@@ -1,314 +1,213 @@
-## Was geändert wird (nur Doku, kein Code)
 
-Eine einzige Datei wird angepasst:
+# Komplette Laien-Anleitung: Zweite OCPP-Bridge für Staging
 
-**`docs/ocpp-persistent-server/ANLEITUNG_HETZNER_DEPLOY.md`** – konkret der bestehende **Schritt 14** („Zwei Instanzen auf demselben Server").
+Ich erweitere die Datei **`docs/ocpp-persistent-server/ANLEITUNG_HETZNER_DEPLOY.md`** um einen vollständig neuen **Schritt 14**, der jede einzelne PuTTY-Eingabe, jede Datei und jeden erwarteten Ausgabewert zeigt. Nichts wird vorausgesetzt — keine Linux-Kenntnisse, keine Docker-Kenntnisse.
 
-Es wird **keine** Quellcode-Datei und **kein** Docker-Image geändert. Die Bridge selbst kann beides bereits – es ist reine Konfigurations- und DNS-Arbeit.
+## Deine Server (Übersicht zum Mitlesen)
 
----
+| Server | IP-Adresse | Was läuft dort |
+|---|---|---|
+| OCPP-Gateway-Server | **178.105.45.225** | Hier installieren wir die zweite Bridge |
+| Energiemanagement-Server | **91.99.170.143** | Hier läuft deine Live-Supabase (wird nur als Adresse eingetragen, nicht angefasst) |
 
-## Zielbild nach Umsetzung
+**Wichtig:** Du arbeitest in dieser Anleitung **ausschließlich** auf **178.105.45.225**. Den anderen Server fasst du nicht an.
+
+## Was am Ende läuft
 
 ```text
-Live-Wallboxen     ──►  wss://ocpp.aicono.org/<seriennr>          ──►  Container "ocpp-server-live"     ──►  Selbst gehostete Live-Supabase (Hetzner)
-Staging/Simulator  ──►  wss://staging-ocpp.aicono.org/<seriennr>  ──►  Container "ocpp-server-staging"  ──►  Lovable-Cloud (xnveugycurplszevdxtw)
+Auf 178.105.45.225:
 
-Beide Container hängen am selben Docker-Netz `ocpp-shared`.
-EINE Caddy (Container `ocpp-caddy`) terminiert TLS für BEIDE Domains und holt zwei Let's-Encrypt-Zertifikate.
+  Container "ocpp-server"          (existiert, bleibt unverändert)
+    → wss://ocpp.aicono.org        → Live-Supabase auf 91.99.170.143
+
+  Container "ocpp-server-staging"  (NEU)
+    → wss://staging-ocpp.aicono.org → Lovable-Cloud
+
+  Container "ocpp-caddy"           (existiert, kriegt nur 1 neuen Block dazu)
+    → erledigt HTTPS für BEIDE Domains
 ```
 
----
+## Aufbau der neuen Anleitung (was in Schritt 14 stehen wird)
 
-## Inhalt, der in `ANLEITUNG_HETZNER_DEPLOY.md` neu geschrieben wird
+Jeder Unterschritt enthält:
+- **Was passiert** (1 Satz, allgemeinverständlich)
+- **Genaue Eingabe** (kompletter Copy-Paste-Block, einfach mit Rechtsklick in PuTTY einfügen)
+- **Erwartete Ausgabe** (was du wörtlich sehen musst, um zu wissen: hat geklappt)
+- **Was tun, wenn etwas anderes erscheint** (1-2 typische Fehler)
 
-Der **gesamte Schritt 14** wird ersetzt durch eine neue, ausführlichere Fassung mit folgenden Unterabschnitten. Jeder Schritt enthält: was anklicken, was tippen, was als Antwort kommen muss, und was zu tun ist, wenn etwas nicht passt.
+### Unterschritte im Detail
 
-### 14.0 – Vorbereitung (für komplette Laien)
+**14.0 PuTTY und WinSCP auf Windows installieren**
+- Download-Links, Schritt-für-Schritt-Installer-Klicks
+- Erklärt: Rechtsklick in PuTTY = Einfügen, Linksklick markiert, Enter führt aus
 
-- **PuTTY herunterladen** (Windows): Link auf https://www.putty.org → „64-bit x86 MSI installer". Installieren mit „Weiter, Weiter, Fertig stellen".
-- **WinSCP herunterladen** (Datei-Upload ohne Konsole): https://winscp.net → Standard-Installation.
-- Notizzettel mit folgenden Werten anlegen (brauchst du gleich):
-  - **Hetzner-Server-IP** (z. B. `116.203.XX.XX`)
-  - **Root-Passwort** des Hetzner-Servers
-  - **URL der Live-Supabase** (z. B. `https://supabase.aicono.org`)
-  - **Anon-Key der Live-Supabase** (aus dem Hetzner-Supabase-Studio → Project Settings → API)
+**14.1 In PuTTY anmelden auf 178.105.45.225**
+- Felder exakt benannt: Host Name = `178.105.45.225`, Port = `22`, Connection type = SSH
+- Login `root`, Passwort aus Hetzner-Mail
+- Erwartete Prompt-Zeile: `root@ocpp-server:~#`
 
-### 14.1 – PuTTY: Erstverbindung Klick-für-Klick
-
-1. PuTTY starten (Windows-Startmenü → „PuTTY").
-2. Im Feld **„Host Name (or IP address)"** die Hetzner-IP eintippen.
-3. **„Port"** = `22`, **„Connection type"** = `SSH` (Voreinstellung).
-4. Unten **„Open"** klicken.
-5. Erstes Fenster „PuTTY Security Alert" → **„Accept"** klicken.
-6. **„login as:"** → `root` tippen, Enter.
-7. **„root@…'s password:"** → Passwort tippen (du siehst nichts beim Tippen, das ist normal), Enter.
-8. Es erscheint die Zeile `root@ocpp-server:~#` → du bist drin.
-
-> **Tipp Copy-Paste in PuTTY:** Text im Browser markieren + `Strg+C`. In PuTTY mit **rechter Maustaste** einfügen (nicht `Strg+V`). Enter drückt aus.
-
-### 14.2 – DNS-Eintrag für `staging-ocpp.aicono.org` in Cloudflare
-
-1. Browser → https://dash.cloudflare.com einloggen.
-2. Domain `aicono.org` anklicken.
-3. Links **DNS → Records → Add record**.
-4. Werte:
-   - **Type:** `A`
-   - **Name:** `staging-ocpp`
-   - **IPv4 address:** dieselbe Hetzner-IP wie `ocpp.aicono.org`
-   - **Proxy status:** **DNS only** (graue Wolke!) – orange Wolke blockiert WebSockets.
-   - **TTL:** Auto
-5. **Save**.
-6. Im PuTTY-Fenster prüfen:
-   ```
-   nslookup staging-ocpp.aicono.org
-   ```
-   Erwartet: die Hetzner-IP. Wenn `104.x.x.x` erscheint, ist die Wolke noch orange → in Cloudflare auf grau umstellen.
-
-### 14.3 – Zwei Arbeits-Ordner anlegen
-
-Im PuTTY exakt diesen Block per Rechtsklick einfügen und Enter:
-
+**14.2 Bestandsaufnahme: läuft alles wie erwartet?**
 ```
-mkdir -p /opt/aicono/ocpp-live /opt/aicono/ocpp-staging
-cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/. /opt/aicono/ocpp-live/
-cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/. /opt/aicono/ocpp-staging/
-docker network create ocpp-shared 2>/dev/null || true
-```
-
-Erwartet: keine Fehlermeldung. Wenn „network already exists" kommt → ok, ignorieren.
-
-### 14.4 – `.env` für Live (zeigt auf selbst gehostete Supabase)
-
-```
-cd /opt/aicono/ocpp-live
-cp .env.example .env
-nano .env
-```
-
-Datei **komplett ersetzen** durch:
-
-```env
-SUPABASE_URL=https://DEINE-LIVE-SUPABASE-DOMAIN
-SUPABASE_ANON_KEY=DEIN-LIVE-ANON-KEY
-OCPP_DOMAIN=ocpp.aicono.org
-PORT=8080
-LOG_LEVEL=info
-PING_INTERVAL_SECONDS=25
-IDLE_TIMEOUT_SECONDS=120
-COMMAND_POLL_INTERVAL_MS=2000
-ENABLE_REALTIME=false
-OCPP_STARTUP_CHECK_ID=testbox01
-```
-
-Speichern: `Strg+O`, Enter, `Strg+X`.
-
-### 14.5 – `.env` für Staging (zeigt auf Lovable-Cloud)
-
-```
-cd /opt/aicono/ocpp-staging
-cp .env.example .env
-nano .env
-```
-
-Datei **komplett ersetzen** durch:
-
-```env
-SUPABASE_URL=https://xnveugycurplszevdxtw.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhudmV1Z3ljdXJwbHN6ZXZkeHR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1MzQ1NzIsImV4cCI6MjA4NjExMDU3Mn0.iWwhILBtqhXomHTYr3jtFh-KKhbCOuDnLnCYvUmr1nw
-OCPP_DOMAIN=staging-ocpp.aicono.org
-PORT=8080
-LOG_LEVEL=debug
-PING_INTERVAL_SECONDS=25
-IDLE_TIMEOUT_SECONDS=120
-COMMAND_POLL_INTERVAL_MS=2000
-ENABLE_REALTIME=false
-OCPP_STARTUP_CHECK_ID=testbox01
-```
-
-Speichern wie oben.
-
-### 14.6 – Live-Compose: Container umbenennen + gemeinsames Netz
-
-`nano /opt/aicono/ocpp-live/docker-compose.yml` öffnen, **kompletten Inhalt** ersetzen durch:
-
-```yaml
-services:
-  ocpp:
-    build: .
-    container_name: ocpp-server-live
-    restart: always
-    env_file: .env
-    expose:
-      - "8080"
-    networks:
-      - shared-ocpp-net
-
-  caddy:
-    image: caddy:2-alpine
-    container_name: ocpp-caddy
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - ocpp
-    networks:
-      - shared-ocpp-net
-
-volumes:
-  caddy_data:
-  caddy_config:
-
-networks:
-  shared-ocpp-net:
-    external: true
-    name: ocpp-shared
-```
-
-Speichern.
-
-### 14.7 – Staging-Compose: nur Bridge, KEINE eigene Caddy
-
-`nano /opt/aicono/ocpp-staging/docker-compose.yml` öffnen, **kompletten Inhalt** ersetzen durch:
-
-```yaml
-services:
-  ocpp:
-    build: .
-    container_name: ocpp-server-staging
-    restart: always
-    env_file: .env
-    expose:
-      - "8080"
-    networks:
-      - shared-ocpp-net
-
-networks:
-  shared-ocpp-net:
-    external: true
-    name: ocpp-shared
-```
-
-Speichern.
-
-### 14.8 – Caddyfile mit beiden Domains
-
-`nano /opt/aicono/ocpp-live/Caddyfile` öffnen, **kompletten Inhalt** ersetzen durch:
-
-```caddy
-ocpp.aicono.org {
-  encode gzip
-  reverse_proxy ocpp-server-live:8080 {
-    header_up Host {host}
-    header_up X-Real-IP {remote}
-    header_up X-Forwarded-For {remote}
-    header_up X-Forwarded-Proto {scheme}
-  }
-}
-
-staging-ocpp.aicono.org {
-  encode gzip
-  reverse_proxy ocpp-server-staging:8080 {
-    header_up Host {host}
-    header_up X-Real-IP {remote}
-    header_up X-Forwarded-For {remote}
-    header_up X-Forwarded-Proto {scheme}
-  }
-}
-```
-
-Speichern.
-
-### 14.9 – Beides starten
-
-```
-cd /opt/aicono/ocpp-live && docker compose up -d --build
-cd /opt/aicono/ocpp-staging && docker compose up -d --build
 docker ps
 ```
+Du musst genau sehen: `ocpp-server` (Up) und `ocpp-caddy` (Up). Falls nicht — STOPP und melden.
 
-Erwartet: drei Container `Up` → `ocpp-server-live`, `ocpp-server-staging`, `ocpp-caddy`.
+**14.3 DNS-Eintrag `staging-ocpp.aicono.org` in Cloudflare**
+- Browser → Cloudflare → DNS → Add record
+- Type A, Name `staging-ocpp`, IPv4 `178.105.45.225`, Proxy `DNS only` (graue Wolke!), TTL Auto
+- Test in PuTTY: `nslookup staging-ocpp.aicono.org` → muss `178.105.45.225` zeigen
 
-### 14.10 – TLS-Zertifikate prüfen (60–90 Sek. warten)
+**14.4 Neuesten Code von GitHub auf den Server holen**
+- Erst prüfen, wo das Repo liegt: `ls /opt/aicono`
+- Dann: 
+  ```
+  cd /opt/aicono/aicono-ems
+  git pull
+  ```
+- Erwartete Ausgabe: `Already up to date.` ODER eine Liste geänderter Dateien
+- Fehlerfall „Permission denied" / „not a git repository" → STOPP, melden
 
+**14.5 Wo liegt die Live-Installation? (zur Sicherheit nur ansehen, nichts ändern)**
 ```
-docker logs ocpp-caddy --tail 100 | grep "certificate obtained"
+ls /opt/aicono
+cat /opt/aicono/<live-ordner>/.env | head -5
 ```
+Damit du den Live-Ordnernamen kennst (z.B. `ocpp-persistent-server` oder `ocpp-live`). Diesen Namen brauchst du in Schritt 14.10 zum Caddy-Reload.
 
-Erwartet: **zwei** Zeilen (eine pro Domain). Wenn nur eine, nochmal 60 Sek. warten und Befehl wiederholen.
+**14.6 Neuen Ordner für die Staging-Bridge anlegen**
+```
+mkdir -p /opt/aicono/ocpp-staging
+cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/. /opt/aicono/ocpp-staging/
+ls /opt/aicono/ocpp-staging
+```
+Erwartete Ausgabe: `Caddyfile  Dockerfile  README.md  docker-compose.yml  package.json  src  tsconfig.json …`
 
-### 14.11 – Health-Checks
+**14.7 `.env` für Staging erstellen (zeigt auf Lovable-Cloud)**
+- Befehl: `nano /opt/aicono/ocpp-staging/.env`
+- **Kompletter Datei-Inhalt** zum Einfügen (Lovable-Cloud-URL, Anon-Key, Domain `staging-ocpp.aicono.org`, `LOG_LEVEL=debug`, `OCPP_STARTUP_CHECK_ID=testbox01`)
+- Speichern: `Strg+O`, Enter, `Strg+X`
+- Kontrolle: `cat /opt/aicono/ocpp-staging/.env`
 
+**14.8 `docker-compose.yml` für Staging ersetzen**
+- `nano /opt/aicono/ocpp-staging/docker-compose.yml`
+- **Kompletter Datei-Inhalt** zum Einfügen — enthält:
+  - nur 1 Service `ocpp` mit `container_name: ocpp-server-staging`
+  - **kein** zweites Caddy
+  - hängt sich ans bestehende Docker-Netzwerk des Live-Caddys (wird in 14.9 ermittelt und eingetragen)
+
+**14.9 Bestehendes Docker-Netzwerk ermitteln (wichtig!)**
+```
+docker network ls
+docker inspect ocpp-caddy | grep -A 2 "Networks"
+```
+- Du siehst den Netz-Namen, z.B. `ocpp-persistent-server_ocppnet`
+- Diesen Namen in `/opt/aicono/ocpp-staging/docker-compose.yml` ganz unten unter `networks:` als `external: true / name: <gefundener-name>` eintragen
+- Beispiel-Block mit Platzhalter wird in der Anleitung gezeigt + Hinweis, was genau zu ersetzen ist
+
+**14.10 Caddyfile der Live-Installation erweitern (nur 1 Block hinzufügen)**
+- `nano /opt/aicono/<live-ordner>/Caddyfile`
+- Genau diesen Block **ans Ende** anfügen:
+  ```
+  staging-ocpp.aicono.org {
+    encode gzip
+    reverse_proxy ocpp-server-staging:8080 {
+      header_up Host {host}
+      header_up X-Real-IP {remote}
+      header_up X-Forwarded-Proto https
+    }
+  }
+  ```
+- Speichern, dann Caddy neu laden:
+  ```
+  docker exec ocpp-caddy caddy reload --config /etc/caddy/Caddyfile
+  ```
+- Erwartete Ausgabe: keine Fehlermeldung. (Falls Fehler: Block wieder löschen, melden.)
+
+**14.11 Staging-Container bauen und starten**
+```
+cd /opt/aicono/ocpp-staging
+docker compose up -d --build
+```
+- Dauer: 2-5 Minuten beim ersten Mal
+- Erwartete letzte Zeile: `Container ocpp-server-staging  Started`
+- Prüfen: `docker ps` → drei Container „Up": `ocpp-server`, `ocpp-server-staging`, `ocpp-caddy`
+
+**14.12 Logs der Staging-Bridge ansehen**
+```
+docker logs --tail 50 ocpp-server-staging
+```
+Erwartete Zeilen u.a.: `Startup check OK for testbox01`, `Listening on :8080`.
+Fehlt der Startup-Check → Anon-Key falsch in 14.7 → korrigieren, dann `docker compose up -d --build` erneut.
+
+**14.13 HTTPS-Test im PuTTY**
 ```
 curl -sf https://ocpp.aicono.org/health
 curl -sf https://staging-ocpp.aicono.org/health
 ```
+Beide müssen exakt antworten mit `{"status":"ok",...}`.
+Falls Staging fehlschlägt → Caddy 60 Sekunden Zeit fürs Let's-Encrypt-Zertifikat geben, dann erneut testen. Sonst: `docker logs --tail 80 ocpp-caddy | grep -i staging`.
 
-Beide müssen `{"status":"ok",...}` antworten.
+**14.14 Funktionstest mit dem Simulator in Lovable**
+- Browser → Lovable-Preview → `/super-admin/ocpp/simulator`
+- Server-URL: `wss://staging-ocpp.aicono.org/`
+- Wallbox `testbox01` → **Verbinden**
+- Erwartet: `Connected (subprotocol: ocpp1.6)`, bleibt ≥ 30 Sek stabil
 
-### 14.12 – Funktionstest mit dem Simulator
+**14.15 Wallboxen zuordnen (welche URL bedeutet welche Umgebung?)**
 
-1. Browser → Lovable-Preview-App.
-2. `/super-admin/ocpp/simulator` öffnen.
-3. **Server-URL:** `wss://staging-ocpp.aicono.org/`
-4. Wallbox `testbox01` wählen, **Verbinden**.
-5. Erwartet: `Connected (subprotocol: ocpp1.6)`, bleibt stabil ≥ 30 Sek.
+| Wallbox-Typ | OCPP-URL in der Wallbox eintragen | Daten landen in |
+|---|---|---|
+| Echte Live-Wallbox | `wss://ocpp.aicono.org/<seriennr>` | Live-Supabase (91.99.170.143) |
+| Simulator/Lovable-Test | `wss://staging-ocpp.aicono.org/<seriennr>` | Lovable-Cloud |
 
-### 14.13 – Wallboxen zuordnen
+**Antwort auf deine Frage „Wie sage ich der Bridge, wohin sie sich verbindet?":**
+Das steht in der jeweiligen `.env` unter `SUPABASE_URL`. Live-Bridge → 91.99.170.143-Supabase. Staging-Bridge → Lovable-Cloud. Die **Wallbox** entscheidet über die URL, an welche Bridge sie sich verbindet — die Bridge entscheidet über ihre `.env`, in welche Datenbank sie schreibt.
 
-| Umgebung | OCPP-URL für die Wallbox |
-|---|---|
-| **Live** (echte Wallboxen) | `wss://ocpp.aicono.org/<seriennr>` |
-| **Staging** (Simulator, Testgeräte) | `wss://staging-ocpp.aicono.org/<seriennr>` |
+## Zusätzlicher neuer Abschnitt 14.16: "Updates einspielen — der sichere Weg"
 
-### 14.14 – Updates einzeln einspielen
+Drei klar getrennte Mini-Anleitungen mit exakten Copy-Paste-Blöcken:
 
+**A) Nur Staging updaten (immer ZUERST testen):**
 ```
 cd /opt/aicono/aicono-ems && git pull
-
-# Nur Staging updaten:
-cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/src/. /opt/aicono/ocpp-staging/src/
+cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/. /opt/aicono/ocpp-staging/
 cd /opt/aicono/ocpp-staging && docker compose up -d --build
-
-# Erst nach erfolgreichem Test: Live updaten
-cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/src/. /opt/aicono/ocpp-live/src/
-cd /opt/aicono/ocpp-live && docker compose up -d --build
+docker logs --tail 30 ocpp-server-staging
 ```
+Erfolg: Letzte Log-Zeilen ohne `error`, Simulator verbindet sich weiterhin.
 
-### 14.15 – Logs getrennt lesen
-
+**B) Live updaten (erst NACH erfolgreichem Staging-Test):**
 ```
-docker logs -f ocpp-server-live      # nur Live
-docker logs -f ocpp-server-staging   # nur Staging
-docker logs -f ocpp-caddy            # TLS / Routing beider
+cd /opt/aicono/aicono-ems && git pull
+cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/. /opt/aicono/<live-ordner>/
+cd /opt/aicono/<live-ordner> && docker compose up -d --build
+docker logs --tail 30 ocpp-server
 ```
+(`<live-ordner>` durch den in 14.5 ermittelten Namen ersetzen.)
 
-### 14.16 – Notfall-Rollback (falls Staging die Live kaputtmacht)
-
+**C) Notfall: Staging anhalten (Live läuft weiter unberührt):**
 ```
 cd /opt/aicono/ocpp-staging && docker compose down
-docker exec ocpp-caddy caddy reload --config /etc/caddy/Caddyfile
 ```
 
-Live läuft weiter unverändert.
+## Was ich NICHT anfasse
 
----
+- Keine Änderung an `/opt/aicono/<live-ordner>/.env`
+- Keine Umbenennung der Live-Container
+- Kein neues Docker-Netzwerk (Staging tritt dem bestehenden bei)
+- Caddyfile wird nur **erweitert**, der bestehende `ocpp.aicono.org`-Block bleibt unverändert
+- Der Energiemanagement-Server **91.99.170.143** wird überhaupt nicht angefasst
 
-## Was du nach Plan-Approval bekommst
+## Was du mir noch sagen musst, bevor ich die Anleitung schreibe
 
-- Der vorhandene **Schritt 14** in `docs/ocpp-persistent-server/ANLEITUNG_HETZNER_DEPLOY.md` wird **1:1 durch obigen Text ersetzt**. Alle anderen Schritte (1–13, 15) bleiben unverändert.
-- Es entsteht **keine** zweite Doku-Datei – Single Source of Truth bleibt erhalten.
-- **Kein** Code, **keine** Migrationen, **keine** Edge-Functions werden angefasst.
+Damit die `.env` für Staging vollständig wird, brauche ich genau **eine** Info — die ich dir auch holen helfe:
 
-## Was du selbst klären musst (vor Umsetzung)
+**Frage:** Soll die Staging-Bridge auf die Lovable-Cloud zugreifen (also `https://xnveugycurplszevdxtw.supabase.co`, Anon-Key ist mir bekannt)?
+→ Falls **ja** (Standardfall), kann ich die `.env` komplett ausgefüllt in die Anleitung schreiben. Du musst dann gar nichts mehr eintippen, nur einfügen.
+→ Falls **nein**, sag mir bitte, welche Supabase-URL stattdessen rein soll.
 
-1. **URL deiner Live-Supabase** (Domain, unter der dein selbst gehostetes Supabase-Studio läuft) – kommt in `SUPABASE_URL` der Live-`.env`.
-2. **Anon-Key der Live-Supabase** – aus dem Studio kopieren.
-3. **Bestätigen, dass DNS-Verwaltung weiterhin über Cloudflare läuft** (laut bestehender Anleitung Stand heute Ja).
+Sobald du das bestätigst (oder einfach „ja"), schreibe ich die komplette Anleitung in `ANLEITUNG_HETZNER_DEPLOY.md` und aktualisiere die `.docx`-Datei automatisch mit.
 
-Wenn diese drei Punkte stehen: Plan annehmen, ich passe die Doku an, du arbeitest sie Schritt für Schritt durch und meldest dich nach jedem Block.
+## Geänderte Datei
+
+- `docs/ocpp-persistent-server/ANLEITUNG_HETZNER_DEPLOY.md` (kompletter Neu-Schreib von Schritt 14)
