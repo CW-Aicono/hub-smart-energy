@@ -19,8 +19,9 @@ import {
 } from "lucide-react";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 
+import { getOcppHost } from "@/lib/ocppEnvironment";
 type Protocol = "ws" | "wss";
-const OCPP_DOMAIN = "cp.aicono.org";
+const OCPP_DOMAIN = getOcppHost();
 
 function generatePassword(len = 32): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
