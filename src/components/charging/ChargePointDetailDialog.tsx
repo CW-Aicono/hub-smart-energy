@@ -388,13 +388,13 @@ export default function ChargePointDetailDialog({
                     <div className="flex items-start gap-2">
                       <Badge variant="outline" className="text-[10px] mt-0.5 shrink-0">wss://</Badge>
                       <code className="text-xs break-all text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
-                        wss://cp.aicono.org/{cp.ocpp_id}
+                        wss://{OCPP_HOST}/{cp.ocpp_id}
                       </code>
                     </div>
                     <div className="flex items-start gap-2">
                       <Badge variant="outline" className="text-[10px] mt-0.5 shrink-0 border-amber-500/50 text-amber-600 dark:text-amber-400">ws://</Badge>
                       <code className="text-xs break-all text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
-                        ws://cp.aicono.org/{cp.ocpp_id}
+                        ws://{OCPP_HOST}/{cp.ocpp_id}
                       </code>
                     </div>
                     <p className="text-[11px] text-muted-foreground/70">
