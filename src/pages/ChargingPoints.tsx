@@ -150,7 +150,7 @@ const ChargingPoints = () => {
     : chargePoints;
 
   const wsScheme = form.connection_protocol === "ws" ? "ws" : "wss";
-  const wsHostUrl = `${wsScheme}://cp.aicono.org`;
+  const wsHostUrl = `${wsScheme}://${getOcppHost()}`;
 
   const ocppHint = (
     <Alert className="mt-4">
