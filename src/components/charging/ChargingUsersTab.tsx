@@ -153,7 +153,12 @@ const ChargingUsersTab = () => {
                   </SelectContent>
                 </Select>
                 {isAdmin && (
-                  <Button size="sm" onClick={openAddUser}><Plus className="h-4 w-4 mr-2" />{t("cu.addUser" as any)}</Button>
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => openIo("users")}>
+                      <FileSpreadsheet className="h-4 w-4 mr-2" />Import / Export
+                    </Button>
+                    <Button size="sm" onClick={openAddUser}><Plus className="h-4 w-4 mr-2" />{t("cu.addUser" as any)}</Button>
+                  </>
                 )}
               </div>
             </CardHeader>
