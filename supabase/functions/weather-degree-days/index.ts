@@ -126,58 +126,64 @@ Deno.serve(async (req) => {
         const meteoUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${latitude}&longitude=${longitude}&start_date=${apiStart}&end_date=${apiEnd}&daily=temperature_2m_mean&timezone=Europe%2FBerlin`;
 
         console.log("Fetching:", meteoUrl);
-        const meteoRes = await fetch(meteoUrl);
-        if (!meteoRes.ok) {
-          const errText = await meteoRes.text();
-          console.error("Meteo error:", meteoRes.status, errText);
-          return new Response(
-            JSON.stringify({ error: "Weather data unavailable" }),
-            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000);
+          const meteoRes = await fetch(meteoUrl, { signal: controller.signal });
+          clearTimeout(timeoutId);
 
-        const meteoData = await meteoRes.json();
-        const dates: string[] = meteoData.daily?.time ?? [];
-        const temps: number[] = meteoData.daily?.temperature_2m_mean ?? [];
+          if (!meteoRes.ok) {
+            const errText = await meteoRes.text();
+            console.error("Meteo error:", meteoRes.status, errText);
+            // Soft-fail: return cached data instead of erroring out
+          } else {
+            const meteoData = await meteoRes.json();
+            const dates: string[] = meteoData.daily?.time ?? [];
+            const temps: number[] = meteoData.daily?.temperature_2m_mean ?? [];
 
-        const monthlyMap: Record<string, { hdd: number; cdd: number; tempSum: number; count: number }> = {};
+            const monthlyMap: Record<string, { hdd: number; cdd: number; tempSum: number; count: number }> = {};
 
-        for (let i = 0; i < dates.length; i++) {
-          const date = dates[i];
-          const temp = temps[i];
-          if (temp === null || temp === undefined) continue;
+            for (let i = 0; i < dates.length; i++) {
+              const date = dates[i];
+              const temp = temps[i];
+              if (temp === null || temp === undefined) continue;
 
-          const monthKey = date.substring(0, 7) + "-01";
-          if (!monthlyMap[monthKey]) {
-            monthlyMap[monthKey] = { hdd: 0, cdd: 0, tempSum: 0, count: 0 };
+              const monthKey = date.substring(0, 7) + "-01";
+              if (!monthlyMap[monthKey]) {
+                monthlyMap[monthKey] = { hdd: 0, cdd: 0, tempSum: 0, count: 0 };
+              }
+
+              const m = monthlyMap[monthKey];
+              m.tempSum += temp;
+              m.count += 1;
+              if (temp < referenceTemp) m.hdd += referenceTemp - temp;
+              if (temp > referenceTemp) m.cdd += temp - referenceTemp;
+            }
+
+            const upsertRows = Object.entries(monthlyMap).map(([month, val]) => ({
+              location_id: locationId,
+              tenant_id: tenantId,
+              month,
+              heating_degree_days: Math.round(val.hdd * 100) / 100,
+              cooling_degree_days: Math.round(val.cdd * 100) / 100,
+              avg_temperature: Math.round((val.tempSum / val.count) * 100) / 100,
+              reference_temperature: referenceTemp,
+            }));
+
+            if (upsertRows.length > 0) {
+              const { error: upsertErr } = await supabase
+                .from("weather_degree_days")
+                .upsert(upsertRows, { onConflict: "location_id,month,reference_temperature" });
+
+              if (upsertErr) console.error("Upsert error:", upsertErr);
+            }
+
+            freshData = upsertRows;
           }
-
-          const m = monthlyMap[monthKey];
-          m.tempSum += temp;
-          m.count += 1;
-          if (temp < referenceTemp) m.hdd += referenceTemp - temp;
-          if (temp > referenceTemp) m.cdd += temp - referenceTemp;
+        } catch (fetchErr) {
+          // Network/timeout to Open-Meteo — soft-fail with cached data
+          console.error("Open-Meteo unreachable, returning cached data only:", String(fetchErr));
         }
-
-        const upsertRows = Object.entries(monthlyMap).map(([month, val]) => ({
-          location_id: locationId,
-          tenant_id: tenantId,
-          month,
-          heating_degree_days: Math.round(val.hdd * 100) / 100,
-          cooling_degree_days: Math.round(val.cdd * 100) / 100,
-          avg_temperature: Math.round((val.tempSum / val.count) * 100) / 100,
-          reference_temperature: referenceTemp,
-        }));
-
-        if (upsertRows.length > 0) {
-          const { error: upsertErr } = await supabase
-            .from("weather_degree_days")
-            .upsert(upsertRows, { onConflict: "location_id,month,reference_temperature" });
-
-          if (upsertErr) console.error("Upsert error:", upsertErr);
-        }
-
-        freshData = upsertRows;
       } else {
         console.log(`Skipping API: apiEnd ${apiEnd} < apiStart ${apiStart}`);
       }
