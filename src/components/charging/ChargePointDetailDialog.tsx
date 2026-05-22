@@ -22,6 +22,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { AccessControlSettings } from "@/components/charging/AccessControlSettings";
 import { PowerLimitScheduler, defaultPowerLimitSchedule, type PowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
+import { getOcppHost } from "@/lib/ocppEnvironment";
+const OCPP_HOST = getOcppHost();
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
   available: { label: "Verfügbar", variant: "default", icon: Zap },
