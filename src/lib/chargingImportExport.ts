@@ -7,7 +7,7 @@
  *    zusätzlich stempeln wir tenant_id explizit beim Insert.
  *  - Excel-Dateien werden mit @e965/xlsx erzeugt/gelesen; CSV nutzt denselben Writer
  *    mit dem CSV-Format. So bleibt das Mapping identisch.
- *  - 'NFC-Tags" ist kein eigenes Modell, sondern eine schlanke Sicht auf
+ *  - "NFC-Tags" ist kein eigenes Modell, sondern eine schlanke Sicht auf
  *    charging_users.rfid_tag (Email → RFID-Tag).
  */
 
