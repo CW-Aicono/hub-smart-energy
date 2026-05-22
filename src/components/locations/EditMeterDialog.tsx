@@ -92,6 +92,39 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [floors, setFloors] = useState<Floor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [replaceOpen, setReplaceOpen] = useState(false);
+  const [validatedAt, setValidatedAt] = useState<string | null>((meter as any).setup_validated_at ?? null);
+  const [validatedByEmail, setValidatedByEmail] = useState<string | null>((meter as any).setup_validated_by_email ?? null);
+  const [validating, setValidating] = useState(false);
+
+  const handleValidateSetup = async () => {
+    setValidating(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      const userEmail = userData.user?.email ?? "unbekannt";
+      if (!userId) {
+        toast.error("Nicht angemeldet");
+        return;
+      }
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from("meters")
+        .update({
+          setup_validated_at: now,
+          setup_validated_by: userId,
+          setup_validated_by_email: userEmail,
+        } as any)
+        .eq("id", meter.id);
+      if (error) throw error;
+      setValidatedAt(now);
+      setValidatedByEmail(userEmail);
+      toast.success("Messwert validiert");
+    } catch (e: any) {
+      toast.error(e?.message || "Validierung fehlgeschlagen");
+    } finally {
+      setValidating(false);
+    }
+  };
   // Available parents: all active meters except self and descendants
   const availableParents = allMeters.filter((m) => !m.is_archived && m.id !== meter.id);
 
