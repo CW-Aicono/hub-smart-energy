@@ -16,9 +16,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, MoreHorizontal, Edit, Trash2, Ban, Archive, Users, FolderOpen, Check, Smartphone } from "lucide-react";
+import { Plus, MoreHorizontal, Edit, Trash2, Ban, Archive, Users, FolderOpen, Check, Smartphone, FileSpreadsheet } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
+import { ChargingImportExportDialog } from "@/components/charging/ChargingImportExportDialog";
+import type { ExportType } from "@/lib/chargingImportExport";
 
 const emptyUserForm = { name: "", email: "", rfid_tag: "", phone: "", group_id: "", tariff_id: "", notes: "" };
 const emptyGroupForm = { name: "", description: "", is_app_user: false, tariff_id: "" };
@@ -42,6 +44,9 @@ const ChargingUsersTab = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ type: "user" | "group"; id: string; name: string } | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked" | "archived">("all");
+  const [ioOpen, setIoOpen] = useState(false);
+  const [ioType, setIoType] = useState<ExportType>("users");
+  const openIo = (t: ExportType) => { setIoType(t); setIoOpen(true); };
 
   const filteredUsers = statusFilter === "all" ? users : users.filter((u) => u.status === statusFilter);
 
@@ -148,7 +153,12 @@ const ChargingUsersTab = () => {
                   </SelectContent>
                 </Select>
                 {isAdmin && (
-                  <Button size="sm" onClick={openAddUser}><Plus className="h-4 w-4 mr-2" />{t("cu.addUser" as any)}</Button>
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => openIo("users")}>
+                      <FileSpreadsheet className="h-4 w-4 mr-2" />Import / Export
+                    </Button>
+                    <Button size="sm" onClick={openAddUser}><Plus className="h-4 w-4 mr-2" />{t("cu.addUser" as any)}</Button>
+                  </>
                 )}
               </div>
             </CardHeader>
@@ -210,7 +220,14 @@ const ChargingUsersTab = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>{t("cu.groupsTitle" as any)}</CardTitle>
-              {isAdmin && (<Button size="sm" onClick={openAddGroup}><Plus className="h-4 w-4 mr-2" />{t("cu.addGroup" as any)}</Button>)}
+              {isAdmin && (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => openIo("groups")}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />Import / Export
+                  </Button>
+                  <Button size="sm" onClick={openAddGroup}><Plus className="h-4 w-4 mr-2" />{t("cu.addGroup" as any)}</Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               {groupsLoading ? (
@@ -337,6 +354,8 @@ const ChargingUsersTab = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ChargingImportExportDialog open={ioOpen} onOpenChange={setIoOpen} initialType={ioType} />
     </div>
   );
 };
