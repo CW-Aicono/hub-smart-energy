@@ -220,7 +220,14 @@ const ChargingUsersTab = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>{t("cu.groupsTitle" as any)}</CardTitle>
-              {isAdmin && (<Button size="sm" onClick={openAddGroup}><Plus className="h-4 w-4 mr-2" />{t("cu.addGroup" as any)}</Button>)}
+              {isAdmin && (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => openIo("groups")}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />Import / Export
+                  </Button>
+                  <Button size="sm" onClick={openAddGroup}><Plus className="h-4 w-4 mr-2" />{t("cu.addGroup" as any)}</Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               {groupsLoading ? (
