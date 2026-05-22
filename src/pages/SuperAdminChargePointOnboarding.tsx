@@ -20,7 +20,7 @@ import {
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 
 type Protocol = "ws" | "wss";
-const OCPP_DOMAIN = "ocpp.aicono.org";
+const OCPP_DOMAIN = "cp.aicono.org";
 
 function generatePassword(len = 32): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -480,7 +480,7 @@ export default function SuperAdminChargePointOnboarding() {
               ) : (
                 <p className="text-xs text-muted-foreground">
                   Falls Ihre Wallbox eine Server-Zertifikat-Auswahl verlangt: <strong>"Amazon Root CA 1"</strong> oder
-                  <strong> "Let's Encrypt R3"</strong> wählen — beides funktioniert mit ocpp.aicono.org.
+                  <strong> "Let's Encrypt R3"</strong> wählen — beides funktioniert mit cp.aicono.org.
                 </p>
               )}
             </div>
