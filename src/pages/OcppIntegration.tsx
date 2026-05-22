@@ -119,7 +119,12 @@ const OcppIntegration = () => {
             <div className="flex items-start gap-2">
               <Server className="h-4 w-4 text-primary mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium">OCPP-Server-URL</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-xs font-medium">OCPP-Server-URL</p>
+                  <Badge variant={OCPP_ENV_LABEL === "Live" ? "default" : "secondary"} className="text-[10px] py-0 h-4">
+                    {OCPP_ENV_LABEL}-Umgebung · {OCPP_HOST}
+                  </Badge>
+                </div>
                 <p className="text-[11px] text-muted-foreground">
                   Persistenter OCPP-Server. Verwende <code>wss://</code> für moderne Wallboxen mit TLS,
                   <code> ws://</code> für ältere Ladepunkte ohne TLS.
