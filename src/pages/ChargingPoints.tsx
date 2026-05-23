@@ -1,4 +1,5 @@
 import { useState, lazy, Suspense } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useDemoPath } from "@/contexts/DemoMode";
 import { useAuth } from "@/hooks/useAuth";
@@ -35,8 +36,9 @@ import ModbusWallboxWizard from "@/components/charging/ModbusWallboxWizard";
 
 const LazyChargePointsMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
+import { getOcppHost, getOcppWssUrl } from "@/lib/ocppEnvironment";
 const OCPP_ENDPOINT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ocpp-central`;
-const OCPP_WS_ENDPOINT_URL = "wss://ocpp.aicono.org";
+const OCPP_WS_ENDPOINT_URL = getOcppWssUrl();
 
 const ChargingPoints = () => {
   const navigate = useNavigate();
@@ -44,6 +46,7 @@ const ChargingPoints = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { chargePoints, isLoading, addChargePoint, updateChargePoint, deleteChargePoint } = useChargePoints();
   const { sessions } = useChargingSessions();
@@ -147,7 +150,7 @@ const ChargingPoints = () => {
     : chargePoints;
 
   const wsScheme = form.connection_protocol === "ws" ? "ws" : "wss";
-  const wsHostUrl = `${wsScheme}://ocpp.aicono.org`;
+  const wsHostUrl = `${wsScheme}://${getOcppHost()}`;
 
   const ocppHint = (
     <Alert className="mt-4">
@@ -342,7 +345,7 @@ const ChargingPoints = () => {
                 <Button variant="outline" onClick={() => setPublicLinkOpen(true)}>
                   <Globe className="h-4 w-4 mr-2" />Öffentlicher Link
                 </Button>
-                <ModbusWallboxWizard />
+                <ModbusWallboxWizard onCreated={() => queryClient.invalidateQueries({ queryKey: ["charge-points"] })} />
                 <Dialog open={addOpen} onOpenChange={setAddOpen}>
                   <DialogTrigger asChild>
                     <Button onClick={resetForm}><Plus className="h-4 w-4 mr-2" />{t("charging.addChargePoint" as any)}</Button>

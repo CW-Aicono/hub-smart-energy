@@ -13,9 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 
-const OCPP_HOST = "ocpp.aicono.org";
-const OCPP_WSS_URL = `wss://${OCPP_HOST}`; // Port 443 (Standard)
-const OCPP_WS_URL = `ws://${OCPP_HOST}`;   // Port 80 (Standard)
+// OCPP-Domain wird automatisch passend zur Umgebung gewählt:
+//  - Live-Domains (ems-pro.aicono.org / aicono.org) → cp.aicono.org
+//  - Test/Staging/Lovable-Preview                    → ocpp.aicono.org
+import { getOcppHost, getOcppWssUrl, getOcppWsUrl, getOcppEnvironmentLabel } from "@/lib/ocppEnvironment";
+const OCPP_HOST = getOcppHost();
+const OCPP_WSS_URL = getOcppWssUrl();
+const OCPP_WS_URL = getOcppWsUrl();
+const OCPP_ENV_LABEL = getOcppEnvironmentLabel();
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
@@ -114,7 +119,12 @@ const OcppIntegration = () => {
             <div className="flex items-start gap-2">
               <Server className="h-4 w-4 text-primary mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium">OCPP-Server-URL</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-xs font-medium">OCPP-Server-URL</p>
+                  <Badge variant={OCPP_ENV_LABEL === "Live" ? "default" : "secondary"} className="text-[10px] py-0 h-4">
+                    {OCPP_ENV_LABEL}-Umgebung · {OCPP_HOST}
+                  </Badge>
+                </div>
                 <p className="text-[11px] text-muted-foreground">
                   Persistenter OCPP-Server. Verwende <code>wss://</code> für moderne Wallboxen mit TLS,
                   <code> ws://</code> für ältere Ladepunkte ohne TLS.
