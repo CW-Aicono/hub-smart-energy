@@ -15,6 +15,8 @@ interface TenantReportSettings {
   show_logo: boolean;
 }
 
+export type TenantType = "gewerbe_industrie" | "kommune" | "privat" | "sonstige";
+
 export interface Tenant {
   id: string;
   name: string;
@@ -27,6 +29,7 @@ export interface Tenant {
   contact_person: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  tenant_type: TenantType;
   branding: TenantBranding;
   logo_url: string | null;
   report_settings: TenantReportSettings;
@@ -124,6 +127,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         contact_person: "Max Mustermann",
         contact_email: "info@stadtwerke-musterstadt.de",
         contact_phone: "+49 89 12345678",
+        tenant_type: "kommune",
         branding: DEFAULT_BRANDING,
         logo_url: null,
         report_settings: { footer_text: "Stadtwerke Musterstadt GmbH", show_logo: true },
@@ -188,6 +192,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
         const tenantData: Tenant = {
           ...data,
+          tenant_type: ((data as any).tenant_type as TenantType) ?? "kommune",
           branding: (data.branding as unknown as TenantBranding) || DEFAULT_BRANDING,
           report_settings: (data.report_settings as unknown as TenantReportSettings) || { footer_text: "", show_logo: true },
           week_start_day: (data.week_start_day as 0 | 1 | 2 | 3 | 4 | 5 | 6) ?? 1,

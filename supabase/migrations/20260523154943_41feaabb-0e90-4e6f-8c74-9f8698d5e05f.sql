@@ -1,0 +1,1 @@
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS tenant_type TEXT NOT NULL DEFAULT 'kommune' CHECK (tenant_type IN ('gewerbe_industrie','kommune','privat','sonstige'));
