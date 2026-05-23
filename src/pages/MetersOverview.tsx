@@ -207,7 +207,18 @@ const MetersOverview = () => {
                       const isManual = m.capture_type === "manual";
                       return (
                         <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
-                          <TableCell className="font-medium">{m.name}</TableCell>
+                          <TableCell className="font-medium">
+                            <span className="inline-flex items-center gap-1.5">
+                              {m.name}
+                              {(m as any).setup_validated_at && (
+                                <CheckCircle2
+                                  className="h-4 w-4 text-[hsl(152_55%_42%)]"
+                                  aria-label="Einrichtung validiert"
+                                >
+                                </CheckCircle2>
+                              )}
+                            </span>
+                          </TableCell>
                           <TableCell>{getLocationName(m.location_id)}</TableCell>
                           <TableCell>{m.meter_number || "–"}</TableCell>
                           <TableCell>
