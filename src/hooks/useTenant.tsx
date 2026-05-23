@@ -15,6 +15,8 @@ interface TenantReportSettings {
   show_logo: boolean;
 }
 
+export type TenantType = "gewerbe_industrie" | "kommune" | "privat" | "sonstige";
+
 export interface Tenant {
   id: string;
   name: string;
@@ -27,6 +29,7 @@ export interface Tenant {
   contact_person: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  tenant_type: TenantType;
   branding: TenantBranding;
   logo_url: string | null;
   report_settings: TenantReportSettings;
