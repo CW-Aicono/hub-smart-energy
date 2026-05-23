@@ -127,6 +127,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         contact_person: "Max Mustermann",
         contact_email: "info@stadtwerke-musterstadt.de",
         contact_phone: "+49 89 12345678",
+        tenant_type: "kommune",
         branding: DEFAULT_BRANDING,
         logo_url: null,
         report_settings: { footer_text: "Stadtwerke Musterstadt GmbH", show_logo: true },
