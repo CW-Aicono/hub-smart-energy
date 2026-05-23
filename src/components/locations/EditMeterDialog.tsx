@@ -96,6 +96,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [validatedAt, setValidatedAt] = useState<string | null>((meter as any).setup_validated_at ?? null);
   const [validatedByEmail, setValidatedByEmail] = useState<string | null>((meter as any).setup_validated_by_email ?? null);
   const [validating, setValidating] = useState(false);
+  const [confirmValidateOpen, setConfirmValidateOpen] = useState(false);
 
   const handleValidateSetup = async () => {
     setValidating(true);
