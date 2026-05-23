@@ -125,6 +125,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       toast.error(e?.message || "Validierung fehlgeschlagen");
     } finally {
       setValidating(false);
+      setConfirmValidateOpen(false);
     }
   };
   // Available parents: all active meters except self and descendants
