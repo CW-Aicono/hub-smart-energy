@@ -64,6 +64,18 @@ export function TenantInfoSettings() {
           <Input id="tenant-name" value={form.name} onChange={(e) => handleChange("name", e.target.value)} placeholder={t("tenantInfo.namePlaceholder" as any)} />
         </div>
         <div className="space-y-2">
+          <Label htmlFor="tenant-type">Art des Mandanten</Label>
+          <Select value={form.tenant_type} onValueChange={(v) => setForm((prev) => ({ ...prev, tenant_type: v as TenantType }))}>
+            <SelectTrigger id="tenant-type"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {TENANT_TYPE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">Bestimmt u.&nbsp;a. die Ausrichtung des Energieberichts. Aktuell ist der Bericht ausschließlich für kommunale Berichtspflichten ausgelegt; weitere Varianten folgen.</p>
+        </div>
+        <div className="space-y-2">
           <Label>{t("tenantInfo.address" as any)}</Label>
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
             <Input value={form.street} onChange={(e) => handleChange("street", e.target.value)} placeholder={t("tenantInfo.street" as any)} />
