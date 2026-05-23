@@ -192,6 +192,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
         const tenantData: Tenant = {
           ...data,
+          tenant_type: ((data as any).tenant_type as TenantType) ?? "kommune",
           branding: (data.branding as unknown as TenantBranding) || DEFAULT_BRANDING,
           report_settings: (data.report_settings as unknown as TenantReportSettings) || { footer_text: "", show_logo: true },
           week_start_day: (data.week_start_day as 0 | 1 | 2 | 3 | 4 | 5 | 6) ?? 1,
