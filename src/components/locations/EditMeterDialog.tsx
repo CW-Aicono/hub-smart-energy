@@ -7,6 +7,7 @@ import { useMeters } from "@/hooks/useMeters";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,6 +96,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [validatedAt, setValidatedAt] = useState<string | null>((meter as any).setup_validated_at ?? null);
   const [validatedByEmail, setValidatedByEmail] = useState<string | null>((meter as any).setup_validated_by_email ?? null);
   const [validating, setValidating] = useState(false);
+  const [confirmValidateOpen, setConfirmValidateOpen] = useState(false);
 
   const handleValidateSetup = async () => {
     setValidating(true);
@@ -123,6 +125,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       toast.error(e?.message || "Validierung fehlgeschlagen");
     } finally {
       setValidating(false);
+      setConfirmValidateOpen(false);
     }
   };
   // Available parents: all active meters except self and descendants
@@ -398,7 +401,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                   size="sm"
                   variant="outline"
                   className="gap-1.5"
-                  onClick={handleValidateSetup}
+                  onClick={() => setConfirmValidateOpen(true)}
                   disabled={validating}
                 >
                   {validating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4" />}
@@ -407,6 +410,29 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               </div>
             )}
           </div>
+
+          <AlertDialog open={confirmValidateOpen} onOpenChange={setConfirmValidateOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Einrichtung validieren?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Hiermit bestätigst du, dass die Einrichtung dieses Geräts geprüft wurde.
+                  Datum, Uhrzeit und dein Benutzername werden dauerhaft gespeichert und können nicht mehr geändert werden.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={validating}>Abbrechen</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => { e.preventDefault(); handleValidateSetup(); }}
+                  disabled={validating}
+                >
+                  {validating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Bestätigen
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
 
 
           {/* Device type selector */}
