@@ -1,14 +1,22 @@
 import { useState, useEffect } from "react";
-import { useTenant } from "@/hooks/useTenant";
+import { useTenant, type TenantType } from "@/hooks/useTenant";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, Save } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+
+const TENANT_TYPE_OPTIONS: { value: TenantType; label: string }[] = [
+  { value: "gewerbe_industrie", label: "Gewerbe / Industrie" },
+  { value: "kommune", label: "Kommune" },
+  { value: "privat", label: "Privat" },
+  { value: "sonstige", label: "Sonstige" },
+];
 
 export function TenantInfoSettings() {
   const { tenant, refetch } = useTenant();
@@ -17,11 +25,11 @@ export function TenantInfoSettings() {
   const { t } = useTranslation();
   const [saving, setSaving] = useState(false);
 
-  const [form, setForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "" });
+  const [form, setForm] = useState({ name: "", tenant_type: "kommune" as TenantType, street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "" });
 
   useEffect(() => {
     if (tenant) {
-      setForm({ name: tenant.name || "", street: tenant.street || "", house_number: tenant.house_number || "", postal_code: tenant.postal_code || "", city: tenant.city || "", contact_person: tenant.contact_person || "", contact_email: tenant.contact_email || "" });
+      setForm({ name: tenant.name || "", tenant_type: tenant.tenant_type || "kommune", street: tenant.street || "", house_number: tenant.house_number || "", postal_code: tenant.postal_code || "", city: tenant.city || "", contact_person: tenant.contact_person || "", contact_email: tenant.contact_email || "" });
     }
   }, [tenant]);
 
