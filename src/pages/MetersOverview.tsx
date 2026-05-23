@@ -211,14 +211,29 @@ const MetersOverview = () => {
                             <span className="inline-flex items-center gap-1.5">
                               {m.name}
                               {(m as any).setup_validated_at && (
-                                <CheckCircle2
-                                  className="h-4 w-4 text-[hsl(152_55%_42%)]"
-                                  aria-label="Einrichtung validiert"
-                                >
-                                </CheckCircle2>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="inline-flex cursor-help">
+                                      <CheckCircle2
+                                        className="h-4 w-4 text-[hsl(152_55%_42%)]"
+                                        aria-label="Einrichtung validiert"
+                                      />
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top">
+                                    <p className="text-xs">
+                                      Einrichtung validiert am{" "}
+                                      {new Date((m as any).setup_validated_at).toLocaleString("de-DE")}
+                                      {(m as any).setup_validated_by_email
+                                        ? ` von ${(m as any).setup_validated_by_email}`
+                                        : ""}
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
                               )}
                             </span>
                           </TableCell>
+
                           <TableCell>{getLocationName(m.location_id)}</TableCell>
                           <TableCell>{m.meter_number || "–"}</TableCell>
                           <TableCell>
