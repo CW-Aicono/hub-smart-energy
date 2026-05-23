@@ -39,7 +39,7 @@ export function TenantInfoSettings() {
 
   const handleSave = async () => {
     setSaving(true);
-    const { error } = await supabase.from("tenants").update({ name: form.name.trim() || tenant.name, street: form.street.trim() || null, house_number: form.house_number.trim() || null, postal_code: form.postal_code.trim() || null, city: form.city.trim() || null, contact_person: form.contact_person.trim() || null, contact_email: form.contact_email.trim() || null }).eq("id", tenant.id);
+    const { error } = await supabase.from("tenants").update({ name: form.name.trim() || tenant.name, tenant_type: form.tenant_type, street: form.street.trim() || null, house_number: form.house_number.trim() || null, postal_code: form.postal_code.trim() || null, city: form.city.trim() || null, contact_person: form.contact_person.trim() || null, contact_email: form.contact_email.trim() || null } as any).eq("id", tenant.id);
     setSaving(false);
     if (error) {
       toast({ title: t("common.error"), description: t("tenantInfo.saveError" as any), variant: "destructive" });
