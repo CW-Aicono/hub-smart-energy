@@ -6740,6 +6740,7 @@ export type Database = {
           slug: string
           street: string | null
           support_price_per_15min: number
+          tenant_type: string
           updated_at: string
           week_start_day: number
         }
@@ -6772,6 +6773,7 @@ export type Database = {
           slug: string
           street?: string | null
           support_price_per_15min?: number
+          tenant_type?: string
           updated_at?: string
           week_start_day?: number
         }
@@ -6804,6 +6806,7 @@ export type Database = {
           slug?: string
           street?: string | null
           support_price_per_15min?: number
+          tenant_type?: string
           updated_at?: string
           week_start_day?: number
         }
