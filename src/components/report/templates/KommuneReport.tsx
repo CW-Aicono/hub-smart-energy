@@ -48,7 +48,7 @@ import { usePriorityRanking } from "@/hooks/usePriorityRanking";
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
-const EnergyReport = () => {
+const KommuneReport = () => {
   const { user, loading: authLoading } = useAuth();
   const { locations, hierarchicalLocations, loading: locLoading } = useLocations();
   const { factors } = useCo2Factors();
@@ -430,33 +430,6 @@ const EnergyReport = () => {
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  if (tenant && tenant.tenant_type !== "kommune") {
-    return (
-      <div className="flex flex-col md:flex-row min-h-screen bg-background">
-        <DashboardSidebar />
-        <main className="flex-1 overflow-auto p-6">
-          <Card className="max-w-2xl mx-auto mt-12">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Energiebericht aktuell nicht verfügbar
-              </CardTitle>
-              <CardDescription>
-                Der Energiebericht ist derzeit ausschließlich auf kommunale Berichtspflichten ausgelegt.
-                Für die Mandantenart „{tenant.tenant_type === "gewerbe_industrie" ? "Gewerbe / Industrie" : tenant.tenant_type === "privat" ? "Privat" : "Sonstige"}"
-                werden in Kürze passende Berichtsvorlagen bereitgestellt.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Sie können die Mandantenart jederzeit unter <strong>Einstellungen → Mandant</strong> anpassen.
-              </p>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-background">
@@ -1256,4 +1229,4 @@ const EnergyReport = () => {
   );
 };
 
-export default EnergyReport;
+export default KommuneReport;
