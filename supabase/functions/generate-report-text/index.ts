@@ -5,51 +5,70 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+type TenantType = "kommune" | "gewerbe_industrie" | "privat" | "sonstige";
+
 interface RequestBody {
-  section: "vorwort" | "einleitung" | "ausblick" | "massnahmen";
-  profile: {
+  tenantType?: TenantType;
+  section: string;
+  // Kommune
+  profile?: {
     code: string;
     name: string;
     legalBasis: string;
     reportingCycle: number;
     extraTopics: string[];
   };
-  context: {
-    tenantName?: string;
-    mayorName?: string;
-    reportYear: number;
-    locationCount?: number;
-    totalArea?: number;
-    totalCo2Tons?: number;
-    totalCostEur?: number;
-    existingSections?: Partial<Record<"vorwort" | "einleitung" | "ausblick" | "massnahmen", string>>;
-    locations?: Array<{
-      name: string;
-      usageType?: string;
-      area?: number;
-      heatingType?: string;
-      benchmarkDeviation?: number;
-    }>;
+  // Gewerbe / Sonstige
+  framework?: {
+    code: string;
+    label: string;
+    legalBasis: string;
+    description: string;
   };
+  context: Record<string, any>;
 }
 
-const SYSTEM_PROMPT = `Du bist ein professioneller Redakteur für kommunale Energieberichte in Deutschland.
+const SYSTEM_PROMPTS: Record<TenantType, string> = {
+  kommune: `Du bist ein professioneller Redakteur für kommunale Energieberichte in Deutschland.
 Schreibe in sachlichem, verwaltungsadäquatem Deutsch (Sie-Form), ohne Marketing-Floskeln.
 Verwende konkrete Zahlen wenn vorhanden.
-WICHTIG: Vermeide Wiederholungen. Jeder Abschnitt hat eine klar abgegrenzte Funktion. Wiederhole NICHT Inhalte, die in bereits vorhandenen Abschnitten stehen (z. B. dieselbe Aufzählung von Liegenschaftszahl, Fläche, CO₂, Kosten oder die wortgleiche Wiedergabe der Rechtsgrundlage). Erwähne die landesrechtliche Grundlage höchstens einmal kurz pro Abschnitt – nur wenn für den Zweck wirklich nötig.
-Antworte ausschließlich mit gültigem semantischen HTML (z.B. <p>, <h3>, <ul>, <li>) – kein Markdown, kein <html>/<body>-Wrapper, KEINE Überschrift mit dem Abschnittsnamen (Vorwort/Einleitung/Ausblick) – die Überschrift wird vom Layout gesetzt.`;
+WICHTIG: Vermeide Wiederholungen. Jeder Abschnitt hat eine klar abgegrenzte Funktion.
+Antworte ausschließlich mit gültigem semantischen HTML (z.B. <p>, <h3>, <ul>, <li>) – kein Markdown, kein <html>/<body>-Wrapper, KEINE Überschrift mit dem Abschnittsnamen.`,
+  gewerbe_industrie: `Du bist Redakteur für Energie- und Nachhaltigkeitsberichte von Unternehmen (Gewerbe/Industrie) in Deutschland.
+Schreibe sachlich, fachlich präzise, Sie-Form. Beziehe dich auf den gewählten Rechtsrahmen (EDL-G, EnEfG, CSRD/ESRS E1 oder ISO 50001) und nutze die übermittelten Kennzahlen (Endenergie, Scope 1/2, EnPI).
+Antworte ausschließlich mit gültigem semantischen HTML – kein Markdown, kein Wrapper, KEINE Abschnittsüberschrift.`,
+  privat: `Du bist Redakteur für persönliche Energieberichte für Privathaushalte.
+Schreibe verständlich, freundlich, Sie-Form, ohne Fachjargon. Beziehe dich auf BDEW-Vergleichswerte und GEG-Orientierung sofern Daten vorliegen.
+Antworte ausschließlich mit gültigem semantischen HTML – kein Markdown, kein Wrapper, KEINE Abschnittsüberschrift.`,
+  sonstige: `Du bist Redakteur für freiwillige Energie- und Nachhaltigkeitsberichte von Vereinen, Stiftungen, Kirchen und vergleichbaren Organisationen.
+Schreibe sachlich, motivierend, Sie-Form. Beziehe dich auf den gewählten Rahmen (DNK, EMASeasy oder freiwilliger Bericht) und auf die übermittelten Kennzahlen.
+Antworte ausschließlich mit gültigem semantischen HTML – kein Markdown, kein Wrapper, KEINE Abschnittsüberschrift.`,
+};
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function buildPrompt(body: RequestBody): string {
+function existingBlock(ctx: Record<string, any>, currentSection: string): string {
+  const existing = ctx.existingSections ?? {};
+  const keys = Object.keys(existing).filter((k) => k !== currentSection && existing[k]);
+  if (keys.length === 0) return "";
+  return (
+    "\n" +
+    keys
+      .map((k) => `--- Bereits vorhanden "${k}" (NICHT wiederholen) ---\n${stripHtml(existing[k]).slice(0, 1200)}`)
+      .join("\n\n") +
+    "\nFormuliere deinen Abschnitt so, dass er sich inhaltlich deutlich von den oben aufgeführten Abschnitten unterscheidet.\n"
+  );
+}
+
+function buildPromptKommune(body: RequestBody): string {
   const { section, profile, context } = body;
   const baseCtx = `
-Bundesland: ${profile.name} (${profile.code})
-Rechtliche Grundlage: ${profile.legalBasis}
-Berichtsturnus: alle ${profile.reportingCycle} Jahre
-Besondere Pflichten: ${profile.extraTopics.length ? profile.extraTopics.join("; ") : "keine landesspezifischen Zusatzpflichten"}
+Bundesland: ${profile?.name} (${profile?.code})
+Rechtliche Grundlage: ${profile?.legalBasis}
+Berichtsturnus: alle ${profile?.reportingCycle} Jahre
+Besondere Pflichten: ${profile?.extraTopics?.length ? profile.extraTopics.join("; ") : "keine"}
 Kommune/Mandant: ${context.tenantName ?? "(unbenannt)"}
 Berichtsjahr: ${context.reportYear}
 Anzahl Liegenschaften: ${context.locationCount ?? "?"}
@@ -57,34 +76,115 @@ Gesamtfläche NGF: ${context.totalArea ?? "?"} m²
 CO₂-Emissionen gesamt: ${context.totalCo2Tons ?? "?"} t/a
 Energiekosten gesamt: ${context.totalCostEur ?? "?"} €
 `;
-
-  const existing = context.existingSections ?? {};
-  const existingBlocks = (["vorwort", "einleitung", "ausblick", "massnahmen"] as const)
-    .filter((k) => k !== section && existing[k])
-    .map((k) => `--- Bereits vorhandener Abschnitt "${k}" (NICHT wiederholen, weder inhaltlich noch im Wortlaut) ---\n${stripHtml(existing[k]!).slice(0, 1500)}`)
-    .join("\n\n");
-  const avoidBlock = existingBlocks
-    ? `\n${existingBlocks}\n\nFormuliere deinen Abschnitt so, dass er sich inhaltlich und sprachlich deutlich von den oben aufgeführten Abschnitten unterscheidet.\n`
-    : "";
-
+  const avoid = existingBlock(context, section);
   switch (section) {
     case "vorwort":
-      return `${baseCtx}${avoidBlock}\nSchreibe ein 2 Absätze langes Vorwort der Verwaltungsspitze${context.mayorName ? ` (${context.mayorName})` : ""}.
-Tonalität: persönlich-politisch, wertschätzend, motivierend. Bezug auf Verantwortung der Kommune und kommunalen Klimaschutz.
-NICHT enthalten: methodische Details (Witterungsbereinigung, Benchmarks, BMWi/BMUB), wörtliche Wiederholung der Kennzahlen-Liste (Liegenschaftszahl, Fläche, CO₂, Kosten). Höchstens ein knapper qualitativer Verweis auf die Größenordnung des Portfolios.`;
+      return `${baseCtx}${avoid}\nSchreibe ein 2 Absätze langes Vorwort der Verwaltungsspitze. Tonalität: persönlich-politisch, motivierend.`;
     case "einleitung":
-      return `${baseCtx}${avoidBlock}\nSchreibe eine 3 Absätze lange Einleitung.
-Inhalt: (1) Zweck und Adressaten des Berichts, (2) methodisches Vorgehen – Witterungsbereinigung mit DWD-Klimafaktoren, Benchmark-Vergleich nach BMWi/BMUB 2015, Emissionsfaktoren –, (3) Aufbau des Berichts.
-NICHT enthalten: politisches Vorwort-Vokabular ("Vorbildfunktion", "Verantwortung"), wortgleiche Wiederholung der Rechtsgrundlage aus dem Vorwort. Kennzahlen nur dort einbauen, wo sie methodisch nötig sind (z. B. Bilanzraum), nicht als zweite Aufzählung.`;
+      return `${baseCtx}${avoid}\nSchreibe eine 3 Absätze lange Einleitung: Zweck, methodisches Vorgehen, Aufbau des Berichts.`;
     case "ausblick":
-      return `${baseCtx}${avoidBlock}\nSchreibe einen Ausblick (2–3 Absätze) mit konkreten nächsten Schritten: priorisierte Sanierungen, erneuerbare Wärme, PV-Ausbau, ggf. landesspezifische Pflichten.
-NICHT enthalten: Wiederholung der Rechtsgrundlage, Zweck des Berichts oder methodische Erläuterungen aus den vorherigen Abschnitten, wortgleiche Wiederholung der Gesamtkennzahlen. Fokus ausschließlich auf zukünftige Maßnahmen, Zeitachse und Ziele.`;
-    case "massnahmen": {
-      const locs = (context.locations ?? []).slice(0, 10).map((l) =>
-        `- ${l.name} (${l.usageType ?? "?"}, ${l.area ?? "?"} m², Heizung: ${l.heatingType ?? "?"}, Abweichung Benchmark: ${l.benchmarkDeviation ?? "?"} %)`
-      ).join("\n");
-      return `${baseCtx}${avoidBlock}\nFolgende Liegenschaften zeigen Auffälligkeiten:\n${locs}\n\nErstelle pro Liegenschaft eine konkrete Maßnahmenempfehlung (1–2 Sätze) als <h3>Liegenschaftsname</h3><p>Empfehlung</p>. Keine Wiederholung allgemeiner Bericht-Boilerplate.`;
-    }
+      return `${baseCtx}${avoid}\nSchreibe einen Ausblick (2–3 Absätze) mit konkreten nächsten Schritten.`;
+    default:
+      return `${baseCtx}${avoid}\nSchreibe einen passenden Abschnitt zu "${section}".`;
+  }
+}
+
+function buildPromptGewerbe(body: RequestBody): string {
+  const { section, framework, context } = body;
+  const baseCtx = `
+Rechtsrahmen: ${framework?.label} (${framework?.code})
+Rechtsgrundlage: ${framework?.legalBasis}
+Unternehmen/Mandant: ${context.tenantName ?? "(unbenannt)"}
+Berichtsjahr: ${context.reportYear}
+Anzahl Standorte: ${context.locationCount ?? "?"}
+Gesamtfläche NGF: ${context.totalArea ?? "?"} m²
+Endenergie gesamt: ${context.totalKwh ?? "?"} kWh
+Scope 1 (direkt): ${context.scope1Co2Tons ?? "?"} t CO₂
+Scope 2 (Strom/Wärme): ${context.scope2Co2Tons ?? "?"} t CO₂
+Energiekosten gesamt: ${context.totalCostEur ?? "?"} €
+Produktion: ${context.productionVolume ?? "–"} ${context.productionUnit ?? ""}
+Jahresumsatz: ${context.revenueEur ?? "–"} €
+`;
+  const avoid = existingBlock(context, section);
+  switch (section) {
+    case "executive_summary":
+      return `${baseCtx}${avoid}\nSchreibe eine Executive Summary (2 Absätze): wichtigste Kennzahlen, Trend, Handlungsbedarf.`;
+    case "methodik_audit":
+      return `${baseCtx}${avoid}\nBeschreibe Methodik und Bilanzraum (2–3 Absätze): Systemgrenzen, Datenquellen, Emissionsfaktoren, marktbasiert vs. standortbasiert (sofern relevant).`;
+    case "massnahmen_roi":
+      return `${baseCtx}${avoid}\nSchreibe 2 Absätze zu Maßnahmenpriorisierung und Wirtschaftlichkeit (Amortisation, ROI, EnPI-Wirkung).`;
+    case "ausblick_dekarbonisierung":
+      return `${baseCtx}${avoid}\nSchreibe einen Dekarbonisierungsausblick (2–3 Absätze): Pfade, Ziele, nächste Schritte gemäß ${framework?.code}.`;
+    default:
+      return `${baseCtx}${avoid}\nSchreibe einen passenden Abschnitt zu "${section}".`;
+  }
+}
+
+function buildPromptPrivat(body: RequestBody): string {
+  const { section, context } = body;
+  const baseCtx = `
+Berichtsjahr: ${context.reportYear}
+Haushaltsgröße: ${context.persons ?? "?"} Personen
+Wohnfläche: ${context.livingArea ?? "?"} m²
+Baujahr: ${context.constructionYear ?? "–"}
+Heizungsart: ${context.heatingType ?? "–"}
+Stromverbrauch: ${context.electricityKwh ?? 0} kWh (BDEW-Ø: ${context.bdewMin}–${context.bdewMax} kWh, Mittel ${context.bdewAvg})
+Wärmeverbrauch: ${context.heatingKwh ?? 0} kWh (${context.heatingPerM2 ?? "?"} kWh/m²a)
+CO₂-Fußabdruck: ${context.totalCo2Kg ?? "?"} kg
+Energiekosten: ${context.totalCostEur ?? "?"} €
+`;
+  const avoid = existingBlock(context, section);
+  switch (section) {
+    case "zusammenfassung":
+      return `${baseCtx}${avoid}\nSchreibe eine kurze, freundliche Zusammenfassung (2 Absätze).`;
+    case "vergleich_durchschnitt":
+      return `${baseCtx}${avoid}\nVergleiche den Haushalt mit dem BDEW-Durchschnitt und gib eine kurze Bewertung (2 Absätze).`;
+    case "spartipps":
+      return `${baseCtx}${avoid}\nGib 5 konkrete Spartipps als <ul><li>…</li></ul>, passend zu Verbrauch und Heizungsart.`;
+    default:
+      return `${baseCtx}${avoid}\nSchreibe einen passenden Abschnitt zu "${section}".`;
+  }
+}
+
+function buildPromptSonstige(body: RequestBody): string {
+  const { section, framework, context } = body;
+  const baseCtx = `
+Berichtsrahmen: ${framework?.label} (${framework?.code})
+Grundlage: ${framework?.legalBasis}
+Organisation: ${context.tenantName ?? "(unbenannt)"}
+Berichtsjahr: ${context.reportYear}
+Anzahl Objekte: ${context.locationCount ?? "?"}
+Endenergie gesamt: ${context.totalKwh ?? "?"} kWh
+CO₂ gesamt (Scope 1+2): ${context.totalCo2Tons ?? "?"} t
+Energiekosten: ${context.totalCostEur ?? "?"} €
+`;
+  const avoid = existingBlock(context, section);
+  switch (section) {
+    case "vorwort":
+      return `${baseCtx}${avoid}\nSchreibe ein 2 Absätze langes Vorwort der Leitung. Motivierend, werteorientiert.`;
+    case "nachhaltigkeitskontext":
+      return `${baseCtx}${avoid}\nSchreibe 2 Absätze zum Nachhaltigkeitskontext und zur Einordnung in ${framework?.code}.`;
+    case "massnahmen":
+      return `${baseCtx}${avoid}\nSchreibe 2 Absätze zu umgesetzten und geplanten Maßnahmen.`;
+    case "ausblick":
+      return `${baseCtx}${avoid}\nSchreibe einen Ausblick (2 Absätze) mit Zielen und nächsten Schritten.`;
+    default:
+      return `${baseCtx}${avoid}\nSchreibe einen passenden Abschnitt zu "${section}".`;
+  }
+}
+
+function buildPrompt(body: RequestBody): string {
+  const tt = body.tenantType ?? "kommune";
+  switch (tt) {
+    case "gewerbe_industrie":
+      return buildPromptGewerbe(body);
+    case "privat":
+      return buildPromptPrivat(body);
+    case "sonstige":
+      return buildPromptSonstige(body);
+    case "kommune":
+    default:
+      return buildPromptKommune(body);
   }
 }
 
@@ -93,7 +193,7 @@ serve(async (req) => {
 
   try {
     const body = (await req.json()) as RequestBody;
-    if (!body?.section || !body?.profile || !body?.context) {
+    if (!body?.section || !body?.context) {
       return new Response(JSON.stringify({ error: "Missing fields" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -102,13 +202,15 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
+    const tt: TenantType = body.tenantType ?? "kommune";
+
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: SYSTEM_PROMPTS[tt] },
           { role: "user", content: buildPrompt(body) },
         ],
       }),
