@@ -52,14 +52,14 @@ const ChargingUsersTab = () => {
 
   const getGroupName = (gid: string | null) => groups.find((g) => g.id === gid)?.name || "—";
   const getTariffName = (tid: string | null) => tariffs.find((t) => t.id === tid)?.name || null;
+  const defaultTariff = tariffs.find((t) => t.is_default && t.is_active);
 
-  /** Resolve effective tariff: user > group > default active */
+  /** Resolve effective tariff: user > group > default */
   const getEffectiveTariff = (u: ChargingUser) => {
     if (u.tariff_id) return getTariffName(u.tariff_id);
     const group = groups.find((g) => g.id === u.group_id);
     if (group?.tariff_id) return getTariffName(group.tariff_id);
-    const active = tariffs.find((t) => t.is_active);
-    return active ? `${active.name} (Standard)` : "—";
+    return defaultTariff ? `${defaultTariff.name} (Standard)` : "—";
   };
 
   const statusBadge = (status: string) => {
