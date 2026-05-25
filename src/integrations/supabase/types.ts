@@ -1176,6 +1176,7 @@ export type Database = {
           idle_fee_grace_minutes: number
           idle_fee_per_minute: number
           is_active: boolean
+          is_default: boolean
           name: string
           price_per_kwh: number
           tax_rate_percent: number
@@ -1190,6 +1191,7 @@ export type Database = {
           idle_fee_grace_minutes?: number
           idle_fee_per_minute?: number
           is_active?: boolean
+          is_default?: boolean
           name: string
           price_per_kwh?: number
           tax_rate_percent?: number
@@ -1204,6 +1206,7 @@ export type Database = {
           idle_fee_grace_minutes?: number
           idle_fee_per_minute?: number
           is_active?: boolean
+          is_default?: boolean
           name?: string
           price_per_kwh?: number
           tax_rate_percent?: number
