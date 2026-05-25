@@ -300,13 +300,17 @@ const ChargingBilling = () => {
                           <TableHead>{t("charging.idleFee" as any)}</TableHead>
                           <TableHead>MwSt</TableHead>
                           <TableHead>{t("charging.active" as any)}</TableHead>
+                          <TableHead>Standard</TableHead>
                           {isAdmin && <TableHead className="w-24">{t("charging.actions" as any)}</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {tariffs.map((tariff) => (
                           <TableRow key={tariff.id}>
-                            <TableCell className="font-medium">{tariff.name}</TableCell>
+                            <TableCell className="font-medium">
+                              {tariff.name}
+                              {tariff.is_default && <Badge variant="secondary" className="ml-2">Standard</Badge>}
+                            </TableCell>
                             <TableCell>{fmtCurrency(tariff.price_per_kwh)}</TableCell>
                             <TableCell>{fmtCurrency(tariff.base_fee)}</TableCell>
                             <TableCell>{tariff.idle_fee_per_minute > 0 ? <span className="text-sm">{fmtCurrency(tariff.idle_fee_per_minute)}/Min. <span className="text-muted-foreground">ab {tariff.idle_fee_grace_minutes} Min.</span></span> : <span className="text-muted-foreground">—</span>}</TableCell>
@@ -315,6 +319,13 @@ const ChargingBilling = () => {
                               <Switch
                                 checked={tariff.is_active}
                                 onCheckedChange={(checked) => updateTariff.mutate({ id: tariff.id, is_active: checked })}
+                                disabled={!isAdmin}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Switch
+                                checked={tariff.is_default}
+                                onCheckedChange={(checked) => handleToggleDefault(tariff, checked)}
                                 disabled={!isAdmin}
                               />
                             </TableCell>
