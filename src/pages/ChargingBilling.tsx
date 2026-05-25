@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, TrendingUp, Percent, FileText, Send, Settings, Download } from "lucide-react";
 import { format } from "date-fns";
 import { fmtNum, fmtCurrency, fmtKwh } from "@/lib/formatCharging";
@@ -47,6 +48,24 @@ const ChargingBilling = () => {
   const [tariffOpen, setTariffOpen] = useState(false);
   const [editTariff, setEditTariff] = useState<ChargingTariff | null>(null);
   const [tariffForm, setTariffForm] = useState({ name: "", price_per_kwh: "0.35", base_fee: "0", idle_fee_per_minute: "0", idle_fee_grace_minutes: "60", tax_rate_percent: "19", currency: "EUR" });
+  const [defaultConfirm, setDefaultConfirm] = useState<{ tariffId: string; currentDefaultName: string } | null>(null);
+
+  const applySetDefault = (tariffId: string) => {
+    updateTariff.mutate({ id: tariffId, is_default: true });
+  };
+
+  const handleToggleDefault = (tariff: ChargingTariff, checked: boolean) => {
+    if (!checked) {
+      updateTariff.mutate({ id: tariff.id, is_default: false });
+      return;
+    }
+    const currentDefault = tariffs.find((t) => t.is_default && t.id !== tariff.id);
+    if (currentDefault) {
+      setDefaultConfirm({ tariffId: tariff.id, currentDefaultName: currentDefault.name });
+    } else {
+      applySetDefault(tariff.id);
+    }
+  };
   const [period, setPeriod] = useState<"day" | "week" | "month" | "quarter" | "year">("month");
 
   // Invoice generation dialog
@@ -281,13 +300,17 @@ const ChargingBilling = () => {
                           <TableHead>{t("charging.idleFee" as any)}</TableHead>
                           <TableHead>MwSt</TableHead>
                           <TableHead>{t("charging.active" as any)}</TableHead>
+                          <TableHead>Standard</TableHead>
                           {isAdmin && <TableHead className="w-24">{t("charging.actions" as any)}</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {tariffs.map((tariff) => (
                           <TableRow key={tariff.id}>
-                            <TableCell className="font-medium">{tariff.name}</TableCell>
+                            <TableCell className="font-medium">
+                              {tariff.name}
+                              {tariff.is_default && <Badge variant="secondary" className="ml-2">Standard</Badge>}
+                            </TableCell>
                             <TableCell>{fmtCurrency(tariff.price_per_kwh)}</TableCell>
                             <TableCell>{fmtCurrency(tariff.base_fee)}</TableCell>
                             <TableCell>{tariff.idle_fee_per_minute > 0 ? <span className="text-sm">{fmtCurrency(tariff.idle_fee_per_minute)}/Min. <span className="text-muted-foreground">ab {tariff.idle_fee_grace_minutes} Min.</span></span> : <span className="text-muted-foreground">—</span>}</TableCell>
@@ -296,6 +319,13 @@ const ChargingBilling = () => {
                               <Switch
                                 checked={tariff.is_active}
                                 onCheckedChange={(checked) => updateTariff.mutate({ id: tariff.id, is_active: checked })}
+                                disabled={!isAdmin}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Switch
+                                checked={tariff.is_default}
+                                onCheckedChange={(checked) => handleToggleDefault(tariff, checked)}
                                 disabled={!isAdmin}
                               />
                             </TableCell>
@@ -322,6 +352,23 @@ const ChargingBilling = () => {
                   <Button onClick={handleEditTariff} disabled={!tariffForm.name}>{t("common.save" as any)}</Button>
                 </DialogContent>
               </Dialog>
+
+              <AlertDialog open={!!defaultConfirm} onOpenChange={(open) => { if (!open) setDefaultConfirm(null); }}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Standard-Tarif ändern?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Achtung! Der Tarif „{defaultConfirm?.currentDefaultName}" ist aktuell als Standard hinterlegt. Möchten Sie stattdessen diesen Tarif als neuen Standard definieren? Neue Lade-Nutzer ohne individuellen Tarif werden anschließend automatisch dem neuen Standard-Tarif zugeordnet.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => { if (defaultConfirm) applySetDefault(defaultConfirm.tariffId); setDefaultConfirm(null); }}>
+                      Als Standard setzen
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </TabsContent>
 
             {/* Invoices Tab */}
