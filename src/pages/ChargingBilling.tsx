@@ -352,6 +352,23 @@ const ChargingBilling = () => {
                   <Button onClick={handleEditTariff} disabled={!tariffForm.name}>{t("common.save" as any)}</Button>
                 </DialogContent>
               </Dialog>
+
+              <AlertDialog open={!!defaultConfirm} onOpenChange={(open) => { if (!open) setDefaultConfirm(null); }}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Standard-Tarif ändern?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Achtung! Der Tarif „{defaultConfirm?.currentDefaultName}" ist aktuell als Standard hinterlegt. Möchten Sie stattdessen diesen Tarif als neuen Standard definieren? Neue Lade-Nutzer ohne individuellen Tarif werden anschließend automatisch dem neuen Standard-Tarif zugeordnet.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => { if (defaultConfirm) applySetDefault(defaultConfirm.tariffId); setDefaultConfirm(null); }}>
+                      Als Standard setzen
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </TabsContent>
 
             {/* Invoices Tab */}
