@@ -294,10 +294,11 @@ const ChargingUsersTab = () => {
             <div className="grid grid-cols-2 gap-4">
               <div><Label>{t("cu.rfidTag" as any)}</Label><Input value={userForm.rfid_tag} onChange={(e) => setUserForm({ ...userForm, rfid_tag: e.target.value })} placeholder="z. B. AB12CD34" /></div>
               <div>
-                <Label>{t("cu.userGroup" as any)} *</Label>
-                <Select value={userForm.group_id} onValueChange={(v) => setUserForm({ ...userForm, group_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Gruppe wählen…" /></SelectTrigger>
+                <Label>{t("cu.userGroup" as any)}</Label>
+                <Select value={userForm.group_id || "__none__"} onValueChange={(v) => setUserForm({ ...userForm, group_id: v === "__none__" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="Keine Gruppe" /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="__none__">Keine Gruppe</SelectItem>
                     {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
