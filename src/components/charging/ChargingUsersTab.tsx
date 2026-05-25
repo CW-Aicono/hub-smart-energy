@@ -72,7 +72,7 @@ const ChargingUsersTab = () => {
   };
 
   // --- User CRUD ---
-  const openAddUser = () => { setUserForm(emptyUserForm); setEditingUser(null); setUserDialogOpen(true); };
+  const openAddUser = () => { setUserForm({ ...emptyUserForm, tariff_id: defaultTariff?.id || "" }); setEditingUser(null); setUserDialogOpen(true); };
   const openEditUser = (u: ChargingUser) => {
     setUserForm({ name: u.name, email: u.email || "", rfid_tag: u.rfid_tag || "", phone: u.phone || "", group_id: u.group_id || "", tariff_id: u.tariff_id || "", notes: u.notes || "" });
     setEditingUser(u); setUserDialogOpen(true);
