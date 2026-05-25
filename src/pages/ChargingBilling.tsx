@@ -11,6 +11,7 @@ import { useChargePoints } from "@/hooks/useChargePoints";
 import { useTenant } from "@/hooks/useTenant";
 import { useChargingInvoiceSettings } from "@/hooks/useChargingInvoiceSettings";
 import ChargingUsersTab from "@/components/charging/ChargingUsersTab";
+import RoamingTab from "@/components/charging/RoamingTab";
 import ChargingInvoiceSettingsDialog from "@/components/charging/ChargingInvoiceSettingsDialog";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -571,13 +572,9 @@ const ChargingBilling = () => {
 
             {/* Roaming Tab */}
             <TabsContent value="roaming">
-              <Card>
-                <CardHeader><CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" />{t("charging.roaming" as any)}</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">{t("charging.roamingDesc" as any)}</p>
-                </CardContent>
-              </Card>
+              <RoamingTab />
             </TabsContent>
+
           </Tabs>
         </div>
         <ChargingInvoiceSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
