@@ -48,6 +48,24 @@ const ChargingBilling = () => {
   const [tariffOpen, setTariffOpen] = useState(false);
   const [editTariff, setEditTariff] = useState<ChargingTariff | null>(null);
   const [tariffForm, setTariffForm] = useState({ name: "", price_per_kwh: "0.35", base_fee: "0", idle_fee_per_minute: "0", idle_fee_grace_minutes: "60", tax_rate_percent: "19", currency: "EUR" });
+  const [defaultConfirm, setDefaultConfirm] = useState<{ tariffId: string; currentDefaultName: string } | null>(null);
+
+  const applySetDefault = (tariffId: string) => {
+    updateTariff.mutate({ id: tariffId, is_default: true });
+  };
+
+  const handleToggleDefault = (tariff: ChargingTariff, checked: boolean) => {
+    if (!checked) {
+      updateTariff.mutate({ id: tariff.id, is_default: false });
+      return;
+    }
+    const currentDefault = tariffs.find((t) => t.is_default && t.id !== tariff.id);
+    if (currentDefault) {
+      setDefaultConfirm({ tariffId: tariff.id, currentDefaultName: currentDefault.name });
+    } else {
+      applySetDefault(tariff.id);
+    }
+  };
   const [period, setPeriod] = useState<"day" | "week" | "month" | "quarter" | "year">("month");
 
   // Invoice generation dialog
