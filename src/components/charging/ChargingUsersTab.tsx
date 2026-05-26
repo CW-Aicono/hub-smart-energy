@@ -44,11 +44,21 @@ const ChargingUsersTab = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ type: "user" | "group"; id: string; name: string } | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked" | "archived">("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [ioOpen, setIoOpen] = useState(false);
   const [ioType, setIoType] = useState<ExportType>("users");
   const openIo = (t: ExportType) => { setIoType(t); setIoOpen(true); };
 
-  const filteredUsers = statusFilter === "all" ? users : users.filter((u) => u.status === statusFilter);
+  const filteredUsers = (statusFilter === "all" ? users : users.filter((u) => u.status === statusFilter))
+    .filter((u) => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        u.name?.toLowerCase().includes(q) ||
+        (u.email?.toLowerCase().includes(q) ?? false) ||
+        (u.rfid_tag?.toLowerCase().includes(q) ?? false)
+      );
+    });
 
   const getGroupName = (gid: string | null) => groups.find((g) => g.id === gid)?.name || "—";
   const getTariffName = (tid: string | null) => tariffs.find((t) => t.id === tid)?.name || null;
