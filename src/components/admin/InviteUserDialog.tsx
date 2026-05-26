@@ -194,7 +194,7 @@ const InviteUserDialog = () => {
             </div>
             <div className="space-y-2">
               <Label>{T("invite.roleLabel")}</Label>
-              <Select value={role} onValueChange={(v: "admin" | "user") => setRole(v)}>
+              <Select value={roleValue} onValueChange={(v) => setRoleValue(v)} disabled={rolesLoading}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -211,6 +211,19 @@ const InviteUserDialog = () => {
                       {T("invite.roleAdmin")}
                     </div>
                   </SelectItem>
+                  {customRoles.length > 0 && (
+                    <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Eigene Rollen
+                    </div>
+                  )}
+                  {customRoles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4" />
+                        {r.name}
+                      </div>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
