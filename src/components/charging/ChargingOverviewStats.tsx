@@ -142,18 +142,12 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
               <XAxis dataKey="day" tick={{ fontSize: 12 }} />
               <YAxis hide />
               <Tooltip
-                formatter={(value: number, name: string) => [
-                  `${value.toFixed(1)} %`,
-                  name === "available" ? t("cos.available" as any) : name === "charging" ? t("cos.charging" as any) : t("cos.error" as any),
-                ]}
+                formatter={(value: number, name: string) => [`${value.toFixed(1)} %`, statusLabel(name)]}
               />
-              <Legend
-                formatter={(value: string) =>
-                  value === "available" ? t("cos.available" as any) : value === "charging" ? t("cos.charging" as any) : t("cos.error" as any)
-                }
-              />
-              <Bar dataKey="available" stackId="a" fill="hsl(var(--primary))" />
-              <Bar dataKey="charging" stackId="a" fill="hsl(var(--chart-4))" />
+              <Legend formatter={(value: string) => statusLabel(value)} />
+              <Bar dataKey="available" stackId="a" fill="hsl(152, 55%, 42%)" />
+              <Bar dataKey="charging" stackId="a" fill="hsl(210, 90%, 55%)" />
+              <Bar dataKey="offline" stackId="a" fill="hsl(30, 95%, 55%)" />
               <Bar dataKey="error" stackId="a" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
