@@ -41,7 +41,7 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
 
   const chartData = useMemo(() => {
     const today = format(new Date(), "yyyy-MM-dd");
-    const days: { day: string; available: number; charging: number; error: number }[] = [];
+    const days: { day: string; available: number; charging: number; offline: number; error: number }[] = [];
 
     for (let i = periodDays - 1; i >= 0; i--) {
       const d = subDays(new Date(), i);
@@ -54,7 +54,7 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
       );
 
       const cpCount = chargePoints.length;
-      if (cpCount === 0) { days.push({ day: dayLabel, available: 0, charging: 0, error: 0 }); continue; }
+      if (cpCount === 0) { days.push({ day: dayLabel, available: 0, charging: 0, offline: 0, error: 0 }); continue; }
 
       const hoursInDay = isToday ? new Date().getHours() + (new Date().getMinutes() / 60) : 24;
       const totalHours = cpCount * hoursInDay;
@@ -71,22 +71,34 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
       }, 0));
 
       // Approximate: project current status onto all days (no historic status log)
-      const errorCpCount = chargePoints.filter((cp) => {
+      let errorCpCount = 0;
+      let offlineCpCount = 0;
+      for (const cp of chargePoints) {
         const s = normalizeConnectorStatus(cp.status, (cp as any).ws_connected !== false);
-        return s === "faulted" || s === "offline";
-      }).length;
+        if (s === "faulted") errorCpCount++;
+        else if (s === "offline") offlineCpCount++;
+      }
       const errorHours = errorCpCount * hoursInDay;
+      const offlineHours = offlineCpCount * hoursInDay;
 
-      const availableHours = Math.max(0, totalHours - chargingHours - errorHours);
+      const availableHours = Math.max(0, totalHours - chargingHours - errorHours - offlineHours);
       days.push({
         day: dayLabel,
         available: totalHours > 0 ? (availableHours / totalHours) * 100 : 0,
         charging: totalHours > 0 ? (chargingHours / totalHours) * 100 : 0,
+        offline: totalHours > 0 ? (offlineHours / totalHours) * 100 : 0,
         error: totalHours > 0 ? (errorHours / totalHours) * 100 : 0,
       });
     }
     return days;
   }, [periodSessions, periodDays, chargePoints]);
+
+  const statusLabel = (key: string) => {
+    if (key === "available") return t("cos.available" as any);
+    if (key === "charging") return t("cos.charging" as any);
+    if (key === "offline") return "Offline";
+    return t("cos.error" as any);
+  };
 
   return (
     <Card>
