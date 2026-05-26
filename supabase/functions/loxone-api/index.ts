@@ -448,10 +448,25 @@ serve(async (req) => {
 
       // Get user's tenant_id
       const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userId).single();
-      if (!profile?.tenant_id) {
+      // Super-admins have no tenant_id but should still be able to call this
+      // (e.g. during a Remote-Support session). Tenant ownership is enforced
+      // below against the location_integration.
+      const { data: roleRow } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "super_admin")
+        .maybeSingle();
+      const isSuperAdmin = !!roleRow;
+
+      if (!profile?.tenant_id && !isSuperAdmin) {
         return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      userTenantId = profile.tenant_id;
+      userTenantId = profile?.tenant_id ?? null;
+      if (isSuperAdmin) {
+        // Treat super-admin like service-role for downstream tenant checks
+        isServiceRole = true;
+      }
     }
 
     const requestBody = await req.json();
