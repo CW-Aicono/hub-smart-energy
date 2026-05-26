@@ -413,15 +413,23 @@ const SuperAdminTenantDetail = () => {
             <h1 className="text-2xl font-bold">{tenant?.name ?? t("billing.tenant")}</h1>
             <p className="text-sm text-muted-foreground mt-1">{tenant?.slug}</p>
           </div>
-          <Button
-            variant={(tenant as any)?.remote_support_enabled ? "default" : "outline"}
-            disabled={!(tenant as any)?.remote_support_enabled}
-            onClick={() => { if ((tenant as any)?.remote_support_enabled) toast.success(t("tenant_detail.remote_support") + " – " + tenant?.name); }}
-          >
-            <HeadsetIcon className="h-4 w-4 mr-2" />
-            {t("tenant_detail.remote_support")}
-            {(tenant as any)?.remote_support_enabled && <Badge variant="secondary" className="ml-2 bg-green-500/20 text-green-600">{t("common.active")}</Badge>}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={(tenant as any)?.remote_support_enabled ? "default" : "outline"}
+              disabled={!(tenant as any)?.remote_support_enabled || startingSupport}
+              onClick={handleStartRemoteSupport}
+            >
+              <HeadsetIcon className="h-4 w-4 mr-2" />
+              {activeSession ? "Sitzung fortsetzen" : t("tenant_detail.remote_support")}
+              {activeSession && <Badge variant="secondary" className="ml-2 bg-green-500/20 text-green-600">{t("common.active")}</Badge>}
+            </Button>
+            {activeSession && (
+              <Button variant="outline" onClick={handleEndRemoteSupport}>
+                Beenden
+              </Button>
+            )}
+          </div>
+
         </header>
         <div className="p-6">
           <Tabs defaultValue="info">
