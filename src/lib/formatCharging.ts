@@ -46,3 +46,28 @@ export function normalizeConnectorStatus(
   if (wsConnected === false) return "offline";
   return (raw ?? "").toLowerCase();
 }
+
+/**
+ * Decides whether a charge point is "online" for UI purposes.
+ *
+ * Priority:
+ *   1. Fresh heartbeat (< 3 min) → online, even if `ws_connected` is null/false
+ *      (older OCPP-server builds e.g. on Hetzner may never have written
+ *      `ws_connected=true`, but they keep updating `last_heartbeat`).
+ *   2. Explicit `ws_connected === true` → online.
+ *   3. Otherwise offline.
+ *
+ * Fixes the case where the CP-level badge showed "Verfügbar" but each
+ * connector card showed "Offline" due to inconsistent fallback logic.
+ */
+export function isChargePointOnline(
+  wsConnected: boolean | null | undefined,
+  lastHeartbeat: string | null | undefined,
+  freshMs: number = 3 * 60 * 1000,
+): boolean {
+  if (lastHeartbeat) {
+    const age = Date.now() - new Date(lastHeartbeat).getTime();
+    if (Number.isFinite(age) && age >= 0 && age < freshMs) return true;
+  }
+  return wsConnected === true;
+}

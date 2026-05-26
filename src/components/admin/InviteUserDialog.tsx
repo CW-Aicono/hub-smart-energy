@@ -3,12 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/useTenant";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useCustomRoles } from "@/hooks/useCustomRoles";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserPlus, Shield, User, Mail, AlertCircle, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { UserPlus, Shield, User, Mail, AlertCircle, CheckCircle2, Loader2, XCircle, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type CheckStatus =
@@ -23,11 +24,13 @@ const InviteUserDialog = () => {
   const { tenant } = useTenant();
   const { toast } = useToast();
   const { t } = useTranslation();
+  const { roles: customRoles, loading: rolesLoading } = useCustomRoles();
   const T = (key: string) => t(key as any);
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState<"admin" | "user">("user");
+  // "admin" | "user" | <custom_role_id>
+  const [roleValue, setRoleValue] = useState<string>("user");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [check, setCheck] = useState<CheckStatus>({ kind: "idle" });
@@ -67,6 +70,15 @@ const InviteUserDialog = () => {
     if (check.kind === "blocked") return;
     setLoading(true);
 
+    // Map the unified select value back to (system role, custom_role_id):
+    //  - "admin"          → admin system role, no custom role
+    //  - "user"           → user  system role, no custom role
+    //  - <custom_role_id> → user  system role, with custom_role_id
+    const isAdmin = roleValue === "admin";
+    const isPlainUser = roleValue === "user";
+    const role = isAdmin ? "admin" : "user";
+    const customRoleId = isAdmin || isPlainUser ? null : roleValue;
+
     try {
       const { data, error } = await supabase.functions.invoke("activate-invited-user", {
         body: {
@@ -74,6 +86,7 @@ const InviteUserDialog = () => {
           email,
           name: name || undefined,
           role,
+          customRoleId,
           tenantId: tenant?.id,
           redirectTo: `${window.location.origin}/set-password`,
         },
@@ -102,7 +115,7 @@ const InviteUserDialog = () => {
   const resetDialog = () => {
     setEmail("");
     setName("");
-    setRole("user");
+    setRoleValue("user");
     setDone(false);
     setCheck({ kind: "idle" });
   };
@@ -181,7 +194,7 @@ const InviteUserDialog = () => {
             </div>
             <div className="space-y-2">
               <Label>{T("invite.roleLabel")}</Label>
-              <Select value={role} onValueChange={(v: "admin" | "user") => setRole(v)}>
+              <Select value={roleValue} onValueChange={(v) => setRoleValue(v)} disabled={rolesLoading}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -198,6 +211,19 @@ const InviteUserDialog = () => {
                       {T("invite.roleAdmin")}
                     </div>
                   </SelectItem>
+                  {customRoles.length > 0 && (
+                    <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Eigene Rollen
+                    </div>
+                  )}
+                  {customRoles.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4" />
+                        {r.name}
+                      </div>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
