@@ -202,6 +202,7 @@ const App = () => (
                       <Route path="/charging/points" element={<M><ChargingPoints /></M>} />
                       <Route path="/charging/points/:id" element={<M><ChargePointDetail /></M>} />
                       <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
+                      <Route path="/charging/users" element={<M><ChargingUsersPage /></M>} />
                       <Route path="/charging/app" element={<M><ChargingAppAdmin /></M>} />
                       <Route path="/charging/ocpp-integration" element={<M><OcppIntegration /></M>} />
                       
