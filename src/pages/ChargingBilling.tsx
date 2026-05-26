@@ -10,7 +10,7 @@ import { useChargingInvoices } from "@/hooks/useChargingInvoices";
 import { useChargePoints } from "@/hooks/useChargePoints";
 import { useTenant } from "@/hooks/useTenant";
 import { useChargingInvoiceSettings } from "@/hooks/useChargingInvoiceSettings";
-import ChargingUsersTab from "@/components/charging/ChargingUsersTab";
+
 import RoamingTab from "@/components/charging/RoamingTab";
 import ChargingInvoiceSettingsDialog from "@/components/charging/ChargingInvoiceSettingsDialog";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -235,7 +235,6 @@ const ChargingBilling = () => {
               <TabsTrigger value="sessions">{t("charging.tabSessions" as any)}</TabsTrigger>
               <TabsTrigger value="tariffs">{t("charging.tabTariffs" as any)}</TabsTrigger>
               <TabsTrigger value="invoices">{t("charging.tabInvoices" as any)}</TabsTrigger>
-              <TabsTrigger value="users">{t("charging.tabUsers" as any)}</TabsTrigger>
               <TabsTrigger value="roaming">{t("charging.tabRoaming" as any)}</TabsTrigger>
             </TabsList>
 
@@ -565,10 +564,7 @@ const ChargingBilling = () => {
               </Dialog>
             </TabsContent>
 
-            {/* Users Tab */}
-            <TabsContent value="users">
-              <ChargingUsersTab />
-            </TabsContent>
+
 
             {/* Roaming Tab */}
             <TabsContent value="roaming">
