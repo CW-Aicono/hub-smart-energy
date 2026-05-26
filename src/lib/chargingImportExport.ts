@@ -136,7 +136,7 @@ export function downloadTemplate(type: ExportType, format: ExportFormat) {
   const sample: Record<ExportType, (string | number | null)[][]> = {
     users: [
       [...USER_HEADERS],
-      ["Max Mustermann", "max@example.com", "04 A1 B2 C3", "+49 170 0000000", "Mitarbeiter", "Standard-Tarif", "active", "Beispielzeile — bitte ersetzen"],
+      ["Max Mustermann", "max@example.com", "04A1B2C3", "+49 170 0000000", "Mitarbeiter", "Standard-Tarif", "active", "Beispielzeile — bitte ersetzen"],
     ],
     groups: [
       [...GROUP_HEADERS],
@@ -144,7 +144,7 @@ export function downloadTemplate(type: ExportType, format: ExportFormat) {
     ],
     nfc: [
       [...NFC_HEADERS],
-      ["max@example.com", "04 A1 B2 C3", "Max Mustermann"],
+      ["max@example.com", "04A1B2C3", "Max Mustermann"],
     ],
   };
   const fname: Record<ExportType, string> = {
