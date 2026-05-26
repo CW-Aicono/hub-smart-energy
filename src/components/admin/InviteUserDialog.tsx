@@ -3,12 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/useTenant";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useCustomRoles } from "@/hooks/useCustomRoles";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserPlus, Shield, User, Mail, AlertCircle, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { UserPlus, Shield, User, Mail, AlertCircle, CheckCircle2, Loader2, XCircle, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type CheckStatus =
