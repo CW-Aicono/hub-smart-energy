@@ -53,6 +53,7 @@ const ChargingPoints = lazy(() => import("./pages/ChargingPoints"));
 const OcppIntegration = lazy(() => import("./pages/OcppIntegration"));
 const ChargePointDetail = lazy(() => import("./pages/ChargePointDetail"));
 const ChargingBilling = lazy(() => import("./pages/ChargingBilling"));
+const ChargingUsersPage = lazy(() => import("./pages/ChargingUsersPage"));
 const Automation = lazy(() => import("./pages/Automation"));
 const EmailTemplates = lazy(() => import("./pages/EmailTemplates"));
 const LiveValues = lazy(() => import("./pages/LiveValues"));
