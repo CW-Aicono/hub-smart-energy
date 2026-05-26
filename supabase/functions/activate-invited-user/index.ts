@@ -93,7 +93,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     // ── MODE 1: Direct invite (new flow – no invitation record needed) ──
     if (body.directInvite) {
-      const { email, name, role, tenantId: overrideTenantId, force } = body;
+      const { email, name, role, tenantId: overrideTenantId, force, customRoleId } = body;
       if (!email) throw new Error("Missing email");
 
       const effectiveTenantId = overrideTenantId || tenantId;
