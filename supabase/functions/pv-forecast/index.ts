@@ -25,11 +25,14 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
 const round1 = (value: number) => Math.round(value * 10) / 10;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-const fetchWithRetry = async (url: string, retries = 3, delayMs = 1500): Promise<Response> => {
+const fetchWithRetry = async (url: string, retries = 3, delayMs = 1500, timeoutMs = 15000): Promise<Response> => {
   let lastError: Error | null = null;
   for (let attempt = 1; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
       if (res.ok) return res;
       const status = res.status;
       console.warn(`Fetch attempt ${attempt}/${retries} failed (HTTP ${status}) for ${url.substring(0, 120)}...`);
@@ -37,8 +40,10 @@ const fetchWithRetry = async (url: string, retries = 3, delayMs = 1500): Promise
       if (attempt < retries) await new Promise((r) => setTimeout(r, delayMs * attempt));
       else return res;
     } catch (err) {
+      clearTimeout(timer);
       lastError = err instanceof Error ? err : new Error(String(err));
-      console.warn(`Fetch attempt ${attempt}/${retries} network error for ${url.substring(0, 120)}: ${lastError.message}`);
+      const aborted = (err as any)?.name === "AbortError";
+      console.warn(`Fetch attempt ${attempt}/${retries} ${aborted ? `timeout after ${timeoutMs}ms` : "network error"} for ${url.substring(0, 120)}: ${lastError.message}`);
       if (attempt < retries) await new Promise((r) => setTimeout(r, delayMs * attempt));
     }
   }
