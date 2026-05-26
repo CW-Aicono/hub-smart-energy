@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
-import { fmtKwh, fmtKw, fmtNum, normalizeConnectorStatus } from "@/lib/formatCharging";
+import { fmtKwh, fmtKw, fmtNum, normalizeConnectorStatus, isChargePointOnline } from "@/lib/formatCharging";
 import { mapOcppRejectMessage } from "@/lib/ocppErrorMessages";
 import { supabase } from "@/integrations/supabase/client";
 import { useOcppMeterValue } from "@/hooks/useOcppMeterValue";
