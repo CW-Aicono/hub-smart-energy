@@ -233,6 +233,59 @@ const SuperAdminTenantDetail = () => {
     },
   });
 
+  // Active (not ended, not expired) remote-support session for this tenant
+  const activeSession = (supportSessions as any[]).find(
+    (s) => !s.ended_at && new Date(s.expires_at).getTime() > Date.now()
+  );
+
+  const [startingSupport, setStartingSupport] = useState(false);
+  const handleStartRemoteSupport = async () => {
+    if (!id || !user) return;
+    setStartingSupport(true);
+    try {
+      let sessionId: string | null = activeSession?.id ?? null;
+      if (!sessionId) {
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        const { data: inserted, error: insErr } = await supabase
+          .from("support_sessions")
+          .insert({
+            tenant_id: id,
+            super_admin_user_id: user.id,
+            started_at: new Date().toISOString(),
+            expires_at: expiresAt,
+            reason: "Remote-Support Sitzung",
+          } as any)
+          .select("id")
+          .single();
+        if (insErr) throw insErr;
+        sessionId = (inserted as any).id;
+      }
+      enterSupportView(id, sessionId!);
+      queryClient.invalidateQueries({ queryKey: ["tenant-support-sessions", id] });
+      navigate("/");
+    } catch (e: any) {
+      toast.error("Remote-Support konnte nicht gestartet werden: " + (e?.message ?? ""));
+    } finally {
+      setStartingSupport(false);
+    }
+  };
+
+  const handleEndRemoteSupport = async () => {
+    if (!activeSession) return;
+    try {
+      await supabase
+        .from("support_sessions")
+        .update({ ended_at: new Date().toISOString() } as any)
+        .eq("id", activeSession.id);
+      if (getSupportViewSessionId() === activeSession.id) exitSupportView();
+      queryClient.invalidateQueries({ queryKey: ["tenant-support-sessions", id] });
+      toast.success("Remote-Support beendet");
+    } catch (e: any) {
+      toast.error("Beenden fehlgeschlagen: " + (e?.message ?? ""));
+    }
+  };
+
+
   if (authLoading || roleLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
   }
