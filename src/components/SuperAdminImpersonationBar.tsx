@@ -60,7 +60,12 @@ export default function SuperAdminImpersonationBar() {
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 z-[70] bg-primary text-primary-foreground px-4 py-2 flex items-center justify-center gap-4 shadow-lg"
+      role="button"
+      tabIndex={0}
+      onClick={handleEnd}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleEnd(); }}
+      title="Klicken zum Beenden der Support-Sitzung"
+      className="fixed top-0 left-0 right-0 z-[70] bg-primary text-primary-foreground px-4 py-2 flex items-center justify-center gap-4 shadow-lg cursor-pointer hover:brightness-110 transition"
       style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
     >
       <HeadsetIcon className="h-4 w-4 shrink-0" />
@@ -70,7 +75,7 @@ export default function SuperAdminImpersonationBar() {
       <Button
         size="sm"
         variant="secondary"
-        onClick={handleEnd}
+        onClick={(e) => { e.stopPropagation(); handleEnd(); }}
         disabled={ending}
         className="h-7 text-xs gap-1"
       >
