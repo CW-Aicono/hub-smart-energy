@@ -2,6 +2,8 @@ import { useState, useEffect, createContext, useContext, useCallback } from "rea
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useDemoMode } from "@/contexts/DemoMode";
+import { getSupportViewTenantId, onSupportViewChanged } from "@/lib/supportView";
+
 
 interface TenantBranding {
   primary_color: string;
