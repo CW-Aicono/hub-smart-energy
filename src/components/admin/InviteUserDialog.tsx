@@ -24,11 +24,13 @@ const InviteUserDialog = () => {
   const { tenant } = useTenant();
   const { toast } = useToast();
   const { t } = useTranslation();
+  const { roles: customRoles, loading: rolesLoading } = useCustomRoles();
   const T = (key: string) => t(key as any);
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState<"admin" | "user">("user");
+  // "admin" | "user" | <custom_role_id>
+  const [roleValue, setRoleValue] = useState<string>("user");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [check, setCheck] = useState<CheckStatus>({ kind: "idle" });
