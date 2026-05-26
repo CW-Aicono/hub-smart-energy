@@ -160,7 +160,8 @@ export default function ChargePointDetailDialog({
 
   if (!cp) return null;
 
-  const cfg = statusConfig[normalizeConnectorStatus(cp.status, cp.ws_connected !== false)] || statusConfig.offline;
+  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat);
+  const cfg = statusConfig[normalizeConnectorStatus(cp.status, cpOnline)] || statusConfig.offline;
   const StatusIcon = cfg.icon;
   const cpSessions = sessions
     .filter((s) => s.charge_point_id === cp.id)
