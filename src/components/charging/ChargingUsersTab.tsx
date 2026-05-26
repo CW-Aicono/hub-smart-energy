@@ -349,7 +349,7 @@ const ChargingUsersTab = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGroupDialogOpen(false)}>{t("common.cancel")}</Button>
-            <Button onClick={handleSaveGroup} disabled={!groupForm.name || !groupForm.tariff_id}>{editingGroup ? t("common.save") : t("common.create")}</Button>
+            <Button onClick={handleSaveGroup} disabled={!groupForm.name}>{editingGroup ? t("common.save") : t("common.create")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
