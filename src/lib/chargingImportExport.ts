@@ -346,7 +346,7 @@ export function buildNfcPreview(
   rows.forEach((r, i) => {
     const rowNumber = i + 2;
     const email = (r["E-Mail"] ?? "").trim().toLowerCase();
-    const rfid = (r["RFID-Tag"] ?? "").trim();
+    const rfid = (r["RFID-Tag"] ?? "").replace(/\s+/g, "").trim();
     if (!email || !rfid) {
       issues.push({ row: rowNumber, severity: "error", message: "'E-Mail' und 'RFID-Tag' sind Pflicht — Zeile wird übersprungen." });
       skipped++;
