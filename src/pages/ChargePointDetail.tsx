@@ -681,9 +681,9 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                                 : "Keine Daten"
                               }
                             />
-                            <Bar dataKey="available" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="charging" stackId="a" fill="hsl(var(--chart-4))" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="error" stackId="a" fill="hsl(var(--destructive))" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="available" stackId="a" fill="hsl(152, 55%, 42%)" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="charging" stackId="a" fill="hsl(210, 90%, 55%)" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="error" stackId="a" fill="hsl(30, 95%, 55%)" radius={[0, 0, 0, 0]} />
                             <Bar dataKey="noData" stackId="a" fill="hsl(var(--muted))" radius={[4, 4, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
