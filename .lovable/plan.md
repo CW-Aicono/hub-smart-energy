@@ -1,107 +1,99 @@
+# Plan: Remote-Support funktionsfähig machen
+
+## Problem
+
+Der „Remote-Support"-Button im Super-Admin (Mandanten-Detailseite) startet aktuell **keinerlei Session**. Er zeigt nur einen Toast (`SuperAdminTenantDetail.tsx`, Zeile 361–369). Es passiert:
+- Keine Eintragung in `support_sessions`
+- Keine Weiterleitung in den Mandanten-Bereich (Tenant-Dashboard)
+- Kein Banner beim Tenant, weil keine Session existiert und Tenant-Nutzer per RLS gar nicht auf `support_sessions` lesen dürfen
+
+Banner-Komponente (`SupportSessionBanner`) und Hook (`useSupportSession`) sind bereits vorhanden und global in `App.tsx` eingebunden – sie haben nur nichts zum Anzeigen.
+
 ## Ziel
 
-Aktuell ist der Energiebericht ausschließlich für **Kommunen** (mit Bundesland-Profil nach KlimaG / NKlimaG etc.) ausgelegt. Für die anderen 3 Mandantentypen wird heute nur ein Hinweis „nicht verfügbar" gezeigt. Es sollen passende, eigenständige Berichtsvorlagen ergänzt werden – jeweils mit eigener Rechtsgrundlage, Pflichtkapiteln und KI-Textbausteinen.
+1. Klick auf „Remote-Support" startet eine echte Session und öffnet die Mandanten-Sicht (Dashboard des Tenants) im Namen des Super-Admins.
+2. Beim Tenant erscheint ein deutlich sichtbares Banner („Remote-Support aktiv – Super-Admin schaut zu") solange die Session läuft.
+3. Beenden über einen Button im Banner / Super-Admin-Topbar setzt `ended_at`, Banner verschwindet beim Tenant in Echtzeit, Super-Admin kehrt in den Super-Admin-Bereich zurück.
 
-## Recherche – Berichtsanforderungen pro Sparte
+## Lösung
 
-### Gewerbe / Industrie
+### 1. Session-Start (Super-Admin)
 
-Relevante deutsche/EU-Pflichten und Standards:
+Aus `SuperAdminTenantDetail.tsx` den Remote-Support-Button erweitern:
+- Vorbedingung: `tenant.remote_support_enabled === true`
+- INSERT in `support_sessions`:
+  - `tenant_id`, `super_admin_user_id = auth.uid()`
+  - `started_at = now()`, `expires_at = now() + 15 min`
+  - `reason = 'Remote-Support Sitzung'`
+- Erfolgreiche ID + Tenant-ID in `sessionStorage` ablegen:
+  - `support_view.tenant_id`
+  - `support_view.session_id`
+- Navigation auf `/` (Tenant-Dashboard).
+- Wenn schon eine aktive Session für diesen Tenant existiert (nicht beendet, nicht abgelaufen): diese wiederverwenden statt neu anzulegen.
 
-- **EDL-G (Energiedienstleistungsgesetz)** – Pflicht-Energieaudit alle 4 Jahre für Nicht-KMU nach **DIN EN 16247-1**.
-- **EnEfG (Energieeffizienzgesetz, 2023)** – Pflicht-Energie- oder Umweltmanagementsystem (ISO 50001 / EMAS) ab > 7,5 GWh/a Endenergie; Veröffentlichung von Endenergieverbrauch und Einsparmaßnahmen ab > 2,5 GWh/a.
-- **CSRD / ESRS E1** – nicht-finanzielle Berichterstattung zu Energie & CO₂ (Scope 1/2, optional Scope 3) für berichtspflichtige Unternehmen.
-- **GHG-Protocol** – Standardgliederung Scope 1/2/3, marktbasiert vs. standortbasiert.
-- **BAFA-Förderbedingungen** für Energieeffizienz / Bundesförderung EEW.
+### 2. Impersonation / „View as Tenant"
 
-Typische Pflichtkapitel: Standortübersicht, Endenergie nach Energieträger, Lastgang/Spitzenlast, spezifischer Verbrauch (kWh/m²·a, kWh/Stück, kWh/€ Umsatz), CO₂-Bilanz Scope 1/2 (marktbasiert+standortbasiert), Maßnahmenliste mit ROI, Amortisation, EnPI-Kennzahlen.
+Neuer Context `SupportViewContext` (oder Erweiterung von `useTenant`):
+- Liest beim Mount `sessionStorage.support_view.tenant_id`.
+- Wenn gesetzt **und** aktueller User ist `super_admin`: `useTenant` lädt diesen Tenant statt des eigenen Profil-Tenants. Alle bestehenden Queries (`.eq("tenant_id", tenant.id)`) funktionieren dadurch automatisch im Kontext des Ziel-Tenants, weil super_admin per RLS ohnehin alles lesen darf.
+- Validierung: Server-seitig prüfen via select auf `support_sessions` (nicht beendet, nicht abgelaufen). Wenn ungültig → sessionStorage leeren, zurück nach `/super-admin/tenants/:id`.
 
-### Kommune (bereits umgesetzt)
+### 3. Banner für den Tenant
 
-Bundesland-Profile (NKlimaG, BayKlimaG, EWKG SH, EWG Bln, …), Witterungsbereinigung, BMWi/BMUB-Benchmarks, GEG-Emissionsfaktoren. **Wird nicht angefasst.**
+Aktuell darf nur `super_admin` `support_sessions` lesen. Damit der Tenant das Banner sieht, muss eine zusätzliche RLS-SELECT-Policy her:
 
-### Privat (Eigenheim / Mehrfamilienhaus)
-
-Keine gesetzliche Berichtspflicht, aber sinnvolle Bezugsdokumente:
-
-- **GEG (Gebäudeenergiegesetz)** – Energieausweis-Logik (Endenergie kWh/m²·a, Primärenergie, CO₂).
-- **Heizkostenverordnung (HKVO)** + EU-EED – jährliche Heizkostenabrechnung, monatliche Verbrauchsinformation.
-- Vergleich mit Durchschnittshaushalt (BDEW-Kennwerte: Strom 1500–4500 kWh/a, Gas 8000–20000 kWh/a je Haushaltsgröße).
-
-Pflichtkapitel: Haushaltsdaten (Personen, Wohnfläche, Baujahr), Verbrauch pro Energieträger (Strom, Gas/Öl/Wärme), Vergleich mit Durchschnittshaushalt, CO₂-Fußabdruck, Kosten, PV-Eigenverbrauch/Einspeisung, einfache Spartipps.
-
-### Sonstige (Vereine, NGOs, Kirchen, Bildungseinrichtungen ohne kommunalen Träger)
-
-Keine spezifische Gesetzespflicht; freiwilliger Nachhaltigkeitsbericht – meist orientiert an:
-
-- **DNK (Deutscher Nachhaltigkeitskodex)** – Kriterien 11–13 (Inanspruchnahme natürlicher Ressourcen, Ressourcenmanagement, klimarelevante Emissionen).
-- **EMASeasy** für kleine Organisationen.
-
-Pflichtkapitel: Organisations-/Liegenschaftsübersicht, Verbrauch nach Energieträger, CO₂-Bilanz vereinfacht (Scope 1+2), Maßnahmen & Ziele, Mitarbeiter-/Mitgliedersensibilisierung.
-
-## Architektur-Entscheidung
-
-Statt eines `if (tenant_type !== "kommune")` Gates wird die bestehende `EnergyReport.tsx` zum **Dispatcher**: sie lädt je nach `tenant.tenant_type` die passende Report-Komponente. Die kommunale Variante wandert 1:1 in eine eigene Datei – kein Funktionsverlust.
-
-```text
-src/pages/EnergyReport.tsx              → Dispatcher (entscheidet anhand tenant_type)
-src/components/report/templates/
-   ├─ KommuneReport.tsx                 → bisheriger Inhalt (refactored)
-   ├─ GewerbeIndustrieReport.tsx        → neu
-   ├─ PrivatReport.tsx                  → neu
-   └─ SonstigeReport.tsx                → neu
-src/lib/report/
-   ├─ federalStateProfiles.ts           → bleibt (Kommune)
-   └─ tenantTypeProfiles.ts             → neu: legalBasis/sections/extraTopics je tenant_type
-supabase/functions/generate-report-text/index.ts → erweitern: zusätzliche SYSTEM_PROMPTs pro tenant_type
+```sql
+CREATE POLICY "Tenant members can view own active support sessions"
+  ON public.support_sessions FOR SELECT
+  TO authenticated
+  USING (
+    tenant_id IN (SELECT tenant_id FROM public.profiles WHERE user_id = auth.uid())
+  );
 ```
 
-## Inhaltsmodell pro neuer Vorlage
+`GRANT SELECT ON public.support_sessions TO authenticated` ergänzen (bisher nur service_role/super_admin via Policy).
 
-Alle Vorlagen teilen sich die generischen Bausteine (Auswahl Berichtsjahr, Liegenschaften/Objekte, KPI-Grid, Verbrauchstrend, CO₂, Druck/Archiv, KI-Texte, Entwurfsspeicherung) – wiederverwendet aus `src/components/report/*`. Unterschiede:
+Banner (`SupportSessionBanner`) bleibt inhaltlich. Anpassungen:
+- Texte auf Tenant-Sicht zugeschnitten („Ein Mitarbeiter des Supports ist aktuell in Ihrem Konto eingeloggt.").
+- Wird durch das bestehende Realtime-Subscribe in `useSupportSession` automatisch ein- und ausgeblendet (wenn `ended_at IS NOT NULL` → Query liefert null → Banner verschwindet).
+- Banner soll auch im Super-Admin-Impersonation-Modus sichtbar sein (zur visuellen Bestätigung, dass man „live im Tenant" ist) – ist es per App.tsx bereits.
 
-**GewerbeIndustrieReport**
+### 4. Session beenden
 
-- Profil-Card mit Rechtsgrundlage-Auswahl: *EDL-G Audit*, *EnEfG*, *CSRD/ESRS E1*, *Freiwillig (ISO 50001)*.
-- Eigene Kapitel: Scope 1 / Scope 2 (marktbasiert + standortbasiert), spezifischer Verbrauch (kWh/m², optional kWh/Stück oder kWh/€ – Eingabefelder), Lastgang-Kennwerte (P_max, Jahresvollbenutzungsstunden – aus vorhandenen 5-min Daten), Maßnahmen-Tabelle mit ROI/Amortisation (wiederverwendet `MeasuresTable`), EnPI-Übersicht.
-- KI-Sektionen: `executive_summary`, `methodik_audit`, `massnahmen_roi`, `ausblick_dekarbonisierung`.
+Zwei Wege, beide aktualisieren `support_sessions.ended_at = now()`:
 
-**PrivatReport**
+a) **Super-Admin Topbar im Impersonation-Modus**: Eine dauerhaft sichtbare Leiste am oberen Rand zeigt „Sie sehen [Tenant-Name] als Super-Admin – [Remote-Support beenden]". Beim Klick:
+   - UPDATE `support_sessions` → `ended_at = now()`
+   - sessionStorage leeren
+   - Navigation auf `/super-admin/tenants/:id`
 
-- Eingaben: Personen im Haushalt, Wohnfläche, Baujahr, Heizungsart (kommt teils aus Location-Profil).
-- Kapitel: Verbrauchsübersicht, Vergleich mit BDEW-Durchschnittshaushalt (Ampel), CO₂-Fußabdruck, Energiekosten, PV-Eigenverbrauchsquote (falls vorhanden), Spartipps.
-- KI-Sektionen: `zusammenfassung`, `vergleich_durchschnitt`, `spartipps`.
-- Schlichteres Layout, kein juristisches Vorwort.
+b) Banner-„Beenden"-Button für den Super-Admin nicht nötig (Topbar reicht). Tenant darf nicht beenden.
 
-**SonstigeReport**
+Realtime auf `support_sessions` ist bereits aktiv – der Banner beim Tenant verschwindet automatisch innerhalb von Sekunden.
 
-- Profil-Card mit Auswahl: *Freiwilliger Nachhaltigkeitsbericht*, *DNK*, *EMASeasy*.
-- Kapitel ähnlich Gewerbe, aber ohne EnPI/ROI-Pflicht; Fokus auf Verbrauch, CO₂ (Scope 1+2 vereinfacht), Maßnahmen, Ziele.
-- KI-Sektionen: `vorwort`, `nachhaltigkeitskontext`, `massnahmen`, `ausblick`.
+### 5. Anzeige im Super-Admin-Button
 
-## Detail-Schritte
+Button „Remote-Support" auf der Mandanten-Seite zeigt zusätzlich:
+- Wenn aktive Session für diesen Tenant existiert: Label „Sitzung fortsetzen" + „Beenden"-Sekundärbutton.
+- Sonst: „Remote-Support starten" (wenn `remote_support_enabled`), sonst disabled.
 
-1. `**src/lib/report/tenantTypeProfiles.ts**` – Typdefinitionen + Profil-Konstanten je `TenantType` (Rechtsgrundlagen, Pflicht-Sections, Default-Extras, Label, AI-Sektion-Keys).
-2. **Refactor** der bestehenden `EnergyReport.tsx`: Kommunalen Inhalt unverändert in `**src/components/report/templates/KommuneReport.tsx**` verschieben.
-3. **Dispatcher in `EnergyReport.tsx**` schreiben: bei `tenant_type === "kommune"` → `KommuneReport`, bei `gewerbe_industrie` → `GewerbeIndustrieReport`, etc. (Loading-/Auth-Guards bleiben oben.)
-4. `**GewerbeIndustrieReport.tsx**` neu, mit Profilauswahl (EDL-G/EnEfG/CSRD), Scope-1/2-KPIs, spezifischen Kennzahlen, Lastgang-Block, Maßnahmen-ROI, KI-Texten.
-5. `**PrivatReport.tsx**` neu, mit Haushaltsprofil-Eingaben, BDEW-Vergleich (Konstanten in `tenantTypeProfiles.ts`), Spartipps-Block, vereinfachten KI-Texten.
-6. `**SonstigeReport.tsx**` neu, ähnlich Gewerbe aber schlanker, DNK/EMASeasy-Profilauswahl.
-7. `**supabase/functions/generate-report-text/index.ts**` erweitern: neuer Request-Parameter `tenantType` + `section`-Union erweitert; eigene SYSTEM_PROMPTs pro Mandantentyp; `profile` wird optional (für Privat nicht benötigt). Backward-kompatibel mit Kommune-Aufrufen.
-8. `**energy_report_drafts**` wird beibehalten; `profile_code` für Nicht-Kommunen mit dem gewählten Rechtsrahmen-Code befüllt (z. B. `EDL-G`, `CSRD`, `BDEW`, `DNK`). Kein Schema-Change nötig.
-9. **Hinweis-Card** in `EnergyReport.tsx` entfernen (wird durch Dispatcher ersetzt).
+## Technische Details
 
-## Nicht im Scope
+Geänderte / neue Dateien:
+- `src/pages/SuperAdminTenantDetail.tsx` – Button-Logik (Start / Fortsetzen / Beenden + Navigation)
+- `src/hooks/useTenant.tsx` – Support-View Override (Super-Admin + sessionStorage)
+- `src/hooks/useSupportSession.tsx` – kleine Erweiterung: `endSession()` Methode
+- `src/components/SupportSessionBanner.tsx` – Tenant-zugeschnittener Text, optional „Beenden" nur für Super-Admin
+- `src/components/SuperAdminImpersonationBar.tsx` (neu) – persistente Top-Leiste im Tenant-Layout wenn Impersonation aktiv
+- `src/App.tsx` – `SuperAdminImpersonationBar` einbinden
+- Neue Migration:
+  - SELECT-Policy für Tenant-Mitglieder auf `support_sessions`
+  - `GRANT SELECT ON public.support_sessions TO authenticated`
+  - UPDATE-Policy für Super-Admin (für `ended_at`) – bereits via FOR ALL vorhanden, prüfen.
 
-- Keine neuen DB-Tabellen oder RLS-Änderungen.
-- Keine Änderungen an der kommunalen Logik, Bundesland-Profilen oder bestehenden Komponenten in `src/components/report/`.
-- Keine Migration für `energy_report_drafts`.
-- Keine Änderungen an Branding, i18n-Übersetzungsfiles (deutsche Texte inline, analog zur bestehenden Kommune-Variante).
+i18n: neue Schlüssel `support_banner.tenant_view_active`, `support_view.exit`, `tenant_detail.remote_support_start`, `tenant_detail.remote_support_resume`, `tenant_detail.remote_support_end` in DE/EN/ES/NL.
 
-## Offene Punkte zur Bestätigung
+## Out of Scope
 
-- Sollen für **Gewerbe/Industrie** alle vier Rechtsrahmen (EDL-G, EnEfG, CSRD, ISO 50001) direkt angeboten werden, oder zunächst nur **EnEfG + CSRD** als die häufigsten?  
-ANTWORT: Ja, alle vier Rechtsramen direkt anbieten.  
-
-- Bei **Privat**: Sollen die Haushaltsdaten (Personen, Wohnfläche) ad-hoc im Report-Konfigurationsformular eingegeben werden, oder dauerhaft am Hauptstandort/Tenant gespeichert (würde eine kleine Migration erfordern)?  
-ANTWORT: ad-hoc Eingabe im Report-Formular, da sich einige Daten (Auszug, Anbau, etc.) immer mal ändern könnten.
+- Keine Änderungen an Abrechnungslogik (`upsertSupportInvoiceEntry`) – das bestehende Modell pro 15-Minuten-Block bleibt.
+- Kein echter Identitätswechsel auf Auth-Ebene (kein Token-Swap). Super-Admin bleibt `super_admin` – die RLS deckt Lesen/Schreiben im Tenant-Kontext bereits ab. Falls später strikte Audit-Trennung nötig: separates Edge-Function-Token (nicht jetzt).
