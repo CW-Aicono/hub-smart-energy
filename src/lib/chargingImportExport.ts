@@ -136,7 +136,7 @@ export function downloadTemplate(type: ExportType, format: ExportFormat) {
   const sample: Record<ExportType, (string | number | null)[][]> = {
     users: [
       [...USER_HEADERS],
-      ["Max Mustermann", "max@example.com", "04 A1 B2 C3", "+49 170 0000000", "Mitarbeiter", "Standard-Tarif", "active", "Beispielzeile — bitte ersetzen"],
+      ["Max Mustermann", "max@example.com", "04A1B2C3", "+49 170 0000000", "Mitarbeiter", "Standard-Tarif", "active", "Beispielzeile — bitte ersetzen"],
     ],
     groups: [
       [...GROUP_HEADERS],
@@ -144,7 +144,7 @@ export function downloadTemplate(type: ExportType, format: ExportFormat) {
     ],
     nfc: [
       [...NFC_HEADERS],
-      ["max@example.com", "04 A1 B2 C3", "Max Mustermann"],
+      ["max@example.com", "04A1B2C3", "Max Mustermann"],
     ],
   };
   const fname: Record<ExportType, string> = {
@@ -222,7 +222,7 @@ export function buildUserPreview(
     const rowNumber = i + 2; // Zeile 1 = Header
     const name = (r["Name"] ?? "").trim();
     const email = (r["E-Mail"] ?? "").trim().toLowerCase();
-    const rfid = (r["RFID-Tag"] ?? "").trim();
+    const rfid = (r["RFID-Tag"] ?? "").replace(/\s+/g, "").trim();
     const groupName = (r["Gruppe"] ?? "").trim();
     const tariffName = (r["Tarif"] ?? "").trim();
     const statusRaw = (r["Status"] ?? "active").trim().toLowerCase();
@@ -346,7 +346,7 @@ export function buildNfcPreview(
   rows.forEach((r, i) => {
     const rowNumber = i + 2;
     const email = (r["E-Mail"] ?? "").trim().toLowerCase();
-    const rfid = (r["RFID-Tag"] ?? "").trim();
+    const rfid = (r["RFID-Tag"] ?? "").replace(/\s+/g, "").trim();
     if (!email || !rfid) {
       issues.push({ row: rowNumber, severity: "error", message: "'E-Mail' und 'RFID-Tag' sind Pflicht — Zeile wird übersprungen." });
       skipped++;

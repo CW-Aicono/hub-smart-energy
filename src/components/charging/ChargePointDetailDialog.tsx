@@ -17,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
 import { format } from "date-fns";
-import { fmtKwh, fmtKw, normalizeConnectorStatus } from "@/lib/formatCharging";
+import { fmtKwh, fmtKw, normalizeConnectorStatus, isChargePointOnline } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { AccessControlSettings } from "@/components/charging/AccessControlSettings";
@@ -160,7 +160,8 @@ export default function ChargePointDetailDialog({
 
   if (!cp) return null;
 
-  const cfg = statusConfig[normalizeConnectorStatus(cp.status, cp.ws_connected !== false)] || statusConfig.offline;
+  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat);
+  const cfg = statusConfig[normalizeConnectorStatus(cp.status, cpOnline)] || statusConfig.offline;
   const StatusIcon = cfg.icon;
   const cpSessions = sessions
     .filter((s) => s.charge_point_id === cp.id)
@@ -230,7 +231,7 @@ export default function ChargePointDetailDialog({
             {connectors.length > 0 && (
               <div className="space-y-2">
                 <p className="text-sm font-medium text-muted-foreground">Anschluss-Status</p>
-                <ConnectorStatusGrid connectors={connectors} wsConnected={cp?.ws_connected ?? false} lastHeartbeat={cp?.last_heartbeat ?? null} />
+                <ConnectorStatusGrid connectors={connectors} wsConnected={cpOnline} lastHeartbeat={cp?.last_heartbeat ?? null} />
               </div>
             )}
 

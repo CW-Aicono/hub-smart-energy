@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
-import { fmtKwh, fmtKw, fmtNum, normalizeConnectorStatus } from "@/lib/formatCharging";
+import { fmtKwh, fmtKw, fmtNum, normalizeConnectorStatus, isChargePointOnline } from "@/lib/formatCharging";
 import { mapOcppRejectMessage } from "@/lib/ocppErrorMessages";
 import { supabase } from "@/integrations/supabase/client";
 import { useOcppMeterValue } from "@/hooks/useOcppMeterValue";
@@ -285,7 +285,8 @@ const ChargePointDetail = () => {
   if (!cp) return null;
 
   // Status-Lookup case-insensitiv (DB liefert "Available" mit Großbuchstabe direkt von OCPP)
-  const normalizedStatus = normalizeConnectorStatus(cp.status, cp.ws_connected !== false);
+  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat);
+  const normalizedStatus = normalizeConnectorStatus(cp.status, cpOnline);
   const cfg = STATUS_KEYS[normalizedStatus] || STATUS_KEYS.offline;
   const StatusIcon = cfg.icon;
 
@@ -729,7 +730,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           selectedConnectorId={selectedConnectorId}
                           onSelectConnector={setSelectedConnectorId}
                           selectable={isAdmin}
-                          wsConnected={cp?.ws_connected ?? false}
+                          wsConnected={cpOnline}
                           lastHeartbeat={cp?.last_heartbeat ?? null}
                           editable={isAdmin}
                           onReorder={isAdmin ? reorderConnectors : undefined}

@@ -201,6 +201,15 @@ export function ChargingImportExportDialog({ open, onOpenChange, initialType = "
                 onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
                 className="block w-full text-sm border rounded px-2 py-1.5 mt-1 file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground"
               />
+              <div className="flex gap-2 mt-2">
+                <Button variant="outline" size="sm" onClick={() => { downloadTemplate(importType, "xlsx"); toast({ title: "Beispielvorlage heruntergeladen", description: `Vorlage mit Beispielzeile für ${TYPE_LABELS[importType]} (XLSX).` }); }}>
+                  <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />Vorlage Beispiel (Excel)
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => { downloadTemplate(importType, "csv"); toast({ title: "Beispielvorlage heruntergeladen", description: `Vorlage mit Beispielzeile für ${TYPE_LABELS[importType]} (CSV).` }); }}>
+                  <FileText className="h-3.5 w-3.5 mr-1.5" />Vorlage Beispiel (CSV)
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">RFID-Tag bitte ohne Leerzeichen angeben (z. B. <code>04A1B2C3</code>).</p>
             </div>
 
             {parsing && (

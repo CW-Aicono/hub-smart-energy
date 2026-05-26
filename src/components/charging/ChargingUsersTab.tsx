@@ -44,11 +44,21 @@ const ChargingUsersTab = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ type: "user" | "group"; id: string; name: string } | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked" | "archived">("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [ioOpen, setIoOpen] = useState(false);
   const [ioType, setIoType] = useState<ExportType>("users");
   const openIo = (t: ExportType) => { setIoType(t); setIoOpen(true); };
 
-  const filteredUsers = statusFilter === "all" ? users : users.filter((u) => u.status === statusFilter);
+  const filteredUsers = (statusFilter === "all" ? users : users.filter((u) => u.status === statusFilter))
+    .filter((u) => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        u.name?.toLowerCase().includes(q) ||
+        (u.email?.toLowerCase().includes(q) ?? false) ||
+        (u.rfid_tag?.toLowerCase().includes(q) ?? false)
+      );
+    });
 
   const getGroupName = (gid: string | null) => groups.find((g) => g.id === gid)?.name || "—";
   const getTariffName = (tid: string | null) => tariffs.find((t) => t.id === tid)?.name || null;
@@ -140,9 +150,15 @@ const ChargingUsersTab = () => {
 
         <TabsContent value="user-list">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle>{t("cu.title" as any)}</CardTitle>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t("cu.searchPlaceholder" as any)}
+                  className="w-64"
+                />
                 <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
                   <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -325,7 +341,7 @@ const ChargingUsersTab = () => {
           <div className="space-y-4">
             <div><Label>{t("common.name" as any)} *</Label><Input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} /></div>
             <div><Label>{t("common.description" as any)}</Label><Textarea value={groupForm.description} onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })} rows={2} /></div>
-            {tariffSelect(groupForm.tariff_id, (v) => setGroupForm({ ...groupForm, tariff_id: v }), "Gruppen-Tarif", true)}
+            {tariffSelect(groupForm.tariff_id, (v) => setGroupForm({ ...groupForm, tariff_id: v }), "Gruppen-Tarif (optional)")}
             <div className="flex items-center justify-between">
               <Label>{t("cu.appUserGroup" as any)}</Label>
               <Switch checked={groupForm.is_app_user} onCheckedChange={(v) => setGroupForm({ ...groupForm, is_app_user: v })} />
@@ -333,7 +349,7 @@ const ChargingUsersTab = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGroupDialogOpen(false)}>{t("common.cancel")}</Button>
-            <Button onClick={handleSaveGroup} disabled={!groupForm.name || !groupForm.tariff_id}>{editingGroup ? t("common.save") : t("common.create")}</Button>
+            <Button onClick={handleSaveGroup} disabled={!groupForm.name}>{editingGroup ? t("common.save") : t("common.create")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

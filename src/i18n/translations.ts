@@ -2699,6 +2699,24 @@ export const translations = {
     es: "Facturación",
     nl: "Facturering",
   },
+  "nav.chargingUsers": {
+    de: "Lade-Nutzer",
+    en: "Charging Users",
+    es: "Usuarios de carga",
+    nl: "Laadgebruikers",
+  },
+  "cu.pageDesc": {
+    de: "Verwalten Sie Nutzer und Nutzergruppen für die Ladeinfrastruktur.",
+    en: "Manage users and user groups for the charging infrastructure.",
+    es: "Gestiona usuarios y grupos de usuarios para la infraestructura de carga.",
+    nl: "Beheer gebruikers en gebruikersgroepen voor de laadinfrastructuur.",
+  },
+  "cu.searchPlaceholder": {
+    de: "Suche nach Name, E-Mail oder RFID-Tag…",
+    en: "Search by name, email or RFID tag…",
+    es: "Buscar por nombre, correo o etiqueta RFID…",
+    nl: "Zoek op naam, e-mail of RFID-tag…",
+  },
   "nav.chargingApp": {
     de: "Lade-App",
     en: "Charging App",
