@@ -147,11 +147,16 @@ const handler = async (req: Request): Promise<Response> => {
       // Update profile with tenant + name.
       // Super-admin invites: tenant_id MUST be NULL (Super-Admin/Tenant separation).
       const profileTenantId = isSuperAdminInvite ? null : (effectiveTenantId || null);
+      // custom_role_id only applies to non-super-admin tenant invites.
+      const profileCustomRoleId = isSuperAdminInvite
+        ? null
+        : (typeof customRoleId === "string" && customRoleId ? customRoleId : null);
       await supabase
         .from("profiles")
         .update({
           tenant_id: profileTenantId,
           contact_person: name || null,
+          custom_role_id: profileCustomRoleId,
         })
         .eq("user_id", newUserId);
 
