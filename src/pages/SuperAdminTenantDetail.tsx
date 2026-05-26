@@ -1,4 +1,5 @@
-import { Navigate, useParams } from "react-router-dom";
+import { Navigate, useParams, useNavigate } from "react-router-dom";
+import { enterSupportView, exitSupportView, getSupportViewSessionId } from "@/lib/supportView";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useTenantModules, ALL_MODULES } from "@/hooks/useTenantModules";
@@ -143,6 +144,7 @@ const SuperAdminTenantDetail = () => {
   const { bundles: allBundles, bundleItems: allBundleItems, getBundleModules } = useModuleBundles();
   const { t } = useSATranslation();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [licenseForm, setLicenseForm] = useState<Record<string, string | number>>({});
   const [editingTenantInfo, setEditingTenantInfo] = useState(false);
   const [savingTenantInfo, setSavingTenantInfo] = useState(false);
@@ -230,6 +232,59 @@ const SuperAdminTenantDetail = () => {
       return data;
     },
   });
+
+  // Active (not ended, not expired) remote-support session for this tenant
+  const activeSession = (supportSessions as any[]).find(
+    (s) => !s.ended_at && new Date(s.expires_at).getTime() > Date.now()
+  );
+
+  const [startingSupport, setStartingSupport] = useState(false);
+  const handleStartRemoteSupport = async () => {
+    if (!id || !user) return;
+    setStartingSupport(true);
+    try {
+      let sessionId: string | null = activeSession?.id ?? null;
+      if (!sessionId) {
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        const { data: inserted, error: insErr } = await supabase
+          .from("support_sessions")
+          .insert({
+            tenant_id: id,
+            super_admin_user_id: user.id,
+            started_at: new Date().toISOString(),
+            expires_at: expiresAt,
+            reason: "Remote-Support Sitzung",
+          } as any)
+          .select("id")
+          .single();
+        if (insErr) throw insErr;
+        sessionId = (inserted as any).id;
+      }
+      enterSupportView(id, sessionId!);
+      queryClient.invalidateQueries({ queryKey: ["tenant-support-sessions", id] });
+      navigate("/");
+    } catch (e: any) {
+      toast.error("Remote-Support konnte nicht gestartet werden: " + (e?.message ?? ""));
+    } finally {
+      setStartingSupport(false);
+    }
+  };
+
+  const handleEndRemoteSupport = async () => {
+    if (!activeSession) return;
+    try {
+      await supabase
+        .from("support_sessions")
+        .update({ ended_at: new Date().toISOString() } as any)
+        .eq("id", activeSession.id);
+      if (getSupportViewSessionId() === activeSession.id) exitSupportView();
+      queryClient.invalidateQueries({ queryKey: ["tenant-support-sessions", id] });
+      toast.success("Remote-Support beendet");
+    } catch (e: any) {
+      toast.error("Beenden fehlgeschlagen: " + (e?.message ?? ""));
+    }
+  };
+
 
   if (authLoading || roleLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
@@ -358,15 +413,23 @@ const SuperAdminTenantDetail = () => {
             <h1 className="text-2xl font-bold">{tenant?.name ?? t("billing.tenant")}</h1>
             <p className="text-sm text-muted-foreground mt-1">{tenant?.slug}</p>
           </div>
-          <Button
-            variant={(tenant as any)?.remote_support_enabled ? "default" : "outline"}
-            disabled={!(tenant as any)?.remote_support_enabled}
-            onClick={() => { if ((tenant as any)?.remote_support_enabled) toast.success(t("tenant_detail.remote_support") + " – " + tenant?.name); }}
-          >
-            <HeadsetIcon className="h-4 w-4 mr-2" />
-            {t("tenant_detail.remote_support")}
-            {(tenant as any)?.remote_support_enabled && <Badge variant="secondary" className="ml-2 bg-green-500/20 text-green-600">{t("common.active")}</Badge>}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={(tenant as any)?.remote_support_enabled ? "default" : "outline"}
+              disabled={!(tenant as any)?.remote_support_enabled || startingSupport}
+              onClick={handleStartRemoteSupport}
+            >
+              <HeadsetIcon className="h-4 w-4 mr-2" />
+              {activeSession ? "Sitzung fortsetzen" : t("tenant_detail.remote_support")}
+              {activeSession && <Badge variant="secondary" className="ml-2 bg-green-500/20 text-green-600">{t("common.active")}</Badge>}
+            </Button>
+            {activeSession && (
+              <Button variant="outline" onClick={handleEndRemoteSupport}>
+                Beenden
+              </Button>
+            )}
+          </div>
+
         </header>
         <div className="p-6">
           <Tabs defaultValue="info">

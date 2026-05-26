@@ -15,6 +15,7 @@ import { SuperAdminWrapper } from "@/components/super-admin/SuperAdminWrapper";
 import RecoveryGuard from "@/components/RecoveryGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
+import SuperAdminImpersonationBar from "./components/SuperAdminImpersonationBar";
 import CookieConsent from "./components/CookieConsent";
 import LocationDetail from "./pages/LocationDetail";
 import Locations from "./pages/Locations";
@@ -121,6 +122,7 @@ const App = () => (
                   <RecoveryGuard />
                   <UpdateBanner />
                   <SupportSessionBanner />
+                  <SuperAdminImpersonationBar />
                   {!window.location.pathname.startsWith("/public/") && <CookieConsent />}
                   <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
                     <Routes>
