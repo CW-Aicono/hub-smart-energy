@@ -52,14 +52,14 @@ const ChargingUsersTab = () => {
 
   const getGroupName = (gid: string | null) => groups.find((g) => g.id === gid)?.name || "—";
   const getTariffName = (tid: string | null) => tariffs.find((t) => t.id === tid)?.name || null;
+  const defaultTariff = tariffs.find((t) => t.is_default && t.is_active);
 
-  /** Resolve effective tariff: user > group > default active */
+  /** Resolve effective tariff: user > group > default */
   const getEffectiveTariff = (u: ChargingUser) => {
     if (u.tariff_id) return getTariffName(u.tariff_id);
     const group = groups.find((g) => g.id === u.group_id);
     if (group?.tariff_id) return getTariffName(group.tariff_id);
-    const active = tariffs.find((t) => t.is_active);
-    return active ? `${active.name} (Standard)` : "—";
+    return defaultTariff ? `${defaultTariff.name} (Standard)` : "—";
   };
 
   const statusBadge = (status: string) => {
@@ -72,7 +72,7 @@ const ChargingUsersTab = () => {
   };
 
   // --- User CRUD ---
-  const openAddUser = () => { setUserForm(emptyUserForm); setEditingUser(null); setUserDialogOpen(true); };
+  const openAddUser = () => { setUserForm({ ...emptyUserForm, tariff_id: defaultTariff?.id || "" }); setEditingUser(null); setUserDialogOpen(true); };
   const openEditUser = (u: ChargingUser) => {
     setUserForm({ name: u.name, email: u.email || "", rfid_tag: u.rfid_tag || "", phone: u.phone || "", group_id: u.group_id || "", tariff_id: u.tariff_id || "", notes: u.notes || "" });
     setEditingUser(u); setUserDialogOpen(true);
@@ -294,10 +294,11 @@ const ChargingUsersTab = () => {
             <div className="grid grid-cols-2 gap-4">
               <div><Label>{t("cu.rfidTag" as any)}</Label><Input value={userForm.rfid_tag} onChange={(e) => setUserForm({ ...userForm, rfid_tag: e.target.value })} placeholder="z. B. AB12CD34" /></div>
               <div>
-                <Label>{t("cu.userGroup" as any)} *</Label>
-                <Select value={userForm.group_id} onValueChange={(v) => setUserForm({ ...userForm, group_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Gruppe wählen…" /></SelectTrigger>
+                <Label>{t("cu.userGroup" as any)}</Label>
+                <Select value={userForm.group_id || "__none__"} onValueChange={(v) => setUserForm({ ...userForm, group_id: v === "__none__" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="Keine Gruppe" /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="__none__">Keine Gruppe</SelectItem>
                     {groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -310,7 +311,7 @@ const ChargingUsersTab = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUserDialogOpen(false)}>{t("common.cancel")}</Button>
-            <Button onClick={handleSaveUser} disabled={!userForm.name || !userForm.group_id}>{editingUser ? t("common.save") : t("common.create")}</Button>
+            <Button onClick={handleSaveUser} disabled={!userForm.name}>{editingUser ? t("common.save") : t("common.create")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

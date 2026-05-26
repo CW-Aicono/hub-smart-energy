@@ -1,213 +1,107 @@
+## Ziel
 
-# Komplette Laien-Anleitung: Zweite OCPP-Bridge für Staging
+Aktuell ist der Energiebericht ausschließlich für **Kommunen** (mit Bundesland-Profil nach KlimaG / NKlimaG etc.) ausgelegt. Für die anderen 3 Mandantentypen wird heute nur ein Hinweis „nicht verfügbar" gezeigt. Es sollen passende, eigenständige Berichtsvorlagen ergänzt werden – jeweils mit eigener Rechtsgrundlage, Pflichtkapiteln und KI-Textbausteinen.
 
-Ich erweitere die Datei **`docs/ocpp-persistent-server/ANLEITUNG_HETZNER_DEPLOY.md`** um einen vollständig neuen **Schritt 14**, der jede einzelne PuTTY-Eingabe, jede Datei und jeden erwarteten Ausgabewert zeigt. Nichts wird vorausgesetzt — keine Linux-Kenntnisse, keine Docker-Kenntnisse.
+## Recherche – Berichtsanforderungen pro Sparte
 
-## Deine Server (Übersicht zum Mitlesen)
+### Gewerbe / Industrie
 
-| Server | IP-Adresse | Was läuft dort |
-|---|---|---|
-| OCPP-Gateway-Server | **178.105.45.225** | Hier installieren wir die zweite Bridge |
-| Energiemanagement-Server | **91.99.170.143** | Hier läuft deine Live-Supabase (wird nur als Adresse eingetragen, nicht angefasst) |
+Relevante deutsche/EU-Pflichten und Standards:
 
-**Wichtig:** Du arbeitest in dieser Anleitung **ausschließlich** auf **178.105.45.225**. Den anderen Server fasst du nicht an.
+- **EDL-G (Energiedienstleistungsgesetz)** – Pflicht-Energieaudit alle 4 Jahre für Nicht-KMU nach **DIN EN 16247-1**.
+- **EnEfG (Energieeffizienzgesetz, 2023)** – Pflicht-Energie- oder Umweltmanagementsystem (ISO 50001 / EMAS) ab > 7,5 GWh/a Endenergie; Veröffentlichung von Endenergieverbrauch und Einsparmaßnahmen ab > 2,5 GWh/a.
+- **CSRD / ESRS E1** – nicht-finanzielle Berichterstattung zu Energie & CO₂ (Scope 1/2, optional Scope 3) für berichtspflichtige Unternehmen.
+- **GHG-Protocol** – Standardgliederung Scope 1/2/3, marktbasiert vs. standortbasiert.
+- **BAFA-Förderbedingungen** für Energieeffizienz / Bundesförderung EEW.
 
-## Was am Ende läuft
+Typische Pflichtkapitel: Standortübersicht, Endenergie nach Energieträger, Lastgang/Spitzenlast, spezifischer Verbrauch (kWh/m²·a, kWh/Stück, kWh/€ Umsatz), CO₂-Bilanz Scope 1/2 (marktbasiert+standortbasiert), Maßnahmenliste mit ROI, Amortisation, EnPI-Kennzahlen.
+
+### Kommune (bereits umgesetzt)
+
+Bundesland-Profile (NKlimaG, BayKlimaG, EWKG SH, EWG Bln, …), Witterungsbereinigung, BMWi/BMUB-Benchmarks, GEG-Emissionsfaktoren. **Wird nicht angefasst.**
+
+### Privat (Eigenheim / Mehrfamilienhaus)
+
+Keine gesetzliche Berichtspflicht, aber sinnvolle Bezugsdokumente:
+
+- **GEG (Gebäudeenergiegesetz)** – Energieausweis-Logik (Endenergie kWh/m²·a, Primärenergie, CO₂).
+- **Heizkostenverordnung (HKVO)** + EU-EED – jährliche Heizkostenabrechnung, monatliche Verbrauchsinformation.
+- Vergleich mit Durchschnittshaushalt (BDEW-Kennwerte: Strom 1500–4500 kWh/a, Gas 8000–20000 kWh/a je Haushaltsgröße).
+
+Pflichtkapitel: Haushaltsdaten (Personen, Wohnfläche, Baujahr), Verbrauch pro Energieträger (Strom, Gas/Öl/Wärme), Vergleich mit Durchschnittshaushalt, CO₂-Fußabdruck, Kosten, PV-Eigenverbrauch/Einspeisung, einfache Spartipps.
+
+### Sonstige (Vereine, NGOs, Kirchen, Bildungseinrichtungen ohne kommunalen Träger)
+
+Keine spezifische Gesetzespflicht; freiwilliger Nachhaltigkeitsbericht – meist orientiert an:
+
+- **DNK (Deutscher Nachhaltigkeitskodex)** – Kriterien 11–13 (Inanspruchnahme natürlicher Ressourcen, Ressourcenmanagement, klimarelevante Emissionen).
+- **EMASeasy** für kleine Organisationen.
+
+Pflichtkapitel: Organisations-/Liegenschaftsübersicht, Verbrauch nach Energieträger, CO₂-Bilanz vereinfacht (Scope 1+2), Maßnahmen & Ziele, Mitarbeiter-/Mitgliedersensibilisierung.
+
+## Architektur-Entscheidung
+
+Statt eines `if (tenant_type !== "kommune")` Gates wird die bestehende `EnergyReport.tsx` zum **Dispatcher**: sie lädt je nach `tenant.tenant_type` die passende Report-Komponente. Die kommunale Variante wandert 1:1 in eine eigene Datei – kein Funktionsverlust.
 
 ```text
-Auf 178.105.45.225:
-
-  Container "ocpp-server"          (existiert, bleibt unverändert)
-    → wss://ocpp.aicono.org        → Live-Supabase auf 91.99.170.143
-
-  Container "ocpp-server-staging"  (NEU)
-    → wss://staging-ocpp.aicono.org → Lovable-Cloud
-
-  Container "ocpp-caddy"           (existiert, kriegt nur 1 neuen Block dazu)
-    → erledigt HTTPS für BEIDE Domains
+src/pages/EnergyReport.tsx              → Dispatcher (entscheidet anhand tenant_type)
+src/components/report/templates/
+   ├─ KommuneReport.tsx                 → bisheriger Inhalt (refactored)
+   ├─ GewerbeIndustrieReport.tsx        → neu
+   ├─ PrivatReport.tsx                  → neu
+   └─ SonstigeReport.tsx                → neu
+src/lib/report/
+   ├─ federalStateProfiles.ts           → bleibt (Kommune)
+   └─ tenantTypeProfiles.ts             → neu: legalBasis/sections/extraTopics je tenant_type
+supabase/functions/generate-report-text/index.ts → erweitern: zusätzliche SYSTEM_PROMPTs pro tenant_type
 ```
 
-## Aufbau der neuen Anleitung (was in Schritt 14 stehen wird)
+## Inhaltsmodell pro neuer Vorlage
 
-Jeder Unterschritt enthält:
-- **Was passiert** (1 Satz, allgemeinverständlich)
-- **Genaue Eingabe** (kompletter Copy-Paste-Block, einfach mit Rechtsklick in PuTTY einfügen)
-- **Erwartete Ausgabe** (was du wörtlich sehen musst, um zu wissen: hat geklappt)
-- **Was tun, wenn etwas anderes erscheint** (1-2 typische Fehler)
+Alle Vorlagen teilen sich die generischen Bausteine (Auswahl Berichtsjahr, Liegenschaften/Objekte, KPI-Grid, Verbrauchstrend, CO₂, Druck/Archiv, KI-Texte, Entwurfsspeicherung) – wiederverwendet aus `src/components/report/*`. Unterschiede:
 
-### Unterschritte im Detail
+**GewerbeIndustrieReport**
 
-**14.0 PuTTY und WinSCP auf Windows installieren**
-- Download-Links, Schritt-für-Schritt-Installer-Klicks
-- Erklärt: Rechtsklick in PuTTY = Einfügen, Linksklick markiert, Enter führt aus
+- Profil-Card mit Rechtsgrundlage-Auswahl: *EDL-G Audit*, *EnEfG*, *CSRD/ESRS E1*, *Freiwillig (ISO 50001)*.
+- Eigene Kapitel: Scope 1 / Scope 2 (marktbasiert + standortbasiert), spezifischer Verbrauch (kWh/m², optional kWh/Stück oder kWh/€ – Eingabefelder), Lastgang-Kennwerte (P_max, Jahresvollbenutzungsstunden – aus vorhandenen 5-min Daten), Maßnahmen-Tabelle mit ROI/Amortisation (wiederverwendet `MeasuresTable`), EnPI-Übersicht.
+- KI-Sektionen: `executive_summary`, `methodik_audit`, `massnahmen_roi`, `ausblick_dekarbonisierung`.
 
-**14.1 In PuTTY anmelden auf 178.105.45.225**
-- Felder exakt benannt: Host Name = `178.105.45.225`, Port = `22`, Connection type = SSH
-- Login `root`, Passwort aus Hetzner-Mail
-- Erwartete Prompt-Zeile: `root@ocpp-server:~#`
+**PrivatReport**
 
-**14.2 Bestandsaufnahme: läuft alles wie erwartet?**
-```
-docker ps
-```
-Du musst genau sehen: `ocpp-server` (Up) und `ocpp-caddy` (Up). Falls nicht — STOPP und melden.
+- Eingaben: Personen im Haushalt, Wohnfläche, Baujahr, Heizungsart (kommt teils aus Location-Profil).
+- Kapitel: Verbrauchsübersicht, Vergleich mit BDEW-Durchschnittshaushalt (Ampel), CO₂-Fußabdruck, Energiekosten, PV-Eigenverbrauchsquote (falls vorhanden), Spartipps.
+- KI-Sektionen: `zusammenfassung`, `vergleich_durchschnitt`, `spartipps`.
+- Schlichteres Layout, kein juristisches Vorwort.
 
-**14.3 DNS-Eintrag `staging-ocpp.aicono.org` in Cloudflare**
-- Browser → Cloudflare → DNS → Add record
-- Type A, Name `staging-ocpp`, IPv4 `178.105.45.225`, Proxy `DNS only` (graue Wolke!), TTL Auto
-- Test in PuTTY: `nslookup staging-ocpp.aicono.org` → muss `178.105.45.225` zeigen
+**SonstigeReport**
 
-**14.4 Neuesten Code von GitHub auf den Server holen**
-- Erst prüfen, wo das Repo liegt: `ls /opt/aicono`
-- Dann: 
-  ```
-  cd /opt/aicono/aicono-ems
-  git pull
-  ```
-- Erwartete Ausgabe: `Already up to date.` ODER eine Liste geänderter Dateien
-- Fehlerfall „Permission denied" / „not a git repository" → STOPP, melden
+- Profil-Card mit Auswahl: *Freiwilliger Nachhaltigkeitsbericht*, *DNK*, *EMASeasy*.
+- Kapitel ähnlich Gewerbe, aber ohne EnPI/ROI-Pflicht; Fokus auf Verbrauch, CO₂ (Scope 1+2 vereinfacht), Maßnahmen, Ziele.
+- KI-Sektionen: `vorwort`, `nachhaltigkeitskontext`, `massnahmen`, `ausblick`.
 
-**14.5 Wo liegt die Live-Installation? (zur Sicherheit nur ansehen, nichts ändern)**
-```
-ls /opt/aicono
-cat /opt/aicono/<live-ordner>/.env | head -5
-```
-Damit du den Live-Ordnernamen kennst (z.B. `ocpp-persistent-server` oder `ocpp-live`). Diesen Namen brauchst du in Schritt 14.10 zum Caddy-Reload.
+## Detail-Schritte
 
-**14.6 Neuen Ordner für die Staging-Bridge anlegen**
-```
-mkdir -p /opt/aicono/ocpp-staging
-cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/. /opt/aicono/ocpp-staging/
-ls /opt/aicono/ocpp-staging
-```
-Erwartete Ausgabe: `Caddyfile  Dockerfile  README.md  docker-compose.yml  package.json  src  tsconfig.json …`
+1. `**src/lib/report/tenantTypeProfiles.ts**` – Typdefinitionen + Profil-Konstanten je `TenantType` (Rechtsgrundlagen, Pflicht-Sections, Default-Extras, Label, AI-Sektion-Keys).
+2. **Refactor** der bestehenden `EnergyReport.tsx`: Kommunalen Inhalt unverändert in `**src/components/report/templates/KommuneReport.tsx**` verschieben.
+3. **Dispatcher in `EnergyReport.tsx**` schreiben: bei `tenant_type === "kommune"` → `KommuneReport`, bei `gewerbe_industrie` → `GewerbeIndustrieReport`, etc. (Loading-/Auth-Guards bleiben oben.)
+4. `**GewerbeIndustrieReport.tsx**` neu, mit Profilauswahl (EDL-G/EnEfG/CSRD), Scope-1/2-KPIs, spezifischen Kennzahlen, Lastgang-Block, Maßnahmen-ROI, KI-Texten.
+5. `**PrivatReport.tsx**` neu, mit Haushaltsprofil-Eingaben, BDEW-Vergleich (Konstanten in `tenantTypeProfiles.ts`), Spartipps-Block, vereinfachten KI-Texten.
+6. `**SonstigeReport.tsx**` neu, ähnlich Gewerbe aber schlanker, DNK/EMASeasy-Profilauswahl.
+7. `**supabase/functions/generate-report-text/index.ts**` erweitern: neuer Request-Parameter `tenantType` + `section`-Union erweitert; eigene SYSTEM_PROMPTs pro Mandantentyp; `profile` wird optional (für Privat nicht benötigt). Backward-kompatibel mit Kommune-Aufrufen.
+8. `**energy_report_drafts**` wird beibehalten; `profile_code` für Nicht-Kommunen mit dem gewählten Rechtsrahmen-Code befüllt (z. B. `EDL-G`, `CSRD`, `BDEW`, `DNK`). Kein Schema-Change nötig.
+9. **Hinweis-Card** in `EnergyReport.tsx` entfernen (wird durch Dispatcher ersetzt).
 
-**14.7 `.env` für Staging erstellen (zeigt auf Lovable-Cloud)**
-- Befehl: `nano /opt/aicono/ocpp-staging/.env`
-- **Kompletter Datei-Inhalt** zum Einfügen (Lovable-Cloud-URL, Anon-Key, Domain `staging-ocpp.aicono.org`, `LOG_LEVEL=debug`, `OCPP_STARTUP_CHECK_ID=testbox01`)
-- Speichern: `Strg+O`, Enter, `Strg+X`
-- Kontrolle: `cat /opt/aicono/ocpp-staging/.env`
+## Nicht im Scope
 
-**14.8 `docker-compose.yml` für Staging ersetzen**
-- `nano /opt/aicono/ocpp-staging/docker-compose.yml`
-- **Kompletter Datei-Inhalt** zum Einfügen — enthält:
-  - nur 1 Service `ocpp` mit `container_name: ocpp-server-staging`
-  - **kein** zweites Caddy
-  - hängt sich ans bestehende Docker-Netzwerk des Live-Caddys (wird in 14.9 ermittelt und eingetragen)
+- Keine neuen DB-Tabellen oder RLS-Änderungen.
+- Keine Änderungen an der kommunalen Logik, Bundesland-Profilen oder bestehenden Komponenten in `src/components/report/`.
+- Keine Migration für `energy_report_drafts`.
+- Keine Änderungen an Branding, i18n-Übersetzungsfiles (deutsche Texte inline, analog zur bestehenden Kommune-Variante).
 
-**14.9 Bestehendes Docker-Netzwerk ermitteln (wichtig!)**
-```
-docker network ls
-docker inspect ocpp-caddy | grep -A 2 "Networks"
-```
-- Du siehst den Netz-Namen, z.B. `ocpp-persistent-server_ocppnet`
-- Diesen Namen in `/opt/aicono/ocpp-staging/docker-compose.yml` ganz unten unter `networks:` als `external: true / name: <gefundener-name>` eintragen
-- Beispiel-Block mit Platzhalter wird in der Anleitung gezeigt + Hinweis, was genau zu ersetzen ist
+## Offene Punkte zur Bestätigung
 
-**14.10 Caddyfile der Live-Installation erweitern (nur 1 Block hinzufügen)**
-- `nano /opt/aicono/<live-ordner>/Caddyfile`
-- Genau diesen Block **ans Ende** anfügen:
-  ```
-  staging-ocpp.aicono.org {
-    encode gzip
-    reverse_proxy ocpp-server-staging:8080 {
-      header_up Host {host}
-      header_up X-Real-IP {remote}
-      header_up X-Forwarded-Proto https
-    }
-  }
-  ```
-- Speichern, dann Caddy neu laden:
-  ```
-  docker exec ocpp-caddy caddy reload --config /etc/caddy/Caddyfile
-  ```
-- Erwartete Ausgabe: keine Fehlermeldung. (Falls Fehler: Block wieder löschen, melden.)
+- Sollen für **Gewerbe/Industrie** alle vier Rechtsrahmen (EDL-G, EnEfG, CSRD, ISO 50001) direkt angeboten werden, oder zunächst nur **EnEfG + CSRD** als die häufigsten?  
+ANTWORT: Ja, alle vier Rechtsramen direkt anbieten.  
 
-**14.11 Staging-Container bauen und starten**
-```
-cd /opt/aicono/ocpp-staging
-docker compose up -d --build
-```
-- Dauer: 2-5 Minuten beim ersten Mal
-- Erwartete letzte Zeile: `Container ocpp-server-staging  Started`
-- Prüfen: `docker ps` → drei Container „Up": `ocpp-server`, `ocpp-server-staging`, `ocpp-caddy`
-
-**14.12 Logs der Staging-Bridge ansehen**
-```
-docker logs --tail 50 ocpp-server-staging
-```
-Erwartete Zeilen u.a.: `Startup check OK for testbox01`, `Listening on :8080`.
-Fehlt der Startup-Check → Anon-Key falsch in 14.7 → korrigieren, dann `docker compose up -d --build` erneut.
-
-**14.13 HTTPS-Test im PuTTY**
-```
-curl -sf https://ocpp.aicono.org/health
-curl -sf https://staging-ocpp.aicono.org/health
-```
-Beide müssen exakt antworten mit `{"status":"ok",...}`.
-Falls Staging fehlschlägt → Caddy 60 Sekunden Zeit fürs Let's-Encrypt-Zertifikat geben, dann erneut testen. Sonst: `docker logs --tail 80 ocpp-caddy | grep -i staging`.
-
-**14.14 Funktionstest mit dem Simulator in Lovable**
-- Browser → Lovable-Preview → `/super-admin/ocpp/simulator`
-- Server-URL: `wss://staging-ocpp.aicono.org/`
-- Wallbox `testbox01` → **Verbinden**
-- Erwartet: `Connected (subprotocol: ocpp1.6)`, bleibt ≥ 30 Sek stabil
-
-**14.15 Wallboxen zuordnen (welche URL bedeutet welche Umgebung?)**
-
-| Wallbox-Typ | OCPP-URL in der Wallbox eintragen | Daten landen in |
-|---|---|---|
-| Echte Live-Wallbox | `wss://ocpp.aicono.org/<seriennr>` | Live-Supabase (91.99.170.143) |
-| Simulator/Lovable-Test | `wss://staging-ocpp.aicono.org/<seriennr>` | Lovable-Cloud |
-
-**Antwort auf deine Frage „Wie sage ich der Bridge, wohin sie sich verbindet?":**
-Das steht in der jeweiligen `.env` unter `SUPABASE_URL`. Live-Bridge → 91.99.170.143-Supabase. Staging-Bridge → Lovable-Cloud. Die **Wallbox** entscheidet über die URL, an welche Bridge sie sich verbindet — die Bridge entscheidet über ihre `.env`, in welche Datenbank sie schreibt.
-
-## Zusätzlicher neuer Abschnitt 14.16: "Updates einspielen — der sichere Weg"
-
-Drei klar getrennte Mini-Anleitungen mit exakten Copy-Paste-Blöcken:
-
-**A) Nur Staging updaten (immer ZUERST testen):**
-```
-cd /opt/aicono/aicono-ems && git pull
-cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/. /opt/aicono/ocpp-staging/
-cd /opt/aicono/ocpp-staging && docker compose up -d --build
-docker logs --tail 30 ocpp-server-staging
-```
-Erfolg: Letzte Log-Zeilen ohne `error`, Simulator verbindet sich weiterhin.
-
-**B) Live updaten (erst NACH erfolgreichem Staging-Test):**
-```
-cd /opt/aicono/aicono-ems && git pull
-cp -r /opt/aicono/aicono-ems/docs/ocpp-persistent-server/. /opt/aicono/<live-ordner>/
-cd /opt/aicono/<live-ordner> && docker compose up -d --build
-docker logs --tail 30 ocpp-server
-```
-(`<live-ordner>` durch den in 14.5 ermittelten Namen ersetzen.)
-
-**C) Notfall: Staging anhalten (Live läuft weiter unberührt):**
-```
-cd /opt/aicono/ocpp-staging && docker compose down
-```
-
-## Was ich NICHT anfasse
-
-- Keine Änderung an `/opt/aicono/<live-ordner>/.env`
-- Keine Umbenennung der Live-Container
-- Kein neues Docker-Netzwerk (Staging tritt dem bestehenden bei)
-- Caddyfile wird nur **erweitert**, der bestehende `ocpp.aicono.org`-Block bleibt unverändert
-- Der Energiemanagement-Server **91.99.170.143** wird überhaupt nicht angefasst
-
-## Was du mir noch sagen musst, bevor ich die Anleitung schreibe
-
-Damit die `.env` für Staging vollständig wird, brauche ich genau **eine** Info — die ich dir auch holen helfe:
-
-**Frage:** Soll die Staging-Bridge auf die Lovable-Cloud zugreifen (also `https://xnveugycurplszevdxtw.supabase.co`, Anon-Key ist mir bekannt)?
-→ Falls **ja** (Standardfall), kann ich die `.env` komplett ausgefüllt in die Anleitung schreiben. Du musst dann gar nichts mehr eintippen, nur einfügen.
-→ Falls **nein**, sag mir bitte, welche Supabase-URL stattdessen rein soll.
-
-Sobald du das bestätigst (oder einfach „ja"), schreibe ich die komplette Anleitung in `ANLEITUNG_HETZNER_DEPLOY.md` und aktualisiere die `.docx`-Datei automatisch mit.
-
-## Geänderte Datei
-
-- `docs/ocpp-persistent-server/ANLEITUNG_HETZNER_DEPLOY.md` (kompletter Neu-Schreib von Schritt 14)
+- Bei **Privat**: Sollen die Haushaltsdaten (Personen, Wohnfläche) ad-hoc im Report-Konfigurationsformular eingegeben werden, oder dauerhaft am Hauptstandort/Tenant gespeichert (würde eine kleine Migration erfordern)?  
+ANTWORT: ad-hoc Eingabe im Report-Formular, da sich einige Daten (Auszug, Anbau, etc.) immer mal ändern könnten.

@@ -1176,6 +1176,7 @@ export type Database = {
           idle_fee_grace_minutes: number
           idle_fee_per_minute: number
           is_active: boolean
+          is_default: boolean
           name: string
           price_per_kwh: number
           tax_rate_percent: number
@@ -1190,6 +1191,7 @@ export type Database = {
           idle_fee_grace_minutes?: number
           idle_fee_per_minute?: number
           is_active?: boolean
+          is_default?: boolean
           name: string
           price_per_kwh?: number
           tax_rate_percent?: number
@@ -1204,6 +1206,7 @@ export type Database = {
           idle_fee_grace_minutes?: number
           idle_fee_per_minute?: number
           is_active?: boolean
+          is_default?: boolean
           name?: string
           price_per_kwh?: number
           tax_rate_percent?: number
@@ -5145,6 +5148,201 @@ export type Database = {
           },
         ]
       }
+      roaming_partners: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          endpoint_url: string | null
+          id: string
+          last_sync_at: string | null
+          name: string
+          notes: string | null
+          party_id: string | null
+          protocol: string
+          role: string
+          status: string
+          tenant_id: string
+          token: string | null
+          updated_at: string
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          endpoint_url?: string | null
+          id?: string
+          last_sync_at?: string | null
+          name: string
+          notes?: string | null
+          party_id?: string | null
+          protocol?: string
+          role?: string
+          status?: string
+          tenant_id: string
+          token?: string | null
+          updated_at?: string
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          endpoint_url?: string | null
+          id?: string
+          last_sync_at?: string | null
+          name?: string
+          notes?: string | null
+          party_id?: string | null
+          protocol?: string
+          role?: string
+          status?: string
+          tenant_id?: string
+          token?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roaming_partners_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roaming_sessions: {
+        Row: {
+          charge_point_id: string | null
+          cost_amount: number | null
+          created_at: string
+          currency: string | null
+          direction: string
+          ended_at: string | null
+          energy_kwh: number | null
+          external_session_id: string | null
+          external_user_ref: string | null
+          id: string
+          partner_id: string | null
+          started_at: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          charge_point_id?: string | null
+          cost_amount?: number | null
+          created_at?: string
+          currency?: string | null
+          direction: string
+          ended_at?: string | null
+          energy_kwh?: number | null
+          external_session_id?: string | null
+          external_user_ref?: string | null
+          id?: string
+          partner_id?: string | null
+          started_at?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          charge_point_id?: string | null
+          cost_amount?: number | null
+          created_at?: string
+          currency?: string | null
+          direction?: string
+          ended_at?: string | null
+          energy_kwh?: number | null
+          external_session_id?: string | null
+          external_user_ref?: string | null
+          id?: string
+          partner_id?: string | null
+          started_at?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roaming_sessions_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roaming_sessions_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "roaming_partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roaming_sessions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roaming_settings: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          default_guest_tariff_id: string | null
+          enabled: boolean
+          id: string
+          notes: string | null
+          our_token: string | null
+          party_id: string | null
+          protocol: string
+          role: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          default_guest_tariff_id?: string | null
+          enabled?: boolean
+          id?: string
+          notes?: string | null
+          our_token?: string | null
+          party_id?: string | null
+          protocol?: string
+          role?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          default_guest_tariff_id?: string | null
+          enabled?: boolean
+          id?: string
+          notes?: string | null
+          our_token?: string | null
+          party_id?: string | null
+          protocol?: string
+          role?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roaming_settings_default_guest_tariff_id_fkey"
+            columns: ["default_guest_tariff_id"]
+            isOneToOne: false
+            referencedRelation: "charging_tariffs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roaming_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_permissions: {
         Row: {
           created_at: string
@@ -6740,6 +6938,7 @@ export type Database = {
           slug: string
           street: string | null
           support_price_per_15min: number
+          tenant_type: string
           updated_at: string
           week_start_day: number
         }
@@ -6772,6 +6971,7 @@ export type Database = {
           slug: string
           street?: string | null
           support_price_per_15min?: number
+          tenant_type?: string
           updated_at?: string
           week_start_day?: number
         }
@@ -6804,6 +7004,7 @@ export type Database = {
           slug?: string
           street?: string | null
           support_price_per_15min?: number
+          tenant_type?: string
           updated_at?: string
           week_start_day?: number
         }

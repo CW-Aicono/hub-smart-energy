@@ -102,11 +102,31 @@ export function useChargePoints() {
     mutationFn: async (cp: Partial<ChargePoint> & { tenant_id: string; ocpp_id: string; name: string }) => {
       const { data, error } = await supabase.from("charge_points").insert(cp as any).select().single();
       if (error) throw error;
+
+      // Seed charge_point_connectors so the connector cards / status grid appear immediately.
+      // Without this, freshly created charge points show "Anschlüsse: N" in the details panel
+      // but have no rows in charge_point_connectors, so the connector UI stays empty until
+      // the user edits the CP (which triggers the sync logic in updateChargePoint).
+      const count = Math.max(1, Number((cp as any).connector_count ?? 1));
+      const connectorType = (cp as any).connector_type ?? "Type2";
+      const maxPower = Number((cp as any).max_power_kw ?? 22);
+      const inserts = Array.from({ length: count }, (_, i) => ({
+        charge_point_id: (data as any).id,
+        connector_id: i + 1,
+        display_order: i,
+        status: "unconfigured",
+        connector_type: connectorType,
+        max_power_kw: maxPower,
+      }));
+      const { error: connErr } = await supabase.from("charge_point_connectors").insert(inserts as any);
+      if (connErr) console.error("Failed to seed charge_point_connectors:", connErr);
+
       return data;
     },
     onSuccess: () => {
       const t = getT();
       queryClient.invalidateQueries({ queryKey: ["charge-points"] });
+      queryClient.invalidateQueries({ queryKey: ["charge-point-connectors"] });
       toast({ title: t("chargePoint.created") });
     },
     onError: (e: Error) => {
