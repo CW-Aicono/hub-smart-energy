@@ -70,6 +70,15 @@ const InviteUserDialog = () => {
     if (check.kind === "blocked") return;
     setLoading(true);
 
+    // Map the unified select value back to (system role, custom_role_id):
+    //  - "admin"          → admin system role, no custom role
+    //  - "user"           → user  system role, no custom role
+    //  - <custom_role_id> → user  system role, with custom_role_id
+    const isAdmin = roleValue === "admin";
+    const isPlainUser = roleValue === "user";
+    const role = isAdmin ? "admin" : "user";
+    const customRoleId = isAdmin || isPlainUser ? null : roleValue;
+
     try {
       const { data, error } = await supabase.functions.invoke("activate-invited-user", {
         body: {
@@ -77,6 +86,7 @@ const InviteUserDialog = () => {
           email,
           name: name || undefined,
           role,
+          customRoleId,
           tenantId: tenant?.id,
           redirectTo: `${window.location.origin}/set-password`,
         },
@@ -105,7 +115,7 @@ const InviteUserDialog = () => {
   const resetDialog = () => {
     setEmail("");
     setName("");
-    setRole("user");
+    setRoleValue("user");
     setDone(false);
     setCheck({ kind: "idle" });
   };
