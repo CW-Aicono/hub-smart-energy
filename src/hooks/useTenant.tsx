@@ -236,6 +236,12 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     fetchTenant();
   }, [fetchTenant]);
 
+  // Re-fetch when a super-admin enters/exits the Remote-Support view.
+  useEffect(() => {
+    return onSupportViewChanged(() => { fetchTenant(); });
+  }, [fetchTenant]);
+
+
   const updateBranding = async (branding: Partial<TenantBranding>) => {
     if (!tenant) return { error: new Error("No tenant") };
 
