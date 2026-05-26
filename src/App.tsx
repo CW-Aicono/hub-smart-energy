@@ -15,6 +15,7 @@ import { SuperAdminWrapper } from "@/components/super-admin/SuperAdminWrapper";
 import RecoveryGuard from "@/components/RecoveryGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
+import SuperAdminImpersonationBar from "./components/SuperAdminImpersonationBar";
 import CookieConsent from "./components/CookieConsent";
 import LocationDetail from "./pages/LocationDetail";
 import Locations from "./pages/Locations";
