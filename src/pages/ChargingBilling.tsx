@@ -564,10 +564,7 @@ const ChargingBilling = () => {
               </Dialog>
             </TabsContent>
 
-            {/* Users Tab */}
-            <TabsContent value="users">
-              <ChargingUsersTab />
-            </TabsContent>
+
 
             {/* Roaming Tab */}
             <TabsContent value="roaming">
