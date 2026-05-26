@@ -285,7 +285,8 @@ const ChargePointDetail = () => {
   if (!cp) return null;
 
   // Status-Lookup case-insensitiv (DB liefert "Available" mit Großbuchstabe direkt von OCPP)
-  const normalizedStatus = normalizeConnectorStatus(cp.status, cp.ws_connected !== false);
+  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat);
+  const normalizedStatus = normalizeConnectorStatus(cp.status, cpOnline);
   const cfg = STATUS_KEYS[normalizedStatus] || STATUS_KEYS.offline;
   const StatusIcon = cfg.icon;
 
