@@ -222,7 +222,7 @@ export function buildUserPreview(
     const rowNumber = i + 2; // Zeile 1 = Header
     const name = (r["Name"] ?? "").trim();
     const email = (r["E-Mail"] ?? "").trim().toLowerCase();
-    const rfid = (r["RFID-Tag"] ?? "").trim();
+    const rfid = (r["RFID-Tag"] ?? "").replace(/\s+/g, "").trim();
     const groupName = (r["Gruppe"] ?? "").trim();
     const tariffName = (r["Tarif"] ?? "").trim();
     const statusRaw = (r["Status"] ?? "active").trim().toLowerCase();
