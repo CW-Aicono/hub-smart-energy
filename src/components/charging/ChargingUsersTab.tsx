@@ -162,6 +162,24 @@ const ChargingUsersTab = () => {
                     <SelectItem value="archived">{t("cu.statusArchived" as any)}</SelectItem>
                   </SelectContent>
                 </Select>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle>{t("cu.title" as any)}</CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t("cu.searchPlaceholder" as any)}
+                  className="w-64"
+                />
+                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                  <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("cu.statusAll" as any)}</SelectItem>
+                    <SelectItem value="active">{t("cu.statusActive" as any)}</SelectItem>
+                    <SelectItem value="blocked">{t("cu.statusBlocked" as any)}</SelectItem>
+                    <SelectItem value="archived">{t("cu.statusArchived" as any)}</SelectItem>
+                  </SelectContent>
+                </Select>
                 {isAdmin && (
                   <>
                     <Button size="sm" variant="outline" onClick={() => openIo("users")}>
