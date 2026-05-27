@@ -215,6 +215,7 @@ const App = () => (
                       <Route path="/arbitrage" element={<M><ArbitrageTrading /></M>} />
                       <Route path="/copilot" element={<M><Copilot /></M>} />
                       <Route path="/energy-report" element={<M><EnergyReport /></M>} />
+                      <Route path="/energy-sharing" element={<M><EnergySharing /></M>} />
                       <Route path="/tenant-electricity" element={<M><TenantElectricity /></M>} />
                       <Route path="/ev" element={<ChargingApp />} />
                       <Route path="/te" element={<TenantEnergyApp />} />
