@@ -96,14 +96,17 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
   const { tariffs } = useCommunityTariffs(communityId);
 
   return (
-    <Tabs defaultValue="overview">
+    <Tabs defaultValue="dashboard">
       <TabsList className="flex-wrap">
+        <TabsTrigger value="dashboard"><BarChart3 className="h-4 w-4 mr-1" />Dashboard</TabsTrigger>
         <TabsTrigger value="overview">Übersicht</TabsTrigger>
         <TabsTrigger value="members"><UsersIcon className="h-4 w-4 mr-1" />Mitglieder</TabsTrigger>
         <TabsTrigger value="assets"><Sun className="h-4 w-4 mr-1" />Anlagen</TabsTrigger>
         <TabsTrigger value="tariff"><Receipt className="h-4 w-4 mr-1" />Tarif</TabsTrigger>
         <TabsTrigger value="contracts"><FileSignature className="h-4 w-4 mr-1" />Verträge</TabsTrigger>
       </TabsList>
+
+      <TabsContent value="dashboard"><CommunityDashboardTab communityId={communityId} /></TabsContent>
 
       <TabsContent value="overview">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
