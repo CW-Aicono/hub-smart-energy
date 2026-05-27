@@ -77,11 +77,15 @@ export function EditIntegrationDialog({
     if (!locationIntegration) return;
 
     setIsSaving(true);
-    const newConfig: Record<string, string> = { ...baseConfig };
+    const newConfig: Record<string, any> = { ...baseConfig };
     if (gatewayDef) {
       for (const field of gatewayDef.configFields) {
         newConfig[field.name] = data[field.name] || "";
       }
+    }
+    if (isLoxone) {
+      const clamped = Math.min(15, Math.max(1, Math.floor(Number(pollIntervalMin) || 5)));
+      newConfig.poll_interval_minutes = clamped;
     }
 
     const { error } = await onUpdate(locationIntegration.id, { config: newConfig });
