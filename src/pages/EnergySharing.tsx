@@ -210,6 +210,13 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
           </Table>
         )}
       </CardContent>
+      <SignContractDialog
+        open={!!signMember}
+        onOpenChange={(o) => !o && setSignMember(null)}
+        member={signMember}
+        communityId={communityId}
+        communityName={communityName}
+      />
     </Card>
   );
 }
