@@ -482,6 +482,13 @@ serve(async (req) => {
     const isRefreshAction = action === "refreshSensors";
     if (isRefreshAction) action = "getSensors";
     const shouldPersistReadings = isServiceRole || isRefreshAction || requestBody?.persistToDb === true;
+    // Manual UI-triggered refresh (Tacho/Discovery button) → bypass the 1 h
+    // structure cache so newly added Loxone sensors/actuators show up instantly.
+    // Cron/background calls (service role) keep using the cache to save traffic.
+    const forceStructureRefresh =
+      requestBody?.forceStructureRefresh === true ||
+      (isRefreshAction && !isServiceRole);
+
 
     if (!locationIntegrationId) {
       throw new Error("Location Integration ID ist erforderlich");
