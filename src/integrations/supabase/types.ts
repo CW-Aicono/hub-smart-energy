@@ -7468,6 +7468,10 @@ export type Database = {
         Args: { p_from?: string; p_to?: string }
         Returns: number
       }
+      bootstrap_cron_settings: {
+        Args: { p_key: string; p_url: string }
+        Returns: undefined
+      }
       bootstrap_user_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
