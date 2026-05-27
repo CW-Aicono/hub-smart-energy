@@ -159,6 +159,25 @@ export function EditIntegrationDialog({
                   />
                 ))}
 
+                {isLoxone && (
+                  <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+                    <FormLabel htmlFor="poll-interval">Abfrage-Intervall (Minuten)</FormLabel>
+                    <Input
+                      id="poll-interval"
+                      type="number"
+                      min={1}
+                      max={15}
+                      step={1}
+                      value={pollIntervalMin}
+                      onChange={(e) => setPollIntervalMin(Number(e.target.value))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Wie oft AICONO neue Sensorwerte vom Miniserver abruft. Erlaubt: 1–15 Minuten. Niedriger = aktuellere Werte, höher = weniger Netzwerk-Last. Empfehlung: 5 Minuten.
+                    </p>
+                  </div>
+                )}
+
+
                 <div className="flex gap-2 justify-end pt-4">
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                     {t("common.cancel" as any)}
