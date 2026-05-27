@@ -113,6 +113,10 @@ export interface CommunityMember {
   melo_id: string | null;
   share_kw: number;
   status: string;
+  invited_at?: string | null;
+  activated_at?: string | null;
+  suspended_at?: string | null;
+  last_invite_sent_at?: string | null;
   created_at: string;
   updated_at: string;
 }
