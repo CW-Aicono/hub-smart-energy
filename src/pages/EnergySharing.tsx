@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine, BarChart3 } from "lucide-react";
+import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine, BarChart3, Upload, Calculator, ShieldCheck } from "lucide-react";
 import {
   useEnergyCommunities,
   useCommunityMembers,
@@ -22,6 +22,9 @@ import CommunityWizard from "@/components/energy-sharing/CommunityWizard";
 import ContractTemplatesTab from "@/components/energy-sharing/ContractTemplatesTab";
 import SignContractDialog from "@/components/energy-sharing/SignContractDialog";
 import CommunityDashboardTab from "@/components/energy-sharing/CommunityDashboardTab";
+import DataImportTab from "@/components/energy-sharing/DataImportTab";
+import BillingTab from "@/components/energy-sharing/BillingTab";
+import DataQualityTab from "@/components/energy-sharing/DataQualityTab";
 import { maLoError, meLoError } from "@/lib/energy-sharing/idValidation";
 
 export default function EnergySharing() {
