@@ -602,6 +602,10 @@ serve(async (req) => {
       // The structure rarely changes, so we serve it from an in-memory cache and
       // only re-fetch on cache miss / expiry. This alone cuts ~30–50 % of traffic.
       const cacheKey = locationIntegrationId;
+      if (forceStructureRefresh) {
+        structureCache.delete(cacheKey);
+        console.log("Manual refresh: structure cache invalidated for this integration");
+      }
       const cached = structureCache.get(cacheKey);
       let structure: LoxoneStructure & { messageCenter?: any };
 
@@ -609,6 +613,7 @@ serve(async (req) => {
         structure = cached.structure;
         console.log(`Using cached LoxAPP3.json structure (expires in ${Math.round((cached.expiresAt - Date.now()) / 1000)}s)`);
       } else {
+
         const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
         console.log(`Fetching structure: ${structureUrl}`);
         const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
