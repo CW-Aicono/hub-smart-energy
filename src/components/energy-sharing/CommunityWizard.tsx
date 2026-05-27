@@ -161,6 +161,7 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
               <p className="text-xs text-muted-foreground mt-1">
                 Nach § 42c EnWG müssen Mitglieder im gleichen Verteilnetz oder benachbarten PLZ-Bereich liegen.
               </p>
+              <PlzVnbHint plzList={regionPlz} />
             </div>
           </div>
         )}
