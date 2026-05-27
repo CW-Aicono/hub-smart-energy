@@ -61,13 +61,15 @@ export function EditIntegrationDialog({
   useEffect(() => {
     if (!locationIntegration || !gatewayDef || !open) return;
 
-    const nextConfig = (locationIntegration.config as Record<string, string> | undefined) ?? {};
+    const nextConfig = (locationIntegration.config as Record<string, any> | undefined) ?? {};
     const vals: Record<string, string> = {};
     for (const field of gatewayDef.configFields) {
-      vals[field.name] = nextConfig[field.name] || "";
+      vals[field.name] = (nextConfig[field.name] as string) || "";
     }
 
     setBaseConfig(nextConfig);
+    const raw = Number(nextConfig.poll_interval_minutes);
+    setPollIntervalMin(Number.isFinite(raw) && raw >= 1 && raw <= 15 ? Math.floor(raw) : 5);
     form.reset(vals);
   }, [locationIntegration, gatewayDef, form, open]);
 
