@@ -179,11 +179,14 @@ const Integrations = () => {
                 <Smartphone className="h-4 w-4" />
                 Mobile Scanner
               </TabsTrigger>
+              <TabsTrigger value="smart-meter" className="gap-2">
+                <Activity className="h-4 w-4" />
+                Smart-Meter
+              </TabsTrigger>
               <TabsTrigger value="api" className="gap-2">
                 <Globe className="h-4 w-4" />
                 API
               </TabsTrigger>
-            </TabsList>
 
             <TabsContent value="gateways">
               {loading ? (
