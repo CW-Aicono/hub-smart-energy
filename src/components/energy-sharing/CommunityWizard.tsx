@@ -83,24 +83,15 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
   const submit = async () => {
     setBusy(true);
     try {
-      const created = await createCommunity.mutateAsync({
+      const row = await createCommunity.mutateAsync({
         name: name.trim(),
         slug: slugify(name) + "-" + Math.random().toString(36).slice(2, 6),
         type,
         region_plz: regionPlz.split(",").map((s) => s.trim()).filter(Boolean),
         status: activate ? "active" : "draft",
       });
-      // createCommunity does not return the row – re-fetch & match on slug isn't reliable.
-      // Use a follow-up insert to children via supabase client directly.
       const { supabase } = await import("@/integrations/supabase/client");
-      const { data: row } = await supabase
-        .from("energy_communities")
-        .select("id, tenant_id")
-        .eq("name", name.trim())
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!row) throw new Error("Community konnte nicht gelesen werden");
+      if (!row) throw new Error("Community konnte nicht erstellt werden");
       const communityId = row.id as string;
       const tenantId = row.tenant_id as string;
 
