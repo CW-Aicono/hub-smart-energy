@@ -25,8 +25,7 @@ export default function EnergySharing() {
   const { communities, isLoading, deleteCommunity } = useEnergyCommunities();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [wizardOpen, setWizardOpen] = useState(false);
+
 
   const selected = communities.find((c) => c.id === selectedId) ?? communities[0] ?? null;
   const activeId = selected?.id ?? null;
