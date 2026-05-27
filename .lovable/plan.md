@@ -1,113 +1,77 @@
-# Plan: Hetzner-Monitoring (a) + Loxone-Bulk-Optimierung (b)
+# Plan: Konfigurierbares Loxone-Polling-Intervall pro Liegenschaft
 
-Beide Teile sind **unabhängig voneinander** und können einzeln freigegeben/zurückgerollt werden. Risiko wird durch Feature-Flags, Read-only-Erstauslieferung und parallelen Betrieb minimiert.
+## Antworten auf deine Fragen
+
+**1. Technisch sicher umsetzbar?**
+Ja — sauber, ohne Risiko. Die Logik bleibt minimal-invasiv:
+
+- Wir nutzen die bereits existierende Spalte `location_integrations.config` (jsonb) und speichern dort einen neuen Schlüssel `poll_interval_minutes` (1–15, Default 5).
+- Die Cron-Funktion `loxone-periodic-sync` läuft **weiterhin jede Minute** (am Cron selbst ändern wir nichts), entscheidet aber pro Integration: „Ist seit `last_sync_at` mindestens `poll_interval_minutes` vergangen? Wenn nein → überspringen."
+- `last_sync_at` wird sowieso schon nach jedem erfolgreichen Sync gesetzt. Keine neue Tabelle, kein neuer Cron, kein Risiko für die Schreibpfade.
+- UI: Neues Feld im Loxone-Integration-Dialog der Liegenschaft (Slider oder Number-Input 1–15 Min, Default 5).
+
+**2. Was spart das an Traffic?**
+Heute pollen wir jede Liegenschaft **jede Minute**. Mit dem neuen Default-Wert 5 Min:
+
+
+| Intervall           | Sync-Calls / Stunde / Liegenschaft | Ersparnis ggü. 1 Min |
+| ------------------- | ---------------------------------- | -------------------- |
+| 1 Min (alt)         | 60                                 | 0 %                  |
+| 5 Min (neu Default) | 12                                 | **−80 %**            |
+| 10 Min              | 6                                  | −90 %                |
+| 15 Min (Max)        | 4                                  | **−93 %**            |
+
+
+Das wirkt **zusätzlich** zu den bereits umgesetzten Optimierungen (Structure-Cache 1 h, Filter auf verknüpfte Sensoren). Realistisch landen die meisten Liegenschaften beim Default 5 Min → nochmals ~80 % weniger Loxone-Requests + ~80 % weniger `loxone-api`-Edge-Function-Calls als heute.
+
+Hinweis: Live-Werte im Dashboard werden dadurch maximal so „frisch" wie das eingestellte Intervall. Für reine Energiezähler (5-Min-Aggregat) ist 5 Min ohnehin die natürliche Auflösung — kein Datenverlust. Wer schnellere Reaktion braucht (z. B. Aktor-Status-Visualisierung), stellt für diese eine Liegenschaft auf 1 Min.
 
 ---
 
-## Teil A — Hetzner-Node-Monitoring (read-only, kein Risiko)
+## Umsetzung
 
-**Ziel:** Im Super-Admin-Bereich live sehen, wie stark die Hetzner-Worker- und DB-Nodes ausgelastet sind (CPU, RAM, Disk, Last-Heartbeat), damit du frühzeitig erkennst, wann ein Upgrade nötig ist.
+### Backend
 
-### Architektur
+1. **Keine Migration nötig** — `config` jsonb existiert. Wir lesen/schreiben `config.poll_interval_minutes`.
+2. `**loxone-periodic-sync/index.ts**`: Nach dem Laden der Integrationen pro Eintrag prüfen:
+  ```text
+   intervalMin = config.poll_interval_minutes ?? 5
+   if last_sync_at && (now - last_sync_at) < (intervalMin*60s - 15s Toleranz)
+     → skip (kein Sync, kein API-Call)
+  ```
+   Toleranz von ~15 s, damit ein Cron-Tick nicht knapp daneben liegt und einen Slot überspringt.
+3. **Manuelle Discovery (Tacho-Button)** bleibt sofort wirksam (umgeht die Drosselung, ist ja kein Cron-Pfad).
 
-```text
-Hetzner-Node (Worker, DB, OCPP)
-  └─ node-metrics-reporter  (kleines Bash-Cron-Skript, alle 60 s)
-       └─ POST /functions/v1/ingest-node-metrics
-              └─ Tabelle: public.node_metrics (append-only)
-                   └─ Super-Admin-Page: /super-admin/monitoring → neue Card "Hetzner-Nodes"
-```
+### Frontend
 
-### Datenfluss
+4. **Loxone-Integration-Dialog** (in der Liegenschaft, dort wo Host/User/Passwort eingegeben werden): Neues Feld
+  - Label: „Abfrage-Intervall (Minuten)"
+  - Typ: Number-Input oder Slider, min 1, max 15, Step 1, Default 5
+  - Hilfetext (de-DE): „Wie oft AICONO neue Sensorwerte vom Miniserver abruft. Niedriger = aktuellere Werte, höher = weniger Netzwerk-Last. Empfehlung: 5 Minuten."
+  - Speichert in `location_integrations.config.poll_interval_minutes`.
 
-1. **Neue Tabelle** `public.node_metrics` (append-only, append + 7 Tage Retention via pg_cron):
-  - `node_name` (z. B. `gateway-worker-1`, `ocpp-server`, `k8s-control-1`)
-  - `cpu_percent`, `mem_percent`, `disk_percent`, `load_avg_1m`, `uptime_seconds`
-  - `recorded_at`
-  - RLS: nur `super_admin` darf lesen, nur Service-Role schreibt.
-2. **Neue Edge Function** `ingest-node-metrics` (POST):
-  - Auth über neuen Secret `NODE_METRICS_TOKEN` (Bearer-Header).
-  - Validiert Payload mit Zod, schreibt eine Zeile in `node_metrics`.
-  - Antwort `{ ok: true }`.
-3. **Bash-Reporter** `docs/node-metrics-reporter/report.sh` (zum manuellen Deploy auf jeden Hetzner-Server):
-  - Liest `/proc/stat`, `/proc/meminfo`, `df`, `uptime`.
-  - Schickt JSON an die Edge Function alle 60 s via cron.
-  - Plus Mini-Anleitung `INSTALL.md` (laienverständlich, copy-paste-Block).
-4. **Super-Admin-UI** — neue Card im bestehenden `SuperAdminMonitoring.tsx`:
-  - Komponente `HetznerNodesCard.tsx` (analog zum bestehenden `GatewayWorkerStatusCard`).
-  - Zeigt pro Node: aktueller CPU/RAM/Disk-Wert + Badge (grün <60 %, gelb 60–80 %, rot >80 %), letzter Heartbeat als „vor X Sekunden".
-  - Refetch alle 15 s, keine Realtime-Subscription (spart Last).
-  - Zahlen mit `toLocaleString("de-DE")`.
+### Sichtbarkeit / Monitoring
+
+5. **Super-Admin-Übersicht** (bestehende Loxone-Status-Karte, falls vorhanden): pro Liegenschaft das eingestellte Intervall anzeigen, damit du auf einen Blick siehst, wo gedrosselt ist.
 
 ### Risiko & Rollback
 
-- **Risiko: minimal.** Reine Lesefunktion, kein Eingriff in produktive Pfade. Wenn der Reporter ausfällt, sieht der Super-Admin nur „kein Heartbeat" — sonst keine Auswirkung.
-- **Rollback:** Edge Function deaktivieren oder Cron-Job auf dem Server stoppen (`crontab -e` → Zeile löschen).
-- Du musst nichts an bestehenden Hetzner-Services anfassen — der Reporter ist additiv.
+- **Risiko: sehr niedrig.** Reine Skip-Logik vor dem API-Call. Wenn `poll_interval_minutes` fehlt, gilt Default 5. Wenn Default 5 zu langsam ist für eine Liegenschaft → im UI auf 1 stellen, sofort wirksam beim nächsten Cron-Tick.
+- **Rollback:** Skip-Logik per Feature-Flag (`system_settings.loxone_respect_poll_interval` default `true`) deaktivierbar — ein UPDATE und alle Liegenschaften pollen wieder jede Minute wie früher.
 
 ### Aufwand
 
-~1 Migration, 1 Edge Function, 1 React-Card, 1 Bash-Skript + Mini-Anleitung. Ein Loop.
+1 Edge-Function-Anpassung + 1 Dialog-Feld + (optional) 1 Anzeige im Super-Admin. Ein Loop.
 
 ---
 
-## Teil B — Loxone-Bulk-Endpoint (90 % Traffic-Reduktion)
+## Offen (entscheidest du)
 
-**Ziel:** Statt pro Sensor einen HTTPS-Call (`/jdev/sps/io/<uuid>/all`), nur **noch einen Call pro Miniserver pro Sync** (`/jdev/sps/io/_/all`), der alle Werte in einem JSON liefert.
-
-### Was geändert wird (nur Edge Function `loxone-api`)
-
-1. **Neuer Modus** `getAllStates` in `loxone-api/index.ts`:
-  - Ein Request an `/jdev/sps/io/_/all` → liefert Map `{ uuid: value }` für **alle** Controls des Miniservers.
-  - Antwort wird in einem In-Memory-Cache (60 s TTL) pro Miniserver gehalten.
-2. `**loxone-periodic-sync` umstellen:**
-  - Statt N parallele `getControlState`-Calls → **einmal** `getAllStates` pro Miniserver, dann lokal die UUIDs aus der Map ziehen.
-  - Schreibpfad in `meter_power_readings_5min` bleibt **byte-identisch** (gleiches Insert, gleiche Aggregation).
-3. **Feature-Flag in `system_settings`:**
-  - Neuer Key `loxone_bulk_mode` (default `false`).
-  - In `loxone-periodic-sync` zu Beginn lesen:
-    - `false` → alter Pfad (heutiges Verhalten, unverändert).
-    - `true`  → Bulk-Pfad.
-  - So kannst du pro Umgebung (Lovable Cloud vs. Hetzner) **getrennt** umschalten und bei Problemen mit einem SQL-Update sofort zurück.
-4. **Schatten-/Vergleichsmodus für 24 h** (optional, aber empfohlen):
-  - Wert `loxone_bulk_mode = 'shadow'` → Bulk-Call wird zusätzlich gemacht, Ergebnis nur geloggt + mit Einzel-Calls verglichen (Differenzen in `integration_errors` als Info).
-  - Schreibpfad nutzt weiterhin die Einzel-Calls. So sehen wir, ob die Bulk-Antwort 1:1 passt, **bevor** wir umschalten.
-
-### Risiko & Rollback
-
-- **Risiko: niedrig**, weil:
-  - Alter Pfad bleibt im Code, wird per Flag gewählt.
-  - Schatten-Modus erlaubt 1:1-Vergleich ohne Produktionsdaten zu ändern.
-  - Rollback = ein UPDATE auf `system_settings`, sofort wirksam beim nächsten Cron-Tick (≤ 60 s).
-- **Was wir NICHT anfassen:** Aggregations-Logik, Schreibpfad in `meter_power_readings_5min`, Stundenaggregate, Frontend-Widgets, Hetzner-Worker (der hat einen eigenen Codepfad und bleibt unverändert).
-
-### Erwarteter Effekt
-
-- **Loxone-Traffic:** ca. **−90 %** (von ~130 Requests/Min auf 1 pro Miniserver).
-- **Edge-Function-Calls (loxone-api):** ebenfalls −90 % → spürbare Entlastung der Lovable-Cloud-Funktion und der Hetzner-Worker-CPU.
-- **Datenqualität:** identisch (gleicher Loxone-Endpoint, nur gebündelt).
-
-### Aufwand
-
-Eine Edge-Function-Erweiterung + Anpassung von `loxone-periodic-sync` + 1 Migration für `system_settings`-Default. Ein Loop.
-
----
-
-## Empfohlene Reihenfolge
-
-1. **Erst Teil A bauen** (Monitoring sichtbar machen) — so siehst du beim Roll-out von Teil B sofort am CPU-Graph, ob die Bulk-Umstellung wirkt.
-2. **Dann Teil B** im Schatten-Modus aktivieren (1–2 Tage Vergleich).
-3. **Bulk-Modus scharfschalten**, CPU-Graphen im neuen Monitoring beobachten.
-
----
-
-## Was offen ist (entscheidest du)
-
-- **Teil A:** Sollen auch **Datenbank-Metriken von Lovable Cloud** (Postgres CPU/Verbindungen) in dieselbe Card? → würde den Plan um ein zweites Edge-Function-Endpunkt erweitern (nutzt `supabase--db_health`). Empfehlung: **separat als Folge-Task**, um diesen Plan klein zu halten.
-- **Teil B:** Soll der Schatten-Modus **automatisch nach 24 h** in den echten Modus wechseln, oder bleibt es ein manuelles Umschalten? Empfehlung: **manuell** (du behältst die Kontrolle).
-
-Wenn du den Plan freigibst, baue ich **Teil A zuerst** und melde mich vor Teil B nochmal.  
+- **Default-Wert:** 5 Min bestätigt? (Alternative: 3 Min für etwas frischere Dashboards bei trotzdem −67 % Traffic.)
+- **Feature-Flag** für globalen Rollback einbauen — ja/nein? Empfehlung: **ja**, kostet quasi nichts.
+- **Anzeige im Super-Admin** der aktuell konfigurierten Intervalle — jetzt mitbauen oder später? Empfehlung: **jetzt mitbauen**, ist eine kleine Tabelle.  
   
 Antworten:  
-- Teil A: Ja, auch Datenbank_Metriken aus der Cloud mit integrieren.  
-- Teil B: Ja, manuelles Umschalten hier über den Chat.
+- Default-Wert: 5 Minuten  
+- Feature-Flag: ja, mit einbauen  
+- Anzeige im Super-Admin: jetzt mitbauen
