@@ -1,186 +1,161 @@
+# Energy-Sharing Modul – Architektur & Umsetzungsplan
 
-# Smart-Meter / iMSys Gateway – Integrationsplan (Rev. 2)
+## 1. Grundsatzentscheidung: Ein Projekt, drei Oberflächen
 
-Ziel: Ein neuer, generischer Gateway-Typ `smart_meter_imsys`, der über den **CLS-Kanal des intelligenten Messsystems** Messdaten empfängt und für mehrere Module wiederverwendbar ist (Messdatenerfassung, Mieterstrom §42a, Energy Sharing §42c, Dynamische Tarife §41a, §14a EnWG-Steuerung).
+**Empfehlung: Im bestehenden Projekt belassen, getrennt über Subdomains und PWA-Manifeste.**
 
----
+Begründung:
 
-## 0. Bewertung des Konzepts (übernommen aus Review)
+- Shared Backend (Supabase, Auth, Tenants, Locations, Meters, Smart-Meter-iMSys-Gateway, Pricing, Lexware-Billing) ist bereits da. Ein zweites Projekt würde 80% davon duplizieren.
+- Pattern existiert schon: `manifest.json`, `manifest-ev.json`, `manifest-te.json`, `manifest-sales.json` zeigen, dass Multi-PWA aus einem Repo bereits etabliert ist.
+- Memory `[PWA Architecture]` bestätigt: Multi-PWA-Support ist Architektur-Standard (Meter Mate, SmartCharge, Mein Strom).
+- Marktplatz braucht öffentliche SEO-Seiten ohne Login – das geht sauber über eine eigene Subdomain mit eigener Route-Gruppe im selben Vite-Build (analog `/demo`, `/embed/pitch`, `/charge/:id`).
 
-**Stärken**
-- Transport-Abstraktion verhindert Vendor-Lock-in.
-- Wiederverwendung bestehender Tabellen statt Neubau.
-- Phasenplan realistisch priorisiert.
-- BSI/DSGVO/mTLS sind mitgedacht.
+Ein **separates Projekt** wäre nur sinnvoll, wenn der Marktplatz später ein komplett anderes Tech-Team, eigene Release-Zyklen oder einen eigenen Trust-Stack (z. B. PCI-DSS) braucht. Davon sind wir weit entfernt.
 
-**Risiken / Schwachstellen (vor Build adressieren)**
-- **Auflösungsmix:** 5-Min- und 15-Min-Werte in derselben Tabelle nur per `source`-Tag zu trennen, kann später in der §42a/§42c-Abrechnung zu subtilen Fehlern führen.
-- **EDIFACT/MSCONS-Komplexität ist unterschätzt** – ein robuster Parser ist allein 2–3 Wochen.
-- **Phase 1 mit 3–4 Wochen** ist für MVP + HAN-Adapter + MSCONS-Parser ambitioniert → realistisch eher **5–7 Wochen**.
+## 2. Drei Rollen → Drei Subdomains → Eine Codebase
 
-→ Beide Punkte fließen unten in „Pre-Build Entscheidungen" und in den **revidierten Zeitplan** ein.
 
----
+| Rolle                       | Subdomain                                                   | Login                                           | Zielgruppe                                 | Technisch                                                                                                                              |
+| --------------------------- | ----------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Community-Manager**       | `kluub.aicono.org` (oder als Modul in `ems-pro.aicono.org`) | Tenant-Login (bestehend)                        | Stadtwerke, Genossenschaften, Tenant-Admin | Neues Modul `energy_sharing` im bestehenden Tenant-Bereich, ModuleGuard-geschützt                                                      |
+| **Mitglieder-App**          | `mein.aicono.org` oder `app.kluub.de`                       | Endkunden-Login (neue Rolle `community_member`) | Mitglieder der Energiegemeinschaft         | Neue PWA (`manifest-kluub.json`), eigene Route-Gruppe `/member/*`, schlanke Mobile-UI                                                  |
+| **Öffentlicher Marktplatz** | `kluub.de` oder `marktplatz.aicono.org`                     | Kein Login (Public)                             | Interessenten                              | Public-Route-Gruppe `/public/kluub/*` analog zu `/demo`, SEO-optimiert (SSG/Pre-render via Vite-Plugin oder statisches Build-Snapshot) |
 
-## 1. Grundlagen & Strategie
 
-Ein iMSys besteht aus mME (Zähler), SMGW (BSI-zertifiziertes Gateway), CLS-Kanal (TLS-Tunnel zu externen Marktteilnehmern) und HAN-Schnittstelle (lokale Anzeige).
+**Routing-Erkennung:** `window.location.hostname` in `App.tsx` bestimmt die Route-Gruppe (Pattern existiert bereits für Charging-PWA). Kein zweiter Build nötig.
 
-Vier Datenwege, die wir abdecken müssen:
-1. **EMT/HKS-Pull über GWA** (OBIS/COSEM, EDIFACT/MSCONS) – Standardweg.
-2. **CLS-Direktkanal** (TLS-Tunnel zu unserem Server) – nahe Echtzeit, Mieterstrom, §14a.
-3. **HAN-Adapter / lokales Gateway** (AICONO EMS Gateway via Optokopf/IR/RJ12) – Pilot/MVP ohne GWA-Vertrag.
-4. **Manueller MSCONS-Import** (EDIFACT-Datei vom MSB) – Fallback.
+## 3. Modul-Definition
 
-Ein **abstrakter Gateway-Typ** mit austauschbaren „Transports" – pro Liegenschaft frei konfigurierbar.
+Neues Modul `energy_sharing` im `module_prices`/`tenant_modules`-System:
 
----
+- **Modul-Code:** `energy_sharing`
+- **Abhängigkeiten:** `electricity` (Zähler/Allokation), `smart_meter_imsys` (15-Min-Lastgänge für §42c EnWG-Abrechnung), `metering`
+- **Preis-Vorschlag:** Kommunen 49 €/Mo, Standard 79 €/Mo + Member-basierte Staffel (z. B. 0,50 € pro aktivem Mitglied/Monat als Add-on, später)
+- **ModuleGuard:** Sidebar-Eintrag "Energy Sharing" nur sichtbar wenn Modul aktiv
 
-## 2. Gateway Registry & UI
-
-Neuer Eintrag in `src/lib/gatewayRegistry.ts`:
+## 4. Datenmodell (neue Tabellen, alle `tenant_id`-scoped + RLS)
 
 ```text
-type: "smart_meter_imsys"
-label: "Smart Meter / iMSys"
-edgeFunctionName: "smart-meter-api"
-configFields:
-  - transport (select: gwa_api | cls_tunnel | han_local | mscons_import)
-  - msb_name / msb_market_partner_id (BDEW-Code, 13-stellig)
-  - smgw_id (BSI-konforme ID)
-  - meter_id (Zählpunktbezeichnung, 33-stellig BDEW)
-  - api_endpoint (URL, optional je transport)
-  - client_cert_ref (Verweis auf Zertifikat im Tresor)
-  - obis_codes (Liste, default 1-0:1.8.0 / 2.8.0 / 1.7.0)
-  - read_interval_minutes (1–60, default 15)
-  - usage_purposes (multi: metering | mieterstrom | energy_sharing | dynamic_tariff | grid_control)
+energy_communities          → eine Gemeinschaft pro Tenant kann mehrere haben
+  id, tenant_id, name, slug (public), region_plz[], type (genossenschaft|stadtwerk|nachbarschaft),
+  registered_at, status, contract_template_id, settings (jsonb)
+
+community_members           → Endkunden in einer Community
+  id, community_id, tenant_id, user_id (auth.users), member_no,
+  joined_at, left_at, role (member|producer|prosumer|consumer),
+  malo_id, melo_id (für Smart-Meter-Zuordnung),
+  share_kw (Anteil an Erzeugungsanlagen), status
+
+community_assets            → eingebrachte Erzeuger/Speicher
+  id, community_id, tenant_id, location_id, meter_id,
+  asset_type (pv|wind|chp|storage), capacity_kw, share_model (gleich|nach_anteil|dynamisch)
+
+community_allocations       → 15-Min-Verteilrechnung (Output von Allocation-Engine)
+  id, community_id, tenant_id, bucket (timestamptz), member_id,
+  consumed_kwh, allocated_from_community_kwh, residual_grid_kwh,
+  price_community_ct, price_grid_ct, savings_eur
+
+community_tariffs           → interner Gemeinschaftstarif
+  id, community_id, valid_from, valid_to, price_ct_kwh, feed_in_ct_kwh
+
+community_invoices          → monatliche Mitgliederabrechnung (PDF)
+  id, community_id, member_id, period_start, period_end,
+  total_eur, pdf_storage_path, status (draft|issued|paid)
+
+community_marketplace_listings  → öffentlicher Marktplatz
+  id, community_id, plz[], available_slots, headline, description,
+  cover_image, contact_email, published (bool)
 ```
 
-Liegenschafts-Konfiguration läuft über `EditIntegrationDialog`; Polling-Intervall pro Liegenschaft frei wählbar (analog Loxone-Modell).
+Erweiterung bestehender Tabellen:
 
----
+- `profiles` / neue Rolle `community_member` in `app_role` Enum
+- `meters.community_member_id` (nullable FK) für direkte Zuordnung
 
-## 3. Datenmodell (Migrationen)
+## 5. Kern-Engines (Edge Functions)
 
-**Entscheidung Pre-Build (siehe §8.1):** Wir führen `resolution_minutes` und `source` als Spalten ein – keine Vermischung undokumentierter Auflösungen mehr.
+1. `**community-allocator**` – Cron, läuft täglich nach MSCONS-Import. Liest 15-Min-Werte aller Community-Member-Zähler, verteilt Community-Erzeugung nach gewähltem `share_model`, schreibt `community_allocations`.
+2. `**community-billing**` – Monatlich, erzeugt `community_invoices` + PDF (jsPDF, analog `generateChargingInvoicePdf.ts`), optional Lexware-Sync.
+3. `**community-join**` – Public-Endpoint für Marktplatz-Beitritt: PLZ-Check → passende Communities → Vertrag (PDF) → E-Mail-Verifikation → `community_members`-Eintrag (status `pending`).
 
-- `meters` erweitern:
-  - `melo_id text` (Marktlokation)
-  - `malo_id text` (Messlokation)
-  - `smgw_id text`, `obis_code text`
-- `meter_power_readings_5min` erweitern:
-  - `resolution_minutes smallint not null default 5`
-  - `source text not null default 'aicono'`
-  - Unique-Index `(meter_id, ts, resolution_minutes)`
-  - Alle bestehenden Abrechnungs-Reads filtern explizit auf `resolution_minutes`.
-- Neue Tabelle `smart_meter_certificates` (AES-256-GCM analog `api_credentials`, tenant-scoped, RLS, **nur Super-Admin schreibend**).
-- Neue Tabelle `smart_meter_mscons_imports` (Audit/Idempotenz: filename, sha256, period_from/to, status, error).
-- Neue Tabelle `smart_meter_consents` (MsbG §50, siehe §8.2): tenant_id, location_id, melo_id, consent_text_version, granted_by, granted_at, revoked_at.
+## 6. UI-Bausteine
 
-Alle neuen Tabellen mit `tenant_id`, `GRANT` für `authenticated` + `service_role`, RLS analog `meters`.
+**Community-Manager (Tenant-Bereich):**
 
----
+- `/community` Übersicht (Mitglieder, Erzeuger, Erlöse, CO₂)
+- `/community/members` CRUD, Einladungs-Workflow
+- `/community/assets` Anlagen einbringen
+- `/community/tariff` Interner Tarif + Verteilmodell
+- `/community/billing` Monatsabrechnung, Lexware-Export
+- `/community/marketplace` Eigenes Listing pflegen
 
-## 4. Edge Functions
+**Mitglieder-App (PWA, eigene Subdomain):**
 
-Eine Familie hinter einem Dispatcher (analog `loxone-api`):
+- Dashboard: aktueller Community-Anteil, Monatsersparnis, CO₂
+- Verbrauchsverlauf (15-Min) mit Community- vs. Rest-Strom
+- Rechnungen (PDF-Download)
+- Profil + Vertrag
 
-- `smart-meter-api` – sync: `getMeters`, `testConnection`, `getLatestReading`
-- `smart-meter-periodic-sync` – pg_cron, respektiert `read_interval_minutes` pro Liegenschaft
-- `smart-meter-cls-ingest` – Push-Ingest, mTLS, signierter Body
-- `smart-meter-mscons-import` – EDIFACT-Datei aus Storage, idempotent
+**Öffentlicher Marktplatz (Public, eigene Subdomain):**
 
-Interne Adapter:
-```text
-transports/
-  gwaApi.ts        – HTTPS/OBIS-COSEM Pull (Discovergy zuerst, siehe §7.1)
-  clsTunnel.ts     – CLS over TLS, Long-Poll/Push
-  hanLocal.ts      – HAN/IR via AICONO EMS Gateway (MQTT-Bridge)
-  msconsImport.ts  – EDIFACT-Parser (siehe Realismus-Hinweis §6)
-```
+- Landing mit PLZ-Suche
+- Listing-Detail pro Community
+- 5-Min-Onboarding: PLZ → Community wählen → Daten → Vertrag → Bestätigung
 
-Sicherheit: Zertifikate nie in Edge-Logs; Background-Jobs validieren `SUPABASE_SERVICE_ROLE_KEY` (Memory „Edge Function Auth").
+## 7. Umsetzungs-Phasen
 
----
+**Phase 1 (Foundation, ~1 Woche):**
 
-## 5. Wiederverwendung in den Modulen
+- Modul `energy_sharing` in `module_prices` + ModuleGuard
+- DB-Migration: `energy_communities`, `community_members`, `community_assets`, `community_tariffs`
+- Tenant-UI: Community anlegen + Mitglieder verwalten (manuell)
+- Rolle `community_member` in `app_role`
 
-Gateway ist **passive Datenquelle** – Module konsumieren bestehende Tabellen, jeweils gefiltert auf `resolution_minutes`:
+**Phase 2 (Allocation & Billing, ~1–2 Wochen):**
 
-| Modul | Konsumiert | Hinweis |
-|---|---|---|
-| Messdatenerfassung | `meter_power_readings_5min` | sofort |
-| Mieterstrom §42a | dito + `meters.melo_id/malo_id` | Allokation über bestehende Logik |
-| Energy Sharing (Kluub DE) | `energy_sharing_allocations` | **strikt `resolution_minutes = 15`** |
-| Dynamische Tarife §41a | `dynamic_pricing` + 15-Min-Verbrauch | Abrechnung unverändert |
-| §14a Steuerung | `automation-core` + CLS-Schaltbefehl | Phase 3 |
+- `community_allocations`-Tabelle + `community-allocator` Edge Function
+- `community-billing` + PDF
+- Tenant-UI: Tarif, Abrechnungs-Liste, Lexware-Export
 
-`usage_purposes` ist UI-/Filter-Flag, keine harte Kopplung.
+**Phase 3 (Mitglieder-PWA, ~1 Woche):**
 
----
+- Subdomain-Routing in `App.tsx` (Hostname-Switch)
+- `manifest-kluub.json` + Service-Worker
+- Member-Dashboard, Verbrauchs-Charts, Rechnungs-Download
 
-## 6. UI-Anpassungen
+**Phase 4 (Marktplatz, ~1 Woche):**
 
-- Onboarding-Wizard in `Integrations.tsx`: „Welcher Weg?" (4 Transport-Optionen, separate Formulare).
-- **Schritt „Einwilligung Anschlussnutzer" verpflichtend** (MsbG §50), schreibt in `smart_meter_consents`.
-- Liegenschafts-Detail: neuer Tab „Smart Meter / iMSys" mit MeLo/MaLo, MSB, letztem Empfang, Intervall.
-- Super-Admin: Karte `SmartMeterFleetCard` analog `LoxonePollingOverviewCard`.
-- Super-Admin: Zertifikatstresor (Upload, Revoke, Renew) – siehe §7.4.
+- Public-Route-Gruppe `/public/kluub/*`
+- Listings-Tabelle + Manager-UI
+- PLZ-Suche, Join-Wizard, `community-join` Edge Function
+- SEO (sitemap, JSON-LD `Organization` + `Offer`, Open-Graph)
 
----
+**Phase 5 (Compliance, parallel):**
 
-## 7. Antworten auf die offenen Punkte (entschieden)
+- §42c EnWG / §50 MsbG Vertragstexte (rechtliche Prüfung – wie bei iMSys-Consent)
+- Bilanzkreis-Anbindung (später, optional)
 
-### 7.1 Referenz-MSB für Phase 2: **Discovergy**
-REST/OAuth2, gut dokumentiert, im Aggregator-Umfeld erprobt. Tibber = Endkunden-API, ungeeignet. Eigener MSB-Vertrag mittelfristig sinnvoll, für Phase 2 zu aufwändig.
+## 8. Offene Punkte zur Entscheidung
 
-### 7.2 CLS-Endpunkt-Hosting: **Hetzner mit eigenem mTLS-Server**
-Cloudflare Workers haben kein Mutual-TLS für eingehende Verbindungen ohne Enterprise-Plan. BSI TR-03109 verlangt echtes mTLS → Hetzner gibt volle Kontrolle über Zertifikatskette und Logging-Compliance. Aufbau analog `docs/ocpp-persistent-server`.
+1. **Domain-Strategie:** Eigene Marke `kluub.de` (Marktplatz braucht starken eigenen Brand) oder Subdomains unter `aicono.org`? Empfehlung: `kluub.de` als Marktplatz-Brand, `mein.kluub.de` für Mitglieder, Community-Manager bleibt in `ems-pro.aicono.org`.
+2. **Mitglieder-Auth:** Eigene Auth-Instanz (Magic-Link, geringe Hürde) oder bestehender Supabase-Auth mit neuer Rolle? Empfehlung: bestehender Auth + Rolle `community_member`, getrennter Login-Screen auf der Mitglieder-Subdomain.
+3. **Allokations-Modell zuerst:** Statisch (gleicher %-Anteil) oder dynamisch (nach Echtzeit-Verbrauch)? Empfehlung: Phase 2 zuerst statisch, dynamisch in Phase 5.
+4. **Lexware-Integration für Member-Rechnungen:** B2C-Rechnung via Lexware sinnvoll oder eigene PDF + SEPA-Mandat? Empfehlung: eigene PDF + SEPA für Member, Lexware nur für die Community-Gebühr Tenant→AICONO.
 
-### 7.3 TRuDI-Integration: **Nein für Phase 1–2**, optional Phase 3
-Endkunden-Transparenz, nicht Aggregator-Workflow. Eigenes Datenformat + eigene Zertifikate = hoher Zusatzaufwand. Zurückgestellt.
+## Antwort auf die Kernfrage
 
-### 7.4 Zertifikatsverwaltung: **Zentral durch Super-Admin** (bis Phase 3)
-mTLS-Zertifikate sind keine Endkunden-Kompetenz. Fehlerhafter Upload bricht Datenerfassung. Revocation/Renewal kontrolliert. Upload landet zentral in `smart_meter_certificates`. Self-Service-Wizard frühestens Phase 3.
-
----
-
-## 8. Pre-Build Entscheidungen (vor Migration zu treffen)
-
-### 8.1 Auflösungs-Trennung – **entschieden: `resolution_minutes`-Spalte**
-Keine separate `_15min`-Tabelle (verdoppelt Indices und Realtime-Channels). Stattdessen Spalte `resolution_minutes` (5 oder 15) + Unique-Index `(meter_id, ts, resolution_minutes)`. Alle Abrechnungs-Queries (§42a, §42c, Dynamic Pricing) werden vor Phase 1 angepasst – das ist die teure Stelle, aber sie wird einmalig sauber statt später unter Lastdruck.
-
-### 8.2 MsbG-§50-Einwilligung – **Rechtsprüfung vor Wizard-Bau**
-Einwilligungstext, Speicherform, Widerrufsweg und Aufbewahrungsdauer **vor** Wizard-Implementierung mit Datenschutzbeauftragten/Anwalt klären. Tabelle `smart_meter_consents` bleibt einfach (siehe §3), aber Inhalt/Flow muss feststehen, sonst doppelter Build.
-
----
-
-## 9. Revidierter Zeitplan (Realismus-Korrektur)
-
-**Phase 1 – MVP (5–7 Wochen statt 3–4)**
-- Gateway-Typ in Registry + UI-Formular + Einwilligungs-Wizard
-- Migration `resolution_minutes` inkl. Anpassung **aller** Abrechnungs-Queries
-- Transport `han_local` über AICONO EMS Gateway (Pilot)
-- Transport `mscons_import`: **MVP-Parser nur UTILMD + MSCONS-Lastgang**, kein vollständiges EDIFACT
-- Super-Admin-Status + Zertifikatstresor (Upload/View)
-
-**Phase 2 – API-Anbindung (4–6 Wochen)**
-- Transport `gwa_api` mit Discovergy
-- mTLS-Zertifikatsverwaltung produktiv (Revoke/Renew)
-- pg_cron Periodic-Sync (per-location 1–15 Min)
-- MSCONS-Export an VNB (Aggregator-Rolle für Energy Sharing)
-- Voller EDIFACT-Parser (APERAK, CONTRL)
-
-**Phase 3 – CLS & Steuerung (parallel Kluub DE Phase 3)**
-- Transport `cls_tunnel` (Push-Ingest, Hetzner-mTLS-Server)
-- §14a Schaltbefehle via `automation-core`
-- Direktvermarktungs-Schnittstelle
-- Optional: TRuDI-Lesepfad für Mieter
-
----
-
-## 10. Risiko & Rollback
-
-- Jeder Transport per Feature-Flag (`system_settings.smart_meter_transports_enabled`) einzeln aktivierbar – Rollback durch UPDATE.
-- `resolution_minutes`-Migration mit Default `5` rückwärtskompatibel; alte Inserts laufen unverändert weiter.
-- Zertifikats-Schreibpfad nur für Super-Admin → kein Tenant-User kann Datenerfassung versehentlich brechen.
+**Kein eigenes Projekt.** Energy Sharing wird ein Modul im bestehenden Repo. Die drei Oberflächen werden über Subdomain-Erkennung im selben Vite-Build ausgeliefert – analog zur bereits etablierten Multi-PWA-Architektur (`manifest-ev.json` etc.). Marktplatz und Mitglieder-App bekommen jeweils eine eigene Subdomain für Branding/SEO, aber teilen Backend, Auth, Tenants, Smart-Meter-Daten und Billing.  
+  
+Hier die Antworten auf Punkt 8: Offene Punkte zur Entscheidung:  
+  
+1. Domain-Strategie: wir starten mit kluub.de, diese Domain kann sich aber noch ändern. Es kann auch sein, dass wir später nicht mit eigener Marke, sondern mit Subdomain arbeiten werden.  
+  
+2. Mitglieder-Auth: bestehender Auth + Rolle  
+  
+3. Allokations-Modell zuerst: Phase 2 zuerst statisch, dynamisch in Phase 5.  
+  
+4. In einem anderen Projekt entsteht aktuell eine komplette Rechnungs-Software. Aktuell sollen daher nur Abrechnungen erzeugt werden, die wir dann über eine API in Zukunft an das eigene Tool übergeben werden. API folgt später.  
+  
+  
+  
