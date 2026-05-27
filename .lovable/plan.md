@@ -1,99 +1,47 @@
-# Plan: Remote-Support funktionsfähig machen
+## Ursache gefunden
 
-## Problem
+Der Miniserver ist erreichbar (auf Hetzner kommen Daten an). Der eigentliche Grund, warum auf der Lovable-Cloud-Staging-Umgebung seit 26.05. 15:20 Uhr keine neuen Live-Werte mehr ankommen, liegt **nicht** am Miniserver, sondern am Cron-System der Cloud-Datenbank:
 
-Der „Remote-Support"-Button im Super-Admin (Mandanten-Detailseite) startet aktuell **keinerlei Session**. Er zeigt nur einen Toast (`SuperAdminTenantDetail.tsx`, Zeile 361–369). Es passiert:
-- Keine Eintragung in `support_sessions`
-- Keine Weiterleitung in den Mandanten-Bereich (Tenant-Dashboard)
-- Kein Banner beim Tenant, weil keine Session existiert und Tenant-Nutzer per RLS gar nicht auf `support_sessions` lesen dürfen
+1. Der Cron-Job `ems-loxone-periodic-sync` läuft jede Minute und meldet `succeeded`.
+2. Er ruft aber `private.invoke_edge_function('loxone-periodic-sync')` auf.
+3. Diese Funktion liest `private.cron_settings`. Die Tabelle ist **leer**:
+   ```
+   SELECT supabase_url, enabled, service_role_key IS NOT NULL ...
+   → 0 rows
+   ```
+4. Ist die Zeile fehlend oder `enabled = false`, gibt die Funktion sofort `NULL` zurück und es wird **nie ein HTTP-Call** an die Edge-Function abgesetzt.
+5. Folge: Die Edge-Function-Logs zeigen seit Stunden keinen einzigen `loxone-api`-Aufruf. Loxone-, Shelly- und Gateway-Sync stehen still. Die `meter_power_readings_5min` bleibt leer ab 15:20.
 
-Banner-Komponente (`SupportSessionBanner`) und Hook (`useSupportSession`) sind bereits vorhanden und global in `App.tsx` eingebunden – sie haben nur nichts zum Anzeigen.
+Hetzner ist davon nicht betroffen, weil dort `cron_settings.enabled = true` mit gültiger URL/Service-Key gesetzt ist.
 
-## Ziel
+## Fix (3 Schritte)
 
-1. Klick auf „Remote-Support" startet eine echte Session und öffnet die Mandanten-Sicht (Dashboard des Tenants) im Namen des Super-Admins.
-2. Beim Tenant erscheint ein deutlich sichtbares Banner („Remote-Support aktiv – Super-Admin schaut zu") solange die Session läuft.
-3. Beenden über einen Button im Banner / Super-Admin-Topbar setzt `ended_at`, Banner verschwindet beim Tenant in Echtzeit, Super-Admin kehrt in den Super-Admin-Bereich zurück.
+### 1. `private.cron_settings` auf Lovable Cloud aktivieren  
+Eine Zeile in `private.cron_settings` einfügen mit:
+- `id = true`
+- `supabase_url = 'https://xnveugycurplszevdxtw.supabase.co'`
+- `service_role_key = <SUPABASE_SERVICE_ROLE_KEY>`
+- `enabled = true`
 
-## Lösung
+Das aktiviert **alle** Periodic-Sync-Jobs (Loxone, Shelly, Gateway, Brighthub) gleichzeitig. Erfolgt per `supabase--insert` (kein Migrationsfile, da Secret-Inhalt).
 
-### 1. Session-Start (Super-Admin)
+### 2. Stillen Cron-Fehlern entgegenwirken  
+`private.invoke_edge_function` so erweitern, dass bei `enabled = false` / leerer Konfiguration eine `RAISE NOTICE`-Meldung mit klarer Begründung im Cron-Log landet, statt einfach `NULL` zurückzugeben. So sieht man künftig in `cron.job_run_details.return_message`, warum nichts passiert.
 
-Aus `SuperAdminTenantDetail.tsx` den Remote-Support-Button erweitern:
-- Vorbedingung: `tenant.remote_support_enabled === true`
-- INSERT in `support_sessions`:
-  - `tenant_id`, `super_admin_user_id = auth.uid()`
-  - `started_at = now()`, `expires_at = now() + 15 min`
-  - `reason = 'Remote-Support Sitzung'`
-- Erfolgreiche ID + Tenant-ID in `sessionStorage` ablegen:
-  - `support_view.tenant_id`
-  - `support_view.session_id`
-- Navigation auf `/` (Tenant-Dashboard).
-- Wenn schon eine aktive Session für diesen Tenant existiert (nicht beendet, nicht abgelaufen): diese wiederverwenden statt neu anzulegen.
+### 3. Loxone-Token-Ablauf im periodic-sync sichtbar machen  
+Aktuell wirft `loxone-api` bei HTTP 401 einen Error, der über `data.success = false` in `integration_errors` landet. Das funktioniert grundsätzlich, allerdings nur, wenn die Edge-Function überhaupt aufgerufen wird (siehe Schritt 1). Zusätzlich:
+- In `loxone-periodic-sync` bei Antwort-Status != 200 **immer** einen `integration_error` mit dem konkreten HTTP-Status anlegen (heute wird nur `data.error` ausgewertet, was bei einem 504/Timeout fehlt).
+- In `loxone-api` nach einem 401 das ggf. gecachte Token im Speicher invalidieren, damit der nächste Cron-Lauf automatisch frisch authentifiziert (Selbstheilung).
 
-### 2. Impersonation / „View as Tenant"
+## Erwartetes Ergebnis
 
-Neuer Context `SupportViewContext` (oder Erweiterung von `useTenant`):
-- Liest beim Mount `sessionStorage.support_view.tenant_id`.
-- Wenn gesetzt **und** aktueller User ist `super_admin`: `useTenant` lädt diesen Tenant statt des eigenen Profil-Tenants. Alle bestehenden Queries (`.eq("tenant_id", tenant.id)`) funktionieren dadurch automatisch im Kontext des Ziel-Tenants, weil super_admin per RLS ohnehin alles lesen darf.
-- Validierung: Server-seitig prüfen via select auf `support_sessions` (nicht beendet, nicht abgelaufen). Wenn ungültig → sessionStorage leeren, zurück nach `/super-admin/tenants/:id`.
-
-### 3. Banner für den Tenant
-
-Aktuell darf nur `super_admin` `support_sessions` lesen. Damit der Tenant das Banner sieht, muss eine zusätzliche RLS-SELECT-Policy her:
-
-```sql
-CREATE POLICY "Tenant members can view own active support sessions"
-  ON public.support_sessions FOR SELECT
-  TO authenticated
-  USING (
-    tenant_id IN (SELECT tenant_id FROM public.profiles WHERE user_id = auth.uid())
-  );
-```
-
-`GRANT SELECT ON public.support_sessions TO authenticated` ergänzen (bisher nur service_role/super_admin via Policy).
-
-Banner (`SupportSessionBanner`) bleibt inhaltlich. Anpassungen:
-- Texte auf Tenant-Sicht zugeschnitten („Ein Mitarbeiter des Supports ist aktuell in Ihrem Konto eingeloggt.").
-- Wird durch das bestehende Realtime-Subscribe in `useSupportSession` automatisch ein- und ausgeblendet (wenn `ended_at IS NOT NULL` → Query liefert null → Banner verschwindet).
-- Banner soll auch im Super-Admin-Impersonation-Modus sichtbar sein (zur visuellen Bestätigung, dass man „live im Tenant" ist) – ist es per App.tsx bereits.
-
-### 4. Session beenden
-
-Zwei Wege, beide aktualisieren `support_sessions.ended_at = now()`:
-
-a) **Super-Admin Topbar im Impersonation-Modus**: Eine dauerhaft sichtbare Leiste am oberen Rand zeigt „Sie sehen [Tenant-Name] als Super-Admin – [Remote-Support beenden]". Beim Klick:
-   - UPDATE `support_sessions` → `ended_at = now()`
-   - sessionStorage leeren
-   - Navigation auf `/super-admin/tenants/:id`
-
-b) Banner-„Beenden"-Button für den Super-Admin nicht nötig (Topbar reicht). Tenant darf nicht beenden.
-
-Realtime auf `support_sessions` ist bereits aktiv – der Banner beim Tenant verschwindet automatisch innerhalb von Sekunden.
-
-### 5. Anzeige im Super-Admin-Button
-
-Button „Remote-Support" auf der Mandanten-Seite zeigt zusätzlich:
-- Wenn aktive Session für diesen Tenant existiert: Label „Sitzung fortsetzen" + „Beenden"-Sekundärbutton.
-- Sonst: „Remote-Support starten" (wenn `remote_support_enabled`), sonst disabled.
+- Innerhalb von 1 Minute nach Schritt 1 schreibt `loxone-periodic-sync` wieder neue Zeilen in `meter_power_readings_5min`.
+- Dashboard-Widgets („Strom", „Gas", „Wärme", „Eigenverbrauch", PAC 3220 …) zeigen wieder Live-Werte für „Mittwoch, 27. Mai 2026".
+- Künftige Cron-Ausfälle sind in `cron.job_run_details.return_message` sofort sichtbar (Schritt 2).
+- Token-Ablauf am Miniserver wird automatisch nach einem Zyklus geheilt (Schritt 3).
 
 ## Technische Details
 
-Geänderte / neue Dateien:
-- `src/pages/SuperAdminTenantDetail.tsx` – Button-Logik (Start / Fortsetzen / Beenden + Navigation)
-- `src/hooks/useTenant.tsx` – Support-View Override (Super-Admin + sessionStorage)
-- `src/hooks/useSupportSession.tsx` – kleine Erweiterung: `endSession()` Methode
-- `src/components/SupportSessionBanner.tsx` – Tenant-zugeschnittener Text, optional „Beenden" nur für Super-Admin
-- `src/components/SuperAdminImpersonationBar.tsx` (neu) – persistente Top-Leiste im Tenant-Layout wenn Impersonation aktiv
-- `src/App.tsx` – `SuperAdminImpersonationBar` einbinden
-- Neue Migration:
-  - SELECT-Policy für Tenant-Mitglieder auf `support_sessions`
-  - `GRANT SELECT ON public.support_sessions TO authenticated`
-  - UPDATE-Policy für Super-Admin (für `ended_at`) – bereits via FOR ALL vorhanden, prüfen.
-
-i18n: neue Schlüssel `support_banner.tenant_view_active`, `support_view.exit`, `tenant_detail.remote_support_start`, `tenant_detail.remote_support_resume`, `tenant_detail.remote_support_end` in DE/EN/ES/NL.
-
-## Out of Scope
-
-- Keine Änderungen an Abrechnungslogik (`upsertSupportInvoiceEntry`) – das bestehende Modell pro 15-Minuten-Block bleibt.
-- Kein echter Identitätswechsel auf Auth-Ebene (kein Token-Swap). Super-Admin bleibt `super_admin` – die RLS deckt Lesen/Schreiben im Tenant-Kontext bereits ab. Falls später strikte Audit-Trennung nötig: separates Edge-Function-Token (nicht jetzt).
+- Schritt 1: einmaliger `INSERT INTO private.cron_settings (id, supabase_url, service_role_key, enabled) VALUES (true, ..., ..., true);`
+- Schritt 2: `CREATE OR REPLACE FUNCTION private.invoke_edge_function` mit `RAISE NOTICE 'cron_settings not configured/enabled'` bei Early-Return.
+- Schritt 3: in `supabase/functions/loxone-periodic-sync/index.ts` Block ab Zeile 87 erweitern (Error-Insert auch wenn `!response.ok` ohne `data.error`); in `supabase/functions/loxone-api/index.ts` Token-Cache (Modul-Scope-Map) invalidieren wenn `structureResponse.status === 401`.
