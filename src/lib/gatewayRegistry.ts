@@ -229,6 +229,72 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
       { name: "site_id", label: "Site ID", placeholder: "site-uuid", type: "text", description: "Site/Building ID aus dem EcoStruxure Energy Hub Portal", required: true },
     ],
   },
+  smart_meter_imsys: {
+    type: "smart_meter_imsys",
+    label: "Smart-Meter / iMSys",
+    icon: "activity",
+    description:
+      "Intelligentes Messsystem (iMSys) nach MsbG. Phase 1: manueller MSCONS-Import vom Messstellenbetreiber (15-Min-Lastgänge). Spätere Phasen: GWA-API, HAN-lokal, CLS-Push.",
+    edgeFunctionName: "smart-meter-mscons-import",
+    configFields: [
+      {
+        name: "transport",
+        label: "Anbindungsart",
+        placeholder: "mscons_import",
+        type: "text",
+        description:
+          "Phase 1 unterstützt 'mscons_import' (manueller EDIFACT-Upload). 'gwa_api', 'han_local' und 'cls_tunnel' folgen in Phase 2/3.",
+        required: true,
+      },
+      {
+        name: "msb_name",
+        label: "Messstellenbetreiber (MSB)",
+        placeholder: "z.B. Discovergy, Westnetz, EWE NETZ",
+        type: "text",
+        description: "Name des zuständigen Messstellenbetreibers",
+        required: true,
+      },
+      {
+        name: "msb_market_partner_id",
+        label: "Marktpartner-ID (BDEW)",
+        placeholder: "9900000000000",
+        type: "text",
+        description: "13-stellige BDEW-Codenummer des MSB (für MSCONS/EDIFACT)",
+        required: false,
+      },
+      {
+        name: "smgw_id",
+        label: "SMGW-ID (optional)",
+        placeholder: "EHAG0123456789",
+        type: "text",
+        description: "Eindeutige ID des Smart-Meter-Gateways (auf dem Gerät bzw. Lieferschein)",
+        required: false,
+      },
+      {
+        name: "read_interval_minutes",
+        label: "Auflösung (Minuten)",
+        placeholder: "15",
+        type: "text",
+        description: "Üblich 15 Minuten (RLM/iMSys-Standard). Wertebereich 1–60.",
+        required: false,
+      },
+      {
+        name: "usage_purposes",
+        label: "Verwendungszwecke",
+        placeholder: "metering,mieterstrom,energy_sharing,dynamic_tariff,grid_control",
+        type: "text",
+        description:
+          "Kommagetrennte Liste der geplanten Nutzungsarten – steuert UI-Filter und Abrechnungsmodule, keine harte Kopplung.",
+        required: false,
+      },
+    ],
+    setupInstructions: {
+      serverField: "__supabase_host__",
+      port: "443",
+      pathTemplate: "functions/v1/smart-meter-mscons-import?tenant_id={tenant_id}",
+      authMethod: "Manueller MSCONS-Upload (Phase 1) – §50 MsbG-Einwilligung erforderlich",
+    },
+  },
 };
 
 /** Get ordered list of gateway types for dropdowns */

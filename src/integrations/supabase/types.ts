@@ -4052,7 +4052,9 @@ export type Database = {
           meter_id: string | null
           power_avg: number
           power_max: number
+          resolution_minutes: number
           sample_count: number
+          source: string | null
           tenant_id: string
         }
         Insert: {
@@ -4063,7 +4065,9 @@ export type Database = {
           meter_id?: string | null
           power_avg: number
           power_max: number
+          resolution_minutes?: number
           sample_count?: number
+          source?: string | null
           tenant_id: string
         }
         Update: {
@@ -4074,7 +4078,9 @@ export type Database = {
           meter_id?: string | null
           power_avg?: number
           power_max?: number
+          resolution_minutes?: number
           sample_count?: number
+          source?: string | null
           tenant_id?: string
         }
         Relationships: [
@@ -4205,7 +4211,9 @@ export type Database = {
           is_main_meter: boolean
           location_id: string
           location_integration_id: string | null
+          malo_id: string | null
           medium: string | null
+          melo_id: string | null
           meter_function: string
           meter_number: string | null
           meter_offset_kwh: number
@@ -4215,6 +4223,7 @@ export type Database = {
           meter_operator: string | null
           name: string
           notes: string | null
+          obis_code: string | null
           parent_meter_id: string | null
           photo_url: string | null
           position_3d_x: number | null
@@ -4226,6 +4235,7 @@ export type Database = {
           setup_validated_at: string | null
           setup_validated_by: string | null
           setup_validated_by_email: string | null
+          smgw_id: string | null
           source_unit_energy: string | null
           source_unit_power: string | null
           tenant_id: string
@@ -4251,7 +4261,9 @@ export type Database = {
           is_main_meter?: boolean
           location_id: string
           location_integration_id?: string | null
+          malo_id?: string | null
           medium?: string | null
+          melo_id?: string | null
           meter_function?: string
           meter_number?: string | null
           meter_offset_kwh?: number
@@ -4261,6 +4273,7 @@ export type Database = {
           meter_operator?: string | null
           name: string
           notes?: string | null
+          obis_code?: string | null
           parent_meter_id?: string | null
           photo_url?: string | null
           position_3d_x?: number | null
@@ -4272,6 +4285,7 @@ export type Database = {
           setup_validated_at?: string | null
           setup_validated_by?: string | null
           setup_validated_by_email?: string | null
+          smgw_id?: string | null
           source_unit_energy?: string | null
           source_unit_power?: string | null
           tenant_id: string
@@ -4297,7 +4311,9 @@ export type Database = {
           is_main_meter?: boolean
           location_id?: string
           location_integration_id?: string | null
+          malo_id?: string | null
           medium?: string | null
+          melo_id?: string | null
           meter_function?: string
           meter_number?: string | null
           meter_offset_kwh?: number
@@ -4307,6 +4323,7 @@ export type Database = {
           meter_operator?: string | null
           name?: string
           notes?: string | null
+          obis_code?: string | null
           parent_meter_id?: string | null
           photo_url?: string | null
           position_3d_x?: number | null
@@ -4318,6 +4335,7 @@ export type Database = {
           setup_validated_at?: string | null
           setup_validated_by?: string | null
           setup_validated_by_email?: string | null
+          smgw_id?: string | null
           source_unit_energy?: string | null
           source_unit_power?: string | null
           tenant_id?: string
@@ -5937,6 +5955,151 @@ export type Database = {
           },
           {
             foreignKeyName: "simulator_instances_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      smart_meter_consents: {
+        Row: {
+          consent_scope: string
+          consent_text_version: string | null
+          created_at: string
+          granted_at: string
+          granted_by: string | null
+          granted_by_email: string | null
+          id: string
+          location_id: string | null
+          meta: Json
+          meter_id: string | null
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          consent_scope: string
+          consent_text_version?: string | null
+          created_at?: string
+          granted_at?: string
+          granted_by?: string | null
+          granted_by_email?: string | null
+          id?: string
+          location_id?: string | null
+          meta?: Json
+          meter_id?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          consent_scope?: string
+          consent_text_version?: string | null
+          created_at?: string
+          granted_at?: string
+          granted_by?: string | null
+          granted_by_email?: string | null
+          id?: string
+          location_id?: string | null
+          meta?: Json
+          meter_id?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "smart_meter_consents_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smart_meter_consents_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smart_meter_consents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      smart_meter_mscons_imports: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          file_hash: string
+          file_name: string
+          file_size_bytes: number | null
+          id: string
+          imported_at: string | null
+          location_id: string | null
+          meta: Json
+          rows_imported: number
+          rows_skipped: number
+          status: string
+          tenant_id: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          file_hash: string
+          file_name: string
+          file_size_bytes?: number | null
+          id?: string
+          imported_at?: string | null
+          location_id?: string | null
+          meta?: Json
+          rows_imported?: number
+          rows_skipped?: number
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          file_hash?: string
+          file_name?: string
+          file_size_bytes?: number | null
+          id?: string
+          imported_at?: string | null
+          location_id?: string | null
+          meta?: Json
+          rows_imported?: number
+          rows_skipped?: number
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "smart_meter_mscons_imports_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smart_meter_mscons_imports_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
