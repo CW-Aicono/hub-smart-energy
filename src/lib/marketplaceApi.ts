@@ -35,15 +35,19 @@ export async function fetchPublicListings(plz?: string): Promise<PublicListingRo
   if (plz) url.searchParams.set("plz", plz);
   const r = await fetch(url.toString(), { headers });
   if (!r.ok) throw new Error(`Marktplatz konnte nicht geladen werden (${r.status})`);
-  return r.json();
+  const body = await r.json();
+  return body.listings ?? [];
 }
 
 export async function fetchPublicListingDetail(slug: string): Promise<PublicListingDetail> {
   const r = await fetch(`${FN}/listings/${encodeURIComponent(slug)}`, { headers });
   if (r.status === 404) throw new Error("Angebot nicht gefunden");
   if (!r.ok) throw new Error(`Fehler ${r.status}`);
-  return r.json();
+  const body = await r.json();
+  if (!body.listing) throw new Error("Angebot nicht gefunden");
+  return body.listing;
 }
+
 
 export async function submitJoinRequest(payload: {
   slug: string;
