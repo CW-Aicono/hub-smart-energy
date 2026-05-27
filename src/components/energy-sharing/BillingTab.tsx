@@ -124,15 +124,20 @@ export default function BillingTab({ communityId }: { communityId: string }) {
                     <TableCell className="text-right">{euro(inv.total_ct)}</TableCell>
                     <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "voided" ? "destructive" : "secondary"}>{inv.status}</Badge></TableCell>
                     <TableCell className="text-right">
-                      <Select value={inv.status} onValueChange={(v) => setStatus.mutate({ id: inv.id, status: v as any })}>
-                        <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="draft">Entwurf</SelectItem>
-                          <SelectItem value="issued">Ausgestellt</SelectItem>
-                          <SelectItem value="paid">Bezahlt</SelectItem>
-                          <SelectItem value="voided">Storniert</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex gap-1 justify-end">
+                        <Button variant="ghost" size="sm" title="PDF herunterladen" onClick={() => downloadPdf(inv)}>
+                          <FileDown className="h-4 w-4" />
+                        </Button>
+                        <Select value={inv.status} onValueChange={(v) => setStatus.mutate({ id: inv.id, status: v as any })}>
+                          <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="draft">Entwurf</SelectItem>
+                            <SelectItem value="issued">Ausgestellt</SelectItem>
+                            <SelectItem value="paid">Bezahlt</SelectItem>
+                            <SelectItem value="voided">Storniert</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
