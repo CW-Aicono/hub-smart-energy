@@ -1444,6 +1444,123 @@ export type Database = {
           },
         ]
       }
+      community_contract_templates: {
+        Row: {
+          body_markdown: string
+          community_id: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          placeholders: Json
+          tenant_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          body_markdown: string
+          community_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          placeholders?: Json
+          tenant_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          body_markdown?: string
+          community_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          placeholders?: Json
+          tenant_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_contract_templates_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_member_signatures: {
+        Row: {
+          body_hash: string
+          community_id: string
+          created_at: string
+          id: string
+          member_id: string
+          signed_at: string
+          signed_body: string
+          signer_ip: string | null
+          signer_name: string
+          template_id: string
+          template_version: number
+          tenant_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          body_hash: string
+          community_id: string
+          created_at?: string
+          id?: string
+          member_id: string
+          signed_at?: string
+          signed_body: string
+          signer_ip?: string | null
+          signer_name: string
+          template_id: string
+          template_version: number
+          tenant_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          body_hash?: string
+          community_id?: string
+          created_at?: string
+          id?: string
+          member_id?: string
+          signed_at?: string
+          signed_body?: string
+          signer_ip?: string | null
+          signer_name?: string
+          template_id?: string
+          template_version?: number
+          tenant_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_member_signatures_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_member_signatures_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "community_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_member_signatures_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "community_contract_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_members: {
         Row: {
           community_id: string
