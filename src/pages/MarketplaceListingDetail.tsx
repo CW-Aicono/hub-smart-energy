@@ -88,13 +88,13 @@ export default function MarketplaceListingDetail() {
   const max = listing.max_members;
   const free = max ? Math.max(max - members, 0) : null;
 
+  useEffect(() => {
+    document.title = `${listing.title} — Energy-Sharing Marktplatz`;
+  }, [listing.title]);
+
   return (
     <div className="min-h-screen bg-background">
-      <Helmet>
-        <title>{listing.title} — Energy-Sharing Marktplatz</title>
-        <meta name="description" content={listing.short_description ?? listing.title} />
-        <link rel="canonical" href={`/sharing/marktplatz/${listing.slug}`} />
-      </Helmet>
+
 
       <header className="border-b">
         <div className="max-w-4xl mx-auto px-4 py-4">
