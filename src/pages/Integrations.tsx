@@ -12,10 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Server, Loader2, Plug, Wifi, WifiOff, Globe, Smartphone, HardDrive } from "lucide-react";
+import { Server, Loader2, Plug, Wifi, WifiOff, Globe, Smartphone, HardDrive, Activity } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiSettings } from "@/components/settings/ApiSettings";
 import { AiconoHubManager } from "@/components/integrations/AiconoHubManager";
+import { SmartMeterImport } from "@/components/integrations/SmartMeterImport";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
 
 const Integrations = () => {
