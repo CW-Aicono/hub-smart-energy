@@ -21,12 +21,10 @@ import CommunityWizard from "@/components/energy-sharing/CommunityWizard";
 import ContractTemplatesTab from "@/components/energy-sharing/ContractTemplatesTab";
 import SignContractDialog from "@/components/energy-sharing/SignContractDialog";
 
-const slugify = (s: string) =>
-  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
-
 export default function EnergySharing() {
-  const { communities, isLoading, createCommunity, deleteCommunity } = useEnergyCommunities();
+  const { communities, isLoading, deleteCommunity } = useEnergyCommunities();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
 
