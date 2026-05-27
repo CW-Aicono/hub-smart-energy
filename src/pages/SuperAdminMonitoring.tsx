@@ -5,6 +5,7 @@ import { useSATranslation } from "@/hooks/useSATranslation";
 import { useInfraMetrics } from "@/hooks/useInfraMetrics";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import GatewayWorkerStatusCard from "@/components/super-admin/GatewayWorkerStatusCard";
+import HetznerNodesCard from "@/components/super-admin/HetznerNodesCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -116,6 +117,9 @@ const SuperAdminMonitoring = () => {
             <>
               {/* Gateway Worker Status (Hetzner) */}
               <GatewayWorkerStatusCard />
+
+              {/* Hetzner Node Live-Metriken (CPU/RAM/Disk) */}
+              <HetznerNodesCard />
 
               {/* System Health */}
               <Card>
