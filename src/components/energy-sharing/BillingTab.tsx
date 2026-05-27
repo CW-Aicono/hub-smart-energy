@@ -19,9 +19,47 @@ function euro(ct: number) {
 export default function BillingTab({ communityId }: { communityId: string }) {
   const { invoices, runBilling, setStatus } = useMemberInvoices(communityId);
   const { runs, runAllocation } = useAllocationRuns(communityId);
+  const { communities } = useEnergyCommunities();
+  const community = communities.find((c) => c.id === communityId);
   const now = new Date();
   const [year, setYear] = useState(now.getUTCFullYear());
   const [month, setMonth] = useState(now.getUTCMonth() + 1);
+
+  const downloadPdf = (inv: any) => {
+    try {
+      const blob = generateCommunityInvoicePdf(
+        {
+          id: inv.id,
+          invoice_number: inv.invoice_number,
+          period_start: inv.period_start,
+          period_end: inv.period_end,
+          allocated_kwh: Number(inv.allocated_kwh ?? 0),
+          feed_in_kwh: Number(inv.feed_in_kwh ?? 0),
+          internal_amount_ct: Number(inv.internal_amount_ct ?? 0),
+          feed_in_credit_ct: Number(inv.feed_in_credit_ct ?? 0),
+          total_ct: Number(inv.total_ct ?? 0),
+          currency: inv.currency,
+          status: inv.status,
+          line_items: inv.line_items,
+        },
+        {
+          communityName: community?.name ?? "Energiegemeinschaft",
+          memberName: inv.community_members?.display_name ?? "Mitglied",
+          memberEmail: inv.community_members?.email,
+        },
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Rechnung_${inv.invoice_number || inv.id.slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast({ title: "PDF-Fehler", description: e.message, variant: "destructive" });
+    }
+  };
 
   return (
     <div className="space-y-4">
