@@ -204,7 +204,11 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
             <TableBody>
               {members.map((m) => (
                 <TableRow key={m.id}>
-                  <TableCell>{m.display_name}</TableCell>
+                  <TableCell>
+                    <Link to={`/energy-sharing/members/${m.id}`} className="text-primary hover:underline">
+                      {m.display_name}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{m.email}</TableCell>
                   <TableCell><Badge variant="secondary">{m.role}</Badge></TableCell>
                   <TableCell className="font-mono text-xs">{m.malo_id ?? "—"}</TableCell>
