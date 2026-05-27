@@ -28,8 +28,7 @@ const slugify = (s: string) =>
 export default function EnergySharing() {
   const { communities, isLoading, createCommunity, deleteCommunity } = useEnergyCommunities();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [openNew, setOpenNew] = useState(false);
-  const [form, setForm] = useState({ name: "", type: "nachbarschaft", region_plz: "" });
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const selected = communities.find((c) => c.id === selectedId) ?? communities[0] ?? null;
   const activeId = selected?.id ?? null;
@@ -42,55 +41,13 @@ export default function EnergySharing() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Energy Sharing</h1>
             <p className="text-muted-foreground">
-              Energiegemeinschaften nach §42c EnWG — Mitglieder, Anlagen und Tarife.
+              Energiegemeinschaften nach §42c EnWG — Mitglieder, Anlagen, Tarife und Verträge.
             </p>
           </div>
-          <Dialog open={openNew} onOpenChange={setOpenNew}>
-            <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-2" />Neue Community</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Neue Energiegemeinschaft</DialogTitle></DialogHeader>
-              <div className="space-y-3">
-                <div>
-                  <Label>Name</Label>
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="z.B. Bürgerenergie Musterstadt" />
-                </div>
-                <div>
-                  <Label>Typ</Label>
-                  <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="nachbarschaft">Nachbarschaft</SelectItem>
-                      <SelectItem value="genossenschaft">Genossenschaft</SelectItem>
-                      <SelectItem value="stadtwerk">Stadtwerk</SelectItem>
-                      <SelectItem value="sonstige">Sonstige</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>PLZ-Bereich (kommagetrennt)</Label>
-                  <Input value={form.region_plz} onChange={(e) => setForm({ ...form, region_plz: e.target.value })} placeholder="49074, 49076, 49080" />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  onClick={async () => {
-                    if (!form.name.trim()) return;
-                    await createCommunity.mutateAsync({
-                      name: form.name.trim(),
-                      slug: slugify(form.name) + "-" + Math.random().toString(36).slice(2, 6),
-                      type: form.type,
-                      region_plz: form.region_plz.split(",").map((s) => s.trim()).filter(Boolean),
-                    });
-                    setForm({ name: "", type: "nachbarschaft", region_plz: "" });
-                    setOpenNew(false);
-                  }}
-                >Erstellen</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => setWizardOpen(true)}><Plus className="h-4 w-4 mr-2" />Neue Community</Button>
+          <CommunityWizard open={wizardOpen} onOpenChange={setWizardOpen} onCreated={(id) => setSelectedId(id)} />
         </div>
+
 
         {isLoading ? (
           <p className="text-muted-foreground">Lade …</p>
