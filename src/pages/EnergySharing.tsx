@@ -192,13 +192,31 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
                   <TableCell className="font-mono text-xs">{m.malo_id ?? "—"}</TableCell>
                   <TableCell className="text-right">{Number(m.share_kw).toLocaleString("de-DE", { maximumFractionDigits: 2 })}</TableCell>
                   <TableCell><Badge>{m.status}</Badge></TableCell>
-                  <TableCell><Button variant="ghost" size="sm" onClick={() => deleteMember.mutate(m.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
+                  <TableCell className="text-right space-x-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title={m.status === "active" ? "Vertrag bereits unterzeichnet" : "Vertrag unterzeichnen"}
+                      disabled={m.status === "active"}
+                      onClick={() => setSignMember(m)}
+                    >
+                      <PenLine className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => deleteMember.mutate(m.id)}><Trash2 className="h-4 w-4" /></Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         )}
       </CardContent>
+      <SignContractDialog
+        open={!!signMember}
+        onOpenChange={(o) => !o && setSignMember(null)}
+        member={signMember}
+        communityId={communityId}
+        communityName={communityName}
+      />
     </Card>
   );
 }
