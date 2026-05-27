@@ -482,6 +482,13 @@ serve(async (req) => {
     const isRefreshAction = action === "refreshSensors";
     if (isRefreshAction) action = "getSensors";
     const shouldPersistReadings = isServiceRole || isRefreshAction || requestBody?.persistToDb === true;
+    // Manual UI-triggered refresh (Tacho/Discovery button) → bypass the 1 h
+    // structure cache so newly added Loxone sensors/actuators show up instantly.
+    // Cron/background calls (service role) keep using the cache to save traffic.
+    const forceStructureRefresh =
+      requestBody?.forceStructureRefresh === true ||
+      (isRefreshAction && !isServiceRole);
+
 
     if (!locationIntegrationId) {
       throw new Error("Location Integration ID ist erforderlich");
@@ -595,6 +602,10 @@ serve(async (req) => {
       // The structure rarely changes, so we serve it from an in-memory cache and
       // only re-fetch on cache miss / expiry. This alone cuts ~30–50 % of traffic.
       const cacheKey = locationIntegrationId;
+      if (forceStructureRefresh) {
+        structureCache.delete(cacheKey);
+        console.log("Manual refresh: structure cache invalidated for this integration");
+      }
       const cached = structureCache.get(cacheKey);
       let structure: LoxoneStructure & { messageCenter?: any };
 
@@ -602,6 +613,7 @@ serve(async (req) => {
         structure = cached.structure;
         console.log(`Using cached LoxAPP3.json structure (expires in ${Math.round((cached.expiresAt - Date.now()) / 1000)}s)`);
       } else {
+
         const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
         console.log(`Fetching structure: ${structureUrl}`);
         const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
@@ -659,7 +671,10 @@ serve(async (req) => {
       let allControlUuids = Object.keys(controls);
       let controlUuids = allControlUuids;
 
-      if (isRefreshAction) {
+      // Skip the linked-meter filter on manual UI refresh so new (yet unlinked)
+      // controls also get state values and appear in discovery.
+      if (isRefreshAction && !forceStructureRefresh) {
+
         const { data: linkedMetersForFilter } = await supabase
           .from("meters")
           .select("sensor_uuid")
