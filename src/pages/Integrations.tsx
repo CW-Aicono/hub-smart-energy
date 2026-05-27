@@ -187,6 +187,8 @@ const Integrations = () => {
                 <Globe className="h-4 w-4" />
                 API
               </TabsTrigger>
+            </TabsList>
+
 
             <TabsContent value="gateways">
               {loading ? (
