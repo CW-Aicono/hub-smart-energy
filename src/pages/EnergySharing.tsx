@@ -25,6 +25,7 @@ import CommunityDashboardTab from "@/components/energy-sharing/CommunityDashboar
 import DataImportTab from "@/components/energy-sharing/DataImportTab";
 import BillingTab from "@/components/energy-sharing/BillingTab";
 import DataQualityTab from "@/components/energy-sharing/DataQualityTab";
+import MarketplaceTab from "@/components/energy-sharing/MarketplaceTab";
 import { maLoError, meLoError } from "@/lib/energy-sharing/idValidation";
 
 export default function EnergySharing() {

@@ -72,6 +72,9 @@ const Copilot = lazy(() => import("./pages/Copilot"));
 const TenantElectricity = lazy(() => import("./pages/TenantElectricity"));
 const EnergySharing = lazy(() => import("./pages/EnergySharing"));
 const EnergySharingMemberDetail = lazy(() => import("./pages/EnergySharingMemberDetail"));
+const MarketplacePublic = lazy(() => import("./pages/MarketplacePublic"));
+const MarketplaceListingDetail = lazy(() => import("./pages/MarketplaceListingDetail"));
+
 const TenantEnergyApp = lazy(() => import("./pages/TenantEnergyApp"));
 const Demo = lazy(() => import("./pages/Demo"));
 const SuperAdminMap = lazy(() => import("./pages/SuperAdminMap"));
@@ -218,6 +221,9 @@ const App = () => (
                       <Route path="/energy-report" element={<M><EnergyReport /></M>} />
                       <Route path="/energy-sharing" element={<M><EnergySharing /></M>} />
                       <Route path="/energy-sharing/members/:memberId" element={<M><EnergySharingMemberDetail /></M>} />
+                      <Route path="/sharing/marktplatz" element={<MarketplacePublic />} />
+                      <Route path="/sharing/marktplatz/:slug" element={<MarketplaceListingDetail />} />
+
                       <Route path="/tenant-electricity" element={<M><TenantElectricity /></M>} />
                       <Route path="/ev" element={<ChargingApp />} />
                       <Route path="/te" element={<TenantEnergyApp />} />
