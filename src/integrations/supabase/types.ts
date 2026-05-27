@@ -1397,6 +1397,162 @@ export type Database = {
           },
         ]
       }
+      community_assets: {
+        Row: {
+          asset_type: string
+          capacity_kw: number
+          community_id: string
+          created_at: string
+          id: string
+          location_id: string | null
+          meter_id: string | null
+          share_model: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          asset_type?: string
+          capacity_kw?: number
+          community_id: string
+          created_at?: string
+          id?: string
+          location_id?: string | null
+          meter_id?: string | null
+          share_model?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          asset_type?: string
+          capacity_kw?: number
+          community_id?: string
+          created_at?: string
+          id?: string
+          location_id?: string | null
+          meter_id?: string | null
+          share_model?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_assets_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_members: {
+        Row: {
+          community_id: string
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          joined_at: string | null
+          left_at: string | null
+          malo_id: string | null
+          melo_id: string | null
+          member_no: string | null
+          role: string
+          share_kw: number
+          status: string
+          tenant_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          community_id: string
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          joined_at?: string | null
+          left_at?: string | null
+          malo_id?: string | null
+          melo_id?: string | null
+          member_no?: string | null
+          role?: string
+          share_kw?: number
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          community_id?: string
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          joined_at?: string | null
+          left_at?: string | null
+          malo_id?: string | null
+          melo_id?: string | null
+          member_no?: string | null
+          role?: string
+          share_kw?: number
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_members_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_tariffs: {
+        Row: {
+          community_id: string
+          created_at: string
+          feed_in_ct_kwh: number
+          id: string
+          price_ct_kwh: number
+          tenant_id: string
+          updated_at: string
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          community_id: string
+          created_at?: string
+          feed_in_ct_kwh?: number
+          id?: string
+          price_ct_kwh?: number
+          tenant_id: string
+          updated_at?: string
+          valid_from: string
+          valid_to?: string | null
+        }
+        Update: {
+          community_id?: string
+          created_at?: string
+          feed_in_ct_kwh?: number
+          id?: string
+          price_ct_kwh?: number
+          tenant_id?: string
+          updated_at?: string
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_tariffs_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       copilot_analyses: {
         Row: {
           analysis_type: string
@@ -1973,6 +2129,48 @@ export type Database = {
           unit?: string
           usage_type?: string
           valid_year?: number
+        }
+        Relationships: []
+      }
+      energy_communities: {
+        Row: {
+          contract_template_id: string | null
+          created_at: string
+          id: string
+          name: string
+          region_plz: string[]
+          settings: Json
+          slug: string
+          status: string
+          tenant_id: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          contract_template_id?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          region_plz?: string[]
+          settings?: Json
+          slug: string
+          status?: string
+          tenant_id: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          contract_template_id?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          region_plz?: string[]
+          settings?: Json
+          slug?: string
+          status?: string
+          tenant_id?: string
+          type?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -7869,7 +8067,12 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "user" | "super_admin" | "sales_partner"
+      app_role:
+        | "admin"
+        | "user"
+        | "super_admin"
+        | "sales_partner"
+        | "community_member"
       device_class:
         | "meter"
         | "gateway"
@@ -8019,7 +8222,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user", "super_admin", "sales_partner"],
+      app_role: [
+        "admin",
+        "user",
+        "super_admin",
+        "sales_partner",
+        "community_member",
+      ],
       device_class: [
         "meter",
         "gateway",
