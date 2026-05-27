@@ -140,7 +140,10 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
   const { members, createMember, deleteMember } = useCommunityMembers(communityId);
   const [open, setOpen] = useState(false);
   const [signMember, setSignMember] = useState<CommunityMember | null>(null);
-  const [form, setForm] = useState({ display_name: "", email: "", role: "member", malo_id: "", share_kw: 0 });
+  const [form, setForm] = useState({ display_name: "", email: "", role: "member", malo_id: "", melo_id: "", share_kw: 0 });
+  const maloErr = maLoError(form.malo_id);
+  const meloErr = meLoError(form.melo_id);
+  const canSubmit = !!form.display_name.trim() && !maloErr && !meloErr;
 
 
   return (
@@ -165,14 +168,23 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>MaLo-ID (optional)</Label><Input value={form.malo_id} onChange={(e) => setForm({ ...form, malo_id: e.target.value })} placeholder="11-stellig" /></div>
+              <div>
+                <Label>MaLo-ID (optional)</Label>
+                <Input value={form.malo_id} onChange={(e) => setForm({ ...form, malo_id: e.target.value })} placeholder="11-stellig" />
+                {maloErr && <p className="text-xs text-destructive mt-1">{maloErr}</p>}
+              </div>
+              <div>
+                <Label>MeLo-ID (optional)</Label>
+                <Input value={form.melo_id} onChange={(e) => setForm({ ...form, melo_id: e.target.value })} placeholder="33-stellig, beginnt mit DE" />
+                {meloErr && <p className="text-xs text-destructive mt-1">{meloErr}</p>}
+              </div>
               <div><Label>Anteil (kW)</Label><Input type="number" step="0.1" value={form.share_kw} onChange={(e) => setForm({ ...form, share_kw: Number(e.target.value) })} /></div>
             </div>
             <DialogFooter>
-              <Button onClick={async () => {
-                if (!form.display_name.trim()) return;
+              <Button disabled={!canSubmit} onClick={async () => {
+                if (!canSubmit) return;
                 await createMember.mutateAsync(form);
-                setForm({ display_name: "", email: "", role: "member", malo_id: "", share_kw: 0 });
+                setForm({ display_name: "", email: "", role: "member", malo_id: "", melo_id: "", share_kw: 0 });
                 setOpen(false);
               }}>Hinzufügen</Button>
             </DialogFooter>
