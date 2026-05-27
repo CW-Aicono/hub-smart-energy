@@ -432,11 +432,11 @@ serve(async (req) => {
       }
     }
 
-    const successCount = results.filter((r) => r.success).length;
-    console.log(`loxone-periodic-sync: Completed. ${successCount}/${results.length} integrations synced successfully.`);
+    const successCount = results.filter((r) => r.success && !r.skipped).length;
+    console.log(`loxone-periodic-sync: Completed. ${successCount}/${results.length} synced, ${skippedCount} skipped (poll interval).`);
 
     return new Response(
-      JSON.stringify({ success: true, synced: successCount, total: results.length, results }),
+      JSON.stringify({ success: true, synced: successCount, skipped: skippedCount, total: results.length, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
