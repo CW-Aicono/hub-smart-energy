@@ -57,7 +57,7 @@ export default function HetznerNodesCard() {
       if (error) throw error;
 
       const seen = new Map<string, NodeMetric>();
-      for (const row of (data ?? []) as NodeMetric[]) {
+      for (const row of ((data ?? []) as unknown) as NodeMetric[]) {
         if (!seen.has(row.node_name)) seen.set(row.node_name, row);
       }
       return Array.from(seen.values()).sort((a, b) =>
