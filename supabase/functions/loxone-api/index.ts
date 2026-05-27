@@ -147,6 +147,13 @@ function detectSensorMeta(controlType: string): { sensorType: string; unit: stri
 const cloudUrlCache = new Map<string, { url: string; expiresAt: number }>();
 const CLOUD_URL_TTL_MS = 15 * 60 * 1000;
 
+// In-memory cache for LoxAPP3.json structure (TTL 1 h).
+// The structure file is several MB and rarely changes — caching it cuts
+// per-sync traffic by ~30–50 %. Cache is per Edge-Function instance and
+// auto-invalidates on cold start.
+const structureCache = new Map<string, { structure: any; expiresAt: number }>();
+const STRUCTURE_CACHE_TTL_MS = 60 * 60 * 1000;
+
 // Resolve Loxone Cloud DNS via the new Remote Connect endpoint.
 // Loxone migrated `dns.loxonecloud.com` (legacy, returns 404 since 2026-05-03)
 // to `connect.loxonecloud.com` which serves an HTTP 307 with the actual
