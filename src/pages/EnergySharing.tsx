@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine, BarChart3 } from "lucide-react";
+import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine, BarChart3, Upload, Calculator, ShieldCheck } from "lucide-react";
 import {
   useEnergyCommunities,
   useCommunityMembers,
@@ -22,6 +22,9 @@ import CommunityWizard from "@/components/energy-sharing/CommunityWizard";
 import ContractTemplatesTab from "@/components/energy-sharing/ContractTemplatesTab";
 import SignContractDialog from "@/components/energy-sharing/SignContractDialog";
 import CommunityDashboardTab from "@/components/energy-sharing/CommunityDashboardTab";
+import DataImportTab from "@/components/energy-sharing/DataImportTab";
+import BillingTab from "@/components/energy-sharing/BillingTab";
+import DataQualityTab from "@/components/energy-sharing/DataQualityTab";
 import { maLoError, meLoError } from "@/lib/energy-sharing/idValidation";
 
 export default function EnergySharing() {
@@ -103,6 +106,9 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
         <TabsTrigger value="members"><UsersIcon className="h-4 w-4 mr-1" />Mitglieder</TabsTrigger>
         <TabsTrigger value="assets"><Sun className="h-4 w-4 mr-1" />Anlagen</TabsTrigger>
         <TabsTrigger value="tariff"><Receipt className="h-4 w-4 mr-1" />Tarif</TabsTrigger>
+        <TabsTrigger value="import"><Upload className="h-4 w-4 mr-1" />Daten-Import</TabsTrigger>
+        <TabsTrigger value="billing"><Calculator className="h-4 w-4 mr-1" />Abrechnung</TabsTrigger>
+        <TabsTrigger value="quality"><ShieldCheck className="h-4 w-4 mr-1" />Datenqualität</TabsTrigger>
         <TabsTrigger value="contracts"><FileSignature className="h-4 w-4 mr-1" />Verträge</TabsTrigger>
       </TabsList>
 
@@ -131,6 +137,9 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
       <TabsContent value="members"><MembersTab communityId={communityId} communityName={communityName} /></TabsContent>
       <TabsContent value="assets"><AssetsTab communityId={communityId} /></TabsContent>
       <TabsContent value="tariff"><TariffTab communityId={communityId} /></TabsContent>
+      <TabsContent value="import"><DataImportTab communityId={communityId} /></TabsContent>
+      <TabsContent value="billing"><BillingTab communityId={communityId} /></TabsContent>
+      <TabsContent value="quality"><DataQualityTab communityId={communityId} /></TabsContent>
       <TabsContent value="contracts"><ContractTemplatesTab communityId={communityId} /></TabsContent>
     </Tabs>
   );

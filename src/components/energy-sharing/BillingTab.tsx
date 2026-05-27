@@ -6,8 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calculator, Play } from "lucide-react";
+import { Calculator, Play, FileDown } from "lucide-react";
 import { useMemberInvoices, useAllocationRuns } from "@/hooks/useCommunityOperations";
+import { generateCommunityInvoicePdf } from "@/lib/energy-sharing/generateCommunityInvoicePdf";
+import { useEnergyCommunities } from "@/hooks/useEnergyCommunities";
+import { toast } from "@/hooks/use-toast";
 
 function euro(ct: number) {
   return (ct / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
@@ -16,9 +19,47 @@ function euro(ct: number) {
 export default function BillingTab({ communityId }: { communityId: string }) {
   const { invoices, runBilling, setStatus } = useMemberInvoices(communityId);
   const { runs, runAllocation } = useAllocationRuns(communityId);
+  const { communities } = useEnergyCommunities();
+  const community = communities.find((c) => c.id === communityId);
   const now = new Date();
   const [year, setYear] = useState(now.getUTCFullYear());
   const [month, setMonth] = useState(now.getUTCMonth() + 1);
+
+  const downloadPdf = (inv: any) => {
+    try {
+      const blob = generateCommunityInvoicePdf(
+        {
+          id: inv.id,
+          invoice_number: inv.invoice_number,
+          period_start: inv.period_start,
+          period_end: inv.period_end,
+          allocated_kwh: Number(inv.allocated_kwh ?? 0),
+          feed_in_kwh: Number(inv.feed_in_kwh ?? 0),
+          internal_amount_ct: Number(inv.internal_amount_ct ?? 0),
+          feed_in_credit_ct: Number(inv.feed_in_credit_ct ?? 0),
+          total_ct: Number(inv.total_ct ?? 0),
+          currency: inv.currency,
+          status: inv.status,
+          line_items: inv.line_items,
+        },
+        {
+          communityName: community?.name ?? "Energiegemeinschaft",
+          memberName: inv.community_members?.display_name ?? "Mitglied",
+          memberEmail: inv.community_members?.email,
+        },
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Rechnung_${inv.invoice_number || inv.id.slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast({ title: "PDF-Fehler", description: e.message, variant: "destructive" });
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -83,15 +124,20 @@ export default function BillingTab({ communityId }: { communityId: string }) {
                     <TableCell className="text-right">{euro(inv.total_ct)}</TableCell>
                     <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "voided" ? "destructive" : "secondary"}>{inv.status}</Badge></TableCell>
                     <TableCell className="text-right">
-                      <Select value={inv.status} onValueChange={(v) => setStatus.mutate({ id: inv.id, status: v as any })}>
-                        <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="draft">Entwurf</SelectItem>
-                          <SelectItem value="issued">Ausgestellt</SelectItem>
-                          <SelectItem value="paid">Bezahlt</SelectItem>
-                          <SelectItem value="voided">Storniert</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex gap-1 justify-end">
+                        <Button variant="ghost" size="sm" title="PDF herunterladen" onClick={() => downloadPdf(inv)}>
+                          <FileDown className="h-4 w-4" />
+                        </Button>
+                        <Select value={inv.status} onValueChange={(v) => setStatus.mutate({ id: inv.id, status: v as any })}>
+                          <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="draft">Entwurf</SelectItem>
+                            <SelectItem value="issued">Ausgestellt</SelectItem>
+                            <SelectItem value="paid">Bezahlt</SelectItem>
+                            <SelectItem value="voided">Storniert</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
