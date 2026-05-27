@@ -1397,6 +1397,126 @@ export type Database = {
           },
         ]
       }
+      community_allocation_runs: {
+        Row: {
+          community_id: string
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          period_end: string
+          period_start: string
+          started_at: string
+          status: string
+          strategy: string
+          tenant_id: string
+          total_allocated_kwh: number | null
+          total_generated_kwh: number | null
+          total_surplus_kwh: number | null
+        }
+        Insert: {
+          community_id: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          period_end: string
+          period_start: string
+          started_at?: string
+          status?: string
+          strategy?: string
+          tenant_id: string
+          total_allocated_kwh?: number | null
+          total_generated_kwh?: number | null
+          total_surplus_kwh?: number | null
+        }
+        Update: {
+          community_id?: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          period_end?: string
+          period_start?: string
+          started_at?: string
+          status?: string
+          strategy?: string
+          tenant_id?: string
+          total_allocated_kwh?: number | null
+          total_generated_kwh?: number | null
+          total_surplus_kwh?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_allocation_runs_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_allocations_15min: {
+        Row: {
+          allocated_kwh: number
+          community_id: string
+          created_at: string
+          id: string
+          member_id: string
+          run_id: string | null
+          strategy: string
+          surplus_to_grid_kwh: number
+          tenant_id: string
+          ts_start: string
+        }
+        Insert: {
+          allocated_kwh?: number
+          community_id: string
+          created_at?: string
+          id?: string
+          member_id: string
+          run_id?: string | null
+          strategy?: string
+          surplus_to_grid_kwh?: number
+          tenant_id: string
+          ts_start: string
+        }
+        Update: {
+          allocated_kwh?: number
+          community_id?: string
+          created_at?: string
+          id?: string
+          member_id?: string
+          run_id?: string | null
+          strategy?: string
+          surplus_to_grid_kwh?: number
+          tenant_id?: string
+          ts_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_allocations_15min_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_allocations_15min_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "community_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_allocations_15min_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "community_allocation_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_assets: {
         Row: {
           asset_type: string
@@ -1487,6 +1607,151 @@ export type Database = {
             columns: ["community_id"]
             isOneToOne: false
             referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_member_invoices: {
+        Row: {
+          allocated_kwh: number
+          community_id: string
+          created_at: string
+          currency: string
+          feed_in_credit_ct: number
+          feed_in_kwh: number
+          id: string
+          internal_amount_ct: number
+          invoice_number: string | null
+          issued_at: string | null
+          line_items: Json
+          member_id: string
+          paid_at: string | null
+          pdf_path: string | null
+          period_end: string
+          period_start: string
+          status: string
+          tenant_id: string
+          total_ct: number
+          updated_at: string
+        }
+        Insert: {
+          allocated_kwh?: number
+          community_id: string
+          created_at?: string
+          currency?: string
+          feed_in_credit_ct?: number
+          feed_in_kwh?: number
+          id?: string
+          internal_amount_ct?: number
+          invoice_number?: string | null
+          issued_at?: string | null
+          line_items?: Json
+          member_id: string
+          paid_at?: string | null
+          pdf_path?: string | null
+          period_end: string
+          period_start: string
+          status?: string
+          tenant_id: string
+          total_ct?: number
+          updated_at?: string
+        }
+        Update: {
+          allocated_kwh?: number
+          community_id?: string
+          created_at?: string
+          currency?: string
+          feed_in_credit_ct?: number
+          feed_in_kwh?: number
+          id?: string
+          internal_amount_ct?: number
+          invoice_number?: string | null
+          issued_at?: string | null
+          line_items?: Json
+          member_id?: string
+          paid_at?: string | null
+          pdf_path?: string | null
+          period_end?: string
+          period_start?: string
+          status?: string
+          tenant_id?: string
+          total_ct?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_member_invoices_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_member_invoices_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "community_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_member_readings_15min: {
+        Row: {
+          community_id: string
+          created_at: string
+          direction: string
+          id: string
+          import_id: string | null
+          kwh: number
+          member_id: string
+          source: string
+          tenant_id: string
+          ts_start: string
+        }
+        Insert: {
+          community_id: string
+          created_at?: string
+          direction: string
+          id?: string
+          import_id?: string | null
+          kwh: number
+          member_id: string
+          source?: string
+          tenant_id: string
+          ts_start: string
+        }
+        Update: {
+          community_id?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          import_id?: string | null
+          kwh?: number
+          member_id?: string
+          source?: string
+          tenant_id?: string
+          ts_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_member_readings_15min_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_member_readings_15min_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "smart_meter_mscons_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_member_readings_15min_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "community_members"
             referencedColumns: ["id"]
           },
         ]
@@ -2265,6 +2530,7 @@ export type Database = {
         Row: {
           contract_template_id: string | null
           created_at: string
+          data_quality_threshold_pct: number
           id: string
           name: string
           region_plz: string[]
@@ -2278,6 +2544,7 @@ export type Database = {
         Insert: {
           contract_template_id?: string | null
           created_at?: string
+          data_quality_threshold_pct?: number
           id?: string
           name: string
           region_plz?: string[]
@@ -2291,6 +2558,7 @@ export type Database = {
         Update: {
           contract_template_id?: string | null
           created_at?: string
+          data_quality_threshold_pct?: number
           id?: string
           name?: string
           region_plz?: string[]
@@ -6367,8 +6635,10 @@ export type Database = {
       }
       smart_meter_mscons_imports: {
         Row: {
+          community_id: string | null
           created_at: string
           error_message: string | null
+          error_segments: Json
           file_hash: string
           file_name: string
           file_size_bytes: number | null
@@ -6376,6 +6646,8 @@ export type Database = {
           imported_at: string | null
           location_id: string | null
           meta: Json
+          parsed_intervals: number
+          parser_version: string | null
           rows_imported: number
           rows_skipped: number
           status: string
@@ -6384,8 +6656,10 @@ export type Database = {
           uploaded_by: string | null
         }
         Insert: {
+          community_id?: string | null
           created_at?: string
           error_message?: string | null
+          error_segments?: Json
           file_hash: string
           file_name: string
           file_size_bytes?: number | null
@@ -6393,6 +6667,8 @@ export type Database = {
           imported_at?: string | null
           location_id?: string | null
           meta?: Json
+          parsed_intervals?: number
+          parser_version?: string | null
           rows_imported?: number
           rows_skipped?: number
           status?: string
@@ -6401,8 +6677,10 @@ export type Database = {
           uploaded_by?: string | null
         }
         Update: {
+          community_id?: string | null
           created_at?: string
           error_message?: string | null
+          error_segments?: Json
           file_hash?: string
           file_name?: string
           file_size_bytes?: number | null
@@ -6410,6 +6688,8 @@ export type Database = {
           imported_at?: string | null
           location_id?: string | null
           meta?: Json
+          parsed_intervals?: number
+          parser_version?: string | null
           rows_imported?: number
           rows_skipped?: number
           status?: string
@@ -6418,6 +6698,13 @@ export type Database = {
           uploaded_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "smart_meter_mscons_imports_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "smart_meter_mscons_imports_location_id_fkey"
             columns: ["location_id"]
@@ -8008,6 +8295,17 @@ export type Database = {
       cleanup_old_node_metrics: { Args: never; Returns: number }
       cleanup_old_ocpp_logs: { Args: never; Returns: number }
       collect_db_metrics: { Args: never; Returns: Json }
+      community_data_quality: {
+        Args: { p_community_id: string }
+        Returns: {
+          active_run_at: string
+          assets_total: number
+          coverage_pct: number
+          last_reading_at: string
+          members_total: number
+          members_with_recent_data: number
+        }[]
+      }
       compact_power_readings_day: {
         Args: { p_day?: string }
         Returns: {
