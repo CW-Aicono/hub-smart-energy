@@ -122,6 +122,10 @@ const SuperAdminMonitoring = () => {
               {/* Hetzner Node Live-Metriken (CPU/RAM/Disk) */}
               <HetznerNodesCard />
 
+              {/* Loxone-Abfrage-Intervalle pro Liegenschaft */}
+              <LoxonePollingOverviewCard />
+
+
               {/* System Health */}
               <Card>
                 <CardHeader className="pb-3">
