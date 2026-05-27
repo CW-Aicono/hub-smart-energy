@@ -106,6 +106,9 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
         <TabsTrigger value="members"><UsersIcon className="h-4 w-4 mr-1" />Mitglieder</TabsTrigger>
         <TabsTrigger value="assets"><Sun className="h-4 w-4 mr-1" />Anlagen</TabsTrigger>
         <TabsTrigger value="tariff"><Receipt className="h-4 w-4 mr-1" />Tarif</TabsTrigger>
+        <TabsTrigger value="import"><Upload className="h-4 w-4 mr-1" />Daten-Import</TabsTrigger>
+        <TabsTrigger value="billing"><Calculator className="h-4 w-4 mr-1" />Abrechnung</TabsTrigger>
+        <TabsTrigger value="quality"><ShieldCheck className="h-4 w-4 mr-1" />Datenqualität</TabsTrigger>
         <TabsTrigger value="contracts"><FileSignature className="h-4 w-4 mr-1" />Verträge</TabsTrigger>
       </TabsList>
 
@@ -134,6 +137,9 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
       <TabsContent value="members"><MembersTab communityId={communityId} communityName={communityName} /></TabsContent>
       <TabsContent value="assets"><AssetsTab communityId={communityId} /></TabsContent>
       <TabsContent value="tariff"><TariffTab communityId={communityId} /></TabsContent>
+      <TabsContent value="import"><DataImportTab communityId={communityId} /></TabsContent>
+      <TabsContent value="billing"><BillingTab communityId={communityId} /></TabsContent>
+      <TabsContent value="quality"><DataQualityTab communityId={communityId} /></TabsContent>
       <TabsContent value="contracts"><ContractTemplatesTab communityId={communityId} /></TabsContent>
     </Tabs>
   );
