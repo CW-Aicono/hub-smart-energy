@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -161,6 +161,7 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
               <p className="text-xs text-muted-foreground mt-1">
                 Nach § 42c EnWG müssen Mitglieder im gleichen Verteilnetz oder benachbarten PLZ-Bereich liegen.
               </p>
+              <PlzVnbHint plzList={regionPlz} />
             </div>
           </div>
         )}
@@ -299,6 +300,36 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function PlzVnbHint({ plzList }: { plzList: string }) {
+  const [results, setResults] = useState<Array<{ plz: string; vnb: string | null; region: string | null; fallback: boolean }>>([]);
+  useEffect(() => {
+    const plzs = plzList.split(",").map((s) => s.trim()).filter((s) => /^\d{5}$/.test(s));
+    if (plzs.length === 0) { setResults([]); return; }
+    let cancelled = false;
+    (async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const out: any[] = [];
+      for (const plz of plzs.slice(0, 5)) {
+        const { data } = await supabase.functions.invoke("community-plz-check", { body: { plz } });
+        if (data) out.push(data);
+      }
+      if (!cancelled) setResults(out);
+    })();
+    return () => { cancelled = true; };
+  }, [plzList]);
+  if (results.length === 0) return null;
+  return (
+    <div className="mt-2 text-xs space-y-1">
+      {results.map((r) => (
+        <div key={r.plz} className="text-muted-foreground">
+          <span className="font-mono">{r.plz}</span> →{" "}
+          {r.vnb ? <span className="text-foreground">{r.vnb} ({r.region})</span> : <span className="text-amber-600">VNB unbekannt — manuell prüfen</span>}
+        </div>
+      ))}
+    </div>
   );
 }
 

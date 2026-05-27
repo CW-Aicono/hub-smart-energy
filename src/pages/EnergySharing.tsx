@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine } from "lucide-react";
+import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine, BarChart3 } from "lucide-react";
 import {
   useEnergyCommunities,
   useCommunityMembers,
@@ -20,6 +21,8 @@ import {
 import CommunityWizard from "@/components/energy-sharing/CommunityWizard";
 import ContractTemplatesTab from "@/components/energy-sharing/ContractTemplatesTab";
 import SignContractDialog from "@/components/energy-sharing/SignContractDialog";
+import CommunityDashboardTab from "@/components/energy-sharing/CommunityDashboardTab";
+import { maLoError, meLoError } from "@/lib/energy-sharing/idValidation";
 
 export default function EnergySharing() {
   const { communities, isLoading, deleteCommunity } = useEnergyCommunities();
@@ -93,14 +96,17 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
   const { tariffs } = useCommunityTariffs(communityId);
 
   return (
-    <Tabs defaultValue="overview">
+    <Tabs defaultValue="dashboard">
       <TabsList className="flex-wrap">
+        <TabsTrigger value="dashboard"><BarChart3 className="h-4 w-4 mr-1" />Dashboard</TabsTrigger>
         <TabsTrigger value="overview">Übersicht</TabsTrigger>
         <TabsTrigger value="members"><UsersIcon className="h-4 w-4 mr-1" />Mitglieder</TabsTrigger>
         <TabsTrigger value="assets"><Sun className="h-4 w-4 mr-1" />Anlagen</TabsTrigger>
         <TabsTrigger value="tariff"><Receipt className="h-4 w-4 mr-1" />Tarif</TabsTrigger>
         <TabsTrigger value="contracts"><FileSignature className="h-4 w-4 mr-1" />Verträge</TabsTrigger>
       </TabsList>
+
+      <TabsContent value="dashboard"><CommunityDashboardTab communityId={communityId} /></TabsContent>
 
       <TabsContent value="overview">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -134,7 +140,10 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
   const { members, createMember, deleteMember } = useCommunityMembers(communityId);
   const [open, setOpen] = useState(false);
   const [signMember, setSignMember] = useState<CommunityMember | null>(null);
-  const [form, setForm] = useState({ display_name: "", email: "", role: "member", malo_id: "", share_kw: 0 });
+  const [form, setForm] = useState({ display_name: "", email: "", role: "member", malo_id: "", melo_id: "", share_kw: 0 });
+  const maloErr = maLoError(form.malo_id);
+  const meloErr = meLoError(form.melo_id);
+  const canSubmit = !!form.display_name.trim() && !maloErr && !meloErr;
 
 
   return (
@@ -159,14 +168,23 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>MaLo-ID (optional)</Label><Input value={form.malo_id} onChange={(e) => setForm({ ...form, malo_id: e.target.value })} placeholder="11-stellig" /></div>
+              <div>
+                <Label>MaLo-ID (optional)</Label>
+                <Input value={form.malo_id} onChange={(e) => setForm({ ...form, malo_id: e.target.value })} placeholder="11-stellig" />
+                {maloErr && <p className="text-xs text-destructive mt-1">{maloErr}</p>}
+              </div>
+              <div>
+                <Label>MeLo-ID (optional)</Label>
+                <Input value={form.melo_id} onChange={(e) => setForm({ ...form, melo_id: e.target.value })} placeholder="33-stellig, beginnt mit DE" />
+                {meloErr && <p className="text-xs text-destructive mt-1">{meloErr}</p>}
+              </div>
               <div><Label>Anteil (kW)</Label><Input type="number" step="0.1" value={form.share_kw} onChange={(e) => setForm({ ...form, share_kw: Number(e.target.value) })} /></div>
             </div>
             <DialogFooter>
-              <Button onClick={async () => {
-                if (!form.display_name.trim()) return;
+              <Button disabled={!canSubmit} onClick={async () => {
+                if (!canSubmit) return;
                 await createMember.mutateAsync(form);
-                setForm({ display_name: "", email: "", role: "member", malo_id: "", share_kw: 0 });
+                setForm({ display_name: "", email: "", role: "member", malo_id: "", melo_id: "", share_kw: 0 });
                 setOpen(false);
               }}>Hinzufügen</Button>
             </DialogFooter>
@@ -186,7 +204,11 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
             <TableBody>
               {members.map((m) => (
                 <TableRow key={m.id}>
-                  <TableCell>{m.display_name}</TableCell>
+                  <TableCell>
+                    <Link to={`/energy-sharing/members/${m.id}`} className="text-primary hover:underline">
+                      {m.display_name}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{m.email}</TableCell>
                   <TableCell><Badge variant="secondary">{m.role}</Badge></TableCell>
                   <TableCell className="font-mono text-xs">{m.malo_id ?? "—"}</TableCell>

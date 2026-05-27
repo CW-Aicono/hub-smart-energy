@@ -1563,12 +1563,15 @@ export type Database = {
       }
       community_members: {
         Row: {
+          activated_at: string | null
           community_id: string
           created_at: string
           display_name: string | null
           email: string | null
           id: string
+          invited_at: string | null
           joined_at: string | null
+          last_invite_sent_at: string | null
           left_at: string | null
           malo_id: string | null
           melo_id: string | null
@@ -1576,17 +1579,21 @@ export type Database = {
           role: string
           share_kw: number
           status: string
+          suspended_at: string | null
           tenant_id: string
           updated_at: string
           user_id: string | null
         }
         Insert: {
+          activated_at?: string | null
           community_id: string
           created_at?: string
           display_name?: string | null
           email?: string | null
           id?: string
+          invited_at?: string | null
           joined_at?: string | null
+          last_invite_sent_at?: string | null
           left_at?: string | null
           malo_id?: string | null
           melo_id?: string | null
@@ -1594,17 +1601,21 @@ export type Database = {
           role?: string
           share_kw?: number
           status?: string
+          suspended_at?: string | null
           tenant_id: string
           updated_at?: string
           user_id?: string | null
         }
         Update: {
+          activated_at?: string | null
           community_id?: string
           created_at?: string
           display_name?: string | null
           email?: string | null
           id?: string
+          invited_at?: string | null
           joined_at?: string | null
+          last_invite_sent_at?: string | null
           left_at?: string | null
           malo_id?: string | null
           melo_id?: string | null
@@ -1612,6 +1623,7 @@ export type Database = {
           role?: string
           share_kw?: number
           status?: string
+          suspended_at?: string | null
           tenant_id?: string
           updated_at?: string
           user_id?: string | null
