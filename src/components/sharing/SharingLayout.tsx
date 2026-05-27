@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { LayoutDashboard, FileText, UserCog, LogOut, Sun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,25 @@ const navItems = [
 export function SharingLayout({ children, title }: Props) {
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // Swap the page manifest so the PWA installs as "Meine Energie-Community"
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    const prev = link?.getAttribute("href") ?? null;
+    if (link) link.setAttribute("href", "/manifest-sharing.json");
+    else {
+      const el = document.createElement("link");
+      el.rel = "manifest";
+      el.href = "/manifest-sharing.json";
+      el.id = "sharing-manifest";
+      document.head.appendChild(el);
+    }
+    return () => {
+      const cur = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+      if (cur && prev !== null) cur.setAttribute("href", prev);
+      else if (cur && cur.id === "sharing-manifest") cur.remove();
+    };
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
