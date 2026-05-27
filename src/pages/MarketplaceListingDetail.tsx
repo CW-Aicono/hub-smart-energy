@@ -66,6 +66,12 @@ export default function MarketplaceListingDetail() {
     }
   }
 
+  useEffect(() => {
+    if (listing?.title) {
+      document.title = `${listing.title} — Energy-Sharing Marktplatz`;
+    }
+  }, [listing?.title]);
+
   if (loading) {
     return <div className="p-8 text-muted-foreground">Lade …</div>;
   }
@@ -88,9 +94,6 @@ export default function MarketplaceListingDetail() {
   const max = listing.max_members;
   const free = max ? Math.max(max - members, 0) : null;
 
-  useEffect(() => {
-    document.title = `${listing.title} — Energy-Sharing Marktplatz`;
-  }, [listing.title]);
 
   return (
     <div className="min-h-screen bg-background">
