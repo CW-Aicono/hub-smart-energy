@@ -32,16 +32,13 @@ export default function MarketplacePublic() {
     load();
   }, []);
 
+  useEffect(() => {
+    document.title = "Energy-Sharing Marktplatz — Energiegemeinschaften finden";
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
-      <Helmet>
-        <title>Energy-Sharing Marktplatz — Energiegemeinschaften finden</title>
-        <meta
-          name="description"
-          content="Finde eine Energiegemeinschaft in deiner Region und beteilige dich am gemeinsamen Strom aus PV, Wind & Speicher."
-        />
-        <link rel="canonical" href="/sharing/marktplatz" />
-      </Helmet>
+
 
       <header className="border-b bg-gradient-to-b from-primary/10 to-transparent">
         <div className="max-w-6xl mx-auto px-4 py-12">
