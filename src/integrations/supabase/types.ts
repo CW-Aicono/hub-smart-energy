@@ -4588,6 +4588,42 @@ export type Database = {
           },
         ]
       }
+      node_metrics: {
+        Row: {
+          cpu_percent: number | null
+          disk_percent: number | null
+          id: string
+          load_avg_1m: number | null
+          mem_percent: number | null
+          metadata: Json
+          node_name: string
+          recorded_at: string
+          uptime_seconds: number | null
+        }
+        Insert: {
+          cpu_percent?: number | null
+          disk_percent?: number | null
+          id?: string
+          load_avg_1m?: number | null
+          mem_percent?: number | null
+          metadata?: Json
+          node_name: string
+          recorded_at?: string
+          uptime_seconds?: number | null
+        }
+        Update: {
+          cpu_percent?: number | null
+          disk_percent?: number | null
+          id?: string
+          load_avg_1m?: number | null
+          mem_percent?: number | null
+          metadata?: Json
+          node_name?: string
+          recorded_at?: string
+          uptime_seconds?: number | null
+        }
+        Relationships: []
+      }
       ocpp_integration_guides: {
         Row: {
           charger_model_id: string | null
@@ -7479,6 +7515,7 @@ export type Database = {
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
+      cleanup_old_node_metrics: { Args: never; Returns: number }
       cleanup_old_ocpp_logs: { Args: never; Returns: number }
       collect_db_metrics: { Args: never; Returns: Json }
       compact_power_readings_day: {
