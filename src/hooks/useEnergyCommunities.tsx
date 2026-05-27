@@ -45,15 +45,20 @@ export function useEnergyCommunities() {
       region_plz?: string[];
       status?: string;
     }) => {
-      const { error } = await supabase.from("energy_communities").insert({
-        tenant_id: tenantId!,
-        name: values.name,
-        slug: values.slug,
-        type: values.type,
-        region_plz: values.region_plz ?? [],
-        status: values.status ?? "draft",
-      });
+      const { data, error } = await supabase
+        .from("energy_communities")
+        .insert({
+          tenant_id: tenantId!,
+          name: values.name,
+          slug: values.slug,
+          type: values.type,
+          region_plz: values.region_plz ?? [],
+          status: values.status ?? "draft",
+        })
+        .select()
+        .single();
       if (error) throw error;
+      return data as EnergyCommunity;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["energy-communities", tenantId] });

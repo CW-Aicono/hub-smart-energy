@@ -9,23 +9,23 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Users as UsersIcon, Sun, Receipt } from "lucide-react";
+import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine } from "lucide-react";
 import {
   useEnergyCommunities,
   useCommunityMembers,
   useCommunityAssets,
   useCommunityTariffs,
+  type CommunityMember,
 } from "@/hooks/useEnergyCommunities";
-
-const slugify = (s: string) =>
-  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+import CommunityWizard from "@/components/energy-sharing/CommunityWizard";
+import ContractTemplatesTab from "@/components/energy-sharing/ContractTemplatesTab";
+import SignContractDialog from "@/components/energy-sharing/SignContractDialog";
 
 export default function EnergySharing() {
-  const { communities, isLoading, createCommunity, deleteCommunity } = useEnergyCommunities();
+  const { communities, isLoading, deleteCommunity } = useEnergyCommunities();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [openNew, setOpenNew] = useState(false);
-  const [form, setForm] = useState({ name: "", type: "nachbarschaft", region_plz: "" });
+  const [wizardOpen, setWizardOpen] = useState(false);
+
 
   const selected = communities.find((c) => c.id === selectedId) ?? communities[0] ?? null;
   const activeId = selected?.id ?? null;
@@ -38,55 +38,13 @@ export default function EnergySharing() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Energy Sharing</h1>
             <p className="text-muted-foreground">
-              Energiegemeinschaften nach §42c EnWG — Mitglieder, Anlagen und Tarife.
+              Energiegemeinschaften nach §42c EnWG — Mitglieder, Anlagen, Tarife und Verträge.
             </p>
           </div>
-          <Dialog open={openNew} onOpenChange={setOpenNew}>
-            <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-2" />Neue Community</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Neue Energiegemeinschaft</DialogTitle></DialogHeader>
-              <div className="space-y-3">
-                <div>
-                  <Label>Name</Label>
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="z.B. Bürgerenergie Musterstadt" />
-                </div>
-                <div>
-                  <Label>Typ</Label>
-                  <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="nachbarschaft">Nachbarschaft</SelectItem>
-                      <SelectItem value="genossenschaft">Genossenschaft</SelectItem>
-                      <SelectItem value="stadtwerk">Stadtwerk</SelectItem>
-                      <SelectItem value="sonstige">Sonstige</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>PLZ-Bereich (kommagetrennt)</Label>
-                  <Input value={form.region_plz} onChange={(e) => setForm({ ...form, region_plz: e.target.value })} placeholder="49074, 49076, 49080" />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  onClick={async () => {
-                    if (!form.name.trim()) return;
-                    await createCommunity.mutateAsync({
-                      name: form.name.trim(),
-                      slug: slugify(form.name) + "-" + Math.random().toString(36).slice(2, 6),
-                      type: form.type,
-                      region_plz: form.region_plz.split(",").map((s) => s.trim()).filter(Boolean),
-                    });
-                    setForm({ name: "", type: "nachbarschaft", region_plz: "" });
-                    setOpenNew(false);
-                  }}
-                >Erstellen</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => setWizardOpen(true)}><Plus className="h-4 w-4 mr-2" />Neue Community</Button>
+          <CommunityWizard open={wizardOpen} onOpenChange={setWizardOpen} onCreated={(id) => setSelectedId(id)} />
         </div>
+
 
         {isLoading ? (
           <p className="text-muted-foreground">Lade …</p>
@@ -141,6 +99,7 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
         <TabsTrigger value="members"><UsersIcon className="h-4 w-4 mr-1" />Mitglieder</TabsTrigger>
         <TabsTrigger value="assets"><Sun className="h-4 w-4 mr-1" />Anlagen</TabsTrigger>
         <TabsTrigger value="tariff"><Receipt className="h-4 w-4 mr-1" />Tarif</TabsTrigger>
+        <TabsTrigger value="contracts"><FileSignature className="h-4 w-4 mr-1" />Verträge</TabsTrigger>
       </TabsList>
 
       <TabsContent value="overview">
@@ -163,17 +122,20 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
         </div>
       </TabsContent>
 
-      <TabsContent value="members"><MembersTab communityId={communityId} /></TabsContent>
+      <TabsContent value="members"><MembersTab communityId={communityId} communityName={communityName} /></TabsContent>
       <TabsContent value="assets"><AssetsTab communityId={communityId} /></TabsContent>
       <TabsContent value="tariff"><TariffTab communityId={communityId} /></TabsContent>
+      <TabsContent value="contracts"><ContractTemplatesTab communityId={communityId} /></TabsContent>
     </Tabs>
   );
 }
 
-function MembersTab({ communityId }: { communityId: string }) {
+function MembersTab({ communityId, communityName }: { communityId: string; communityName: string }) {
   const { members, createMember, deleteMember } = useCommunityMembers(communityId);
   const [open, setOpen] = useState(false);
+  const [signMember, setSignMember] = useState<CommunityMember | null>(null);
   const [form, setForm] = useState({ display_name: "", email: "", role: "member", malo_id: "", share_kw: 0 });
+
 
   return (
     <Card>
