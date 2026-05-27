@@ -40,6 +40,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/arbitrage": "arbitrage_trading",
   "/tenant-electricity": "tenant_electricity",
   "/energy-report": "energy_report",
+  "/energy-sharing": "energy_sharing",
 };
 
 export function useModuleGuard() {
