@@ -153,7 +153,7 @@ export function useCommunityMembers(communityId: string | null) {
         malo_id: values.malo_id ?? null,
         melo_id: values.melo_id ?? null,
         share_kw: values.share_kw ?? 0,
-        status: values.status ?? "pending",
+        status: values.status ?? "invited",
         joined_at: values.joined_at ?? null,
       });
       if (error) throw error;
