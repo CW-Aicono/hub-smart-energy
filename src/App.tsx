@@ -233,6 +233,7 @@ const App = () => (
                       <Route path="/mein-sharing/dashboard" element={<SharingDashboard />} />
                       <Route path="/mein-sharing/rechnungen" element={<SharingInvoices />} />
                       <Route path="/mein-sharing/onboarding" element={<SharingOnboarding />} />
+                      <Route path="/mein-sharing/install" element={<SharingInstall />} />
 
                       <Route path="/tenant-electricity" element={<M><TenantElectricity /></M>} />
                       <Route path="/ev" element={<ChargingApp />} />
