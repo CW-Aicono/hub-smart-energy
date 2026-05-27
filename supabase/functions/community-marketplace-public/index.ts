@@ -1,7 +1,7 @@
 // Iter D · Stufe 1 — Öffentlicher Marktplatz-Endpoint (Lese-RPC + Beitritts-Antrag)
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -18,14 +18,15 @@ const JoinSchema = z.object({
   message: z.string().trim().max(2000).optional().nullable(),
 });
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
 
   const url = new URL(req.url);
   // Stripe-style: alles nach /community-marketplace-public/...

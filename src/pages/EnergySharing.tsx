@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine, BarChart3, Upload, Calculator, ShieldCheck } from "lucide-react";
+import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine, BarChart3, Upload, Calculator, ShieldCheck, Store } from "lucide-react";
 import {
   useEnergyCommunities,
   useCommunityMembers,
@@ -25,6 +25,7 @@ import CommunityDashboardTab from "@/components/energy-sharing/CommunityDashboar
 import DataImportTab from "@/components/energy-sharing/DataImportTab";
 import BillingTab from "@/components/energy-sharing/BillingTab";
 import DataQualityTab from "@/components/energy-sharing/DataQualityTab";
+import MarketplaceTab from "@/components/energy-sharing/MarketplaceTab";
 import { maLoError, meLoError } from "@/lib/energy-sharing/idValidation";
 
 export default function EnergySharing() {
@@ -109,7 +110,9 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
         <TabsTrigger value="import"><Upload className="h-4 w-4 mr-1" />Daten-Import</TabsTrigger>
         <TabsTrigger value="billing"><Calculator className="h-4 w-4 mr-1" />Abrechnung</TabsTrigger>
         <TabsTrigger value="quality"><ShieldCheck className="h-4 w-4 mr-1" />Datenqualität</TabsTrigger>
+        <TabsTrigger value="marketplace"><Store className="h-4 w-4 mr-1" />Marktplatz</TabsTrigger>
         <TabsTrigger value="contracts"><FileSignature className="h-4 w-4 mr-1" />Verträge</TabsTrigger>
+
       </TabsList>
 
       <TabsContent value="dashboard"><CommunityDashboardTab communityId={communityId} /></TabsContent>
@@ -140,7 +143,9 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
       <TabsContent value="import"><DataImportTab communityId={communityId} /></TabsContent>
       <TabsContent value="billing"><BillingTab communityId={communityId} /></TabsContent>
       <TabsContent value="quality"><DataQualityTab communityId={communityId} /></TabsContent>
+      <TabsContent value="marketplace"><MarketplaceTab communityId={communityId} /></TabsContent>
       <TabsContent value="contracts"><ContractTemplatesTab communityId={communityId} /></TabsContent>
+
     </Tabs>
   );
 }
