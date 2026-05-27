@@ -273,6 +273,10 @@ const Integrations = () => {
               <ScannerManagement />
             </TabsContent>
 
+            <TabsContent value="smart-meter">
+              <SmartMeterImport />
+            </TabsContent>
+
             <TabsContent value="api">
               <ApiSettings />
             </TabsContent>
