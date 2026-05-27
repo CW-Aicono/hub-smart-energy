@@ -671,7 +671,10 @@ serve(async (req) => {
       let allControlUuids = Object.keys(controls);
       let controlUuids = allControlUuids;
 
-      if (isRefreshAction) {
+      // Skip the linked-meter filter on manual UI refresh so new (yet unlinked)
+      // controls also get state values and appear in discovery.
+      if (isRefreshAction && !forceStructureRefresh) {
+
         const { data: linkedMetersForFilter } = await supabase
           .from("meters")
           .select("sensor_uuid")
