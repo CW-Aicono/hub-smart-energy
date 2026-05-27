@@ -31,13 +31,15 @@ export function EditIntegrationDialog({
   onUpdate,
 }: EditIntegrationDialogProps) {
   const [isSaving, setIsSaving] = useState(false);
-  const [baseConfig, setBaseConfig] = useState<Record<string, string>>({});
+  const [baseConfig, setBaseConfig] = useState<Record<string, any>>({});
+  const [pollIntervalMin, setPollIntervalMin] = useState<number>(5);
   const { toast } = useToast();
   const { t } = useTranslation();
 
   const integrationType = locationIntegration?.integration?.type;
   const gatewayDef = integrationType ? getGatewayDefinition(integrationType) : undefined;
   const isAiconoGateway = integrationType === "aicono_gateway";
+  const isLoxone = integrationType === "loxone" || integrationType === "loxone_miniserver";
 
   const formSchema = useMemo(() => {
     const shape: Record<string, z.ZodTypeAny> = {};
@@ -59,13 +61,15 @@ export function EditIntegrationDialog({
   useEffect(() => {
     if (!locationIntegration || !gatewayDef || !open) return;
 
-    const nextConfig = (locationIntegration.config as Record<string, string> | undefined) ?? {};
+    const nextConfig = (locationIntegration.config as Record<string, any> | undefined) ?? {};
     const vals: Record<string, string> = {};
     for (const field of gatewayDef.configFields) {
-      vals[field.name] = nextConfig[field.name] || "";
+      vals[field.name] = (nextConfig[field.name] as string) || "";
     }
 
     setBaseConfig(nextConfig);
+    const raw = Number(nextConfig.poll_interval_minutes);
+    setPollIntervalMin(Number.isFinite(raw) && raw >= 1 && raw <= 15 ? Math.floor(raw) : 5);
     form.reset(vals);
   }, [locationIntegration, gatewayDef, form, open]);
 
@@ -73,11 +77,15 @@ export function EditIntegrationDialog({
     if (!locationIntegration) return;
 
     setIsSaving(true);
-    const newConfig: Record<string, string> = { ...baseConfig };
+    const newConfig: Record<string, any> = { ...baseConfig };
     if (gatewayDef) {
       for (const field of gatewayDef.configFields) {
         newConfig[field.name] = data[field.name] || "";
       }
+    }
+    if (isLoxone) {
+      const clamped = Math.min(15, Math.max(1, Math.floor(Number(pollIntervalMin) || 5)));
+      newConfig.poll_interval_minutes = clamped;
     }
 
     const { error } = await onUpdate(locationIntegration.id, { config: newConfig });
@@ -150,6 +158,25 @@ export function EditIntegrationDialog({
                     )}
                   />
                 ))}
+
+                {isLoxone && (
+                  <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+                    <FormLabel htmlFor="poll-interval">Abfrage-Intervall (Minuten)</FormLabel>
+                    <Input
+                      id="poll-interval"
+                      type="number"
+                      min={1}
+                      max={15}
+                      step={1}
+                      value={pollIntervalMin}
+                      onChange={(e) => setPollIntervalMin(Number(e.target.value))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Wie oft AICONO neue Sensorwerte vom Miniserver abruft. Erlaubt: 1–15 Minuten. Niedriger = aktuellere Werte, höher = weniger Netzwerk-Last. Empfehlung: 5 Minuten.
+                    </p>
+                  </div>
+                )}
+
 
                 <div className="flex gap-2 justify-end pt-4">
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
