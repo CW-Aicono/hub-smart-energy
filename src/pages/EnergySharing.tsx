@@ -9,13 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Users as UsersIcon, Sun, Receipt } from "lucide-react";
+import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine } from "lucide-react";
 import {
   useEnergyCommunities,
   useCommunityMembers,
   useCommunityAssets,
   useCommunityTariffs,
+  type CommunityMember,
 } from "@/hooks/useEnergyCommunities";
+import CommunityWizard from "@/components/energy-sharing/CommunityWizard";
+import ContractTemplatesTab from "@/components/energy-sharing/ContractTemplatesTab";
+import SignContractDialog from "@/components/energy-sharing/SignContractDialog";
 
 const slugify = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
