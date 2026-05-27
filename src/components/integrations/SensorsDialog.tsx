@@ -191,8 +191,12 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
         body: {
           locationIntegrationId: locationIntegration.id,
           action: "getSensors",
+          // User explicitly opened the discovery dialog → bypass the 1 h
+          // structure cache so newly added Loxone devices appear instantly.
+          forceStructureRefresh: true,
         },
       });
+
 
       if (fnError) throw new Error(fnError.message || "Fehler beim Abrufen der Sensoren");
       if (!data?.success) throw new Error(data?.error || "Unbekannter Fehler");
