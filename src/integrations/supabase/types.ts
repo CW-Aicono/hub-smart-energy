@@ -1611,6 +1611,165 @@ export type Database = {
           },
         ]
       }
+      community_join_requests: {
+        Row: {
+          address: string | null
+          city: string | null
+          community_id: string
+          created_at: string
+          created_member_id: string | null
+          email: string
+          id: string
+          listing_id: string | null
+          message: string | null
+          name: string
+          phone: string | null
+          plz: string | null
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_ip: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          community_id: string
+          created_at?: string
+          created_member_id?: string | null
+          email: string
+          id?: string
+          listing_id?: string | null
+          message?: string | null
+          name: string
+          phone?: string | null
+          plz?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_ip?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          community_id?: string
+          created_at?: string
+          created_member_id?: string | null
+          email?: string
+          id?: string
+          listing_id?: string | null
+          message?: string | null
+          name?: string
+          phone?: string | null
+          plz?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_ip?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_join_requests_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_join_requests_created_member_id_fkey"
+            columns: ["created_member_id"]
+            isOneToOne: false
+            referencedRelation: "community_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_join_requests_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "community_marketplace_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_marketplace_listings: {
+        Row: {
+          community_id: string
+          contact_email: string | null
+          created_at: string
+          feed_in_ct_kwh: number | null
+          hero_image_url: string | null
+          id: string
+          is_public: boolean
+          long_description: string | null
+          max_members: number | null
+          price_ct_kwh: number | null
+          region_city: string | null
+          region_plz: string | null
+          short_description: string | null
+          slug: string
+          tenant_id: string
+          title: string
+          updated_at: string
+          view_count: number
+        }
+        Insert: {
+          community_id: string
+          contact_email?: string | null
+          created_at?: string
+          feed_in_ct_kwh?: number | null
+          hero_image_url?: string | null
+          id?: string
+          is_public?: boolean
+          long_description?: string | null
+          max_members?: number | null
+          price_ct_kwh?: number | null
+          region_city?: string | null
+          region_plz?: string | null
+          short_description?: string | null
+          slug: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+          view_count?: number
+        }
+        Update: {
+          community_id?: string
+          contact_email?: string | null
+          created_at?: string
+          feed_in_ct_kwh?: number | null
+          hero_image_url?: string | null
+          id?: string
+          is_public?: boolean
+          long_description?: string | null
+          max_members?: number | null
+          price_ct_kwh?: number | null
+          region_city?: string | null
+          region_plz?: string | null
+          short_description?: string | null
+          slug?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_marketplace_listings_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_member_invoices: {
         Row: {
           allocated_kwh: number
@@ -8304,6 +8463,47 @@ export type Database = {
           last_reading_at: string
           members_total: number
           members_with_recent_data: number
+        }[]
+      }
+      community_marketplace_increment_view: {
+        Args: { p_slug: string }
+        Returns: undefined
+      }
+      community_marketplace_public_detail: {
+        Args: { p_slug: string }
+        Returns: {
+          community_id: string
+          contact_email: string
+          created_at: string
+          current_members: number
+          feed_in_ct_kwh: number
+          hero_image_url: string
+          long_description: string
+          max_members: number
+          price_ct_kwh: number
+          region_city: string
+          region_plz: string
+          short_description: string
+          slug: string
+          title: string
+          total_capacity_kw: number
+        }[]
+      }
+      community_marketplace_public_listings: {
+        Args: { p_plz?: string }
+        Returns: {
+          created_at: string
+          current_members: number
+          feed_in_ct_kwh: number
+          hero_image_url: string
+          max_members: number
+          price_ct_kwh: number
+          region_city: string
+          region_plz: string
+          short_description: string
+          slug: string
+          title: string
+          total_capacity_kw: number
         }[]
       }
       compact_power_readings_day: {
