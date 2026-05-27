@@ -39,6 +39,7 @@ export function EditIntegrationDialog({
   const integrationType = locationIntegration?.integration?.type;
   const gatewayDef = integrationType ? getGatewayDefinition(integrationType) : undefined;
   const isAiconoGateway = integrationType === "aicono_gateway";
+  const isLoxone = integrationType === "loxone" || integrationType === "loxone_miniserver";
 
   const formSchema = useMemo(() => {
     const shape: Record<string, z.ZodTypeAny> = {};
