@@ -99,6 +99,7 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
         <TabsTrigger value="members"><UsersIcon className="h-4 w-4 mr-1" />Mitglieder</TabsTrigger>
         <TabsTrigger value="assets"><Sun className="h-4 w-4 mr-1" />Anlagen</TabsTrigger>
         <TabsTrigger value="tariff"><Receipt className="h-4 w-4 mr-1" />Tarif</TabsTrigger>
+        <TabsTrigger value="contracts"><FileSignature className="h-4 w-4 mr-1" />Verträge</TabsTrigger>
       </TabsList>
 
       <TabsContent value="overview">
@@ -121,17 +122,20 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
         </div>
       </TabsContent>
 
-      <TabsContent value="members"><MembersTab communityId={communityId} /></TabsContent>
+      <TabsContent value="members"><MembersTab communityId={communityId} communityName={communityName} /></TabsContent>
       <TabsContent value="assets"><AssetsTab communityId={communityId} /></TabsContent>
       <TabsContent value="tariff"><TariffTab communityId={communityId} /></TabsContent>
+      <TabsContent value="contracts"><ContractTemplatesTab communityId={communityId} /></TabsContent>
     </Tabs>
   );
 }
 
-function MembersTab({ communityId }: { communityId: string }) {
+function MembersTab({ communityId, communityName }: { communityId: string; communityName: string }) {
   const { members, createMember, deleteMember } = useCommunityMembers(communityId);
   const [open, setOpen] = useState(false);
+  const [signMember, setSignMember] = useState<CommunityMember | null>(null);
   const [form, setForm] = useState({ display_name: "", email: "", role: "member", malo_id: "", share_kw: 0 });
+
 
   return (
     <Card>
