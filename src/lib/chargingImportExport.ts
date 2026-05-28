@@ -336,6 +336,7 @@ export interface NfcImportRecord {
   rowNumber: number;
   email: string;
   rfid_tag: string;
+  rfid_label: string | null;
   userId: string;
 }
 
