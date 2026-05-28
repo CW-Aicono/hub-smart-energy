@@ -425,7 +425,9 @@ export async function executeNfcImport(records: NfcImportRecord[]) {
   let updated = 0;
   let failed = 0;
   for (const r of records) {
-    const { error } = await supabase.from("charging_users").update({ rfid_tag: r.rfid_tag }).eq("id", r.userId);
+    const update: { rfid_tag: string; rfid_label?: string | null } = { rfid_tag: r.rfid_tag };
+    if (r.rfid_label !== null) update.rfid_label = r.rfid_label;
+    const { error } = await supabase.from("charging_users").update(update).eq("id", r.userId);
     if (error) failed++; else updated++;
   }
   return { created: 0, updated, failed };
