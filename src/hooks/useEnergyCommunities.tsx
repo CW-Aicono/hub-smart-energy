@@ -98,9 +98,6 @@ export function useEnergyCommunities() {
   });
 
   return { communities, isLoading, createCommunity, updateCommunity, deleteCommunity };
-}
-
-// ── Members ──────────────────────────────────────────────────────────────────
 export interface CommunityMember {
   id: string;
   community_id: string;
@@ -120,6 +117,18 @@ export interface CommunityMember {
   activated_at?: string | null;
   suspended_at?: string | null;
   last_invite_sent_at?: string | null;
+  customer_class?: string | null;
+  employees?: number | null;
+  annual_revenue_eur?: number | null;
+  annual_balance_eur?: number | null;
+  rest_supplier_name?: string | null;
+  imsys_status?: string | null;
+  imsys_requested_at?: string | null;
+  metering_type?: string | null;
+  pre_contract_info_sent_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
   created_at: string;
   updated_at: string;
 }
