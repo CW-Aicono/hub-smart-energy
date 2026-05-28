@@ -94,7 +94,19 @@ export default function EnergySharing() {
             <p className="text-muted-foreground">
               Energiegemeinschaften nach §42c EnWG — Mitglieder, Anlagen, Tarife und Verträge.
             </p>
-          </div>
+        </div>
+
+        <Alert className="mb-6 border-amber-500/40 bg-amber-500/5">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertTitle>Pilotbetrieb nach §42c EnWG</AlertTitle>
+          <AlertDescription className="text-xs leading-relaxed">
+            Die bundesweit einheitliche Internetplattform nach §20b EnWG sowie finale Vorgaben der Bundesnetzagentur stehen
+            noch aus (Stand: BDEW erwartet Konsultation Q3/Q4 2026, breite Marktdurchdringung ab 2027). Prozesse, Vertrags-
+            und Messkonzepte können sich später ändern. Es besteht keine Befreiung von Netzentgelten, Steuern oder Umlagen.
+          </AlertDescription>
+        </Alert>
+
+
           <Button onClick={() => setWizardOpen(true)}><Plus className="h-4 w-4 mr-2" />Neue Community</Button>
           <CommunityWizard open={wizardOpen} onOpenChange={setWizardOpen} onCreated={(id) => setSelectedId(id)} />
         </div>
