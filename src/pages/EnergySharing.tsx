@@ -31,6 +31,18 @@ import DataQualityTab from "@/components/energy-sharing/DataQualityTab";
 import MarketplaceTab from "@/components/energy-sharing/MarketplaceTab";
 import { maLoError, meLoError } from "@/lib/energy-sharing/idValidation";
 import { confirmDialog } from "@/components/ui/confirm-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertTriangle, Info } from "lucide-react";
+import {
+  classifyKmu,
+  CUSTOMER_CLASS_LABELS,
+  IMSYS_STATUS_LABELS,
+  METERING_TYPE_LABELS,
+  BUILDING_TYPE_LABELS,
+  imsysDeadline,
+  isSmallPlant,
+  type CustomerClass,
+} from "@/lib/energy-sharing/kmuClassification";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Entwurf",
@@ -52,9 +64,12 @@ const SHARE_MODEL_LABELS: Record<string, string> = {
   dynamisch: "Dynamisch (Verbrauch)",
 };
 const ROLE_LABELS: Record<string, string> = {
+  member: "Mitglied (Verbraucher)",
   producer: "Erzeuger",
-  consumer: "Verbraucher",
+  consumer: "Reiner Verbraucher",
   prosumer: "Prosumer",
+  service: "Dienstleister",
+  rest_supplier: "Reststromlieferant (Info)",
 };
 const labelOr = (map: Record<string, string>, key: string | null | undefined) =>
   (key && map[key]) || key || "—";
