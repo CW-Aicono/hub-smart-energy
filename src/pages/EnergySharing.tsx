@@ -197,23 +197,64 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
 }
 
 function MembersTab({ communityId, communityName }: { communityId: string; communityName: string }) {
-  const { members, createMember, deleteMember } = useCommunityMembers(communityId);
+  const { members, createMember, updateMember, deleteMember } = useCommunityMembers(communityId);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<CommunityMember | null>(null);
   const [signMember, setSignMember] = useState<CommunityMember | null>(null);
-  const [form, setForm] = useState({ display_name: "", email: "", role: "member", malo_id: "", melo_id: "", share_kw: 0 });
+  const emptyForm = { display_name: "", email: "", role: "member", malo_id: "", melo_id: "", share_kw: 0 };
+  const [form, setForm] = useState(emptyForm);
   const maloErr = maLoError(form.malo_id);
   const meloErr = meLoError(form.melo_id);
   const canSubmit = !!form.display_name.trim() && !maloErr && !meloErr;
 
+  useEffect(() => {
+    if (editing) {
+      setForm({
+        display_name: editing.display_name ?? "",
+        email: editing.email ?? "",
+        role: editing.role ?? "member",
+        malo_id: editing.malo_id ?? "",
+        melo_id: editing.melo_id ?? "",
+        share_kw: Number(editing.share_kw ?? 0),
+      });
+      setOpen(true);
+    }
+  }, [editing]);
+
+  const handleClose = (o: boolean) => {
+    setOpen(o);
+    if (!o) {
+      setEditing(null);
+      setForm(emptyForm);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    const payload = {
+      display_name: form.display_name,
+      email: form.email || null,
+      role: form.role,
+      malo_id: form.malo_id || null,
+      melo_id: form.melo_id || null,
+      share_kw: form.share_kw,
+    };
+    if (editing) {
+      await updateMember.mutateAsync({ id: editing.id, ...payload });
+    } else {
+      await createMember.mutateAsync(payload);
+    }
+    handleClose(false);
+  };
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Mitglieder</CardTitle>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-2" />Mitglied</Button></DialogTrigger>
+        <Dialog open={open} onOpenChange={handleClose}>
+          <DialogTrigger asChild><Button size="sm" onClick={() => setEditing(null)}><Plus className="h-4 w-4 mr-2" />Mitglied</Button></DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Neues Mitglied</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{editing ? "Mitglied bearbeiten" : "Neues Mitglied"}</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div><Label>Name</Label><Input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></div>
               <div><Label>E-Mail</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
@@ -241,12 +282,7 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
               <div><Label>Anteil (kW)</Label><Input type="number" step="0.1" value={form.share_kw} onChange={(e) => setForm({ ...form, share_kw: Number(e.target.value) })} /></div>
             </div>
             <DialogFooter>
-              <Button disabled={!canSubmit} onClick={async () => {
-                if (!canSubmit) return;
-                await createMember.mutateAsync(form);
-                setForm({ display_name: "", email: "", role: "member", malo_id: "", melo_id: "", share_kw: 0 });
-                setOpen(false);
-              }}>Hinzufügen</Button>
+              <Button disabled={!canSubmit} onClick={handleSubmit}>{editing ? "Speichern" : "Hinzufügen"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -275,6 +311,9 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
                   <TableCell className="text-right">{Number(m.share_kw).toLocaleString("de-DE", { maximumFractionDigits: 2 })}</TableCell>
                   <TableCell><Badge>{m.status}</Badge></TableCell>
                   <TableCell className="text-right space-x-1">
+                    <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(m)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -284,7 +323,9 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
                     >
                       <PenLine className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => deleteMember.mutate(m.id)}><Trash2 className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="sm" title="Löschen" onClick={() => {
+                      if (confirm(`Mitglied "${m.display_name}" wirklich entfernen?`)) deleteMember.mutate(m.id);
+                    }}><Trash2 className="h-4 w-4" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -304,18 +345,46 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
 }
 
 function AssetsTab({ communityId }: { communityId: string }) {
-  const { assets, createAsset, deleteAsset } = useCommunityAssets(communityId);
+  const { assets, createAsset, updateAsset, deleteAsset } = useCommunityAssets(communityId);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ asset_type: "pv", capacity_kw: 0, share_model: "gleich" });
+  const [editing, setEditing] = useState<CommunityAsset | null>(null);
+  const emptyForm = { asset_type: "pv", capacity_kw: 0, share_model: "gleich" };
+  const [form, setForm] = useState(emptyForm);
+
+  useEffect(() => {
+    if (editing) {
+      setForm({
+        asset_type: editing.asset_type,
+        capacity_kw: Number(editing.capacity_kw),
+        share_model: editing.share_model,
+      });
+      setOpen(true);
+    }
+  }, [editing]);
+
+  const handleClose = (o: boolean) => {
+    setOpen(o);
+    if (!o) { setEditing(null); setForm(emptyForm); }
+  };
+
+  const handleSubmit = async () => {
+    if (!form.capacity_kw) return;
+    if (editing) {
+      await updateAsset.mutateAsync({ id: editing.id, ...form });
+    } else {
+      await createAsset.mutateAsync(form);
+    }
+    handleClose(false);
+  };
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Erzeugungsanlagen & Speicher</CardTitle>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-2" />Anlage</Button></DialogTrigger>
+        <Dialog open={open} onOpenChange={handleClose}>
+          <DialogTrigger asChild><Button size="sm" onClick={() => setEditing(null)}><Plus className="h-4 w-4 mr-2" />Anlage</Button></DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Anlage einbringen</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{editing ? "Anlage bearbeiten" : "Anlage einbringen"}</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div><Label>Typ</Label>
                 <Select value={form.asset_type} onValueChange={(v) => setForm({ ...form, asset_type: v })}>
@@ -341,12 +410,7 @@ function AssetsTab({ communityId }: { communityId: string }) {
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={async () => {
-                if (!form.capacity_kw) return;
-                await createAsset.mutateAsync(form);
-                setForm({ asset_type: "pv", capacity_kw: 0, share_model: "gleich" });
-                setOpen(false);
-              }}>Hinzufügen</Button>
+              <Button onClick={handleSubmit}>{editing ? "Speichern" : "Hinzufügen"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -366,7 +430,14 @@ function AssetsTab({ communityId }: { communityId: string }) {
                   <TableCell><Badge variant="secondary">{a.asset_type}</Badge></TableCell>
                   <TableCell className="text-right">{Number(a.capacity_kw).toLocaleString("de-DE", { maximumFractionDigits: 1 })}</TableCell>
                   <TableCell>{a.share_model}</TableCell>
-                  <TableCell><Button variant="ghost" size="sm" onClick={() => deleteAsset.mutate(a.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
+                  <TableCell className="text-right space-x-1">
+                    <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(a)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" title="Löschen" onClick={() => {
+                      if (confirm("Anlage wirklich entfernen?")) deleteAsset.mutate(a.id);
+                    }}><Trash2 className="h-4 w-4" /></Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -378,19 +449,53 @@ function AssetsTab({ communityId }: { communityId: string }) {
 }
 
 function TariffTab({ communityId }: { communityId: string }) {
-  const { tariffs, createTariff, deleteTariff } = useCommunityTariffs(communityId);
+  const { tariffs, createTariff, updateTariff, deleteTariff } = useCommunityTariffs(communityId);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<CommunityTariff | null>(null);
   const today = new Date().toISOString().slice(0, 10);
-  const [form, setForm] = useState({ valid_from: today, valid_to: "", price_ct_kwh: 0, feed_in_ct_kwh: 0 });
+  const emptyForm = { valid_from: today, valid_to: "", price_ct_kwh: 0, feed_in_ct_kwh: 0 };
+  const [form, setForm] = useState(emptyForm);
+
+  useEffect(() => {
+    if (editing) {
+      setForm({
+        valid_from: editing.valid_from,
+        valid_to: editing.valid_to ?? "",
+        price_ct_kwh: Number(editing.price_ct_kwh),
+        feed_in_ct_kwh: Number(editing.feed_in_ct_kwh),
+      });
+      setOpen(true);
+    }
+  }, [editing]);
+
+  const handleClose = (o: boolean) => {
+    setOpen(o);
+    if (!o) { setEditing(null); setForm(emptyForm); }
+  };
+
+  const handleSubmit = async () => {
+    const payload = {
+      valid_from: form.valid_from,
+      valid_to: form.valid_to || null,
+      price_ct_kwh: form.price_ct_kwh,
+      feed_in_ct_kwh: form.feed_in_ct_kwh,
+    };
+    if (editing) {
+      await updateTariff.mutateAsync({ id: editing.id, ...payload });
+    } else {
+      await createTariff.mutateAsync(payload);
+    }
+    handleClose(false);
+  };
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Gemeinschaftstarif</CardTitle>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-2" />Tarif</Button></DialogTrigger>
+        <Dialog open={open} onOpenChange={handleClose}>
+          <DialogTrigger asChild><Button size="sm" onClick={() => setEditing(null)}><Plus className="h-4 w-4 mr-2" />Tarif</Button></DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Neuer Tarif</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{editing ? "Tarif bearbeiten" : "Neuer Tarif"}</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div><Label>Gültig ab</Label><Input type="date" value={form.valid_from} onChange={(e) => setForm({ ...form, valid_from: e.target.value })} /></div>
               <div><Label>Gültig bis (optional)</Label><Input type="date" value={form.valid_to} onChange={(e) => setForm({ ...form, valid_to: e.target.value })} /></div>
@@ -398,15 +503,7 @@ function TariffTab({ communityId }: { communityId: string }) {
               <div><Label>Einspeisevergütung (ct/kWh)</Label><Input type="number" step="0.01" value={form.feed_in_ct_kwh} onChange={(e) => setForm({ ...form, feed_in_ct_kwh: Number(e.target.value) })} /></div>
             </div>
             <DialogFooter>
-              <Button onClick={async () => {
-                await createTariff.mutateAsync({
-                  valid_from: form.valid_from,
-                  valid_to: form.valid_to || null,
-                  price_ct_kwh: form.price_ct_kwh,
-                  feed_in_ct_kwh: form.feed_in_ct_kwh,
-                });
-                setOpen(false);
-              }}>Speichern</Button>
+              <Button onClick={handleSubmit}>{editing ? "Speichern" : "Hinzufügen"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -429,7 +526,14 @@ function TariffTab({ communityId }: { communityId: string }) {
                   <TableCell>{t.valid_to ?? "—"}</TableCell>
                   <TableCell className="text-right">{Number(t.price_ct_kwh).toLocaleString("de-DE", { minimumFractionDigits: 2 })}</TableCell>
                   <TableCell className="text-right">{Number(t.feed_in_ct_kwh).toLocaleString("de-DE", { minimumFractionDigits: 2 })}</TableCell>
-                  <TableCell><Button variant="ghost" size="sm" onClick={() => deleteTariff.mutate(t.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
+                  <TableCell className="text-right space-x-1">
+                    <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(t)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" title="Löschen" onClick={() => {
+                      if (confirm("Tarif wirklich löschen?")) deleteTariff.mutate(t.id);
+                    }}><Trash2 className="h-4 w-4" /></Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -439,3 +543,50 @@ function TariffTab({ communityId }: { communityId: string }) {
     </Card>
   );
 }
+
+function CommunityEditDialog({
+  community,
+  onOpenChange,
+  onSave,
+}: {
+  community: EnergyCommunity | null;
+  onOpenChange: (o: boolean) => void;
+  onSave: (values: Partial<EnergyCommunity>) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [status, setStatus] = useState("draft");
+
+  useEffect(() => {
+    if (community) {
+      setName(community.name);
+      setStatus(community.status);
+    }
+  }, [community]);
+
+  return (
+    <Dialog open={!!community} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Community bearbeiten</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+          <div><Label>Status</Label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="draft">Entwurf</SelectItem>
+                <SelectItem value="active">Aktiv</SelectItem>
+                <SelectItem value="paused">Pausiert</SelectItem>
+                <SelectItem value="closed">Geschlossen</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
+          <Button disabled={!name.trim()} onClick={() => onSave({ name, status })}>Speichern</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
