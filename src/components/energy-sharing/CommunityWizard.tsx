@@ -190,6 +190,17 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
               </p>
               <PlzVnbHint plzList={regionPlz} />
             </div>
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+              <div>
+                <Label>Bilanzkreis</Label>
+                <Input value={balancingZone} onChange={(e) => setBalancingZone(e.target.value)} placeholder="z.B. TenneT-Nord" />
+                <p className="text-xs text-muted-foreground mt-1">Bis 31.05.2028: alle Mitglieder im selben Bilanzkreis.</p>
+              </div>
+              <div>
+                <Label>Verteilnetzbetreiber</Label>
+                <Input value={gridOperator} onChange={(e) => setGridOperator(e.target.value)} placeholder="z.B. Westnetz GmbH" />
+              </div>
+            </div>
           </div>
         )}
 
