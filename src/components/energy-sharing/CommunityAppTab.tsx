@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, Check, ExternalLink, Smartphone, Printer } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Copy, Check, ExternalLink, Smartphone, Printer, AlertTriangle, LayoutDashboard, FileText, UserCog, Sun } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Props {
