@@ -198,10 +198,10 @@ export interface ImportPreview<T> {
 
 export interface UserImportRecord {
   rowNumber: number;
+  name: string;
   email: string | null;
   rfid_tag: string | null;
   rfid_label: string | null;
-  phone: string | null;
   phone: string | null;
   group_id: string | null;
   tariff_id: string | null;
