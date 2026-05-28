@@ -146,7 +146,7 @@ export function downloadTemplate(type: ExportType, format: ExportFormat) {
     ],
     nfc: [
       [...NFC_HEADERS],
-      ["max@example.com", "04A1B2C3", "Max Mustermann"],
+      ["max@example.com", "04A1B2C3", "Karte 042", "Max Mustermann"],
     ],
   };
   const fname: Record<ExportType, string> = {
