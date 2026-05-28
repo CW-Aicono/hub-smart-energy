@@ -696,12 +696,17 @@ function TariffTab({ communityId }: { communityId: string }) {
               <div><Label>Gültig bis (optional)</Label><Input type="date" value={form.valid_to} onChange={(e) => setForm({ ...form, valid_to: e.target.value })} /></div>
               <div><Label>Preis (ct/kWh)</Label><Input type="number" step="0.01" value={form.price_ct_kwh} onChange={(e) => setForm({ ...form, price_ct_kwh: Number(e.target.value) })} /></div>
               <div><Label>Einspeisevergütung (ct/kWh)</Label><Input type="number" step="0.01" value={form.feed_in_ct_kwh} onChange={(e) => setForm({ ...form, feed_in_ct_kwh: Number(e.target.value) })} /></div>
+              <Alert className="text-xs">
+                <AlertDescription>
+                  <b>Hinweis (BDEW):</b> Energy-Sharing-Mengen sind <b>nicht</b> von Netzentgelten, Umlagen oder Steuern befreit.
+                  Der Letztverbraucher trägt alle Zusatzkosten — der hier gepflegte Preis ist der reine Gemeinschaftspreis ohne Netzaufschläge.
+                </AlertDescription>
+              </Alert>
             </div>
             <DialogFooter>
               <Button onClick={handleSubmit}>{editing ? "Speichern" : "Hinzufügen"}</Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
       </CardHeader>
       <CardContent>
         {tariffs.length === 0 ? (
