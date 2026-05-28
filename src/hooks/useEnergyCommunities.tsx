@@ -98,6 +98,9 @@ export function useEnergyCommunities() {
   });
 
   return { communities, isLoading, createCommunity, updateCommunity, deleteCommunity };
+}
+
+// ── Members ──────────────────────────────────────────────────────────────────
 export interface CommunityMember {
   id: string;
   community_id: string;
@@ -129,9 +132,7 @@ export interface CommunityMember {
   created_at: string;
   updated_at: string;
 }
-  created_at: string;
-  updated_at: string;
-}
+
 
 export function useCommunityMembers(communityId: string | null) {
   const { tenant } = useTenant();
