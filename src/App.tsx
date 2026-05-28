@@ -233,6 +233,7 @@ const App = () => (
                       <Route path="/sharing/marktplatz/:slug" element={<MarketplaceListingDetail />} />
                       <Route path="/mein-sharing" element={<SharingDashboard />} />
                       <Route path="/mein-sharing/login" element={<SharingLogin />} />
+                      <Route path="/mein-sharing/set-password" element={<SharingSetPassword />} />
                       <Route path="/mein-sharing/dashboard" element={<SharingDashboard />} />
                       <Route path="/mein-sharing/rechnungen" element={<SharingInvoices />} />
                       <Route path="/mein-sharing/onboarding" element={<SharingOnboarding />} />
