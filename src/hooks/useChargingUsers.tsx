@@ -22,6 +22,7 @@ export interface ChargingUser {
   name: string;
   email: string | null;
   rfid_tag: string | null;
+  rfid_label: string | null;
   phone: string | null;
   status: "active" | "blocked" | "archived";
   notes: string | null;
