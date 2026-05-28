@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,13 +10,16 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine, BarChart3, Upload, Calculator, ShieldCheck, Store } from "lucide-react";
+import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine, BarChart3, Upload, Calculator, ShieldCheck, Store, Pencil } from "lucide-react";
 import {
   useEnergyCommunities,
   useCommunityMembers,
   useCommunityAssets,
   useCommunityTariffs,
   type CommunityMember,
+  type CommunityAsset,
+  type CommunityTariff,
+  type EnergyCommunity,
 } from "@/hooks/useEnergyCommunities";
 import CommunityWizard from "@/components/energy-sharing/CommunityWizard";
 import ContractTemplatesTab from "@/components/energy-sharing/ContractTemplatesTab";
