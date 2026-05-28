@@ -206,6 +206,7 @@ const ChargingUsersTab = () => {
                         <TableCell className="font-medium">{u.name}</TableCell>
                         <TableCell>{u.email || "—"}</TableCell>
                         <TableCell className="font-mono text-sm">{u.rfid_tag || "—"}</TableCell>
+                        <TableCell className="text-sm">{u.rfid_label || "—"}</TableCell>
                         <TableCell>{getGroupName(u.group_id)}</TableCell>
                         <TableCell className="text-sm">{getEffectiveTariff(u)}</TableCell>
                         <TableCell>{statusBadge(u.status)}</TableCell>
