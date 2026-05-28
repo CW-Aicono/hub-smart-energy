@@ -352,6 +352,7 @@ export function buildNfcPreview(
     const rowNumber = i + 2;
     const email = (r["E-Mail"] ?? "").trim().toLowerCase();
     const rfid = (r["RFID-Tag"] ?? "").replace(/\s+/g, "").trim();
+    const label = (r["Tag-Bezeichnung"] ?? "").trim();
     if (!email || !rfid) {
       issues.push({ row: rowNumber, severity: "error", message: "'E-Mail' und 'RFID-Tag' sind Pflicht — Zeile wird übersprungen." });
       skipped++;
@@ -363,7 +364,7 @@ export function buildNfcPreview(
       skipped++;
       return;
     }
-    records.push({ rowNumber, email, rfid_tag: rfid, userId: user.id });
+    records.push({ rowNumber, email, rfid_tag: rfid, rfid_label: label || null, userId: user.id });
   });
 
   return { records, issues, skipped };
