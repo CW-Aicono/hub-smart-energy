@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Card,
   CardContent,
@@ -320,8 +321,8 @@ export default function MarketplaceTab({ communityId }: Props) {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          if (confirm(`Angebot "${l.title}" löschen?`)) deleteListing.mutate(l.id);
+                        onClick={async () => {
+                          if (await confirmDialog({ title: "Angebot löschen", description: `Angebot "${l.title}" löschen?` })) deleteListing.mutate(l.id);
                         }}
                       >
                         <Trash2 className="h-4 w-4" />
