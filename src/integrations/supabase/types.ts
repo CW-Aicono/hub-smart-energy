@@ -1520,36 +1520,57 @@ export type Database = {
       community_assets: {
         Row: {
           asset_type: string
+          building_type: string | null
           capacity_kw: number
           community_id: string
           created_at: string
           id: string
+          imsys_requested_at: string | null
+          imsys_status: string | null
           location_id: string | null
           meter_id: string | null
+          not_commercial: boolean | null
+          operator_legal_form: string | null
+          renewable_confirmed: boolean | null
+          renewable_proof_url: string | null
           share_model: string
           tenant_id: string
           updated_at: string
         }
         Insert: {
           asset_type?: string
+          building_type?: string | null
           capacity_kw?: number
           community_id: string
           created_at?: string
           id?: string
+          imsys_requested_at?: string | null
+          imsys_status?: string | null
           location_id?: string | null
           meter_id?: string | null
+          not_commercial?: boolean | null
+          operator_legal_form?: string | null
+          renewable_confirmed?: boolean | null
+          renewable_proof_url?: string | null
           share_model?: string
           tenant_id: string
           updated_at?: string
         }
         Update: {
           asset_type?: string
+          building_type?: string | null
           capacity_kw?: number
           community_id?: string
           created_at?: string
           id?: string
+          imsys_requested_at?: string | null
+          imsys_status?: string | null
           location_id?: string | null
           meter_id?: string | null
+          not_commercial?: boolean | null
+          operator_legal_form?: string | null
+          renewable_confirmed?: boolean | null
+          renewable_proof_url?: string | null
           share_model?: string
           tenant_id?: string
           updated_at?: string
@@ -1573,6 +1594,7 @@ export type Database = {
           is_active: boolean
           name: string
           placeholders: Json
+          template_kind: string
           tenant_id: string
           updated_at: string
           version: number
@@ -1585,6 +1607,7 @@ export type Database = {
           is_active?: boolean
           name: string
           placeholders?: Json
+          template_kind?: string
           tenant_id: string
           updated_at?: string
           version?: number
@@ -1597,6 +1620,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           placeholders?: Json
+          template_kind?: string
           tenant_id?: string
           updated_at?: string
           version?: number
@@ -1988,11 +2012,18 @@ export type Database = {
       community_members: {
         Row: {
           activated_at: string | null
+          annual_balance_eur: number | null
+          annual_revenue_eur: number | null
           community_id: string
           created_at: string
+          customer_class: string | null
           display_name: string | null
           email: string | null
+          employees: number | null
           id: string
+          imsys_installed_at: string | null
+          imsys_requested_at: string | null
+          imsys_status: string | null
           invited_at: string | null
           joined_at: string | null
           last_invite_sent_at: string | null
@@ -2000,6 +2031,11 @@ export type Database = {
           malo_id: string | null
           melo_id: string | null
           member_no: string | null
+          metering_type: string | null
+          pre_contract_info_sent_at: string | null
+          rest_supplier_confirmed_at: string | null
+          rest_supplier_contract_no: string | null
+          rest_supplier_name: string | null
           role: string
           share_kw: number
           status: string
@@ -2010,11 +2046,18 @@ export type Database = {
         }
         Insert: {
           activated_at?: string | null
+          annual_balance_eur?: number | null
+          annual_revenue_eur?: number | null
           community_id: string
           created_at?: string
+          customer_class?: string | null
           display_name?: string | null
           email?: string | null
+          employees?: number | null
           id?: string
+          imsys_installed_at?: string | null
+          imsys_requested_at?: string | null
+          imsys_status?: string | null
           invited_at?: string | null
           joined_at?: string | null
           last_invite_sent_at?: string | null
@@ -2022,6 +2065,11 @@ export type Database = {
           malo_id?: string | null
           melo_id?: string | null
           member_no?: string | null
+          metering_type?: string | null
+          pre_contract_info_sent_at?: string | null
+          rest_supplier_confirmed_at?: string | null
+          rest_supplier_contract_no?: string | null
+          rest_supplier_name?: string | null
           role?: string
           share_kw?: number
           status?: string
@@ -2032,11 +2080,18 @@ export type Database = {
         }
         Update: {
           activated_at?: string | null
+          annual_balance_eur?: number | null
+          annual_revenue_eur?: number | null
           community_id?: string
           created_at?: string
+          customer_class?: string | null
           display_name?: string | null
           email?: string | null
+          employees?: number | null
           id?: string
+          imsys_installed_at?: string | null
+          imsys_requested_at?: string | null
+          imsys_status?: string | null
           invited_at?: string | null
           joined_at?: string | null
           last_invite_sent_at?: string | null
@@ -2044,6 +2099,11 @@ export type Database = {
           malo_id?: string | null
           melo_id?: string | null
           member_no?: string | null
+          metering_type?: string | null
+          pre_contract_info_sent_at?: string | null
+          rest_supplier_confirmed_at?: string | null
+          rest_supplier_contract_no?: string | null
+          rest_supplier_name?: string | null
           role?: string
           share_kw?: number
           status?: string
@@ -2687,11 +2747,14 @@ export type Database = {
       }
       energy_communities: {
         Row: {
+          balancing_zone: string | null
           contract_template_id: string | null
           created_at: string
           data_quality_threshold_pct: number
+          grid_operator: string | null
           id: string
           name: string
+          pilot_acknowledged_at: string | null
           region_plz: string[]
           settings: Json
           slug: string
@@ -2701,11 +2764,14 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          balancing_zone?: string | null
           contract_template_id?: string | null
           created_at?: string
           data_quality_threshold_pct?: number
+          grid_operator?: string | null
           id?: string
           name: string
+          pilot_acknowledged_at?: string | null
           region_plz?: string[]
           settings?: Json
           slug: string
@@ -2715,11 +2781,14 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          balancing_zone?: string | null
           contract_template_id?: string | null
           created_at?: string
           data_quality_threshold_pct?: number
+          grid_operator?: string | null
           id?: string
           name?: string
+          pilot_acknowledged_at?: string | null
           region_plz?: string[]
           settings?: Json
           slug?: string
