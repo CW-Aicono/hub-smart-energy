@@ -89,17 +89,18 @@ export function exportUsers(
   format: ExportFormat,
 ) {
   const rows: (string | number | null)[][] = [
-    [...USER_HEADERS],
     ...users.map((u) => [
       u.name,
       u.email ?? "",
       u.rfid_tag ?? "",
+      u.rfid_label ?? "",
       u.phone ?? "",
       nameById(groups, u.group_id),
       nameById(tariffs, u.tariff_id),
       u.status,
       u.notes ?? "",
     ]),
+  ];
   ];
   writeSheet(rows, format, `lade-nutzer_${new Date().toISOString().slice(0, 10)}`);
 }
