@@ -218,6 +218,9 @@ export interface CommunityAsset {
   asset_type: string;
   capacity_kw: number;
   share_model: string;
+  building_type?: string | null;
+  renewable_confirmed?: boolean | null;
+  imsys_status?: string | null;
   created_at: string;
   updated_at: string;
 }
