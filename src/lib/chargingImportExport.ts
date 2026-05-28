@@ -138,7 +138,7 @@ export function downloadTemplate(type: ExportType, format: ExportFormat) {
   const sample: Record<ExportType, (string | number | null)[][]> = {
     users: [
       [...USER_HEADERS],
-      ["Max Mustermann", "max@example.com", "04A1B2C3", "+49 170 0000000", "Mitarbeiter", "Standard-Tarif", "active", "Beispielzeile — bitte ersetzen"],
+      ["Max Mustermann", "max@example.com", "04A1B2C3", "Karte 042", "+49 170 0000000", "Mitarbeiter", "Standard-Tarif", "active", "Beispielzeile — bitte ersetzen"],
     ],
     groups: [
       [...GROUP_HEADERS],
