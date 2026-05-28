@@ -45,7 +45,15 @@ export function SharingLayout({ children, title }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div
+      className="min-h-screen bg-background flex flex-col"
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
+      }}
+    >
       <header className="border-b bg-card">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -64,6 +72,7 @@ export function SharingLayout({ children, title }: Props) {
           )}
         </div>
       </header>
+
 
       <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-6 pb-24">
         {title && <h1 className="text-xl font-semibold mb-4">{title}</h1>}
