@@ -22,7 +22,7 @@ import { format } from "date-fns";
 import { ChargingImportExportDialog } from "@/components/charging/ChargingImportExportDialog";
 import type { ExportType } from "@/lib/chargingImportExport";
 
-const emptyUserForm = { name: "", email: "", rfid_tag: "", phone: "", group_id: "", tariff_id: "", notes: "" };
+const emptyUserForm = { name: "", email: "", rfid_tag: "", rfid_label: "", phone: "", group_id: "", tariff_id: "", notes: "" };
 const emptyGroupForm = { name: "", description: "", is_app_user: false, tariff_id: "" };
 
 const ChargingUsersTab = () => {
