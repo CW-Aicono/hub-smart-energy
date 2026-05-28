@@ -99,6 +99,7 @@ export function useChargingUsers() {
       name: string;
       email?: string;
       rfid_tag?: string;
+      rfid_label?: string;
       phone?: string;
       group_id?: string | null;
       tariff_id?: string | null;
