@@ -299,6 +299,19 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
                     readOnly={templateMode === "default"}
                   />
                 </div>
+                <div className="flex items-start gap-2 rounded-md border p-3 bg-muted/30">
+                  <input
+                    type="checkbox"
+                    id="supplyTpl"
+                    className="mt-1"
+                    checked={createSupplyTemplate}
+                    onChange={(e) => setCreateSupplyTemplate(e.target.checked)}
+                  />
+                  <Label htmlFor="supplyTpl" className="text-xs leading-relaxed">
+                    Zusätzlich <b>Liefervertrag-Schablone</b> (Reststrom, §42c Abs. 1 Nr. 2) anlegen.
+                    Empfohlen: Energy Sharing braucht beide Vertragstypen — Nutzungsvertrag (Anteil) + Liefervertrag (Reststrom).
+                  </Label>
+                </div>
               </>
             )}
           </div>
@@ -311,9 +324,18 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
               <div><b>Name:</b> {name}</div>
               <div><b>Typ:</b> {type}</div>
               <div><b>PLZ:</b> {regionPlz || "—"}</div>
+              <div><b>Bilanzkreis:</b> {balancingZone || "—"} / VNB: {gridOperator || "—"}</div>
               <div><b>Anlage:</b> {skipAsset ? "—" : `${assetType}, ${assetKw} kW, ${assetShare}`}</div>
               <div><b>Tarif:</b> {skipTariff ? "—" : `${priceCt} ct / ${feedInCt} ct ab ${validFrom}`}</div>
-              <div><b>Vertragsschablone:</b> {templateMode === "none" ? "—" : templateName}</div>
+              <div><b>Verträge:</b> {templateMode === "none" ? "—" : `${templateName}${createSupplyTemplate ? " + Liefervertrag" : ""}`}</div>
+            </div>
+            <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+              <input type="checkbox" id="pilot" className="mt-1" checked={pilotAck} onChange={(e) => setPilotAck(e.target.checked)} />
+              <Label htmlFor="pilot" className="text-sm leading-relaxed">
+                <b>Pilot-Modus bestätigen (Pflicht):</b> Energy Sharing nach §42c/§20b EnWG befindet sich noch im
+                regulatorischen Aufbau (BDEW Q3-Q4 2026). Es besteht <b>keine Befreiung</b> von Netzentgelten,
+                Umlagen oder Steuern. Mitglieder müssen alle Zusatzkosten tragen.
+              </Label>
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" id="activate" checked={activate} onChange={(e) => setActivate(e.target.checked)} />
