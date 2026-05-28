@@ -14,6 +14,9 @@ export interface EnergyCommunity {
   status: string;
   contract_template_id: string | null;
   settings: any;
+  balancing_zone?: string | null;
+  grid_operator?: string | null;
+  pilot_acknowledged_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -117,9 +120,19 @@ export interface CommunityMember {
   activated_at?: string | null;
   suspended_at?: string | null;
   last_invite_sent_at?: string | null;
+  customer_class?: string | null;
+  employees?: number | null;
+  annual_revenue_eur?: number | null;
+  annual_balance_eur?: number | null;
+  rest_supplier_name?: string | null;
+  imsys_status?: string | null;
+  imsys_requested_at?: string | null;
+  metering_type?: string | null;
+  pre_contract_info_sent_at?: string | null;
   created_at: string;
   updated_at: string;
 }
+
 
 export function useCommunityMembers(communityId: string | null) {
   const { tenant } = useTenant();
@@ -205,6 +218,9 @@ export interface CommunityAsset {
   asset_type: string;
   capacity_kw: number;
   share_model: string;
+  building_type?: string | null;
+  renewable_confirmed?: boolean | null;
+  imsys_status?: string | null;
   created_at: string;
   updated_at: string;
 }

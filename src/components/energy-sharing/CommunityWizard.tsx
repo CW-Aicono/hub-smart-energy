@@ -20,11 +20,11 @@ const slugify = (s: string) =>
 
 const STEPS = [
   "Stammdaten",
-  "PLZ-Region",
+  "PLZ & Bilanzkreis",
   "Erste Anlage",
   "Erster Tarif",
-  "Vertragsschablone",
-  "Aktivierung",
+  "Verträge (Liefer + Nutzung)",
+  "Pilot-Bestätigung",
 ];
 
 interface Props {
@@ -41,6 +41,8 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
   const [name, setName] = useState("");
   const [type, setType] = useState("nachbarschaft");
   const [regionPlz, setRegionPlz] = useState("");
+  const [balancingZone, setBalancingZone] = useState("");
+  const [gridOperator, setGridOperator] = useState("");
   const [assetType, setAssetType] = useState("pv");
   const [assetKw, setAssetKw] = useState<number>(0);
   const [assetShare, setAssetShare] = useState("gleich");
@@ -51,8 +53,10 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
   const [feedInCt, setFeedInCt] = useState<number>(20);
   const [skipTariff, setSkipTariff] = useState(false);
   const [templateMode, setTemplateMode] = useState<"none" | "default" | "custom">("default");
-  const [templateName, setTemplateName] = useState("Mitgliedervertrag Energiegemeinschaft");
+  const [templateName, setTemplateName] = useState("Nutzungsvertrag Energiegemeinschaft");
   const [templateBody, setTemplateBody] = useState(DEFAULT_CONTRACT);
+  const [createSupplyTemplate, setCreateSupplyTemplate] = useState(true);
+  const [pilotAck, setPilotAck] = useState(false);
   const [activate, setActivate] = useState(true);
 
   const { createCommunity, updateCommunity } = useEnergyCommunities();
@@ -65,10 +69,12 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
   const reset = () => {
     setStep(0);
     setName(""); setType("nachbarschaft"); setRegionPlz("");
+    setBalancingZone(""); setGridOperator("");
     setAssetType("pv"); setAssetKw(0); setAssetShare("gleich"); setSkipAsset(false);
     setValidFrom(today); setPriceCt(22); setFeedInCt(20); setSkipTariff(false);
-    setTemplateMode("default"); setTemplateName("Mitgliedervertrag Energiegemeinschaft");
-    setTemplateBody(DEFAULT_CONTRACT); setActivate(true);
+    setTemplateMode("default"); setTemplateName("Nutzungsvertrag Energiegemeinschaft");
+    setTemplateBody(DEFAULT_CONTRACT); setCreateSupplyTemplate(true);
+    setPilotAck(false); setActivate(true);
   };
 
   const canNext = () => {
@@ -77,6 +83,7 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
     if (step === 2) return skipAsset || assetKw > 0;
     if (step === 3) return skipTariff || (priceCt > 0 && feedInCt >= 0);
     if (step === 4) return templateMode === "none" || (templateName.trim() && templateBody.trim());
+    if (step === 5) return pilotAck;
     return true;
   };
 
@@ -94,6 +101,13 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
       if (!row) throw new Error("Community konnte nicht erstellt werden");
       const communityId = row.id as string;
       const tenantId = row.tenant_id as string;
+
+      // Bilanzkreis + VNB + Pilot-Bestätigung nachtragen
+      await supabase.from("energy_communities").update({
+        balancing_zone: balancingZone || null,
+        grid_operator: gridOperator || null,
+        pilot_acknowledged_at: pilotAck ? new Date().toISOString() : null,
+      } as any).eq("id", communityId);
 
       if (!skipAsset && assetKw > 0) {
         await supabase.from("community_assets").insert({
@@ -114,9 +128,21 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
           body_markdown: templateBody,
           placeholders: ["community_name", "member_name", "member_email", "valid_from", "price_ct_kwh"],
           version: 1, is_active: true,
-        });
+          template_kind: "nutzung",
+        } as any);
+
+        if (createSupplyTemplate) {
+          await supabase.from("community_contract_templates").insert({
+            tenant_id: tenantId, community_id: communityId,
+            name: "Liefervertrag (Reststrom) " + name.trim(),
+            body_markdown: DEFAULT_SUPPLY_CONTRACT,
+            placeholders: ["community_name", "member_name", "member_email", "rest_supplier_name", "valid_from"],
+            version: 1, is_active: true,
+            template_kind: "liefer",
+          } as any);
+        }
       }
-      void updateCommunity; // not needed for now
+      void updateCommunity;
       onCreated?.(communityId);
       reset();
       onOpenChange(false);
@@ -124,6 +150,7 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
       setBusy(false);
     }
   };
+
 
   const progress = ((step + 1) / STEPS.length) * 100;
 
@@ -162,6 +189,17 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
                 Nach § 42c EnWG müssen Mitglieder im gleichen Verteilnetz oder benachbarten PLZ-Bereich liegen.
               </p>
               <PlzVnbHint plzList={regionPlz} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+              <div>
+                <Label>Bilanzkreis</Label>
+                <Input value={balancingZone} onChange={(e) => setBalancingZone(e.target.value)} placeholder="z.B. TenneT-Nord" />
+                <p className="text-xs text-muted-foreground mt-1">Bis 31.05.2028: alle Mitglieder im selben Bilanzkreis.</p>
+              </div>
+              <div>
+                <Label>Verteilnetzbetreiber</Label>
+                <Input value={gridOperator} onChange={(e) => setGridOperator(e.target.value)} placeholder="z.B. Westnetz GmbH" />
+              </div>
             </div>
           </div>
         )}
@@ -261,6 +299,19 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
                     readOnly={templateMode === "default"}
                   />
                 </div>
+                <div className="flex items-start gap-2 rounded-md border p-3 bg-muted/30">
+                  <input
+                    type="checkbox"
+                    id="supplyTpl"
+                    className="mt-1"
+                    checked={createSupplyTemplate}
+                    onChange={(e) => setCreateSupplyTemplate(e.target.checked)}
+                  />
+                  <Label htmlFor="supplyTpl" className="text-xs leading-relaxed">
+                    Zusätzlich <b>Liefervertrag-Schablone</b> (Reststrom, §42c Abs. 1 Nr. 2) anlegen.
+                    Empfohlen: Energy Sharing braucht beide Vertragstypen — Nutzungsvertrag (Anteil) + Liefervertrag (Reststrom).
+                  </Label>
+                </div>
               </>
             )}
           </div>
@@ -273,9 +324,18 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
               <div><b>Name:</b> {name}</div>
               <div><b>Typ:</b> {type}</div>
               <div><b>PLZ:</b> {regionPlz || "—"}</div>
+              <div><b>Bilanzkreis:</b> {balancingZone || "—"} / VNB: {gridOperator || "—"}</div>
               <div><b>Anlage:</b> {skipAsset ? "—" : `${assetType}, ${assetKw} kW, ${assetShare}`}</div>
               <div><b>Tarif:</b> {skipTariff ? "—" : `${priceCt} ct / ${feedInCt} ct ab ${validFrom}`}</div>
-              <div><b>Vertragsschablone:</b> {templateMode === "none" ? "—" : templateName}</div>
+              <div><b>Verträge:</b> {templateMode === "none" ? "—" : `${templateName}${createSupplyTemplate ? " + Liefervertrag" : ""}`}</div>
+            </div>
+            <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+              <input type="checkbox" id="pilot" className="mt-1" checked={pilotAck} onChange={(e) => setPilotAck(e.target.checked)} />
+              <Label htmlFor="pilot" className="text-sm leading-relaxed">
+                <b>Pilot-Modus bestätigen (Pflicht):</b> Energy Sharing nach §42c/§20b EnWG befindet sich noch im
+                regulatorischen Aufbau (BDEW Q3-Q4 2026). Es besteht <b>keine Befreiung</b> von Netzentgelten,
+                Umlagen oder Steuern. Mitglieder müssen alle Zusatzkosten tragen.
+              </Label>
             </div>
             <div className="flex items-center gap-2">
               <input type="checkbox" id="activate" checked={activate} onChange={(e) => setActivate(e.target.checked)} />
@@ -363,4 +423,33 @@ Energiegemeinschaft verarbeitet. Es erfolgt keine Weitergabe an Dritte.
 Mit der digitalen Unterschrift bestätigt das Mitglied den Inhalt dieses Vertrags.
 Zeitpunkt, IP-Adresse und ein kryptografischer Hash des Vertragstexts werden zur
 Beweissicherung gespeichert.
+`;
+
+const DEFAULT_SUPPLY_CONTRACT = `# Liefervertrag (Reststrom) – {{community_name}}
+
+zwischen
+
+**{{community_name}}** (Energiegemeinschaft nach § 42c Abs. 1 Nr. 2 EnWG)
+
+und
+
+**{{member_name}}**, E-Mail: {{member_email}}
+
+## 1. Gegenstand
+Lieferung von Reststrom (über den Energy-Sharing-Anteil hinaus) durch den
+Reststromlieferanten **{{rest_supplier_name}}**.
+
+## 2. Tarif
+Es gelten die Konditionen des Reststromlieferanten in der jeweils aktuellen Fassung.
+Energy Sharing deckt nur den in der Allokation berechneten Anteil.
+
+## 3. Netzentgelte, Umlagen, Steuern
+Auf Energy-Sharing-Mengen sind **alle gesetzlichen Netzentgelte, Umlagen und Steuern**
+zu entrichten. Eine Befreiung ist nach derzeitiger Gesetzeslage nicht vorgesehen.
+
+## 4. Laufzeit & Kündigung
+Gültig ab {{valid_from}}. Kündigung gemäß AGB des Reststromlieferanten.
+
+## 5. Digitale Unterschrift
+Mit der digitalen Unterschrift bestätigt das Mitglied den Inhalt dieses Vertrags.
 `;

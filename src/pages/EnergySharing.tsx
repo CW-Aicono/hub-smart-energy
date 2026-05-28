@@ -229,11 +229,24 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<CommunityMember | null>(null);
   const [signMember, setSignMember] = useState<CommunityMember | null>(null);
-  const emptyForm = { display_name: "", email: "", role: "member", malo_id: "", melo_id: "", share_kw: 0 };
+  const emptyForm = {
+    display_name: "", email: "", role: "member", malo_id: "", melo_id: "", share_kw: 0,
+    customer_class: "privat", employees: 0, annual_revenue_eur: 0, annual_balance_eur: 0,
+    rest_supplier_name: "", imsys_status: "missing", imsys_requested_at: "",
+    metering_type: "zaehlerstandsgang", pre_contract_info_sent_at: "",
+  };
   const [form, setForm] = useState(emptyForm);
   const maloErr = maLoError(form.malo_id);
   const meloErr = meLoError(form.melo_id);
   const canSubmit = !!form.display_name.trim() && !maloErr && !meloErr;
+
+  // KMU-Klassifikation live
+  const kmu = classifyKmu({
+    employees: form.employees,
+    annual_revenue_eur: form.annual_revenue_eur,
+    annual_balance_eur: form.annual_balance_eur,
+  });
+  const imsysFrist = imsysDeadline(form.imsys_requested_at);
 
   useEffect(() => {
     if (editing) {
@@ -244,6 +257,15 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
         malo_id: editing.malo_id ?? "",
         melo_id: editing.melo_id ?? "",
         share_kw: Number(editing.share_kw ?? 0),
+        customer_class: editing.customer_class ?? "privat",
+        employees: Number(editing.employees ?? 0),
+        annual_revenue_eur: Number(editing.annual_revenue_eur ?? 0),
+        annual_balance_eur: Number(editing.annual_balance_eur ?? 0),
+        rest_supplier_name: editing.rest_supplier_name ?? "",
+        imsys_status: editing.imsys_status ?? "missing",
+        imsys_requested_at: editing.imsys_requested_at ?? "",
+        metering_type: editing.metering_type ?? "zaehlerstandsgang",
+        pre_contract_info_sent_at: editing.pre_contract_info_sent_at ?? "",
       });
       setOpen(true);
     }
@@ -266,6 +288,15 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
       malo_id: form.malo_id || null,
       melo_id: form.melo_id || null,
       share_kw: form.share_kw,
+      customer_class: form.customer_class || null,
+      employees: form.employees || null,
+      annual_revenue_eur: form.annual_revenue_eur || null,
+      annual_balance_eur: form.annual_balance_eur || null,
+      rest_supplier_name: form.rest_supplier_name || null,
+      imsys_status: form.imsys_status || null,
+      imsys_requested_at: form.imsys_requested_at || null,
+      metering_type: form.metering_type || null,
+      pre_contract_info_sent_at: form.pre_contract_info_sent_at || null,
     };
     if (editing) {
       await updateMember.mutateAsync({ id: editing.id, ...payload });
@@ -281,33 +312,111 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
         <CardTitle>Mitglieder</CardTitle>
         <Dialog open={open} onOpenChange={handleClose}>
           <DialogTrigger asChild><Button size="sm" onClick={() => setEditing(null)}><Plus className="h-4 w-4 mr-2" />Mitglied</Button></DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{editing ? "Mitglied bearbeiten" : "Neues Mitglied"}</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label>Name</Label><Input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></div>
-              <div><Label>E-Mail</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-              <div><Label>Rolle</Label>
-                <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="member">Mitglied (Verbraucher)</SelectItem>
-                    <SelectItem value="producer">Erzeuger</SelectItem>
-                    <SelectItem value="prosumer">Prosumer</SelectItem>
-                    <SelectItem value="consumer">Reiner Verbraucher</SelectItem>
-                  </SelectContent>
-                </Select>
+            <div className="space-y-4">
+              {/* Stammdaten */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Stammdaten</h4>
+                <div><Label>Name</Label><Input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></div>
+                <div><Label>E-Mail</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+                <div><Label>Rolle</Label>
+                  <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="member">Mitglied (Verbraucher)</SelectItem>
+                      <SelectItem value="producer">Erzeuger</SelectItem>
+                      <SelectItem value="prosumer">Prosumer</SelectItem>
+                      <SelectItem value="consumer">Reiner Verbraucher</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>MaLo-ID (optional)</Label>
+                    <Input value={form.malo_id} onChange={(e) => setForm({ ...form, malo_id: e.target.value })} placeholder="11-stellig" />
+                    {maloErr && <p className="text-xs text-destructive mt-1">{maloErr}</p>}
+                  </div>
+                  <div>
+                    <Label>MeLo-ID (optional)</Label>
+                    <Input value={form.melo_id} onChange={(e) => setForm({ ...form, melo_id: e.target.value })} placeholder="33-stellig, DE…" />
+                    {meloErr && <p className="text-xs text-destructive mt-1">{meloErr}</p>}
+                  </div>
+                </div>
+                <div><Label>Anteil (kW)</Label><Input type="number" step="0.1" value={form.share_kw} onChange={(e) => setForm({ ...form, share_kw: Number(e.target.value) })} /></div>
               </div>
-              <div>
-                <Label>MaLo-ID (optional)</Label>
-                <Input value={form.malo_id} onChange={(e) => setForm({ ...form, malo_id: e.target.value })} placeholder="11-stellig" />
-                {maloErr && <p className="text-xs text-destructive mt-1">{maloErr}</p>}
+
+              {/* KMU-Einstufung (§42c Abs. 2 EnWG) */}
+              <div className="space-y-3 border-t pt-4">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">KMU-Einstufung (§42c Abs. 2)</h4>
+                <div><Label>Kundenklasse</Label>
+                  <Select value={form.customer_class} onValueChange={(v) => setForm({ ...form, customer_class: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(CUSTOMER_CLASS_LABELS).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div><Label className="text-xs">Beschäftigte</Label><Input type="number" value={form.employees} onChange={(e) => setForm({ ...form, employees: Number(e.target.value) })} /></div>
+                  <div><Label className="text-xs">Umsatz €/Jahr</Label><Input type="number" value={form.annual_revenue_eur} onChange={(e) => setForm({ ...form, annual_revenue_eur: Number(e.target.value) })} /></div>
+                  <div><Label className="text-xs">Bilanzsumme €</Label><Input type="number" value={form.annual_balance_eur} onChange={(e) => setForm({ ...form, annual_balance_eur: Number(e.target.value) })} /></div>
+                </div>
+                <Alert variant={kmu.eligible ? "default" : "destructive"} className="text-xs">
+                  <AlertDescription>
+                    <b>Auto-Einstufung:</b> {kmu.label} — {kmu.reason}
+                    {!kmu.eligible && " ⚠ Nicht teilnahmeberechtigt."}
+                  </AlertDescription>
+                </Alert>
               </div>
-              <div>
-                <Label>MeLo-ID (optional)</Label>
-                <Input value={form.melo_id} onChange={(e) => setForm({ ...form, melo_id: e.target.value })} placeholder="33-stellig, beginnt mit DE" />
-                {meloErr && <p className="text-xs text-destructive mt-1">{meloErr}</p>}
+
+              {/* Reststromlieferant + iMSys */}
+              <div className="space-y-3 border-t pt-4">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Versorgung & Messtechnik</h4>
+                <div><Label>Reststromlieferant</Label>
+                  <Input value={form.rest_supplier_name} onChange={(e) => setForm({ ...form, rest_supplier_name: e.target.value })} placeholder="z.B. Stadtwerke Musterstadt" />
+                  <p className="text-xs text-muted-foreground mt-1">Pflicht: Energy Sharing deckt nur Anteil, Rest läuft über klassischen Lieferanten.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Messtyp</Label>
+                    <Select value={form.metering_type} onValueChange={(v) => setForm({ ...form, metering_type: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(METERING_TYPE_LABELS).map(([k, v]) => (
+                          <SelectItem key={k} value={k}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>iMSys-Status</Label>
+                    <Select value={form.imsys_status} onValueChange={(v) => setForm({ ...form, imsys_status: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(IMSYS_STATUS_LABELS).map(([k, v]) => (
+                          <SelectItem key={k} value={k}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {form.imsys_status === "requested" && (
+                  <div>
+                    <Label>iMSys beantragt am</Label>
+                    <Input type="date" value={form.imsys_requested_at} onChange={(e) => setForm({ ...form, imsys_requested_at: e.target.value })} />
+                    {imsysFrist && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        4-Monats-Frist (MsbG §34): endet am <b>{imsysFrist.toLocaleDateString("de-DE")}</b>
+                      </p>
+                    )}
+                  </div>
+                )}
+                <div>
+                  <Label>Vorvertragliche Information versendet am (§42c Abs. 6)</Label>
+                  <Input type="date" value={form.pre_contract_info_sent_at} onChange={(e) => setForm({ ...form, pre_contract_info_sent_at: e.target.value })} />
+                </div>
               </div>
-              <div><Label>Anteil (kW)</Label><Input type="number" step="0.1" value={form.share_kw} onChange={(e) => setForm({ ...form, share_kw: Number(e.target.value) })} /></div>
             </div>
             <DialogFooter>
               <Button disabled={!canSubmit} onClick={handleSubmit}>{editing ? "Speichern" : "Hinzufügen"}</Button>
@@ -321,8 +430,8 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
         ) : (
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Name</TableHead><TableHead>E-Mail</TableHead><TableHead>Rolle</TableHead>
-              <TableHead>MaLo</TableHead><TableHead className="text-right">Anteil (kW)</TableHead>
+              <TableHead>Name</TableHead><TableHead>Rolle</TableHead><TableHead>Klasse</TableHead>
+              <TableHead>iMSys</TableHead><TableHead className="text-right">Anteil (kW)</TableHead>
               <TableHead>Status</TableHead><TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
@@ -332,10 +441,11 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
                     <Link to={`/energy-sharing/members/${m.id}`} className="text-primary hover:underline">
                       {m.display_name}
                     </Link>
+                    {m.email && <div className="text-xs text-muted-foreground">{m.email}</div>}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{m.email}</TableCell>
                   <TableCell><Badge variant="secondary">{labelOr(ROLE_LABELS, m.role)}</Badge></TableCell>
-                  <TableCell className="font-mono text-xs">{m.malo_id ?? "—"}</TableCell>
+                  <TableCell className="text-xs">{labelOr(CUSTOMER_CLASS_LABELS, m.customer_class ?? "privat")}</TableCell>
+                  <TableCell><Badge variant={m.imsys_status === "installed" ? "default" : "outline"} className="text-xs">{labelOr(IMSYS_STATUS_LABELS, m.imsys_status ?? "missing")}</Badge></TableCell>
                   <TableCell className="text-right">{Number(m.share_kw).toLocaleString("de-DE", { maximumFractionDigits: 2 })}</TableCell>
                   <TableCell><Badge>{labelOr(STATUS_LABELS, m.status)}</Badge></TableCell>
                   <TableCell className="text-right space-x-1">
@@ -372,12 +482,17 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
   );
 }
 
+
 function AssetsTab({ communityId }: { communityId: string }) {
   const { assets, createAsset, updateAsset, deleteAsset } = useCommunityAssets(communityId);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<CommunityAsset | null>(null);
-  const emptyForm = { asset_type: "pv", capacity_kw: 0, share_model: "gleich" };
+  const emptyForm = {
+    asset_type: "pv", capacity_kw: 0, share_model: "gleich",
+    building_type: "efh", renewable_confirmed: false, imsys_status: "missing",
+  };
   const [form, setForm] = useState(emptyForm);
+  const smallPlant = isSmallPlant(form.capacity_kw, form.building_type);
 
   useEffect(() => {
     if (editing) {
@@ -385,6 +500,9 @@ function AssetsTab({ communityId }: { communityId: string }) {
         asset_type: editing.asset_type,
         capacity_kw: Number(editing.capacity_kw),
         share_model: editing.share_model,
+        building_type: editing.building_type ?? "efh",
+        renewable_confirmed: !!editing.renewable_confirmed,
+        imsys_status: editing.imsys_status ?? "missing",
       });
       setOpen(true);
     }
@@ -411,7 +529,7 @@ function AssetsTab({ communityId }: { communityId: string }) {
         <CardTitle>Erzeugungsanlagen & Speicher</CardTitle>
         <Dialog open={open} onOpenChange={handleClose}>
           <DialogTrigger asChild><Button size="sm" onClick={() => setEditing(null)}><Plus className="h-4 w-4 mr-2" />Anlage</Button></DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{editing ? "Anlage bearbeiten" : "Anlage einbringen"}</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div><Label>Typ</Label>
@@ -425,7 +543,19 @@ function AssetsTab({ communityId }: { communityId: string }) {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Leistung (kW)</Label><Input type="number" step="0.1" value={form.capacity_kw} onChange={(e) => setForm({ ...form, capacity_kw: Number(e.target.value) })} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Leistung (kW)</Label><Input type="number" step="0.1" value={form.capacity_kw} onChange={(e) => setForm({ ...form, capacity_kw: Number(e.target.value) })} /></div>
+                <div><Label>Gebäudetyp</Label>
+                  <Select value={form.building_type} onValueChange={(v) => setForm({ ...form, building_type: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(BUILDING_TYPE_LABELS).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <div><Label>Verteilmodell</Label>
                 <Select value={form.share_model} onValueChange={(v) => setForm({ ...form, share_model: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -436,9 +566,34 @@ function AssetsTab({ communityId }: { communityId: string }) {
                   </SelectContent>
                 </Select>
               </div>
+              <div><Label>iMSys-Status der Anlage</Label>
+                <Select value={form.imsys_status} onValueChange={(v) => setForm({ ...form, imsys_status: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(IMSYS_STATUS_LABELS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2 rounded-md border p-3">
+                <input type="checkbox" id="ee" checked={form.renewable_confirmed} onChange={(e) => setForm({ ...form, renewable_confirmed: e.target.checked })} />
+                <Label htmlFor="ee" className="text-sm leading-relaxed">
+                  Ich bestätige: Anlage erzeugt <b>ausschließlich erneuerbare Energie</b> und wird <b>nicht überwiegend gewerblich</b> betrieben (§42c Abs. 2 Nr. 2 EnWG).
+                </Label>
+              </div>
+              {form.capacity_kw > 0 && (
+                <Alert variant={smallPlant.small ? "default" : "destructive"} className="text-xs">
+                  <AlertDescription>
+                    {smallPlant.small
+                      ? <>✓ Kleinanlage (unter {smallPlant.threshold} kW): <b>keine Stromlieferanten-Pflichten</b> nach §42c Abs. 5.</>
+                      : <>⚠ Anlage ab {smallPlant.threshold} kW: <b>Stromlieferanten-Status</b> für Eigner erforderlich.</>}
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
             <DialogFooter>
-              <Button onClick={handleSubmit}>{editing ? "Speichern" : "Hinzufügen"}</Button>
+              <Button disabled={!form.renewable_confirmed} onClick={handleSubmit}>{editing ? "Speichern" : "Hinzufügen"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -449,25 +604,36 @@ function AssetsTab({ communityId }: { communityId: string }) {
         ) : (
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Typ</TableHead><TableHead className="text-right">Leistung (kW)</TableHead>
-              <TableHead>Verteilmodell</TableHead><TableHead></TableHead>
+              <TableHead>Typ</TableHead><TableHead>Gebäude</TableHead>
+              <TableHead className="text-right">Leistung (kW)</TableHead>
+              <TableHead>Verteilmodell</TableHead><TableHead>iMSys</TableHead>
+              <TableHead>EE</TableHead><TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {assets.map((a) => (
-                <TableRow key={a.id}>
-                  <TableCell><Badge variant="secondary">{labelOr(ASSET_TYPE_LABELS, a.asset_type)}</Badge></TableCell>
-                  <TableCell className="text-right">{Number(a.capacity_kw).toLocaleString("de-DE", { maximumFractionDigits: 1 })}</TableCell>
-                  <TableCell>{labelOr(SHARE_MODEL_LABELS, a.share_model)}</TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(a)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" title="Löschen" onClick={async () => {
-                      if (await confirmDialog({ title: "Anlage entfernen", description: "Anlage wirklich entfernen?" })) deleteAsset.mutate(a.id);
-                    }}><Trash2 className="h-4 w-4" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {assets.map((a) => {
+                const sp = isSmallPlant(Number(a.capacity_kw), a.building_type);
+                return (
+                  <TableRow key={a.id}>
+                    <TableCell><Badge variant="secondary">{labelOr(ASSET_TYPE_LABELS, a.asset_type)}</Badge></TableCell>
+                    <TableCell className="text-xs">{labelOr(BUILDING_TYPE_LABELS, a.building_type ?? "efh")}</TableCell>
+                    <TableCell className="text-right">
+                      {Number(a.capacity_kw).toLocaleString("de-DE", { maximumFractionDigits: 1 })}
+                      {!sp.small && <Badge variant="destructive" className="ml-2 text-[10px]">≥ {sp.threshold} kW</Badge>}
+                    </TableCell>
+                    <TableCell>{labelOr(SHARE_MODEL_LABELS, a.share_model)}</TableCell>
+                    <TableCell><Badge variant={a.imsys_status === "installed" ? "default" : "outline"} className="text-xs">{labelOr(IMSYS_STATUS_LABELS, a.imsys_status ?? "missing")}</Badge></TableCell>
+                    <TableCell>{a.renewable_confirmed ? "✓" : <span className="text-destructive">✗</span>}</TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(a)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" title="Löschen" onClick={async () => {
+                        if (await confirmDialog({ title: "Anlage entfernen", description: "Anlage wirklich entfernen?" })) deleteAsset.mutate(a.id);
+                      }}><Trash2 className="h-4 w-4" /></Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
@@ -475,6 +641,7 @@ function AssetsTab({ communityId }: { communityId: string }) {
     </Card>
   );
 }
+
 
 function TariffTab({ communityId }: { communityId: string }) {
   const { tariffs, createTariff, updateTariff, deleteTariff } = useCommunityTariffs(communityId);
@@ -529,6 +696,12 @@ function TariffTab({ communityId }: { communityId: string }) {
               <div><Label>Gültig bis (optional)</Label><Input type="date" value={form.valid_to} onChange={(e) => setForm({ ...form, valid_to: e.target.value })} /></div>
               <div><Label>Preis (ct/kWh)</Label><Input type="number" step="0.01" value={form.price_ct_kwh} onChange={(e) => setForm({ ...form, price_ct_kwh: Number(e.target.value) })} /></div>
               <div><Label>Einspeisevergütung (ct/kWh)</Label><Input type="number" step="0.01" value={form.feed_in_ct_kwh} onChange={(e) => setForm({ ...form, feed_in_ct_kwh: Number(e.target.value) })} /></div>
+              <Alert className="text-xs">
+                <AlertDescription>
+                  <b>Hinweis (BDEW):</b> Energy-Sharing-Mengen sind <b>nicht</b> von Netzentgelten, Umlagen oder Steuern befreit.
+                  Der Letztverbraucher trägt alle Zusatzkosten — der hier gepflegte Preis ist der reine Gemeinschaftspreis ohne Netzaufschläge.
+                </AlertDescription>
+              </Alert>
             </div>
             <DialogFooter>
               <Button onClick={handleSubmit}>{editing ? "Speichern" : "Hinzufügen"}</Button>
@@ -585,17 +758,33 @@ function CommunityEditDialog({
 }) {
   const [name, setName] = useState("");
   const [status, setStatus] = useState("draft");
+  const [balancingZone, setBalancingZone] = useState("");
+  const [gridOperator, setGridOperator] = useState("");
+  const [pilotAck, setPilotAck] = useState(false);
 
   useEffect(() => {
     if (community) {
       setName(community.name);
       setStatus(community.status);
+      setBalancingZone(community.balancing_zone ?? "");
+      setGridOperator(community.grid_operator ?? "");
+      setPilotAck(!!community.pilot_acknowledged_at);
     }
   }, [community]);
 
+  const handleSave = () => {
+    onSave({
+      name,
+      status,
+      balancing_zone: balancingZone || null,
+      grid_operator: gridOperator || null,
+      pilot_acknowledged_at: pilotAck ? (community?.pilot_acknowledged_at ?? new Date().toISOString()) : null,
+    });
+  };
+
   return (
     <Dialog open={!!community} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Community bearbeiten</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
@@ -610,6 +799,33 @@ function CommunityEditDialog({
               </SelectContent>
             </Select>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Bilanzkreis (Pflicht ab Mai 2028 nur 1 Zone)</Label>
+              <Input value={balancingZone} onChange={(e) => setBalancingZone(e.target.value)} placeholder="z.B. TenneT-Nord" />
+            </div>
+            <div>
+              <Label>Verteilnetzbetreiber (VNB)</Label>
+              <Input value={gridOperator} onChange={(e) => setGridOperator(e.target.value)} placeholder="z.B. Westnetz GmbH" />
+            </div>
+          </div>
+          <Alert className="text-xs">
+            <AlertDescription>
+              Bis zum 31. Mai 2028 müssen sich alle Mitglieder im <b>gleichen Bilanzkreis</b> befinden (§42c Abs. 3 EnWG).
+            </AlertDescription>
+          </Alert>
+          <div className="flex items-start gap-2 rounded-md border p-3">
+            <input type="checkbox" id="pilot" className="mt-1" checked={pilotAck} onChange={(e) => setPilotAck(e.target.checked)} />
+            <Label htmlFor="pilot" className="text-sm leading-relaxed">
+              <b>Pilot-Modus bestätigt:</b> Energy Sharing nach §42c/§20b EnWG ist noch im regulatorischen Aufbau (BDEW Q3-Q4 2026).
+              Mir ist bekannt, dass <b>keine Befreiung</b> von Netzentgelten, Umlagen oder Steuern besteht.
+              {community?.pilot_acknowledged_at && (
+                <span className="block text-xs text-muted-foreground mt-1">
+                  Bestätigt am: {new Date(community.pilot_acknowledged_at).toLocaleDateString("de-DE")}
+                </span>
+              )}
+            </Label>
+          </div>
         </div>
         <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
           <Button variant="destructive" onClick={onDelete}>
@@ -617,7 +833,7 @@ function CommunityEditDialog({
           </Button>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
-            <Button disabled={!name.trim()} onClick={() => onSave({ name, status })}>Speichern</Button>
+            <Button disabled={!name.trim()} onClick={handleSave}>Speichern</Button>
           </div>
         </DialogFooter>
       </DialogContent>
