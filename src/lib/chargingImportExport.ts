@@ -379,7 +379,8 @@ export async function executeUserImport(records: UserImportRecord[], tenantId: s
   for (const r of records) {
     const payload = {
       name: r.name,
-      email: r.email,
+      rfid_tag: r.rfid_tag,
+      rfid_label: r.rfid_label,
       rfid_tag: r.rfid_tag,
       phone: r.phone,
       group_id: r.group_id,
