@@ -8658,6 +8658,7 @@ export type Database = {
           estimated_kwh: number
         }[]
       }
+      get_user_email: { Args: never; Returns: string }
       get_user_tenant_id: { Args: never; Returns: string }
       has_location_access: {
         Args: { _location_id: string; _user_id: string }
