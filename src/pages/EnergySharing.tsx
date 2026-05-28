@@ -95,18 +95,20 @@ export default function EnergySharing() {
                 await updateCommunity.mutateAsync({ id: editCommunity!.id, ...values });
                 setEditCommunity(null);
               }}
+              onDelete={async () => {
+                if (!editCommunity) return;
+                if (confirm(`Community "${editCommunity.name}" wirklich unwiderruflich löschen?`)) {
+                  await deleteCommunity.mutateAsync(editCommunity.id);
+                  if (selectedId === editCommunity.id) setSelectedId(null);
+                  setEditCommunity(null);
+                }
+              }}
             />
 
             {selected && (
               <CommunityDetail
                 communityId={selected.id}
                 communityName={selected.name}
-                onDelete={async () => {
-                  if (confirm(`Community "${selected.name}" wirklich löschen?`)) {
-                    await deleteCommunity.mutateAsync(selected.id);
-                    setSelectedId(null);
-                  }
-                }}
               />
             )}
           </>
