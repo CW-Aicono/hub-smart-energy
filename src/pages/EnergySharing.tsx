@@ -750,6 +750,12 @@ function CommunityEditDialog({
   onOpenChange,
   onSave,
   onDelete,
+}: {
+  community: EnergyCommunity | null;
+  onOpenChange: (o: boolean) => void;
+  onSave: (values: Partial<EnergyCommunity>) => Promise<void>;
+  onDelete: () => Promise<void>;
+}) {
   const [name, setName] = useState("");
   const [status, setStatus] = useState("draft");
   const [balancingZone, setBalancingZone] = useState("");
