@@ -750,25 +750,35 @@ function CommunityEditDialog({
   onOpenChange,
   onSave,
   onDelete,
-}: {
-  community: EnergyCommunity | null;
-  onOpenChange: (o: boolean) => void;
-  onSave: (values: Partial<EnergyCommunity>) => Promise<void>;
-  onDelete: () => Promise<void>;
-}) {
   const [name, setName] = useState("");
   const [status, setStatus] = useState("draft");
+  const [balancingZone, setBalancingZone] = useState("");
+  const [gridOperator, setGridOperator] = useState("");
+  const [pilotAck, setPilotAck] = useState(false);
 
   useEffect(() => {
     if (community) {
       setName(community.name);
       setStatus(community.status);
+      setBalancingZone(community.balancing_zone ?? "");
+      setGridOperator(community.grid_operator ?? "");
+      setPilotAck(!!community.pilot_acknowledged_at);
     }
   }, [community]);
 
+  const handleSave = () => {
+    onSave({
+      name,
+      status,
+      balancing_zone: balancingZone || null,
+      grid_operator: gridOperator || null,
+      pilot_acknowledged_at: pilotAck ? (community?.pilot_acknowledged_at ?? new Date().toISOString()) : null,
+    });
+  };
+
   return (
     <Dialog open={!!community} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Community bearbeiten</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
@@ -783,6 +793,33 @@ function CommunityEditDialog({
               </SelectContent>
             </Select>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Bilanzkreis (Pflicht ab Mai 2028 nur 1 Zone)</Label>
+              <Input value={balancingZone} onChange={(e) => setBalancingZone(e.target.value)} placeholder="z.B. TenneT-Nord" />
+            </div>
+            <div>
+              <Label>Verteilnetzbetreiber (VNB)</Label>
+              <Input value={gridOperator} onChange={(e) => setGridOperator(e.target.value)} placeholder="z.B. Westnetz GmbH" />
+            </div>
+          </div>
+          <Alert className="text-xs">
+            <AlertDescription>
+              Bis zum 31. Mai 2028 müssen sich alle Mitglieder im <b>gleichen Bilanzkreis</b> befinden (§42c Abs. 3 EnWG).
+            </AlertDescription>
+          </Alert>
+          <div className="flex items-start gap-2 rounded-md border p-3">
+            <input type="checkbox" id="pilot" className="mt-1" checked={pilotAck} onChange={(e) => setPilotAck(e.target.checked)} />
+            <Label htmlFor="pilot" className="text-sm leading-relaxed">
+              <b>Pilot-Modus bestätigt:</b> Energy Sharing nach §42c/§20b EnWG ist noch im regulatorischen Aufbau (BDEW Q3-Q4 2026).
+              Mir ist bekannt, dass <b>keine Befreiung</b> von Netzentgelten, Umlagen oder Steuern besteht.
+              {community?.pilot_acknowledged_at && (
+                <span className="block text-xs text-muted-foreground mt-1">
+                  Bestätigt am: {new Date(community.pilot_acknowledged_at).toLocaleDateString("de-DE")}
+                </span>
+              )}
+            </Label>
+          </div>
         </div>
         <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
           <Button variant="destructive" onClick={onDelete}>
@@ -790,7 +827,13 @@ function CommunityEditDialog({
           </Button>
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
-            <Button disabled={!name.trim()} onClick={() => onSave({ name, status })}>Speichern</Button>
+            <Button disabled={!name.trim()} onClick={handleSave}>Speichern</Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
           </div>
         </DialogFooter>
       </DialogContent>
