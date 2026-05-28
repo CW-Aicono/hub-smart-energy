@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, Pencil } from "lucide-react";
 import { useContractTemplates, type ContractTemplate } from "@/hooks/useCommunityContracts";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 
 interface Props {
   communityId: string;
@@ -88,7 +89,7 @@ export default function ContractTemplatesTab({ communityId }: Props) {
                   <TableCell><Badge variant={t.is_active ? "default" : "secondary"}>{t.is_active ? "Aktiv" : "Inaktiv"}</Badge></TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={() => openEdit(t)}><Pencil className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Schablone „${t.name}" löschen?`)) deleteTemplate.mutate(t.id); }}>
+                    <Button variant="ghost" size="sm" onClick={async () => { if (await confirmDialog({ title: "Schablone löschen", description: `Schablone „${t.name}" löschen?` })) deleteTemplate.mutate(t.id); }}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>

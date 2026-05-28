@@ -30,6 +30,7 @@ import BillingTab from "@/components/energy-sharing/BillingTab";
 import DataQualityTab from "@/components/energy-sharing/DataQualityTab";
 import MarketplaceTab from "@/components/energy-sharing/MarketplaceTab";
 import { maLoError, meLoError } from "@/lib/energy-sharing/idValidation";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function EnergySharing() {
   const { communities, isLoading, deleteCommunity, updateCommunity } = useEnergyCommunities();
@@ -97,7 +98,7 @@ export default function EnergySharing() {
               }}
               onDelete={async () => {
                 if (!editCommunity) return;
-                if (confirm(`Community "${editCommunity.name}" wirklich unwiderruflich löschen?`)) {
+                if (await confirmDialog({ title: "Community löschen", description: `Community "${editCommunity.name}" wirklich unwiderruflich löschen?`, confirmLabel: "Löschen" })) {
                   await deleteCommunity.mutateAsync(editCommunity.id);
                   if (selectedId === editCommunity.id) setSelectedId(null);
                   setEditCommunity(null);
@@ -296,8 +297,8 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
                     >
                       <PenLine className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" title="Löschen" onClick={() => {
-                      if (confirm(`Mitglied "${m.display_name}" wirklich entfernen?`)) deleteMember.mutate(m.id);
+                    <Button variant="ghost" size="sm" title="Löschen" onClick={async () => {
+                      if (await confirmDialog({ title: "Mitglied entfernen", description: `Mitglied "${m.display_name}" wirklich entfernen?` })) deleteMember.mutate(m.id);
                     }}><Trash2 className="h-4 w-4" /></Button>
                   </TableCell>
                 </TableRow>
@@ -407,8 +408,8 @@ function AssetsTab({ communityId }: { communityId: string }) {
                     <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(a)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" title="Löschen" onClick={() => {
-                      if (confirm("Anlage wirklich entfernen?")) deleteAsset.mutate(a.id);
+                    <Button variant="ghost" size="sm" title="Löschen" onClick={async () => {
+                      if (await confirmDialog({ title: "Anlage entfernen", description: "Anlage wirklich entfernen?" })) deleteAsset.mutate(a.id);
                     }}><Trash2 className="h-4 w-4" /></Button>
                   </TableCell>
                 </TableRow>
@@ -503,8 +504,8 @@ function TariffTab({ communityId }: { communityId: string }) {
                     <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(t)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" title="Löschen" onClick={() => {
-                      if (confirm("Tarif wirklich löschen?")) deleteTariff.mutate(t.id);
+                    <Button variant="ghost" size="sm" title="Löschen" onClick={async () => {
+                      if (await confirmDialog({ title: "Tarif löschen", description: "Tarif wirklich löschen?" })) deleteTariff.mutate(t.id);
                     }}><Trash2 className="h-4 w-4" /></Button>
                   </TableCell>
                 </TableRow>
