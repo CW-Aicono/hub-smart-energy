@@ -127,7 +127,7 @@ export function exportNfc(users: ChargingUser[], format: ExportFormat) {
     [...NFC_HEADERS],
     ...users
       .filter((u) => u.rfid_tag && u.rfid_tag.trim().length > 0)
-      .map((u) => [u.email ?? "", u.rfid_tag ?? "", u.name]),
+      .map((u) => [u.email ?? "", u.rfid_tag ?? "", u.rfid_label ?? "", u.name]),
   ];
   writeSheet(rows, format, `nfc-tags_${new Date().toISOString().slice(0, 10)}`);
 }
