@@ -91,13 +91,6 @@ export function useContractTemplates(communityId: string | null) {
       } as any);
       if (error) throw error;
     },
-        body_markdown: values.body_markdown,
-        placeholders: values.placeholders ?? [],
-        version: 1,
-        is_active: true,
-      });
-      if (error) throw error;
-    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["contract-templates", tenantId] });
       toast({ title: "Vertragsschablone gespeichert" });
