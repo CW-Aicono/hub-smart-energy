@@ -229,11 +229,24 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<CommunityMember | null>(null);
   const [signMember, setSignMember] = useState<CommunityMember | null>(null);
-  const emptyForm = { display_name: "", email: "", role: "member", malo_id: "", melo_id: "", share_kw: 0 };
+  const emptyForm = {
+    display_name: "", email: "", role: "member", malo_id: "", melo_id: "", share_kw: 0,
+    customer_class: "privat", employees: 0, annual_revenue_eur: 0, annual_balance_eur: 0,
+    rest_supplier_name: "", imsys_status: "missing", imsys_requested_at: "",
+    metering_type: "zaehlerstandsgang", pre_contract_info_sent_at: "",
+  };
   const [form, setForm] = useState(emptyForm);
   const maloErr = maLoError(form.malo_id);
   const meloErr = meLoError(form.melo_id);
   const canSubmit = !!form.display_name.trim() && !maloErr && !meloErr;
+
+  // KMU-Klassifikation live
+  const kmu = classifyKmu({
+    employees: form.employees,
+    annual_revenue_eur: form.annual_revenue_eur,
+    annual_balance_eur: form.annual_balance_eur,
+  });
+  const imsysFrist = imsysDeadline(form.imsys_requested_at);
 
   useEffect(() => {
     if (editing) {
@@ -244,6 +257,15 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
         malo_id: editing.malo_id ?? "",
         melo_id: editing.melo_id ?? "",
         share_kw: Number(editing.share_kw ?? 0),
+        customer_class: editing.customer_class ?? "privat",
+        employees: Number(editing.employees ?? 0),
+        annual_revenue_eur: Number(editing.annual_revenue_eur ?? 0),
+        annual_balance_eur: Number(editing.annual_balance_eur ?? 0),
+        rest_supplier_name: editing.rest_supplier_name ?? "",
+        imsys_status: editing.imsys_status ?? "missing",
+        imsys_requested_at: editing.imsys_requested_at ?? "",
+        metering_type: editing.metering_type ?? "zaehlerstandsgang",
+        pre_contract_info_sent_at: editing.pre_contract_info_sent_at ?? "",
       });
       setOpen(true);
     }
@@ -266,6 +288,15 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
       malo_id: form.malo_id || null,
       melo_id: form.melo_id || null,
       share_kw: form.share_kw,
+      customer_class: form.customer_class || null,
+      employees: form.employees || null,
+      annual_revenue_eur: form.annual_revenue_eur || null,
+      annual_balance_eur: form.annual_balance_eur || null,
+      rest_supplier_name: form.rest_supplier_name || null,
+      imsys_status: form.imsys_status || null,
+      imsys_requested_at: form.imsys_requested_at || null,
+      metering_type: form.metering_type || null,
+      pre_contract_info_sent_at: form.pre_contract_info_sent_at || null,
     };
     if (editing) {
       await updateMember.mutateAsync({ id: editing.id, ...payload });
@@ -281,33 +312,111 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
         <CardTitle>Mitglieder</CardTitle>
         <Dialog open={open} onOpenChange={handleClose}>
           <DialogTrigger asChild><Button size="sm" onClick={() => setEditing(null)}><Plus className="h-4 w-4 mr-2" />Mitglied</Button></DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{editing ? "Mitglied bearbeiten" : "Neues Mitglied"}</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label>Name</Label><Input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></div>
-              <div><Label>E-Mail</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-              <div><Label>Rolle</Label>
-                <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="member">Mitglied (Verbraucher)</SelectItem>
-                    <SelectItem value="producer">Erzeuger</SelectItem>
-                    <SelectItem value="prosumer">Prosumer</SelectItem>
-                    <SelectItem value="consumer">Reiner Verbraucher</SelectItem>
-                  </SelectContent>
-                </Select>
+            <div className="space-y-4">
+              {/* Stammdaten */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Stammdaten</h4>
+                <div><Label>Name</Label><Input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></div>
+                <div><Label>E-Mail</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+                <div><Label>Rolle</Label>
+                  <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="member">Mitglied (Verbraucher)</SelectItem>
+                      <SelectItem value="producer">Erzeuger</SelectItem>
+                      <SelectItem value="prosumer">Prosumer</SelectItem>
+                      <SelectItem value="consumer">Reiner Verbraucher</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>MaLo-ID (optional)</Label>
+                    <Input value={form.malo_id} onChange={(e) => setForm({ ...form, malo_id: e.target.value })} placeholder="11-stellig" />
+                    {maloErr && <p className="text-xs text-destructive mt-1">{maloErr}</p>}
+                  </div>
+                  <div>
+                    <Label>MeLo-ID (optional)</Label>
+                    <Input value={form.melo_id} onChange={(e) => setForm({ ...form, melo_id: e.target.value })} placeholder="33-stellig, DE…" />
+                    {meloErr && <p className="text-xs text-destructive mt-1">{meloErr}</p>}
+                  </div>
+                </div>
+                <div><Label>Anteil (kW)</Label><Input type="number" step="0.1" value={form.share_kw} onChange={(e) => setForm({ ...form, share_kw: Number(e.target.value) })} /></div>
               </div>
-              <div>
-                <Label>MaLo-ID (optional)</Label>
-                <Input value={form.malo_id} onChange={(e) => setForm({ ...form, malo_id: e.target.value })} placeholder="11-stellig" />
-                {maloErr && <p className="text-xs text-destructive mt-1">{maloErr}</p>}
+
+              {/* KMU-Einstufung (§42c Abs. 2 EnWG) */}
+              <div className="space-y-3 border-t pt-4">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">KMU-Einstufung (§42c Abs. 2)</h4>
+                <div><Label>Kundenklasse</Label>
+                  <Select value={form.customer_class} onValueChange={(v) => setForm({ ...form, customer_class: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(CUSTOMER_CLASS_LABELS).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div><Label className="text-xs">Beschäftigte</Label><Input type="number" value={form.employees} onChange={(e) => setForm({ ...form, employees: Number(e.target.value) })} /></div>
+                  <div><Label className="text-xs">Umsatz €/Jahr</Label><Input type="number" value={form.annual_revenue_eur} onChange={(e) => setForm({ ...form, annual_revenue_eur: Number(e.target.value) })} /></div>
+                  <div><Label className="text-xs">Bilanzsumme €</Label><Input type="number" value={form.annual_balance_eur} onChange={(e) => setForm({ ...form, annual_balance_eur: Number(e.target.value) })} /></div>
+                </div>
+                <Alert variant={kmu.eligible ? "default" : "destructive"} className="text-xs">
+                  <AlertDescription>
+                    <b>Auto-Einstufung:</b> {kmu.label} — {kmu.reason}
+                    {!kmu.eligible && " ⚠ Nicht teilnahmeberechtigt."}
+                  </AlertDescription>
+                </Alert>
               </div>
-              <div>
-                <Label>MeLo-ID (optional)</Label>
-                <Input value={form.melo_id} onChange={(e) => setForm({ ...form, melo_id: e.target.value })} placeholder="33-stellig, beginnt mit DE" />
-                {meloErr && <p className="text-xs text-destructive mt-1">{meloErr}</p>}
+
+              {/* Reststromlieferant + iMSys */}
+              <div className="space-y-3 border-t pt-4">
+                <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Versorgung & Messtechnik</h4>
+                <div><Label>Reststromlieferant</Label>
+                  <Input value={form.rest_supplier_name} onChange={(e) => setForm({ ...form, rest_supplier_name: e.target.value })} placeholder="z.B. Stadtwerke Musterstadt" />
+                  <p className="text-xs text-muted-foreground mt-1">Pflicht: Energy Sharing deckt nur Anteil, Rest läuft über klassischen Lieferanten.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Messtyp</Label>
+                    <Select value={form.metering_type} onValueChange={(v) => setForm({ ...form, metering_type: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(METERING_TYPE_LABELS).map(([k, v]) => (
+                          <SelectItem key={k} value={k}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div><Label>iMSys-Status</Label>
+                    <Select value={form.imsys_status} onValueChange={(v) => setForm({ ...form, imsys_status: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(IMSYS_STATUS_LABELS).map(([k, v]) => (
+                          <SelectItem key={k} value={k}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {form.imsys_status === "requested" && (
+                  <div>
+                    <Label>iMSys beantragt am</Label>
+                    <Input type="date" value={form.imsys_requested_at} onChange={(e) => setForm({ ...form, imsys_requested_at: e.target.value })} />
+                    {imsysFrist && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        4-Monats-Frist (MsbG §34): endet am <b>{imsysFrist.toLocaleDateString("de-DE")}</b>
+                      </p>
+                    )}
+                  </div>
+                )}
+                <div>
+                  <Label>Vorvertragliche Information versendet am (§42c Abs. 6)</Label>
+                  <Input type="date" value={form.pre_contract_info_sent_at} onChange={(e) => setForm({ ...form, pre_contract_info_sent_at: e.target.value })} />
+                </div>
               </div>
-              <div><Label>Anteil (kW)</Label><Input type="number" step="0.1" value={form.share_kw} onChange={(e) => setForm({ ...form, share_kw: Number(e.target.value) })} /></div>
             </div>
             <DialogFooter>
               <Button disabled={!canSubmit} onClick={handleSubmit}>{editing ? "Speichern" : "Hinzufügen"}</Button>
@@ -321,8 +430,8 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
         ) : (
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Name</TableHead><TableHead>E-Mail</TableHead><TableHead>Rolle</TableHead>
-              <TableHead>MaLo</TableHead><TableHead className="text-right">Anteil (kW)</TableHead>
+              <TableHead>Name</TableHead><TableHead>Rolle</TableHead><TableHead>Klasse</TableHead>
+              <TableHead>iMSys</TableHead><TableHead className="text-right">Anteil (kW)</TableHead>
               <TableHead>Status</TableHead><TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
@@ -332,10 +441,11 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
                     <Link to={`/energy-sharing/members/${m.id}`} className="text-primary hover:underline">
                       {m.display_name}
                     </Link>
+                    {m.email && <div className="text-xs text-muted-foreground">{m.email}</div>}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{m.email}</TableCell>
                   <TableCell><Badge variant="secondary">{labelOr(ROLE_LABELS, m.role)}</Badge></TableCell>
-                  <TableCell className="font-mono text-xs">{m.malo_id ?? "—"}</TableCell>
+                  <TableCell className="text-xs">{labelOr(CUSTOMER_CLASS_LABELS, m.customer_class ?? "privat")}</TableCell>
+                  <TableCell><Badge variant={m.imsys_status === "installed" ? "default" : "outline"} className="text-xs">{labelOr(IMSYS_STATUS_LABELS, m.imsys_status ?? "missing")}</Badge></TableCell>
                   <TableCell className="text-right">{Number(m.share_kw).toLocaleString("de-DE", { maximumFractionDigits: 2 })}</TableCell>
                   <TableCell><Badge>{labelOr(STATUS_LABELS, m.status)}</Badge></TableCell>
                   <TableCell className="text-right space-x-1">
@@ -371,6 +481,7 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
     </Card>
   );
 }
+
 
 function AssetsTab({ communityId }: { communityId: string }) {
   const { assets, createAsset, updateAsset, deleteAsset } = useCommunityAssets(communityId);
