@@ -22,6 +22,7 @@ export const ALL_MODULES = [
   { code: "arbitrage_trading", label: "Arbitragehandel (Strom)" },
   { code: "tenant_electricity", label: "Mieterstrom" },
   { code: "energy_report", label: "Energiebericht" },
+  { code: "energy_sharing", label: "Energy-Sharing (Communitys)" },
   { code: "remote_support", label: "Remote-Support (Flatrate)" },
   { code: "support_billing", label: "Support (mit Berechnung)" },
 ] as const;
