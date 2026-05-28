@@ -71,24 +71,26 @@ export function useContractTemplates(communityId: string | null) {
         .order("updated_at", { ascending: false });
       if (communityId) {
         q = q.or(`community_id.is.null,community_id.eq.${communityId}`);
-      }
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as unknown as ContractTemplate[];
-    },
-  });
-
   const createTemplate = useMutation({
     mutationFn: async (values: {
       name: string;
       body_markdown: string;
       placeholders?: string[];
       community_id?: string | null;
+      template_kind?: "liefer" | "nutzung";
     }) => {
       const { error } = await supabase.from("community_contract_templates").insert({
         tenant_id: tenantId!,
         community_id: values.community_id ?? null,
         name: values.name,
+        body_markdown: values.body_markdown,
+        placeholders: values.placeholders ?? [],
+        version: 1,
+        is_active: true,
+        template_kind: values.template_kind ?? "nutzung",
+      } as any);
+      if (error) throw error;
+    },
         body_markdown: values.body_markdown,
         placeholders: values.placeholders ?? [],
         version: 1,
