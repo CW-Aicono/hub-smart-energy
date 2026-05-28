@@ -1,58 +1,45 @@
-# Iteration D — Community-Marktplatz + Mitglieder-PWA
+# Verwaltungslogik Energy Sharing — Bearbeiten ergänzen
 
-Ziel: Energy-Sharing nach außen öffnen (öffentlicher Marktplatz mit Beitritt) und nach innen (PWA für Mitglieder mit Lese-Zugriff auf Allokation + Rechnungen).
+## Befund (Ist-Zustand)
 
-## Stufe 1 — Marktplatz Backend (DB + Edge Function)
+Aktuell gibt es in `src/pages/EnergySharing.tsx` und `src/hooks/useEnergyCommunities.tsx` für jeden Bereich nur **Anlegen + Löschen**, aber keinen **Bearbeiten-Button**. Im Detail:
 
-**Migration:**
-- `community_marketplace_listings` (community_id, title, short_description, region_plz, max_members, price_ct_kwh, feed_in_ct_kwh, hero_image_url, is_public, slug uniq, view_count)
-- `community_join_requests` (listing_id, community_id, name, email, phone, address, plz, message, status [new|accepted|rejected|withdrawn], rejection_reason)
-- RLS: Tenant verwaltet eigene; öffentliche Selects über Edge Function (SECURITY DEFINER RPC oder service_role)
-- Storage Bucket `community-marketplace` (public read) für hero images
-- Trigger: `view_count++` via RPC
+| Bereich      | Anlegen | Bearbeiten | Löschen |
+|--------------|---------|------------|---------|
+| Community    | ✓ (Wizard) | ✗ (Hook da, UI fehlt) | ✓ |
+| Mitglieder   | ✓ | ✗ (Hook da, UI fehlt) | ✓ |
+| Anlagen      | ✓ | ✗ (Hook + UI fehlen)  | ✓ |
+| Tarife       | ✓ | ✗ (Hook + UI fehlen)  | ✓ |
 
-**Edge Function `community-marketplace-public`** (verify_jwt=false):
-- `GET /listings` — alle is_public=true Listings (slug, title, region, kw verfügbar, Preis)
-- `GET /listings/:slug` — Detail + Community-Stats (Mitglieder, kW installiert)
-- `POST /join-request` — Beitritts-Antrag (Rate-Limit per IP, Zod-Validierung, PLZ-Plausi)
+## Umsetzung
 
-## Stufe 2 — Marktplatz Frontend (öffentlich + Backoffice)
+### 1. Hook `useEnergyCommunities.tsx`
+- `useCommunityAssets`: `updateAsset` Mutation ergänzen (Felder: `asset_type`, `capacity_kw`, `share_model`).
+- `useCommunityTariffs`: `updateTariff` Mutation ergänzen (Felder: `valid_from`, `valid_to`, `price_ct_kwh`, `feed_in_ct_kwh`).
 
-**Öffentliche Seiten** (kein Login):
-- `/sharing/marktplatz` — Kachelübersicht mit PLZ-Filter
-- `/sharing/marktplatz/:slug` — Detailseite (Karte, Hero, Kennzahlen, Beitritts-Formular)
+### 2. UI in `src/pages/EnergySharing.tsx`
 
-**Backoffice-Tab in `EnergySharing.tsx`:** „Marktplatz"
-- Listing erzeugen/editieren (Toggle public/draft, Hero-Upload, Slug-Generator)
-- Eingegangene Join-Requests prüfen → akzeptieren erzeugt automatisch `community_members` Eintrag (status=invited)
+**Community-Header (Pill-Zeile mit Community-Namen):**
+- Neben jedem Pill (oder im Überblick-Tab) ein „Bearbeiten"-Button (Stift-Icon). Öffnet Dialog mit Feldern: `name`, `status` (draft/active/paused/closed). Speichert via `updateCommunity`.
 
-## Stufe 3 — Mitglieder-PWA Grundgerüst
+**MembersTab:**
+- In jeder Tabellenzeile ein Stift-Button neben dem Vertrag-/Löschen-Button.
+- Wiederverwendung des bestehenden Dialogs als „Neu/Bearbeiten" Modus (gleiche Felder, prefill bei Edit). Speichern via `createMember` oder `updateMember`.
 
-- `public/manifest-sharing.json` (name „Meine Energie-Community", standalone, scope `/mein-sharing/`)
-- Icons (reuse aicono Brand)
-- Manifest-only PWA (keine Service Worker — siehe Projekt-Policy)
-- Routen unter `/mein-sharing/*`:
-  - `/mein-sharing/login` (reuse existing Supabase Auth, Mail-Magic-Link)
-  - `/mein-sharing/dashboard` — kW eingebracht, kWh alloziert (Monat), Tagesverlauf
-  - `/mein-sharing/rechnungen` — Liste eigener Rechnungen + PDF-Download
-  - `/mein-sharing/onboarding` — IDs nachreichen (MaLo/MeLo)
-- Mitglied wird per `community_members.email = auth.users.email` erkannt (RLS-Policy existiert bereits für `community_member_invoices`)
+**AssetsTab:**
+- Stift-Button in jeder Zeile.
+- Dialog im „Neu/Bearbeiten" Modus, prefill bei Edit. Speichern via `createAsset` oder `updateAsset`.
 
-## Stufe 4 — PWA Datenflüsse + Install-Seite
+**TariffTab:**
+- Stift-Button in jeder Zeile.
+- Dialog im „Neu/Bearbeiten" Modus, prefill bei Edit. Speichern via `createTariff` oder `updateTariff`.
 
-- `sharingClient.ts` Hook: lädt eigenes Mitglied, eigene Allokationen 15-min (aggregiert auf Tag), eigene Rechnungen
-- Read-only Dashboard mit Recharts (Tageskurve kW)
-- `/mein-sharing/install` — Anleitung „Zum Startbildschirm hinzufügen" (iOS/Android), Manifest-Verlinkung
-- Out of scope: Push, Chat, Self-Service-Vertragsänderung
+### 3. Muster
+Pro Bereich ein `editing: T | null` State plus existierender `open` State. Beim Klick auf Stift: `setEditing(row); setOpen(true);` mit prefill in `useEffect`. Beim Submit: wenn `editing` → `updateXxx.mutateAsync({id, ...form})`, sonst `createXxx.mutateAsync(form)`.
 
-## Risiken / Annahmen
+## Out of scope
+- Keine Schema-Änderungen, keine neuen RLS-Policies (vorhandene UPDATE-Policies existieren bereits, da `updateCommunity`/`updateMember` schon funktionieren).
+- Marktplatz-Tab, Verträge, Daten-Import etc. werden nicht angefasst.
 
-- Rate-Limiting für Public-Endpoint: einfache IP+Email Drossel in Edge Function (Memory-Map, 5/min) — produktiv später per pg-Tabelle
-- Slug-Kollisionen: UNIQUE-Constraint + Server-seitige Fallback-Suffixe
-- PWA-Install funktioniert nur in published-Version, nicht im Lovable-Preview-Iframe (Projekt-Policy)
-
-## Reihenfolge
-
-Stufe 1 (DB + Public Edge Function) → User testet API → Stufe 2 (Public Pages + Backoffice) → Stufe 3 (PWA Skeleton) → Stufe 4 (Daten + Install). Nach jeder Stufe Pause für Test.
-
-**Jetzt beginne ich mit Stufe 1.**
+## Geschätzter Aufwand
+~1 Datei (`EnergySharing.tsx`) und 1 Hook-Datei (`useEnergyCommunities.tsx`) editieren. Keine Migration nötig.
