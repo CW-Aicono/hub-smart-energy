@@ -264,6 +264,7 @@ export function buildUserPreview(
       name,
       email: email || null,
       rfid_tag: rfid || null,
+      rfid_label: (r["Tag-Bezeichnung"] ?? "").trim() || null,
       phone: (r["Telefon"] ?? "").trim() || null,
       group_id,
       tariff_id,
