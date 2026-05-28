@@ -22,6 +22,7 @@ export interface ChargingUser {
   name: string;
   email: string | null;
   rfid_tag: string | null;
+  rfid_label: string | null;
   phone: string | null;
   status: "active" | "blocked" | "archived";
   notes: string | null;
@@ -98,6 +99,7 @@ export function useChargingUsers() {
       name: string;
       email?: string;
       rfid_tag?: string;
+      rfid_label?: string;
       phone?: string;
       group_id?: string | null;
       tariff_id?: string | null;
@@ -116,6 +118,7 @@ export function useChargingUsers() {
       name?: string;
       email?: string;
       rfid_tag?: string;
+      rfid_label?: string;
       phone?: string;
       group_id?: string | null;
       tariff_id?: string | null;

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
+import { ConfirmDialogHost } from "@/components/ui/confirm-dialog";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -70,6 +71,16 @@ const ChargingAppAdmin = lazy(() => import("./pages/ChargingAppAdmin"));
 const ArbitrageTrading = lazy(() => import("./pages/ArbitrageTrading"));
 const Copilot = lazy(() => import("./pages/Copilot"));
 const TenantElectricity = lazy(() => import("./pages/TenantElectricity"));
+const EnergySharing = lazy(() => import("./pages/EnergySharing"));
+const EnergySharingMemberDetail = lazy(() => import("./pages/EnergySharingMemberDetail"));
+const MarketplacePublic = lazy(() => import("./pages/MarketplacePublic"));
+const MarketplaceListingDetail = lazy(() => import("./pages/MarketplaceListingDetail"));
+const SharingLogin = lazy(() => import("./pages/sharing/SharingLogin"));
+const SharingDashboard = lazy(() => import("./pages/sharing/SharingDashboard"));
+const SharingInvoices = lazy(() => import("./pages/sharing/SharingInvoices"));
+const SharingOnboarding = lazy(() => import("./pages/sharing/SharingOnboarding"));
+const SharingInstall = lazy(() => import("./pages/sharing/SharingInstall"));
+
 const TenantEnergyApp = lazy(() => import("./pages/TenantEnergyApp"));
 const Demo = lazy(() => import("./pages/Demo"));
 const SuperAdminMap = lazy(() => import("./pages/SuperAdminMap"));
@@ -119,6 +130,7 @@ const App = () => (
                 <TooltipProvider>
                   <Toaster />
                   <Sonner />
+                  <ConfirmDialogHost />
                   <RecoveryGuard />
                   <UpdateBanner />
                   <SupportSessionBanner />
@@ -214,6 +226,17 @@ const App = () => (
                       <Route path="/arbitrage" element={<M><ArbitrageTrading /></M>} />
                       <Route path="/copilot" element={<M><Copilot /></M>} />
                       <Route path="/energy-report" element={<M><EnergyReport /></M>} />
+                      <Route path="/energy-sharing" element={<M><EnergySharing /></M>} />
+                      <Route path="/energy-sharing/members/:memberId" element={<M><EnergySharingMemberDetail /></M>} />
+                      <Route path="/sharing/marktplatz" element={<MarketplacePublic />} />
+                      <Route path="/sharing/marktplatz/:slug" element={<MarketplaceListingDetail />} />
+                      <Route path="/mein-sharing" element={<SharingDashboard />} />
+                      <Route path="/mein-sharing/login" element={<SharingLogin />} />
+                      <Route path="/mein-sharing/dashboard" element={<SharingDashboard />} />
+                      <Route path="/mein-sharing/rechnungen" element={<SharingInvoices />} />
+                      <Route path="/mein-sharing/onboarding" element={<SharingOnboarding />} />
+                      <Route path="/mein-sharing/install" element={<SharingInstall />} />
+
                       <Route path="/tenant-electricity" element={<M><TenantElectricity /></M>} />
                       <Route path="/ev" element={<ChargingApp />} />
                       <Route path="/te" element={<TenantEnergyApp />} />

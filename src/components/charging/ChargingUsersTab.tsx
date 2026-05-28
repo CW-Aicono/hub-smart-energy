@@ -22,7 +22,7 @@ import { format } from "date-fns";
 import { ChargingImportExportDialog } from "@/components/charging/ChargingImportExportDialog";
 import type { ExportType } from "@/lib/chargingImportExport";
 
-const emptyUserForm = { name: "", email: "", rfid_tag: "", phone: "", group_id: "", tariff_id: "", notes: "" };
+const emptyUserForm = { name: "", email: "", rfid_tag: "", rfid_label: "", phone: "", group_id: "", tariff_id: "", notes: "" };
 const emptyGroupForm = { name: "", description: "", is_app_user: false, tariff_id: "" };
 
 const ChargingUsersTab = () => {
@@ -56,7 +56,8 @@ const ChargingUsersTab = () => {
       return (
         u.name?.toLowerCase().includes(q) ||
         (u.email?.toLowerCase().includes(q) ?? false) ||
-        (u.rfid_tag?.toLowerCase().includes(q) ?? false)
+        (u.rfid_tag?.toLowerCase().includes(q) ?? false) ||
+        (u.rfid_label?.toLowerCase().includes(q) ?? false)
       );
     });
 
@@ -84,7 +85,7 @@ const ChargingUsersTab = () => {
   // --- User CRUD ---
   const openAddUser = () => { setUserForm({ ...emptyUserForm, tariff_id: defaultTariff?.id || "" }); setEditingUser(null); setUserDialogOpen(true); };
   const openEditUser = (u: ChargingUser) => {
-    setUserForm({ name: u.name, email: u.email || "", rfid_tag: u.rfid_tag || "", phone: u.phone || "", group_id: u.group_id || "", tariff_id: u.tariff_id || "", notes: u.notes || "" });
+    setUserForm({ name: u.name, email: u.email || "", rfid_tag: u.rfid_tag || "", rfid_label: u.rfid_label || "", phone: u.phone || "", group_id: u.group_id || "", tariff_id: u.tariff_id || "", notes: u.notes || "" });
     setEditingUser(u); setUserDialogOpen(true);
   };
   const handleSaveUser = () => {
@@ -93,6 +94,7 @@ const ChargingUsersTab = () => {
       name: userForm.name,
       email: userForm.email || undefined,
       rfid_tag: userForm.rfid_tag || undefined,
+      rfid_label: userForm.rfid_label || undefined,
       phone: userForm.phone || undefined,
       group_id: userForm.group_id || null,
       tariff_id: userForm.tariff_id || null,
@@ -190,6 +192,7 @@ const ChargingUsersTab = () => {
                       <TableHead>{t("common.name" as any)}</TableHead>
                       <TableHead>{t("common.email" as any)}</TableHead>
                       <TableHead>{t("cu.rfidTag" as any)}</TableHead>
+                      <TableHead>Tag-Bezeichnung</TableHead>
                       <TableHead>{t("cu.userGroup" as any)}</TableHead>
                       <TableHead>Tarif</TableHead>
                       <TableHead>{t("common.status" as any)}</TableHead>
@@ -203,6 +206,7 @@ const ChargingUsersTab = () => {
                         <TableCell className="font-medium">{u.name}</TableCell>
                         <TableCell>{u.email || "—"}</TableCell>
                         <TableCell className="font-mono text-sm">{u.rfid_tag || "—"}</TableCell>
+                        <TableCell className="text-sm">{u.rfid_label || "—"}</TableCell>
                         <TableCell>{getGroupName(u.group_id)}</TableCell>
                         <TableCell className="text-sm">{getEffectiveTariff(u)}</TableCell>
                         <TableCell>{statusBadge(u.status)}</TableCell>
@@ -309,6 +313,9 @@ const ChargingUsersTab = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div><Label>{t("cu.rfidTag" as any)}</Label><Input value={userForm.rfid_tag} onChange={(e) => setUserForm({ ...userForm, rfid_tag: e.target.value })} placeholder="z. B. AB12CD34" /></div>
+              <div><Label>Tag-Bezeichnung</Label><Input value={userForm.rfid_label} onChange={(e) => setUserForm({ ...userForm, rfid_label: e.target.value })} placeholder="z. B. Karte 042" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>{t("cu.userGroup" as any)}</Label>
                 <Select value={userForm.group_id || "__none__"} onValueChange={(v) => setUserForm({ ...userForm, group_id: v === "__none__" ? "" : v })}>
@@ -320,6 +327,7 @@ const ChargingUsersTab = () => {
                 </Select>
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               {tariffSelect(userForm.tariff_id, (v) => setUserForm({ ...userForm, tariff_id: v }), "Individueller Tarif")}
             </div>

@@ -33,9 +33,24 @@ serve(async (req) => {
   console.log("loxone-periodic-sync: Starting sync for all active Loxone integrations...");
 
   try {
+    // Feature-Flag: globaler Kill-Switch für die Intervall-Drosselung
+    let respectPollInterval = true;
+    try {
+      const { data: flagRow } = await supabase
+        .from("system_settings")
+        .select("value")
+        .eq("key", "loxone_respect_poll_interval")
+        .maybeSingle();
+      if (flagRow && String(flagRow.value).toLowerCase() === "false") {
+        respectPollInterval = false;
+      }
+    } catch (_) {
+      // Tabelle/Schlüssel fehlt → Default true
+    }
+
     const { data: locationIntegrations, error } = await supabase
       .from("location_integrations")
-      .select("id, location_id, integration:integrations(type)")
+      .select("id, location_id, config, last_sync_at, integration:integrations(type)")
       .eq("is_enabled", true);
 
     if (error) {
@@ -50,7 +65,7 @@ serve(async (req) => {
       (li: any) => li.integration?.type === "loxone" || li.integration?.type === "loxone_miniserver"
     );
 
-    console.log(`Found ${loxoneIntegrations.length} active Loxone integrations`);
+    console.log(`Found ${loxoneIntegrations.length} active Loxone integrations (respectPollInterval=${respectPollInterval})`);
 
     if (loxoneIntegrations.length === 0) {
       return new Response(
@@ -59,13 +74,40 @@ serve(async (req) => {
       );
     }
 
-    const results: Array<{ id: string; success: boolean; error?: string }> = [];
+    const results: Array<{ id: string; success: boolean; error?: string; skipped?: boolean }> = [];
+    let skippedCount = 0;
+    const nowMs = Date.now();
+    const TOLERANCE_MS = 15_000; // 15 s Toleranz, damit Cron-Ticks nicht knapp daneben liegen
 
     for (const li of loxoneIntegrations) {
       const integrationId = li.id;
       const locationId = (li as any).location_id;
       const integrationType = (li.integration as any)?.type || "loxone";
+
+      // ── Intervall-Drosselung: pro Liegenschaft konfigurierbar (1–15 Min, Default 5) ──
+      if (respectPollInterval) {
+        const cfg = ((li as any).config as Record<string, any> | null) || {};
+        const rawInterval = Number(cfg.poll_interval_minutes);
+        const intervalMin = Number.isFinite(rawInterval) && rawInterval >= 1 && rawInterval <= 15
+          ? Math.floor(rawInterval)
+          : 5;
+        const lastSyncIso = (li as any).last_sync_at as string | null;
+        if (lastSyncIso) {
+          const lastMs = new Date(lastSyncIso).getTime();
+          const elapsedMs = nowMs - lastMs;
+          const requiredMs = intervalMin * 60_000 - TOLERANCE_MS;
+          if (elapsedMs < requiredMs) {
+            const remainingSec = Math.ceil((requiredMs - elapsedMs) / 1000);
+            console.log(`Skipping integration ${integrationId} – next sync in ${remainingSec}s (interval=${intervalMin}min)`);
+            results.push({ id: integrationId, success: true, skipped: true });
+            skippedCount++;
+            continue;
+          }
+        }
+      }
+
       console.log(`Syncing integration: ${integrationId}`);
+
 
       try {
         const response = await fetch(
@@ -390,11 +432,11 @@ serve(async (req) => {
       }
     }
 
-    const successCount = results.filter((r) => r.success).length;
-    console.log(`loxone-periodic-sync: Completed. ${successCount}/${results.length} integrations synced successfully.`);
+    const successCount = results.filter((r) => r.success && !r.skipped).length;
+    console.log(`loxone-periodic-sync: Completed. ${successCount}/${results.length} synced, ${skippedCount} skipped (poll interval).`);
 
     return new Response(
-      JSON.stringify({ success: true, synced: successCount, total: results.length, results }),
+      JSON.stringify({ success: true, synced: successCount, skipped: skippedCount, total: results.length, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

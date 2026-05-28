@@ -21,6 +21,7 @@ const ROUTE_MODULE_MAP: Record<string, string> = {
   "/arbitrage": "arbitrage_trading",
   "/tenant-electricity": "tenant_electricity",
   "/energy-report": "energy_report",
+  "/energy-sharing": "energy_sharing",
 };
 
 /**
@@ -39,6 +40,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/arbitrage": "arbitrage_trading",
   "/tenant-electricity": "tenant_electricity",
   "/energy-report": "energy_report",
+  "/energy-sharing": "energy_sharing",
 };
 
 export function useModuleGuard() {
@@ -46,20 +48,24 @@ export function useModuleGuard() {
   const { tenant } = useTenant();
   const { modules, isLoading, isModuleEnabled } = useTenantModules(isDemo ? null : (tenant?.id ?? null));
 
+  // Strict mode: if the tenant has any module records, treat absence as "disabled" (opt-in).
+  // Permissive mode: if no records exist at all, default to enabled (legacy/unconfigured tenants).
+  const strictMode = modules.length > 0;
+
   const checkModule = (code: string): boolean => {
     if (isDemo) return true;
     if (isLoading || !tenant) return true;
     const mod = modules.find((m) => m.module_code === code);
-    return mod ? mod.is_enabled : true;
+    if (mod) return mod.is_enabled;
+    return !strictMode;
   };
 
   const isRouteAllowed = (path: string): boolean => {
     if (isDemo) return true;
     if (isLoading || !tenant) return true;
-    
+
     const moduleCode = ROUTE_MODULE_MAP[path];
     if (!moduleCode) {
-      // Check prefix match (e.g. /locations/:id)
       const matchedRoute = Object.keys(ROUTE_MODULE_MAP).find(
         (route) => path.startsWith(route + "/")
       );
@@ -82,8 +88,10 @@ export function useModuleGuard() {
   const locationsFullEnabled = useMemo(() => {
     if (isLoading || !tenant) return true;
     const mod = modules.find((m) => m.module_code === "locations");
-    return mod ? mod.is_enabled : true;
-  }, [modules, isLoading, tenant]);
+    if (mod) return mod.is_enabled;
+    return !strictMode;
+  }, [modules, isLoading, tenant, strictMode]);
 
   return { isRouteAllowed, isNavItemVisible, isLoading, isModuleEnabled: checkModule, locationsFullEnabled };
 }
+
