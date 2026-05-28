@@ -313,6 +313,9 @@ const ChargingUsersTab = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div><Label>{t("cu.rfidTag" as any)}</Label><Input value={userForm.rfid_tag} onChange={(e) => setUserForm({ ...userForm, rfid_tag: e.target.value })} placeholder="z. B. AB12CD34" /></div>
+              <div><Label>Tag-Bezeichnung</Label><Input value={userForm.rfid_label} onChange={(e) => setUserForm({ ...userForm, rfid_label: e.target.value })} placeholder="z. B. Karte 042" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>{t("cu.userGroup" as any)}</Label>
                 <Select value={userForm.group_id || "__none__"} onValueChange={(v) => setUserForm({ ...userForm, group_id: v === "__none__" ? "" : v })}>
@@ -324,6 +327,7 @@ const ChargingUsersTab = () => {
                 </Select>
               </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               {tariffSelect(userForm.tariff_id, (v) => setUserForm({ ...userForm, tariff_id: v }), "Individueller Tarif")}
             </div>
