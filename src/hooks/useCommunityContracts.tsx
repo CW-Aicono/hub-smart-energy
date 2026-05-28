@@ -12,9 +12,16 @@ export interface ContractTemplate {
   body_markdown: string;
   placeholders: string[];
   is_active: boolean;
+  /** "liefer" = Liefervertrag (§42c Abs.1 Nr.2), "nutzung" = Nutzungsvertrag (§42c Abs.1 Nr.3) */
+  template_kind?: "liefer" | "nutzung";
   created_at: string;
   updated_at: string;
 }
+
+export const TEMPLATE_KIND_LABELS: Record<string, string> = {
+  liefer: "Liefervertrag (§42c Abs. 1 Nr. 2)",
+  nutzung: "Nutzungsvertrag (§42c Abs. 1 Nr. 3)",
+};
 
 export interface MemberSignature {
   id: string;
@@ -64,19 +71,13 @@ export function useContractTemplates(communityId: string | null) {
         .order("updated_at", { ascending: false });
       if (communityId) {
         q = q.or(`community_id.is.null,community_id.eq.${communityId}`);
-      }
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as unknown as ContractTemplate[];
-    },
-  });
-
   const createTemplate = useMutation({
     mutationFn: async (values: {
       name: string;
       body_markdown: string;
       placeholders?: string[];
       community_id?: string | null;
+      template_kind?: "liefer" | "nutzung";
     }) => {
       const { error } = await supabase.from("community_contract_templates").insert({
         tenant_id: tenantId!,
@@ -86,7 +87,8 @@ export function useContractTemplates(communityId: string | null) {
         placeholders: values.placeholders ?? [],
         version: 1,
         is_active: true,
-      });
+        template_kind: values.template_kind ?? "nutzung",
+      } as any);
       if (error) throw error;
     },
     onSuccess: () => {
