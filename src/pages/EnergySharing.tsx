@@ -32,7 +32,8 @@ import MarketplaceTab from "@/components/energy-sharing/MarketplaceTab";
 import { maLoError, meLoError } from "@/lib/energy-sharing/idValidation";
 
 export default function EnergySharing() {
-  const { communities, isLoading, deleteCommunity } = useEnergyCommunities();
+  const { communities, isLoading, deleteCommunity, updateCommunity } = useEnergyCommunities();
+  const [editCommunity, setEditCommunity] = useState<EnergyCommunity | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
 
