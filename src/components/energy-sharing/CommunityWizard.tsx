@@ -20,15 +20,18 @@ const slugify = (s: string) =>
 
 const STEPS = [
   "Stammdaten",
-  "PLZ-Region",
+const slugify = (s: string) =>
+  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+
+const STEPS = [
+  "Stammdaten",
+  "PLZ & Bilanzkreis",
   "Erste Anlage",
   "Erster Tarif",
-  "Vertragsschablone",
-  "Aktivierung",
+  "Verträge (Liefer + Nutzung)",
+  "Pilot-Bestätigung",
 ];
-
-interface Props {
-  open: boolean;
   onOpenChange: (v: boolean) => void;
   onCreated?: (communityId: string) => void;
 }
