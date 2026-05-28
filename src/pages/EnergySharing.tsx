@@ -67,17 +67,35 @@ export default function EnergySharing() {
           <>
             <div className="flex gap-2 flex-wrap mb-6">
               {communities.map((c) => (
-                <Button
-                  key={c.id}
-                  variant={activeId === c.id ? "default" : "outline"}
-                  onClick={() => setSelectedId(c.id)}
-                  className="rounded-full"
-                >
-                  {c.name}
-                  <Badge variant="secondary" className="ml-2">{c.status}</Badge>
-                </Button>
+                <div key={c.id} className="inline-flex items-center rounded-full border bg-card overflow-hidden">
+                  <Button
+                    variant={activeId === c.id ? "default" : "ghost"}
+                    onClick={() => setSelectedId(c.id)}
+                    className="rounded-none rounded-l-full border-0"
+                  >
+                    {c.name}
+                    <Badge variant="secondary" className="ml-2">{c.status}</Badge>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-none rounded-r-full px-2"
+                    title="Community bearbeiten"
+                    onClick={() => setEditCommunity(c)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               ))}
             </div>
+            <CommunityEditDialog
+              community={editCommunity}
+              onOpenChange={(o) => !o && setEditCommunity(null)}
+              onSave={async (values) => {
+                await updateCommunity.mutateAsync({ id: editCommunity!.id, ...values });
+                setEditCommunity(null);
+              }}
+            />
 
             {selected && (
               <CommunityDetail
