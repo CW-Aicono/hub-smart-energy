@@ -250,6 +250,19 @@ export function useCommunityAssets(communityId: string | null) {
       toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
+  const updateAsset = useMutation({
+    mutationFn: async ({ id, ...values }: { id: string } & Partial<CommunityAsset>) => {
+      const { error } = await supabase.from("community_assets").update(values).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["community-assets", communityId, tenantId] });
+      toast({ title: "Anlage aktualisiert" });
+    },
+    onError: (e: Error) =>
+      toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
   const deleteAsset = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("community_assets").delete().eq("id", id);
@@ -263,8 +276,9 @@ export function useCommunityAssets(communityId: string | null) {
       toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
-  return { assets, isLoading, createAsset, deleteAsset };
+  return { assets, isLoading, createAsset, updateAsset, deleteAsset };
 }
+
 
 // ── Tariffs ──────────────────────────────────────────────────────────────────
 export interface CommunityTariff {
