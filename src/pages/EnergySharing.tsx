@@ -521,10 +521,12 @@ function CommunityEditDialog({
   community,
   onOpenChange,
   onSave,
+  onDelete,
 }: {
   community: EnergyCommunity | null;
   onOpenChange: (o: boolean) => void;
   onSave: (values: Partial<EnergyCommunity>) => Promise<void>;
+  onDelete: () => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [status, setStatus] = useState("draft");
@@ -554,12 +556,18 @@ function CommunityEditDialog({
             </Select>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
-          <Button disabled={!name.trim()} onClick={() => onSave({ name, status })}>Speichern</Button>
+        <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
+          <Button variant="destructive" onClick={onDelete}>
+            <Trash2 className="h-4 w-4 mr-2" />Community löschen
+          </Button>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
+            <Button disabled={!name.trim()} onClick={() => onSave({ name, status })}>Speichern</Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
 
