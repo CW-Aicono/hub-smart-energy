@@ -707,6 +707,7 @@ function TariffTab({ communityId }: { communityId: string }) {
               <Button onClick={handleSubmit}>{editing ? "Speichern" : "Hinzufügen"}</Button>
             </DialogFooter>
           </DialogContent>
+        </Dialog>
       </CardHeader>
       <CardContent>
         {tariffs.length === 0 ? (
