@@ -130,7 +130,6 @@ function CommunityDetail({ communityId, communityName }: { communityId: string; 
       <TabsContent value="ueberblick">
         <CommunityDashboardTab communityId={communityId} />
       </TabsContent>
-      </TabsContent>
 
       {/* GRUPPE 2: STAMMDATEN */}
       <TabsContent value="stammdaten">
