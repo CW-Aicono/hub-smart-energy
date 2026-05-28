@@ -89,6 +89,7 @@ export function exportUsers(
   format: ExportFormat,
 ) {
   const rows: (string | number | null)[][] = [
+    [...USER_HEADERS],
     ...users.map((u) => [
       u.name,
       u.email ?? "",
@@ -100,7 +101,6 @@ export function exportUsers(
       u.status,
       u.notes ?? "",
     ]),
-  ];
   ];
   writeSheet(rows, format, `lade-nutzer_${new Date().toISOString().slice(0, 10)}`);
 }
