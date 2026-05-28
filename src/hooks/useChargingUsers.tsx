@@ -116,7 +116,8 @@ export function useChargingUsers() {
     mutationFn: async ({ id, ...rest }: {
       id: string;
       name?: string;
-      email?: string;
+      rfid_tag?: string;
+      rfid_label?: string;
       rfid_tag?: string;
       phone?: string;
       group_id?: string | null;
