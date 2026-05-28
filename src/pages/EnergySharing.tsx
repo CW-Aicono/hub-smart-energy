@@ -586,8 +586,8 @@ function AssetsTab({ communityId }: { communityId: string }) {
                 <Alert variant={smallPlant.small ? "default" : "destructive"} className="text-xs">
                   <AlertDescription>
                     {smallPlant.small
-                      ? <>✓ Kleinanlage (< {smallPlant.threshold} kW): <b>keine Stromlieferanten-Pflichten</b> nach §42c Abs. 5.</>
-                      : <>⚠ Anlage ≥ {smallPlant.threshold} kW: <b>Stromlieferanten-Status</b> für Eigner erforderlich.</>}
+                      ? <>✓ Kleinanlage (unter {smallPlant.threshold} kW): <b>keine Stromlieferanten-Pflichten</b> nach §42c Abs. 5.</>
+                      : <>⚠ Anlage ab {smallPlant.threshold} kW: <b>Stromlieferanten-Status</b> für Eigner erforderlich.</>}
                   </AlertDescription>
                 </Alert>
               )}
