@@ -71,6 +71,13 @@ export function useContractTemplates(communityId: string | null) {
         .order("updated_at", { ascending: false });
       if (communityId) {
         q = q.or(`community_id.is.null,community_id.eq.${communityId}`);
+      }
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as unknown as ContractTemplate[];
+    },
+  });
+
   const createTemplate = useMutation({
     mutationFn: async (values: {
       name: string;
