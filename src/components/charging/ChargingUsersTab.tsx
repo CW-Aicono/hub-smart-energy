@@ -189,10 +189,10 @@ const ChargingUsersTab = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t("cu.rfidTag" as any)}</TableHead>
-                      <TableHead>Tag-Bezeichnung</TableHead>
+                      <TableHead>{t("common.name" as any)}</TableHead>
                       <TableHead>{t("common.email" as any)}</TableHead>
                       <TableHead>{t("cu.rfidTag" as any)}</TableHead>
+                      <TableHead>Tag-Bezeichnung</TableHead>
                       <TableHead>{t("cu.userGroup" as any)}</TableHead>
                       <TableHead>Tarif</TableHead>
                       <TableHead>{t("common.status" as any)}</TableHead>
