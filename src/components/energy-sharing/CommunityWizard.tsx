@@ -27,6 +27,68 @@ const STEPS = [
   "Pilot-Bestätigung",
 ];
 
+const DEFAULT_CONTRACT = `# Mitgliedervertrag – {{community_name}}
+
+zwischen
+
+**{{community_name}}** (Energiegemeinschaft nach § 42c EnWG)
+
+und
+
+**{{member_name}}**, E-Mail: {{member_email}}
+
+## 1. Gegenstand
+Das Mitglied tritt der Energiegemeinschaft {{community_name}} bei und bezieht bzw. liefert
+Strom über das öffentliche Netz im Rahmen des gemeinsamen Strombezugs nach § 42c EnWG.
+
+## 2. Tarif
+- Verbraucherpreis: {{price_ct_kwh}} ct/kWh
+- Gültig ab: {{valid_from}}
+
+## 3. Laufzeit & Kündigung
+Der Vertrag läuft unbefristet und kann mit einer Frist von einem Monat zum Monatsende
+gekündigt werden.
+
+## 4. Datenschutz
+Verbrauchsdaten werden ausschließlich zur Abrechnung und Allokation innerhalb der
+Energiegemeinschaft verarbeitet. Es erfolgt keine Weitergabe an Dritte.
+
+## 5. Digitale Unterschrift
+Mit der digitalen Unterschrift bestätigt das Mitglied den Inhalt dieses Vertrags.
+Zeitpunkt, IP-Adresse und ein kryptografischer Hash des Vertragstexts werden zur
+Beweissicherung gespeichert.
+`;
+
+const DEFAULT_SUPPLY_CONTRACT = `# Liefervertrag (Reststrom) – {{community_name}}
+
+zwischen
+
+**{{community_name}}** (Energiegemeinschaft nach § 42c Abs. 1 Nr. 2 EnWG)
+
+und
+
+**{{member_name}}**, E-Mail: {{member_email}}
+
+## 1. Gegenstand
+Lieferung von Reststrom (über den Energy-Sharing-Anteil hinaus) durch den
+Reststromlieferanten **{{rest_supplier_name}}**.
+
+## 2. Tarif
+Es gelten die Konditionen des Reststromlieferanten in der jeweils aktuellen Fassung.
+Energy Sharing deckt nur den in der Allokation berechneten Anteil.
+
+## 3. Netzentgelte, Umlagen, Steuern
+Auf Energy-Sharing-Mengen sind **alle gesetzlichen Netzentgelte, Umlagen und Steuern**
+zu entrichten. Eine Befreiung ist nach derzeitiger Gesetzeslage nicht vorgesehen.
+
+## 4. Laufzeit & Kündigung
+Gültig ab {{valid_from}}. Kündigung gemäß AGB des Reststromlieferanten.
+
+## 5. Digitale Unterschrift
+Mit der digitalen Unterschrift bestätigt das Mitglied den Inhalt dieses Vertrags.
+`;
+
+
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -393,63 +455,4 @@ function PlzVnbHint({ plzList }: { plzList: string }) {
   );
 }
 
-const DEFAULT_CONTRACT = `# Mitgliedervertrag – {{community_name}}
 
-zwischen
-
-**{{community_name}}** (Energiegemeinschaft nach § 42c EnWG)
-
-und
-
-**{{member_name}}**, E-Mail: {{member_email}}
-
-## 1. Gegenstand
-Das Mitglied tritt der Energiegemeinschaft {{community_name}} bei und bezieht bzw. liefert
-Strom über das öffentliche Netz im Rahmen des gemeinsamen Strombezugs nach § 42c EnWG.
-
-## 2. Tarif
-- Verbraucherpreis: {{price_ct_kwh}} ct/kWh
-- Gültig ab: {{valid_from}}
-
-## 3. Laufzeit & Kündigung
-Der Vertrag läuft unbefristet und kann mit einer Frist von einem Monat zum Monatsende
-gekündigt werden.
-
-## 4. Datenschutz
-Verbrauchsdaten werden ausschließlich zur Abrechnung und Allokation innerhalb der
-Energiegemeinschaft verarbeitet. Es erfolgt keine Weitergabe an Dritte.
-
-## 5. Digitale Unterschrift
-Mit der digitalen Unterschrift bestätigt das Mitglied den Inhalt dieses Vertrags.
-Zeitpunkt, IP-Adresse und ein kryptografischer Hash des Vertragstexts werden zur
-Beweissicherung gespeichert.
-`;
-
-const DEFAULT_SUPPLY_CONTRACT = `# Liefervertrag (Reststrom) – {{community_name}}
-
-zwischen
-
-**{{community_name}}** (Energiegemeinschaft nach § 42c Abs. 1 Nr. 2 EnWG)
-
-und
-
-**{{member_name}}**, E-Mail: {{member_email}}
-
-## 1. Gegenstand
-Lieferung von Reststrom (über den Energy-Sharing-Anteil hinaus) durch den
-Reststromlieferanten **{{rest_supplier_name}}**.
-
-## 2. Tarif
-Es gelten die Konditionen des Reststromlieferanten in der jeweils aktuellen Fassung.
-Energy Sharing deckt nur den in der Allokation berechneten Anteil.
-
-## 3. Netzentgelte, Umlagen, Steuern
-Auf Energy-Sharing-Mengen sind **alle gesetzlichen Netzentgelte, Umlagen und Steuern**
-zu entrichten. Eine Befreiung ist nach derzeitiger Gesetzeslage nicht vorgesehen.
-
-## 4. Laufzeit & Kündigung
-Gültig ab {{valid_from}}. Kündigung gemäß AGB des Reststromlieferanten.
-
-## 5. Digitale Unterschrift
-Mit der digitalen Unterschrift bestätigt das Mitglied den Inhalt dieses Vertrags.
-`;
