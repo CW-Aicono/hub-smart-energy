@@ -26,6 +26,7 @@ const USER_HEADERS = [
   "Name",
   "E-Mail",
   "RFID-Tag",
+  "Tag-Bezeichnung",
   "Telefon",
   "Gruppe",
   "Tarif",
@@ -40,7 +41,7 @@ const GROUP_HEADERS = [
   "Tarif",
 ] as const;
 
-const NFC_HEADERS = ["E-Mail", "RFID-Tag", "Name"] as const;
+const NFC_HEADERS = ["E-Mail", "RFID-Tag", "Tag-Bezeichnung", "Name"] as const;
 
 /* -------------------------- Hilfsfunktionen ----------------------------- */
 
@@ -93,6 +94,7 @@ export function exportUsers(
       u.name,
       u.email ?? "",
       u.rfid_tag ?? "",
+      u.rfid_label ?? "",
       u.phone ?? "",
       nameById(groups, u.group_id),
       nameById(tariffs, u.tariff_id),
@@ -125,7 +127,7 @@ export function exportNfc(users: ChargingUser[], format: ExportFormat) {
     [...NFC_HEADERS],
     ...users
       .filter((u) => u.rfid_tag && u.rfid_tag.trim().length > 0)
-      .map((u) => [u.email ?? "", u.rfid_tag ?? "", u.name]),
+      .map((u) => [u.email ?? "", u.rfid_tag ?? "", u.rfid_label ?? "", u.name]),
   ];
   writeSheet(rows, format, `nfc-tags_${new Date().toISOString().slice(0, 10)}`);
 }
@@ -136,7 +138,7 @@ export function downloadTemplate(type: ExportType, format: ExportFormat) {
   const sample: Record<ExportType, (string | number | null)[][]> = {
     users: [
       [...USER_HEADERS],
-      ["Max Mustermann", "max@example.com", "04A1B2C3", "+49 170 0000000", "Mitarbeiter", "Standard-Tarif", "active", "Beispielzeile — bitte ersetzen"],
+      ["Max Mustermann", "max@example.com", "04A1B2C3", "Karte 042", "+49 170 0000000", "Mitarbeiter", "Standard-Tarif", "active", "Beispielzeile — bitte ersetzen"],
     ],
     groups: [
       [...GROUP_HEADERS],
@@ -144,7 +146,7 @@ export function downloadTemplate(type: ExportType, format: ExportFormat) {
     ],
     nfc: [
       [...NFC_HEADERS],
-      ["max@example.com", "04A1B2C3", "Max Mustermann"],
+      ["max@example.com", "04A1B2C3", "Karte 042", "Max Mustermann"],
     ],
   };
   const fname: Record<ExportType, string> = {
@@ -199,6 +201,7 @@ export interface UserImportRecord {
   name: string;
   email: string | null;
   rfid_tag: string | null;
+  rfid_label: string | null;
   phone: string | null;
   group_id: string | null;
   tariff_id: string | null;
@@ -261,6 +264,7 @@ export function buildUserPreview(
       name,
       email: email || null,
       rfid_tag: rfid || null,
+      rfid_label: (r["Tag-Bezeichnung"] ?? "").trim() || null,
       phone: (r["Telefon"] ?? "").trim() || null,
       group_id,
       tariff_id,
@@ -332,6 +336,7 @@ export interface NfcImportRecord {
   rowNumber: number;
   email: string;
   rfid_tag: string;
+  rfid_label: string | null;
   userId: string;
 }
 
@@ -347,6 +352,7 @@ export function buildNfcPreview(
     const rowNumber = i + 2;
     const email = (r["E-Mail"] ?? "").trim().toLowerCase();
     const rfid = (r["RFID-Tag"] ?? "").replace(/\s+/g, "").trim();
+    const label = (r["Tag-Bezeichnung"] ?? "").trim();
     if (!email || !rfid) {
       issues.push({ row: rowNumber, severity: "error", message: "'E-Mail' und 'RFID-Tag' sind Pflicht — Zeile wird übersprungen." });
       skipped++;
@@ -358,7 +364,7 @@ export function buildNfcPreview(
       skipped++;
       return;
     }
-    records.push({ rowNumber, email, rfid_tag: rfid, userId: user.id });
+    records.push({ rowNumber, email, rfid_tag: rfid, rfid_label: label || null, userId: user.id });
   });
 
   return { records, issues, skipped };
@@ -375,6 +381,7 @@ export async function executeUserImport(records: UserImportRecord[], tenantId: s
       name: r.name,
       email: r.email,
       rfid_tag: r.rfid_tag,
+      rfid_label: r.rfid_label,
       phone: r.phone,
       group_id: r.group_id,
       tariff_id: r.tariff_id,
@@ -418,7 +425,9 @@ export async function executeNfcImport(records: NfcImportRecord[]) {
   let updated = 0;
   let failed = 0;
   for (const r of records) {
-    const { error } = await supabase.from("charging_users").update({ rfid_tag: r.rfid_tag }).eq("id", r.userId);
+    const update: { rfid_tag: string; rfid_label?: string | null } = { rfid_tag: r.rfid_tag };
+    if (r.rfid_label !== null) update.rfid_label = r.rfid_label;
+    const { error } = await supabase.from("charging_users").update(update).eq("id", r.userId);
     if (error) failed++; else updated++;
   }
   return { created: 0, updated, failed };

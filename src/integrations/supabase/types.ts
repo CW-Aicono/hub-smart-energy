@@ -1282,6 +1282,7 @@ export type Database = {
           name: string
           notes: string | null
           phone: string | null
+          rfid_label: string | null
           rfid_tag: string | null
           status: string
           tariff_id: string | null
@@ -1298,6 +1299,7 @@ export type Database = {
           name: string
           notes?: string | null
           phone?: string | null
+          rfid_label?: string | null
           rfid_tag?: string | null
           status?: string
           tariff_id?: string | null
@@ -1314,6 +1316,7 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string | null
+          rfid_label?: string | null
           rfid_tag?: string | null
           status?: string
           tariff_id?: string | null

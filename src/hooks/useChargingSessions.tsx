@@ -26,7 +26,7 @@ export function useIdTagResolver() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("charging_users")
-        .select("name, rfid_tag, app_tag")
+        .select("name, rfid_tag, rfid_label, app_tag")
         .neq("status", "archived");
       if (error) throw error;
       return data ?? [];
@@ -37,7 +37,8 @@ export function useIdTagResolver() {
   const tagMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const u of chargingUsers) {
-      if (u.rfid_tag) m.set(u.rfid_tag.toUpperCase(), u.name);
+      const label = (u as any).rfid_label ? ` (${(u as any).rfid_label})` : "";
+      if (u.rfid_tag) m.set(u.rfid_tag.toUpperCase(), u.name + label);
       if (u.app_tag) m.set(u.app_tag.toUpperCase(), u.name);
     }
     return m;

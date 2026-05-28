@@ -189,7 +189,7 @@ export function ChargingImportExportDialog({ open, onOpenChange, initialType = "
               <p className="text-[11px] text-muted-foreground mt-1">
                 {importType === "users" && "Match per E-Mail (oder RFID-Tag) — bestehende Nutzer werden aktualisiert, neue angelegt."}
                 {importType === "groups" && "Match per Gruppenname — bestehende Gruppen werden aktualisiert, neue angelegt."}
-                {importType === "nfc" && "RFID-Tags werden bestehenden Nutzern per E-Mail zugeordnet."}
+                {importType === "nfc" && "RFID-Tags (optional mit Tag-Bezeichnung) werden bestehenden Nutzern per E-Mail zugeordnet."}
               </p>
             </div>
 
