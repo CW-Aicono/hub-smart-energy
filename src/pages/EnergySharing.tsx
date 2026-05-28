@@ -840,11 +840,5 @@ function CommunityEditDialog({
     </Dialog>
   );
 }
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 
