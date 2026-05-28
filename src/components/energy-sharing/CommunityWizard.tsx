@@ -41,6 +41,8 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
   const [name, setName] = useState("");
   const [type, setType] = useState("nachbarschaft");
   const [regionPlz, setRegionPlz] = useState("");
+  const [balancingZone, setBalancingZone] = useState("");
+  const [gridOperator, setGridOperator] = useState("");
   const [assetType, setAssetType] = useState("pv");
   const [assetKw, setAssetKw] = useState<number>(0);
   const [assetShare, setAssetShare] = useState("gleich");
@@ -51,8 +53,10 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
   const [feedInCt, setFeedInCt] = useState<number>(20);
   const [skipTariff, setSkipTariff] = useState(false);
   const [templateMode, setTemplateMode] = useState<"none" | "default" | "custom">("default");
-  const [templateName, setTemplateName] = useState("Mitgliedervertrag Energiegemeinschaft");
+  const [templateName, setTemplateName] = useState("Nutzungsvertrag Energiegemeinschaft");
   const [templateBody, setTemplateBody] = useState(DEFAULT_CONTRACT);
+  const [createSupplyTemplate, setCreateSupplyTemplate] = useState(true);
+  const [pilotAck, setPilotAck] = useState(false);
   const [activate, setActivate] = useState(true);
 
   const { createCommunity, updateCommunity } = useEnergyCommunities();
@@ -65,10 +69,12 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
   const reset = () => {
     setStep(0);
     setName(""); setType("nachbarschaft"); setRegionPlz("");
+    setBalancingZone(""); setGridOperator("");
     setAssetType("pv"); setAssetKw(0); setAssetShare("gleich"); setSkipAsset(false);
     setValidFrom(today); setPriceCt(22); setFeedInCt(20); setSkipTariff(false);
-    setTemplateMode("default"); setTemplateName("Mitgliedervertrag Energiegemeinschaft");
-    setTemplateBody(DEFAULT_CONTRACT); setActivate(true);
+    setTemplateMode("default"); setTemplateName("Nutzungsvertrag Energiegemeinschaft");
+    setTemplateBody(DEFAULT_CONTRACT); setCreateSupplyTemplate(true);
+    setPilotAck(false); setActivate(true);
   };
 
   const canNext = () => {
@@ -77,6 +83,7 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
     if (step === 2) return skipAsset || assetKw > 0;
     if (step === 3) return skipTariff || (priceCt > 0 && feedInCt >= 0);
     if (step === 4) return templateMode === "none" || (templateName.trim() && templateBody.trim());
+    if (step === 5) return pilotAck;
     return true;
   };
 
@@ -94,6 +101,13 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
       if (!row) throw new Error("Community konnte nicht erstellt werden");
       const communityId = row.id as string;
       const tenantId = row.tenant_id as string;
+
+      // Bilanzkreis + VNB + Pilot-Bestätigung nachtragen
+      await supabase.from("energy_communities").update({
+        balancing_zone: balancingZone || null,
+        grid_operator: gridOperator || null,
+        pilot_acknowledged_at: pilotAck ? new Date().toISOString() : null,
+      } as any).eq("id", communityId);
 
       if (!skipAsset && assetKw > 0) {
         await supabase.from("community_assets").insert({
@@ -114,9 +128,21 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
           body_markdown: templateBody,
           placeholders: ["community_name", "member_name", "member_email", "valid_from", "price_ct_kwh"],
           version: 1, is_active: true,
-        });
+          template_kind: "nutzung",
+        } as any);
+
+        if (createSupplyTemplate) {
+          await supabase.from("community_contract_templates").insert({
+            tenant_id: tenantId, community_id: communityId,
+            name: "Liefervertrag (Reststrom) " + name.trim(),
+            body_markdown: DEFAULT_SUPPLY_CONTRACT,
+            placeholders: ["community_name", "member_name", "member_email", "rest_supplier_name", "valid_from"],
+            version: 1, is_active: true,
+            template_kind: "liefer",
+          } as any);
+        }
       }
-      void updateCommunity; // not needed for now
+      void updateCommunity;
       onCreated?.(communityId);
       reset();
       onOpenChange(false);
@@ -124,6 +150,7 @@ export default function CommunityWizard({ open, onOpenChange, onCreated }: Props
       setBusy(false);
     }
   };
+
 
   const progress = ((step + 1) / STEPS.length) * 100;
 
