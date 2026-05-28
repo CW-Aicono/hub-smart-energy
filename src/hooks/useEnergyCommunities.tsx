@@ -14,6 +14,9 @@ export interface EnergyCommunity {
   status: string;
   contract_template_id: string | null;
   settings: any;
+  balancing_zone?: string | null;
+  grid_operator?: string | null;
+  pilot_acknowledged_at?: string | null;
   created_at: string;
   updated_at: string;
 }
