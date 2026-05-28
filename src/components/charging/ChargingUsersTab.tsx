@@ -56,7 +56,8 @@ const ChargingUsersTab = () => {
       return (
         u.name?.toLowerCase().includes(q) ||
         (u.email?.toLowerCase().includes(q) ?? false) ||
-        (u.rfid_tag?.toLowerCase().includes(q) ?? false)
+        (u.rfid_tag?.toLowerCase().includes(q) ?? false) ||
+        (u.rfid_label?.toLowerCase().includes(q) ?? false)
       );
     });
 
