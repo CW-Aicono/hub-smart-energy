@@ -487,8 +487,12 @@ function AssetsTab({ communityId }: { communityId: string }) {
   const { assets, createAsset, updateAsset, deleteAsset } = useCommunityAssets(communityId);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<CommunityAsset | null>(null);
-  const emptyForm = { asset_type: "pv", capacity_kw: 0, share_model: "gleich" };
+  const emptyForm = {
+    asset_type: "pv", capacity_kw: 0, share_model: "gleich",
+    building_type: "efh", renewable_confirmed: false, imsys_status: "missing",
+  };
   const [form, setForm] = useState(emptyForm);
+  const smallPlant = isSmallPlant(form.capacity_kw, form.building_type);
 
   useEffect(() => {
     if (editing) {
@@ -496,6 +500,9 @@ function AssetsTab({ communityId }: { communityId: string }) {
         asset_type: editing.asset_type,
         capacity_kw: Number(editing.capacity_kw),
         share_model: editing.share_model,
+        building_type: editing.building_type ?? "efh",
+        renewable_confirmed: !!editing.renewable_confirmed,
+        imsys_status: editing.imsys_status ?? "missing",
       });
       setOpen(true);
     }
@@ -522,7 +529,7 @@ function AssetsTab({ communityId }: { communityId: string }) {
         <CardTitle>Erzeugungsanlagen & Speicher</CardTitle>
         <Dialog open={open} onOpenChange={handleClose}>
           <DialogTrigger asChild><Button size="sm" onClick={() => setEditing(null)}><Plus className="h-4 w-4 mr-2" />Anlage</Button></DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{editing ? "Anlage bearbeiten" : "Anlage einbringen"}</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div><Label>Typ</Label>
@@ -536,7 +543,19 @@ function AssetsTab({ communityId }: { communityId: string }) {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Leistung (kW)</Label><Input type="number" step="0.1" value={form.capacity_kw} onChange={(e) => setForm({ ...form, capacity_kw: Number(e.target.value) })} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Leistung (kW)</Label><Input type="number" step="0.1" value={form.capacity_kw} onChange={(e) => setForm({ ...form, capacity_kw: Number(e.target.value) })} /></div>
+                <div><Label>Gebäudetyp</Label>
+                  <Select value={form.building_type} onValueChange={(v) => setForm({ ...form, building_type: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(BUILDING_TYPE_LABELS).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <div><Label>Verteilmodell</Label>
                 <Select value={form.share_model} onValueChange={(v) => setForm({ ...form, share_model: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -547,9 +566,34 @@ function AssetsTab({ communityId }: { communityId: string }) {
                   </SelectContent>
                 </Select>
               </div>
+              <div><Label>iMSys-Status der Anlage</Label>
+                <Select value={form.imsys_status} onValueChange={(v) => setForm({ ...form, imsys_status: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(IMSYS_STATUS_LABELS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2 rounded-md border p-3">
+                <input type="checkbox" id="ee" checked={form.renewable_confirmed} onChange={(e) => setForm({ ...form, renewable_confirmed: e.target.checked })} />
+                <Label htmlFor="ee" className="text-sm leading-relaxed">
+                  Ich bestätige: Anlage erzeugt <b>ausschließlich erneuerbare Energie</b> und wird <b>nicht überwiegend gewerblich</b> betrieben (§42c Abs. 2 Nr. 2 EnWG).
+                </Label>
+              </div>
+              {form.capacity_kw > 0 && (
+                <Alert variant={smallPlant.small ? "default" : "destructive"} className="text-xs">
+                  <AlertDescription>
+                    {smallPlant.small
+                      ? <>✓ Kleinanlage (< {smallPlant.threshold} kW): <b>keine Stromlieferanten-Pflichten</b> nach §42c Abs. 5.</>
+                      : <>⚠ Anlage ≥ {smallPlant.threshold} kW: <b>Stromlieferanten-Status</b> für Eigner erforderlich.</>}
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
             <DialogFooter>
-              <Button onClick={handleSubmit}>{editing ? "Speichern" : "Hinzufügen"}</Button>
+              <Button disabled={!form.renewable_confirmed} onClick={handleSubmit}>{editing ? "Speichern" : "Hinzufügen"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -560,25 +604,36 @@ function AssetsTab({ communityId }: { communityId: string }) {
         ) : (
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Typ</TableHead><TableHead className="text-right">Leistung (kW)</TableHead>
-              <TableHead>Verteilmodell</TableHead><TableHead></TableHead>
+              <TableHead>Typ</TableHead><TableHead>Gebäude</TableHead>
+              <TableHead className="text-right">Leistung (kW)</TableHead>
+              <TableHead>Verteilmodell</TableHead><TableHead>iMSys</TableHead>
+              <TableHead>EE</TableHead><TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {assets.map((a) => (
-                <TableRow key={a.id}>
-                  <TableCell><Badge variant="secondary">{labelOr(ASSET_TYPE_LABELS, a.asset_type)}</Badge></TableCell>
-                  <TableCell className="text-right">{Number(a.capacity_kw).toLocaleString("de-DE", { maximumFractionDigits: 1 })}</TableCell>
-                  <TableCell>{labelOr(SHARE_MODEL_LABELS, a.share_model)}</TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(a)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" title="Löschen" onClick={async () => {
-                      if (await confirmDialog({ title: "Anlage entfernen", description: "Anlage wirklich entfernen?" })) deleteAsset.mutate(a.id);
-                    }}><Trash2 className="h-4 w-4" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {assets.map((a) => {
+                const sp = isSmallPlant(Number(a.capacity_kw), a.building_type);
+                return (
+                  <TableRow key={a.id}>
+                    <TableCell><Badge variant="secondary">{labelOr(ASSET_TYPE_LABELS, a.asset_type)}</Badge></TableCell>
+                    <TableCell className="text-xs">{labelOr(BUILDING_TYPE_LABELS, a.building_type ?? "efh")}</TableCell>
+                    <TableCell className="text-right">
+                      {Number(a.capacity_kw).toLocaleString("de-DE", { maximumFractionDigits: 1 })}
+                      {!sp.small && <Badge variant="destructive" className="ml-2 text-[10px]">≥ {sp.threshold} kW</Badge>}
+                    </TableCell>
+                    <TableCell>{labelOr(SHARE_MODEL_LABELS, a.share_model)}</TableCell>
+                    <TableCell><Badge variant={a.imsys_status === "installed" ? "default" : "outline"} className="text-xs">{labelOr(IMSYS_STATUS_LABELS, a.imsys_status ?? "missing")}</Badge></TableCell>
+                    <TableCell>{a.renewable_confirmed ? "✓" : <span className="text-destructive">✗</span>}</TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(a)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" title="Löschen" onClick={async () => {
+                        if (await confirmDialog({ title: "Anlage entfernen", description: "Anlage wirklich entfernen?" })) deleteAsset.mutate(a.id);
+                      }}><Trash2 className="h-4 w-4" /></Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
@@ -586,6 +641,7 @@ function AssetsTab({ communityId }: { communityId: string }) {
     </Card>
   );
 }
+
 
 function TariffTab({ communityId }: { communityId: string }) {
   const { tariffs, createTariff, updateTariff, deleteTariff } = useCommunityTariffs(communityId);
