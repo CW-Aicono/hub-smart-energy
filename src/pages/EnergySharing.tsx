@@ -32,6 +32,33 @@ import MarketplaceTab from "@/components/energy-sharing/MarketplaceTab";
 import { maLoError, meLoError } from "@/lib/energy-sharing/idValidation";
 import { confirmDialog } from "@/components/ui/confirm-dialog";
 
+const STATUS_LABELS: Record<string, string> = {
+  draft: "Entwurf",
+  active: "Aktiv",
+  inactive: "Inaktiv",
+  pending: "Ausstehend",
+  invited: "Eingeladen",
+  archived: "Archiviert",
+};
+const ASSET_TYPE_LABELS: Record<string, string> = {
+  pv: "PV-Anlage",
+  wind: "Wind",
+  chp: "BHKW",
+  storage: "Speicher",
+};
+const SHARE_MODEL_LABELS: Record<string, string> = {
+  gleich: "Gleiche Anteile",
+  nach_anteil: "Nach kW-Anteil",
+  dynamisch: "Dynamisch (Verbrauch)",
+};
+const ROLE_LABELS: Record<string, string> = {
+  producer: "Erzeuger",
+  consumer: "Verbraucher",
+  prosumer: "Prosumer",
+};
+const labelOr = (map: Record<string, string>, key: string | null | undefined) =>
+  (key && map[key]) || key || "—";
+
 export default function EnergySharing() {
   const { communities, isLoading, deleteCommunity, updateCommunity } = useEnergyCommunities();
   const [editCommunity, setEditCommunity] = useState<EnergyCommunity | null>(null);
@@ -75,7 +102,7 @@ export default function EnergySharing() {
                     className="rounded-none rounded-l-full border-0"
                   >
                     {c.name}
-                    <Badge variant="secondary" className="ml-2">{c.status}</Badge>
+                    <Badge variant="secondary" className="ml-2">{labelOr(STATUS_LABELS, c.status)}</Badge>
                   </Button>
                   <Button
                     variant="ghost"
@@ -280,10 +307,10 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
                     </Link>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{m.email}</TableCell>
-                  <TableCell><Badge variant="secondary">{m.role}</Badge></TableCell>
+                  <TableCell><Badge variant="secondary">{labelOr(ROLE_LABELS, m.role)}</Badge></TableCell>
                   <TableCell className="font-mono text-xs">{m.malo_id ?? "—"}</TableCell>
                   <TableCell className="text-right">{Number(m.share_kw).toLocaleString("de-DE", { maximumFractionDigits: 2 })}</TableCell>
-                  <TableCell><Badge>{m.status}</Badge></TableCell>
+                  <TableCell><Badge>{labelOr(STATUS_LABELS, m.status)}</Badge></TableCell>
                   <TableCell className="text-right space-x-1">
                     <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(m)}>
                       <Pencil className="h-4 w-4" />
@@ -401,9 +428,9 @@ function AssetsTab({ communityId }: { communityId: string }) {
             <TableBody>
               {assets.map((a) => (
                 <TableRow key={a.id}>
-                  <TableCell><Badge variant="secondary">{a.asset_type}</Badge></TableCell>
+                  <TableCell><Badge variant="secondary">{labelOr(ASSET_TYPE_LABELS, a.asset_type)}</Badge></TableCell>
                   <TableCell className="text-right">{Number(a.capacity_kw).toLocaleString("de-DE", { maximumFractionDigits: 1 })}</TableCell>
-                  <TableCell>{a.share_model}</TableCell>
+                  <TableCell>{labelOr(SHARE_MODEL_LABELS, a.share_model)}</TableCell>
                   <TableCell className="text-right space-x-1">
                     <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(a)}>
                       <Pencil className="h-4 w-4" />
