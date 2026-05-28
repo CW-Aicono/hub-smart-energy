@@ -95,18 +95,20 @@ export default function EnergySharing() {
                 await updateCommunity.mutateAsync({ id: editCommunity!.id, ...values });
                 setEditCommunity(null);
               }}
+              onDelete={async () => {
+                if (!editCommunity) return;
+                if (confirm(`Community "${editCommunity.name}" wirklich unwiderruflich löschen?`)) {
+                  await deleteCommunity.mutateAsync(editCommunity.id);
+                  if (selectedId === editCommunity.id) setSelectedId(null);
+                  setEditCommunity(null);
+                }
+              }}
             />
 
             {selected && (
               <CommunityDetail
                 communityId={selected.id}
                 communityName={selected.name}
-                onDelete={async () => {
-                  if (confirm(`Community "${selected.name}" wirklich löschen?`)) {
-                    await deleteCommunity.mutateAsync(selected.id);
-                    setSelectedId(null);
-                  }
-                }}
               />
             )}
           </>
@@ -116,11 +118,7 @@ export default function EnergySharing() {
   );
 }
 
-function CommunityDetail({ communityId, communityName, onDelete }: { communityId: string; communityName: string; onDelete: () => void }) {
-  const { members } = useCommunityMembers(communityId);
-  const { assets } = useCommunityAssets(communityId);
-  const { tariffs } = useCommunityTariffs(communityId);
-
+function CommunityDetail({ communityId, communityName }: { communityId: string; communityName: string }) {
   return (
     <Tabs defaultValue="ueberblick">
       <TabsList className="flex-wrap">
@@ -132,32 +130,7 @@ function CommunityDetail({ communityId, communityName, onDelete }: { communityId
 
       {/* GRUPPE 1: ÜBERBLICK */}
       <TabsContent value="ueberblick">
-        <Tabs defaultValue="dashboard">
-          <TabsList className="mb-4 rounded-full">
-            <TabsTrigger value="dashboard" className="rounded-full"><BarChart3 className="h-4 w-4 mr-1" />Dashboard</TabsTrigger>
-            <TabsTrigger value="overview" className="rounded-full">Kennzahlen</TabsTrigger>
-          </TabsList>
-          <TabsContent value="dashboard"><CommunityDashboardTab communityId={communityId} /></TabsContent>
-          <TabsContent value="overview">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Card><CardHeader className="pb-2"><CardDescription>Mitglieder</CardDescription></CardHeader>
-                <CardContent><div className="text-2xl font-bold">{members.length.toLocaleString("de-DE")}</div></CardContent></Card>
-              <Card><CardHeader className="pb-2"><CardDescription>Anlagen</CardDescription></CardHeader>
-                <CardContent><div className="text-2xl font-bold">{assets.length.toLocaleString("de-DE")}</div></CardContent></Card>
-              <Card><CardHeader className="pb-2"><CardDescription>Installierte Leistung</CardDescription></CardHeader>
-                <CardContent><div className="text-2xl font-bold">
-                  {assets.reduce((s, a) => s + Number(a.capacity_kw || 0), 0).toLocaleString("de-DE", { maximumFractionDigits: 1 })} kW
-                </div></CardContent></Card>
-              <Card><CardHeader className="pb-2"><CardDescription>Aktive Tarife</CardDescription></CardHeader>
-                <CardContent><div className="text-2xl font-bold">{tariffs.length.toLocaleString("de-DE")}</div></CardContent></Card>
-            </div>
-            <div className="mt-6">
-              <Button variant="destructive" onClick={onDelete}>
-                <Trash2 className="h-4 w-4 mr-2" />Community „{communityName}" löschen
-              </Button>
-            </div>
-          </TabsContent>
-        </Tabs>
+        <CommunityDashboardTab communityId={communityId} />
       </TabsContent>
 
       {/* GRUPPE 2: STAMMDATEN */}
@@ -548,10 +521,12 @@ function CommunityEditDialog({
   community,
   onOpenChange,
   onSave,
+  onDelete,
 }: {
   community: EnergyCommunity | null;
   onOpenChange: (o: boolean) => void;
   onSave: (values: Partial<EnergyCommunity>) => Promise<void>;
+  onDelete: () => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [status, setStatus] = useState("draft");
@@ -581,12 +556,18 @@ function CommunityEditDialog({
             </Select>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
-          <Button disabled={!name.trim()} onClick={() => onSave({ name, status })}>Speichern</Button>
+        <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
+          <Button variant="destructive" onClick={onDelete}>
+            <Trash2 className="h-4 w-4 mr-2" />Community löschen
+          </Button>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
+            <Button disabled={!name.trim()} onClick={() => onSave({ name, status })}>Speichern</Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
 

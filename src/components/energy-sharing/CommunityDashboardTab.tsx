@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCommunityMembers, useCommunityAssets } from "@/hooks/useEnergyCommunities";
+import { useCommunityMembers, useCommunityAssets, useCommunityTariffs } from "@/hooks/useEnergyCommunities";
 import { supabase } from "@/integrations/supabase/client";
 import { PieChart, Pie, Cell, Tooltip as ReTooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
 
@@ -31,6 +31,7 @@ const fmt = (n: number, frac = 0) =>
 export default function CommunityDashboardTab({ communityId }: { communityId: string }) {
   const { members } = useCommunityMembers(communityId);
   const { assets } = useCommunityAssets(communityId);
+  const { tariffs } = useCommunityTariffs(communityId);
 
   const { data: signatureCount = 0 } = useQuery({
     queryKey: ["community-signatures-count", communityId],
@@ -88,12 +89,16 @@ export default function CommunityDashboardTab({ communityId }: { communityId: st
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card>
-          <CardHeader className="pb-2"><CardDescription>Aktive Mitglieder</CardDescription></CardHeader>
+          <CardHeader className="pb-2"><CardDescription>Mitglieder (aktiv / gesamt)</CardDescription></CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{fmt(stats.active)} <span className="text-sm text-muted-foreground">/ {fmt(stats.total)}</span></div>
           </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardDescription>Anlagen</CardDescription></CardHeader>
+          <CardContent><div className="text-2xl font-bold">{fmt(assets.length)}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardDescription>Installierte Leistung</CardDescription></CardHeader>
@@ -102,6 +107,10 @@ export default function CommunityDashboardTab({ communityId }: { communityId: st
         <Card>
           <CardHeader className="pb-2"><CardDescription>Gesicherter Anteil (aktive)</CardDescription></CardHeader>
           <CardContent><div className="text-2xl font-bold">{fmt(stats.securedShare, 2)} kW</div></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardDescription>Aktive Tarife</CardDescription></CardHeader>
+          <CardContent><div className="text-2xl font-bold">{fmt(tariffs.length)}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardDescription>Unterzeichnete Verträge</CardDescription></CardHeader>
