@@ -12,9 +12,16 @@ export interface ContractTemplate {
   body_markdown: string;
   placeholders: string[];
   is_active: boolean;
+  /** "liefer" = Liefervertrag (§42c Abs.1 Nr.2), "nutzung" = Nutzungsvertrag (§42c Abs.1 Nr.3) */
+  template_kind?: "liefer" | "nutzung";
   created_at: string;
   updated_at: string;
 }
+
+export const TEMPLATE_KIND_LABELS: Record<string, string> = {
+  liefer: "Liefervertrag (§42c Abs. 1 Nr. 2)",
+  nutzung: "Nutzungsvertrag (§42c Abs. 1 Nr. 3)",
+};
 
 export interface MemberSignature {
   id: string;
