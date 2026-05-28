@@ -80,6 +80,7 @@ const SharingDashboard = lazy(() => import("./pages/sharing/SharingDashboard"));
 const SharingInvoices = lazy(() => import("./pages/sharing/SharingInvoices"));
 const SharingOnboarding = lazy(() => import("./pages/sharing/SharingOnboarding"));
 const SharingInstall = lazy(() => import("./pages/sharing/SharingInstall"));
+const SharingSetPassword = lazy(() => import("./pages/sharing/SharingSetPassword"));
 
 const TenantEnergyApp = lazy(() => import("./pages/TenantEnergyApp"));
 const Demo = lazy(() => import("./pages/Demo"));
