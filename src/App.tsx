@@ -129,6 +129,7 @@ const App = () => (
                 <TooltipProvider>
                   <Toaster />
                   <Sonner />
+                  <ConfirmDialogHost />
                   <RecoveryGuard />
                   <UpdateBanner />
                   <SupportSessionBanner />
