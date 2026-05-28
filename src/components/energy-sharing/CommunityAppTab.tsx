@@ -182,7 +182,3 @@ export default function CommunityAppTab({ communityId }: Props) {
     </div>
   );
 }
-
-    </div>
-  );
-}
