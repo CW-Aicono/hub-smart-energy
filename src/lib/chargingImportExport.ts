@@ -26,6 +26,7 @@ const USER_HEADERS = [
   "Name",
   "E-Mail",
   "RFID-Tag",
+  "Tag-Bezeichnung",
   "Telefon",
   "Gruppe",
   "Tarif",
@@ -40,7 +41,7 @@ const GROUP_HEADERS = [
   "Tarif",
 ] as const;
 
-const NFC_HEADERS = ["E-Mail", "RFID-Tag", "Name"] as const;
+const NFC_HEADERS = ["E-Mail", "RFID-Tag", "Tag-Bezeichnung", "Name"] as const;
 
 /* -------------------------- Hilfsfunktionen ----------------------------- */
 
