@@ -93,6 +93,7 @@ const ChargingUsersTab = () => {
       name: userForm.name,
       email: userForm.email || undefined,
       rfid_tag: userForm.rfid_tag || undefined,
+      rfid_label: userForm.rfid_label || undefined,
       phone: userForm.phone || undefined,
       group_id: userForm.group_id || null,
       tariff_id: userForm.tariff_id || null,
