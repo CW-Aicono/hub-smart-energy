@@ -116,26 +116,24 @@ function PpaList({ type }: { type: "onsite" | "offsite" }) {
   );
 }
 
-export default function PPA() {
+export default function PPA({ type = "onsite" }: { type?: "onsite" | "offsite" }) {
+  const title = type === "onsite" ? "PPA On-site" : "PPA Off-site";
+  const subtitle =
+    type === "onsite"
+      ? "On-site Power Purchase Agreements (Direktlieferung am Standort)"
+      : "Off-site Power Purchase Agreements (Bilanzielle Lieferung)";
   return (
     <div className="container max-w-7xl py-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">PPA-Management</h1>
-          <p className="text-muted-foreground text-sm">Power Purchase Agreements verwalten</p>
+          <h1 className="text-2xl font-bold">{title}</h1>
+          <p className="text-muted-foreground text-sm">{subtitle}</p>
         </div>
         <Button asChild>
-          <Link to="/ppa/new"><Plus className="h-4 w-4 mr-2" />Neuen PPA anlegen</Link>
+          <Link to={`/ppa/new?type=${type}`}><Plus className="h-4 w-4 mr-2" />Neuen PPA anlegen</Link>
         </Button>
       </div>
-      <Tabs defaultValue="onsite">
-        <TabsList>
-          <TabsTrigger value="onsite">On-site PPAs</TabsTrigger>
-          <TabsTrigger value="offsite">Off-site PPAs</TabsTrigger>
-        </TabsList>
-        <TabsContent value="onsite" className="mt-4"><PpaList type="onsite" /></TabsContent>
-        <TabsContent value="offsite" className="mt-4"><PpaList type="offsite" /></TabsContent>
-      </Tabs>
+      <PpaList type={type} />
     </div>
   );
 }

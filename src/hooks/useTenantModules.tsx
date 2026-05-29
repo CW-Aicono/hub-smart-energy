@@ -23,6 +23,8 @@ export const ALL_MODULES = [
   { code: "tenant_electricity", label: "Mieterstrom" },
   { code: "energy_report", label: "Energiebericht" },
   { code: "energy_sharing", label: "Energy-Sharing (Communitys)" },
+  { code: "ppa_onsite", label: "PPA On-site (Power Purchase Agreements)" },
+  { code: "ppa_offsite", label: "PPA Off-site (Power Purchase Agreements)" },
   { code: "remote_support", label: "Remote-Support (Flatrate)" },
   { code: "support_billing", label: "Support (mit Berechnung)" },
 ] as const;

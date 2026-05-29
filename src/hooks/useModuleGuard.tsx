@@ -22,7 +22,9 @@ const ROUTE_MODULE_MAP: Record<string, string> = {
   "/tenant-electricity": "tenant_electricity",
   "/energy-report": "energy_report",
   "/energy-sharing": "energy_sharing",
-  "/ppa": "ppa",
+  "/ppa": "ppa_onsite",
+  "/ppa/onsite": "ppa_onsite",
+  "/ppa/offsite": "ppa_offsite",
 };
 
 /**
@@ -42,7 +44,8 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/tenant-electricity": "tenant_electricity",
   "/energy-report": "energy_report",
   "/energy-sharing": "energy_sharing",
-  "/ppa": "ppa",
+  "/ppa/onsite": "ppa_onsite",
+  "/ppa/offsite": "ppa_offsite",
 };
 
 export function useModuleGuard() {
