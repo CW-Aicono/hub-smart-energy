@@ -18,7 +18,8 @@ import { useQuery } from "@tanstack/react-query";
 import { computeApplicablePrice, priceModelLabel } from "@/lib/ppa/priceFormula";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Save, FileSignature } from "lucide-react";
-import type { PpaType, PriceModel, SupplyModel, SurplusHandling, DeliveryType, TsoArea, GridLevel, EnergySource } from "@/lib/ppa/types";
+import type { PpaType, SupplyModel, SurplusHandling, DeliveryType, TsoArea, GridLevel, EnergySource } from "@/lib/ppa/types";
+import type { PriceModel } from "@/lib/ppa/priceFormula";
 
 interface WizardState {
   step: number;
