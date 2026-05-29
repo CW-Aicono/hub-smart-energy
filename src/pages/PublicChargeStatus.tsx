@@ -104,7 +104,7 @@ export default function PublicChargeStatus() {
       }
     }
     load();
-    const id = setInterval(load, 15000);
+    const id = setInterval(load, 5000);
     return () => {
       cancelled = true;
       clearInterval(id);
