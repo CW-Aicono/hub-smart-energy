@@ -1,153 +1,140 @@
-Du hast recht: Nach zwei Fix-Versuchen darf ich nicht weiter herumprobieren. Die Analyse zeigt jetzt eindeutig: Der Browser sendet beide Uploads korrekt angemeldet an Storage, aber Storage lehnt beide mit `new row violates row-level security policy` ab. Es ist also kein UI-Problem, kein Dateityp-Problem und kein fehlender Login.
+# PPA-Management — Umsetzungsplan
 
-## Gesicherte Fakten aus der Tiefenanalyse
+Basis: Konzept geprüft, drei Kernentscheidungen sind getroffen:
 
-1. Tenant-Logo schlägt fehl bei:
-   `POST /storage/v1/object/tenant-assets/0ce0c43a-c0b4-417b-9fd5-4131907e7504/logo.png`
+- **Mieterstrom:** PPA referenziert bestehende `tenant_electricity_settings` (keine Z.-Liste duplizieren).
+- **Energy Sharing:** Keine Verknüpfung in Phase 1 (`surplus_contract_id` entfällt vorerst).
+- **EPEX-Historie:** Vorhanden, Settlement kann darauf zugreifen.
 
-2. Ladestationsfoto schlägt fehl bei:
-   `POST /storage/v1/object/meter-photos/charge-points/0e2e8550-083d-4498-9134-7ee40f89410f.png`
+Da kein expliziter Phase-1-Scope genannt wurde, schlage ich aus Credit- und Risikogründen einen klaren Schnitt vor. Wenn du in einem Rutsch alles willst, sag Bescheid — dann wird's nur teurer, nicht besser.
 
-3. Beide Requests enthalten einen gültigen angemeldeten Benutzer-Token.
+---
 
-4. Der Benutzer ist im richtigen Tenant:
-   - Benutzer: `info@aicono.de`
-   - Rolle: `admin`
-   - Tenant: `0ce0c43a-c0b4-417b-9fd5-4131907e7504`
-   - Ladestation gehört ebenfalls zu diesem Tenant.
+## Phase 1 — was jetzt gebaut wird
 
-5. Die Buckets existieren:
-   - `tenant-assets`
-   - `meter-photos`
+### A. Datenmodell (1 Migration)
 
-6. Es gibt vorhandene Dateien, besonders beim Logo:
-   - `tenant-assets/0ce0c43a-c0b4-417b-9fd5-4131907e7504/logo.png` existiert bereits.
+Tabellen (alle `tenant_id`-scoped, RLS via `has_role`/`get_user_tenant_id`, GRANT für `authenticated` + `service_role`):
 
-7. Der Frontend-Code nutzt bei beiden Uploads:
-   `upload(..., { upsert: true })`
+1. `**ppa_contracts**` — wie im Konzept, mit folgenden Anpassungen:
+  - `price_formula jsonb` mit CHECK-Trigger (Pflichtschlüssel je `price_model`).
+  - `mieterstrom_settings_id uuid` (FK auf `tenant_electricity_settings`, nullable) — die saubere Mieterstrom-Brücke.
+  - `surplus_contract_id` **wird nicht angelegt** (Phase 2/3).
+2. `**ppa_onsite_config**` — wie im Konzept, **ohne** `consumption_meter_ids uuid[]`.
+3. `**ppa_consumption_meters**` — Join-Tabelle (`contract_id`, `meter_id`, `role`) statt Array. Projektkonvention.
+4. `**ppa_offsite_config**` — wie im Konzept.
+5. `**ppa_documents**` — wie im Konzept, mit `file_hash` (SHA-256) für Idempotenz.
+6. `**ppa_status_history**` — eigener Audit-Trail (`contract_id`, `old_status`, `new_status`, `changed_by`, `changed_at`, `reason`). Wird per Trigger auf `ppa_contracts` befüllt.
 
-## Wahrscheinlich echte technische Ursache
+`ppa_settlement_periods` wird angelegt (leer), damit Phase 2 keine Migration mehr braucht. Keine Cron-Jobs in Phase 1.
 
-Der entscheidende Punkt ist `upsert: true`.
+### B. Storage
 
-Ein Upload mit `upsert: true` ist nicht nur „Datei hochladen“. Storage behandelt das intern wie:
+- Bucket `ppa-documents` (privat).
+- RLS via `split_part(name, '/', 1) = tenant_id::text` (Projekt-Standard, siehe `storage-rls-policy-logic-isolation`).
+- Download über bestehenden `secureStorage`-Proxy (kein public URL).
 
-```text
-Wenn Datei noch nicht existiert: neue Datei anlegen
-Wenn Datei existiert: vorhandene Datei ersetzen
+### C. ModuleGuard & Permissions
+
+- Neues Modul `ppa_management` in der Module-Registry.
+- Permission-Codes: `ppa.view`, `ppa.manage`, `ppa.activate` (nur Admin).
+- Route mit `ModuleGuard` + `useHasPermission`.
+
+### D. UI (Tenant-Bereich, `/ppa`)
+
+1. `**PPA.tsx**` — Übersicht mit Tabs „On-site" / „Off-site", Karten-Grid, Filter (Alle/Aktiv/Auslaufend/Entwurf), Auslauf-Alert-Banner.
+2. `**PPAWizard.tsx**` — 7-Schritt-Wizard wie spezifiziert:
+  - Schritt 5a (on-site): Mieterstrom-Toggle → wenn an, Dropdown bestehender `tenant_electricity_settings` (ersetzt manuelle Verbrauchszähler-Auswahl). Sonst: Multi-Select via `ppa_consumption_meters`.
+  - Schritt 4: Live-EPEX-Vorschau über `useSpotPrices`.
+  - Schritt 7: Speichern als `draft`.
+3. `**PPADetail.tsx**` — Tabs „Übersicht", „Messdaten", „Dokumente", „Historie".
+  - **„Abrechnung"-Tab wird als Placeholder gerendert** („Verfügbar nach Aktivierung der Settlement-Engine in Phase 2"). Keine Halb-Implementierung.
+4. **Hooks:** `usePpaContracts`, `usePpaContract(id)`, `usePpaDocuments(id)` — alle mit `useTenantQuery`.
+5. **i18n:** DE/EN/ES/NL via dynamisches `t()`. Zahlen `toLocaleString("de-DE")`.
+
+### E. Sidebar / Routing
+
+- Neuer Sidebar-Eintrag „PPA-Management" unter „Energie".
+- Routes: `/ppa`, `/ppa/new`, `/ppa/:id`. **Statische Imports** (HMR-Stabilitätsregel).
+
+### F. Edge Function (Phase 1, minimal)
+
+- `**ppa-api**` — nur `validatePriceFormula` (Zod) + `getContractSummary`. Auth via `getClaims`. Keine Background-Logik.
+
+### Phase 1 explizit NICHT enthalten (= Phase 2/3)
+
+- `ppa-settlement-calculate` Cron + Logik
+- `ppa-alert-check` Cron
+- `ppa-report-generate` (PDF)
+- `PPAFleetCard` Super-Admin-Widget
+- `surplus_contract_id` / Energy-Sharing-Brücke
+- GoO-Workflow über Basisupload hinaus
+
+Das spart ~60% des Aufwands und liefert ein nutzbares MVP, an dem du die Datenmodell-Entscheidungen prüfen kannst, **bevor** wir die teure Settlement-Engine bauen.
+
+---
+
+## Technische Details
+
+### Preisformel-Validierung (`price_formula`)
+
+CHECK-Trigger und Zod-Schema müssen synchron sein:
+
+- `fixed`: `price_eur_per_kwh` NOT NULL, `price_formula` NULL.
+- `spot_plus_premium`: `{ base: 'epex_spot', premium: number }`.
+- `floor_cap`: `{ base: 'epex_spot', floor: number, cap: number, floor <= cap }`.
+- `index_linked`: `{ base: 'epex_spot', factor: number, offset: number }`.
+
+### Status-Transitions
+
+Erlaubte Übergänge per Trigger erzwingen:
+
+```
+draft   → active | terminated
+active  → suspended | expired | terminated
+suspended → active | terminated
+expired   → (final)
+terminated→ (final)
 ```
 
-Dafür müssen die Storage-Regeln je nach internem Ablauf gleichzeitig mehrere Operationen sauber erlauben:
+Jeder Wechsel → Eintrag in `ppa_status_history`.
+
+### Mieterstrom-Bridge
+
+`ppa_onsite_config.supply_model = 'mieterstrom'` setzt `ppa_contracts.mieterstrom_settings_id` voraus (CHECK). Verbrauchszähler werden in dem Fall **nicht** in `ppa_consumption_meters` doppelt geführt — der Detail-Tab „Messdaten" liest sie aus `tenant_electricity_tenant_meters`.
+
+### Datei-Struktur
 
 ```text
-INSERT  = neue Datei anlegen
-UPDATE  = vorhandene Datei ersetzen
-SELECT  = vorhandene Datei prüfen/finden
+src/pages/PPA.tsx
+src/pages/PPADetail.tsx
+src/pages/PPAWizard.tsx
+src/components/ppa/
+  PpaContractCard.tsx
+  PpaStatusBadge.tsx
+  PpaPriceModelForm.tsx
+  PpaEpexLivePreview.tsx
+  PpaDocumentUpload.tsx
+  PpaMeterChart.tsx
+  wizard/StepType.tsx, StepParties.tsx, StepTerm.tsx,
+         StepPricing.tsx, StepOnsite.tsx, StepOffsite.tsx,
+         StepGoo.tsx, StepDocs.tsx
+src/hooks/usePpaContracts.tsx
+src/hooks/usePpaContract.tsx
+src/hooks/usePpaDocuments.tsx
+src/lib/ppa/priceFormulaSchema.ts   (Zod, shared mit Edge)
+src/lib/ppa/statusTransitions.ts
+src/i18n/{de,en,es,nl}/ppa.ts
+supabase/functions/ppa-api/index.ts
+supabase/migrations/<timestamp>_ppa_module.sql
 ```
 
-Die aktuellen Regeln sind weiterhin zu fragil, weil sie direkt auf `storage.objects` mit Pfadprüfungen arbeiten. Meine vorherige Funktionslösung hat zwar einen Teil verbessert, aber der echte Browser-Test zeigt: Storage akzeptiert den kombinierten Upsert-Ablauf weiterhin nicht.
+---
 
-## Warum ich nicht einfach noch eine dritte RLS-Regel rate
+## Offene Frage vor Build
 
-Weil das genau das Problem der letzten Versuche war. RLS bei Storage ist in Kombination mit `upsert` fehleranfällig, besonders wenn vorhandene Dateien ersetzt werden. Ein weiterer kleiner Policy-Patch wäre wieder ein Ratespiel.
+Du hast den Phase-1-Scope nicht beantwortet. Ich gehe oben vom **MVP-Schnitt** aus (kein Settlement, keine Cron, keine PDF). Wenn du stattdessen den **kompletten Big-Bang** willst (alle 4 Edge Functions + alle UI-Tabs voll funktional), sag das vor dem Implementieren — der Plan wird dann deutlich größer und teurer, und ich würde dringend zur Aufteilung raten.
 
-## Seriöser Behebungsplan
-
-### Schritt 1: Frontend-Upsert entfernen
-
-Ich ändere beide Upload-Stellen so, dass sie nicht mehr `upsert: true` verwenden.
-
-Stattdessen wird der Ablauf bewusst getrennt:
-
-```text
-1. Vorhandene Ziel-Datei entfernen, falls sie existiert.
-2. Neue Datei normal hochladen, ohne upsert.
-3. Signed URL erzeugen.
-4. Datenbankfeld aktualisieren.
-```
-
-Warum das besser ist:
-- Storage muss nicht mehr einen kombinierten Upsert-Sonderfall ausführen.
-- Die RLS-Prüfung ist klarer: `DELETE` dann `INSERT`.
-- Fehler lassen sich sauber getrennt anzeigen.
-
-Betroffene Dateien:
-- `src/components/settings/BrandingSettings.tsx`
-- `src/pages/ChargePointDetail.tsx`
-- `src/components/charging/ChargePointDetailDialog.tsx`
-
-### Schritt 2: Dateinamen stabilisieren
-
-Für Tenant-Logo bleibt der Pfad:
-
-```text
-{tenant_id}/logo.{endung}
-```
-
-Für Ladestationsfoto bleibt der Pfad:
-
-```text
-charge-points/{charge_point_id}.{endung}
-```
-
-Wenn beim Logo die Dateiendung wechselt, zum Beispiel von `.png` zu `.jpg`, entferne ich optional die bekannten alten Logo-Dateien desselben Tenants:
-
-```text
-logo.png
-logo.jpg
-logo.jpeg
-logo.webp
-logo.avif
-```
-
-Damit bleibt nicht versehentlich ein altes Logo im Speicher liegen.
-
-### Schritt 3: Storage-Regeln nur dort nachschärfen, wo nötig
-
-Falls nach Entfernen von `upsert` weiterhin ein RLS-Fehler kommt, ist der nächste saubere Fix nicht „mehr Frontend-Code“, sondern eine präzise Storage-Regel-Korrektur:
-
-- `tenant-assets`: angemeldete Tenant-Mitglieder dürfen im eigenen Tenant-Ordner Logo-Dateien löschen und neu anlegen.
-- `meter-photos`: angemeldete Tenant-Mitglieder dürfen Ladestationsfotos nur für Ladestationen des eigenen Tenants löschen und neu anlegen.
-
-Wichtig: Keine breite öffentliche Schreibberechtigung, keine Tenant-Vermischung.
-
-### Schritt 4: Validierung mit echten Signalen
-
-Nach Umsetzung prüfe ich nicht nur „Code sieht gut aus“, sondern diese konkreten Signale:
-
-1. Netzwerkrequest für Tenant-Logo:
-   - Erwartet: kein `400`
-   - Erwartet: Storage-Upload erfolgreich
-
-2. Netzwerkrequest für Ladestationsfoto:
-   - Erwartet: kein `400`
-   - Erwartet: Storage-Upload erfolgreich
-
-3. Datenbankprüfung:
-   - Tenant `logo_url` zeigt auf den neuen Pfad.
-   - Ladestation `photo_url` beziehungsweise Preview zeigt die neue Signed URL.
-
-4. UI-Prüfung:
-   - Logo wird nach Upload angezeigt.
-   - Ladestationsfoto wird nach Upload angezeigt.
-
-## Was ich ausdrücklich nicht mache
-
-- Keine dritte blinde RLS-Änderung ohne Frontend-Upsert als Ursache zu beseitigen.
-- Keine Service-Role-Uploads im Browser.
-- Keine öffentliche Schreibfreigabe für Buckets.
-- Keine Änderung an fremden Modulen.
-- Keine Änderungen an `src/integrations/supabase/client.ts` oder generierten Dateien.
-
-## Ergebnis, wenn du den Plan freigibst
-
-Ich setze exakt diese Änderung um:
-
-```text
-Direkter Storage-Upsert raus.
-Explizites Entfernen alter Datei(en) rein.
-Normaler Upload ohne upsert rein.
-Danach echte Validierung über Netzwerk-/Storage-Signal.
-```
-
-Das ist der günstigste und sauberste nächste Schritt, weil die Daten jetzt belegen, dass der kombinierte Storage-Upsert der gemeinsame Auslöser beider Fehler ist.
+Antworte mit „MVP starten" oder „Big Bang bauen".  
+  
+Antwort: MVP starten
