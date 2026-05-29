@@ -2,6 +2,16 @@ import { supabase } from "@/integrations/supabase/client";
 
 const objectUrlCache = new Map<string, string>();
 
+async function getAccessToken(): Promise<string | null> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (token) return token;
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
+  }
+  return null;
+}
+
 export async function downloadSecureStorageObject(bucket: string, path: string): Promise<string | null> {
   if (!path || path.startsWith("blob:")) return path || null;
   if (/^https?:\/\//i.test(path)) return path;
@@ -10,8 +20,7 @@ export async function downloadSecureStorageObject(bucket: string, path: string):
   const cached = objectUrlCache.get(cacheKey);
   if (cached) return cached;
 
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
+  const token = await getAccessToken();
   if (!token) return null;
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
