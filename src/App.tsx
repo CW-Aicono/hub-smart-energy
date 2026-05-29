@@ -243,6 +243,9 @@ const App = () => (
                       <Route path="/mein-sharing/install" element={<SharingInstall />} />
 
                       <Route path="/tenant-electricity" element={<M><TenantElectricity /></M>} />
+                      <Route path="/ppa" element={<M><PPA /></M>} />
+                      <Route path="/ppa/new" element={<M><PPAWizard /></M>} />
+                      <Route path="/ppa/:id" element={<M><PPADetail /></M>} />
                       <Route path="/ev" element={<ChargingApp />} />
                       <Route path="/te" element={<TenantEnergyApp />} />
                       <Route path="/m" element={<MobileApp />} />
