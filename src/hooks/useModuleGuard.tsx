@@ -22,6 +22,7 @@ const ROUTE_MODULE_MAP: Record<string, string> = {
   "/tenant-electricity": "tenant_electricity",
   "/energy-report": "energy_report",
   "/energy-sharing": "energy_sharing",
+  "/ppa": "ppa",
 };
 
 /**
