@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useEffect } from "react";
 import { getT } from "@/i18n/getT";
+import { downloadSecureStorageObject } from "@/lib/secureStorage";
 
 export interface ChargePointAccessSettings {
   free_charging: boolean;
@@ -76,8 +77,8 @@ export function useChargePoints() {
       return { displayUrl: photoUrl, storagePath: null };
     }
 
-    const { data } = await supabase.storage.from("meter-photos").download(photoUrl);
-    return { displayUrl: data ? URL.createObjectURL(data) : photoUrl, storagePath: photoUrl };
+    const displayUrl = await downloadSecureStorageObject("meter-photos", photoUrl);
+    return { displayUrl: displayUrl || photoUrl, storagePath: photoUrl };
   };
 
   const { data: chargePoints = [], isLoading } = useQuery({

@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useDemoMode } from "@/contexts/DemoMode";
 import { getSupportViewTenantId, onSupportViewChanged } from "@/lib/supportView";
+import { downloadSecureStorageObject } from "@/lib/secureStorage";
 
 
 interface TenantBranding {
@@ -204,15 +205,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           setError(fetchError.message);
         }
       } else if (data) {
-        // Resolve uploaded logo paths through authenticated download.
-        // createSignedUrl currently fails against tenant-assets storage RLS in this project,
-        // while download uses the existing SELECT policy and gives the header a renderable blob URL.
         let resolvedLogoUrl = data.logo_url;
         if (resolvedLogoUrl && !resolvedLogoUrl.startsWith('http')) {
-          const { data: logoBlob } = await supabase.storage
-            .from('tenant-assets')
-            .download(resolvedLogoUrl);
-          resolvedLogoUrl = logoBlob ? URL.createObjectURL(logoBlob) : null;
+          resolvedLogoUrl = await downloadSecureStorageObject('tenant-assets', resolvedLogoUrl);
         }
 
         const tenantData: Tenant = {
