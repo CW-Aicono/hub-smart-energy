@@ -376,12 +376,21 @@ const ChargingPoints = () => {
                   <Globe className="h-4 w-4 mr-2" />Öffentlicher Link
                 </Button>
                 <ModbusWallboxWizard onCreated={() => queryClient.invalidateQueries({ queryKey: ["charge-points"] })} />
-                <Dialog open={addOpen} onOpenChange={setAddOpen}>
+                <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) setDuplicateSource(null); }}>
                   <DialogTrigger asChild>
-                    <Button onClick={resetForm}><Plus className="h-4 w-4 mr-2" />{t("charging.addChargePoint" as any)}</Button>
+                    <Button onClick={() => { setDuplicateSource(null); resetForm(); }}><Plus className="h-4 w-4 mr-2" />{t("charging.addChargePoint" as any)}</Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                    <DialogHeader><DialogTitle>{t("charging.newChargePoint" as any)}</DialogTitle></DialogHeader>
+                    <DialogHeader>
+                      <DialogTitle>
+                        {duplicateSource ? `Ladepunkt duplizieren` : t("charging.newChargePoint" as any)}
+                      </DialogTitle>
+                      {duplicateSource && (
+                        <p className="text-xs text-muted-foreground">
+                          Dupliziert von: <span className="font-medium">{duplicateSource.name}</span> — Name und OCPP-ID neu vergeben.
+                        </p>
+                      )}
+                    </DialogHeader>
                     {formFields}
                     <Button onClick={handleAdd} disabled={!form.name}>{t("common.create" as any)}</Button>
                   </DialogContent>
