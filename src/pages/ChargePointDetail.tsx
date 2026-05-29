@@ -368,12 +368,7 @@ const ChargePointDetail = () => {
     setUploading(true);
     try {
       const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-      const path = `charge-points/${cp.id}.${ext}`;
-
-      // Vorhandene Foto-Varianten dieser Ladestation entfernen (keine upsert-Falle)
-      const knownExts = ["png", "jpg", "jpeg", "webp", "avif"];
-      const oldPaths = knownExts.map((x) => `charge-points/${cp.id}.${x}`);
-      await supabase.storage.from("meter-photos").remove(oldPaths);
+      const path = `charge-points/${cp.id}-${crypto.randomUUID()}.${ext}`;
 
       const { error } = await supabase.storage
         .from("meter-photos")
