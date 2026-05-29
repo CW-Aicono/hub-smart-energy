@@ -62,13 +62,20 @@ Deno.serve(async (req) => {
   if (!allowed && bucket === "meter-photos") {
     const chargePointId = getChargePointId(path);
     if (chargePointId) {
-      const { data } = await admin
+      const { data: cp } = await admin
         .from("charge_points")
-        .select("id, profiles!inner(id)")
+        .select("tenant_id")
         .eq("id", chargePointId)
-        .eq("profiles.user_id", userId)
         .maybeSingle();
-      allowed = !!data;
+      if (cp?.tenant_id) {
+        const { data: profile } = await admin
+          .from("profiles")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("tenant_id", cp.tenant_id)
+          .maybeSingle();
+        allowed = !!profile;
+      }
     }
   }
 
