@@ -1,130 +1,82 @@
-# Plan: Energy-Sharing an BDEW-Vorgaben (§42c, §20b EnWG) anpassen
+## Übersicht
 
-## Ausgangslage
+Vier Themen im Modul **Ladeinfrastruktur**:
 
-Das Modul bildet heute Gemeinschaft, Mitglieder, Anlagen, Tarife, eine Vertragsschablone, Marktplatz und Abrechnung ab. Die BDEW-Informationen verlangen darüber hinaus eine sauberere juristische Einordnung, mehr Pflichtfelder und einen klaren „Pilot-Charakter“ bis die Bundesnetzagentur Vorgaben veröffentlicht. Schema-Änderungen bleiben additiv — bestehende Daten gehen nicht verloren.
-
-## Was geändert / ergänzt wird
-
-### 1. Pilot-Disclaimer (überall sichtbar)
-- Auf der Seite `Energy Sharing` oben ein Hinweis-Banner: *„Pilotbetrieb nach §42c EnWG. Die bundesweite Plattform nach §20b EnWG und die finalen BNetzA-Vorgaben stehen noch aus. Prozesse können sich ändern.“*
-- Im Community-Wizard zusätzlich ein Pflicht-Häkchen „Pilot-Risiko verstanden“.
-
-### 2. Teilnahmeberechtigung (KMU- und Anlagen-Check)
-Neue Felder, die im Wizard und in der Mitglieder-/Anlagen-Bearbeitung abgefragt werden:
-
-**Mitglied (Letztverbraucher):**
-- Unternehmens-Typ: Privatperson / Kleinstunternehmen / Kleines U. / Mittleres U. / Juristische Person ö. Rechts
-- Mitarbeiterzahl, Jahresumsatz (EUR), Bilanzsumme (EUR)
-- Auto-Klassifikation nach EU-Empfehlung 2003/361/EG mit Ampel (grün = teilnahmeberechtigt, rot = nicht zulässig)
-
-**Anlage (Erzeuger):**
-- Gebäudetyp: Einfamilienhaus / Mehrfamilienhaus / Sonstige
-- Schwellen-Check: <30 kW EFH bzw. <100 kW MFH → Hinweis „Erleichterung: gilt nicht als Stromlieferant“
-- Checkbox „nicht überwiegend gewerblich betrieben“
-- Auswahl Betreiber-Rechtsform
-
-### 3. Zwei-Vertrags-Struktur (§42c Abs. 1 Nr. 2 + Nr. 3)
-Heute gibt es eine Schablone. Künftig zwei Typen pro Gemeinschaft:
-- **Liefervertrag** (Strombezug)
-- **Nutzungsvertrag** (gemeinschaftliche Nutzung, Aufteilungsschlüssel, Entgelt)
-
-Umsetzung: neues Feld `template_kind` (`liefer` | `nutzung`) in `community_contract_templates`. Standard-Vorlagen für beide Typen werden im Wizard angeboten. `SignContractDialog` zeigt beide Verträge nacheinander.
-
-### 4. Pflicht-Informationsschreiben (§42c Abs. 6)
-Vor Vertragsabschluss muss in Textform übergeben werden:
-- Hinweis „keine Vollversorgung möglich“
-- „Reststrombezug nötig, ggf. höhere Kosten“
-- „Freie Lieferantenwahl bleibt erhalten“
-
-Umsetzung: PDF-Vorlage „Vorvertragliche Information“, automatisch beim Anlegen/Einladen eines Mitglieds erzeugt und im Mitgliedsdatensatz mit Zeitstempel hinterlegt (`pre_contract_info_sent_at`). Im Member-Tab Spalte „Info-Schreiben“ + Button „Erneut senden“.
-
-### 5. Reststromlieferant je Mitglied
-Neue Felder am Mitglied: `rest_supplier_name`, `rest_supplier_contract_no`, `rest_supplier_confirmed_at`. Pflichtfeld vor Aktivierung des Mitglieds.
-
-### 6. iMSys-Status & 4-Monate-Frist (MsbG §34)
-Neue Felder am Mitglied und an der Anlage:
-- `imsys_status`: nicht vorhanden / beantragt / installiert
-- `imsys_requested_at` (Datum)
-- Anzeige „Frist endet am …“ (4 Monate ab Antrag) mit Ampel
-- Mitglied kann erst „aktiv“ werden, wenn iMSys installiert ist
-
-### 7. Bilanzgebiet & Phasenlogik (§42c Abs. 4)
-- Neue Community-Felder: `balancing_zone` (Bilanzgebiet) und `grid_operator` (VNB)
-- Validierung beim Mitglieds-Anlegen:
-  - bis 31.05.2028: Mitglied muss im **gleichen** Bilanzgebiet liegen
-  - ab 01.06.2028: auch in angrenzendem Gebiet derselben Regelzone
-- Bestehende `community-plz-check` Edge-Function um `balancing_zone` erweitern.
-
-### 8. Messung & Aufteilungsschlüssel
-- Pro Mitglied: `metering_type` (`zaehlerstandsgang` | `15min_leistung`) gemäß §42c Abs. 1 Nr. 6/7
-- Beim Aufteilungsschlüssel der Anlage Tooltip-Erläuterung „statisch = Wizard-Anteil, dynamisch = nach Verbrauch je 15 min“
-- Tarif-Maske: Hinweistext „Netzentgelte, Steuern, Abgaben und Umlagen werden separat abgerechnet — keine Befreiung.“
-
-### 9. Rollen klarer trennen
-Im Mitglieder-Tab Rollen-Dropdown erweitern:
-- Anlagenbetreiber, Letztverbraucher, Dienstleister, Reststromlieferant (nur Info, nicht Teil der Gemeinschaft)
-- Sidebar-Hinweis: „VNB/MSB nehmen keine wirtschaftliche Rolle ein.“
-
-### 10. EE-Nachweis
-Pflicht-Checkbox an der Anlage: „Strom stammt zu 100 % aus erneuerbaren Energien“ + optionaler Upload (EEG-Bescheid, Herkunftsnachweis).
+1. OCPP-ID beim Anlegen optional → später bei Inbetriebnahme nachtragbar
+2. „Ladepunkt duplizieren" – Standort, Modell, Hersteller, Stecker, Leistung übernehmen
+3. Öffentlicher Status-Link: jeden Stecker einer Mehrfach-Wallbox einzeln zeigen + nach Ladestationsgruppen optisch gruppieren
+4. Bugfix: belegte/ladende Ladepunkte werden fälschlich als „Verfügbar" angezeigt, Status nicht live
 
 ---
 
-## Technische Details (für Entwickler)
+## 1 · OCPP-ID optional machen
 
-**Migration (additiv, keine Datenverluste):**
+**Datenbank**
+- Migration: `ALTER TABLE public.charge_points ALTER COLUMN ocpp_id DROP NOT NULL;`
+- Falls vorhanden: bestehenden Unique-Index auf `ocpp_id` ersetzen durch **partiellen** Unique-Index, der nur greift, wenn `ocpp_id IS NOT NULL` (mehrere Ladepunkte ohne OCPP-ID dürfen parallel existieren).
 
-```text
-ALTER TABLE community_members ADD COLUMN
-  customer_class text,          -- privat | kleinst | klein | mittel | jur_oer
-  employees int,
-  annual_revenue_eur numeric,
-  annual_balance_eur numeric,
-  rest_supplier_name text,
-  rest_supplier_contract_no text,
-  rest_supplier_confirmed_at timestamptz,
-  imsys_status text default 'missing',
-  imsys_requested_at date,
-  imsys_installed_at date,
-  metering_type text,
-  pre_contract_info_sent_at timestamptz;
+**Frontend**
+- `src/pages/ChargingPoints.tsx`: Pflichtfeld-Validierung im Anlegen-Formular entfernen (`disabled={!form.name || !form.ocpp_id}` → nur noch `!form.name`); Feld als „optional, später nachtragbar" labeln, Vorschau-URL nur einblenden, wenn OCPP-ID gesetzt.
+- `src/components/charging/ChargePointDetailDialog.tsx`: gleiche Anpassung im Bearbeiten-Dialog; **OCPP-ID nachträglich editierbar** behalten, damit sie bei Inbetriebnahme gesetzt werden kann.
+- Liste/Karten zeigen ohne OCPP-ID einen klaren Hinweis-Badge **„OCPP-ID fehlt – nicht in Betrieb"** statt der Mono-ID-Anzeige.
+- Status solcher Ladepunkte erzwingen auf `unconfigured` in der Anzeige (auch im öffentlichen Link), damit niemand sie für nutzbar hält.
 
-ALTER TABLE community_assets ADD COLUMN
-  building_type text,           -- efh | mfh | sonstige
-  not_commercial bool default true,
-  operator_legal_form text,
-  renewable_confirmed bool default false,
-  renewable_proof_url text,
-  imsys_status text default 'missing',
-  imsys_requested_at date;
+---
 
-ALTER TABLE energy_communities ADD COLUMN
-  balancing_zone text,
-  grid_operator text,
-  pilot_acknowledged_at timestamptz;
+## 2 · Ladepunkt duplizieren
 
-ALTER TABLE community_contract_templates ADD COLUMN
-  template_kind text default 'nutzung'; -- liefer | nutzung
-```
+**Frontend (keine DB-Änderung nötig)**
+- In der Ladepunkt-Liste (`src/pages/ChargingPoints.tsx`) je Zeile neuen Button **„Duplizieren"** (Copy-Icon) neben Bearbeiten/Löschen.
+- Klick öffnet den existierenden „Ladepunkt hinzufügen"-Dialog mit vorausgefüllten Feldern aus dem gewählten Ladepunkt:
+  - übernommen: `address`, `latitude`, `longitude`, `vendor`, `model`, `connector_type`, `connector_count`, `max_power_kw`, `connection_protocol`, `auth_required`, `group_id`
+  - **leer gelassen**: `name`, `ocpp_id`, `ocpp_password` (neu generiert)
+- Anzeige im Dialog-Header: „Dupliziert von: <Originalname>".
+- Speichern erzeugt regulär einen neuen Ladepunkt – keine eigene Backend-Logik nötig.
 
-**UI-Dateien, die berührt werden (frontend-only, kleinteilig):**
-- `src/pages/EnergySharing.tsx` — Pilot-Banner, neue Spalten/Badges, KMU-Ampel, iMSys-Ampel
-- `src/components/energy-sharing/CommunityWizard.tsx` — Schritte „Bilanzgebiet + Pilot-Bestätigung“, „EE-Nachweis“, zweite Vertragsschablone
-- `src/components/energy-sharing/ContractTemplatesTab.tsx` — Typ-Auswahl `liefer`/`nutzung`
-- `src/components/energy-sharing/SignContractDialog.tsx` — beide Verträge unterzeichnen
-- Neuer Helper `src/lib/energy-sharing/kmuClassification.ts` für die EU-2003/361/EG-Logik
-- Neuer Helper `src/lib/energy-sharing/preContractInfoPdf.ts` (PDF-Generator, analog `generateCommunityInvoicePdf.ts`)
+---
 
-**Edge-Functions:**
-- `community-plz-check` um `balancing_zone` ergänzen
-- Optional: neue Function `community-pre-contract-info` für PDF-Versand
+## 3 · Öffentlicher Link: Mehrfach-Stecker + Gruppen-Darstellung
 
-## Was bewusst NICHT geändert wird
-- Keine Änderung der bestehenden Daten und keine Migration von Bestandsverträgen.
-- Keine Anbindung an die §20b-Plattform (steht noch nicht zur Verfügung).
-- Keine Netzentgelt- oder Steuerlogik (gesetzlich keine Befreiung).
-- Marktplatz, Billing und Allocation-Logik bleiben unverändert.
+**Edge Function** `supabase/functions/public-charge-status/index.ts`
+- `charge_points`-Select zusätzlich um `group_id` erweitern.
+- Zweite Query: `charge_point_groups` (id, name, color, display_order) für den Tenant laden und im Response unter `groups` zurückgeben.
 
-## Aufwand
-~1 Migration, ~6 UI-Dateien, 2 neue Helper, 1 Edge-Function-Erweiterung. Keine Breaking Changes.
+**Frontend** `src/pages/PublicChargeStatus.tsx`
+- Mehrfach-Stecker werden bereits einzeln gerendert (Code-Stelle ist vorhanden, Zeilen 118-135). **Verifizieren**, warum es beim Nutzer offenbar nicht greift:
+  - Wahrscheinliche Ursache: Connectors-Tabelle ist für die betroffenen Wallboxen nicht oder nur mit einem Eintrag gefüllt → wir prüfen Live-Daten via `read_query` und greifen ggf. auf `connector_count` zurück (Fallback: wenn `connector_count > 1`, aber weniger Connector-Rows existieren, virtuelle Kacheln aus `connector_count` erzeugen).
+- Karten nach `group_id` gruppieren:
+  - Pro Gruppe ein Abschnitt mit Gruppen-Header (Name + farbiger Akzent), darunter das vorhandene Grid.
+  - Ladepunkte ohne Gruppe in einen letzten Block „Ohne Gruppe".
+  - Gruppen-Filter-Chip oben (zusätzlich zu den bestehenden Status-Filtern), damit man eine Gruppe gezielt einblenden kann.
+
+---
+
+## 4 · Bugfix: Live-Status (immer „Verfügbar")
+
+**Ursache (im Code identifiziert)**
+`src/pages/PublicChargeStatus.tsx`, `normalizeStatus()` Zeilen 53–62:
+- OCPP-1.6-Status `Preparing`, `Finishing`, `SuspendedEV`, `SuspendedEVSE` werden alle auf **available** abgebildet.
+- Reiner OCPP-Status `Occupied` (manche Wallboxen) wird nicht erkannt.
+- Default-Fallback `return "available"` verschleiert unbekannte Status.
+
+**Fix**
+- Mapping korrigieren:
+  - `charging`, `occup`, `suspendedev`, `suspendedevse`, `preparing`, `finishing`, `reserved` → **charging** (= belegt/in Nutzung)
+  - `available`/`avail` → **available**
+  - Default künftig **unconfigured** statt „available", damit unbekannte Werte sichtbar werden.
+- Gleiches Mapping zentral in eine Helper-Datei (`src/lib/chargePointStatus.ts`) auslagern und auch in `ConnectorStatusGrid.tsx`, `ChargePointDetail.tsx`, `ChargingPoints.tsx` verwenden – damit Liste und öffentlicher Link identisch sind.
+
+**Live-Update prüfen**
+- Polling im öffentlichen Link liegt aktuell bei **15 s** (Zeile 104). Beibehalten, zusätzlich Realtime-Subscription auf `charge_point_connectors` und `charge_points` einrichten (Supabase Realtime) – Status-Wechsel sind dann unter 1 s sichtbar.
+- Validierung via `supabase--read_query` an einer aktiven Wallbox: liegt in `charge_point_connectors.status` tatsächlich „Charging"/„SuspendedEV" an, wenn ein Fahrzeug lädt? Falls nein, Ursache im OCPP-Server (`docs/ocpp-persistent-server/src/ocppHandler.ts`, `StatusNotification`-Handler) prüfen – dort wird der Status bereits per `updateConnectorStatus()` geschrieben, sollte also ankommen.
+- In der internen Ladepunkt-Liste (`ChargingPoints.tsx`) ebenfalls Realtime-Subscription ergänzen, sonst bleibt die Liste bis zum nächsten Reload „verfügbar".
+
+---
+
+## Reihenfolge der Umsetzung
+
+1. Migration `ocpp_id` nullable + partieller Unique-Index
+2. Frontend-Anpassungen Anlegen/Bearbeiten ohne OCPP-ID
+3. „Duplizieren"-Button
+4. Status-Helper auslagern + Mapping-Fix + Realtime-Subscription (Bugfix zuerst sichtbar machen)
+5. Edge Function um `groups` erweitern + öffentliche Seite gruppieren + Mehrfach-Stecker-Fallback

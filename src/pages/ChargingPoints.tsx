@@ -64,6 +64,7 @@ const ChargingPoints = () => {
   const [addOpen, setAddOpen] = useState(false);
   const [publicLinkOpen, setPublicLinkOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [duplicateSource, setDuplicateSource] = useState<ChargePoint | null>(null);
   const [showAddPassword, setShowAddPassword] = useState(false);
   const generatePw = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -112,7 +113,7 @@ const ChargingPoints = () => {
     addChargePoint.mutate({
       tenant_id: tenant.id,
       name: form.name,
-      ocpp_id: form.ocpp_id,
+      ocpp_id: form.ocpp_id.trim() || null,
       address: form.address || null,
       latitude: addCoords.lat,
       longitude: addCoords.lng,
@@ -124,10 +125,36 @@ const ChargingPoints = () => {
       connection_protocol: form.connection_protocol,
       auth_required: form.auth_required,
       ocpp_password: form.auth_required ? form.ocpp_password : null,
+      ...(duplicateSource?.group_id ? { group_id: duplicateSource.group_id } : {}),
     } as any);
     setAddOpen(false);
+    setDuplicateSource(null);
     resetForm();
   };
+
+  const handleDuplicate = (cp: ChargePoint) => {
+    setDuplicateSource(cp);
+    setForm({
+      name: "",
+      ocpp_id: "",
+      address: cp.address ?? "",
+      connector_count: String(cp.connector_count ?? 1),
+      max_power_kw: String(cp.max_power_kw ?? 22),
+      vendor: cp.vendor ?? "",
+      model: cp.model ?? "",
+      connector_type: cp.connector_type ?? "Type2",
+      connection_protocol: ((cp as any).connection_protocol === "ws" ? "ws" : "wss"),
+      auth_required: (cp as any).auth_required ?? true,
+      ocpp_password: generatePw(),
+    });
+    setAddCoords({
+      lat: cp.latitude ?? null,
+      lng: cp.longitude ?? null,
+    });
+    setShowAddPassword(false);
+    setAddOpen(true);
+  };
+
 
 
   const geocodeAddAddress = async () => {
@@ -260,7 +287,10 @@ const ChargingPoints = () => {
   const formFields = (
     <div className="space-y-4">
       <div><Label>{t("charging.name" as any)}</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-      <div><Label>OCPP-ID (ChargeBox Identity)</Label><Input value={form.ocpp_id} onChange={(e) => setForm({ ...form, ocpp_id: e.target.value })} placeholder="z.B. CP001" /></div>
+      <div>
+        <Label>OCPP-ID (ChargeBox Identity) <span className="text-xs text-muted-foreground font-normal">— optional, kann bei Inbetriebnahme nachgetragen werden</span></Label>
+        <Input value={form.ocpp_id} onChange={(e) => setForm({ ...form, ocpp_id: e.target.value })} placeholder="z.B. CP001 (leer lassen, falls noch unbekannt)" />
+      </div>
       <div>
         <Label>{t("charging.address" as any)}</Label>
         <div className="flex gap-2">
@@ -346,14 +376,23 @@ const ChargingPoints = () => {
                   <Globe className="h-4 w-4 mr-2" />Öffentlicher Link
                 </Button>
                 <ModbusWallboxWizard onCreated={() => queryClient.invalidateQueries({ queryKey: ["charge-points"] })} />
-                <Dialog open={addOpen} onOpenChange={setAddOpen}>
+                <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) setDuplicateSource(null); }}>
                   <DialogTrigger asChild>
-                    <Button onClick={resetForm}><Plus className="h-4 w-4 mr-2" />{t("charging.addChargePoint" as any)}</Button>
+                    <Button onClick={() => { setDuplicateSource(null); resetForm(); }}><Plus className="h-4 w-4 mr-2" />{t("charging.addChargePoint" as any)}</Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                    <DialogHeader><DialogTitle>{t("charging.newChargePoint" as any)}</DialogTitle></DialogHeader>
+                    <DialogHeader>
+                      <DialogTitle>
+                        {duplicateSource ? `Ladepunkt duplizieren` : t("charging.newChargePoint" as any)}
+                      </DialogTitle>
+                      {duplicateSource && (
+                        <p className="text-xs text-muted-foreground">
+                          Dupliziert von: <span className="font-medium">{duplicateSource.name}</span> — Name und OCPP-ID neu vergeben.
+                        </p>
+                      )}
+                    </DialogHeader>
                     {formFields}
-                    <Button onClick={handleAdd} disabled={!form.name || !form.ocpp_id}>{t("common.create" as any)}</Button>
+                    <Button onClick={handleAdd} disabled={!form.name}>{t("common.create" as any)}</Button>
                   </DialogContent>
                 </Dialog>
                 <PublicStatusLinkDialog open={publicLinkOpen} onOpenChange={setPublicLinkOpen} />
@@ -459,29 +498,39 @@ const ChargingPoints = () => {
                                 {cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm") : "—"}
                               </TableCell>
                               <TableCell>
-                                <ChargePointQrCode ocppId={cp.ocpp_id} name={cp.name} address={cp.address} />
+                                <ChargePointQrCode ocppId={cp.ocpp_id ?? ""} name={cp.name} address={cp.address} />
                               </TableCell>
                               {isAdmin && (
                                 <TableCell>
-                                  <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                      <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>{t("charging.deleteConfirm" as any)}</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          <strong>{cp.name}</strong> ({cp.ocpp_id}) {t("charging.deleteChargePointDesc" as any)}
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>{t("common.cancel" as any)}</AlertDialogCancel>
-                                        <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteChargePoint.mutate(cp.id)}>
-                                          {t("charging.deletePermanently" as any)}
-                                        </AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      title="Duplizieren"
+                                      onClick={(e) => { e.stopPropagation(); handleDuplicate(cp); }}
+                                    >
+                                      <Copy className="h-4 w-4" />
+                                    </Button>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>{t("charging.deleteConfirm" as any)}</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            <strong>{cp.name}</strong>{cp.ocpp_id ? ` (${cp.ocpp_id})` : ""} {t("charging.deleteChargePointDesc" as any)}
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>{t("common.cancel" as any)}</AlertDialogCancel>
+                                          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteChargePoint.mutate(cp.id)}>
+                                            {t("charging.deletePermanently" as any)}
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
                                 </TableCell>
                               )}
                             </TableRow>

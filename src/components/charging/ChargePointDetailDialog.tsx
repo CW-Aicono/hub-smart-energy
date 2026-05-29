@@ -353,7 +353,7 @@ export default function ChargePointDetailDialog({
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={cancelEdit}><X className="h-4 w-4 mr-1" />Abbrechen</Button>
-                  <Button onClick={saveEdit} disabled={!form.name || !form.ocpp_id}><Save className="h-4 w-4 mr-1" />Speichern</Button>
+                  <Button onClick={saveEdit} disabled={!form.name}><Save className="h-4 w-4 mr-1" />Speichern</Button>
                 </div>
               </div>
             ) : (

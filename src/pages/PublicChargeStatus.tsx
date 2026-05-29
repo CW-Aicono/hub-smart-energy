@@ -12,15 +12,20 @@ import {
   Check,
   X,
 } from "lucide-react";
+import {
+  normalizeChargePointStatus,
+  type ChargePointStatusKey,
+} from "@/lib/chargePointStatus";
 
 interface ChargePoint {
   id: string;
   name: string;
-  ocpp_id: string;
+  ocpp_id: string | null;
   status: string;
   connector_count: number;
   ws_connected: boolean;
   last_heartbeat: string | null;
+  group_id: string | null;
 }
 
 interface Connector {
@@ -32,41 +37,39 @@ interface Connector {
   connector_type: string;
 }
 
+interface Group {
+  id: string;
+  name: string;
+}
+
 interface ApiResponse {
   tenant: { name: string; logo_url: string | null };
+  groups?: Group[];
   charge_points: ChargePoint[];
   connectors: Connector[];
   generated_at: string;
 }
 
-type StatusKey = "available" | "charging" | "faulted" | "offline" | "unavailable" | "unconfigured";
+type StatusKey = ChargePointStatusKey;
 
 const STATUS_META: Record<StatusKey, { label: string; bg: string; icon: typeof Zap; iconClass: string }> = {
-  available:    { label: "Available",     bg: "bg-emerald-600 text-white",                icon: Zap,         iconClass: "text-emerald-100" },
-  charging:     { label: "Charging",      bg: "bg-blue-600 text-white",                   icon: PlugZap,     iconClass: "text-blue-100" },
-  faulted:      { label: "Error",         bg: "bg-red-600 text-white",                    icon: AlertTriangle, iconClass: "text-red-100" },
-  offline:      { label: "Disconnected",  bg: "bg-slate-500 text-white",                  icon: WifiOff,     iconClass: "text-slate-100" },
-  unavailable:  { label: "Unavailable",   bg: "bg-amber-500 text-white",                  icon: ZapOff,      iconClass: "text-amber-100" },
-  unconfigured: { label: "Unconfigured",  bg: "bg-purple-500 text-white",                 icon: Settings,    iconClass: "text-purple-100" },
+  available:    { label: "Verfügbar",     bg: "bg-emerald-600 text-white",                icon: Zap,         iconClass: "text-emerald-100" },
+  charging:     { label: "Belegt",        bg: "bg-blue-600 text-white",                   icon: PlugZap,     iconClass: "text-blue-100" },
+  faulted:      { label: "Fehler",        bg: "bg-red-600 text-white",                    icon: AlertTriangle, iconClass: "text-red-100" },
+  offline:      { label: "Offline",       bg: "bg-slate-500 text-white",                  icon: WifiOff,     iconClass: "text-slate-100" },
+  unavailable:  { label: "Nicht verfügbar", bg: "bg-amber-500 text-white",                icon: ZapOff,      iconClass: "text-amber-100" },
+  unconfigured: { label: "Nicht eingerichtet",  bg: "bg-purple-500 text-white",           icon: Settings,    iconClass: "text-purple-100" },
 };
-
-function normalizeStatus(cp: ChargePoint, connStatus?: string): StatusKey {
-  if (!cp.ws_connected) return "offline";
-  const s = (connStatus ?? cp.status ?? "").toLowerCase();
-  if (s.includes("charg")) return "charging";
-  if (s.includes("fault") || s.includes("error")) return "faulted";
-  if (s.includes("unavailable") || s.includes("inoperative")) return "unavailable";
-  if (s.includes("unconfigured") || s === "" ) return "unconfigured";
-  if (s.includes("avail") || s.includes("preparing") || s.includes("finishing") || s.includes("suspended")) return "available";
-  return "available";
-}
 
 interface CardData {
   key: string;
   name: string;
-  ocppId: string;
+  ocppId: string | null;
   status: StatusKey;
+  groupId: string | null;
 }
+
+
 
 export default function PublicChargeStatus() {
   const { token } = useParams<{ token: string }>();
@@ -101,7 +104,7 @@ export default function PublicChargeStatus() {
       }
     }
     load();
-    const id = setInterval(load, 15000);
+    const id = setInterval(load, 5000);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -112,26 +115,51 @@ export default function PublicChargeStatus() {
     if (!data) return [];
     const result: CardData[] = [];
     for (const cp of data.charge_points) {
-      const conns = data.connectors
+      const hasOcppId = !!cp.ocpp_id && cp.ocpp_id.trim() !== "";
+      const connsRaw = data.connectors
         .filter((c) => c.charge_point_id === cp.id)
         .sort((a, b) => a.display_order - b.display_order || a.connector_id - b.connector_id);
-      if (conns.length <= 1) {
+
+      // Fallback: bekannte Steckerzahl > vorhandene Connector-Rows -> virtuelle Kacheln auffüllen
+      const conns: Array<Connector | null> = [...connsRaw];
+      const declared = Math.max(1, cp.connector_count || 1);
+      if (conns.length < declared) {
+        const existingIds = new Set(connsRaw.map((c) => c.connector_id));
+        for (let i = 1; i <= declared; i++) {
+          if (!existingIds.has(i)) conns.push(null);
+        }
+      }
+
+      const effective = conns.length > 0 ? conns : [null];
+
+      if (effective.length <= 1) {
         result.push({
           key: cp.id,
           name: cp.name,
           ocppId: cp.ocpp_id,
-          status: normalizeStatus(cp, conns[0]?.status),
+          status: normalizeChargePointStatus({
+            hasOcppId,
+            wsConnected: cp.ws_connected,
+            rawStatus: effective[0]?.status ?? cp.status,
+          }),
+          groupId: cp.group_id ?? null,
         });
       } else {
-        for (const c of conns) {
-          const suffix = c.name?.trim() || `Connector ${c.connector_id}`;
+        effective.forEach((c, idx) => {
+          const connectorId = c?.connector_id ?? idx + 1;
+          const suffix = c?.name?.trim() || `Stecker ${connectorId}`;
           result.push({
-            key: `${cp.id}-${c.connector_id}`,
+            key: `${cp.id}-${connectorId}`,
             name: `${cp.name}\n${suffix}`,
             ocppId: cp.ocpp_id,
-            status: normalizeStatus(cp, c.status),
+            status: normalizeChargePointStatus({
+              hasOcppId,
+              wsConnected: cp.ws_connected,
+              rawStatus: c?.status ?? cp.status,
+            }),
+            groupId: cp.group_id ?? null,
           });
-        }
+        });
       }
     }
     return result;
@@ -151,6 +179,30 @@ export default function PublicChargeStatus() {
   }, [cards]);
 
   const filteredCards = filter ? cards.filter((c) => c.status === filter) : cards;
+
+  // Nach Gruppen bündeln, "Ohne Gruppe" am Ende
+  const groupedCards = useMemo(() => {
+    const groupsList = data?.groups ?? [];
+    const byId = new Map<string, { name: string; cards: CardData[] }>();
+    for (const g of groupsList) byId.set(g.id, { name: g.name, cards: [] });
+    const ungrouped: CardData[] = [];
+    for (const card of filteredCards) {
+      if (card.groupId && byId.has(card.groupId)) {
+        byId.get(card.groupId)!.cards.push(card);
+      } else {
+        ungrouped.push(card);
+      }
+    }
+    const sections: Array<{ id: string | null; name: string; cards: CardData[] }> = [];
+    for (const g of groupsList) {
+      const entry = byId.get(g.id);
+      if (entry && entry.cards.length > 0) sections.push({ id: g.id, name: g.name, cards: entry.cards });
+    }
+    if (ungrouped.length > 0) sections.push({ id: null, name: "Ohne Gruppe", cards: ungrouped });
+    return sections;
+  }, [filteredCards, data?.groups]);
+
+
 
   if (error === "not_found") {
     return (
@@ -257,30 +309,48 @@ export default function PublicChargeStatus() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 py-6 space-y-8">
         {filteredCards.length === 0 ? (
           <div className="text-center text-slate-500 py-16">Keine Ladepunkte vorhanden.</div>
         ) : (
-          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {filteredCards.map((card) => {
-              const meta = STATUS_META[card.status];
-              const Icon = meta.icon;
-              return (
-                <div
-                  key={card.key}
-                  className={`rounded-lg p-4 ${meta.bg} shadow-sm`}
-                >
-                  <div className="flex items-center gap-1.5 text-xs font-medium opacity-95">
-                    <Icon className={`h-3.5 w-3.5 ${meta.iconClass}`} />
-                    {meta.label}
-                  </div>
-                  <div className="mt-3 font-semibold leading-tight whitespace-pre-line">{card.name}</div>
-                  <div className="mt-3 text-xs opacity-80 font-mono">#{card.ocppId}</div>
+          groupedCards.map((section) => (
+            <section key={section.id ?? "__ungrouped"}>
+              {(groupedCards.length > 1 || section.id) && (
+                <div className="flex items-center gap-2 mb-3">
+                  <h2 className="text-sm font-semibold text-slate-800 uppercase tracking-wide">
+                    {section.name}
+                  </h2>
+                  <span className="text-xs text-slate-500">({section.cards.length})</span>
+                  <div className="flex-1 h-px bg-slate-200" />
                 </div>
-              );
-            })}
-          </div>
+              )}
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {section.cards.map((card) => {
+                  const meta = STATUS_META[card.status];
+                  const Icon = meta.icon;
+                  return (
+                    <div
+                      key={card.key}
+                      className={`rounded-lg p-4 ${meta.bg} shadow-sm`}
+                    >
+                      <div className="flex items-center gap-1.5 text-xs font-medium opacity-95">
+                        <Icon className={`h-3.5 w-3.5 ${meta.iconClass}`} />
+                        {meta.label}
+                      </div>
+                      <div className="mt-3 font-semibold leading-tight whitespace-pre-line">{card.name}</div>
+                      {card.ocppId ? (
+                        <div className="mt-3 text-xs opacity-80 font-mono">#{card.ocppId}</div>
+                      ) : (
+                        <div className="mt-3 text-xs opacity-80 italic">OCPP-ID fehlt</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))
         )}
+
         <div className="text-center text-xs text-slate-400 mt-8">
           Aktualisiert: {new Date(data.generated_at).toLocaleTimeString("de-DE")}
         </div>

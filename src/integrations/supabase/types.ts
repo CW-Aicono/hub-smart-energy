@@ -682,7 +682,7 @@ export type Database = {
           max_power_kw: number
           model: string | null
           name: string
-          ocpp_id: string
+          ocpp_id: string | null
           ocpp_password: string | null
           photo_url: string | null
           power_limit_schedule: Json | null
@@ -718,7 +718,7 @@ export type Database = {
           max_power_kw?: number
           model?: string | null
           name: string
-          ocpp_id: string
+          ocpp_id?: string | null
           ocpp_password?: string | null
           photo_url?: string | null
           power_limit_schedule?: Json | null
@@ -754,7 +754,7 @@ export type Database = {
           max_power_kw?: number
           model?: string | null
           name?: string
-          ocpp_id?: string
+          ocpp_id?: string | null
           ocpp_password?: string | null
           photo_url?: string | null
           power_limit_schedule?: Json | null
