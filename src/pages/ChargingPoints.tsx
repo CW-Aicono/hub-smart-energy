@@ -64,6 +64,7 @@ const ChargingPoints = () => {
   const [addOpen, setAddOpen] = useState(false);
   const [publicLinkOpen, setPublicLinkOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [duplicateSource, setDuplicateSource] = useState<ChargePoint | null>(null);
   const [showAddPassword, setShowAddPassword] = useState(false);
   const generatePw = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
