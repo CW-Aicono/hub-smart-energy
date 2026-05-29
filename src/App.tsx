@@ -20,6 +20,9 @@ import SuperAdminImpersonationBar from "./components/SuperAdminImpersonationBar"
 import CookieConsent from "./components/CookieConsent";
 import LocationDetail from "./pages/LocationDetail";
 import Locations from "./pages/Locations";
+import PPA from "./pages/PPA";
+import PPAWizard from "./pages/PPAWizard";
+import PPADetail from "./pages/PPADetail";
 // leaflet CSS is loaded lazily in map components
 
 // Lazy-loaded pages
@@ -240,6 +243,9 @@ const App = () => (
                       <Route path="/mein-sharing/install" element={<SharingInstall />} />
 
                       <Route path="/tenant-electricity" element={<M><TenantElectricity /></M>} />
+                      <Route path="/ppa" element={<M><PPA /></M>} />
+                      <Route path="/ppa/new" element={<M><PPAWizard /></M>} />
+                      <Route path="/ppa/:id" element={<M><PPADetail /></M>} />
                       <Route path="/ev" element={<ChargingApp />} />
                       <Route path="/te" element={<TenantEnergyApp />} />
                       <Route path="/m" element={<MobileApp />} />

@@ -127,6 +127,64 @@ export function useUpdatePpaStatus() {
   });
 }
 
+export function useUpdatePpaContract() {
+  const { tenant } = useTenant();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      id: string;
+      contract?: Partial<Omit<PpaContract, "id" | "tenant_id" | "created_at" | "updated_at">>;
+      onsite?: Partial<Omit<PpaOnsiteConfig, "id" | "contract_id" | "tenant_id">>;
+      offsite?: Partial<Omit<PpaOffsiteConfig, "id" | "contract_id" | "tenant_id">>;
+      consumptionMeterIds?: string[];
+    }) => {
+      if (!tenant?.id) throw new Error("Kein Mandant");
+      if (params.contract && Object.keys(params.contract).length > 0) {
+        const { error } = await supabase
+          .from("ppa_contracts" as any)
+          .update(params.contract as any)
+          .eq("id", params.id)
+          .eq("tenant_id", tenant.id);
+        if (error) throw error;
+      }
+      if (params.onsite) {
+        const { error } = await supabase
+          .from("ppa_onsite_config" as any)
+          .update(params.onsite as any)
+          .eq("contract_id", params.id);
+        if (error) throw error;
+      }
+      if (params.offsite) {
+        const { error } = await supabase
+          .from("ppa_offsite_config" as any)
+          .update(params.offsite as any)
+          .eq("contract_id", params.id);
+        if (error) throw error;
+      }
+      if (params.consumptionMeterIds) {
+        const { error: delErr } = await supabase
+          .from("ppa_consumption_meters" as any)
+          .delete()
+          .eq("contract_id", params.id);
+        if (delErr) throw delErr;
+        if (params.consumptionMeterIds.length > 0) {
+          const rows = params.consumptionMeterIds.map((meter_id) => ({
+            contract_id: params.id,
+            meter_id,
+            tenant_id: tenant.id,
+          }));
+          const { error } = await supabase.from("ppa_consumption_meters" as any).insert(rows as any);
+          if (error) throw error;
+        }
+      }
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["ppa-contracts"] });
+      qc.invalidateQueries({ queryKey: ["ppa-contract", vars.id] });
+    },
+  });
+}
+
 export function useDeletePpaContract() {
   const qc = useQueryClient();
   return useMutation({
@@ -137,3 +195,17 @@ export function useDeletePpaContract() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ppa-contracts"] }),
   });
 }
+
+export function useDeletePpaDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (doc: { id: string; contract_id: string; storage_path: string }) => {
+      await supabase.storage.from("ppa-documents").remove([doc.storage_path]);
+      const { error } = await supabase.from("ppa_documents" as any).delete().eq("id", doc.id);
+      if (error) throw error;
+      return doc.contract_id;
+    },
+    onSuccess: (contractId) => qc.invalidateQueries({ queryKey: ["ppa-documents", contractId] }),
+  });
+}
+
