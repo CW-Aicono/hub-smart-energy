@@ -498,7 +498,7 @@ const ChargingPoints = () => {
                                 {cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm") : "—"}
                               </TableCell>
                               <TableCell>
-                                <ChargePointQrCode ocppId={cp.ocpp_id} name={cp.name} address={cp.address} />
+                                <ChargePointQrCode ocppId={cp.ocpp_id ?? ""} name={cp.name} address={cp.address} />
                               </TableCell>
                               {isAdmin && (
                                 <TableCell>
