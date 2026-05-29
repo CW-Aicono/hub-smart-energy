@@ -321,7 +321,7 @@ const ChargePointDetail = () => {
       rfid_read_mode: (cp as any).rfid_read_mode || "raw",
     });
     setCoords({ lat: cp.latitude, lng: cp.longitude });
-    setPhotoUrl(cp.photo_url || null);
+    setPhotoUrl(cp.photo_storage_path || cp.photo_url || null);
     setEditing(true);
   };
 
@@ -375,8 +375,12 @@ const ChargePointDetail = () => {
         .upload(path, file, { contentType: file.type || undefined });
       if (error) throw error;
 
-      const { data: signedData } = await supabase.storage.from("meter-photos").createSignedUrl(path, 3600);
-      setPhotoUrl(signedData?.signedUrl || null);
+      const { data: signedData, error: signedError } = await supabase.storage.from("meter-photos").createSignedUrl(path, 60 * 60 * 24 * 365);
+      if (signedError) throw signedError;
+
+      setPhotoUrl(path);
+      updateChargePoint.mutate({ id: cp.id, photo_url: path } as any);
+      toast({ title: "Foto hochgeladen", description: "Das Foto wurde gespeichert." });
     } catch (err: any) {
       console.error("Charge point photo upload failed:", err);
       toast({ title: "Upload fehlgeschlagen", description: err?.message ?? "Unbekannter Fehler", variant: "destructive" });
@@ -1139,7 +1143,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       <div>
                         <Label>Foto</Label>
                         <div className="flex items-center gap-3 mt-1">
-                          {photoUrl && <img src={photoUrl} alt="Vorschau" className="h-16 w-16 rounded object-cover" />}
+                          {photoUrl && <img src={photoUrl.startsWith("http") ? photoUrl : cp.photo_url || ""} alt="Vorschau" className="h-16 w-16 rounded object-cover" />}
                           <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
                             {uploading ? "Lädt…" : "Foto hochladen"}
                           </Button>
