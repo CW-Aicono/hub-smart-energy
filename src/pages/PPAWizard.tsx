@@ -1,5 +1,6 @@
 import { useMemo, useReducer, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -261,14 +262,17 @@ export default function PPAWizard() {
   const progressPct = Math.round((state.step / totalSteps) * 100);
 
   return (
-    <div className="container max-w-3xl py-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <FileSignature className="h-6 w-6 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold">Neuen PPA anlegen</h1>
-          <p className="text-sm text-muted-foreground">Schritt {state.step.toLocaleString("de-DE")} von {totalSteps.toLocaleString("de-DE")}</p>
-        </div>
-      </div>
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
+      <DashboardSidebar />
+      <main className="flex-1 p-3 md:p-6 overflow-auto">
+        <div className="container max-w-3xl space-y-6">
+          <div className="flex items-center gap-3">
+            <FileSignature className="h-6 w-6 text-primary" />
+            <div>
+              <h1 className="text-2xl font-bold">Neuen PPA anlegen</h1>
+              <p className="text-sm text-muted-foreground">Schritt {state.step.toLocaleString("de-DE")} von {totalSteps.toLocaleString("de-DE")}</p>
+            </div>
+          </div>
       <Progress value={progressPct} />
 
       <Card>
@@ -564,6 +568,8 @@ export default function PPAWizard() {
           )}
         </div>
       </div>
+      </div>
+      </main>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { usePpaContracts } from "@/hooks/usePpaContracts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -123,17 +124,22 @@ export default function PPA({ type = "onsite" }: { type?: "onsite" | "offsite" }
       ? "On-site Power Purchase Agreements (Direktlieferung am Standort)"
       : "Off-site Power Purchase Agreements (Bilanzielle Lieferung)";
   return (
-    <div className="container max-w-7xl py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{title}</h1>
-          <p className="text-muted-foreground text-sm">{subtitle}</p>
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
+      <DashboardSidebar />
+      <main className="flex-1 p-3 md:p-6 overflow-auto">
+        <div className="container max-w-7xl space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">{title}</h1>
+              <p className="text-muted-foreground text-sm">{subtitle}</p>
+            </div>
+            <Button asChild>
+              <Link to={`/ppa/new?type=${type}`}><Plus className="h-4 w-4 mr-2" />Neuen PPA anlegen</Link>
+            </Button>
+          </div>
+          <PpaList type={type} />
         </div>
-        <Button asChild>
-          <Link to={`/ppa/new?type=${type}`}><Plus className="h-4 w-4 mr-2" />Neuen PPA anlegen</Link>
-        </Button>
-      </div>
-      <PpaList type={type} />
+      </main>
     </div>
   );
 }
