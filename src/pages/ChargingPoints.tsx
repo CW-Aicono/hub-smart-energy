@@ -112,7 +112,7 @@ const ChargingPoints = () => {
     addChargePoint.mutate({
       tenant_id: tenant.id,
       name: form.name,
-      ocpp_id: form.ocpp_id,
+      ocpp_id: form.ocpp_id.trim() || null,
       address: form.address || null,
       latitude: addCoords.lat,
       longitude: addCoords.lng,
