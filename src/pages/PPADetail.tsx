@@ -279,6 +279,12 @@ export default function PPADetail() {
           <SettlementsPanel contractId={id!} />
         </TabsContent>
 
+        {c.goo_required && (
+          <TabsContent value="goo" className="mt-4">
+            <GooPanel contractId={id!} />
+          </TabsContent>
+        )}
+
         <TabsContent value="history" className="mt-4">
           <Card>
             <CardHeader><CardTitle>Status-Historie</CardTitle></CardHeader>
