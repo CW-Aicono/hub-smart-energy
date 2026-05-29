@@ -260,7 +260,10 @@ const ChargingPoints = () => {
   const formFields = (
     <div className="space-y-4">
       <div><Label>{t("charging.name" as any)}</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-      <div><Label>OCPP-ID (ChargeBox Identity)</Label><Input value={form.ocpp_id} onChange={(e) => setForm({ ...form, ocpp_id: e.target.value })} placeholder="z.B. CP001" /></div>
+      <div>
+        <Label>OCPP-ID (ChargeBox Identity) <span className="text-xs text-muted-foreground font-normal">— optional, kann bei Inbetriebnahme nachgetragen werden</span></Label>
+        <Input value={form.ocpp_id} onChange={(e) => setForm({ ...form, ocpp_id: e.target.value })} placeholder="z.B. CP001 (leer lassen, falls noch unbekannt)" />
+      </div>
       <div>
         <Label>{t("charging.address" as any)}</Label>
         <div className="flex gap-2">
