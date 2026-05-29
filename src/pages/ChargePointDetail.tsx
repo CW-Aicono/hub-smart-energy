@@ -368,7 +368,7 @@ const ChargePointDetail = () => {
     setUploading(true);
     try {
       const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-      const path = `charge-points/${cp.id}-${crypto.randomUUID()}.${ext}`;
+      const path = `charge-points/${cp.id}/${crypto.randomUUID()}.${ext}`;
 
       const { error } = await supabase.storage
         .from("meter-photos")
