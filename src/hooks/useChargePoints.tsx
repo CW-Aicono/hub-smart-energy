@@ -99,7 +99,7 @@ export function useChargePoints() {
   }, [queryClient]);
 
   const addChargePoint = useMutation({
-    mutationFn: async (cp: Partial<ChargePoint> & { tenant_id: string; ocpp_id: string; name: string }) => {
+    mutationFn: async (cp: Partial<ChargePoint> & { tenant_id: string; ocpp_id?: string | null; name: string }) => {
       const { data, error } = await supabase.from("charge_points").insert(cp as any).select().single();
       if (error) throw error;
 
