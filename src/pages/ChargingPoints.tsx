@@ -502,25 +502,35 @@ const ChargingPoints = () => {
                               </TableCell>
                               {isAdmin && (
                                 <TableCell>
-                                  <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                      <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>{t("charging.deleteConfirm" as any)}</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          <strong>{cp.name}</strong> ({cp.ocpp_id}) {t("charging.deleteChargePointDesc" as any)}
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>{t("common.cancel" as any)}</AlertDialogCancel>
-                                        <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteChargePoint.mutate(cp.id)}>
-                                          {t("charging.deletePermanently" as any)}
-                                        </AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      title="Duplizieren"
+                                      onClick={(e) => { e.stopPropagation(); handleDuplicate(cp); }}
+                                    >
+                                      <Copy className="h-4 w-4" />
+                                    </Button>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>{t("charging.deleteConfirm" as any)}</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            <strong>{cp.name}</strong>{cp.ocpp_id ? ` (${cp.ocpp_id})` : ""} {t("charging.deleteChargePointDesc" as any)}
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>{t("common.cancel" as any)}</AlertDialogCancel>
+                                          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteChargePoint.mutate(cp.id)}>
+                                            {t("charging.deletePermanently" as any)}
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
                                 </TableCell>
                               )}
                             </TableRow>
