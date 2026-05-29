@@ -124,10 +124,36 @@ const ChargingPoints = () => {
       connection_protocol: form.connection_protocol,
       auth_required: form.auth_required,
       ocpp_password: form.auth_required ? form.ocpp_password : null,
+      ...(duplicateSource?.group_id ? { group_id: duplicateSource.group_id } : {}),
     } as any);
     setAddOpen(false);
+    setDuplicateSource(null);
     resetForm();
   };
+
+  const handleDuplicate = (cp: ChargePoint) => {
+    setDuplicateSource(cp);
+    setForm({
+      name: "",
+      ocpp_id: "",
+      address: cp.address ?? "",
+      connector_count: String(cp.connector_count ?? 1),
+      max_power_kw: String(cp.max_power_kw ?? 22),
+      vendor: cp.vendor ?? "",
+      model: cp.model ?? "",
+      connector_type: cp.connector_type ?? "Type2",
+      connection_protocol: ((cp as any).connection_protocol === "ws" ? "ws" : "wss"),
+      auth_required: (cp as any).auth_required ?? true,
+      ocpp_password: generatePw(),
+    });
+    setAddCoords({
+      lat: cp.latitude ?? null,
+      lng: cp.longitude ?? null,
+    });
+    setShowAddPassword(false);
+    setAddOpen(true);
+  };
+
 
 
   const geocodeAddAddress = async () => {
