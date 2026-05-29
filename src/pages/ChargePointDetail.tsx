@@ -118,6 +118,28 @@ const ChargePointDetail = () => {
 
   const cp = chargePoints.find((c) => c.id === id);
   const currentPhotoUrl = photoPreviewUrl || cp?.photo_url || null;
+
+  useEffect(() => {
+    let cancelled = false;
+    const path = cp?.photo_storage_path || cp?.photo_url || null;
+
+    if (!path) {
+      setPhotoPreviewUrl(null);
+      return;
+    }
+
+    if (path.startsWith("blob:") || /^https?:\/\//i.test(path)) {
+      setPhotoPreviewUrl(path);
+      return;
+    }
+
+    downloadSecureStorageObject("meter-photos", path).then((url) => {
+      if (!cancelled) setPhotoPreviewUrl(url);
+    });
+
+    return () => { cancelled = true; };
+  }, [cp?.id, cp?.photo_storage_path, cp?.photo_url]);
+
   const cpGroup = cp?.group_id ? groups.find((g) => g.id === cp.group_id) ?? null : null;
   const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
   const { connectors, reorderConnectors } = useChargePointConnectors(cp?.id);
