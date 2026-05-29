@@ -682,7 +682,7 @@ export type Database = {
           max_power_kw: number
           model: string | null
           name: string
-          ocpp_id: string
+          ocpp_id: string | null
           ocpp_password: string | null
           photo_url: string | null
           power_limit_schedule: Json | null
@@ -718,7 +718,7 @@ export type Database = {
           max_power_kw?: number
           model?: string | null
           name: string
-          ocpp_id: string
+          ocpp_id?: string | null
           ocpp_password?: string | null
           photo_url?: string | null
           power_limit_schedule?: Json | null
@@ -754,7 +754,7 @@ export type Database = {
           max_power_kw?: number
           model?: string | null
           name?: string
-          ocpp_id?: string
+          ocpp_id?: string | null
           ocpp_password?: string | null
           photo_url?: string | null
           power_limit_schedule?: Json | null
@@ -4770,6 +4770,33 @@ export type Database = {
           },
         ]
       }
+      master_recovery_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          ip_address: string | null
+          success: boolean
+          target_email: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          ip_address?: string | null
+          success: boolean
+          target_email: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          ip_address?: string | null
+          success?: boolean
+          target_email?: string
+        }
+        Relationships: []
+      }
       meter_period_totals: {
         Row: {
           created_at: string | null
@@ -7968,6 +7995,7 @@ export type Database = {
           lexware_contact_id: string | null
           logo_url: string | null
           name: string
+          onboarding_completed: boolean
           payment_method: string
           postal_code: string | null
           remote_support_enabled: boolean
@@ -8001,6 +8029,7 @@ export type Database = {
           lexware_contact_id?: string | null
           logo_url?: string | null
           name: string
+          onboarding_completed?: boolean
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
@@ -8034,6 +8063,7 @@ export type Database = {
           lexware_contact_id?: string | null
           logo_url?: string | null
           name?: string
+          onboarding_completed?: boolean
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean

@@ -1,130 +1,89 @@
-# Plan: Energy-Sharing an BDEW-Vorgaben (§42c, §20b EnWG) anpassen
+# Master-Recovery v2 — Reiner Super-Admin-Account
 
-## Ausgangslage
+## Problem mit v1
 
-Das Modul bildet heute Gemeinschaft, Mitglieder, Anlagen, Tarife, eine Vertragsschablone, Marktplatz und Abrechnung ab. Die BDEW-Informationen verlangen darüber hinaus eine sauberere juristische Einordnung, mehr Pflichtfelder und einen klaren „Pilot-Charakter“ bis die Bundesnetzagentur Vorgaben veröffentlicht. Schema-Änderungen bleiben additiv — bestehende Daten gehen nicht verloren.
+Die bisherige Funktion befördert eine bestehende E-Mail zum `super_admin`. Wenn diese E-Mail aber bereits einem Tenant zugeordnet ist (z. B. als Tenant-Admin), hätte derselbe User Zugriff auf **beide** Welten. Das verletzt die strikte Trennung Super-Admin ↔ Tenant.
 
-## Was geändert / ergänzt wird
+## Neues Verhalten
 
-### 1. Pilot-Disclaimer (überall sichtbar)
-- Auf der Seite `Energy Sharing` oben ein Hinweis-Banner: *„Pilotbetrieb nach §42c EnWG. Die bundesweite Plattform nach §20b EnWG und die finalen BNetzA-Vorgaben stehen noch aus. Prozesse können sich ändern.“*
-- Im Community-Wizard zusätzlich ein Pflicht-Häkchen „Pilot-Risiko verstanden“.
+Die Edge Function `master-recovery` legt einen **neuen, reinen Plattform-User** an:
 
-### 2. Teilnahmeberechtigung (KMU- und Anlagen-Check)
-Neue Felder, die im Wizard und in der Mitglieder-/Anlagen-Bearbeitung abgefragt werden:
+1. **E-Mail muss noch nicht existieren** in `auth.users`.
+  - Falls die E-Mail bereits existiert **und einem Tenant zugeordnet ist** → Fehler `409 Email gehört bereits zu einem Tenant — bitte andere E-Mail verwenden`.
+  - Falls die E-Mail bereits existiert **und kein Tenant zugeordnet** (also schon Plattform-User) → bestehende Rolle wird auf `super_admin` gesetzt/bestätigt, Passwort wird **nicht** geändert.
+2. Falls neu: User wird per `auth.admin.createUser` angelegt mit:
+  - `email_confirm: true`
+  - **Einmal-Passwort (OTP)** — 16 Zeichen, zufällig, im Response zurückgegeben (nur einmal sichtbar)
+  - `user_metadata.must_change_password = true`
+3. `profiles`-Eintrag wird angelegt mit `tenant_id = NULL` (= Plattform-User).
+4. Eintrag in `user_roles` mit Rolle `super_admin`.
+5. Audit-Log in `master_recovery_log` (existiert bereits).
 
-**Mitglied (Letztverbraucher):**
-- Unternehmens-Typ: Privatperson / Kleinstunternehmen / Kleines U. / Mittleres U. / Juristische Person ö. Rechts
-- Mitarbeiterzahl, Jahresumsatz (EUR), Bilanzsumme (EUR)
-- Auto-Klassifikation nach EU-Empfehlung 2003/361/EG mit Ampel (grün = teilnahmeberechtigt, rot = nicht zulässig)
+## Aufruf
 
-**Anlage (Erzeuger):**
-- Gebäudetyp: Einfamilienhaus / Mehrfamilienhaus / Sonstige
-- Schwellen-Check: <30 kW EFH bzw. <100 kW MFH → Hinweis „Erleichterung: gilt nicht als Stromlieferant“
-- Checkbox „nicht überwiegend gewerblich betrieben“
-- Auswahl Betreiber-Rechtsform
-
-### 3. Zwei-Vertrags-Struktur (§42c Abs. 1 Nr. 2 + Nr. 3)
-Heute gibt es eine Schablone. Künftig zwei Typen pro Gemeinschaft:
-- **Liefervertrag** (Strombezug)
-- **Nutzungsvertrag** (gemeinschaftliche Nutzung, Aufteilungsschlüssel, Entgelt)
-
-Umsetzung: neues Feld `template_kind` (`liefer` | `nutzung`) in `community_contract_templates`. Standard-Vorlagen für beide Typen werden im Wizard angeboten. `SignContractDialog` zeigt beide Verträge nacheinander.
-
-### 4. Pflicht-Informationsschreiben (§42c Abs. 6)
-Vor Vertragsabschluss muss in Textform übergeben werden:
-- Hinweis „keine Vollversorgung möglich“
-- „Reststrombezug nötig, ggf. höhere Kosten“
-- „Freie Lieferantenwahl bleibt erhalten“
-
-Umsetzung: PDF-Vorlage „Vorvertragliche Information“, automatisch beim Anlegen/Einladen eines Mitglieds erzeugt und im Mitgliedsdatensatz mit Zeitstempel hinterlegt (`pre_contract_info_sent_at`). Im Member-Tab Spalte „Info-Schreiben“ + Button „Erneut senden“.
-
-### 5. Reststromlieferant je Mitglied
-Neue Felder am Mitglied: `rest_supplier_name`, `rest_supplier_contract_no`, `rest_supplier_confirmed_at`. Pflichtfeld vor Aktivierung des Mitglieds.
-
-### 6. iMSys-Status & 4-Monate-Frist (MsbG §34)
-Neue Felder am Mitglied und an der Anlage:
-- `imsys_status`: nicht vorhanden / beantragt / installiert
-- `imsys_requested_at` (Datum)
-- Anzeige „Frist endet am …“ (4 Monate ab Antrag) mit Ampel
-- Mitglied kann erst „aktiv“ werden, wenn iMSys installiert ist
-
-### 7. Bilanzgebiet & Phasenlogik (§42c Abs. 4)
-- Neue Community-Felder: `balancing_zone` (Bilanzgebiet) und `grid_operator` (VNB)
-- Validierung beim Mitglieds-Anlegen:
-  - bis 31.05.2028: Mitglied muss im **gleichen** Bilanzgebiet liegen
-  - ab 01.06.2028: auch in angrenzendem Gebiet derselben Regelzone
-- Bestehende `community-plz-check` Edge-Function um `balancing_zone` erweitern.
-
-### 8. Messung & Aufteilungsschlüssel
-- Pro Mitglied: `metering_type` (`zaehlerstandsgang` | `15min_leistung`) gemäß §42c Abs. 1 Nr. 6/7
-- Beim Aufteilungsschlüssel der Anlage Tooltip-Erläuterung „statisch = Wizard-Anteil, dynamisch = nach Verbrauch je 15 min“
-- Tarif-Maske: Hinweistext „Netzentgelte, Steuern, Abgaben und Umlagen werden separat abgerechnet — keine Befreiung.“
-
-### 9. Rollen klarer trennen
-Im Mitglieder-Tab Rollen-Dropdown erweitern:
-- Anlagenbetreiber, Letztverbraucher, Dienstleister, Reststromlieferant (nur Info, nicht Teil der Gemeinschaft)
-- Sidebar-Hinweis: „VNB/MSB nehmen keine wirtschaftliche Rolle ein.“
-
-### 10. EE-Nachweis
-Pflicht-Checkbox an der Anlage: „Strom stammt zu 100 % aus erneuerbaren Energien“ + optionaler Upload (EEG-Bescheid, Herkunftsnachweis).
-
----
-
-## Technische Details (für Entwickler)
-
-**Migration (additiv, keine Datenverluste):**
-
-```text
-ALTER TABLE community_members ADD COLUMN
-  customer_class text,          -- privat | kleinst | klein | mittel | jur_oer
-  employees int,
-  annual_revenue_eur numeric,
-  annual_balance_eur numeric,
-  rest_supplier_name text,
-  rest_supplier_contract_no text,
-  rest_supplier_confirmed_at timestamptz,
-  imsys_status text default 'missing',
-  imsys_requested_at date,
-  imsys_installed_at date,
-  metering_type text,
-  pre_contract_info_sent_at timestamptz;
-
-ALTER TABLE community_assets ADD COLUMN
-  building_type text,           -- efh | mfh | sonstige
-  not_commercial bool default true,
-  operator_legal_form text,
-  renewable_confirmed bool default false,
-  renewable_proof_url text,
-  imsys_status text default 'missing',
-  imsys_requested_at date;
-
-ALTER TABLE energy_communities ADD COLUMN
-  balancing_zone text,
-  grid_operator text,
-  pilot_acknowledged_at timestamptz;
-
-ALTER TABLE community_contract_templates ADD COLUMN
-  template_kind text default 'nutzung'; -- liefer | nutzung
+```bash
+curl -X POST https://xnveugycurplszevdxtw.supabase.co/functions/v1/master-recovery \
+  -H "x-master-key: <MASTER_RECOVERY_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@aicono.de"}'
 ```
 
-**UI-Dateien, die berührt werden (frontend-only, kleinteilig):**
-- `src/pages/EnergySharing.tsx` — Pilot-Banner, neue Spalten/Badges, KMU-Ampel, iMSys-Ampel
-- `src/components/energy-sharing/CommunityWizard.tsx` — Schritte „Bilanzgebiet + Pilot-Bestätigung“, „EE-Nachweis“, zweite Vertragsschablone
-- `src/components/energy-sharing/ContractTemplatesTab.tsx` — Typ-Auswahl `liefer`/`nutzung`
-- `src/components/energy-sharing/SignContractDialog.tsx` — beide Verträge unterzeichnen
-- Neuer Helper `src/lib/energy-sharing/kmuClassification.ts` für die EU-2003/361/EG-Logik
-- Neuer Helper `src/lib/energy-sharing/preContractInfoPdf.ts` (PDF-Generator, analog `generateCommunityInvoicePdf.ts`)
+Erfolgs-Antwort bei Neuanlage:
 
-**Edge-Functions:**
-- `community-plz-check` um `balancing_zone` ergänzen
-- Optional: neue Function `community-pre-contract-info` für PDF-Versand
+```json
+{
+  "success": true,
+  "created": true,
+  "email": "admin@aicono.de",
+  "one_time_password": "Xy7k!p2Qm9aB4nVz",
+  "message": "Bitte sofort einloggen und Passwort ändern. Dieses Passwort wird nicht erneut angezeigt."
+}
+```
 
-## Was bewusst NICHT geändert wird
-- Keine Änderung der bestehenden Daten und keine Migration von Bestandsverträgen.
-- Keine Anbindung an die §20b-Plattform (steht noch nicht zur Verfügung).
-- Keine Netzentgelt- oder Steuerlogik (gesetzlich keine Befreiung).
-- Marktplatz, Billing und Allocation-Logik bleiben unverändert.
+Erfolgs-Antwort bei bestehendem Plattform-User:
 
-## Aufwand
-~1 Migration, ~6 UI-Dateien, 2 neue Helper, 1 Edge-Function-Erweiterung. Keine Breaking Changes.
+```json
+{ "success": true, "created": false, "message": "Super-Admin-Rolle bestätigt" }
+```
+
+## Passwort-Wechsel-Zwang beim ersten Login
+
+- Beim Login prüft die App `user_metadata.must_change_password`.
+- Wenn `true` → Redirect auf `/set-password` (Seite existiert bereits).
+- Nach erfolgreichem `updateUser({ password, data: { must_change_password: false } })` wird das Flag entfernt.
+
+Dafür kleine Ergänzung in `src/pages/Index.tsx` (oder einem zentralen Auth-Guard): nach `getUser()` prüfen, ob `user.user_metadata?.must_change_password === true` → `navigate("/set-password")`.
+
+## Was angepasst werden muss
+
+1. `**supabase/functions/master-recovery/index.ts**` — komplett überarbeiten:
+  - Tenant-Check via `profiles.tenant_id IS NOT NULL` → 409 abbrechen
+  - `createUser` mit zufälligem OTP
+  - `profiles`-Insert mit `tenant_id = NULL`
+  - OTP im Response zurückgeben
+2. `**docs/MASTER_RECOVERY.md**` — aktualisieren:
+  - Neue Semantik (legt User an, nicht befördern)
+  - OTP-Workflow
+  - Fehler `409 Email gehört zu einem Tenant`
+3. **Auth-Guard für `must_change_password**` — kleine Erweiterung in `Index.tsx`/Auth-Flow, Redirect auf `/set-password`.
+4. **Keine DB-Migration nötig** — `master_recovery_log` reicht.
+
+## Sicherheits-Eigenschaften
+
+- Kein bestehender Tenant-User kann „nebenbei" zum Super-Admin gemacht werden (strikte Trennung bleibt gewahrt).
+- OTP ist nur einmal sichtbar (sofort in 1Password speichern).
+- Erstes Login erzwingt Passwort-Wechsel.
+- Rate-Limit (5/h pro IP) und Audit-Log bleiben aktiv.
+
+## Offene Frage an dich
+
+Soll bei einer **bereits existierenden Plattform-E-Mail ohne Tenant** (Fall 2 oben):
+
+- (a) nur die Rolle bestätigt werden (kein neues Passwort), **oder**
+- (b) zusätzlich ein neues OTP gesetzt werden (= „Passwort-Reset für Super-Admin")?
+
+Default-Vorschlag: **(a)** — sicherer, da kein versehentlicher Passwort-Overwrite. Reset läuft regulär über „Passwort vergessen".  
+  
+Antwort: Option (a) umsetzen
+
+&nbsp;

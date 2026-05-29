@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine, BarChart3, Upload, Calculator, ShieldCheck, Store, Pencil } from "lucide-react";
+import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine, BarChart3, Upload, Calculator, ShieldCheck, Store, Pencil, Smartphone } from "lucide-react";
+
 import {
   useEnergyCommunities,
   useCommunityMembers,
@@ -29,6 +30,8 @@ import DataImportTab from "@/components/energy-sharing/DataImportTab";
 import BillingTab from "@/components/energy-sharing/BillingTab";
 import DataQualityTab from "@/components/energy-sharing/DataQualityTab";
 import MarketplaceTab from "@/components/energy-sharing/MarketplaceTab";
+import CommunityAppTab from "@/components/energy-sharing/CommunityAppTab";
+
 import { maLoError, meLoError } from "@/lib/energy-sharing/idValidation";
 import { confirmDialog } from "@/components/ui/confirm-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -211,12 +214,15 @@ function CommunityDetail({ communityId, communityName }: { communityId: string; 
             <TabsTrigger value="import" className="rounded-full"><Upload className="h-4 w-4 mr-1" />Daten-Import</TabsTrigger>
             <TabsTrigger value="quality" className="rounded-full"><ShieldCheck className="h-4 w-4 mr-1" />Datenqualität</TabsTrigger>
             <TabsTrigger value="billing" className="rounded-full"><Calculator className="h-4 w-4 mr-1" />Abrechnung</TabsTrigger>
+            <TabsTrigger value="app" className="rounded-full"><Smartphone className="h-4 w-4 mr-1" />Community App</TabsTrigger>
           </TabsList>
           <TabsContent value="import"><DataImportTab communityId={communityId} /></TabsContent>
           <TabsContent value="quality"><DataQualityTab communityId={communityId} /></TabsContent>
           <TabsContent value="billing"><BillingTab communityId={communityId} /></TabsContent>
+          <TabsContent value="app"><CommunityAppTab communityId={communityId} /></TabsContent>
         </Tabs>
       </TabsContent>
+
 
       {/* GRUPPE 4: MARKTPLATZ */}
       <TabsContent value="marktplatz"><MarketplaceTab communityId={communityId} /></TabsContent>

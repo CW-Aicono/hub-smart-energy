@@ -80,6 +80,7 @@ const SharingDashboard = lazy(() => import("./pages/sharing/SharingDashboard"));
 const SharingInvoices = lazy(() => import("./pages/sharing/SharingInvoices"));
 const SharingOnboarding = lazy(() => import("./pages/sharing/SharingOnboarding"));
 const SharingInstall = lazy(() => import("./pages/sharing/SharingInstall"));
+const SharingSetPassword = lazy(() => import("./pages/sharing/SharingSetPassword"));
 
 const TenantEnergyApp = lazy(() => import("./pages/TenantEnergyApp"));
 const Demo = lazy(() => import("./pages/Demo"));
@@ -232,6 +233,7 @@ const App = () => (
                       <Route path="/sharing/marktplatz/:slug" element={<MarketplaceListingDetail />} />
                       <Route path="/mein-sharing" element={<SharingDashboard />} />
                       <Route path="/mein-sharing/login" element={<SharingLogin />} />
+                      <Route path="/mein-sharing/set-password" element={<SharingSetPassword />} />
                       <Route path="/mein-sharing/dashboard" element={<SharingDashboard />} />
                       <Route path="/mein-sharing/rechnungen" element={<SharingInvoices />} />
                       <Route path="/mein-sharing/onboarding" element={<SharingOnboarding />} />

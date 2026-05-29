@@ -40,7 +40,7 @@ export interface ChargePoint {
   tenant_id: string;
   location_id: string | null;
   group_id: string | null;
-  ocpp_id: string;
+  ocpp_id: string | null;
   ocpp_password: string | null;
   name: string;
   status: string;
@@ -99,7 +99,7 @@ export function useChargePoints() {
   }, [queryClient]);
 
   const addChargePoint = useMutation({
-    mutationFn: async (cp: Partial<ChargePoint> & { tenant_id: string; ocpp_id: string; name: string }) => {
+    mutationFn: async (cp: Partial<ChargePoint> & { tenant_id: string; ocpp_id?: string | null; name: string }) => {
       const { data, error } = await supabase.from("charge_points").insert(cp as any).select().single();
       if (error) throw error;
 
@@ -206,7 +206,7 @@ export function useChargePoints() {
     mutationFn: async (id: string) => {
       // Find ocpp_id to delete logs
       const cp = queryClient.getQueryData<ChargePoint[]>(["charge-points"])?.find(c => c.id === id);
-      if (cp) {
+      if (cp && cp.ocpp_id) {
         await supabase.from("ocpp_message_log").delete().eq("charge_point_id", cp.ocpp_id);
       }
       // Delete charging invoices linked to sessions of this charge point
