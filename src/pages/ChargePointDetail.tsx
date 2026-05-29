@@ -366,16 +366,28 @@ const ChargePointDetail = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    const ext = file.name.split(".").pop();
-    const path = `charge-points/${cp.id}.${ext}`;
-    const { error } = await supabase.storage.from("meter-photos").upload(path, file, { upsert: true });
-    if (error) {
-      toast({ title: "Upload fehlgeschlagen", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `charge-points/${cp.id}.${ext}`;
+
+      // Vorhandene Foto-Varianten dieser Ladestation entfernen (keine upsert-Falle)
+      const knownExts = ["png", "jpg", "jpeg", "webp", "avif"];
+      const oldPaths = knownExts.map((x) => `charge-points/${cp.id}.${x}`);
+      await supabase.storage.from("meter-photos").remove(oldPaths);
+
+      const { error } = await supabase.storage
+        .from("meter-photos")
+        .upload(path, file, { contentType: file.type || undefined });
+      if (error) throw error;
+
       const { data: signedData } = await supabase.storage.from("meter-photos").createSignedUrl(path, 3600);
       setPhotoUrl(signedData?.signedUrl || null);
+    } catch (err: any) {
+      console.error("Charge point photo upload failed:", err);
+      toast({ title: "Upload fehlgeschlagen", description: err?.message ?? "Unbekannter Fehler", variant: "destructive" });
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   };
 
   // Energy settings (Lastmanagement, PV-Überschuss-Switch, Günstig-Laden) on charge point
