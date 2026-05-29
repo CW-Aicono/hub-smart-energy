@@ -115,26 +115,51 @@ export default function PublicChargeStatus() {
     if (!data) return [];
     const result: CardData[] = [];
     for (const cp of data.charge_points) {
-      const conns = data.connectors
+      const hasOcppId = !!cp.ocpp_id && cp.ocpp_id.trim() !== "";
+      const connsRaw = data.connectors
         .filter((c) => c.charge_point_id === cp.id)
         .sort((a, b) => a.display_order - b.display_order || a.connector_id - b.connector_id);
-      if (conns.length <= 1) {
+
+      // Fallback: bekannte Steckerzahl > vorhandene Connector-Rows -> virtuelle Kacheln auffüllen
+      const conns: Array<Connector | null> = [...connsRaw];
+      const declared = Math.max(1, cp.connector_count || 1);
+      if (conns.length < declared) {
+        const existingIds = new Set(connsRaw.map((c) => c.connector_id));
+        for (let i = 1; i <= declared; i++) {
+          if (!existingIds.has(i)) conns.push(null);
+        }
+      }
+
+      const effective = conns.length > 0 ? conns : [null];
+
+      if (effective.length <= 1) {
         result.push({
           key: cp.id,
           name: cp.name,
           ocppId: cp.ocpp_id,
-          status: normalizeStatus(cp, conns[0]?.status),
+          status: normalizeChargePointStatus({
+            hasOcppId,
+            wsConnected: cp.ws_connected,
+            rawStatus: effective[0]?.status ?? cp.status,
+          }),
+          groupId: cp.group_id ?? null,
         });
       } else {
-        for (const c of conns) {
-          const suffix = c.name?.trim() || `Connector ${c.connector_id}`;
+        effective.forEach((c, idx) => {
+          const connectorId = c?.connector_id ?? idx + 1;
+          const suffix = c?.name?.trim() || `Stecker ${connectorId}`;
           result.push({
-            key: `${cp.id}-${c.connector_id}`,
+            key: `${cp.id}-${connectorId}`,
             name: `${cp.name}\n${suffix}`,
             ocppId: cp.ocpp_id,
-            status: normalizeStatus(cp, c.status),
+            status: normalizeChargePointStatus({
+              hasOcppId,
+              wsConnected: cp.ws_connected,
+              rawStatus: c?.status ?? cp.status,
+            }),
+            groupId: cp.group_id ?? null,
           });
-        }
+        });
       }
     }
     return result;
@@ -154,6 +179,30 @@ export default function PublicChargeStatus() {
   }, [cards]);
 
   const filteredCards = filter ? cards.filter((c) => c.status === filter) : cards;
+
+  // Nach Gruppen bündeln, "Ohne Gruppe" am Ende
+  const groupedCards = useMemo(() => {
+    const groupsList = data?.groups ?? [];
+    const byId = new Map<string, { name: string; cards: CardData[] }>();
+    for (const g of groupsList) byId.set(g.id, { name: g.name, cards: [] });
+    const ungrouped: CardData[] = [];
+    for (const card of filteredCards) {
+      if (card.groupId && byId.has(card.groupId)) {
+        byId.get(card.groupId)!.cards.push(card);
+      } else {
+        ungrouped.push(card);
+      }
+    }
+    const sections: Array<{ id: string | null; name: string; cards: CardData[] }> = [];
+    for (const g of groupsList) {
+      const entry = byId.get(g.id);
+      if (entry && entry.cards.length > 0) sections.push({ id: g.id, name: g.name, cards: entry.cards });
+    }
+    if (ungrouped.length > 0) sections.push({ id: null, name: "Ohne Gruppe", cards: ungrouped });
+    return sections;
+  }, [filteredCards, data?.groups]);
+
+
 
   if (error === "not_found") {
     return (
