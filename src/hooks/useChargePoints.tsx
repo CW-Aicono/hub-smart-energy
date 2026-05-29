@@ -76,8 +76,8 @@ export function useChargePoints() {
       return { displayUrl: photoUrl, storagePath: null };
     }
 
-    const { data } = await supabase.storage.from("meter-photos").createSignedUrl(photoUrl, 60 * 60 * 24 * 365);
-    return { displayUrl: data?.signedUrl ?? photoUrl, storagePath: photoUrl };
+    const { data } = await supabase.storage.from("meter-photos").download(photoUrl);
+    return { displayUrl: data ? URL.createObjectURL(data) : photoUrl, storagePath: photoUrl };
   };
 
   const { data: chargePoints = [], isLoading } = useQuery({
