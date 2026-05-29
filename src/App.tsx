@@ -20,6 +20,9 @@ import SuperAdminImpersonationBar from "./components/SuperAdminImpersonationBar"
 import CookieConsent from "./components/CookieConsent";
 import LocationDetail from "./pages/LocationDetail";
 import Locations from "./pages/Locations";
+import PPA from "./pages/PPA";
+import PPAWizard from "./pages/PPAWizard";
+import PPADetail from "./pages/PPADetail";
 // leaflet CSS is loaded lazily in map components
 
 // Lazy-loaded pages
