@@ -1,11 +1,23 @@
 import { supabase } from "@/integrations/supabase/client";
 
+const objectUrlCache = new Map<string, string>();
+
 export async function downloadSecureStorageObject(bucket: string, path: string): Promise<string | null> {
+  if (!path || path.startsWith("blob:")) return path || null;
+  if (/^https?:\/\//i.test(path)) return path;
+
+  const cacheKey = `${bucket}:${path}`;
+  const cached = objectUrlCache.get(cacheKey);
+  if (cached) return cached;
+
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData.session?.access_token;
   if (!token) return null;
 
-  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/secure-storage-download`, {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+    || `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co`;
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/secure-storage-download`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -20,5 +32,7 @@ export async function downloadSecureStorageObject(bucket: string, path: string):
     return null;
   }
 
-  return URL.createObjectURL(await response.blob());
+  const objectUrl = URL.createObjectURL(await response.blob());
+  objectUrlCache.set(cacheKey, objectUrl);
+  return objectUrl;
 }
