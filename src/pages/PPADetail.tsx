@@ -274,6 +274,10 @@ export default function PPADetail() {
           )}
         </TabsContent>
 
+        <TabsContent value="settlements" className="mt-4">
+          <SettlementsPanel contractId={id!} />
+        </TabsContent>
+
         <TabsContent value="history" className="mt-4">
           <Card>
             <CardHeader><CardTitle>Status-Historie</CardTitle></CardHeader>
