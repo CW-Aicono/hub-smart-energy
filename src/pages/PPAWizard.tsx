@@ -1,5 +1,6 @@
 import { useMemo, useReducer, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -261,12 +262,38 @@ export default function PPAWizard() {
   const progressPct = Math.round((state.step / totalSteps) * 100);
 
   return (
-    <div className="container max-w-3xl py-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <FileSignature className="h-6 w-6 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold">Neuen PPA anlegen</h1>
-          <p className="text-sm text-muted-foreground">Schritt {state.step.toLocaleString("de-DE")} von {totalSteps.toLocaleString("de-DE")}</p>
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
+      <DashboardSidebar />
+      <main className="flex-1 p-3 md:p-6 overflow-auto">
+        <div className="container max-w-3xl space-y-6">
+          <div className="flex items-center gap-3">
+            <FileSignature className="h-6 w-6 text-primary" />
+            <div>
+              <h1 className="text-2xl font-bold">Neuen PPA anlegen</h1>
+              <p className="text-sm text-muted-foreground">Schritt {state.step.toLocaleString("de-DE")} von {totalSteps.toLocaleString("de-DE")}</p>
+            </div>
+          </div>
+          <Progress value={progressPct} />
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{stepTitle(state.step, isOnsite)}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {state.step === 1 && (
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" onClick={() => set({ ppa_type: "onsite" })}
+                    className={`rounded-lg border p-4 text-left transition-colors ${state.ppa_type === "onsite" ? "border-primary bg-primary/10" : "hover:bg-muted"}`}>
+                    <div className="font-semibold">On-site PPA</div>
+                    <div className="text-xs text-muted-foreground mt-1">Direktbelieferung am Gebäude (PV-Dach, Direktleitung, Mieterstrom)</div>
+                  </button>
+                  <button type="button" onClick={() => set({ ppa_type: "offsite" })}
+                    className={`rounded-lg border p-4 text-left transition-colors ${state.ppa_type === "offsite" ? "border-primary bg-primary/10" : "hover:bg-muted"}`}>
+                    <div className="font-semibold">Off-site PPA</div>
+                    <div className="text-xs text-muted-foreground mt-1">Lieferung über das öffentliche Netz (physisch/sleeved/finanziell)</div>
+                  </button>
+                </div>
+              )}
         </div>
       </div>
       <Progress value={progressPct} />
