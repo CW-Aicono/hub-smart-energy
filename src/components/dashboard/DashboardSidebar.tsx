@@ -118,6 +118,9 @@ const DashboardSidebar = () => {
     if (currentPath.startsWith("/charging")) {
       setOpenMenus((prev) => prev.includes("/charging/points") ? prev : [...prev, "/charging/points"]);
     }
+    if (currentPath === "/arbitrage" || currentPath.startsWith("/ppa")) {
+      setOpenMenus((prev) => prev.includes("/trading") ? prev : [...prev, "/trading"]);
+    }
   }, [currentPath]);
 
   const toggleMenu = (to: string) => {
