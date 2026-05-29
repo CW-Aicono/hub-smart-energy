@@ -514,3 +514,142 @@ function SettlementsPanel({ contractId }: { contractId: string }) {
     </div>
   );
 }
+
+function GooPanel({ contractId }: { contractId: string }) {
+  const { data, isLoading } = usePpaGooCertificates(contractId);
+  const create = useCreatePpaGooCertificate();
+  const updateStatus = useUpdatePpaGooStatus();
+  const del = useDeletePpaGooCertificate();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    certificate_number: "",
+    registry: "HKNR",
+    energy_source: "solar",
+    generation_period_start: "",
+    generation_period_end: "",
+    volume_kwh: 0,
+    counterparty: "",
+    notes: "",
+  });
+
+  const statusBadge: Record<PpaGooCertificate["status"], { l: string; v: "default" | "secondary" | "outline" | "destructive" }> = {
+    issued: { l: "Ausgestellt", v: "default" },
+    transferred: { l: "Übertragen", v: "secondary" },
+    redeemed: { l: "Entwertet", v: "outline" },
+    cancelled: { l: "Storniert", v: "destructive" },
+  };
+
+  async function handleCreate() {
+    try {
+      await create.mutateAsync({
+        contract_id: contractId,
+        certificate_number: form.certificate_number,
+        registry: form.registry,
+        energy_source: form.energy_source,
+        generation_period_start: form.generation_period_start,
+        generation_period_end: form.generation_period_end,
+        volume_kwh: Number(form.volume_kwh),
+        status: "issued",
+        counterparty: form.counterparty || null,
+        notes: form.notes || null,
+        issued_at: new Date().toISOString(),
+        transferred_at: null,
+        redeemed_at: null,
+      });
+      toast.success("Herkunftsnachweis angelegt");
+      setOpen(false);
+    } catch (e: any) {
+      toast.error(e.message ?? "Fehler beim Anlegen");
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" /> Nachweis anlegen</Button>
+      </div>
+      <Card>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Award className="h-4 w-4" /> Herkunftsnachweise</CardTitle></CardHeader>
+        <CardContent>
+          {isLoading ? <p className="text-sm text-muted-foreground">Lade…</p>
+            : (data ?? []).length === 0 ? <p className="text-sm text-muted-foreground">Keine Herkunftsnachweise erfasst.</p>
+            : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b text-left text-muted-foreground">
+                    <th className="py-2 pr-3">Nummer</th>
+                    <th className="py-2 pr-3">Registry</th>
+                    <th className="py-2 pr-3">Zeitraum</th>
+                    <th className="py-2 pr-3 text-right">Volumen</th>
+                    <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 pr-3 text-right">Aktion</th>
+                  </tr></thead>
+                  <tbody>
+                    {(data ?? []).map((g) => (
+                      <tr key={g.id} className="border-b">
+                        <td className="py-2 pr-3 font-mono text-xs">{g.certificate_number}</td>
+                        <td className="py-2 pr-3">{g.registry}</td>
+                        <td className="py-2 pr-3">{new Date(g.generation_period_start).toLocaleDateString("de-DE")} – {new Date(g.generation_period_end).toLocaleDateString("de-DE")}</td>
+                        <td className="py-2 pr-3 text-right">{Number(g.volume_kwh).toLocaleString("de-DE", { maximumFractionDigits: 1 })} kWh</td>
+                        <td className="py-2 pr-3"><Badge variant={statusBadge[g.status].v}>{statusBadge[g.status].l}</Badge></td>
+                        <td className="py-2 pr-3 text-right space-x-1">
+                          {g.status === "issued" && (
+                            <Button size="sm" variant="outline" onClick={async () => {
+                              try { await updateStatus.mutateAsync({ id: g.id, contract_id: contractId, status: "transferred" }); toast.success("Übertragen"); }
+                              catch (e: any) { toast.error(e.message); }
+                            }}>Übertragen</Button>
+                          )}
+                          {(g.status === "issued" || g.status === "transferred") && (
+                            <Button size="sm" variant="outline" onClick={async () => {
+                              try { await updateStatus.mutateAsync({ id: g.id, contract_id: contractId, status: "redeemed" }); toast.success("Entwertet"); }
+                              catch (e: any) { toast.error(e.message); }
+                            }}>Entwerten</Button>
+                          )}
+                          <Button size="sm" variant="ghost" onClick={async () => {
+                            if (!confirm("Nachweis löschen?")) return;
+                            try { await del.mutateAsync({ id: g.id, contract_id: contractId }); toast.success("Gelöscht"); }
+                            catch (e: any) { toast.error(e.message); }
+                          }}><Trash2 className="h-3 w-3" /></Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Herkunftsnachweis anlegen</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Zertifikatsnummer</Label><Input value={form.certificate_number} onChange={(e) => setForm({ ...form, certificate_number: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Registry</Label><Input value={form.registry} onChange={(e) => setForm({ ...form, registry: e.target.value })} /></div>
+              <div><Label>Quelle</Label>
+                <Select value={form.energy_source} onValueChange={(v) => setForm({ ...form, energy_source: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="solar">Solar</SelectItem><SelectItem value="wind">Wind</SelectItem>
+                    <SelectItem value="hydro">Wasser</SelectItem><SelectItem value="biomass">Biomasse</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Erzeugung von</Label><Input type="date" value={form.generation_period_start} onChange={(e) => setForm({ ...form, generation_period_start: e.target.value })} /></div>
+              <div><Label>bis</Label><Input type="date" value={form.generation_period_end} onChange={(e) => setForm({ ...form, generation_period_end: e.target.value })} /></div>
+            </div>
+            <div><Label>Volumen (kWh)</Label><Input type="number" value={form.volume_kwh} onChange={(e) => setForm({ ...form, volume_kwh: Number(e.target.value) })} /></div>
+            <div><Label>Gegenpartei (optional)</Label><Input value={form.counterparty} onChange={(e) => setForm({ ...form, counterparty: e.target.value })} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Abbrechen</Button>
+            <Button onClick={handleCreate} disabled={!form.certificate_number || !form.generation_period_start || !form.generation_period_end || !form.volume_kwh}>Anlegen</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
