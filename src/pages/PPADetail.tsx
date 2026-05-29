@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { usePpaContract, useUpdatePpaStatus, useDeletePpaContract, useDeletePpaDocument } from "@/hooks/usePpaContracts";
 import { usePpaDocuments, useUploadPpaDocument, useDownloadPpaDocument } from "@/hooks/usePpaDocuments";
 import { Button } from "@/components/ui/button";
@@ -59,8 +60,8 @@ export default function PPADetail() {
     return onsiteMeters.meters.filter((m) => data.consumptionMeterIds.includes(m.id));
   }, [data, onsiteMeters.meters]);
 
-  if (isLoading) return <div className="container py-6">Lade…</div>;
-  if (!data?.contract) return <div className="container py-6">Vertrag nicht gefunden.</div>;
+  if (isLoading) return <PpaPageFrame><div className="container max-w-6xl">Lade…</div></PpaPageFrame>;
+  if (!data?.contract) return <PpaPageFrame><div className="container max-w-6xl">Vertrag nicht gefunden.</div></PpaPageFrame>;
 
   const c = data.contract;
   const status = c.status;
@@ -89,7 +90,8 @@ export default function PPADetail() {
   }
 
   return (
-    <div className="container max-w-6xl py-6 space-y-6">
+    <PpaPageFrame>
+    <div className="container max-w-6xl space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild>
@@ -321,6 +323,16 @@ export default function PPADetail() {
           }
         }}
       />
+    </div>
+    </PpaPageFrame>
+  );
+}
+
+function PpaPageFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
+      <DashboardSidebar />
+      <main className="flex-1 p-3 md:p-6 overflow-auto">{children}</main>
     </div>
   );
 }
