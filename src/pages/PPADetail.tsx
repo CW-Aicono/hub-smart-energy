@@ -489,7 +489,7 @@ function SettlementsPanel({ contractId }: { contractId: string }) {
                       <td className="py-2 pr-3 text-right">{s.applied_avg_price_eur_kwh != null ? `${(s.applied_avg_price_eur_kwh * 100).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ct` : "—"}</td>
                       <td className="py-2 pr-3 text-right font-semibold">{Number(s.total_amount_eur).toLocaleString("de-DE", { style: "currency", currency: s.currency || "EUR" })}</td>
                       <td className="py-2 pr-3"><Badge variant={statusVariant[s.status]}>{statusLabel[s.status]}</Badge></td>
-                      <td className="py-2 pr-3 text-right">
+                      <td className="py-2 pr-3 text-right space-x-1">
                         {s.status === "draft" && (
                           <Button size="sm" variant="outline" onClick={async () => {
                             try { await updateStatus.mutateAsync({ id: s.id, contract_id: contractId, status: "finalized" }); toast.success("Finalisiert"); }
@@ -502,6 +502,10 @@ function SettlementsPanel({ contractId }: { contractId: string }) {
                             catch (e: any) { toast.error(e.message); }
                           }}>Als fakturiert</Button>
                         )}
+                        <Button size="sm" variant="ghost" title="Report erzeugen" onClick={async () => {
+                          try { const r = await report.mutateAsync({ contract_id: contractId, settlement_id: s.id }); toast.success(`Report: ${r.filename}`); }
+                          catch (e: any) { toast.error(e.message ?? "Report-Fehler"); }
+                        }}><FileText className="h-3 w-3" /></Button>
                       </td>
                     </tr>
                   ))}
