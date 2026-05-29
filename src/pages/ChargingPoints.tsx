@@ -356,7 +356,7 @@ const ChargingPoints = () => {
                   <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                     <DialogHeader><DialogTitle>{t("charging.newChargePoint" as any)}</DialogTitle></DialogHeader>
                     {formFields}
-                    <Button onClick={handleAdd} disabled={!form.name || !form.ocpp_id}>{t("common.create" as any)}</Button>
+                    <Button onClick={handleAdd} disabled={!form.name}>{t("common.create" as any)}</Button>
                   </DialogContent>
                 </Dialog>
                 <PublicStatusLinkDialog open={publicLinkOpen} onOpenChange={setPublicLinkOpen} />
