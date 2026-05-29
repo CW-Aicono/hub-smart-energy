@@ -47,12 +47,7 @@ export function BrandingSettings() {
     setUploading(true);
     try {
       const fileExt = (file.name.split('.').pop() || 'png').toLowerCase();
-      const fileName = `${tenant.id}/logo.${fileExt}`;
-
-      // Alte Logo-Varianten desselben Tenants entfernen (kein upsert -> klare DELETE/INSERT-Trennung)
-      const knownExts = ['png', 'jpg', 'jpeg', 'webp', 'avif', 'svg'];
-      const oldPaths = knownExts.map((ext) => `${tenant.id}/logo.${ext}`);
-      await supabase.storage.from('tenant-assets').remove(oldPaths);
+      const fileName = `${tenant.id}/logo-${crypto.randomUUID()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('tenant-assets')
