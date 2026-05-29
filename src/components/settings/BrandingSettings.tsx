@@ -46,18 +46,34 @@ export function BrandingSettings() {
     if (!file || !tenant) return;
     setUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
+      const fileExt = (file.name.split('.').pop() || 'png').toLowerCase();
       const fileName = `${tenant.id}/logo.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('tenant-assets').upload(fileName, file, { upsert: true });
+
+      // Alte Logo-Varianten desselben Tenants entfernen (kein upsert -> klare DELETE/INSERT-Trennung)
+      const knownExts = ['png', 'jpg', 'jpeg', 'webp', 'avif', 'svg'];
+      const oldPaths = knownExts.map((ext) => `${tenant.id}/logo.${ext}`);
+      await supabase.storage.from('tenant-assets').remove(oldPaths);
+
+      const { error: uploadError } = await supabase.storage
+        .from('tenant-assets')
+        .upload(fileName, file, { contentType: file.type || undefined });
       if (uploadError) throw uploadError;
-      const { data: signedData, error: signError } = await supabase.storage.from('tenant-assets').createSignedUrl(fileName, 3600);
-      if (signError || !signedData?.signedUrl) throw signError ?? new Error("Signed URL failed");
-      const { error: updateError } = await supabase.from('tenants').update({ logo_url: fileName }).eq('id', tenant.id);
+
+      const { error: updateError } = await supabase
+        .from('tenants')
+        .update({ logo_url: fileName })
+        .eq('id', tenant.id);
       if (updateError) throw updateError;
+
       await refetch();
       toast({ title: t("branding.logoUploaded" as any), description: t("branding.logoUploadedDesc" as any) });
-    } catch {
-      toast({ title: t("common.error"), description: t("branding.logoUploadError" as any), variant: "destructive" });
+    } catch (err: any) {
+      console.error('Logo upload failed:', err);
+      toast({
+        title: t("common.error"),
+        description: err?.message ?? t("branding.logoUploadError" as any),
+        variant: "destructive",
+      });
     } finally {
       setUploading(false);
     }
