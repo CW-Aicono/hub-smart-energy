@@ -204,13 +204,15 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           setError(fetchError.message);
         }
       } else if (data) {
-        // Resolve signed URL for logo if stored as a path
+        // Resolve uploaded logo paths through authenticated download.
+        // createSignedUrl currently fails against tenant-assets storage RLS in this project,
+        // while download uses the existing SELECT policy and gives the header a renderable blob URL.
         let resolvedLogoUrl = data.logo_url;
         if (resolvedLogoUrl && !resolvedLogoUrl.startsWith('http')) {
-          const { data: signedData } = await supabase.storage
+          const { data: logoBlob } = await supabase.storage
             .from('tenant-assets')
-            .createSignedUrl(resolvedLogoUrl, 3600);
-          resolvedLogoUrl = signedData?.signedUrl ?? null;
+            .download(resolvedLogoUrl);
+          resolvedLogoUrl = logoBlob ? URL.createObjectURL(logoBlob) : null;
         }
 
         const tenantData: Tenant = {
