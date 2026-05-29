@@ -166,7 +166,7 @@ const DashboardSidebar = () => {
     { to: "/copilot", icon: Sparkles, labelKey: "nav.copilot" as TranslationKey },
     { to: "/tenant-electricity", icon: Home, labelKey: "nav.tenantElectricity" as TranslationKey },
     { to: "/energy-sharing", icon: Share2, labelKey: "nav.energySharing" as TranslationKey },
-    { to: "/ppa", icon: FileSignature, labelKey: "nav.ppa" as TranslationKey },
+    
     { to: "/network", icon: Network, labelKey: "nav.networkInfrastructure" as TranslationKey },
     { to: "/tasks", icon: ListChecks, labelKey: "nav.tasks" as TranslationKey },
     ...(isAdmin ? [
