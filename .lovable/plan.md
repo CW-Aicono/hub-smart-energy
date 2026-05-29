@@ -1,76 +1,89 @@
-## Ziel
+# Master-Recovery v2 — Reiner Super-Admin-Account
 
-Eine versteckte Notfall-Funktion ("Break-Glass") implementieren, mit der per geheimem Header ein beliebiger User per E-Mail zum `super_admin` befördert werden kann — funktioniert sowohl in Lovable Cloud als auch nach Roll-Out auf dem Hetzner-Server.
+## Problem mit v1
 
-## Umsetzungsschritte
+Die bisherige Funktion befördert eine bestehende E-Mail zum `super_admin`. Wenn diese E-Mail aber bereits einem Tenant zugeordnet ist (z. B. als Tenant-Admin), hätte derselbe User Zugriff auf **beide** Welten. Das verletzt die strikte Trennung Super-Admin ↔ Tenant.
 
-### 1. Secret anlegen
-- `MASTER_RECOVERY_KEY` als Secret in Lovable Cloud erzeugen (zufälliger 64-Zeichen-String)
-- Derselbe Wert muss später auf Hetzner als Umgebungsvariable gesetzt werden
+## Neues Verhalten
 
-### 2. Edge Function `master-recovery` erstellen
-Datei: `supabase/functions/master-recovery/index.ts`
+Die Edge Function `master-recovery` legt einen **neuen, reinen Plattform-User** an:
 
-Funktionsweise:
-- Akzeptiert nur `POST`
-- Prüft Header `x-master-key` gegen `MASTER_RECOVERY_KEY` (Constant-Time-Vergleich)
-- Body: `{ email: string }`
-- Sucht User per E-Mail in `auth.users` (via `SUPABASE_SERVICE_ROLE_KEY`)
-- Wenn User existiert: `UPSERT` Rolle `super_admin` in `public.user_roles`
-- Wenn nicht existiert: Klartext-Fehler `"User nicht gefunden — bitte zuerst registrieren"`
-- Schreibt jeden Aufruf (erfolgreich + fehlgeschlagen) in eine neue Audit-Tabelle `master_recovery_log` (Timestamp, IP, Ziel-Email, Erfolg)
-- `verify_jwt = false` (kein Login nötig)
+1. **E-Mail muss noch nicht existieren** in `auth.users`.
+  - Falls die E-Mail bereits existiert **und einem Tenant zugeordnet ist** → Fehler `409 Email gehört bereits zu einem Tenant — bitte andere E-Mail verwenden`.
+  - Falls die E-Mail bereits existiert **und kein Tenant zugeordnet** (also schon Plattform-User) → bestehende Rolle wird auf `super_admin` gesetzt/bestätigt, Passwort wird **nicht** geändert.
+2. Falls neu: User wird per `auth.admin.createUser` angelegt mit:
+  - `email_confirm: true`
+  - **Einmal-Passwort (OTP)** — 16 Zeichen, zufällig, im Response zurückgegeben (nur einmal sichtbar)
+  - `user_metadata.must_change_password = true`
+3. `profiles`-Eintrag wird angelegt mit `tenant_id = NULL` (= Plattform-User).
+4. Eintrag in `user_roles` mit Rolle `super_admin`.
+5. Audit-Log in `master_recovery_log` (existiert bereits).
 
-### 3. Audit-Tabelle per Migration
-```text
-master_recovery_log
-  - id, created_at
-  - target_email
-  - success (bool)
-  - ip_address
-  - error_message
-```
-RLS: nur `super_admin` darf lesen, niemand schreiben (nur Service Role aus Edge Function).
+## Aufruf
 
-### 4. Rate-Limiting
-In der Function: max. 5 Aufrufe pro IP pro Stunde (Abfrage über `master_recovery_log`). Verhindert Brute-Force des Keys.
-
-### 5. Dokumentation
-Eine kurze deutsche Anleitung als Markdown-Datei `docs/MASTER_RECOVERY.md`:
-- Wofür ist die Funktion
-- Wie ruft man sie auf (mit `curl`-Beispiel, Schritt für Schritt)
-- Wo der Key gespeichert werden muss (1Password/Bitwarden)
-- Wie man den Key rotiert
-- Was beim Hetzner-Deployment zu beachten ist
-
-## Technische Details
-
-**Aufruf-Beispiel (curl):**
 ```bash
-curl -X POST https://<projekt>.supabase.co/functions/v1/master-recovery \
-  -H "x-master-key: <geheimer-key>" \
+curl -X POST https://xnveugycurplszevdxtw.supabase.co/functions/v1/master-recovery \
+  -H "x-master-key: <MASTER_RECOVERY_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@aicono.de"}'
 ```
 
-**Sicherheitsmaßnahmen:**
-- Constant-Time-Vergleich des Keys (verhindert Timing-Attacken)
-- Key niemals in Logs ausgeben
-- Audit-Log unveränderlich (nur INSERT erlaubt)
-- Rate-Limiting auf IP-Ebene
-- Key-Länge ≥ 64 Zeichen (praktisch nicht brute-forcebar)
+Erfolgs-Antwort bei Neuanlage:
 
-**Hetzner-Kompatibilität:**
-Da die Edge Function im Self-Hosted-Supabase auf Hetzner identisch läuft, muss dort nur derselbe `MASTER_RECOVERY_KEY` als ENV-Variable im Docker-Compose-File gesetzt werden — kein Code-Unterschied.
+```json
+{
+  "success": true,
+  "created": true,
+  "email": "admin@aicono.de",
+  "one_time_password": "Xy7k!p2Qm9aB4nVz",
+  "message": "Bitte sofort einloggen und Passwort ändern. Dieses Passwort wird nicht erneut angezeigt."
+}
+```
 
-## Was nicht enthalten ist
-- Keine UI in Lovable (bewusst — würde Angriffsfläche erhöhen)
-- Keine Möglichkeit, Rolle wieder zu entziehen (nur Beförderung; Entzug erfolgt regulär durch Super-Admin im Backend)
-- Keine Massenoperationen (immer nur ein User pro Aufruf)
+Erfolgs-Antwort bei bestehendem Plattform-User:
 
-## Nach Genehmigung
-1. Secret-Dialog wird geöffnet → Du gibst einen zufälligen 64-Zeichen-Key ein (oder ich generiere einen Vorschlag)
-2. Migration für `master_recovery_log` wird angelegt → Du genehmigst
-3. Edge Function wird geschrieben und automatisch deployed
-4. Dokumentation wird erstellt
-5. Wir testen den Aufruf einmal mit deiner E-Mail
+```json
+{ "success": true, "created": false, "message": "Super-Admin-Rolle bestätigt" }
+```
+
+## Passwort-Wechsel-Zwang beim ersten Login
+
+- Beim Login prüft die App `user_metadata.must_change_password`.
+- Wenn `true` → Redirect auf `/set-password` (Seite existiert bereits).
+- Nach erfolgreichem `updateUser({ password, data: { must_change_password: false } })` wird das Flag entfernt.
+
+Dafür kleine Ergänzung in `src/pages/Index.tsx` (oder einem zentralen Auth-Guard): nach `getUser()` prüfen, ob `user.user_metadata?.must_change_password === true` → `navigate("/set-password")`.
+
+## Was angepasst werden muss
+
+1. `**supabase/functions/master-recovery/index.ts**` — komplett überarbeiten:
+  - Tenant-Check via `profiles.tenant_id IS NOT NULL` → 409 abbrechen
+  - `createUser` mit zufälligem OTP
+  - `profiles`-Insert mit `tenant_id = NULL`
+  - OTP im Response zurückgeben
+2. `**docs/MASTER_RECOVERY.md**` — aktualisieren:
+  - Neue Semantik (legt User an, nicht befördern)
+  - OTP-Workflow
+  - Fehler `409 Email gehört zu einem Tenant`
+3. **Auth-Guard für `must_change_password**` — kleine Erweiterung in `Index.tsx`/Auth-Flow, Redirect auf `/set-password`.
+4. **Keine DB-Migration nötig** — `master_recovery_log` reicht.
+
+## Sicherheits-Eigenschaften
+
+- Kein bestehender Tenant-User kann „nebenbei" zum Super-Admin gemacht werden (strikte Trennung bleibt gewahrt).
+- OTP ist nur einmal sichtbar (sofort in 1Password speichern).
+- Erstes Login erzwingt Passwort-Wechsel.
+- Rate-Limit (5/h pro IP) und Audit-Log bleiben aktiv.
+
+## Offene Frage an dich
+
+Soll bei einer **bereits existierenden Plattform-E-Mail ohne Tenant** (Fall 2 oben):
+
+- (a) nur die Rolle bestätigt werden (kein neues Passwort), **oder**
+- (b) zusätzlich ein neues OTP gesetzt werden (= „Passwort-Reset für Super-Admin")?
+
+Default-Vorschlag: **(a)** — sicherer, da kein versehentlicher Passwort-Overwrite. Reset läuft regulär über „Passwort vergessen".  
+  
+Antwort: Option (a) umsetzen
+
+&nbsp;
