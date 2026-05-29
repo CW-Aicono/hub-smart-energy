@@ -11,10 +11,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Download, FileSignature, RefreshCw, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, Award, Download, FileSignature, FileText, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { priceModelLabel } from "@/lib/ppa/priceFormula";
 import { useMeters } from "@/hooks/useMeters";
 import { usePpaSettlements, useCalculatePpaSettlement, useUpdatePpaSettlementStatus, type PpaSettlement } from "@/hooks/usePpaSettlements";
+import { usePpaGooCertificates, useCreatePpaGooCertificate, useUpdatePpaGooStatus, useDeletePpaGooCertificate, useGeneratePpaReport, type PpaGooCertificate } from "@/hooks/usePpaGooCertificates";
 import { toast } from "sonner";
 import type { PpaDocument, PpaStatus } from "@/lib/ppa/types";
 
