@@ -46,12 +46,10 @@ Status-Wechsel-Dialog mit erlaubten Übergängen (clientseitig gespiegelt aus `l
 - **Storage**: Uploads in `ppa-documents/{tenant_id}/{contract_id}/{filename}`, RLS via `split_part`.
 - **Audit**: Status-Trigger schreibt automatisch in `ppa_status_history`, kein Client-Code nötig.
 
-## Explizit NICHT in dieser Phase
+## Phase 2 – Status
 
-- `ppa-settlement-calculate` Edge Function / Cron
-- `ppa-alert-check` / `ppa-report-generate`
-- `PPAFleetCard` für Dashboard
-- Energy-Sharing-Verknüpfung (`surplus_contract_id`)
-- GoO-Workflow über Basis-Upload hinaus
-
-Diese kommen in Phase 2, sobald Phase 1 produktiv getestet ist.
+- [x] **Settlement-Engine** – Tabelle `ppa_settlements`, Edge `ppa-settlement-calculate` (stündliche Aggregation × Preisformel × EPEX-Spot), monatlicher Cron (2. um 03:15), Tab „Abrechnungen" im PPADetail mit Manuell-Berechnen + Status-Workflow (draft → finalized → invoiced)
+- [ ] Alerts & Monitoring (`ppa-alert-check`)
+- [ ] Report-Generator (`ppa-report-generate`)
+- [ ] PPAFleetCard fürs Dashboard
+- [ ] Energy-Sharing-Verknüpfung + erweiterter GoO-Workflow

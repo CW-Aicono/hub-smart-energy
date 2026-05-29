@@ -6086,6 +6086,74 @@ export type Database = {
           },
         ]
       }
+      ppa_settlements: {
+        Row: {
+          applied_avg_price_eur_kwh: number | null
+          avg_spot_price_eur_kwh: number | null
+          breakdown: Json | null
+          computed_at: string
+          consumed_kwh: number
+          contract_id: string
+          created_at: string
+          currency: string
+          delivered_kwh: number
+          error: string | null
+          id: string
+          period_end: string
+          period_start: string
+          status: string
+          tenant_id: string
+          total_amount_eur: number
+          updated_at: string
+        }
+        Insert: {
+          applied_avg_price_eur_kwh?: number | null
+          avg_spot_price_eur_kwh?: number | null
+          breakdown?: Json | null
+          computed_at?: string
+          consumed_kwh?: number
+          contract_id: string
+          created_at?: string
+          currency?: string
+          delivered_kwh?: number
+          error?: string | null
+          id?: string
+          period_end: string
+          period_start: string
+          status?: string
+          tenant_id: string
+          total_amount_eur?: number
+          updated_at?: string
+        }
+        Update: {
+          applied_avg_price_eur_kwh?: number | null
+          avg_spot_price_eur_kwh?: number | null
+          breakdown?: Json | null
+          computed_at?: string
+          consumed_kwh?: number
+          contract_id?: string
+          created_at?: string
+          currency?: string
+          delivered_kwh?: number
+          error?: string | null
+          id?: string
+          period_end?: string
+          period_start?: string
+          status?: string
+          tenant_id?: string
+          total_amount_eur?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_settlements_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ppa_status_history: {
         Row: {
           changed_at: string
