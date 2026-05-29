@@ -397,3 +397,112 @@ function UploadDialog({ open, onClose, onUpload }: { open: boolean; onClose: () 
     </Dialog>
   );
 }
+
+function SettlementsPanel({ contractId }: { contractId: string }) {
+  const { data, isLoading } = usePpaSettlements(contractId);
+  const calc = useCalculatePpaSettlement();
+  const updateStatus = useUpdatePpaSettlementStatus();
+  const [periodInput, setPeriodInput] = useState<string>(() => {
+    const now = new Date();
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    return d.toISOString().slice(0, 7); // YYYY-MM
+  });
+
+  async function handleCalc() {
+    try {
+      const res = await calc.mutateAsync({ contract_id: contractId, period_start: `${periodInput}-01` });
+      const ok = res.results.find((r: any) => !r.error && !r.skipped);
+      if (ok) toast.success(`Abrechnung berechnet: ${(ok.total_kwh as number).toLocaleString("de-DE")} kWh / ${(ok.total_eur as number).toLocaleString("de-DE", { style: "currency", currency: "EUR" })}`);
+      else if (res.results[0]?.skipped) toast.warning(`Übersprungen: ${res.results[0].skipped}`);
+      else if (res.results[0]?.error) toast.error(res.results[0].error);
+      else toast.info("Keine Daten für diesen Zeitraum");
+    } catch (e: any) {
+      toast.error(e.message ?? "Berechnung fehlgeschlagen");
+    }
+  }
+
+  const statusVariant: Record<PpaSettlement["status"], "default" | "secondary" | "outline" | "destructive"> = {
+    draft: "secondary",
+    finalized: "default",
+    invoiced: "outline",
+    error: "destructive",
+  };
+  const statusLabel: Record<PpaSettlement["status"], string> = {
+    draft: "Entwurf",
+    finalized: "Final",
+    invoiced: "Fakturiert",
+    error: "Fehler",
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader><CardTitle>Abrechnung berechnen</CardTitle></CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-3">
+          <div>
+            <Label>Monat</Label>
+            <Input type="month" value={periodInput} onChange={(e) => setPeriodInput(e.target.value)} className="w-44" />
+          </div>
+          <Button onClick={handleCalc} disabled={calc.isPending}>
+            <RefreshCw className={`h-4 w-4 mr-1 ${calc.isPending ? "animate-spin" : ""}`} />
+            {calc.isPending ? "Berechne…" : "Jetzt berechnen"}
+          </Button>
+          <p className="text-xs text-muted-foreground">Aggregiert stündliche Verbrauchswerte × Preisformel × EPEX-Spot.</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Bisherige Abrechnungen</CardTitle></CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="text-muted-foreground text-sm">Lade…</p>
+          ) : (data ?? []).length === 0 ? (
+            <p className="text-muted-foreground text-sm">Noch keine Abrechnungen vorhanden.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="py-2 pr-3">Zeitraum</th>
+                    <th className="py-2 pr-3 text-right">Verbrauch</th>
+                    <th className="py-2 pr-3 text-right">Ø Spot</th>
+                    <th className="py-2 pr-3 text-right">Ø Preis</th>
+                    <th className="py-2 pr-3 text-right">Summe</th>
+                    <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 pr-3 text-right">Aktion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data ?? []).map((s) => (
+                    <tr key={s.id} className="border-b">
+                      <td className="py-2 pr-3">{new Date(s.period_start).toLocaleDateString("de-DE", { month: "long", year: "numeric" })}</td>
+                      <td className="py-2 pr-3 text-right">{Number(s.delivered_kwh).toLocaleString("de-DE", { maximumFractionDigits: 1 })} kWh</td>
+                      <td className="py-2 pr-3 text-right">{s.avg_spot_price_eur_kwh != null ? `${(s.avg_spot_price_eur_kwh * 100).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ct` : "—"}</td>
+                      <td className="py-2 pr-3 text-right">{s.applied_avg_price_eur_kwh != null ? `${(s.applied_avg_price_eur_kwh * 100).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ct` : "—"}</td>
+                      <td className="py-2 pr-3 text-right font-semibold">{Number(s.total_amount_eur).toLocaleString("de-DE", { style: "currency", currency: s.currency || "EUR" })}</td>
+                      <td className="py-2 pr-3"><Badge variant={statusVariant[s.status]}>{statusLabel[s.status]}</Badge></td>
+                      <td className="py-2 pr-3 text-right">
+                        {s.status === "draft" && (
+                          <Button size="sm" variant="outline" onClick={async () => {
+                            try { await updateStatus.mutateAsync({ id: s.id, contract_id: contractId, status: "finalized" }); toast.success("Finalisiert"); }
+                            catch (e: any) { toast.error(e.message); }
+                          }}>Finalisieren</Button>
+                        )}
+                        {s.status === "finalized" && (
+                          <Button size="sm" variant="outline" onClick={async () => {
+                            try { await updateStatus.mutateAsync({ id: s.id, contract_id: contractId, status: "invoiced" }); toast.success("Als fakturiert markiert"); }
+                            catch (e: any) { toast.error(e.message); }
+                          }}>Als fakturiert</Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
