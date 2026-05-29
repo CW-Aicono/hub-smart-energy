@@ -375,9 +375,6 @@ const ChargePointDetail = () => {
         .upload(path, file, { contentType: file.type || undefined });
       if (error) throw error;
 
-      const { data: signedData, error: signedError } = await supabase.storage.from("meter-photos").createSignedUrl(path, 60 * 60 * 24 * 365);
-      if (signedError) throw signedError;
-
       setPhotoUrl(path);
       updateChargePoint.mutate({ id: cp.id, photo_url: path } as any);
       toast({ title: "Foto hochgeladen", description: "Das Foto wurde gespeichert." });
