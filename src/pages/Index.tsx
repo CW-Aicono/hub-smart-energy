@@ -2,6 +2,7 @@ import { useState, useEffect, Suspense } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
+import { useTenant } from "@/hooks/useTenant";
 import { useTranslation } from "@/hooks/useTranslation";
 import { DashboardFilterProvider } from "@/hooks/useDashboardFilter";
 import { getSupportViewTenantId } from "@/lib/supportView";
@@ -10,6 +11,7 @@ import DashboardContent from "./DashboardContent";
 const Index = () => {
   const { user, loading, isRecovery } = useAuth();
   const { isSuperAdmin, loading: superAdminLoading } = useSuperAdmin();
+  const { tenant, loading: tenantLoading } = useTenant();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [onboardingChecked, setOnboardingChecked] = useState(false);
@@ -23,19 +25,14 @@ const Index = () => {
 
   useEffect(() => {
     if (!user || onboardingChecked) return;
-    const checkOnboarding = async () => {
-      const { data } = await (await import("@/integrations/supabase/client")).supabase
-        .from("user_preferences")
-        .select("onboarding_completed")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      setOnboardingChecked(true);
-      if (data && !(data as any).onboarding_completed) {
-        navigate("/getting-started", { replace: true });
-      }
-    };
-    checkOnboarding();
-  }, [user, onboardingChecked, navigate]);
+    // Onboarding-Status hängt am Tenant, nicht am User:
+    // Der Wizard wird nur einmal pro Mandant gezeigt (vom Erst-Nutzer).
+    if (tenantLoading) return;
+    setOnboardingChecked(true);
+    if (tenant && !(tenant as any).onboarding_completed) {
+      navigate("/getting-started", { replace: true });
+    }
+  }, [user, onboardingChecked, navigate, tenant, tenantLoading]);
 
   if (loading || superAdminLoading) {
     return (
