@@ -16,12 +16,14 @@ const Index = () => {
   const navigate = useNavigate();
   const [onboardingChecked, setOnboardingChecked] = useState(false);
 
-  // If user is in recovery mode, force them to /set-password
+  // If user is in recovery mode OR must change password (e.g. master-recovery OTP), force /set-password
   useEffect(() => {
-    if (isRecovery && user) {
+    if (!user) return;
+    if (isRecovery || (user as any)?.user_metadata?.must_change_password === true) {
       navigate("/set-password", { replace: true });
     }
   }, [isRecovery, user, navigate]);
+
 
   useEffect(() => {
     if (!user || onboardingChecked) return;
