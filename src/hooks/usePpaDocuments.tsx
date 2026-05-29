@@ -68,13 +68,12 @@ export function useUploadPpaDocument() {
 export function useDownloadPpaDocument() {
   return useMutation({
     mutationFn: async (doc: PpaDocument) => {
-      const blob = await downloadSecureStorageObject("ppa-documents", doc.storage_path);
-      const url = URL.createObjectURL(blob);
+      const url = await downloadSecureStorageObject("ppa-documents", doc.storage_path);
+      if (!url) throw new Error("Download fehlgeschlagen");
       const a = document.createElement("a");
       a.href = url;
       a.download = doc.filename;
       a.click();
-      URL.revokeObjectURL(url);
     },
   });
 }
