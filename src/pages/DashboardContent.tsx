@@ -86,6 +86,7 @@ const WIDGET_MODULE_MAP: Record<string, string> = {
   energy_gauge: "energy_monitoring",
   spot_price: "arbitrage_trading",
   pv_forecast: "energy_monitoring",
+  ppa_fleet: "ppa_onsite",
 };
 
 const getLocationWidget = (_locationId: string | null): string => {
