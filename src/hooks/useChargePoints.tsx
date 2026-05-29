@@ -206,7 +206,7 @@ export function useChargePoints() {
     mutationFn: async (id: string) => {
       // Find ocpp_id to delete logs
       const cp = queryClient.getQueryData<ChargePoint[]>(["charge-points"])?.find(c => c.id === id);
-      if (cp) {
+      if (cp && cp.ocpp_id) {
         await supabase.from("ocpp_message_log").delete().eq("charge_point_id", cp.ocpp_id);
       }
       // Delete charging invoices linked to sessions of this charge point
