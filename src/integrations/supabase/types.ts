@@ -4770,6 +4770,33 @@ export type Database = {
           },
         ]
       }
+      master_recovery_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          ip_address: string | null
+          success: boolean
+          target_email: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          ip_address?: string | null
+          success: boolean
+          target_email: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          ip_address?: string | null
+          success?: boolean
+          target_email?: string
+        }
+        Relationships: []
+      }
       meter_period_totals: {
         Row: {
           created_at: string | null
