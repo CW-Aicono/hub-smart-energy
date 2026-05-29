@@ -131,6 +131,7 @@ export default function PPADetail() {
           {c.ppa_type === "onsite" && <TabsTrigger value="meters">Verbrauchszähler</TabsTrigger>}
           <TabsTrigger value="documents">Dokumente</TabsTrigger>
           <TabsTrigger value="settlements">Abrechnungen</TabsTrigger>
+          {c.goo_required && <TabsTrigger value="goo">Herkunftsnachweise</TabsTrigger>}
           <TabsTrigger value="history">Historie</TabsTrigger>
         </TabsList>
 
