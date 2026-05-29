@@ -8550,14 +8550,6 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
-      can_manage_charge_point_photo_path: {
-        Args: { _object_name: string }
-        Returns: boolean
-      }
-      can_manage_tenant_asset_path: {
-        Args: { _object_name: string }
-        Returns: boolean
-      }
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
