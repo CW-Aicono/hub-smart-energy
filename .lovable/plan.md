@@ -1,89 +1,153 @@
-# Master-Recovery v2 — Reiner Super-Admin-Account
+Du hast recht: Nach zwei Fix-Versuchen darf ich nicht weiter herumprobieren. Die Analyse zeigt jetzt eindeutig: Der Browser sendet beide Uploads korrekt angemeldet an Storage, aber Storage lehnt beide mit `new row violates row-level security policy` ab. Es ist also kein UI-Problem, kein Dateityp-Problem und kein fehlender Login.
 
-## Problem mit v1
+## Gesicherte Fakten aus der Tiefenanalyse
 
-Die bisherige Funktion befördert eine bestehende E-Mail zum `super_admin`. Wenn diese E-Mail aber bereits einem Tenant zugeordnet ist (z. B. als Tenant-Admin), hätte derselbe User Zugriff auf **beide** Welten. Das verletzt die strikte Trennung Super-Admin ↔ Tenant.
+1. Tenant-Logo schlägt fehl bei:
+   `POST /storage/v1/object/tenant-assets/0ce0c43a-c0b4-417b-9fd5-4131907e7504/logo.png`
 
-## Neues Verhalten
+2. Ladestationsfoto schlägt fehl bei:
+   `POST /storage/v1/object/meter-photos/charge-points/0e2e8550-083d-4498-9134-7ee40f89410f.png`
 
-Die Edge Function `master-recovery` legt einen **neuen, reinen Plattform-User** an:
+3. Beide Requests enthalten einen gültigen angemeldeten Benutzer-Token.
 
-1. **E-Mail muss noch nicht existieren** in `auth.users`.
-  - Falls die E-Mail bereits existiert **und einem Tenant zugeordnet ist** → Fehler `409 Email gehört bereits zu einem Tenant — bitte andere E-Mail verwenden`.
-  - Falls die E-Mail bereits existiert **und kein Tenant zugeordnet** (also schon Plattform-User) → bestehende Rolle wird auf `super_admin` gesetzt/bestätigt, Passwort wird **nicht** geändert.
-2. Falls neu: User wird per `auth.admin.createUser` angelegt mit:
-  - `email_confirm: true`
-  - **Einmal-Passwort (OTP)** — 16 Zeichen, zufällig, im Response zurückgegeben (nur einmal sichtbar)
-  - `user_metadata.must_change_password = true`
-3. `profiles`-Eintrag wird angelegt mit `tenant_id = NULL` (= Plattform-User).
-4. Eintrag in `user_roles` mit Rolle `super_admin`.
-5. Audit-Log in `master_recovery_log` (existiert bereits).
+4. Der Benutzer ist im richtigen Tenant:
+   - Benutzer: `info@aicono.de`
+   - Rolle: `admin`
+   - Tenant: `0ce0c43a-c0b4-417b-9fd5-4131907e7504`
+   - Ladestation gehört ebenfalls zu diesem Tenant.
 
-## Aufruf
+5. Die Buckets existieren:
+   - `tenant-assets`
+   - `meter-photos`
 
-```bash
-curl -X POST https://xnveugycurplszevdxtw.supabase.co/functions/v1/master-recovery \
-  -H "x-master-key: <MASTER_RECOVERY_KEY>" \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@aicono.de"}'
+6. Es gibt vorhandene Dateien, besonders beim Logo:
+   - `tenant-assets/0ce0c43a-c0b4-417b-9fd5-4131907e7504/logo.png` existiert bereits.
+
+7. Der Frontend-Code nutzt bei beiden Uploads:
+   `upload(..., { upsert: true })`
+
+## Wahrscheinlich echte technische Ursache
+
+Der entscheidende Punkt ist `upsert: true`.
+
+Ein Upload mit `upsert: true` ist nicht nur „Datei hochladen“. Storage behandelt das intern wie:
+
+```text
+Wenn Datei noch nicht existiert: neue Datei anlegen
+Wenn Datei existiert: vorhandene Datei ersetzen
 ```
 
-Erfolgs-Antwort bei Neuanlage:
+Dafür müssen die Storage-Regeln je nach internem Ablauf gleichzeitig mehrere Operationen sauber erlauben:
 
-```json
-{
-  "success": true,
-  "created": true,
-  "email": "admin@aicono.de",
-  "one_time_password": "Xy7k!p2Qm9aB4nVz",
-  "message": "Bitte sofort einloggen und Passwort ändern. Dieses Passwort wird nicht erneut angezeigt."
-}
+```text
+INSERT  = neue Datei anlegen
+UPDATE  = vorhandene Datei ersetzen
+SELECT  = vorhandene Datei prüfen/finden
 ```
 
-Erfolgs-Antwort bei bestehendem Plattform-User:
+Die aktuellen Regeln sind weiterhin zu fragil, weil sie direkt auf `storage.objects` mit Pfadprüfungen arbeiten. Meine vorherige Funktionslösung hat zwar einen Teil verbessert, aber der echte Browser-Test zeigt: Storage akzeptiert den kombinierten Upsert-Ablauf weiterhin nicht.
 
-```json
-{ "success": true, "created": false, "message": "Super-Admin-Rolle bestätigt" }
+## Warum ich nicht einfach noch eine dritte RLS-Regel rate
+
+Weil das genau das Problem der letzten Versuche war. RLS bei Storage ist in Kombination mit `upsert` fehleranfällig, besonders wenn vorhandene Dateien ersetzt werden. Ein weiterer kleiner Policy-Patch wäre wieder ein Ratespiel.
+
+## Seriöser Behebungsplan
+
+### Schritt 1: Frontend-Upsert entfernen
+
+Ich ändere beide Upload-Stellen so, dass sie nicht mehr `upsert: true` verwenden.
+
+Stattdessen wird der Ablauf bewusst getrennt:
+
+```text
+1. Vorhandene Ziel-Datei entfernen, falls sie existiert.
+2. Neue Datei normal hochladen, ohne upsert.
+3. Signed URL erzeugen.
+4. Datenbankfeld aktualisieren.
 ```
 
-## Passwort-Wechsel-Zwang beim ersten Login
+Warum das besser ist:
+- Storage muss nicht mehr einen kombinierten Upsert-Sonderfall ausführen.
+- Die RLS-Prüfung ist klarer: `DELETE` dann `INSERT`.
+- Fehler lassen sich sauber getrennt anzeigen.
 
-- Beim Login prüft die App `user_metadata.must_change_password`.
-- Wenn `true` → Redirect auf `/set-password` (Seite existiert bereits).
-- Nach erfolgreichem `updateUser({ password, data: { must_change_password: false } })` wird das Flag entfernt.
+Betroffene Dateien:
+- `src/components/settings/BrandingSettings.tsx`
+- `src/pages/ChargePointDetail.tsx`
+- `src/components/charging/ChargePointDetailDialog.tsx`
 
-Dafür kleine Ergänzung in `src/pages/Index.tsx` (oder einem zentralen Auth-Guard): nach `getUser()` prüfen, ob `user.user_metadata?.must_change_password === true` → `navigate("/set-password")`.
+### Schritt 2: Dateinamen stabilisieren
 
-## Was angepasst werden muss
+Für Tenant-Logo bleibt der Pfad:
 
-1. `**supabase/functions/master-recovery/index.ts**` — komplett überarbeiten:
-  - Tenant-Check via `profiles.tenant_id IS NOT NULL` → 409 abbrechen
-  - `createUser` mit zufälligem OTP
-  - `profiles`-Insert mit `tenant_id = NULL`
-  - OTP im Response zurückgeben
-2. `**docs/MASTER_RECOVERY.md**` — aktualisieren:
-  - Neue Semantik (legt User an, nicht befördern)
-  - OTP-Workflow
-  - Fehler `409 Email gehört zu einem Tenant`
-3. **Auth-Guard für `must_change_password**` — kleine Erweiterung in `Index.tsx`/Auth-Flow, Redirect auf `/set-password`.
-4. **Keine DB-Migration nötig** — `master_recovery_log` reicht.
+```text
+{tenant_id}/logo.{endung}
+```
 
-## Sicherheits-Eigenschaften
+Für Ladestationsfoto bleibt der Pfad:
 
-- Kein bestehender Tenant-User kann „nebenbei" zum Super-Admin gemacht werden (strikte Trennung bleibt gewahrt).
-- OTP ist nur einmal sichtbar (sofort in 1Password speichern).
-- Erstes Login erzwingt Passwort-Wechsel.
-- Rate-Limit (5/h pro IP) und Audit-Log bleiben aktiv.
+```text
+charge-points/{charge_point_id}.{endung}
+```
 
-## Offene Frage an dich
+Wenn beim Logo die Dateiendung wechselt, zum Beispiel von `.png` zu `.jpg`, entferne ich optional die bekannten alten Logo-Dateien desselben Tenants:
 
-Soll bei einer **bereits existierenden Plattform-E-Mail ohne Tenant** (Fall 2 oben):
+```text
+logo.png
+logo.jpg
+logo.jpeg
+logo.webp
+logo.avif
+```
 
-- (a) nur die Rolle bestätigt werden (kein neues Passwort), **oder**
-- (b) zusätzlich ein neues OTP gesetzt werden (= „Passwort-Reset für Super-Admin")?
+Damit bleibt nicht versehentlich ein altes Logo im Speicher liegen.
 
-Default-Vorschlag: **(a)** — sicherer, da kein versehentlicher Passwort-Overwrite. Reset läuft regulär über „Passwort vergessen".  
-  
-Antwort: Option (a) umsetzen
+### Schritt 3: Storage-Regeln nur dort nachschärfen, wo nötig
 
-&nbsp;
+Falls nach Entfernen von `upsert` weiterhin ein RLS-Fehler kommt, ist der nächste saubere Fix nicht „mehr Frontend-Code“, sondern eine präzise Storage-Regel-Korrektur:
+
+- `tenant-assets`: angemeldete Tenant-Mitglieder dürfen im eigenen Tenant-Ordner Logo-Dateien löschen und neu anlegen.
+- `meter-photos`: angemeldete Tenant-Mitglieder dürfen Ladestationsfotos nur für Ladestationen des eigenen Tenants löschen und neu anlegen.
+
+Wichtig: Keine breite öffentliche Schreibberechtigung, keine Tenant-Vermischung.
+
+### Schritt 4: Validierung mit echten Signalen
+
+Nach Umsetzung prüfe ich nicht nur „Code sieht gut aus“, sondern diese konkreten Signale:
+
+1. Netzwerkrequest für Tenant-Logo:
+   - Erwartet: kein `400`
+   - Erwartet: Storage-Upload erfolgreich
+
+2. Netzwerkrequest für Ladestationsfoto:
+   - Erwartet: kein `400`
+   - Erwartet: Storage-Upload erfolgreich
+
+3. Datenbankprüfung:
+   - Tenant `logo_url` zeigt auf den neuen Pfad.
+   - Ladestation `photo_url` beziehungsweise Preview zeigt die neue Signed URL.
+
+4. UI-Prüfung:
+   - Logo wird nach Upload angezeigt.
+   - Ladestationsfoto wird nach Upload angezeigt.
+
+## Was ich ausdrücklich nicht mache
+
+- Keine dritte blinde RLS-Änderung ohne Frontend-Upsert als Ursache zu beseitigen.
+- Keine Service-Role-Uploads im Browser.
+- Keine öffentliche Schreibfreigabe für Buckets.
+- Keine Änderung an fremden Modulen.
+- Keine Änderungen an `src/integrations/supabase/client.ts` oder generierten Dateien.
+
+## Ergebnis, wenn du den Plan freigibst
+
+Ich setze exakt diese Änderung um:
+
+```text
+Direkter Storage-Upsert raus.
+Explizites Entfernen alter Datei(en) rein.
+Normaler Upload ohne upsert rein.
+Danach echte Validierung über Netzwerk-/Storage-Signal.
+```
+
+Das ist der günstigste und sauberste nächste Schritt, weil die Daten jetzt belegen, dass der kombinierte Storage-Upsert der gemeinsame Auslöser beider Fehler ist.
