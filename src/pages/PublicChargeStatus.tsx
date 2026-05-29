@@ -309,30 +309,48 @@ export default function PublicChargeStatus() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 py-6 space-y-8">
         {filteredCards.length === 0 ? (
           <div className="text-center text-slate-500 py-16">Keine Ladepunkte vorhanden.</div>
         ) : (
-          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {filteredCards.map((card) => {
-              const meta = STATUS_META[card.status];
-              const Icon = meta.icon;
-              return (
-                <div
-                  key={card.key}
-                  className={`rounded-lg p-4 ${meta.bg} shadow-sm`}
-                >
-                  <div className="flex items-center gap-1.5 text-xs font-medium opacity-95">
-                    <Icon className={`h-3.5 w-3.5 ${meta.iconClass}`} />
-                    {meta.label}
-                  </div>
-                  <div className="mt-3 font-semibold leading-tight whitespace-pre-line">{card.name}</div>
-                  <div className="mt-3 text-xs opacity-80 font-mono">#{card.ocppId}</div>
+          groupedCards.map((section) => (
+            <section key={section.id ?? "__ungrouped"}>
+              {(groupedCards.length > 1 || section.id) && (
+                <div className="flex items-center gap-2 mb-3">
+                  <h2 className="text-sm font-semibold text-slate-800 uppercase tracking-wide">
+                    {section.name}
+                  </h2>
+                  <span className="text-xs text-slate-500">({section.cards.length})</span>
+                  <div className="flex-1 h-px bg-slate-200" />
                 </div>
-              );
-            })}
-          </div>
+              )}
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {section.cards.map((card) => {
+                  const meta = STATUS_META[card.status];
+                  const Icon = meta.icon;
+                  return (
+                    <div
+                      key={card.key}
+                      className={`rounded-lg p-4 ${meta.bg} shadow-sm`}
+                    >
+                      <div className="flex items-center gap-1.5 text-xs font-medium opacity-95">
+                        <Icon className={`h-3.5 w-3.5 ${meta.iconClass}`} />
+                        {meta.label}
+                      </div>
+                      <div className="mt-3 font-semibold leading-tight whitespace-pre-line">{card.name}</div>
+                      {card.ocppId ? (
+                        <div className="mt-3 text-xs opacity-80 font-mono">#{card.ocppId}</div>
+                      ) : (
+                        <div className="mt-3 text-xs opacity-80 italic">OCPP-ID fehlt</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))
         )}
+
         <div className="text-center text-xs text-slate-400 mt-8">
           Aktualisiert: {new Date(data.generated_at).toLocaleTimeString("de-DE")}
         </div>
