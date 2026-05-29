@@ -52,6 +52,7 @@ export interface ChargePoint {
   vendor: string | null;
   model: string | null;
   photo_url: string | null;
+  photo_storage_path?: string | null;
   address: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -70,6 +71,15 @@ export interface ChargePoint {
 export function useChargePoints() {
   const queryClient = useQueryClient();
 
+  const resolvePhotoUrl = async (photoUrl: string | null) => {
+    if (!photoUrl || /^https?:\/\//i.test(photoUrl)) {
+      return { displayUrl: photoUrl, storagePath: null };
+    }
+
+    const { data } = await supabase.storage.from("meter-photos").createSignedUrl(photoUrl, 60 * 60 * 24 * 365);
+    return { displayUrl: data?.signedUrl ?? photoUrl, storagePath: photoUrl };
+  };
+
   const { data: chargePoints = [], isLoading } = useQuery({
     queryKey: ["charge-points"],
     queryFn: async () => {
@@ -78,7 +88,11 @@ export function useChargePoints() {
         .select("*")
         .order("name");
       if (error) throw error;
-      return (data ?? []) as unknown as ChargePoint[];
+      const rows = (data ?? []) as unknown as ChargePoint[];
+      return Promise.all(rows.map(async (cp) => {
+        const resolved = await resolvePhotoUrl(cp.photo_url);
+        return { ...cp, photo_url: resolved.displayUrl, photo_storage_path: resolved.storagePath };
+      }));
     },
   });
 
