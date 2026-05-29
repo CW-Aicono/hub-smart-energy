@@ -12,15 +12,20 @@ import {
   Check,
   X,
 } from "lucide-react";
+import {
+  normalizeChargePointStatus,
+  type ChargePointStatusKey,
+} from "@/lib/chargePointStatus";
 
 interface ChargePoint {
   id: string;
   name: string;
-  ocpp_id: string;
+  ocpp_id: string | null;
   status: string;
   connector_count: number;
   ws_connected: boolean;
   last_heartbeat: string | null;
+  group_id: string | null;
 }
 
 interface Connector {
@@ -32,41 +37,39 @@ interface Connector {
   connector_type: string;
 }
 
+interface Group {
+  id: string;
+  name: string;
+}
+
 interface ApiResponse {
   tenant: { name: string; logo_url: string | null };
+  groups?: Group[];
   charge_points: ChargePoint[];
   connectors: Connector[];
   generated_at: string;
 }
 
-type StatusKey = "available" | "charging" | "faulted" | "offline" | "unavailable" | "unconfigured";
+type StatusKey = ChargePointStatusKey;
 
 const STATUS_META: Record<StatusKey, { label: string; bg: string; icon: typeof Zap; iconClass: string }> = {
-  available:    { label: "Available",     bg: "bg-emerald-600 text-white",                icon: Zap,         iconClass: "text-emerald-100" },
-  charging:     { label: "Charging",      bg: "bg-blue-600 text-white",                   icon: PlugZap,     iconClass: "text-blue-100" },
-  faulted:      { label: "Error",         bg: "bg-red-600 text-white",                    icon: AlertTriangle, iconClass: "text-red-100" },
-  offline:      { label: "Disconnected",  bg: "bg-slate-500 text-white",                  icon: WifiOff,     iconClass: "text-slate-100" },
-  unavailable:  { label: "Unavailable",   bg: "bg-amber-500 text-white",                  icon: ZapOff,      iconClass: "text-amber-100" },
-  unconfigured: { label: "Unconfigured",  bg: "bg-purple-500 text-white",                 icon: Settings,    iconClass: "text-purple-100" },
+  available:    { label: "Verfügbar",     bg: "bg-emerald-600 text-white",                icon: Zap,         iconClass: "text-emerald-100" },
+  charging:     { label: "Belegt",        bg: "bg-blue-600 text-white",                   icon: PlugZap,     iconClass: "text-blue-100" },
+  faulted:      { label: "Fehler",        bg: "bg-red-600 text-white",                    icon: AlertTriangle, iconClass: "text-red-100" },
+  offline:      { label: "Offline",       bg: "bg-slate-500 text-white",                  icon: WifiOff,     iconClass: "text-slate-100" },
+  unavailable:  { label: "Nicht verfügbar", bg: "bg-amber-500 text-white",                icon: ZapOff,      iconClass: "text-amber-100" },
+  unconfigured: { label: "Nicht eingerichtet",  bg: "bg-purple-500 text-white",           icon: Settings,    iconClass: "text-purple-100" },
 };
-
-function normalizeStatus(cp: ChargePoint, connStatus?: string): StatusKey {
-  if (!cp.ws_connected) return "offline";
-  const s = (connStatus ?? cp.status ?? "").toLowerCase();
-  if (s.includes("charg")) return "charging";
-  if (s.includes("fault") || s.includes("error")) return "faulted";
-  if (s.includes("unavailable") || s.includes("inoperative")) return "unavailable";
-  if (s.includes("unconfigured") || s === "" ) return "unconfigured";
-  if (s.includes("avail") || s.includes("preparing") || s.includes("finishing") || s.includes("suspended")) return "available";
-  return "available";
-}
 
 interface CardData {
   key: string;
   name: string;
-  ocppId: string;
+  ocppId: string | null;
   status: StatusKey;
+  groupId: string | null;
 }
+
+
 
 export default function PublicChargeStatus() {
   const { token } = useParams<{ token: string }>();
