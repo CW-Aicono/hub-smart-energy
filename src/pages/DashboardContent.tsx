@@ -60,6 +60,7 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   pv_forecast: PvForecastWidget,
   arbitrage_ai: ArbitrageAiWidget,
   integration_errors: IntegrationErrorsWidget,
+  ppa_fleet: PPAFleetWidget,
 };
 
 const SIZE_CLASS: Record<WidgetSize, string> = {
