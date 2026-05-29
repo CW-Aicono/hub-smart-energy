@@ -51,6 +51,7 @@ import SingleChargePointMap from "@/components/charging/SingleChargePointMap";
 import { AccessControlSettings, AccessSettings } from "@/components/charging/AccessControlSettings";
 import ChargePointSolarChargingConfig from "@/components/charging/ChargePointSolarChargingConfig";
 import ModbusInstancePanel from "@/components/charging/ModbusInstancePanel";
+import { downloadSecureStorageObject } from "@/lib/secureStorage";
 
 const STATUS_KEYS: Record<string, { labelKey: string; color: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
   available: { labelKey: "cpd.available", color: "hsl(var(--primary))", variant: "default", icon: Zap },
@@ -102,6 +103,7 @@ const ChargePointDetail = () => {
   };
   const [coords, setCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState("7");
@@ -115,6 +117,29 @@ const ChargePointDetail = () => {
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
 
   const cp = chargePoints.find((c) => c.id === id);
+  const currentPhotoUrl = photoPreviewUrl || cp?.photo_url || null;
+
+  useEffect(() => {
+    let cancelled = false;
+    const path = cp?.photo_storage_path || cp?.photo_url || null;
+
+    if (!path) {
+      setPhotoPreviewUrl(null);
+      return;
+    }
+
+    if (path.startsWith("blob:") || /^https?:\/\//i.test(path)) {
+      setPhotoPreviewUrl(path);
+      return;
+    }
+
+    downloadSecureStorageObject("meter-photos", path).then((url) => {
+      if (!cancelled) setPhotoPreviewUrl(url);
+    });
+
+    return () => { cancelled = true; };
+  }, [cp?.id, cp?.photo_storage_path, cp?.photo_url]);
+
   const cpGroup = cp?.group_id ? groups.find((g) => g.id === cp.group_id) ?? null : null;
   const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
   const { connectors, reorderConnectors } = useChargePointConnectors(cp?.id);
@@ -376,6 +401,8 @@ const ChargePointDetail = () => {
       if (error) throw error;
 
       setPhotoUrl(path);
+      const previewUrl = await downloadSecureStorageObject("meter-photos", path);
+      setPhotoPreviewUrl(previewUrl);
       updateChargePoint.mutate({ id: cp.id, photo_url: path } as any);
       toast({ title: "Foto hochgeladen", description: "Das Foto wurde gespeichert." });
     } catch (err: any) {
@@ -825,8 +852,8 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   <Card>
                     <CardContent className="p-0">
                       <div className="relative w-full aspect-video bg-muted rounded-t-lg overflow-hidden flex items-center justify-center">
-                        {cp.photo_url ? (
-                          <img src={cp.photo_url} alt={cp.name} className="object-cover w-full h-full" />
+                        {currentPhotoUrl ? (
+                          <img src={currentPhotoUrl} alt={cp.name} className="object-cover w-full h-full" />
                         ) : (
                           <div className="text-muted-foreground flex flex-col items-center gap-2">
                             <Camera className="h-8 w-8" />
@@ -1140,7 +1167,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       <div>
                         <Label>Foto</Label>
                         <div className="flex items-center gap-3 mt-1">
-                          {photoUrl && <img src={photoUrl.startsWith("http") ? photoUrl : cp.photo_url || ""} alt="Vorschau" className="h-16 w-16 rounded object-cover" />}
+                          {currentPhotoUrl && <img src={currentPhotoUrl} alt="Vorschau" className="h-16 w-16 rounded object-cover" />}
                           <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
                             {uploading ? "Lädt…" : "Foto hochladen"}
                           </Button>

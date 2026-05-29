@@ -161,6 +161,8 @@ export default function ChargePointDetailDialog({
       const previewUrl = await downloadSecureStorageObject("meter-photos", path);
       setPhotoUrl(path);
       setPhotoPreviewUrl(previewUrl);
+      onUpdate({ id: cp.id, photo_url: path } as any);
+      toast({ title: "Foto hochgeladen", description: "Das Foto wurde gespeichert." });
     } catch (err: any) {
       console.error("Charge point photo upload failed:", err);
       toast({ title: "Upload fehlgeschlagen", description: err?.message ?? "Unbekannter Fehler", variant: "destructive" });
