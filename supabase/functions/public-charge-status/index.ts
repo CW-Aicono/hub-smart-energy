@@ -40,13 +40,18 @@ Deno.serve(async (req) => {
 
     const tenantId = link.tenant_id as string;
 
-    const [tenantRes, cpRes] = await Promise.all([
+    const [tenantRes, cpRes, groupsRes] = await Promise.all([
       admin.from("tenants").select("id, name, logo_url").eq("id", tenantId).maybeSingle(),
       admin
         .from("charge_points")
         .select(
-          "id, name, ocpp_id, status, connector_count, ws_connected, last_heartbeat",
+          "id, name, ocpp_id, status, connector_count, ws_connected, last_heartbeat, group_id",
         )
+        .eq("tenant_id", tenantId)
+        .order("name"),
+      admin
+        .from("charge_point_groups")
+        .select("id, name")
         .eq("tenant_id", tenantId)
         .order("name"),
     ]);
@@ -54,12 +59,15 @@ Deno.serve(async (req) => {
     const cps = (cpRes.data ?? []) as Array<{
       id: string;
       name: string;
-      ocpp_id: string;
+      ocpp_id: string | null;
       status: string;
       connector_count: number;
       ws_connected: boolean;
       last_heartbeat: string | null;
+      group_id: string | null;
     }>;
+
+    const groups = (groupsRes.data ?? []) as Array<{ id: string; name: string }>;
 
     const cpIds = cps.map((c) => c.id);
     let connectors: Array<{
