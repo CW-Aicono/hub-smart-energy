@@ -130,6 +130,7 @@ export default function PPADetail() {
           <TabsTrigger value="config">Konfiguration</TabsTrigger>
           {c.ppa_type === "onsite" && <TabsTrigger value="meters">Verbrauchszähler</TabsTrigger>}
           <TabsTrigger value="documents">Dokumente</TabsTrigger>
+          <TabsTrigger value="settlements">Abrechnungen</TabsTrigger>
           <TabsTrigger value="history">Historie</TabsTrigger>
         </TabsList>
 
