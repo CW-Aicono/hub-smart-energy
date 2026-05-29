@@ -7968,6 +7968,7 @@ export type Database = {
           lexware_contact_id: string | null
           logo_url: string | null
           name: string
+          onboarding_completed: boolean
           payment_method: string
           postal_code: string | null
           remote_support_enabled: boolean
@@ -8001,6 +8002,7 @@ export type Database = {
           lexware_contact_id?: string | null
           logo_url?: string | null
           name: string
+          onboarding_completed?: boolean
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
@@ -8034,6 +8036,7 @@ export type Database = {
           lexware_contact_id?: string | null
           logo_url?: string | null
           name?: string
+          onboarding_completed?: boolean
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
