@@ -107,6 +107,7 @@ Deno.serve(async (req) => {
         name: tenantRes.data?.name ?? "",
         logo_url: logoUrl,
       },
+      groups,
       charge_points: cps,
       connectors,
       generated_at: new Date().toISOString(),
