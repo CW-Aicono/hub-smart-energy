@@ -51,6 +51,7 @@ import SingleChargePointMap from "@/components/charging/SingleChargePointMap";
 import { AccessControlSettings, AccessSettings } from "@/components/charging/AccessControlSettings";
 import ChargePointSolarChargingConfig from "@/components/charging/ChargePointSolarChargingConfig";
 import ModbusInstancePanel from "@/components/charging/ModbusInstancePanel";
+import { downloadSecureStorageObject } from "@/lib/secureStorage";
 
 const STATUS_KEYS: Record<string, { labelKey: string; color: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
   available: { labelKey: "cpd.available", color: "hsl(var(--primary))", variant: "default", icon: Zap },
@@ -102,6 +103,7 @@ const ChargePointDetail = () => {
   };
   const [coords, setCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState("7");
@@ -115,6 +117,7 @@ const ChargePointDetail = () => {
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
 
   const cp = chargePoints.find((c) => c.id === id);
+  const currentPhotoUrl = photoPreviewUrl || cp?.photo_url || null;
   const cpGroup = cp?.group_id ? groups.find((g) => g.id === cp.group_id) ?? null : null;
   const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
   const { connectors, reorderConnectors } = useChargePointConnectors(cp?.id);
