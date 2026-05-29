@@ -273,29 +273,6 @@ export default function PPAWizard() {
               <p className="text-sm text-muted-foreground">Schritt {state.step.toLocaleString("de-DE")} von {totalSteps.toLocaleString("de-DE")}</p>
             </div>
           </div>
-          <Progress value={progressPct} />
-
-          <Card>
-            <CardHeader>
-              <CardTitle>{stepTitle(state.step, isOnsite)}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {state.step === 1 && (
-                <div className="grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => set({ ppa_type: "onsite" })}
-                    className={`rounded-lg border p-4 text-left transition-colors ${state.ppa_type === "onsite" ? "border-primary bg-primary/10" : "hover:bg-muted"}`}>
-                    <div className="font-semibold">On-site PPA</div>
-                    <div className="text-xs text-muted-foreground mt-1">Direktbelieferung am Gebäude (PV-Dach, Direktleitung, Mieterstrom)</div>
-                  </button>
-                  <button type="button" onClick={() => set({ ppa_type: "offsite" })}
-                    className={`rounded-lg border p-4 text-left transition-colors ${state.ppa_type === "offsite" ? "border-primary bg-primary/10" : "hover:bg-muted"}`}>
-                    <div className="font-semibold">Off-site PPA</div>
-                    <div className="text-xs text-muted-foreground mt-1">Lieferung über das öffentliche Netz (physisch/sleeved/finanziell)</div>
-                  </button>
-                </div>
-              )}
-        </div>
-      </div>
       <Progress value={progressPct} />
 
       <Card>
@@ -591,6 +568,8 @@ export default function PPAWizard() {
           )}
         </div>
       </div>
+      </div>
+      </main>
     </div>
   );
 }
