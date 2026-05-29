@@ -5898,6 +5898,74 @@ export type Database = {
           },
         ]
       }
+      ppa_goo_certificates: {
+        Row: {
+          certificate_number: string
+          contract_id: string
+          counterparty: string | null
+          created_at: string
+          energy_source: string
+          generation_period_end: string
+          generation_period_start: string
+          id: string
+          issued_at: string | null
+          notes: string | null
+          redeemed_at: string | null
+          registry: string
+          status: string
+          tenant_id: string
+          transferred_at: string | null
+          updated_at: string
+          volume_kwh: number
+        }
+        Insert: {
+          certificate_number: string
+          contract_id: string
+          counterparty?: string | null
+          created_at?: string
+          energy_source?: string
+          generation_period_end: string
+          generation_period_start: string
+          id?: string
+          issued_at?: string | null
+          notes?: string | null
+          redeemed_at?: string | null
+          registry?: string
+          status?: string
+          tenant_id: string
+          transferred_at?: string | null
+          updated_at?: string
+          volume_kwh: number
+        }
+        Update: {
+          certificate_number?: string
+          contract_id?: string
+          counterparty?: string | null
+          created_at?: string
+          energy_source?: string
+          generation_period_end?: string
+          generation_period_start?: string
+          id?: string
+          issued_at?: string | null
+          notes?: string | null
+          redeemed_at?: string | null
+          registry?: string
+          status?: string
+          tenant_id?: string
+          transferred_at?: string | null
+          updated_at?: string
+          volume_kwh?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_goo_certificates_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ppa_offsite_config: {
         Row: {
           balancing_group_id: string | null
@@ -5972,6 +6040,7 @@ export type Database = {
           id: string
           self_consumption_target_pct: number | null
           supply_model: string
+          surplus_community_id: string | null
           surplus_handling: string
           tenant_id: string
           updated_at: string
@@ -5984,6 +6053,7 @@ export type Database = {
           id?: string
           self_consumption_target_pct?: number | null
           supply_model: string
+          surplus_community_id?: string | null
           surplus_handling?: string
           tenant_id: string
           updated_at?: string
@@ -5996,6 +6066,7 @@ export type Database = {
           id?: string
           self_consumption_target_pct?: number | null
           supply_model?: string
+          surplus_community_id?: string | null
           surplus_handling?: string
           tenant_id?: string
           updated_at?: string
@@ -6020,6 +6091,13 @@ export type Database = {
             columns: ["generation_meter_id"]
             isOneToOne: false
             referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_onsite_config_surplus_community_id_fkey"
+            columns: ["surplus_community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
             referencedColumns: ["id"]
           },
         ]
