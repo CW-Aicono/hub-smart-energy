@@ -401,6 +401,8 @@ const ChargePointDetail = () => {
       if (error) throw error;
 
       setPhotoUrl(path);
+      const previewUrl = await downloadSecureStorageObject("meter-photos", path);
+      setPhotoPreviewUrl(previewUrl);
       updateChargePoint.mutate({ id: cp.id, photo_url: path } as any);
       toast({ title: "Foto hochgeladen", description: "Das Foto wurde gespeichert." });
     } catch (err: any) {
@@ -850,8 +852,8 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   <Card>
                     <CardContent className="p-0">
                       <div className="relative w-full aspect-video bg-muted rounded-t-lg overflow-hidden flex items-center justify-center">
-                        {cp.photo_url ? (
-                          <img src={cp.photo_url} alt={cp.name} className="object-cover w-full h-full" />
+                        {currentPhotoUrl ? (
+                          <img src={currentPhotoUrl} alt={cp.name} className="object-cover w-full h-full" />
                         ) : (
                           <div className="text-muted-foreground flex flex-col items-center gap-2">
                             <Camera className="h-8 w-8" />
@@ -1165,7 +1167,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       <div>
                         <Label>Foto</Label>
                         <div className="flex items-center gap-3 mt-1">
-                          {photoUrl && <img src={photoUrl.startsWith("http") ? photoUrl : cp.photo_url || ""} alt="Vorschau" className="h-16 w-16 rounded object-cover" />}
+                          {currentPhotoUrl && <img src={currentPhotoUrl} alt="Vorschau" className="h-16 w-16 rounded object-cover" />}
                           <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
                             {uploading ? "Lädt…" : "Foto hochladen"}
                           </Button>
