@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getT } from "@/i18n/getT";
+import { useTenant } from "@/hooks/useTenant";
 
 export interface ChargingUserGroup {
   id: string;
