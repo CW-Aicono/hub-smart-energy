@@ -5688,6 +5688,591 @@ export type Database = {
           },
         ]
       }
+      ppa_consumption_meters: {
+        Row: {
+          contract_id: string
+          created_at: string
+          meter_id: string
+          role: string
+          tenant_id: string
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          meter_id: string
+          role?: string
+          tenant_id: string
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          meter_id?: string
+          role?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_consumption_meters_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_consumption_meters_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_contracts: {
+        Row: {
+          auto_renewal: boolean
+          contract_end: string
+          contract_start: string
+          contracted_volume_kwh_pa: number | null
+          created_at: string
+          created_by: string | null
+          energy_source: string
+          goo_registry: string | null
+          goo_required: boolean
+          id: string
+          mieterstrom_settings_id: string | null
+          notes: string | null
+          notice_period_days: number
+          offtaker_market_id: string | null
+          offtaker_name: string
+          plant_capacity_kw: number | null
+          plant_description: string | null
+          plant_id: string | null
+          ppa_type: string
+          price_eur_per_kwh: number | null
+          price_formula: Json | null
+          price_model: string
+          producer_market_id: string | null
+          producer_name: string
+          reference_number: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          auto_renewal?: boolean
+          contract_end: string
+          contract_start: string
+          contracted_volume_kwh_pa?: number | null
+          created_at?: string
+          created_by?: string | null
+          energy_source?: string
+          goo_registry?: string | null
+          goo_required?: boolean
+          id?: string
+          mieterstrom_settings_id?: string | null
+          notes?: string | null
+          notice_period_days?: number
+          offtaker_market_id?: string | null
+          offtaker_name: string
+          plant_capacity_kw?: number | null
+          plant_description?: string | null
+          plant_id?: string | null
+          ppa_type: string
+          price_eur_per_kwh?: number | null
+          price_formula?: Json | null
+          price_model: string
+          producer_market_id?: string | null
+          producer_name: string
+          reference_number?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          auto_renewal?: boolean
+          contract_end?: string
+          contract_start?: string
+          contracted_volume_kwh_pa?: number | null
+          created_at?: string
+          created_by?: string | null
+          energy_source?: string
+          goo_registry?: string | null
+          goo_required?: boolean
+          id?: string
+          mieterstrom_settings_id?: string | null
+          notes?: string | null
+          notice_period_days?: number
+          offtaker_market_id?: string | null
+          offtaker_name?: string
+          plant_capacity_kw?: number | null
+          plant_description?: string | null
+          plant_id?: string | null
+          ppa_type?: string
+          price_eur_per_kwh?: number | null
+          price_formula?: Json | null
+          price_model?: string
+          producer_market_id?: string | null
+          producer_name?: string
+          reference_number?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_contracts_mieterstrom_settings_id_fkey"
+            columns: ["mieterstrom_settings_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_electricity_settings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_contracts_plant_id_fkey"
+            columns: ["plant_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_contracts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_documents: {
+        Row: {
+          contract_id: string
+          created_at: string
+          doc_type: string
+          file_hash: string | null
+          file_size_bytes: number | null
+          filename: string
+          id: string
+          mime_type: string | null
+          storage_path: string
+          tenant_id: string
+          uploaded_by: string | null
+          valid_from: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          doc_type: string
+          file_hash?: string | null
+          file_size_bytes?: number | null
+          filename: string
+          id?: string
+          mime_type?: string | null
+          storage_path: string
+          tenant_id: string
+          uploaded_by?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          doc_type?: string
+          file_hash?: string | null
+          file_size_bytes?: number | null
+          filename?: string
+          id?: string
+          mime_type?: string | null
+          storage_path?: string
+          tenant_id?: string
+          uploaded_by?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_documents_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_goo_certificates: {
+        Row: {
+          certificate_number: string
+          contract_id: string
+          counterparty: string | null
+          created_at: string
+          energy_source: string
+          generation_period_end: string
+          generation_period_start: string
+          id: string
+          issued_at: string | null
+          notes: string | null
+          redeemed_at: string | null
+          registry: string
+          status: string
+          tenant_id: string
+          transferred_at: string | null
+          updated_at: string
+          volume_kwh: number
+        }
+        Insert: {
+          certificate_number: string
+          contract_id: string
+          counterparty?: string | null
+          created_at?: string
+          energy_source?: string
+          generation_period_end: string
+          generation_period_start: string
+          id?: string
+          issued_at?: string | null
+          notes?: string | null
+          redeemed_at?: string | null
+          registry?: string
+          status?: string
+          tenant_id: string
+          transferred_at?: string | null
+          updated_at?: string
+          volume_kwh: number
+        }
+        Update: {
+          certificate_number?: string
+          contract_id?: string
+          counterparty?: string | null
+          created_at?: string
+          energy_source?: string
+          generation_period_end?: string
+          generation_period_start?: string
+          id?: string
+          issued_at?: string | null
+          notes?: string | null
+          redeemed_at?: string | null
+          registry?: string
+          status?: string
+          tenant_id?: string
+          transferred_at?: string | null
+          updated_at?: string
+          volume_kwh?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_goo_certificates_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_offsite_config: {
+        Row: {
+          balancing_group_id: string | null
+          balancing_responsible_party: string | null
+          contract_id: string
+          created_at: string
+          delivery_type: string
+          id: string
+          imbalance_responsibility: string
+          intermediary_market_id: string | null
+          intermediary_name: string | null
+          mscons_receiver_id: string | null
+          mscons_sender_id: string | null
+          plant_grid_level: string | null
+          plant_location: string | null
+          plant_tso_area: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          balancing_group_id?: string | null
+          balancing_responsible_party?: string | null
+          contract_id: string
+          created_at?: string
+          delivery_type: string
+          id?: string
+          imbalance_responsibility?: string
+          intermediary_market_id?: string | null
+          intermediary_name?: string | null
+          mscons_receiver_id?: string | null
+          mscons_sender_id?: string | null
+          plant_grid_level?: string | null
+          plant_location?: string | null
+          plant_tso_area?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          balancing_group_id?: string | null
+          balancing_responsible_party?: string | null
+          contract_id?: string
+          created_at?: string
+          delivery_type?: string
+          id?: string
+          imbalance_responsibility?: string
+          intermediary_market_id?: string | null
+          intermediary_name?: string | null
+          mscons_receiver_id?: string | null
+          mscons_sender_id?: string | null
+          plant_grid_level?: string | null
+          plant_location?: string | null
+          plant_tso_area?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_offsite_config_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: true
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_onsite_config: {
+        Row: {
+          building_id: string | null
+          contract_id: string
+          created_at: string
+          generation_meter_id: string | null
+          id: string
+          self_consumption_target_pct: number | null
+          supply_model: string
+          surplus_community_id: string | null
+          surplus_handling: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          building_id?: string | null
+          contract_id: string
+          created_at?: string
+          generation_meter_id?: string | null
+          id?: string
+          self_consumption_target_pct?: number | null
+          supply_model: string
+          surplus_community_id?: string | null
+          surplus_handling?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          building_id?: string | null
+          contract_id?: string
+          created_at?: string
+          generation_meter_id?: string | null
+          id?: string
+          self_consumption_target_pct?: number | null
+          supply_model?: string
+          surplus_community_id?: string | null
+          surplus_handling?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_onsite_config_building_id_fkey"
+            columns: ["building_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_onsite_config_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: true
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_onsite_config_generation_meter_id_fkey"
+            columns: ["generation_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_onsite_config_surplus_community_id_fkey"
+            columns: ["surplus_community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_settlement_periods: {
+        Row: {
+          actual_consumed_kwh: number | null
+          actual_produced_kwh: number | null
+          applicable_price_eur_per_kwh: number | null
+          contract_id: string
+          contracted_kwh: number | null
+          created_at: string
+          data_source: string
+          deviation_kwh: number | null
+          id: string
+          notes: string | null
+          period_end: string
+          period_start: string
+          settlement_amount_eur: number | null
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          actual_consumed_kwh?: number | null
+          actual_produced_kwh?: number | null
+          applicable_price_eur_per_kwh?: number | null
+          contract_id: string
+          contracted_kwh?: number | null
+          created_at?: string
+          data_source?: string
+          deviation_kwh?: number | null
+          id?: string
+          notes?: string | null
+          period_end: string
+          period_start: string
+          settlement_amount_eur?: number | null
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          actual_consumed_kwh?: number | null
+          actual_produced_kwh?: number | null
+          applicable_price_eur_per_kwh?: number | null
+          contract_id?: string
+          contracted_kwh?: number | null
+          created_at?: string
+          data_source?: string
+          deviation_kwh?: number | null
+          id?: string
+          notes?: string | null
+          period_end?: string
+          period_start?: string
+          settlement_amount_eur?: number | null
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_settlement_periods_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_settlements: {
+        Row: {
+          applied_avg_price_eur_kwh: number | null
+          avg_spot_price_eur_kwh: number | null
+          breakdown: Json | null
+          computed_at: string
+          consumed_kwh: number
+          contract_id: string
+          created_at: string
+          currency: string
+          delivered_kwh: number
+          error: string | null
+          id: string
+          period_end: string
+          period_start: string
+          status: string
+          tenant_id: string
+          total_amount_eur: number
+          updated_at: string
+        }
+        Insert: {
+          applied_avg_price_eur_kwh?: number | null
+          avg_spot_price_eur_kwh?: number | null
+          breakdown?: Json | null
+          computed_at?: string
+          consumed_kwh?: number
+          contract_id: string
+          created_at?: string
+          currency?: string
+          delivered_kwh?: number
+          error?: string | null
+          id?: string
+          period_end: string
+          period_start: string
+          status?: string
+          tenant_id: string
+          total_amount_eur?: number
+          updated_at?: string
+        }
+        Update: {
+          applied_avg_price_eur_kwh?: number | null
+          avg_spot_price_eur_kwh?: number | null
+          breakdown?: Json | null
+          computed_at?: string
+          consumed_kwh?: number
+          contract_id?: string
+          created_at?: string
+          currency?: string
+          delivered_kwh?: number
+          error?: string | null
+          id?: string
+          period_end?: string
+          period_start?: string
+          status?: string
+          tenant_id?: string
+          total_amount_eur?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_settlements_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_status_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          contract_id: string
+          id: string
+          new_status: string
+          old_status: string | null
+          reason: string | null
+          tenant_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          contract_id: string
+          id?: string
+          new_status: string
+          old_status?: string | null
+          reason?: string | null
+          tenant_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          contract_id?: string
+          id?: string
+          new_status?: string
+          old_status?: string | null
+          reason?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_status_history_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           company_name: string | null

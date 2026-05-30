@@ -33,6 +33,7 @@ const SpotPriceWidget = lazy(() => import("@/components/dashboard/SpotPriceWidge
 const PvForecastWidget = lazy(() => import("@/components/dashboard/PvForecastWidget"));
 const ArbitrageAiWidget = lazy(() => import("@/components/dashboard/ArbitrageAiWidget"));
 const IntegrationErrorsWidget = lazy(() => import("@/components/dashboard/IntegrationErrorsWidget"));
+const PPAFleetWidget = lazy(() => import("@/components/dashboard/PPAFleetWidget"));
 
 interface WidgetProps {
   locationId: string | null;
@@ -59,6 +60,7 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   pv_forecast: PvForecastWidget,
   arbitrage_ai: ArbitrageAiWidget,
   integration_errors: IntegrationErrorsWidget,
+  ppa_fleet: PPAFleetWidget,
 };
 
 const SIZE_CLASS: Record<WidgetSize, string> = {
@@ -84,6 +86,7 @@ const WIDGET_MODULE_MAP: Record<string, string> = {
   energy_gauge: "energy_monitoring",
   spot_price: "arbitrage_trading",
   pv_forecast: "energy_monitoring",
+  ppa_fleet: "ppa_onsite",
 };
 
 const getLocationWidget = (_locationId: string | null): string => {

@@ -20,6 +20,9 @@ import SuperAdminImpersonationBar from "./components/SuperAdminImpersonationBar"
 import CookieConsent from "./components/CookieConsent";
 import LocationDetail from "./pages/LocationDetail";
 import Locations from "./pages/Locations";
+import PPA from "./pages/PPA";
+import PPAWizard from "./pages/PPAWizard";
+import PPADetail from "./pages/PPADetail";
 // leaflet CSS is loaded lazily in map components
 
 // Lazy-loaded pages
@@ -109,6 +112,14 @@ const queryClient = new QueryClient({
       staleTime: 5 * 60 * 1000, // 5 minutes
     },
   },
+});
+
+// Stufe 1: Beim Ein-/Austritt aus der Remote-Support-Sicht alle React-Query-
+// Caches verwerfen, damit niemals Daten der falschen Tenant-Sicht angezeigt
+// werden (siehe .lovable/plan.md – Audit „Remote-Support zeigt falsche Tenant-Daten").
+import { onSupportViewChanged } from "@/lib/supportView";
+onSupportViewChanged(() => {
+  queryClient.clear();
 });
 
 const M = ({ children }: { children: React.ReactNode }) => (
@@ -240,6 +251,11 @@ const App = () => (
                       <Route path="/mein-sharing/install" element={<SharingInstall />} />
 
                       <Route path="/tenant-electricity" element={<M><TenantElectricity /></M>} />
+                      <Route path="/ppa" element={<M><PPA /></M>} />
+                      <Route path="/ppa/onsite" element={<M><PPA type="onsite" /></M>} />
+                      <Route path="/ppa/offsite" element={<M><PPA type="offsite" /></M>} />
+                      <Route path="/ppa/new" element={<M><PPAWizard /></M>} />
+                      <Route path="/ppa/:id" element={<M><PPADetail /></M>} />
                       <Route path="/ev" element={<ChargingApp />} />
                       <Route path="/te" element={<TenantEnergyApp />} />
                       <Route path="/m" element={<MobileApp />} />

@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useDemoMode } from "@/contexts/DemoMode";
 import { getSupportViewTenantId, onSupportViewChanged } from "@/lib/supportView";
+import { downloadSecureStorageObject } from "@/lib/secureStorage";
 
 
 interface TenantBranding {
@@ -204,13 +205,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           setError(fetchError.message);
         }
       } else if (data) {
-        // Resolve signed URL for logo if stored as a path
         let resolvedLogoUrl = data.logo_url;
         if (resolvedLogoUrl && !resolvedLogoUrl.startsWith('http')) {
-          const { data: signedData } = await supabase.storage
-            .from('tenant-assets')
-            .createSignedUrl(resolvedLogoUrl, 3600);
-          resolvedLogoUrl = signedData?.signedUrl ?? null;
+          resolvedLogoUrl = await downloadSecureStorageObject('tenant-assets', resolvedLogoUrl);
         }
 
         const tenantData: Tenant = {

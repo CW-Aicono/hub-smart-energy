@@ -23,6 +23,7 @@ import { toast } from "@/hooks/use-toast";
 import { AccessControlSettings } from "@/components/charging/AccessControlSettings";
 import { PowerLimitScheduler, defaultPowerLimitSchedule, type PowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
 import { getOcppHost } from "@/lib/ocppEnvironment";
+import { downloadSecureStorageObject } from "@/lib/secureStorage";
 const OCPP_HOST = getOcppHost();
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
@@ -60,6 +61,7 @@ export default function ChargePointDetailDialog({
   const [showPassword, setShowPassword] = useState(false);
   const [coords, setCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -80,7 +82,8 @@ export default function ChargePointDetailDialog({
       auth_required: (cp as any).auth_required ?? true,
     });
     setCoords({ lat: cp.latitude, lng: cp.longitude });
-    setPhotoUrl(cp.photo_url || null);
+    setPhotoUrl(cp.photo_storage_path || cp.photo_url || null);
+    setPhotoPreviewUrl(cp.photo_url || null);
     setEditing(true);
   };
 
@@ -146,16 +149,26 @@ export default function ChargePointDetailDialog({
     const file = e.target.files?.[0];
     if (!file || !cp) return;
     setUploading(true);
-    const ext = file.name.split(".").pop();
-    const path = `charge-points/${cp.id}.${ext}`;
-    const { error } = await supabase.storage.from("meter-photos").upload(path, file, { upsert: true });
-    if (error) {
-      toast({ title: "Upload fehlgeschlagen", description: error.message, variant: "destructive" });
-    } else {
-      const { data: signedData } = await supabase.storage.from("meter-photos").createSignedUrl(path, 3600);
-      setPhotoUrl(signedData?.signedUrl || null);
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `charge-points/${cp.id}/${crypto.randomUUID()}.${ext}`;
+
+      const { error } = await supabase.storage
+        .from("meter-photos")
+        .upload(path, file, { contentType: file.type || undefined });
+      if (error) throw error;
+
+      const previewUrl = await downloadSecureStorageObject("meter-photos", path);
+      setPhotoUrl(path);
+      setPhotoPreviewUrl(previewUrl);
+      onUpdate({ id: cp.id, photo_url: path } as any);
+      toast({ title: "Foto hochgeladen", description: "Das Foto wurde gespeichert." });
+    } catch (err: any) {
+      console.error("Charge point photo upload failed:", err);
+      toast({ title: "Upload fehlgeschlagen", description: err?.message ?? "Unbekannter Fehler", variant: "destructive" });
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   };
 
   if (!cp) return null;
@@ -166,7 +179,7 @@ export default function ChargePointDetailDialog({
   const cpSessions = sessions
     .filter((s) => s.charge_point_id === cp.id)
     .slice(0, 5);
-  const currentPhoto = editing ? photoUrl : cp.photo_url;
+  const currentPhoto = editing ? (photoPreviewUrl || (photoUrl?.startsWith("http") ? photoUrl : null)) : cp.photo_url;
   const isInGroup = !!cp.group_id;
 
   return (

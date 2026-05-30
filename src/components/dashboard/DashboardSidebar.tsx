@@ -8,7 +8,7 @@ import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { useDemoMode, useDemoPath } from "@/contexts/DemoMode";
 import { Button } from "@/components/ui/button";
 import { MobileHeader } from "@/components/dashboard/MobileSidebar";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText, Sparkles, Sun, Share2 } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText, Sparkles, Sun, Share2, FileSignature } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -118,6 +118,14 @@ const DashboardSidebar = () => {
     if (currentPath.startsWith("/charging")) {
       setOpenMenus((prev) => prev.includes("/charging/points") ? prev : [...prev, "/charging/points"]);
     }
+    if (
+      currentPath === "/arbitrage" ||
+      currentPath.startsWith("/ppa") ||
+      currentPath === "/tenant-electricity" ||
+      currentPath.startsWith("/energy-sharing")
+    ) {
+      setOpenMenus((prev) => prev.includes("/trading") ? prev : [...prev, "/trading"]);
+    }
   }, [currentPath]);
 
   const toggleMenu = (to: string) => {
@@ -153,10 +161,21 @@ const DashboardSidebar = () => {
       ]
     },
     { to: "/automation", icon: Cpu, labelKey: "nav.multiLocationAutomation" as TranslationKey },
-    { to: "/arbitrage", icon: TrendingUp, labelKey: "nav.arbitrageTrading" as TranslationKey },
+    {
+      to: "/trading",
+      icon: TrendingUp,
+      labelKey: "nav.trading" as TranslationKey,
+      children: [
+        { to: "/arbitrage", icon: TrendingUp, labelKey: "nav.arbitrageTrading" as TranslationKey },
+        { to: "/ppa", icon: FileSignature, labelKey: "nav.ppa" as TranslationKey },
+        { to: "/tenant-electricity", icon: Home, labelKey: "nav.tenantElectricity" as TranslationKey },
+        { to: "/energy-sharing", icon: Share2, labelKey: "nav.energySharing" as TranslationKey },
+      ],
+    },
     { to: "/copilot", icon: Sparkles, labelKey: "nav.copilot" as TranslationKey },
-    { to: "/tenant-electricity", icon: Home, labelKey: "nav.tenantElectricity" as TranslationKey },
-    { to: "/energy-sharing", icon: Share2, labelKey: "nav.energySharing" as TranslationKey },
+    
+    
+    
     { to: "/network", icon: Network, labelKey: "nav.networkInfrastructure" as TranslationKey },
     { to: "/tasks", icon: ListChecks, labelKey: "nav.tasks" as TranslationKey },
     ...(isAdmin ? [

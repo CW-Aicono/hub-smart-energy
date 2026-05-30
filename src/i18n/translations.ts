@@ -3545,6 +3545,10 @@ export const translations = {
   // Tenant Electricity (Mieterstrom)
   "nav.tenantElectricity": { de: "Mieterstrom", en: "Tenant Electricity", es: "Electricidad inquilinos", nl: "Huurderstroom" },
   "nav.energySharing": { de: "Energy Sharing", en: "Energy Sharing", es: "Energy Sharing", nl: "Energy Sharing" },
+  "nav.ppa": { de: "PPA-Management", en: "PPA Management", es: "Gestión PPA", nl: "PPA-beheer" },
+  "nav.ppaOnsite": { de: "PPA On-site", en: "PPA On-site", es: "PPA On-site", nl: "PPA On-site" },
+  "nav.ppaOffsite": { de: "PPA Off-site", en: "PPA Off-site", es: "PPA Off-site", nl: "PPA Off-site" },
+  "nav.trading": { de: "Trading", en: "Trading", es: "Trading", nl: "Trading" },
 
 
   // Support Session Banner
