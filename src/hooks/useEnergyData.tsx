@@ -188,15 +188,15 @@ export function useEnergyData(locationId?: string | null) {
     queryKey: ["energy-readings-and-sources", tenant?.id, user?.id],
     queryFn: async () => {
       const [readingsRes, sourcesRes] = await Promise.all([
-        supabase
+        (supabase
           .from("meter_readings")
           .select("value, reading_date, meter_id")
-          .eq("tenant_id", tenant!.id)
+          .eq("tenant_id", tenant!.id) as any)
           .order("reading_date", { ascending: true }),
-        supabase
+        (supabase
           .from("virtual_meter_sources")
           .select("virtual_meter_id, source_meter_id, operator, sort_order")
-          .eq("tenant_id", tenant!.id)
+          .eq("tenant_id", tenant!.id) as any)
           .order("sort_order"),
       ]);
       return {
