@@ -61,6 +61,10 @@ export function useModuleGuard() {
   const checkModule = (code: string): boolean => {
     if (isDemo) return true;
     if (isLoading || !tenant) return true;
+    // Support OR-combined codes separated by "|" (route visible if ANY is enabled)
+    if (code.includes("|")) {
+      return code.split("|").some((c) => checkModule(c));
+    }
     const mod = modules.find((m) => m.module_code === code);
     if (mod) return mod.is_enabled;
     return !strictMode;
