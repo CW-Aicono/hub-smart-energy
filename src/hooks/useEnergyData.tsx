@@ -182,17 +182,21 @@ export function useEnergyData(locationId?: string | null) {
   const showManualMeters = tenant?.show_manual_meters ?? false;
 
   // Shared react-query cache for readings + virtual sources
+  // CRITICAL: scope to tenant.id — super_admins bypass RLS and would otherwise
+  // see ALL tenants' readings during a remote-support session.
   const { data: dbData, isLoading: dbLoading } = useQuery({
-    queryKey: ["energy-readings-and-sources", user?.id],
+    queryKey: ["energy-readings-and-sources", tenant?.id, user?.id],
     queryFn: async () => {
       const [readingsRes, sourcesRes] = await Promise.all([
         supabase
           .from("meter_readings")
           .select("value, reading_date, meter_id")
+          .eq("tenant_id", tenant!.id)
           .order("reading_date", { ascending: true }),
         supabase
           .from("virtual_meter_sources")
           .select("virtual_meter_id, source_meter_id, operator, sort_order")
+          .eq("tenant_id", tenant!.id)
           .order("sort_order"),
       ]);
       return {
@@ -200,7 +204,7 @@ export function useEnergyData(locationId?: string | null) {
         virtualSources: (sourcesRes.data ?? []) as { virtual_meter_id: string; source_meter_id: string; operator: string; sort_order: number }[],
       };
     },
-    enabled: !!user,
+    enabled: !!user && !!tenant?.id,
     staleTime: 30_000,
   });
 
