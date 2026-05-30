@@ -118,7 +118,12 @@ const DashboardSidebar = () => {
     if (currentPath.startsWith("/charging")) {
       setOpenMenus((prev) => prev.includes("/charging/points") ? prev : [...prev, "/charging/points"]);
     }
-    if (currentPath === "/arbitrage" || currentPath.startsWith("/ppa")) {
+    if (
+      currentPath === "/arbitrage" ||
+      currentPath.startsWith("/ppa") ||
+      currentPath === "/tenant-electricity" ||
+      currentPath.startsWith("/energy-sharing")
+    ) {
       setOpenMenus((prev) => prev.includes("/trading") ? prev : [...prev, "/trading"]);
     }
   }, [currentPath]);
