@@ -169,11 +169,13 @@ const DashboardSidebar = () => {
         { to: "/arbitrage", icon: TrendingUp, labelKey: "nav.arbitrageTrading" as TranslationKey },
         { to: "/ppa/onsite", icon: FileSignature, labelKey: "nav.ppaOnsite" as TranslationKey },
         { to: "/ppa/offsite", icon: FileSignature, labelKey: "nav.ppaOffsite" as TranslationKey },
+        { to: "/tenant-electricity", icon: Home, labelKey: "nav.tenantElectricity" as TranslationKey },
+        { to: "/energy-sharing", icon: Share2, labelKey: "nav.energySharing" as TranslationKey },
       ],
     },
     { to: "/copilot", icon: Sparkles, labelKey: "nav.copilot" as TranslationKey },
-    { to: "/tenant-electricity", icon: Home, labelKey: "nav.tenantElectricity" as TranslationKey },
-    { to: "/energy-sharing", icon: Share2, labelKey: "nav.energySharing" as TranslationKey },
+    
+    
     
     { to: "/network", icon: Network, labelKey: "nav.networkInfrastructure" as TranslationKey },
     { to: "/tasks", icon: ListChecks, labelKey: "nav.tasks" as TranslationKey },
