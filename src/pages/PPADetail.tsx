@@ -410,6 +410,7 @@ function SettlementsPanel({ contractId }: { contractId: string }) {
   const { data, isLoading } = usePpaSettlements(contractId);
   const calc = useCalculatePpaSettlement();
   const updateStatus = useUpdatePpaSettlementStatus();
+  const report = useGeneratePpaReport();
   const [periodInput, setPeriodInput] = useState<string>(() => {
     const now = new Date();
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));

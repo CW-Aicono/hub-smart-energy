@@ -49,7 +49,7 @@ Status-Wechsel-Dialog mit erlaubten Übergängen (clientseitig gespiegelt aus `l
 ## Phase 2 – Status
 
 - [x] **Settlement-Engine** – Tabelle `ppa_settlements`, Edge `ppa-settlement-calculate` (stündliche Aggregation × Preisformel × EPEX-Spot), monatlicher Cron (2. um 03:15), Tab „Abrechnungen" im PPADetail mit Manuell-Berechnen + Status-Workflow (draft → finalized → invoiced)
-- [ ] Alerts & Monitoring (`ppa-alert-check`)
-- [ ] Report-Generator (`ppa-report-generate`)
-- [ ] PPAFleetCard fürs Dashboard
-- [ ] Energy-Sharing-Verknüpfung + erweiterter GoO-Workflow
+- [x] **Alerts & Monitoring** – Edge `ppa-alert-check` (Laufzeit-Ende 90/60/30 Tage, Floor/Cap-Verletzungen vs. 7-Tage-EPEX-Ø, fehlende Verbrauchsdaten > 7 Tage), täglicher Cron 06:30 UTC, schreibt Tasks
+- [x] **Report-Generator** – Edge `ppa-report-generate` (HTML-Report pro Settlement, gespeichert in `ppa-documents` als `meter_report`), Button im Settlements-Tab, monatlicher Cron 04:00 UTC am 3.
+- [x] **PPAFleetCard fürs Dashboard** – `PPAFleetWidget` mit aktiven Verträgen, MTD-Volumen und nächsten Fälligkeiten
+- [x] **Energy-Sharing-Verknüpfung + erweiterter GoO-Workflow** – `surplus_community_id` in `ppa_onsite_config`, Tabelle `ppa_goo_certificates` mit Status-Workflow (issued → transferred → redeemed), Tab „Herkunftsnachweise" im PPADetail
