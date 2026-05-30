@@ -27,11 +27,17 @@ export interface ChargingInvoice {
 
 export function useChargingInvoices() {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   const { data: invoices = [], isLoading } = useQuery({
-    queryKey: ["charging-invoices"],
+    queryKey: ["charging-invoices", tenant?.id],
+    enabled: !!tenant?.id,
     queryFn: async () => {
-      const { data, error } = await supabase.from("charging_invoices").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("charging_invoices")
+        .select("*")
+        .eq("tenant_id", tenant!.id)
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data as ChargingInvoice[];
     },
