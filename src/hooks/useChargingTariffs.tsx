@@ -22,11 +22,17 @@ export interface ChargingTariff {
 
 export function useChargingTariffs() {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   const { data: tariffs = [], isLoading } = useQuery({
-    queryKey: ["charging-tariffs"],
+    queryKey: ["charging-tariffs", tenant?.id],
+    enabled: !!tenant?.id,
     queryFn: async () => {
-      const { data, error } = await supabase.from("charging_tariffs").select("*").order("name");
+      const { data, error } = await supabase
+        .from("charging_tariffs")
+        .select("*")
+        .eq("tenant_id", tenant!.id)
+        .order("name");
       if (error) throw error;
       return data as ChargingTariff[];
     },
