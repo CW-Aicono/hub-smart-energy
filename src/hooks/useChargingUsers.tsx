@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getT } from "@/i18n/getT";
+import { useTenant } from "@/hooks/useTenant";
 
 export interface ChargingUserGroup {
   id: string;
@@ -33,14 +34,17 @@ export interface ChargingUser {
 
 export function useChargingUserGroups() {
   const qc = useQueryClient();
-  const key = ["charging-user-groups"];
+  const { tenant } = useTenant();
+  const key = ["charging-user-groups", tenant?.id];
 
   const { data: groups = [], isLoading } = useQuery({
     queryKey: key,
+    enabled: !!tenant?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("charging_user_groups")
         .select("*")
+        .eq("tenant_id", tenant!.id)
         .order("name");
       if (error) throw error;
       return data as ChargingUserGroup[];
@@ -79,14 +83,17 @@ export function useChargingUserGroups() {
 
 export function useChargingUsers() {
   const qc = useQueryClient();
-  const key = ["charging-users"];
+  const { tenant } = useTenant();
+  const key = ["charging-users", tenant?.id];
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: key,
+    enabled: !!tenant?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("charging_users")
         .select("*")
+        .eq("tenant_id", tenant!.id)
         .order("name");
       if (error) throw error;
       return data as ChargingUser[];

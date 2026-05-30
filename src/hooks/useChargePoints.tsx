@@ -4,6 +4,7 @@ import { toast } from "@/hooks/use-toast";
 import { useEffect } from "react";
 import { getT } from "@/i18n/getT";
 import { downloadSecureStorageObject } from "@/lib/secureStorage";
+import { useTenant } from "@/hooks/useTenant";
 
 export interface ChargePointAccessSettings {
   free_charging: boolean;
@@ -71,6 +72,7 @@ export interface ChargePoint {
 
 export function useChargePoints() {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   const resolvePhotoUrl = async (photoUrl: string | null) => {
     if (!photoUrl || /^https?:\/\//i.test(photoUrl)) {
@@ -82,11 +84,13 @@ export function useChargePoints() {
   };
 
   const { data: chargePoints = [], isLoading } = useQuery({
-    queryKey: ["charge-points"],
+    queryKey: ["charge-points", tenant?.id],
+    enabled: !!tenant?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("charge_points")
         .select("*")
+        .eq("tenant_id", tenant!.id)
         .order("name");
       if (error) throw error;
       const rows = (data ?? []) as unknown as ChargePoint[];
@@ -99,19 +103,20 @@ export function useChargePoints() {
 
   // Realtime subscription
   useEffect(() => {
+    if (!tenant?.id) return;
     const channel = supabase
       .channel("charge-points-realtime")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "charge_points" },
+        { event: "*", schema: "public", table: "charge_points", filter: `tenant_id=eq.${tenant.id}` },
         () => {
-          queryClient.invalidateQueries({ queryKey: ["charge-points"] });
+          queryClient.invalidateQueries({ queryKey: ["charge-points", tenant.id] });
         }
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [queryClient]);
+  }, [queryClient, tenant?.id]);
 
   const addChargePoint = useMutation({
     mutationFn: async (cp: Partial<ChargePoint> & { tenant_id: string; ocpp_id?: string | null; name: string }) => {
@@ -220,7 +225,7 @@ export function useChargePoints() {
   const deleteChargePoint = useMutation({
     mutationFn: async (id: string) => {
       // Find ocpp_id to delete logs
-      const cp = queryClient.getQueryData<ChargePoint[]>(["charge-points"])?.find(c => c.id === id);
+      const cp = chargePoints.find(c => c.id === id);
       if (cp && cp.ocpp_id) {
         await supabase.from("ocpp_message_log").delete().eq("charge_point_id", cp.ocpp_id);
       }

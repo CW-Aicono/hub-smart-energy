@@ -43,11 +43,12 @@ export function useChargePointGroups() {
   const { tenant } = useTenant();
 
   const { data: groups = [], isLoading } = useQuery({
-    queryKey: ["charge-point-groups"],
+    queryKey: ["charge-point-groups", tenant?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("charge_point_groups")
         .select("*")
+        .eq("tenant_id", tenant!.id)
         .order("name");
       if (error) throw error;
       return (data ?? []) as unknown as ChargePointGroup[];
