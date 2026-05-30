@@ -22,7 +22,7 @@ const ROUTE_MODULE_MAP: Record<string, string> = {
   "/tenant-electricity": "tenant_electricity",
   "/energy-report": "energy_report",
   "/energy-sharing": "energy_sharing",
-  "/ppa": "ppa_onsite",
+  "/ppa": "ppa_onsite|ppa_offsite",
   "/ppa/onsite": "ppa_onsite",
   "/ppa/offsite": "ppa_offsite",
 };
@@ -44,6 +44,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/tenant-electricity": "tenant_electricity",
   "/energy-report": "energy_report",
   "/energy-sharing": "energy_sharing",
+  "/ppa": "ppa_onsite|ppa_offsite",
   "/ppa/onsite": "ppa_onsite",
   "/ppa/offsite": "ppa_offsite",
 };
@@ -60,6 +61,10 @@ export function useModuleGuard() {
   const checkModule = (code: string): boolean => {
     if (isDemo) return true;
     if (isLoading || !tenant) return true;
+    // Support OR-combined codes separated by "|" (route visible if ANY is enabled)
+    if (code.includes("|")) {
+      return code.split("|").some((c) => checkModule(c));
+    }
     const mod = modules.find((m) => m.module_code === code);
     if (mod) return mod.is_enabled;
     return !strictMode;

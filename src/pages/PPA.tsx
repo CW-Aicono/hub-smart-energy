@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { usePpaContracts } from "@/hooks/usePpaContracts";
+import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -117,12 +118,32 @@ function PpaList({ type }: { type: "onsite" | "offsite" }) {
   );
 }
 
-export default function PPA({ type = "onsite" }: { type?: "onsite" | "offsite" }) {
-  const title = type === "onsite" ? "PPA On-site" : "PPA Off-site";
-  const subtitle =
-    type === "onsite"
+export default function PPA({ type }: { type?: "onsite" | "offsite" }) {
+  const { isModuleEnabled } = useModuleGuard();
+  const onsiteEnabled = isModuleEnabled("ppa_onsite");
+  const offsiteEnabled = isModuleEnabled("ppa_offsite");
+
+  // If a legacy route forces a type, render only that one
+  const forced = type;
+  const showOnsite = forced ? forced === "onsite" : onsiteEnabled;
+  const showOffsite = forced ? forced === "offsite" : offsiteEnabled;
+  const both = showOnsite && showOffsite && !forced;
+  const single: "onsite" | "offsite" | null = !both
+    ? showOnsite ? "onsite" : showOffsite ? "offsite" : null
+    : null;
+
+  const [tab, setTab] = useState<"onsite" | "offsite">(showOnsite ? "onsite" : "offsite");
+  const activeType: "onsite" | "offsite" = both ? tab : (single ?? "onsite");
+
+  const title = both
+    ? "PPA-Management"
+    : activeType === "onsite" ? "PPA On-site" : "PPA Off-site";
+  const subtitle = both
+    ? "Power Purchase Agreements – On-site und Off-site Verträge"
+    : activeType === "onsite"
       ? "On-site Power Purchase Agreements (Direktlieferung am Standort)"
       : "Off-site Power Purchase Agreements (Bilanzielle Lieferung)";
+
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-background">
       <DashboardSidebar />
@@ -134,10 +155,32 @@ export default function PPA({ type = "onsite" }: { type?: "onsite" | "offsite" }
               <p className="text-muted-foreground text-sm">{subtitle}</p>
             </div>
             <Button asChild>
-              <Link to={`/ppa/new?type=${type}`}><Plus className="h-4 w-4 mr-2" />Neuen PPA anlegen</Link>
+              <Link to={`/ppa/new?type=${activeType}`}><Plus className="h-4 w-4 mr-2" />Neuen PPA anlegen</Link>
             </Button>
           </div>
-          <PpaList type={type} />
+          {both ? (
+            <Tabs value={tab} onValueChange={(v) => setTab(v as "onsite" | "offsite")}>
+              <TabsList>
+                <TabsTrigger value="onsite">PPA On-site</TabsTrigger>
+                <TabsTrigger value="offsite">PPA Off-site</TabsTrigger>
+              </TabsList>
+              <TabsContent value="onsite" className="mt-4">
+                <PpaList type="onsite" />
+              </TabsContent>
+              <TabsContent value="offsite" className="mt-4">
+                <PpaList type="offsite" />
+              </TabsContent>
+            </Tabs>
+          ) : single ? (
+            <PpaList type={single} />
+          ) : (
+            <Card>
+              <CardContent className="py-10 text-center text-muted-foreground">
+                <FileText className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                Kein PPA-Modul gebucht.
+              </CardContent>
+            </Card>
+          )}
         </div>
       </main>
     </div>
