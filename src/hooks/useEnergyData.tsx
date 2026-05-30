@@ -184,21 +184,24 @@ export function useEnergyData(locationId?: string | null) {
   // Shared react-query cache for readings + virtual sources
   // CRITICAL: scope to tenant.id — super_admins bypass RLS and would otherwise
   // see ALL tenants' readings during a remote-support session.
+  const tenantMeterIds = useMemo(() => meters.map((m) => m.id), [meters]);
+
   const { data: dbData, isLoading: dbLoading } = useQuery({
-    queryKey: ["energy-readings-and-sources", tenant?.id, user?.id],
+    queryKey: ["energy-readings-and-sources", tenant?.id, user?.id, tenantMeterIds.length],
     queryFn: async () => {
-      const [readingsRes, sourcesRes] = await Promise.all([
-        (supabase
-          .from("meter_readings")
-          .select("value, reading_date, meter_id")
-          .eq("tenant_id", tenant!.id) as any)
-          .order("reading_date", { ascending: true }),
-        (supabase
-          .from("virtual_meter_sources")
-          .select("virtual_meter_id, source_meter_id, operator, sort_order")
-          .eq("tenant_id", tenant!.id) as any)
-          .order("sort_order"),
-      ]);
+      const readingsRes = await supabase
+        .from("meter_readings")
+        .select("value, reading_date, meter_id")
+        .eq("tenant_id", tenant!.id)
+        .order("reading_date", { ascending: true });
+      // virtual_meter_sources has no tenant_id — scope via tenant meter ids
+      const sourcesRes = tenantMeterIds.length > 0
+        ? await supabase
+            .from("virtual_meter_sources")
+            .select("virtual_meter_id, source_meter_id, operator, sort_order")
+            .in("virtual_meter_id", tenantMeterIds)
+            .order("sort_order")
+        : { data: [] as any[] };
       return {
         readings: (readingsRes.data ?? []) as ReadingRow[],
         virtualSources: (sourcesRes.data ?? []) as { virtual_meter_id: string; source_meter_id: string; operator: string; sort_order: number }[],
