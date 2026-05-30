@@ -83,14 +83,17 @@ export function useChargingUserGroups() {
 
 export function useChargingUsers() {
   const qc = useQueryClient();
-  const key = ["charging-users"];
+  const { tenant } = useTenant();
+  const key = ["charging-users", tenant?.id];
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: key,
+    enabled: !!tenant?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("charging_users")
         .select("*")
+        .eq("tenant_id", tenant!.id)
         .order("name");
       if (error) throw error;
       return data as ChargingUser[];
