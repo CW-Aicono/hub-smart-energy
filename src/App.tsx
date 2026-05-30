@@ -114,6 +114,14 @@ const queryClient = new QueryClient({
   },
 });
 
+// Stufe 1: Beim Ein-/Austritt aus der Remote-Support-Sicht alle React-Query-
+// Caches verwerfen, damit niemals Daten der falschen Tenant-Sicht angezeigt
+// werden (siehe .lovable/plan.md – Audit „Remote-Support zeigt falsche Tenant-Daten").
+import { onSupportViewChanged } from "@/lib/supportView";
+onSupportViewChanged(() => {
+  queryClient.clear();
+});
+
 const M = ({ children }: { children: React.ReactNode }) => (
   <ModuleGuard>{children}</ModuleGuard>
 );

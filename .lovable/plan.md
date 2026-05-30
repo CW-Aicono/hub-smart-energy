@@ -1,55 +1,110 @@
-# PPA-Management Phase 1 – Restarbeiten
+# Audit & Fix-Plan: Remote-Support zeigt falsche Tenant-Daten
 
-DB, Storage, Permissions, Hooks (`usePpaContracts`, `usePpaDocuments`), Preisformel-Engine und die Übersichtsseite `src/pages/PPA.tsx` sind bereits live. Jetzt fehlen Wizard, Detail-View und die Einbettung ins Hauptsystem.
+## 1. Ursache (kurz erklärt)
 
-## 1. Wizard `src/pages/PPAWizard.tsx`
+Beim Remote-Support tauscht `useTenant` zwar den aktiven Tenant aus (`getSupportViewTenantId()`), aber:
 
-7-Step Flow, ein Step pro Bildschirm, Fortschrittsbalken oben, "Zurück / Weiter / Entwurf speichern":
+- **RLS schützt nichts gegen Super-Admins.** Policies erlauben dem `super_admin` global Zugriff auf alle Tenants — daher liefern Abfragen ohne expliziten Tenant-Filter alle Datensätze tenantübergreifend (z. B. 626,43 kWh / 28 Sessions im Screenshot = Summe über alle Tenants).
+- **React-Query-Caches sind nicht tenant-aware.** Wo `tenant.id` nicht im `queryKey` steht, bleiben beim Wechsel in/aus der Support-Sicht alte Daten stehen.
+- Es existiert bereits `useTenantQuery` als zentrale Lösung, wird aber nur in **4 von 44** Hooks benutzt.
 
-1. **Typ wählen** – On-site / Off-site (CardSelect)
-2. **Stammdaten** – Vertragsname, Counterparty, Laufzeit (Start/Ende), Vertragsnummer
-3. **Preismodell** – Auswahl `fixed | spot_plus_premium | floor_cap | index_linked` + dynamische Felder, Live-Validierung via `validatePriceFormula` aus `src/lib/ppa/priceFormula.ts`, Live-Vorschau mit aktuellem EPEX-Spot (Re-use `fetch-spot-prices`)
-4. **On-site Config** (nur On-site): Gebäude (`locations`), Erzeugungs-Zähler (PV-Meter), Volumenmodell (`as_produced` / `as_consumed` / `fixed_share`)
-5. **Verbrauchs-Zähler** (nur On-site): Multi-Select aus `meters`, schreibt in `ppa_consumption_meters`
-   - **5a. Mieterstrom-Bridge**: optional `mieterstrom_settings_id` setzen (Dropdown aus `tenant_electricity_settings`)
-6. **Off-site Config** (nur Off-site): Lieferpunkt, jährliches Volumen (MWh), Profil (`baseload` / `solar` / `wind` / `custom`), Herkunftsnachweise (GoO) toggle
-7. **Dokumente & Review** – PDF-Upload (Vertrag, GoO, Anhänge) via `usePpaDocuments`, finaler Review, "Als Entwurf speichern" oder "Aktivieren" (letzteres nur mit `ppa.activate`)
+## 2. Vollständiger Befund (Code-Audit)
 
-Validierung pro Step via Zod-Schemas, Wizard-State in `useReducer`.
+### A) Hooks ohne jeden Tenant-Filter (kritisch — werden 1:1 im Super-Admin geleakt)
 
-## 2. Detail-View `src/pages/PPADetail.tsx`
+| Hook | `from()`-Aufrufe | Tenant-Filter | tenant.id im queryKey |
+|---|---|---|---|
+| `useChargePoints` | 10 | **0** | **nein** |
+| `useChargingSessions` | 1 | **0** | **nein** |
+| `useChargingUsers` | 6 | **0** | **nein** |
+| `useChargingTariffs` | 4 | **0** | **nein** |
+| `useChargingInvoices` | 2 | **0** | **nein** |
+| `useChargerModels` | 3 | **0** | **nein** |
+| `useChargePointAccessControl` | 1 | **0** | **nein** |
+| `useChargePointConnectors` | 1 | **0** | **nein** |
+| `useReportSchedules` | 3 | **0** | **nein** |
+| `useTaskAttachments` | 2 | **0** | **nein** |
+| `useEmailTemplates` | 1 | **0** | **nein** |
+| `useLocationEnergySources` | 3 | **0** | **nein** |
+| `useOfflineReadings` | 1 | **0** | **nein** |
+| `useBenchmarks` | 1 | **0** | **nein** |
+| `useBackups` | 1 | **0** | **nein** |
+| `usePpaDocuments` | 1 | **0** | **nein** |
+| `useCustomRoles` | 4 | **0** | **nein** |
+| `useAlertRules` | 3 | (über TQ) | **nein** |
 
-Header mit Vertragsname, Status-Badge, Counterparty, Quick-Actions (Bearbeiten, Status ändern, Löschen wenn `draft`).
+### B) Hooks mit teilweisem Filter (einzelne Abfragen lecken)
 
-Tabs:
-- **Übersicht** – Stammdaten, Preisformel (lesbar formatiert), Laufzeit, Mieterstrom-Bezug (Link), KPI-Karten (Vertragsvolumen, Restlaufzeit)
-- **Konfiguration** – On-site oder Off-site Detail-Card
-- **Verbrauchs-Zähler** (On-site) – Tabelle aus `ppa_consumption_meters`, hinzufügen/entfernen
-- **Dokumente** – Liste aus `ppa_documents` mit Download via `secureStorage`-Proxy, Upload, Hash-Anzeige
-- **Historie** – `ppa_status_history` chronologisch, mit User/Email
+| Hook | `from()` | Filter | Anmerkung |
+|---|---|---|---|
+| `usePpaContracts` | 8 | 3 | 5 Reads ungefiltert |
+| `useEnergyCommunities` | 11 | 4 | 7 Reads ungefiltert |
+| `useMeters` | 5 | 1 | Hauptpunkt, kritisch fürs Dashboard |
+| `useCommunityContracts` | 4 | 2 | |
+| `useCommunityOperations` | 4 | 1 | |
+| `useEnergyMeasures` | 2 | 1 | |
+| `useCopilotProjects` | 2 | 1 | |
 
-Status-Wechsel-Dialog mit erlaubten Übergängen (clientseitig gespiegelt aus `log_ppa_status_change`-Trigger).
+### C) Pages/Components mit direktem Supabase-Zugriff ohne Tenant-Filter
 
-## 3. Integration
+Tenant-relevant (müssen migriert werden):
+- `src/pages/ChargingApp.tsx` (PWA)
+- `src/pages/GettingStarted.tsx`
+- `src/components/dashboard/FloorPlanDashboardWidget.tsx`
+- `src/components/locations/EditMeterDialog.tsx`
+- `src/components/locations/ReplaceDeviceDialog.tsx`
+- `src/components/integrations/SmartMeterImport.tsx`
+- `src/components/energy-sharing/CommunityWizard.tsx`
+- `src/components/settings/TenantInfoSettings.tsx`
+- `src/components/settings/WeekStartSetting.tsx`
 
-- **Routing** `src/App.tsx`: `/ppa`, `/ppa/new`, `/ppa/:id` – als statische Imports (HMR-Stability-Policy), gewrappt in `ProtectedRoute` + `ModuleGuard moduleKey="ppa"`
-- **Sidebar** `src/components/DashboardSidebar.tsx`: Eintrag "PPA-Management" unter Energy-Bereich, Icon `FileSignature`, sichtbar wenn `ppa.view`
-- **ModuleGuard** – `ppa` zu `MODULE_KEYS` und Module-Mapping hinzufügen (Display-Name "PPA-Management")
-- **i18n** – Keys in `de`, `en`, `es`, `nl` unter `ppa.*` (overview, wizard, detail, status, priceModel, errors)
-- **Zahlenformat** – alle Preise/Volumen via `toLocaleString("de-DE")`
+Bereits korrekt scoped (Super-Admin-Globalansicht — bewusst nicht filtern):
+- alle `src/pages/SuperAdmin*.tsx` außer Remote-Support
+- `src/components/super-admin/*`
+- `src/components/sales/*` (Vertriebsbereich, ebenfalls global)
 
-## Technische Details
+## 3. Lösungsansatz (3 Stufen, in dieser Reihenfolge)
 
-- **Hooks-Erweiterungen**: `usePpaContracts` bekommt `createDraft`, `updateContract`, `changeStatus`, `deleteContract`. Neuer `usePpaStatusHistory(contractId)`.
-- **Mieterstrom-Bridge**: nur FK-Set, keine Datenduplizierung. Settings werden im Detail nur referenziert/verlinkt, nicht editiert.
-- **Tenant-Scope**: alle Queries über `useTenantQuery` bzw. `.eq("tenant_id", tenant.id)`.
-- **Storage**: Uploads in `ppa-documents/{tenant_id}/{contract_id}/{filename}`, RLS via `split_part`.
-- **Audit**: Status-Trigger schreibt automatisch in `ppa_status_history`, kein Client-Code nötig.
+### Stufe 1 — Sofortmaßnahme: Cache-Reset bei Support-Sicht-Wechsel
+**Eine Datei:** `src/App.tsx` (oder `src/main.tsx`, dort wo der `QueryClient` lebt).
 
-## Phase 2 – Status
+Listener auf `onSupportViewChanged()` registrieren → bei jedem Ein-/Austritt aus Remote-Support `queryClient.clear()` aufrufen. Dadurch fallen alle gecachten Daten der falschen Sicht sofort weg, und alle Hooks laden frisch.
 
-- [x] **Settlement-Engine** – Tabelle `ppa_settlements`, Edge `ppa-settlement-calculate` (stündliche Aggregation × Preisformel × EPEX-Spot), monatlicher Cron (2. um 03:15), Tab „Abrechnungen" im PPADetail mit Manuell-Berechnen + Status-Workflow (draft → finalized → invoiced)
-- [x] **Alerts & Monitoring** – Edge `ppa-alert-check` (Laufzeit-Ende 90/60/30 Tage, Floor/Cap-Verletzungen vs. 7-Tage-EPEX-Ø, fehlende Verbrauchsdaten > 7 Tage), täglicher Cron 06:30 UTC, schreibt Tasks
-- [x] **Report-Generator** – Edge `ppa-report-generate` (HTML-Report pro Settlement, gespeichert in `ppa-documents` als `meter_report`), Button im Settlements-Tab, monatlicher Cron 04:00 UTC am 3.
-- [x] **PPAFleetCard fürs Dashboard** – `PPAFleetWidget` mit aktiven Verträgen, MTD-Volumen und nächsten Fälligkeiten
-- [x] **Energy-Sharing-Verknüpfung + erweiterter GoO-Workflow** – `surplus_community_id` in `ppa_onsite_config`, Tabelle `ppa_goo_certificates` mit Status-Workflow (issued → transferred → redeemed), Tab „Herkunftsnachweise" im PPADetail
+**Wirkung:** Beseitigt alle Probleme, die durch **gecachte Daten** entstehen (Punkt 2 oben). Behebt das eigentliche Leck (RLS-Bypass des Super-Admin) noch nicht.
+
+### Stufe 2 — Daten-Leak schließen: zentrale Hooks auf `useTenantQuery` migrieren
+
+Pro Hook gleicher Patch:
+1. `useTenant` (oder `useTenantQuery`) importieren.
+2. `queryKey` um `tenant?.id` erweitern.
+3. `enabled: !!tenant?.id` setzen.
+4. SELECT-Query mit `.eq("tenant_id", tenant.id)` ergänzen — bei vorhandenem `useTenantQuery` lieber direkt `from("tabelle")` aus dem Helper benutzen.
+5. Realtime-Subscriptions ggf. auf `filter: tenant_id=eq.<id>` einschränken.
+
+**Reihenfolge nach Sichtbarkeit/Schaden:**
+
+- **Phase 2a (Ladeinfrastruktur — bestätigt im Screenshot):**
+  `useChargePoints`, `useChargingSessions`, `useChargingUsers`, `useChargingTariffs`, `useChargingInvoices`, `useChargerModels`, `useChargePointAccessControl`, `useChargePointConnectors`
+- **Phase 2b (Dashboard/Energiedaten):**
+  Restliche ungefilterte Abfragen in `useMeters`, `useEnergyCommunities`, `useEnergyMeasures`, `useLocationEnergySources`, `useOfflineReadings`, `useBenchmarks`, `usePpaContracts`, `usePpaDocuments`
+- **Phase 2c (Admin/Reports/Communications):**
+  `useReportSchedules`, `useTaskAttachments`, `useEmailTemplates`, `useBackups`, `useAlertRules`, `useCustomRoles`, `useCopilotProjects`, `useCommunityContracts`, `useCommunityOperations`
+- **Phase 2d (Pages/Components aus Liste C):** alle 9 oben genannten Dateien analog umstellen.
+
+Keine RLS-Änderungen, keine Backend-Änderungen, keine neuen Felder.
+
+### Stufe 3 — Schutz vor Wiederholung
+- Kurzer Vitest, der für jede Tabelle mit `tenant_id`-Spalte sicherstellt, dass kein Hook unter `src/hooks` ein `supabase.from("<tabelle>").select(...)` ohne `.eq("tenant_id"` oder `useTenantQuery` enthält.
+- Eintrag in `mem://technical/architecture/multi-tenancy-core` ergänzen: „Im Remote-Support sieht der Super-Admin RLS-bedingt alle Tenants — Frontend muss IMMER explizit auf `tenant.id` filtern UND `tenant.id` in jeden `queryKey` aufnehmen."
+
+## 4. Out of scope
+- Keine RLS-Policy-Änderungen (Super-Admin soll bewusst global lesen können).
+- Keine Änderungen am Edge-Function-Verhalten.
+- Keine Refactorings über das Tenant-Scoping hinaus.
+
+## 5. Vorgehen für die Umsetzung
+1. **Erst Stufe 1 umsetzen** (1 Datei, sofort wirksam) und vom Nutzer in der Live-Umgebung validieren.
+2. Nach Bestätigung **Stufe 2 phasenweise** (2a → 2b → 2c → 2d), nach jeder Phase Validierung im Remote-Support.
+3. **Stufe 3** zuletzt als Absicherung.
+
+Bei jeder Phase: Build + Smoke-Test im Remote-Support für genau die in der Phase migrierten Bereiche.
