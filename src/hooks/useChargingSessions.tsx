@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useMemo } from "react";
+import { useTenant } from "@/hooks/useTenant";
 
 export interface ChargingSession {
   id: string;
@@ -21,12 +22,15 @@ export interface ChargingSession {
 
 /** Resolves an id_tag to a charging user name (if known). */
 export function useIdTagResolver() {
+  const { tenant } = useTenant();
   const { data: chargingUsers = [] } = useQuery({
-    queryKey: ["charging-users-for-tag-resolution"],
+    queryKey: ["charging-users-for-tag-resolution", tenant?.id],
+    enabled: !!tenant?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("charging_users")
         .select("name, rfid_tag, rfid_label, app_tag")
+        .eq("tenant_id", tenant!.id)
         .neq("status", "archived");
       if (error) throw error;
       return data ?? [];
@@ -52,11 +56,17 @@ export function useIdTagResolver() {
 
 export function useChargingSessions(chargePointId?: string) {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   const { data: sessions = [], isLoading } = useQuery({
-    queryKey: ["charging-sessions", chargePointId],
+    queryKey: ["charging-sessions", tenant?.id, chargePointId],
+    enabled: !!tenant?.id,
     queryFn: async () => {
-      let query = supabase.from("charging_sessions").select("*").order("start_time", { ascending: false });
+      let query = supabase
+        .from("charging_sessions")
+        .select("*")
+        .eq("tenant_id", tenant!.id)
+        .order("start_time", { ascending: false });
       if (chargePointId) query = query.eq("charge_point_id", chargePointId);
       const { data, error } = await query;
       if (error) throw error;
@@ -65,14 +75,15 @@ export function useChargingSessions(chargePointId?: string) {
   });
 
   useEffect(() => {
+    if (!tenant?.id) return;
     const channel = supabase
       .channel("charging-sessions-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "charging_sessions" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["charging-sessions"] });
+      .on("postgres_changes", { event: "*", schema: "public", table: "charging_sessions", filter: `tenant_id=eq.${tenant.id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ["charging-sessions", tenant.id] });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [queryClient]);
+  }, [queryClient, tenant?.id]);
 
   return { sessions, isLoading };
 }
