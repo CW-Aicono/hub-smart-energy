@@ -216,7 +216,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
   // Re-fetch when a super-admin enters/exits the Remote-Support view.
   useEffect(() => {
-    return onSupportViewChanged(() => { fetchTenant(); });
+    return onImpersonationChanged(() => { fetchTenant(); });
   }, [fetchTenant]);
 
 
