@@ -338,7 +338,27 @@ export default function PublicChargeStatus() {
                         <Icon className={`h-3.5 w-3.5 ${meta.iconClass}`} />
                         {meta.label}
                       </div>
-                      <div className="mt-3 font-semibold leading-tight whitespace-pre-line">{card.name}</div>
+                      <div className="mt-3 font-semibold leading-tight">{card.name}</div>
+                      {card.connectors && (
+                        <div className="mt-3 space-y-1.5">
+                          {card.connectors.map((conn) => {
+                            const cMeta = STATUS_META[conn.status];
+                            const CIcon = cMeta.icon;
+                            return (
+                              <div
+                                key={conn.id}
+                                className="flex items-center justify-between gap-2 text-xs bg-white/15 rounded px-2 py-1"
+                              >
+                                <span className="truncate">{conn.label}</span>
+                                <span className="inline-flex items-center gap-1 opacity-95 shrink-0">
+                                  <CIcon className={`h-3 w-3 ${cMeta.iconClass}`} />
+                                  {cMeta.label}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       {card.ocppId ? (
                         <div className="mt-3 text-xs opacity-80 font-mono">#{card.ocppId}</div>
                       ) : (
@@ -351,10 +371,6 @@ export default function PublicChargeStatus() {
             </section>
           ))
         )}
-
-        <div className="text-center text-xs text-slate-400 mt-8">
-          Aktualisiert: {new Date(data.generated_at).toLocaleTimeString("de-DE")}
-        </div>
       </main>
     </div>
   );
