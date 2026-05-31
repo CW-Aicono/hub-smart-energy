@@ -52,6 +52,10 @@ interface TenantContextType {
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
+export function useTenantOptional() {
+  return useContext(TenantContext) ?? null;
+}
+
 const DEFAULT_BRANDING: TenantBranding = {
   primary_color: "#1a365d",
   secondary_color: "#2d8a6e",
