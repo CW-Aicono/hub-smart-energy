@@ -12,7 +12,7 @@ interface SupportSession {
 }
 
 export function useSupportSession() {
-  const { tenant } = useTenant();
+  const tenant = useTenantOptional()?.tenant ?? null;
   const queryClient = useQueryClient();
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
 
