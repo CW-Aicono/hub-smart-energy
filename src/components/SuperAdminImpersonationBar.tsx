@@ -4,10 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useTenant } from "@/hooks/useTenant";
 import {
-  getSupportViewSessionId,
-  getSupportViewTenantId,
-  exitSupportView,
-  onSupportViewChanged,
+  getActiveSupportSessionId,
+  getActiveSupportTenantId,
+  getOriginalSession,
+  clearImpersonation,
+  onImpersonationChanged,
 } from "@/lib/supportView";
 import { Button } from "@/components/ui/button";
 import { HeadsetIcon, LogOut } from "lucide-react";
@@ -24,11 +25,11 @@ export default function SuperAdminImpersonationBar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [tenantId, setTenantId] = useState<string | null>(() => getSupportViewTenantId());
+  const [tenantId, setTenantId] = useState<string | null>(() => getActiveSupportTenantId());
   const [ending, setEnding] = useState(false);
 
   useEffect(() => {
-    return onSupportViewChanged(() => setTenantId(getSupportViewTenantId()));
+    return onImpersonationChanged(() => setTenantId(getActiveSupportTenantId()));
   }, []);
 
   if (!isSuperAdmin) return null;
@@ -38,7 +39,7 @@ export default function SuperAdminImpersonationBar() {
   if (location.pathname.startsWith("/auth")) return null;
 
   const handleEnd = async () => {
-    const sessionId = getSupportViewSessionId();
+    const sessionId = getActiveSupportSessionId();
     setEnding(true);
     try {
       if (sessionId) {
@@ -48,7 +49,6 @@ export default function SuperAdminImpersonationBar() {
       }
       const tid = tenantId;
       // Original-Session des Super-Admins wiederherstellen
-      const { getOriginalSession, clearImpersonation } = await import("@/lib/supportView");
       const orig = getOriginalSession();
       if (orig) {
         await supabase.auth.setSession({

@@ -75,16 +75,3 @@ export function onImpersonationChanged(cb: () => void): () => void {
   return () => window.removeEventListener(EVENT_NAME, handler);
 }
 
-// ---- Backward-compat Aliases (werden in Phase 3 entfernt) ----
-// Bestehende Aufrufer auf getSupportViewTenantId/SessionId etc. werden
-// schrittweise umgestellt; bis dahin liefern wir die aktiven Werte zurück.
-export const getSupportViewTenantId = getActiveSupportTenantId;
-export const getSupportViewSessionId = getActiveSupportSessionId;
-export const onSupportViewChanged = onImpersonationChanged;
-export function enterSupportView(_tenantId: string, _sessionId: string) {
-  // Veraltete API – Impersonation läuft jetzt über beginImpersonation().
-  // Bewusst No-Op, damit alte Aufrufe keine Inkonsistenz erzeugen.
-}
-export function exitSupportView() {
-  clearImpersonation();
-}

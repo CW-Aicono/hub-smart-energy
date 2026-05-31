@@ -7,7 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ShieldAlert, RefreshCw, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { exitSupportView, getSupportViewSessionId } from "@/lib/supportView";
+import { clearImpersonation, getActiveSupportSessionId } from "@/lib/supportView";
 
 export default function SupportSessionBanner() {
   const { isActive, session, secondsLeft, showCountdown, extendSession } = useSupportSession();
@@ -34,7 +34,7 @@ export default function SupportSessionBanner() {
         .from("support_sessions")
         .update({ ended_at: new Date().toISOString() } as any)
         .eq("id", session.id);
-      if (getSupportViewSessionId() === session.id) exitSupportView();
+      if (getActiveSupportSessionId() === session.id) clearImpersonation();
       queryClient.invalidateQueries({ queryKey: ["active-support-session"] });
       toast.success("Remote-Support beendet");
     } catch (e: any) {
