@@ -241,9 +241,12 @@ export default function PublicChargeStatus() {
               </div>
             )}
             <h1 className="text-lg font-semibold text-slate-900">{data.tenant.name}</h1>
-            <span className="inline-flex items-center gap-1.5 ml-2 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
+            <span
+              className="inline-flex items-center gap-1.5 ml-2 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium"
+              title="Letzter Statusabruf"
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Real-time
+              {new Date(data.generated_at).toLocaleTimeString("de-DE")}
             </span>
             <div className="relative">
               <button
