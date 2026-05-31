@@ -155,40 +155,21 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     setError(null);
 
     try {
-      // Remote-Support: if a super-admin is "viewing as tenant", load that tenant.
-      // If the lookup fails (e.g. non-super-admin with stale sessionStorage), fall
-      // back to the user's own tenant via profile.
-      const overrideTenantId = getSupportViewTenantId();
-      let targetTenantId: string | null = null;
+      // First get the user's tenant_id from their profile, then fetch that specific tenant.
+      // Using .single() on an unfiltered query fails when the user is a super_admin
+      // and can see multiple tenants via RLS.
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .single();
 
-      if (overrideTenantId) {
-        const { data: overrideTenant } = await supabase
-          .from("tenants")
-          .select("id")
-          .eq("id", overrideTenantId)
-          .maybeSingle();
-        if (overrideTenant?.id) {
-          targetTenantId = overrideTenant.id;
-        }
+      if (!profile?.tenant_id) {
+        setTenant(null);
+        setLoading(false);
+        return;
       }
-
-      if (!targetTenantId) {
-        // First get the user's tenant_id from their profile, then fetch that specific tenant.
-        // Using .single() on an unfiltered query fails when the user is a super_admin
-        // and can see multiple tenants via RLS.
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("tenant_id")
-          .eq("user_id", user.id)
-          .single();
-
-        if (!profile?.tenant_id) {
-          setTenant(null);
-          setLoading(false);
-          return;
-        }
-        targetTenantId = profile.tenant_id;
-      }
+      const targetTenantId = profile.tenant_id;
 
       const { data, error: fetchError } = await supabase
         .from("tenants")
