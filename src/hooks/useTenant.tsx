@@ -2,7 +2,7 @@ import { useState, useEffect, createContext, useContext, useCallback } from "rea
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useDemoMode } from "@/contexts/DemoMode";
-import { getSupportViewTenantId, onSupportViewChanged } from "@/lib/supportView";
+import { onImpersonationChanged } from "@/lib/supportView";
 import { downloadSecureStorageObject } from "@/lib/secureStorage";
 
 
