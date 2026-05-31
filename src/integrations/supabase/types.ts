@@ -7723,6 +7723,7 @@ export type Database = {
           ended_at: string | null
           expires_at: string
           id: string
+          impersonated_user_id: string | null
           is_manual: boolean
           notes: string | null
           reason: string | null
@@ -7736,6 +7737,7 @@ export type Database = {
           ended_at?: string | null
           expires_at?: string
           id?: string
+          impersonated_user_id?: string | null
           is_manual?: boolean
           notes?: string | null
           reason?: string | null
@@ -7749,6 +7751,7 @@ export type Database = {
           ended_at?: string | null
           expires_at?: string
           id?: string
+          impersonated_user_id?: string | null
           is_manual?: boolean
           notes?: string | null
           reason?: string | null
@@ -8564,6 +8567,35 @@ export type Database = {
           },
         ]
       }
+      tenant_support_users: {
+        Row: {
+          auth_user_id: string
+          created_at: string
+          support_email: string
+          tenant_id: string
+        }
+        Insert: {
+          auth_user_id: string
+          created_at?: string
+          support_email: string
+          tenant_id: string
+        }
+        Update: {
+          auth_user_id?: string
+          created_at?: string
+          support_email?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_support_users_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenants: {
         Row: {
           address: string | null
@@ -9363,6 +9395,7 @@ export type Database = {
         Returns: boolean
       }
       is_own_profile: { Args: { profile_user_id: string }; Returns: boolean }
+      is_support_user: { Args: { _user_id: string }; Returns: boolean }
       next_charging_invoice_number: {
         Args: { p_tenant_id: string; p_year: number }
         Returns: string
