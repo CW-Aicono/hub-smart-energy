@@ -132,35 +132,32 @@ export default function PublicChargeStatus() {
 
       const effective = conns.length > 0 ? conns : [null];
 
-      if (effective.length <= 1) {
-        result.push({
-          key: cp.id,
-          name: cp.name,
-          ocppId: cp.ocpp_id,
+      const connectors = effective.map((c, idx) => {
+        const connectorId = c?.connector_id ?? idx + 1;
+        const label = c?.name?.trim() || `Stecker ${connectorId}`;
+        return {
+          id: connectorId,
+          label,
           status: normalizeChargePointStatus({
             hasOcppId,
             wsConnected: cp.ws_connected,
-            rawStatus: effective[0]?.status ?? cp.status,
+            rawStatus: c?.status ?? cp.status,
           }),
-          groupId: cp.group_id ?? null,
-        });
-      } else {
-        effective.forEach((c, idx) => {
-          const connectorId = c?.connector_id ?? idx + 1;
-          const suffix = c?.name?.trim() || `Stecker ${connectorId}`;
-          result.push({
-            key: `${cp.id}-${connectorId}`,
-            name: `${cp.name}\n${suffix}`,
-            ocppId: cp.ocpp_id,
-            status: normalizeChargePointStatus({
-              hasOcppId,
-              wsConnected: cp.ws_connected,
-              rawStatus: c?.status ?? cp.status,
-            }),
-            groupId: cp.group_id ?? null,
-          });
-        });
-      }
+        };
+      });
+
+      // Aggregierter Status für die Kachel: schlechtester Status hat Vorrang
+      const priority: StatusKey[] = ["faulted", "offline", "unconfigured", "unavailable", "charging", "available"];
+      const aggregated = priority.find((s) => connectors.some((c) => c.status === s)) ?? connectors[0].status;
+
+      result.push({
+        key: cp.id,
+        name: cp.name,
+        ocppId: cp.ocpp_id,
+        status: aggregated,
+        groupId: cp.group_id ?? null,
+        connectors: connectors.length > 1 ? connectors : null,
+      });
     }
     return result;
   }, [data]);
