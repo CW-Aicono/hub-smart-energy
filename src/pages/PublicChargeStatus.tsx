@@ -67,6 +67,7 @@ interface CardData {
   ocppId: string | null;
   status: StatusKey;
   groupId: string | null;
+  connectors: Array<{ id: number; label: string; status: StatusKey }> | null;
 }
 
 
