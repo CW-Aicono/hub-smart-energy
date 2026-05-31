@@ -67,6 +67,7 @@ interface CardData {
   ocppId: string | null;
   status: StatusKey;
   groupId: string | null;
+  connectors: Array<{ id: number; label: string; status: StatusKey }> | null;
 }
 
 
@@ -132,35 +133,32 @@ export default function PublicChargeStatus() {
 
       const effective = conns.length > 0 ? conns : [null];
 
-      if (effective.length <= 1) {
-        result.push({
-          key: cp.id,
-          name: cp.name,
-          ocppId: cp.ocpp_id,
+      const connectors = effective.map((c, idx) => {
+        const connectorId = c?.connector_id ?? idx + 1;
+        const label = c?.name?.trim() || `Stecker ${connectorId}`;
+        return {
+          id: connectorId,
+          label,
           status: normalizeChargePointStatus({
             hasOcppId,
             wsConnected: cp.ws_connected,
-            rawStatus: effective[0]?.status ?? cp.status,
+            rawStatus: c?.status ?? cp.status,
           }),
-          groupId: cp.group_id ?? null,
-        });
-      } else {
-        effective.forEach((c, idx) => {
-          const connectorId = c?.connector_id ?? idx + 1;
-          const suffix = c?.name?.trim() || `Stecker ${connectorId}`;
-          result.push({
-            key: `${cp.id}-${connectorId}`,
-            name: `${cp.name}\n${suffix}`,
-            ocppId: cp.ocpp_id,
-            status: normalizeChargePointStatus({
-              hasOcppId,
-              wsConnected: cp.ws_connected,
-              rawStatus: c?.status ?? cp.status,
-            }),
-            groupId: cp.group_id ?? null,
-          });
-        });
-      }
+        };
+      });
+
+      // Aggregierter Status für die Kachel: schlechtester Status hat Vorrang
+      const priority: StatusKey[] = ["faulted", "offline", "unconfigured", "unavailable", "charging", "available"];
+      const aggregated = priority.find((s) => connectors.some((c) => c.status === s)) ?? connectors[0].status;
+
+      result.push({
+        key: cp.id,
+        name: cp.name,
+        ocppId: cp.ocpp_id,
+        status: aggregated,
+        groupId: cp.group_id ?? null,
+        connectors: connectors.length > 1 ? connectors : null,
+      });
     }
     return result;
   }, [data]);
@@ -243,9 +241,12 @@ export default function PublicChargeStatus() {
               </div>
             )}
             <h1 className="text-lg font-semibold text-slate-900">{data.tenant.name}</h1>
-            <span className="inline-flex items-center gap-1.5 ml-2 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
+            <span
+              className="inline-flex items-center gap-1.5 ml-2 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium"
+              title="Letzter Statusabruf"
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Real-time
+              {new Date(data.generated_at).toLocaleTimeString("de-DE")}
             </span>
             <div className="relative">
               <button
@@ -337,7 +338,27 @@ export default function PublicChargeStatus() {
                         <Icon className={`h-3.5 w-3.5 ${meta.iconClass}`} />
                         {meta.label}
                       </div>
-                      <div className="mt-3 font-semibold leading-tight whitespace-pre-line">{card.name}</div>
+                      <div className="mt-3 font-semibold leading-tight">{card.name}</div>
+                      {card.connectors && (
+                        <div className="mt-3 space-y-1.5">
+                          {card.connectors.map((conn) => {
+                            const cMeta = STATUS_META[conn.status];
+                            const CIcon = cMeta.icon;
+                            return (
+                              <div
+                                key={conn.id}
+                                className="flex items-center justify-between gap-2 text-xs bg-white/15 rounded px-2 py-1"
+                              >
+                                <span className="truncate">{conn.label}</span>
+                                <span className="inline-flex items-center gap-1 opacity-95 shrink-0">
+                                  <CIcon className={`h-3 w-3 ${cMeta.iconClass}`} />
+                                  {cMeta.label}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       {card.ocppId ? (
                         <div className="mt-3 text-xs opacity-80 font-mono">#{card.ocppId}</div>
                       ) : (
@@ -350,10 +371,6 @@ export default function PublicChargeStatus() {
             </section>
           ))
         )}
-
-        <div className="text-center text-xs text-slate-400 mt-8">
-          Aktualisiert: {new Date(data.generated_at).toLocaleTimeString("de-DE")}
-        </div>
       </main>
     </div>
   );
