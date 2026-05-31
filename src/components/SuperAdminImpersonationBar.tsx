@@ -42,13 +42,21 @@ export default function SuperAdminImpersonationBar() {
     setEnding(true);
     try {
       if (sessionId) {
-        await supabase
-          .from("support_sessions")
-          .update({ ended_at: new Date().toISOString() } as any)
-          .eq("id", sessionId);
+        await supabase.functions.invoke("support-session-end", {
+          body: { session_id: sessionId },
+        });
       }
       const tid = tenantId;
-      exitSupportView();
+      // Original-Session des Super-Admins wiederherstellen
+      const { getOriginalSession, clearImpersonation } = await import("@/lib/supportView");
+      const orig = getOriginalSession();
+      if (orig) {
+        await supabase.auth.setSession({
+          access_token: orig.access_token,
+          refresh_token: orig.refresh_token,
+        });
+      }
+      clearImpersonation();
       toast.success("Remote-Support beendet");
       navigate(tid ? `/super-admin/tenants/${tid}` : "/super-admin/tenants");
     } catch (e: any) {

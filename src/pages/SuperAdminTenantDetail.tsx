@@ -1,5 +1,5 @@
 import { Navigate, useParams, useNavigate } from "react-router-dom";
-import { enterSupportView, exitSupportView, getSupportViewSessionId } from "@/lib/supportView";
+import { beginImpersonation, clearImpersonation, getActiveSupportSessionId } from "@/lib/supportView";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useTenantModules, ALL_MODULES } from "@/hooks/useTenantModules";
@@ -243,24 +243,34 @@ const SuperAdminTenantDetail = () => {
     if (!id || !user) return;
     setStartingSupport(true);
     try {
-      let sessionId: string | null = activeSession?.id ?? null;
-      if (!sessionId) {
-        const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-        const { data: inserted, error: insErr } = await supabase
-          .from("support_sessions")
-          .insert({
-            tenant_id: id,
-            super_admin_user_id: user.id,
-            started_at: new Date().toISOString(),
-            expires_at: expiresAt,
-            reason: "Remote-Support Sitzung",
-          } as any)
-          .select("id")
-          .single();
-        if (insErr) throw insErr;
-        sessionId = (inserted as any).id;
-      }
-      enterSupportView(id, sessionId!);
+      // 1) Original-Session des Super-Admins sichern
+      const { data: cur } = await supabase.auth.getSession();
+      if (!cur.session) throw new Error("Keine aktive Session");
+      const original = {
+        access_token: cur.session.access_token,
+        refresh_token: cur.session.refresh_token,
+      };
+
+      // 2) Impersonation-Tokens für den technischen Support-User des Tenants anfordern
+      const { data: imp, error: impErr } = await supabase.functions.invoke(
+        "support-session-impersonate",
+        { body: { target_tenant_id: id, reason: "Remote-Support Sitzung" } }
+      );
+      if (impErr) throw impErr;
+      if (!imp?.access_token) throw new Error(imp?.error || "Impersonation fehlgeschlagen");
+
+      // 3) Lokal als Support-User anmelden + Impersonations-Flags setzen
+      beginImpersonation({
+        sessionId: imp.session_id,
+        tenantId: id,
+        originalSession: original,
+      });
+      const { error: setErr } = await supabase.auth.setSession({
+        access_token: imp.access_token,
+        refresh_token: imp.refresh_token,
+      });
+      if (setErr) throw setErr;
+
       queryClient.invalidateQueries({ queryKey: ["tenant-support-sessions", id] });
       navigate("/");
     } catch (e: any) {
@@ -271,13 +281,11 @@ const SuperAdminTenantDetail = () => {
   };
 
   const handleEndRemoteSupport = async () => {
-    if (!activeSession) return;
+    const sessionId = getActiveSupportSessionId() ?? activeSession?.id;
+    if (!sessionId) return;
     try {
-      await supabase
-        .from("support_sessions")
-        .update({ ended_at: new Date().toISOString() } as any)
-        .eq("id", activeSession.id);
-      if (getSupportViewSessionId() === activeSession.id) exitSupportView();
+      await supabase.functions.invoke("support-session-end", { body: { session_id: sessionId } });
+      clearImpersonation();
       queryClient.invalidateQueries({ queryKey: ["tenant-support-sessions", id] });
       toast.success("Remote-Support beendet");
     } catch (e: any) {
