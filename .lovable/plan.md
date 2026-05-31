@@ -1,110 +1,54 @@
-# Audit & Fix-Plan: Remote-Support zeigt falsche Tenant-Daten
+## Fehleranalyse
 
-## 1. Ursache (kurz erklärt)
+Im Deploy-Log sind zwei Punkte sichtbar:
 
-Beim Remote-Support tauscht `useTenant` zwar den aktiven Tenant aus (`getSupportViewTenantId()`), aber:
+1. **Eigentlicher Fehler** (Zeile aus dem Log):
+   ```
+   ERROR: relation "public.charging_invoice_settings" does not exist
+   CONTEXT: ... CREATE POLICY "Super admins can view all charging_invoice_settings" ...
+   ```
+   Die neue Migration `20260531091839_..._.sql` legt in einer Schleife `super_admin`-SELECT-Policies für ~50 Tabellen an. Auf der prod-Datenbank existiert die Tabelle `charging_invoice_settings` (und vermutlich noch ein paar weitere) aber nicht — sie ist nur in der Lovable-Cloud-DB vorhanden. `DROP POLICY IF EXISTS` toleriert die fehlende Relation noch (NOTICE), aber `CREATE POLICY` bricht hart ab.
 
-- **RLS schützt nichts gegen Super-Admins.** Policies erlauben dem `super_admin` global Zugriff auf alle Tenants — daher liefern Abfragen ohne expliziten Tenant-Filter alle Datensätze tenantübergreifend (z. B. 626,43 kWh / 28 Sessions im Screenshot = Summe über alle Tenants).
-- **React-Query-Caches sind nicht tenant-aware.** Wo `tenant.id` nicht im `queryKey` steht, bleiben beim Wechsel in/aus der Support-Sicht alte Daten stehen.
-- Es existiert bereits `useTenantQuery` als zentrale Lösung, wird aber nur in **4 von 44** Hooks benutzt.
+2. **Folgefehler im Auto-Heal**: Das Script versucht daraufhin, die fehlende Tabelle über die früheste CREATE-Migration zu heilen und greift dabei `20260209204836_..._.sql`, die u. a. `CREATE TABLE ... meters` ohne `IF NOT EXISTS` enthält → `relation "meters" already exists`. Auto-Heal scheitert, Rollback wird sauber ausgeführt — prod läuft unverändert weiter.
 
-## 2. Vollständiger Befund (Code-Audit)
+Der zweite Punkt ist nur ein Symptom des ersten. Sobald die Schleifen-Migration die fehlenden Tabellen überspringt, läuft der Deploy durch.
 
-### A) Hooks ohne jeden Tenant-Filter (kritisch — werden 1:1 im Super-Admin geleakt)
+## Plan
 
-| Hook | `from()`-Aufrufe | Tenant-Filter | tenant.id im queryKey |
-|---|---|---|---|
-| `useChargePoints` | 10 | **0** | **nein** |
-| `useChargingSessions` | 1 | **0** | **nein** |
-| `useChargingUsers` | 6 | **0** | **nein** |
-| `useChargingTariffs` | 4 | **0** | **nein** |
-| `useChargingInvoices` | 2 | **0** | **nein** |
-| `useChargerModels` | 3 | **0** | **nein** |
-| `useChargePointAccessControl` | 1 | **0** | **nein** |
-| `useChargePointConnectors` | 1 | **0** | **nein** |
-| `useReportSchedules` | 3 | **0** | **nein** |
-| `useTaskAttachments` | 2 | **0** | **nein** |
-| `useEmailTemplates` | 1 | **0** | **nein** |
-| `useLocationEnergySources` | 3 | **0** | **nein** |
-| `useOfflineReadings` | 1 | **0** | **nein** |
-| `useBenchmarks` | 1 | **0** | **nein** |
-| `useBackups` | 1 | **0** | **nein** |
-| `usePpaDocuments` | 1 | **0** | **nein** |
-| `useCustomRoles` | 4 | **0** | **nein** |
-| `useAlertRules` | 3 | (über TQ) | **nein** |
+**Schritt 1 — Migration idempotent gegen fehlende Tabellen machen**
 
-### B) Hooks mit teilweisem Filter (einzelne Abfragen lecken)
+Datei `supabase/migrations/20260531091839_3c981d36-5ce9-453f-8ada-78d710a0b2d0.sql` umbauen, sodass im `DO`-Block vor jedem `CREATE POLICY` geprüft wird, ob die Tabelle existiert. Tabellen, die nicht existieren, werden mit einem `RAISE NOTICE` übersprungen.
 
-| Hook | `from()` | Filter | Anmerkung |
-|---|---|---|---|
-| `usePpaContracts` | 8 | 3 | 5 Reads ungefiltert |
-| `useEnergyCommunities` | 11 | 4 | 7 Reads ungefiltert |
-| `useMeters` | 5 | 1 | Hauptpunkt, kritisch fürs Dashboard |
-| `useCommunityContracts` | 4 | 2 | |
-| `useCommunityOperations` | 4 | 1 | |
-| `useEnergyMeasures` | 2 | 1 | |
-| `useCopilotProjects` | 2 | 1 | |
+Pseudocode der Änderung (Detail in der Umsetzung):
+```sql
+FOREACH t IN ARRAY tables LOOP
+  IF to_regclass('public.' || t) IS NULL THEN
+    RAISE NOTICE 'Skip %: table does not exist on this DB', t;
+    CONTINUE;
+  END IF;
+  EXECUTE format('DROP POLICY IF EXISTS "Super admins can view all %1$s" ON public.%1$I;', t);
+  EXECUTE format('CREATE POLICY "Super admins can view all %1$s" ON public.%1$I FOR SELECT USING (has_role(auth.uid(), ''super_admin''::app_role));', t);
+END LOOP;
+```
 
-### C) Pages/Components mit direktem Supabase-Zugriff ohne Tenant-Filter
+Damit:
+- Cloud-DB (alle Tabellen vorhanden) → Policies werden überall gesetzt wie bisher.
+- Prod-DB (einige Tabellen fehlen) → fehlende Tabellen werden mit Notice übersprungen, vorhandene bekommen die Policy.
 
-Tenant-relevant (müssen migriert werden):
-- `src/pages/ChargingApp.tsx` (PWA)
-- `src/pages/GettingStarted.tsx`
-- `src/components/dashboard/FloorPlanDashboardWidget.tsx`
-- `src/components/locations/EditMeterDialog.tsx`
-- `src/components/locations/ReplaceDeviceDialog.tsx`
-- `src/components/integrations/SmartMeterImport.tsx`
-- `src/components/energy-sharing/CommunityWizard.tsx`
-- `src/components/settings/TenantInfoSettings.tsx`
-- `src/components/settings/WeekStartSetting.tsx`
+**Schritt 2 — Erneut deployen**
 
-Bereits korrekt scoped (Super-Admin-Globalansicht — bewusst nicht filtern):
-- alle `src/pages/SuperAdmin*.tsx` außer Remote-Support
-- `src/components/super-admin/*`
-- `src/components/sales/*` (Vertriebsbereich, ebenfalls global)
+Nach dem Commit auf staging → "Deploy to Production" mit `LIVE` neu starten. Der Deploy sollte jetzt durchlaufen.
 
-## 3. Lösungsansatz (3 Stufen, in dieser Reihenfolge)
+**Schritt 3 — Optional: fehlende Tabellen separat sauber nachziehen**
 
-### Stufe 1 — Sofortmaßnahme: Cache-Reset bei Support-Sicht-Wechsel
-**Eine Datei:** `src/App.tsx` (oder `src/main.tsx`, dort wo der `QueryClient` lebt).
+Sobald der Deploy grün ist, in einem nächsten Schritt prüfen, welche der Tabellen aus der Liste (z. B. `charging_invoice_settings`) auf prod tatsächlich fehlen. Falls einzelne Tabellen für die Live-Funktionalität nötig sind, dafür eine eigene, klar benannte Migration erzeugen (`CREATE TABLE IF NOT EXISTS …` + GRANTs + RLS). Das ist **nicht** Teil dieses Fixes — hier geht es nur darum, den Deploy wieder grün zu bekommen, ohne Datenmodell-Änderungen auf prod zu erzwingen.
 
-Listener auf `onSupportViewChanged()` registrieren → bei jedem Ein-/Austritt aus Remote-Support `queryClient.clear()` aufrufen. Dadurch fallen alle gecachten Daten der falschen Sicht sofort weg, und alle Hooks laden frisch.
+## Was NICHT geändert wird
 
-**Wirkung:** Beseitigt alle Probleme, die durch **gecachte Daten** entstehen (Punkt 2 oben). Behebt das eigentliche Leck (RLS-Bypass des Super-Admin) noch nicht.
+- Keine Anpassung an `scripts/apply-migrations.sh` / Auto-Heal-Logik. Der Auto-Heal-Fall war nur Folgeschaden — wenn Schritt 1 greift, wird er gar nicht erst getriggert.
+- Keine Anpassung an früheren Migrations (z. B. `20260209204836_...`). Die laufen auf prod längst sauber, sie sind nur durch den fehlerhaften Auto-Heal-Trigger erneut versucht worden.
+- Keine Änderung an Code/Hooks/UI — der Bugfix bleibt rein auf der Migrations-Datei.
 
-### Stufe 2 — Daten-Leak schließen: zentrale Hooks auf `useTenantQuery` migrieren
+## Risiko
 
-Pro Hook gleicher Patch:
-1. `useTenant` (oder `useTenantQuery`) importieren.
-2. `queryKey` um `tenant?.id` erweitern.
-3. `enabled: !!tenant?.id` setzen.
-4. SELECT-Query mit `.eq("tenant_id", tenant.id)` ergänzen — bei vorhandenem `useTenantQuery` lieber direkt `from("tabelle")` aus dem Helper benutzen.
-5. Realtime-Subscriptions ggf. auf `filter: tenant_id=eq.<id>` einschränken.
-
-**Reihenfolge nach Sichtbarkeit/Schaden:**
-
-- **Phase 2a (Ladeinfrastruktur — bestätigt im Screenshot):**
-  `useChargePoints`, `useChargingSessions`, `useChargingUsers`, `useChargingTariffs`, `useChargingInvoices`, `useChargerModels`, `useChargePointAccessControl`, `useChargePointConnectors`
-- **Phase 2b (Dashboard/Energiedaten):**
-  Restliche ungefilterte Abfragen in `useMeters`, `useEnergyCommunities`, `useEnergyMeasures`, `useLocationEnergySources`, `useOfflineReadings`, `useBenchmarks`, `usePpaContracts`, `usePpaDocuments`
-- **Phase 2c (Admin/Reports/Communications):**
-  `useReportSchedules`, `useTaskAttachments`, `useEmailTemplates`, `useBackups`, `useAlertRules`, `useCustomRoles`, `useCopilotProjects`, `useCommunityContracts`, `useCommunityOperations`
-- **Phase 2d (Pages/Components aus Liste C):** alle 9 oben genannten Dateien analog umstellen.
-
-Keine RLS-Änderungen, keine Backend-Änderungen, keine neuen Felder.
-
-### Stufe 3 — Schutz vor Wiederholung
-- Kurzer Vitest, der für jede Tabelle mit `tenant_id`-Spalte sicherstellt, dass kein Hook unter `src/hooks` ein `supabase.from("<tabelle>").select(...)` ohne `.eq("tenant_id"` oder `useTenantQuery` enthält.
-- Eintrag in `mem://technical/architecture/multi-tenancy-core` ergänzen: „Im Remote-Support sieht der Super-Admin RLS-bedingt alle Tenants — Frontend muss IMMER explizit auf `tenant.id` filtern UND `tenant.id` in jeden `queryKey` aufnehmen."
-
-## 4. Out of scope
-- Keine RLS-Policy-Änderungen (Super-Admin soll bewusst global lesen können).
-- Keine Änderungen am Edge-Function-Verhalten.
-- Keine Refactorings über das Tenant-Scoping hinaus.
-
-## 5. Vorgehen für die Umsetzung
-1. **Erst Stufe 1 umsetzen** (1 Datei, sofort wirksam) und vom Nutzer in der Live-Umgebung validieren.
-2. Nach Bestätigung **Stufe 2 phasenweise** (2a → 2b → 2c → 2d), nach jeder Phase Validierung im Remote-Support.
-3. **Stufe 3** zuletzt als Absicherung.
-
-Bei jeder Phase: Build + Smoke-Test im Remote-Support für genau die in der Phase migrierten Bereiche.
+Sehr gering: die Änderung macht die Migration strikt defensiver. Auf der Lovable-Cloud-DB ist die Migration bereits sauber appliziert; ein erneuter Lauf der geänderten Datei würde dort wegen `_deploy_migrations`-Tracking gar nicht erst stattfinden. Auf prod wird die Migration erstmalig laufen — diesmal ohne Abbruch.
