@@ -5,7 +5,7 @@ import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useTenant } from "@/hooks/useTenant";
 import { useTranslation } from "@/hooks/useTranslation";
 import { DashboardFilterProvider } from "@/hooks/useDashboardFilter";
-import { getSupportViewTenantId } from "@/lib/supportView";
+import { isImpersonating } from "@/lib/supportView";
 import DashboardContent from "./DashboardContent";
 
 const Index = () => {
@@ -48,7 +48,7 @@ const Index = () => {
 
   // Super-Admins have no tenant context — redirect them to their dedicated area,
   // UNLESS they are actively viewing a tenant via Remote-Support (impersonation).
-  if (isSuperAdmin && !getSupportViewTenantId()) return <Navigate to="/super-admin" replace />;
+  if (isSuperAdmin && !isImpersonating()) return <Navigate to="/super-admin" replace />;
 
   if (!onboardingChecked) {
     return (
