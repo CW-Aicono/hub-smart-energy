@@ -1,6 +1,7 @@
 
 -- Add super_admin SELECT policies to all tenant-scoped tables that currently lack one.
 -- This unblocks the Remote-Support view so super_admins see the impersonated tenant's data.
+-- Defensiv: ueberspringt Tabellen, die auf der jeweiligen DB nicht existieren (z.B. prod vs. cloud drift).
 DO $$
 DECLARE
   t text;
@@ -22,6 +23,10 @@ DECLARE
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
+    IF to_regclass('public.' || quote_ident(t)) IS NULL THEN
+      RAISE NOTICE 'Skip %: table does not exist on this DB', t;
+      CONTINUE;
+    END IF;
     EXECUTE format(
       'DROP POLICY IF EXISTS "Super admins can view all %1$s" ON public.%1$I;',
       t
