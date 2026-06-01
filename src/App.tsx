@@ -17,6 +17,7 @@ import { PartnerLayout } from "@/components/partner/PartnerLayout";
 import PartnerDashboard from "@/pages/partner/PartnerDashboard";
 import PartnerTenants from "@/pages/partner/PartnerTenants";
 import PartnerMembers from "@/pages/partner/PartnerMembers";
+import PartnerBilling from "@/pages/partner/PartnerBilling";
 import RecoveryGuard from "@/components/RecoveryGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
@@ -275,6 +276,7 @@ const App = () => (
                       {/* Stufe 2: Partner-Portal (partner.aicono.org → /partner/*) */}
                       <Route path="/partner" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
                       <Route path="/partner/tenants" element={<PartnerLayout><PartnerTenants /></PartnerLayout>} />
+                      <Route path="/partner/billing" element={<PartnerLayout><PartnerBilling /></PartnerLayout>} />
                       <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
                       {/* Sales Scout: gemeinsam genutzt unter /sales (Partner-Member sehen ihre eigene Org via RLS) */}
 

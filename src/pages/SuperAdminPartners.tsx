@@ -23,6 +23,7 @@ interface Partner {
   contact_email: string | null;
   is_active: boolean;
   billing_mode: string;
+  commission_pct: number | null;
   created_at: string;
 }
 
@@ -68,6 +69,8 @@ export default function SuperAdminPartners() {
   const [editEmail, setEditEmail] = useState("");
   const [editSubdomain, setEditSubdomain] = useState("");
   const [editActive, setEditActive] = useState(true);
+  const [editBillingMode, setEditBillingMode] = useState<"wholesale" | "commission">("wholesale");
+  const [editCommissionPct, setEditCommissionPct] = useState<string>("20");
   const [editSaving, setEditSaving] = useState(false);
   const [editSlugStatus, setEditSlugStatus] = useState<
     | { kind: "idle" }
@@ -82,7 +85,7 @@ export default function SuperAdminPartners() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("partners")
-        .select("id, name, slug, subdomain, contact_email, is_active, billing_mode, created_at")
+        .select("id, name, slug, subdomain, contact_email, is_active, billing_mode, commission_pct, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as Partner[];
@@ -222,6 +225,8 @@ export default function SuperAdminPartners() {
     setEditEmail(p.contact_email ?? "");
     setEditSubdomain(p.subdomain ?? "");
     setEditActive(p.is_active);
+    setEditBillingMode((p.billing_mode === "commission" ? "commission" : "wholesale"));
+    setEditCommissionPct(String(p.commission_pct ?? 20));
     setEditSlugStatus({ kind: "available" });
     setEditOpen(true);
   };
@@ -236,6 +241,11 @@ export default function SuperAdminPartners() {
       toast({ title: "Slug prüfen", description: "Bitte gültigen, freien Slug wählen.", variant: "destructive" });
       return;
     }
+    const pct = parseFloat(editCommissionPct.replace(",", "."));
+    if (editBillingMode === "commission" && (isNaN(pct) || pct < 0 || pct > 100)) {
+      toast({ title: "Provisionssatz", description: "Bitte einen Wert zwischen 0 und 100 angeben.", variant: "destructive" });
+      return;
+    }
     setEditSaving(true);
     try {
       const { error } = await supabase
@@ -246,6 +256,8 @@ export default function SuperAdminPartners() {
           contact_email: editEmail.trim().toLowerCase() || null,
           subdomain: editSubdomain.trim() || null,
           is_active: editActive,
+          billing_mode: editBillingMode,
+          commission_pct: isNaN(pct) ? 20 : pct,
         })
         .eq("id", editPartner.id);
       if (error) throw error;
@@ -568,6 +580,47 @@ export default function SuperAdminPartners() {
                 className="h-4 w-4"
               />
               <Label htmlFor="e-active" className="cursor-pointer">Partner aktiv</Label>
+            </div>
+
+            <div className="border-t pt-3 mt-2 space-y-2">
+              <Label>Abrechnungsmodell</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditBillingMode("wholesale")}
+                  className={`rounded-md border px-3 py-2 text-sm text-left transition-colors ${
+                    editBillingMode === "wholesale" ? "border-primary bg-primary/10" : "border-input"
+                  }`}
+                >
+                  <div className="font-medium">Wiederverkauf</div>
+                  <div className="text-xs text-muted-foreground">Partner kauft bei AICONO ein und verkauft mit Marge an Tenants.</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditBillingMode("commission")}
+                  className={`rounded-md border px-3 py-2 text-sm text-left transition-colors ${
+                    editBillingMode === "commission" ? "border-primary bg-primary/10" : "border-input"
+                  }`}
+                >
+                  <div className="font-medium">Provision</div>
+                  <div className="text-xs text-muted-foreground">AICONO rechnet mit den Tenants ab, Partner erhält Provision.</div>
+                </button>
+              </div>
+              {editBillingMode === "commission" && (
+                <div className="space-y-1.5 pt-1">
+                  <Label htmlFor="e-commission">Provisionssatz (%)</Label>
+                  <Input
+                    id="e-commission"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.1"
+                    value={editCommissionPct}
+                    onChange={(e) => setEditCommissionPct(e.target.value)}
+                    placeholder="20"
+                  />
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

@@ -5314,6 +5314,8 @@ export type Database = {
           industry_price_monthly: number
           industry_standard_price: number
           module_code: string
+          partner_industry_price_monthly: number
+          partner_price_monthly: number
           price_monthly: number
           standard_price: number
           updated_at: string
@@ -5324,6 +5326,8 @@ export type Database = {
           industry_price_monthly?: number
           industry_standard_price?: number
           module_code: string
+          partner_industry_price_monthly?: number
+          partner_price_monthly?: number
           price_monthly?: number
           standard_price?: number
           updated_at?: string
@@ -5334,6 +5338,8 @@ export type Database = {
           industry_price_monthly?: number
           industry_standard_price?: number
           module_code?: string
+          partner_industry_price_monthly?: number
+          partner_price_monthly?: number
           price_monthly?: number
           standard_price?: number
           updated_at?: string
@@ -5601,10 +5607,49 @@ export type Database = {
           },
         ]
       }
+      partner_module_prices: {
+        Row: {
+          created_at: string
+          id: string
+          module_code: string
+          partner_id: string
+          sale_price_industry_monthly: number | null
+          sale_price_monthly: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          module_code: string
+          partner_id: string
+          sale_price_industry_monthly?: number | null
+          sale_price_monthly?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          module_code?: string
+          partner_id?: string
+          sale_price_industry_monthly?: number | null
+          sale_price_monthly?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_module_prices_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partners: {
         Row: {
           billing_address: Json
           billing_mode: string
+          commission_pct: number
           contact_email: string | null
           contact_phone: string | null
           created_at: string
@@ -5622,6 +5667,7 @@ export type Database = {
         Insert: {
           billing_address?: Json
           billing_mode?: string
+          commission_pct?: number
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
@@ -5639,6 +5685,7 @@ export type Database = {
         Update: {
           billing_address?: Json
           billing_mode?: string
+          commission_pct?: number
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
