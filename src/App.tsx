@@ -153,6 +153,7 @@ const App = () => (
                   <Sonner />
                   <ConfirmDialogHost />
                   <RecoveryGuard />
+                  <SalesHostGuard />
                   <UpdateBanner />
                   <SupportSessionBanner />
                   <SuperAdminImpersonationBar />
