@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Briefcase, Loader2, Plus, Mail, Users } from "lucide-react";
+import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 
 interface Partner {
   id: string;
