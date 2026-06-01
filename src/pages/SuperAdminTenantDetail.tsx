@@ -606,6 +606,7 @@ const SuperAdminTenantDetail = () => {
                         contact_email: tenant?.contact_email ?? "",
                         is_aicono_member: (tenant as any)?.is_aicono_member ?? false,
                         is_kommune: (tenant as any)?.is_kommune !== false,
+                        partner_id: (tenant as any)?.partner_id ?? "",
                       });
                       setEditingTenantInfo(true);
                     }}>
