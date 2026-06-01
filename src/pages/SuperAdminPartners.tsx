@@ -20,12 +20,21 @@ interface Partner {
   name: string;
   slug: string;
   subdomain: string | null;
+  custom_domain: string | null;
   contact_email: string | null;
   is_active: boolean;
   billing_mode: string;
   commission_pct: number | null;
+  white_label_enabled: boolean | null;
+  brand_display_name: string | null;
+  logo_url: string | null;
+  primary_color: string | null;
+  secondary_color: string | null;
+  accent_color: string | null;
+  support_email: string | null;
   created_at: string;
 }
+
 
 const normalizeSlug = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-{2,}/g, "-").slice(0, 50);
