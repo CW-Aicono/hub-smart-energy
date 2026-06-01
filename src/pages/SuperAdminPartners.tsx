@@ -688,7 +688,161 @@ export default function SuperAdminPartners() {
                 </div>
               )}
             </div>
+
+            {/* Stage 7: White-Label / Custom Domain */}
+            <div className="border-t pt-3 mt-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-base">White-Label</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="e-wl"
+                    type="checkbox"
+                    checked={editWhiteLabel}
+                    onChange={(e) => setEditWhiteLabel(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="e-wl" className="cursor-pointer text-sm">aktiv</Label>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1">
+                Bei Aktivierung wird das Partner-Branding (Logo + Farbe) für alle Tenants dieses Partners
+                und auf der Login-Seite der eigenen Domain angezeigt.
+              </p>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="e-brand-name">Marken-Anzeigename (optional)</Label>
+                <Input
+                  id="e-brand-name"
+                  value={editBrandDisplayName}
+                  onChange={(e) => setEditBrandDisplayName(e.target.value)}
+                  placeholder={editName || "z. B. Mustermann Energie"}
+                  disabled={!editWhiteLabel}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="e-custom-domain">Custom Domain</Label>
+                <Input
+                  id="e-custom-domain"
+                  value={editCustomDomain}
+                  onChange={(e) => setEditCustomDomain(e.target.value)}
+                  placeholder="energie.mustermann.de"
+                  disabled={!editWhiteLabel}
+                />
+                <p className="text-xs text-muted-foreground">
+                  DNS-CNAME auf die AICONO-Hetzner-Infrastruktur muss eingerichtet sein.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Logo</Label>
+                <div className="flex items-center gap-3">
+                  {editLogoUrl ? (
+                    <img src={editLogoUrl} alt="Logo" className="h-12 w-12 object-contain rounded border bg-white p-1" />
+                  ) : (
+                    <div className="h-12 w-12 rounded border bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                      kein Logo
+                    </div>
+                  )}
+                  <Input
+                    type="file"
+                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                    onChange={handleLogoUpload}
+                    disabled={!editWhiteLabel || logoUploading}
+                    className="text-xs"
+                  />
+                  {editLogoUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditLogoUrl(null)}
+                      disabled={!editWhiteLabel}
+                    >
+                      Entfernen
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">PNG/JPG/SVG/WebP, max. 2 MB.</p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="e-primary">Primärfarbe</Label>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      id="e-primary"
+                      type="color"
+                      value={editPrimaryColor || "#1a365d"}
+                      onChange={(e) => setEditPrimaryColor(e.target.value)}
+                      disabled={!editWhiteLabel}
+                      className="h-9 w-12 p-1"
+                    />
+                    <Input
+                      value={editPrimaryColor}
+                      onChange={(e) => setEditPrimaryColor(e.target.value)}
+                      disabled={!editWhiteLabel}
+                      placeholder="#1a365d"
+                      className="text-xs"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="e-secondary">Sekundär</Label>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      id="e-secondary"
+                      type="color"
+                      value={editSecondaryColor || "#2d8a6e"}
+                      onChange={(e) => setEditSecondaryColor(e.target.value)}
+                      disabled={!editWhiteLabel}
+                      className="h-9 w-12 p-1"
+                    />
+                    <Input
+                      value={editSecondaryColor}
+                      onChange={(e) => setEditSecondaryColor(e.target.value)}
+                      disabled={!editWhiteLabel}
+                      placeholder="#2d8a6e"
+                      className="text-xs"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="e-accent">Akzent</Label>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      id="e-accent"
+                      type="color"
+                      value={editAccentColor || "#f59e0b"}
+                      onChange={(e) => setEditAccentColor(e.target.value)}
+                      disabled={!editWhiteLabel}
+                      className="h-9 w-12 p-1"
+                    />
+                    <Input
+                      value={editAccentColor}
+                      onChange={(e) => setEditAccentColor(e.target.value)}
+                      disabled={!editWhiteLabel}
+                      placeholder="#f59e0b"
+                      className="text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="e-support">Support-E-Mail (optional)</Label>
+                <Input
+                  id="e-support"
+                  type="email"
+                  value={editSupportEmail}
+                  onChange={(e) => setEditSupportEmail(e.target.value)}
+                  placeholder="support@mustermann.de"
+                  disabled={!editWhiteLabel}
+                />
+              </div>
+            </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>Abbrechen</Button>
             <Button
