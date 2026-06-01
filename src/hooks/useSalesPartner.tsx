@@ -27,20 +27,21 @@ export function useSalesPartner(): SalesPartnerState {
     }
 
     (async () => {
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
+      const [{ data: roles }, { data: pm }] = await Promise.all([
+        supabase.from("user_roles").select("role").eq("user_id", user.id),
+        supabase.from("partner_members").select("partner_id").eq("user_id", user.id).limit(1),
+      ]);
 
       if (cancelled) return;
 
-      const roles = (data ?? []).map((r) => r.role as string);
-      const isSuperAdmin = roles.includes("super_admin");
-      const isSalesPartner = roles.includes("sales_partner");
+      const roleList = (roles ?? []).map((r) => r.role as string);
+      const isSuperAdmin = roleList.includes("super_admin");
+      const isSalesPartner = roleList.includes("sales_partner");
+      const isPartnerMember = (pm ?? []).length > 0;
       setState({
-        isSalesPartner,
+        isSalesPartner: isSalesPartner || isPartnerMember,
         isSuperAdmin,
-        hasAccess: isSuperAdmin || isSalesPartner,
+        hasAccess: isSuperAdmin || isSalesPartner || isPartnerMember,
         loading: false,
       });
     })();

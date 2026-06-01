@@ -276,7 +276,7 @@ const App = () => (
                       <Route path="/partner" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
                       <Route path="/partner/tenants" element={<PartnerLayout><PartnerTenants /></PartnerLayout>} />
                       <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
-                      <Route path="/partner/sales" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
+                      {/* Sales Scout: gemeinsam genutzt unter /sales (Partner-Member sehen ihre eigene Org via RLS) */}
 
                       <Route path="*" element={<NotFound />} />
                     </Routes>
