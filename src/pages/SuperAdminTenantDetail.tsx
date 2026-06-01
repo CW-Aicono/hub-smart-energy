@@ -627,6 +627,8 @@ const SuperAdminTenantDetail = () => {
                           contact_email: tenantInfoForm.contact_email.trim() || null,
                           is_aicono_member: tenantInfoForm.is_aicono_member,
                           is_kommune: tenantInfoForm.is_kommune,
+                          partner_id: tenantInfoForm.partner_id ? tenantInfoForm.partner_id : null,
+                          support_owner: tenantInfoForm.partner_id ? "partner" : "platform",
                         }).eq("id", tenant!.id);
                         setSavingTenantInfo(false);
                         if (error) { toast.error("Fehler beim Speichern"); console.error(error); }
