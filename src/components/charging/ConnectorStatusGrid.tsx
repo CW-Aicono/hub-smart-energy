@@ -52,6 +52,7 @@ interface Props {
 }
 
 export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectConnector, selectable = false, wsConnected = true, lastHeartbeat = null, editable = false, onReorder }: Props) {
+  const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const dragItem = useRef<number | null>(null);
@@ -68,10 +69,22 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
 
   const saveEdit = async (c: ChargePointConnector) => {
     const trimmed = editName.trim();
-    await supabase
+    const newName = trimmed || null;
+    const { error } = await supabase
       .from("charge_point_connectors")
-      .update({ name: trimmed || null } as any)
+      .update({ name: newName } as any)
       .eq("id", c.id);
+    if (error) {
+      toast({ title: "Speichern fehlgeschlagen", description: error.message, variant: "destructive" });
+      return;
+    }
+    // Cache sofort aktualisieren, damit die Anzeige auch ohne Realtime
+    // (z. B. selfhosted Hetzner) den neuen Namen sofort übernimmt.
+    queryClient.setQueryData<ChargePointConnector[]>(
+      ["charge-point-connectors", c.charge_point_id],
+      (prev) => (prev ?? []).map((x) => (x.id === c.id ? { ...x, name: newName } : x)),
+    );
+    queryClient.invalidateQueries({ queryKey: ["charge-point-connectors", c.charge_point_id] });
     setEditingId(null);
   };
 
