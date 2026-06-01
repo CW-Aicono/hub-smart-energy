@@ -6,6 +6,8 @@ import { useTenant } from "@/hooks/useTenant";
 import { useTranslation } from "@/hooks/useTranslation";
 import { DashboardFilterProvider } from "@/hooks/useDashboardFilter";
 import { isImpersonating } from "@/lib/supportView";
+import { usePartnerAccess } from "@/hooks/usePartnerAccess";
+import { isPartnerHost } from "@/lib/hostname";
 import DashboardContent from "./DashboardContent";
 
 const Index = () => {
