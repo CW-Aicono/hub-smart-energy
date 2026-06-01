@@ -140,6 +140,7 @@ const SuperAdminTenants = () => {
     setNewEmail("");
     setAdminEmail("");
     setAdminName("");
+    setNewPartnerId("");
   };
 
   return (
