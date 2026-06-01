@@ -14,6 +14,7 @@ const Index = () => {
   const { user, loading, isRecovery } = useAuth();
   const { isSuperAdmin, loading: superAdminLoading } = useSuperAdmin();
   const { tenant, loading: tenantLoading } = useTenant();
+  const { isPartnerMember, loading: partnerLoading } = usePartnerAccess();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [onboardingChecked, setOnboardingChecked] = useState(false);
