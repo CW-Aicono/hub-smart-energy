@@ -11,8 +11,10 @@ import { ArrowLeft } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import aiconoLogo from "@/assets/aicono-logo.png";
+import { usePartnerHostBranding } from "@/hooks/usePartnerHostBranding";
 
 type AuthView = "login" | "forgotPassword";
+
 
 const Auth = () => {
   const { user, loading, signIn } = useAuth();

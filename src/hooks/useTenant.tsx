@@ -195,10 +195,33 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           resolvedLogoUrl = await downloadSecureStorageObject('tenant-assets', resolvedLogoUrl);
         }
 
+        let branding = (data.branding as unknown as TenantBranding) || DEFAULT_BRANDING;
+
+        // Stage 7: Partner White-Label overrides tenant branding (if enabled)
+        try {
+          const { data: pb } = await supabase.rpc("get_partner_branding_for_tenant", {
+            _tenant_id: targetTenantId,
+          });
+          const partnerBranding = pb as any;
+          if (partnerBranding && partnerBranding.white_label_enabled) {
+            branding = {
+              primary_color: partnerBranding.primary_color || branding.primary_color,
+              secondary_color: partnerBranding.secondary_color || branding.secondary_color,
+              accent_color: partnerBranding.accent_color || branding.accent_color,
+              font_family: branding.font_family,
+            };
+            if (partnerBranding.logo_url) {
+              resolvedLogoUrl = partnerBranding.logo_url;
+            }
+          }
+        } catch {
+          // ignore — fall back to tenant branding
+        }
+
         const tenantData: Tenant = {
           ...data,
           tenant_type: ((data as any).tenant_type as TenantType) ?? "kommune",
-          branding: (data.branding as unknown as TenantBranding) || DEFAULT_BRANDING,
+          branding,
           report_settings: (data.report_settings as unknown as TenantReportSettings) || { footer_text: "", show_logo: true },
           week_start_day: (data.week_start_day as 0 | 1 | 2 | 3 | 4 | 5 | 6) ?? 1,
           show_manual_meters: data.show_manual_meters ?? false,
@@ -207,6 +230,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         setTenant(tenantData);
         applyBrandingToCSS(tenantData.branding);
       }
+
     } catch (err) {
       setError("Failed to fetch tenant");
     } finally {
