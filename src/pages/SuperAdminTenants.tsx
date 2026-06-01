@@ -81,7 +81,13 @@ const SuperAdminTenants = () => {
       // 1. Create tenant
       const { data: tenant, error: tenantError } = await supabase
         .from("tenants")
-        .insert({ name: newName, slug: newSlug, contact_email: newEmail || adminEmail })
+        .insert({
+          name: newName,
+          slug: newSlug,
+          contact_email: newEmail || adminEmail,
+          partner_id: newPartnerId ? newPartnerId : null,
+          support_owner: newPartnerId ? "partner" : "platform",
+        })
         .select()
         .single();
 
