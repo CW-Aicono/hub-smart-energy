@@ -141,10 +141,11 @@ Deno.serve(async (req) => {
         logo_url: logoUrl,
       },
       groups,
-      charge_points: cps,
+      charge_points: cpsOut,
       connectors,
       generated_at: new Date().toISOString(),
     }, 200);
+
   } catch (e) {
     console.error("public-charge-status error", e);
     return json({ error: "internal" }, 500);
