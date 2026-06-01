@@ -168,6 +168,9 @@ export default function SuperAdminSidebar() {
     if (location.pathname.startsWith("/super-admin/sales")) {
       setOpenMenus((prev) => prev.includes("/super-admin/sales") ? prev : [...prev, "/super-admin/sales"]);
     }
+    if (location.pathname.startsWith("/super-admin/tenants") || location.pathname.startsWith("/super-admin/partners")) {
+      setOpenMenus((prev) => prev.includes("/super-admin/tenants") ? prev : [...prev, "/super-admin/tenants"]);
+    }
   }, [location.pathname]);
 
   const toggleMenu = (to: string) => {
