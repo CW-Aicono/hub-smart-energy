@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Briefcase, Loader2, Plus, Mail, Users } from "lucide-react";
+import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 
 interface Partner {
   id: string;
@@ -119,7 +120,9 @@ export default function SuperAdminPartners() {
   });
 
   return (
-    <div className="p-3 md:p-6 space-y-4">
+    <div className="flex min-h-screen bg-background">
+      <SuperAdminSidebar />
+      <main className="flex-1 overflow-auto p-3 md:p-6 space-y-4">
       <header className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
@@ -250,6 +253,7 @@ export default function SuperAdminPartners() {
           </Table>
         )}
       </div>
+      </main>
     </div>
   );
 }
