@@ -696,6 +696,27 @@ const SuperAdminTenantDetail = () => {
                           </Label>
                         </div>
                       </div>
+                      <div className="space-y-2 pt-2 border-t">
+                        <Label className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          Zuordnung zu Partner
+                        </Label>
+                        <Select
+                          value={tenantInfoForm.partner_id || "__platform__"}
+                          onValueChange={(v) => setTenantInfoForm(f => ({ ...f, partner_id: v === "__platform__" ? "" : v }))}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__platform__">Direkt AICONO (Super-Admin)</SelectItem>
+                            {allPartners.map((p: any) => (
+                              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Legt fest, welcher Vertriebspartner diesen Mandanten betreut. „Direkt AICONO" = kein Partner, Mandant wird zentral verwaltet.
+                        </p>
+                      </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
