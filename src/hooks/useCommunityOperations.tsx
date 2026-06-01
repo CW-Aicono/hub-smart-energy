@@ -78,7 +78,7 @@ export function useAllocationRuns(communityId: string | null) {
       qc.invalidateQueries({ queryKey: ["allocation-runs"] });
       qc.invalidateQueries({ queryKey: ["community-data-quality"] });
       toast({
-        title: "Allokation berechnet",
+        title: "Verteilung berechnet",
         description: `${Number(data?.total_allocated_kwh ?? 0).toLocaleString("de-DE", { maximumFractionDigits: 2 })} kWh verteilt.`,
       });
     },
