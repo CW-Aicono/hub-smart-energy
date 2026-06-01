@@ -87,6 +87,39 @@ Deno.serve(async (req) => {
       connectors = data ?? [];
     }
 
+    // Aktive Ladevorgänge laden – manche Wallboxen (z. B. ESB Mennekes) melden
+    // während eines Ladevorgangs "Unavailable" statt "Charging". Wir markieren
+    // diese Connectors/CPs als belegt, damit die Übersicht den realen Zustand
+    // zeigt.
+    const activeConnKeys = new Set<string>();
+    const activeCpIds = new Set<string>();
+    if (cpIds.length > 0) {
+      const { data: sessions } = await admin
+        .from("charging_sessions")
+        .select("charge_point_id, connector_id")
+        .in("charge_point_id", cpIds)
+        .is("stop_time", null);
+      for (const s of sessions ?? []) {
+        activeCpIds.add(s.charge_point_id as string);
+        if (s.connector_id != null) {
+          activeConnKeys.add(`${s.charge_point_id}:${s.connector_id}`);
+        }
+      }
+    }
+
+    // Status der Connectors überschreiben, wenn aktiver Ladevorgang läuft.
+    connectors = connectors.map((c) => {
+      const k = `${c.charge_point_id}:${c.connector_id}`;
+      if (activeConnKeys.has(k)) return { ...c, status: "Charging" };
+      return c;
+    });
+
+    // CP-Level-Status ebenfalls überschreiben, wenn irgendein Ladevorgang läuft.
+    const cpsOut = cps.map((cp) =>
+      activeCpIds.has(cp.id) ? { ...cp, status: "Charging" } : cp,
+    );
+
+
     // Resolve tenant logo: stored as a path in the private "tenant-assets" bucket.
     // Generate a long-lived signed URL so the public page can render it.
     let logoUrl: string | null = null;
