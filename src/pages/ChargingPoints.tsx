@@ -53,8 +53,9 @@ const ChargingPoints = () => {
   const { chargePoints, isLoading, addChargePoint, updateChargePoint, deleteChargePoint } = useChargePoints();
   const { sessions } = useChargingSessions();
   const { chargerModels, vendors: knownVendors, getModelsForVendor } = useChargerModels();
+  const chargePointIds = useMemo(() => chargePoints.map((cp) => cp.id).sort().join(","), [chargePoints]);
   const { data: allConnectors = [] } = useQuery({
-    queryKey: ["charge-point-connectors", tenant?.id, "all"],
+    queryKey: ["charge-point-connectors", tenant?.id, "all", chargePointIds],
     enabled: !!tenant?.id,
     queryFn: async () => {
       const ids = chargePoints.map((cp) => cp.id);
