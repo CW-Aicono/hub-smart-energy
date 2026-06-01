@@ -1,3 +1,5 @@
+import { normalizeChargePointStatus } from "@/lib/chargePointStatus";
+
 /**
  * Formats a number with German locale (dot as thousands separator, comma as decimal).
  * @param value - The number to format
@@ -43,8 +45,11 @@ export function normalizeConnectorStatus(
   raw: string | null | undefined,
   wsConnected: boolean = true,
 ): string {
-  if (wsConnected === false) return "offline";
-  return (raw ?? "").toLowerCase();
+  return normalizeChargePointStatus({ rawStatus: raw, wsConnected });
+}
+
+export function isOccupiedChargingStatus(raw: string | null | undefined): boolean {
+  return normalizeChargePointStatus({ rawStatus: raw, wsConnected: true }) === "charging";
 }
 
 /**

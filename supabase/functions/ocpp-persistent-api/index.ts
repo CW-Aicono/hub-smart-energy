@@ -66,6 +66,36 @@ function onlyPatch(input: Record<string, unknown>, allowed: string[]) {
   return out;
 }
 
+function normalizeOcppStatus(raw: string | null | undefined): "available" | "charging" | "faulted" | "unavailable" | "unconfigured" {
+  const s = String(raw ?? "").toLowerCase().trim();
+  if (!s) return "unconfigured";
+  if (s.includes("fault") || s.includes("error")) return "faulted";
+  if (s.includes("unavailable") || s.includes("inoperative")) return "unavailable";
+  if (
+    s.includes("charg") ||
+    s.includes("occup") ||
+    s.includes("suspendedev") ||
+    s.includes("suspendedevse") ||
+    s.includes("preparing") ||
+    s.includes("finishing") ||
+    s.includes("reserved")
+  ) return "charging";
+  if (s.includes("avail")) return "available";
+  return "unconfigured";
+}
+
+async function syncChargePointStatusFromConnectors(chargePointId: string) {
+  const { data, error } = await admin
+    .from("charge_point_connectors")
+    .select("status")
+    .eq("charge_point_id", chargePointId);
+  if (error) throw error;
+  const statuses = (data ?? []).map((row) => normalizeOcppStatus(row.status as string | null));
+  const priority = ["faulted", "unavailable", "charging", "unconfigured", "available"] as const;
+  const status = priority.find((candidate) => statuses.includes(candidate)) ?? "available";
+  await admin.from("charge_points").update({ status }).eq("id", chargePointId);
+}
+
 async function handle(action: string, body: Record<string, unknown>) {
   switch (action) {
     case "authenticate-charge-point": {
@@ -140,6 +170,7 @@ async function handle(action: string, body: Record<string, unknown>) {
         .eq("charge_point_id", chargePointId)
         .eq("connector_id", connectorId);
       if (error) return fail(500, error.message);
+      await syncChargePointStatusFromConnectors(chargePointId);
       return ok();
     }
 
@@ -199,22 +230,84 @@ async function handle(action: string, body: Record<string, unknown>) {
     }
 
     case "create-charging-session": {
+      const tenantId = String(body.tenantId ?? "");
+      const chargePointId = String(body.chargePointId ?? "");
+      const connectorId = Number(body.connectorId ?? 1);
+      const idTag = String(body.idTag ?? "");
+      const meterStart = Number(body.meterStart ?? 0);
+      const startTime = String(body.startTime ?? new Date().toISOString());
+      const newTransactionId = Number(body.transactionId ?? 0);
+
+      // Dedup: bestehende aktive Session auf demselben CP+Connector suchen.
+      const { data: activeSessions } = await admin
+        .from("charging_sessions")
+        .select("id, transaction_id, meter_start, start_time, id_tag")
+        .eq("charge_point_id", chargePointId)
+        .eq("connector_id", connectorId)
+        .is("stop_time", null)
+        .order("start_time", { ascending: false });
+
+      const active = activeSessions ?? [];
+      if (active.length > 0) {
+        const newest = active[0];
+        const ageMs = Date.now() - new Date(newest.start_time as string).getTime();
+        const sameStart = Number(newest.meter_start ?? -1) === meterStart;
+        const sameTag = String(newest.id_tag ?? "") === idTag;
+        // Idempotenz: identischer meterStart + idTag innerhalb 5 Minuten -> Duplicate-Retry der Wallbox.
+        if (sameStart && sameTag && ageMs < 5 * 60 * 1000) {
+          console.warn(
+            `[ocpp-persistent-api] duplicate StartTransaction detected, returning existing session ${newest.id} (tx=${newest.transaction_id})`,
+          );
+          await admin
+            .from("charge_point_connectors")
+            .update({ status: "Charging", last_status_at: new Date().toISOString() })
+            .eq("charge_point_id", chargePointId)
+            .eq("connector_id", connectorId);
+          await syncChargePointStatusFromConnectors(chargePointId);
+          return ok({
+            id: newest.id,
+            transactionId: Number(newest.transaction_id ?? newTransactionId),
+            duplicate: true,
+          });
+        }
+        // Sonst: alte verwaiste aktive Session(en) auf diesem Connector schließen,
+        // damit niemals zwei aktive Rows koexistieren ("Belegt"-Phantom).
+        const orphanIds = active.map((s) => s.id as string);
+        await admin
+          .from("charging_sessions")
+          .update({
+            stop_time: new Date().toISOString(),
+            stop_reason: "DuplicateStart",
+            status: "orphaned",
+          })
+          .in("id", orphanIds);
+        console.warn(
+          `[ocpp-persistent-api] orphaned ${orphanIds.length} stale active session(s) on cp=${chargePointId} connector=${connectorId}`,
+        );
+      }
+
       const { data, error } = await admin
         .from("charging_sessions")
         .insert({
-          tenant_id: String(body.tenantId ?? ""),
-          charge_point_id: String(body.chargePointId ?? ""),
-          connector_id: Number(body.connectorId ?? 1),
-          id_tag: String(body.idTag ?? ""),
-          meter_start: Number(body.meterStart ?? 0),
-          start_time: String(body.startTime ?? new Date().toISOString()),
-          transaction_id: Number(body.transactionId ?? 0),
+          tenant_id: tenantId,
+          charge_point_id: chargePointId,
+          connector_id: connectorId,
+          id_tag: idTag,
+          meter_start: meterStart,
+          start_time: startTime,
+          transaction_id: newTransactionId,
           status: "active",
         })
         .select("id")
         .single();
       if (error) return fail(500, error.message);
-      return ok({ id: data.id });
+      await admin
+        .from("charge_point_connectors")
+        .update({ status: "Charging", last_status_at: new Date().toISOString() })
+        .eq("charge_point_id", chargePointId)
+        .eq("connector_id", connectorId);
+      await syncChargePointStatusFromConnectors(chargePointId);
+      return ok({ id: data.id, transactionId: newTransactionId, duplicate: false });
     }
 
     case "get-charging-session": {

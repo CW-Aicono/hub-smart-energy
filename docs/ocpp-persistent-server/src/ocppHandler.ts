@@ -89,20 +89,28 @@ export async function handleCall(
         const connectorId = payload.connectorId as number;
         const meterStart = payload.meterStart as number;
         const ts = (payload.timestamp as string) ?? new Date().toISOString();
-        const transactionId = Math.floor(Date.now() / 1000) & 0x7fffffff;
+        const proposedTransactionId = Math.floor(Date.now() / 1000) & 0x7fffffff;
 
-        await createChargingSession({
+        const result = await createChargingSession({
           tenantId,
           chargePointId: chargePointPk,
           connectorId,
           idTag,
           meterStart,
           startTime: ts,
-          transactionId,
+          transactionId: proposedTransactionId,
         });
 
+        if (result.duplicate) {
+          log.warn("Duplicate StartTransaction reused existing session", {
+            chargePointId,
+            connectorId,
+            transactionId: result.transactionId,
+          });
+        }
+
         return callResult(messageId, {
-          transactionId,
+          transactionId: result.transactionId,
           idTagInfo: { status: "Accepted" },
         });
       }

@@ -216,7 +216,7 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
         {validPoints.map((cp) => {
           const s = normalizeConnectorStatus(cp.status, (cp as any).ws_connected !== false);
           const statusKey = `chargePointStatus.${s}` as any;
-          const statusLabel = t(statusKey) || s;
+          const statusLabel = s === "charging" ? t("chargingStats.occupied" as any) : (t(statusKey) || s);
           const cfgVariant = statusVariantMap[s] || statusVariantMap.offline;
           return (
             <Marker
