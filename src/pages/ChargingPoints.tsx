@@ -243,6 +243,8 @@ const ChargingPoints = () => {
   const filteredChargePoints = statusFilter
     ? chargePoints.filter((cp) => getEffectiveStatus(cp) === statusFilter)
     : chargePoints;
+  const effectiveChargePoints = chargePoints.map((cp) => ({ ...cp, status: getEffectiveStatus(cp) }));
+  const effectiveFilteredChargePoints = filteredChargePoints.map((cp) => ({ ...cp, status: getEffectiveStatus(cp) }));
 
   const wsScheme = form.connection_protocol === "ws" ? "ws" : "wss";
   const wsHostUrl = `${wsScheme}://${getOcppHost()}`;
@@ -483,7 +485,7 @@ const ChargingPoints = () => {
               </CardContent>
             </Card>
             {Object.entries(statusConfig).map(([key, cfg]) => {
-              const count = chargePoints.filter((cp) => normalizeConnectorStatus(cp.status, cp.ws_connected !== false) === key).reduce((sum, cp) => sum + (cp.connector_count || 1), 0);
+              const count = getConnectorStatusCount(key);
               const isActive = statusFilter === key;
               return (
                 <Card
@@ -504,7 +506,7 @@ const ChargingPoints = () => {
           </div>
 
           {/* Statistics */}
-          <ChargingOverviewStats chargePoints={chargePoints} sessions={sessions} />
+          <ChargingOverviewStats chargePoints={effectiveChargePoints} sessions={sessions} />
 
           {/* Groups Manager */}
           <ChargePointGroupsManager isAdmin={isAdmin} />
@@ -544,7 +546,7 @@ const ChargingPoints = () => {
                       </TableHeader>
                       <TableBody>
                         {filteredChargePoints.map((cp) => {
-                          const cfg = statusConfig[normalizeConnectorStatus(cp.status, cp.ws_connected !== false)] || statusConfig.offline;
+                          const cfg = statusConfig[getEffectiveStatus(cp)] || statusConfig.offline;
                           const activeSession = getActiveSession(cp.id);
                           return (
                             <TableRow key={cp.id}>
@@ -620,7 +622,7 @@ const ChargingPoints = () => {
             <CardContent>
               <Suspense fallback={<div className="h-[400px] rounded-lg border bg-muted/50 flex items-center justify-center"><div className="animate-pulse text-muted-foreground">{t("charging.mapLoading" as any)}</div></div>}>
                 <LazyChargePointsMap
-                  chargePoints={filteredChargePoints}
+                  chargePoints={effectiveFilteredChargePoints}
                   onChargePointClick={(cp) => navigate(demoPath(`/charging/points/${cp.id}`))}
                   showEditPositionButton={true}
                   onPositionChange={(cpId, lat, lng) => {
