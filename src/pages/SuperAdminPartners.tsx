@@ -20,12 +20,21 @@ interface Partner {
   name: string;
   slug: string;
   subdomain: string | null;
+  custom_domain: string | null;
   contact_email: string | null;
   is_active: boolean;
   billing_mode: string;
   commission_pct: number | null;
+  white_label_enabled: boolean | null;
+  brand_display_name: string | null;
+  logo_url: string | null;
+  primary_color: string | null;
+  secondary_color: string | null;
+  accent_color: string | null;
+  support_email: string | null;
   created_at: string;
 }
+
 
 const normalizeSlug = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-{2,}/g, "-").slice(0, 50);
@@ -71,6 +80,16 @@ export default function SuperAdminPartners() {
   const [editActive, setEditActive] = useState(true);
   const [editBillingMode, setEditBillingMode] = useState<"wholesale" | "commission">("wholesale");
   const [editCommissionPct, setEditCommissionPct] = useState<string>("20");
+  // White-Label (Stage 7)
+  const [editWhiteLabel, setEditWhiteLabel] = useState(false);
+  const [editBrandDisplayName, setEditBrandDisplayName] = useState("");
+  const [editCustomDomain, setEditCustomDomain] = useState("");
+  const [editPrimaryColor, setEditPrimaryColor] = useState("");
+  const [editSecondaryColor, setEditSecondaryColor] = useState("");
+  const [editAccentColor, setEditAccentColor] = useState("");
+  const [editSupportEmail, setEditSupportEmail] = useState("");
+  const [editLogoUrl, setEditLogoUrl] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editSlugStatus, setEditSlugStatus] = useState<
     | { kind: "idle" }
@@ -80,12 +99,13 @@ export default function SuperAdminPartners() {
     | { kind: "invalid"; message: string }
   >({ kind: "idle" });
 
+
   const { data: partners = [], isLoading } = useQuery({
     queryKey: ["super-admin-partners"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("partners")
-        .select("id, name, slug, subdomain, contact_email, is_active, billing_mode, commission_pct, created_at")
+        .select("id, name, slug, subdomain, custom_domain, contact_email, is_active, billing_mode, commission_pct, white_label_enabled, brand_display_name, logo_url, primary_color, secondary_color, accent_color, support_email, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as Partner[];
@@ -227,8 +247,43 @@ export default function SuperAdminPartners() {
     setEditActive(p.is_active);
     setEditBillingMode((p.billing_mode === "commission" ? "commission" : "wholesale"));
     setEditCommissionPct(String(p.commission_pct ?? 20));
+    setEditWhiteLabel(p.white_label_enabled ?? false);
+    setEditBrandDisplayName(p.brand_display_name ?? "");
+    setEditCustomDomain(p.custom_domain ?? "");
+    setEditPrimaryColor(p.primary_color ?? "");
+    setEditSecondaryColor(p.secondary_color ?? "");
+    setEditAccentColor(p.accent_color ?? "");
+    setEditSupportEmail(p.support_email ?? "");
+    setEditLogoUrl(p.logo_url ?? null);
     setEditSlugStatus({ kind: "available" });
     setEditOpen(true);
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!editPartner) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "Logo zu groß", description: "Max. 2 MB.", variant: "destructive" });
+      return;
+    }
+    setLogoUploading(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+      const path = `${editPartner.id}/logo-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("partner-assets")
+        .upload(path, file, { cacheControl: "3600", upsert: true });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("partner-assets").getPublicUrl(path);
+      setEditLogoUrl(pub.publicUrl);
+      toast({ title: "Logo hochgeladen" });
+    } catch (err) {
+      toast({ title: "Upload-Fehler", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    } finally {
+      setLogoUploading(false);
+      e.target.value = "";
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -246,6 +301,8 @@ export default function SuperAdminPartners() {
       toast({ title: "Provisionssatz", description: "Bitte einen Wert zwischen 0 und 100 angeben.", variant: "destructive" });
       return;
     }
+    const normalizeDomain = (d: string) =>
+      d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "") || null;
     setEditSaving(true);
     try {
       const { error } = await supabase
@@ -258,6 +315,14 @@ export default function SuperAdminPartners() {
           is_active: editActive,
           billing_mode: editBillingMode,
           commission_pct: isNaN(pct) ? 20 : pct,
+          white_label_enabled: editWhiteLabel,
+          brand_display_name: editBrandDisplayName.trim() || null,
+          custom_domain: normalizeDomain(editCustomDomain),
+          primary_color: editPrimaryColor.trim() || null,
+          secondary_color: editSecondaryColor.trim() || null,
+          accent_color: editAccentColor.trim() || null,
+          support_email: editSupportEmail.trim().toLowerCase() || null,
+          logo_url: editLogoUrl,
         })
         .eq("id", editPartner.id);
       if (error) throw error;
@@ -269,6 +334,7 @@ export default function SuperAdminPartners() {
       toast({ title: "Fehler", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     } finally { setEditSaving(false); }
   };
+
 
   const toggleActive = useMutation({
     mutationFn: async (p: Partner) => {
@@ -506,7 +572,8 @@ export default function SuperAdminPartners() {
         open={editOpen}
         onOpenChange={(o) => { setEditOpen(o); if (!o) setEditPartner(null); }}
       >
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+
           <DialogHeader>
             <DialogTitle>Partner bearbeiten</DialogTitle>
             <DialogDescription>
@@ -622,7 +689,161 @@ export default function SuperAdminPartners() {
                 </div>
               )}
             </div>
+
+            {/* Stage 7: White-Label / Custom Domain */}
+            <div className="border-t pt-3 mt-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-base">White-Label</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="e-wl"
+                    type="checkbox"
+                    checked={editWhiteLabel}
+                    onChange={(e) => setEditWhiteLabel(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="e-wl" className="cursor-pointer text-sm">aktiv</Label>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1">
+                Bei Aktivierung wird das Partner-Branding (Logo + Farbe) für alle Tenants dieses Partners
+                und auf der Login-Seite der eigenen Domain angezeigt.
+              </p>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="e-brand-name">Marken-Anzeigename (optional)</Label>
+                <Input
+                  id="e-brand-name"
+                  value={editBrandDisplayName}
+                  onChange={(e) => setEditBrandDisplayName(e.target.value)}
+                  placeholder={editName || "z. B. Mustermann Energie"}
+                  disabled={!editWhiteLabel}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="e-custom-domain">Custom Domain</Label>
+                <Input
+                  id="e-custom-domain"
+                  value={editCustomDomain}
+                  onChange={(e) => setEditCustomDomain(e.target.value)}
+                  placeholder="energie.mustermann.de"
+                  disabled={!editWhiteLabel}
+                />
+                <p className="text-xs text-muted-foreground">
+                  DNS-CNAME auf die AICONO-Hetzner-Infrastruktur muss eingerichtet sein.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Logo</Label>
+                <div className="flex items-center gap-3">
+                  {editLogoUrl ? (
+                    <img src={editLogoUrl} alt="Logo" className="h-12 w-12 object-contain rounded border bg-white p-1" />
+                  ) : (
+                    <div className="h-12 w-12 rounded border bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                      kein Logo
+                    </div>
+                  )}
+                  <Input
+                    type="file"
+                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                    onChange={handleLogoUpload}
+                    disabled={!editWhiteLabel || logoUploading}
+                    className="text-xs"
+                  />
+                  {editLogoUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditLogoUrl(null)}
+                      disabled={!editWhiteLabel}
+                    >
+                      Entfernen
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">PNG/JPG/SVG/WebP, max. 2 MB.</p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="e-primary">Primärfarbe</Label>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      id="e-primary"
+                      type="color"
+                      value={editPrimaryColor || "#1a365d"}
+                      onChange={(e) => setEditPrimaryColor(e.target.value)}
+                      disabled={!editWhiteLabel}
+                      className="h-9 w-12 p-1"
+                    />
+                    <Input
+                      value={editPrimaryColor}
+                      onChange={(e) => setEditPrimaryColor(e.target.value)}
+                      disabled={!editWhiteLabel}
+                      placeholder="#1a365d"
+                      className="text-xs"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="e-secondary">Sekundär</Label>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      id="e-secondary"
+                      type="color"
+                      value={editSecondaryColor || "#2d8a6e"}
+                      onChange={(e) => setEditSecondaryColor(e.target.value)}
+                      disabled={!editWhiteLabel}
+                      className="h-9 w-12 p-1"
+                    />
+                    <Input
+                      value={editSecondaryColor}
+                      onChange={(e) => setEditSecondaryColor(e.target.value)}
+                      disabled={!editWhiteLabel}
+                      placeholder="#2d8a6e"
+                      className="text-xs"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="e-accent">Akzent</Label>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      id="e-accent"
+                      type="color"
+                      value={editAccentColor || "#f59e0b"}
+                      onChange={(e) => setEditAccentColor(e.target.value)}
+                      disabled={!editWhiteLabel}
+                      className="h-9 w-12 p-1"
+                    />
+                    <Input
+                      value={editAccentColor}
+                      onChange={(e) => setEditAccentColor(e.target.value)}
+                      disabled={!editWhiteLabel}
+                      placeholder="#f59e0b"
+                      className="text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="e-support">Support-E-Mail (optional)</Label>
+                <Input
+                  id="e-support"
+                  type="email"
+                  value={editSupportEmail}
+                  onChange={(e) => setEditSupportEmail(e.target.value)}
+                  placeholder="support@mustermann.de"
+                  disabled={!editWhiteLabel}
+                />
+              </div>
+            </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>Abbrechen</Button>
             <Button

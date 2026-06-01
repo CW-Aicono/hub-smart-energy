@@ -11,17 +11,25 @@ import { ArrowLeft } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import aiconoLogo from "@/assets/aicono-logo.png";
+import { usePartnerHostBranding } from "@/hooks/usePartnerHostBranding";
 
 type AuthView = "login" | "forgotPassword";
+
 
 const Auth = () => {
   const { user, loading, signIn } = useAuth();
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { branding: partnerBranding } = usePartnerHostBranding();
   const [view, setView] = useState<AuthView>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const brandLogo = partnerBranding?.logo_url || aiconoLogo;
+  const brandName = partnerBranding?.brand_display_name || partnerBranding?.name || "AICONO";
+  const brandPrimary = partnerBranding?.primary_color || "hsl(220, 60%, 20%)";
+
 
   const authSchema = z.object({
     email: z.string().email(t("auth.invalidCredentials")),
@@ -83,11 +91,11 @@ const Auth = () => {
   return (
     <div className="flex min-h-screen">
       {/* Left branding panel */}
-      <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-12" style={{ backgroundColor: 'hsl(220, 60%, 20%)' }}>
+      <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-12" style={{ backgroundColor: brandPrimary }}>
         <div className="max-w-md text-center">
           <div className="flex flex-col items-center gap-6 mb-8">
             <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-8">
-              <img src={aiconoLogo} alt="AICONO" className="h-28 object-contain drop-shadow-lg" />
+              <img src={brandLogo} alt={brandName} className="h-28 object-contain drop-shadow-lg" />
             </div>
           </div>
           <p className="text-base leading-relaxed" style={{ color: 'hsl(0, 0%, 100%, 0.75)' }}>
@@ -101,8 +109,9 @@ const Auth = () => {
         <Card className="w-full max-w-md border-0 shadow-lg">
           <CardHeader className="text-center">
             <div className="flex items-center justify-center mb-2 lg:hidden">
-              <img src={aiconoLogo} alt="AICONO" className="h-16 object-contain" />
+              <img src={brandLogo} alt={brandName} className="h-16 object-contain" />
             </div>
+
             <CardTitle className="text-2xl font-display">
               {view === "forgotPassword" ? t("auth.forgotPassword") : t("auth.welcomeBack")}
             </CardTitle>
@@ -126,7 +135,8 @@ const Auth = () => {
                     required
                   />
                 </div>
-                <Button type="submit" style={{ backgroundColor: 'hsl(220, 60%, 20%)' }} className="w-full text-white hover:opacity-90" disabled={submitting}>
+                <Button type="submit" style={{ backgroundColor: brandPrimary }} className="w-full text-white hover:opacity-90" disabled={submitting}>
+
                   {submitting ? t("common.loading") : t("profile.passwordResetViaEmail")}
                 </Button>
                 <div className="text-center">
@@ -175,7 +185,7 @@ const Auth = () => {
                     autoComplete="current-password"
                   />
                 </div>
-                <Button type="submit" style={{ backgroundColor: 'hsl(220, 60%, 20%)' }} className="w-full text-white hover:opacity-90" disabled={submitting}>
+                <Button type="submit" style={{ backgroundColor: brandPrimary }} className="w-full text-white hover:opacity-90" disabled={submitting}>
                   {submitting ? t("common.loading") : t("auth.login")}
                 </Button>
               </form>
