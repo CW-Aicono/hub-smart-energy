@@ -1,14 +1,16 @@
-import { useState, lazy, Suspense } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState, lazy, Suspense } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useDemoPath } from "@/contexts/DemoMode";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useChargePoints, ChargePoint } from "@/hooks/useChargePoints";
+import type { ChargePointConnector } from "@/hooks/useChargePointConnectors";
 import { useChargerModels } from "@/hooks/useChargerModels";
 import { useChargingSessions } from "@/hooks/useChargingSessions";
 import { useTenant } from "@/hooks/useTenant";
+import { supabase } from "@/integrations/supabase/client";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,7 +56,7 @@ const ChargingPoints = () => {
 
   const statusConfig: Record<string, { labelKey: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap; color: string }> = {
     available: { labelKey: "charging.statusAvailable", variant: "default", icon: Zap, color: "text-green-500" },
-    charging: { labelKey: "charging.statusCharging", variant: "secondary", icon: PlugZap, color: "text-blue-500" },
+    charging: { labelKey: "chargingStats.occupied", variant: "secondary", icon: PlugZap, color: "text-blue-500" },
     faulted: { labelKey: "charging.statusFaulted", variant: "destructive", icon: AlertTriangle, color: "text-red-500" },
     unavailable: { labelKey: "charging.statusUnavailable", variant: "outline", icon: ZapOff, color: "text-yellow-500" },
     offline: { labelKey: "charging.statusOffline", variant: "outline", icon: WifiOff, color: "text-orange-500" },
