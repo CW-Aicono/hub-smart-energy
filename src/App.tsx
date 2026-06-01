@@ -18,7 +18,10 @@ import PartnerDashboard from "@/pages/partner/PartnerDashboard";
 import PartnerTenants from "@/pages/partner/PartnerTenants";
 import PartnerMembers from "@/pages/partner/PartnerMembers";
 import PartnerBilling from "@/pages/partner/PartnerBilling";
+import PartnerSalesCatalog from "@/pages/partner/PartnerSalesCatalog";
+import PartnerSalesRules from "@/pages/partner/PartnerSalesRules";
 import RecoveryGuard from "@/components/RecoveryGuard";
+import SalesHostGuard from "@/components/SalesHostGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
 import SuperAdminImpersonationBar from "./components/SuperAdminImpersonationBar";
@@ -150,6 +153,7 @@ const App = () => (
                   <Sonner />
                   <ConfirmDialogHost />
                   <RecoveryGuard />
+                  <SalesHostGuard />
                   <UpdateBanner />
                   <SupportSessionBanner />
                   <SuperAdminImpersonationBar />
@@ -278,6 +282,8 @@ const App = () => (
                       <Route path="/partner/tenants" element={<PartnerLayout><PartnerTenants /></PartnerLayout>} />
                       <Route path="/partner/billing" element={<PartnerLayout><PartnerBilling /></PartnerLayout>} />
                       <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
+                      <Route path="/partner/sales/catalog" element={<PartnerLayout><PartnerSalesCatalog /></PartnerLayout>} />
+                      <Route path="/partner/sales/rules" element={<PartnerLayout><PartnerSalesRules /></PartnerLayout>} />
                       {/* Sales Scout: gemeinsam genutzt unter /sales (Partner-Member sehen ihre eigene Org via RLS) */}
 
                       <Route path="*" element={<NotFound />} />

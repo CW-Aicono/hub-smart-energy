@@ -7,7 +7,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { DashboardFilterProvider } from "@/hooks/useDashboardFilter";
 import { isImpersonating } from "@/lib/supportView";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
-import { isPartnerHost } from "@/lib/hostname";
+import { isPartnerHost, isSalesHost } from "@/lib/hostname";
 import DashboardContent from "./DashboardContent";
 
 const Index = () => {
@@ -48,6 +48,9 @@ const Index = () => {
   }
 
   if (!user) return <Navigate to="/auth" replace />;
+
+  // Sales-Scout-Subdomain (sales.aicono.org) leitet auf die mobile PWA /sales.
+  if (isSalesHost()) return <Navigate to="/sales" replace />;
 
   // Stufe 2: Partner-Subdomain (partner.aicono.org) zeigt ausschließlich das Partner-Portal.
   // Auch wenn der eingeloggte User Super-Admin oder Tenant-Admin ist, soll auf dieser
