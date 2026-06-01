@@ -46,6 +46,7 @@ const Help = lazy(() => import("./pages/Help"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
 const SuperAdminTenants = lazy(() => import("./pages/SuperAdminTenants"));
+const SuperAdminPartners = lazy(() => import("./pages/SuperAdminPartners"));
 const SuperAdminTenantDetail = lazy(() => import("./pages/SuperAdminTenantDetail"));
 const SuperAdminStatistics = lazy(() => import("./pages/SuperAdminStatistics"));
 const SuperAdminBilling = lazy(() => import("./pages/SuperAdminBilling"));
@@ -203,6 +204,7 @@ const App = () => (
                       <Route path="/super-admin" element={<SA><SuperAdminDashboard /></SA>} />
                       <Route path="/super-admin/tenants" element={<SA><SuperAdminTenants /></SA>} />
                       <Route path="/super-admin/tenants/:id" element={<SA><SuperAdminTenantDetail /></SA>} />
+                      <Route path="/super-admin/partners" element={<SA><SuperAdminPartners /></SA>} />
                       <Route path="/super-admin/statistics" element={<SA><SuperAdminStatistics /></SA>} />
                       <Route path="/super-admin/users" element={<SA><SuperAdminUsers /></SA>} />
                       <Route path="/super-admin/roles" element={<SA><SuperAdminRoles /></SA>} />
