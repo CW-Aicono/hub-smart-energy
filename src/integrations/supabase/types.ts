@@ -2491,6 +2491,8 @@ export type Database = {
           kompatibilitaet: Json
           kompatible_klassen: string[]
           modell: string
+          owner_scope: string
+          partner_id: string | null
           tech_specs: Json
           updated_at: string
           vk_preis: number
@@ -2511,6 +2513,8 @@ export type Database = {
           kompatibilitaet?: Json
           kompatible_klassen?: string[]
           modell: string
+          owner_scope?: string
+          partner_id?: string | null
           tech_specs?: Json
           updated_at?: string
           vk_preis?: number
@@ -2531,11 +2535,69 @@ export type Database = {
           kompatibilitaet?: Json
           kompatible_klassen?: string[]
           modell?: string
+          owner_scope?: string
+          partner_id?: string | null
           tech_specs?: Json
           updated_at?: string
           vk_preis?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "device_catalog_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      device_catalog_partner_pricing: {
+        Row: {
+          created_at: string
+          device_catalog_id: string
+          ek_preis: number | null
+          id: string
+          installations_pauschale: number | null
+          partner_id: string
+          updated_at: string
+          vk_preis: number | null
+        }
+        Insert: {
+          created_at?: string
+          device_catalog_id: string
+          ek_preis?: number | null
+          id?: string
+          installations_pauschale?: number | null
+          partner_id: string
+          updated_at?: string
+          vk_preis?: number | null
+        }
+        Update: {
+          created_at?: string
+          device_catalog_id?: string
+          ek_preis?: number | null
+          id?: string
+          installations_pauschale?: number | null
+          partner_id?: string
+          updated_at?: string
+          vk_preis?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_catalog_partner_pricing_device_catalog_id_fkey"
+            columns: ["device_catalog_id"]
+            isOneToOne: false
+            referencedRelation: "device_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_catalog_partner_pricing_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       device_compatibility: {
         Row: {
@@ -2543,6 +2605,8 @@ export type Database = {
           created_at: string
           id: string
           notiz: string | null
+          owner_scope: string
+          partner_id: string | null
           prio: number
           relation_type: string
           source_device_id: string
@@ -2554,6 +2618,8 @@ export type Database = {
           created_at?: string
           id?: string
           notiz?: string | null
+          owner_scope?: string
+          partner_id?: string | null
           prio?: number
           relation_type: string
           source_device_id: string
@@ -2565,6 +2631,8 @@ export type Database = {
           created_at?: string
           id?: string
           notiz?: string | null
+          owner_scope?: string
+          partner_id?: string | null
           prio?: number
           relation_type?: string
           source_device_id?: string
@@ -2572,6 +2640,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "device_compatibility_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "device_compatibility_source_device_id_fkey"
             columns: ["source_device_id"]
@@ -2597,6 +2672,8 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          owner_scope: string
+          partner_id: string | null
           prio: number
           updated_at: string
         }
@@ -2608,6 +2685,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          owner_scope?: string
+          partner_id?: string | null
           prio?: number
           updated_at?: string
         }
@@ -2619,6 +2698,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          owner_scope?: string
+          partner_id?: string | null
           prio?: number
           updated_at?: string
         }
@@ -2628,6 +2709,13 @@ export type Database = {
             columns: ["device_catalog_id"]
             isOneToOne: false
             referencedRelation: "device_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_selection_rules_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
@@ -5574,6 +5662,10 @@ export type Database = {
       }
       partner_members: {
         Row: {
+          can_create_tenant: boolean
+          can_manage_sales_catalog: boolean
+          can_use_sales_scout: boolean
+          can_view_billing: boolean
           created_at: string
           id: string
           partner_id: string
@@ -5582,6 +5674,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          can_create_tenant?: boolean
+          can_manage_sales_catalog?: boolean
+          can_use_sales_scout?: boolean
+          can_view_billing?: boolean
           created_at?: string
           id?: string
           partner_id: string
@@ -5590,6 +5686,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          can_create_tenant?: boolean
+          can_manage_sales_catalog?: boolean
+          can_use_sales_scout?: boolean
+          can_view_billing?: boolean
           created_at?: string
           id?: string
           partner_id?: string
@@ -9591,6 +9691,10 @@ export type Database = {
       }
       partner_has_tenant_access: {
         Args: { _tenant_id: string; _user_id: string }
+        Returns: boolean
+      }
+      partner_member_can: {
+        Args: { _permission: string; _user_id: string }
         Returns: boolean
       }
       release_gateway_refresh_lock: {

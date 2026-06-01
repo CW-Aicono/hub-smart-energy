@@ -1,47 +1,122 @@
-# Plan: Bewertungs-Pitchdeck (PPTX) für AICONO EMS
-
 ## Ziel
 
-Eine kompakte PowerPoint-Präsentation (.pptx, ~12–15 Folien) erstellen, die den aktuellen Projektstand zusammenfasst und eine grobe **Unternehmens-/Projektbewertung** liefert.
+1. **Partner** (Rolle `partner_admin`) bekommt unter `/partner/sales/catalog` und `/partner/sales/rules` dieselben Verwaltungsseiten wie der Super-Admin – aber gescoped auf seine `partner_id`.
+2. **Globaler Katalog bleibt sichtbar** (read-only) und der Partner kann für **jeden globalen Artikel einen eigenen Preis** hinterlegen (Override-Preis), zusätzlich eigene Artikel und Auswahl-Regeln pflegen.
+3. **Sales-Scout-PWA** läuft unter eigener Subdomain `**sales.aicono.org**` mit eigenem Manifest, Standalone-Layout, Safe-Area oben/unten und Tablet-/Smartphone-Optimierung.
 
-## Inhalt der Folien (Entwurf)
+---
 
-1. **Titel** — AICONO EMS – Projektbewertung Stand Juni 2026
-2. **Executive Summary** — Was ist AICONO EMS? Multi-Tenant B2B-Energieplattform mit lokalen Gateways, EV-Charging, Mieterstrom, Energy-Sharing, Sales-Scout, Partner-Portal.
-3. **Produktportfolio (Übersicht)** — Hauptprodukt + Teilprodukte als Bento-Grid
-4. **Kernplattform (Tenant-Backend)** — Dashboard, Energiemonitoring, Reporting, Multi-Location, Automation, Alarmregeln, CO₂-Bilanz, AI-Copilot
-5. **Hardware-Layer** — AICONO EMS Gateway (HA-Add-on), AICONO OS, MQTT Cloud Bridge, OCPP Persistent Server, Integrationen (Schneider, Siemens, Shelly, Loxone, …)
-6. **EV-Charging-Modul** — OCPP 1.6, PV-Überschussladen, Billing, Public Status, Stability Score
-7. **Mieterstrom & Energy-Sharing** — Communitys, Rechnungs-PDF, SEPA-XML, KMU-Klassifikation
-8. **Sales Scout & PPA** — Mobile PWA, Lead-Pipeline, Angebots-PDF, Marketplace
-9. **Partner-Portal & White-Label-Strategie** — partner.aicono.org, RBAC, Branding
-10. **Super-Admin-Tools** — Lexware-Billing, Monitoring, Bundles, Lizenzen, Recovery
-11. **Technologie & Skalierung** — React/Vite, Supabase self-hosted (Hetzner), Docker, RLS-Multi-Tenancy, i18n (DE/EN/ES/NL)
-12. **Bewertung – Methodik** — Cost-to-build (Replacement Cost), SaaS-Multiples, strategischer Wert; deutlich machen, dass es eine **grobe Indikation** ohne Revenue-Daten ist
-13. **Bewertung – Zahlen** — Range Low/Mid/High mit Begründung (Code-Umfang, Feature-Breite, Hardware-Integration, Vertikalisierung)
-14. **Werttreiber & Risiken** — Werttreiber (Tiefe der Integrationen, Multi-Tenant, Hardware), Risiken (Wirtschaftsmodell offen, Single-Founder-Codebase, Compliance/DSGVO)
-15. **Disclaimer** — Keine Wirtschaftsprüfer-Bewertung, nur indikative Größenordnung
+## 1. Datenmodell (Migration)
 
-## Bewertungsmethodik (Vorab-Indikation)
+```sql
+-- device_catalog: Owner-Felder
+ALTER TABLE public.device_catalog
+  ADD COLUMN partner_id uuid REFERENCES public.partners(id) ON DELETE CASCADE,
+  ADD COLUMN owner_scope text NOT NULL DEFAULT 'global'
+    CHECK (owner_scope IN ('global','partner'));
+CREATE INDEX idx_device_catalog_partner ON public.device_catalog(partner_id);
 
-- **Replacement Cost**: Geschätzter Aufwand, das Produkt heute nachzubauen (Team-Jahre × Marktsätze).
-- **Strategischer Wert**: Multi-Tenant-Architektur, eigene Gateway-Hardware, vollständige OCPP-Stack, Partner-Modell.
-- **Da keine ARR/MRR-Zahlen bekannt sind**: kein SaaS-Revenue-Multiple, sondern Asset-/Tech-Bewertung.
+-- device_compatibility: Owner-Felder (für Regeln)
+ALTER TABLE public.device_compatibility
+  ADD COLUMN partner_id uuid REFERENCES public.partners(id) ON DELETE CASCADE,
+  ADD COLUMN owner_scope text NOT NULL DEFAULT 'global'
+    CHECK (owner_scope IN ('global','partner'));
 
-## Vorgehen (nach Plan-Approval)
+-- Partner-spezifische Preis-Overrides auf globale Artikel
+CREATE TABLE public.device_catalog_partner_pricing (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  device_catalog_id uuid NOT NULL REFERENCES public.device_catalog(id) ON DELETE CASCADE,
+  partner_id uuid NOT NULL REFERENCES public.partners(id) ON DELETE CASCADE,
+  ek_preis numeric(10,2),
+  vk_preis numeric(10,2),
+  installations_pauschale numeric(10,2),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (device_catalog_id, partner_id)
+);
+-- GRANT + RLS: Partner sieht/ändert nur eigene Overrides; super_admin alles.
+```
 
-1. Codebase-Inventur: Zeilen-/Dateienzahl, Edge Functions, Migrationen, Tabellen, Module zählen (Lovable Cloud + Hetzner)
-2. PPTX mit `pptxgenjs` (Skill: pptx) erstellen — dunkles AICONO-CI-Design (Navy/Teal-Akzent), Montserrat-ähnliche Fonts
-3. QA: Slides → PDF → JPG, jede Folie visuell prüfen, Fixes
-4. Datei nach `/mnt/documents/AICONO_EMS_Bewertung_2026-06.pptx` legen und als Artifact ausliefern
+**RLS (Kurzfassung):**
 
-## Offene Fragen
+- `device_catalog` SELECT: alle authenticated dürfen `owner_scope='global'` ODER eigene `partner_id`.
+- `device_catalog` INSERT/UPDATE/DELETE: super_admin (global) oder `partner_admin` (nur eigene `partner_id`, `owner_scope='partner'` erzwungen via Trigger).
+- Analog `device_compatibility`.
+- `device_catalog_partner_pricing`: nur eigener Partner + super_admin.
 
-- Soll die Bewertung in **EUR** oder **USD** dargestellt werden? (Default: EUR)
-- Zielgruppe der Folien: **intern** (für dich) oder **investorenfähig** (mehr Politur, weniger interne Begriffe)? (Default: intern/sachlich)
-- Sollen reale ARR/MRR-Zahlen einfließen, falls du welche nennst, oder rein **Tech-/Asset-Bewertung**? (Default: Tech-/Asset, da keine Zahlen vorliegen)  
+Edge-Function `sales-suggest-accessories` und Preisermittlung in Quote-Generierung: beim Laden von `vk_preis`/`installations_pauschale` Override per `partner_id` mergen (LEFT JOIN auf `device_catalog_partner_pricing`).
+
+---
+
+## 2. Frontend – Partner-Backend
+
+Neue Seiten unter `src/pages/partner/`:
+
+- `PartnerSalesCatalog.tsx` – wiederverwendete Komponente aus `SuperAdminSalesCatalog`, parametrisiert mit `scope: 'partner' | 'global-readonly-with-override'`.
+- `PartnerSalesRules.tsx` – analog zu `SuperAdminSalesRules`.
+
+**Refactor:** Logik aus `SuperAdminSalesCatalog.tsx` und `SuperAdminSalesRules.tsx` in wiederverwendbare Komponenten extrahieren (`SalesCatalogManager`, `SalesRulesManager`) mit Prop `scope`. Filter & Insert-Defaults setzen `owner_scope`/`partner_id` entsprechend.
+
+Globale Artikel werden in der Partner-Ansicht angezeigt mit:
+
+- Read-only Basisdaten
+- Inline-Editor für Override-Preise (ek/vk/Pauschale) → schreibt in `device_catalog_partner_pricing`
+- Visueller Badge „Global" vs. „Eigen"
+
+Routen in `src/App.tsx`:
+
+```
+/partner/sales/catalog → PartnerLayout > PartnerSalesCatalog
+/partner/sales/rules   → PartnerLayout > PartnerSalesRules
+```
+
+Navigation in `PartnerLayout` ergänzen (Sales-Scout-Gruppe mit zwei Unterpunkten).
+
+---
+
+## 3. Sales-Scout PWA
+
+**Subdomain `sales.aicono.org`:**
+
+- DNS A/AAAA-Record auf den Hetzner-Server (Anleitung im Plan-Ergebnis).
+- Traefik/Caddy-Routing: zusätzlicher Host-Eintrag für `sales.aicono.org` → gleicher Vite-Build, gleicher Origin-Server. Anleitung als Markdown in `docs/DEPLOYMENT.md` ergänzen.
+- React-Boot prüft `window.location.hostname === 'sales.aicono.org'` und redirected `/` → `/sales` automatisch (oder rendert direkt SalesLayout ohne Tenant-Chrome).
+
+**Manifest:**
+
+- `public/manifest-sales.json`: `start_url`/`scope` auf `/` setzen wenn Subdomain dediziert, `display: standalone`, Theme #0f172a (bereits vorhanden).
+- In `SalesLayout` wird Manifest bereits dynamisch geladen – Logik anpassen: bei Subdomain immer aktiv.
+
+**Tablet/Mobile-Optimierung + Safe-Area:**
+
+- `index.html`: `<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">` (`viewport-fit=cover` ist neu).
+- `SalesLayout` Header bekommt:
+  - `padding-top: env(safe-area-inset-top)`
+  - `padding-left/right: env(safe-area-inset-left/right)`
+  - sticky Header bleibt unter Notch.
+- Touch-Targets ≥ 44px, größere Buttons, FAB bereits vorhanden.
+- Landscape-Layout für Tablets (max-width 1024px statt 768px), 2-spaltiges Formular auf Tablet.
+
+**Funktional unverändert** – nur Layout-Optimierung; Daten kommen weiterhin aus `sales_projects`, `sales_distributions`, `sales_measurement_points`. RLS-Erweiterung sorgt automatisch dafür, dass Monteur (partner_member) den Partner-Katalog + globalen Katalog mit eigenen Preisen sieht.
+
+---
+
+## 4. Reihenfolge der Umsetzung
+
+1. **Migration** (Schema + RLS + GRANT) – muss vom Nutzer freigegeben werden.
+2. Refactor Super-Admin-Seiten → wiederverwendbare Komponenten.
+3. Partner-Seiten + Routen + Navigation.
+4. Edge-Function `sales-suggest-accessories` + Quote-Generator: Preis-Override-Merge.
+5. PWA: Manifest, Safe-Area, viewport-fit, Subdomain-Detection im Frontend.
+6. Schritt-für-Schritt-Anleitung (DE, laienverständlich) für DNS + Traefik-Subdomain in `docs/DEPLOYMENT.md`.
+
+---
+
+## Offen / Bestätigung erwünscht
+
+- **DNS/Traefik**: Soll ich die exakte Anleitung im selben Schritt schreiben, oder erst nach Cloud-Implementierung als separates Setup-Dokument?
+- **Partner-Mitarbeiter ohne `partner_admin**`: Sollen sie den Katalog nur lesen oder auch eigene Artikel/Regeln pflegen dürfen? (Vorschlag: nur `partner_admin` darf pflegen, alle Partner-Member dürfen lesen.)  
   
 Antworten:  
-- Bewertung in EUR  
-- intern  
-- reine Tech-/Asset-Bewertung
+- DNS/Traefik: Anleitung im selben Schritt schreiben  
+- Partner-Mitarbeiter: Partner-Admin soll Rollen und Rechte für seine Mitarbeiter anlegen und verwalten können: Artikel/Regeln pflegen ja/nein, neuen Tenant anlegen ja/nein, Abrechnung ja/nein, Sales-Scout nutzen ja/nein
