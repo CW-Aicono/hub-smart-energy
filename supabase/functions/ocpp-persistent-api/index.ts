@@ -66,6 +66,36 @@ function onlyPatch(input: Record<string, unknown>, allowed: string[]) {
   return out;
 }
 
+function normalizeOcppStatus(raw: string | null | undefined): "available" | "charging" | "faulted" | "unavailable" | "unconfigured" {
+  const s = String(raw ?? "").toLowerCase().trim();
+  if (!s) return "unconfigured";
+  if (s.includes("fault") || s.includes("error")) return "faulted";
+  if (s.includes("unavailable") || s.includes("inoperative")) return "unavailable";
+  if (
+    s.includes("charg") ||
+    s.includes("occup") ||
+    s.includes("suspendedev") ||
+    s.includes("suspendedevse") ||
+    s.includes("preparing") ||
+    s.includes("finishing") ||
+    s.includes("reserved")
+  ) return "charging";
+  if (s.includes("avail")) return "available";
+  return "unconfigured";
+}
+
+async function syncChargePointStatusFromConnectors(chargePointId: string) {
+  const { data, error } = await admin
+    .from("charge_point_connectors")
+    .select("status")
+    .eq("charge_point_id", chargePointId);
+  if (error) throw error;
+  const statuses = (data ?? []).map((row) => normalizeOcppStatus(row.status as string | null));
+  const priority = ["faulted", "unavailable", "charging", "unconfigured", "available"] as const;
+  const status = priority.find((candidate) => statuses.includes(candidate)) ?? "available";
+  await admin.from("charge_points").update({ status }).eq("id", chargePointId);
+}
+
 async function handle(action: string, body: Record<string, unknown>) {
   switch (action) {
     case "authenticate-charge-point": {
