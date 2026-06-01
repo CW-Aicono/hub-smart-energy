@@ -94,8 +94,11 @@ export async function createChargingSession(payload: {
   meterStart: number;
   startTime: string;
   transactionId: number;
-}): Promise<{ id: string }> {
-  return callBackend<{ id: string }>("create-charging-session", payload as unknown as Record<string, unknown>);
+}): Promise<{ id: string; transactionId: number; duplicate?: boolean }> {
+  return callBackend<{ id: string; transactionId: number; duplicate?: boolean }>(
+    "create-charging-session",
+    payload as unknown as Record<string, unknown>,
+  );
 }
 
 export async function getChargingSessionByTransaction(
