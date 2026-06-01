@@ -45,26 +45,29 @@ export function usePartnerAccess(): PartnerAccessState {
     (async () => {
       const { data, error } = await supabase
         .from("partner_members")
-        .select("role, partner_id, partners:partner_id(name, logo_url, is_active)")
+        .select("partner_role, partner_id, partners:partner_id(name, logo_url, is_active)")
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (cancelled) return;
 
-      if (error || !data || !data.partners || (data.partners as any).is_active === false) {
+      const partner = (data as any)?.partners as
+        | { name: string; logo_url: string | null; is_active: boolean }
+        | null;
+
+      if (error || !data || !partner || partner.is_active === false) {
         setState({ ...INITIAL, loading: false });
         return;
       }
 
-      const role = data.role as PartnerRole;
-      const p = data.partners as { name: string; logo_url: string | null };
+      const role = (data as any).partner_role as PartnerRole;
       setState({
         loading: false,
         isPartnerMember: true,
         isPartnerAdmin: role === "partner_admin",
-        partnerId: data.partner_id,
-        partnerName: p.name,
-        partnerLogoUrl: p.logo_url,
+        partnerId: (data as any).partner_id,
+        partnerName: partner.name,
+        partnerLogoUrl: partner.logo_url,
         role,
       });
     })();
