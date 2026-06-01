@@ -105,7 +105,7 @@ export default function SuperAdminPartners() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("partners")
-        .select("id, name, slug, subdomain, contact_email, is_active, billing_mode, commission_pct, created_at")
+        .select("id, name, slug, subdomain, custom_domain, contact_email, is_active, billing_mode, commission_pct, white_label_enabled, brand_display_name, logo_url, primary_color, secondary_color, accent_color, support_email, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as Partner[];
