@@ -30,9 +30,7 @@ const handler = async (req: Request): Promise<Response> => {
       .eq("user_id", callingUser.id);
 
     const roles = (callerRoles || []).map((r: { role: string }) => r.role);
-    if (!roles.includes("super_admin") && !roles.includes("admin")) {
-      throw new Error("Insufficient permissions");
-    }
+    const isElevated = roles.includes("super_admin") || roles.includes("admin");
 
     const { tenantId, adminEmail, adminName, role, redirectTo, force } = await req.json();
 
@@ -43,6 +41,21 @@ const handler = async (req: Request): Promise<Response> => {
     if (adminName && typeof adminName !== "string") throw new Error("Invalid adminName");
     if (role && !["admin", "user"].includes(role)) throw new Error("Invalid role");
     const assignedRole = role === "user" ? "user" : "admin";
+
+    // Allow partner_admins to invite admins for tenants that belong to their own partner
+    if (!isElevated) {
+      const { data: partnerOk } = await supabase.rpc("partner_has_tenant_access", {
+        _user_id: callingUser.id,
+        _tenant_id: tenantId,
+      });
+      const { data: isPartnerAdmin } = await supabase.rpc("is_partner_admin", {
+        _user_id: callingUser.id,
+      });
+      if (!partnerOk || !isPartnerAdmin) {
+        throw new Error("Insufficient permissions");
+      }
+    }
+
 
     // Get tenant info for branding
     const { data: tenant } = await supabase
