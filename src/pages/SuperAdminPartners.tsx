@@ -253,6 +253,7 @@ export default function SuperAdminPartners() {
           </Table>
         )}
       </div>
+      </main>
     </div>
   );
 }
