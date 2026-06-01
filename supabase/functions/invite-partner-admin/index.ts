@@ -215,6 +215,12 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
+    console.log("[invite-partner-admin] email sent", {
+      to: adminEmail,
+      partnerId: partner.id,
+      messageId: emailResponse.data?.id ?? null,
+    });
+
     return new Response(
       JSON.stringify({
         success: true,
