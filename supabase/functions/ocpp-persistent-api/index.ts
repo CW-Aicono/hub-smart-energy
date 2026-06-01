@@ -170,6 +170,7 @@ async function handle(action: string, body: Record<string, unknown>) {
         .eq("charge_point_id", chargePointId)
         .eq("connector_id", connectorId);
       if (error) return fail(500, error.message);
+      await syncChargePointStatusFromConnectors(chargePointId);
       return ok();
     }
 
