@@ -34,7 +34,20 @@ const SuperAdminTenants = () => {
   const [newEmail, setNewEmail] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminName, setAdminName] = useState("");
+  const [newPartnerId, setNewPartnerId] = useState<string>("");
   const [creating, setCreating] = useState(false);
+
+  const { data: partnerOptions = [] } = useQuery({
+    queryKey: ["sa-tenants-partner-options"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("partners")
+        .select("id, name, is_active")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).filter((p: any) => p.is_active !== false);
+    },
+  });
 
   if (authLoading || roleLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
