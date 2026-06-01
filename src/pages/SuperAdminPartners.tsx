@@ -572,7 +572,8 @@ export default function SuperAdminPartners() {
         open={editOpen}
         onOpenChange={(o) => { setEditOpen(o); if (!o) setEditPartner(null); }}
       >
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+
           <DialogHeader>
             <DialogTitle>Partner bearbeiten</DialogTitle>
             <DialogDescription>
