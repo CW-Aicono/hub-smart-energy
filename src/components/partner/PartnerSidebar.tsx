@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Building2, LogOut, Briefcase, Users } from "lucide-react";
+import { LayoutDashboard, Building2, LogOut, Briefcase, Users, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { usePartnerAccess } from "@/hooks/usePartnerAccess";
 const NAV = [
   { to: "/partner", icon: LayoutDashboard, label: "Übersicht", end: true },
   { to: "/partner/tenants", icon: Building2, label: "Meine Tenants" },
+  { to: "/partner/billing", icon: Receipt, label: "Abrechnung" },
   { to: "/partner/members", icon: Users, label: "Partner-User" },
   { to: "/sales", icon: Briefcase, label: "Sales Scout" },
 ];
