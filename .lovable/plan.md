@@ -1,68 +1,121 @@
-# Remote-Support-Ansicht: Analyse und Lösungsvorschlag
+# Vertriebspartner-Backend — Gesamtkonzept
 
-## Was die Screenshots zeigen
+## 1. Ziel und Hierarchie
 
-| | Tenant-Admin (rote Leiste) | Super-Admin-Support (lila Leiste) |
-|---|---|---|
-| Sidebar-Reihenfolge | individuell sortiert | andere Reihenfolge |
-| Energieverbrauch Monat | tägliche Balken vom 1.–31. | nur ein Balken am 31. (heute), Werte stark reduziert |
-| Gauges | echte Live-Werte (8,6 kW etc.) | leere/abweichende Werte |
+Drei strikt getrennte Ebenen mit klarer Sichtbarkeit:
 
-## Warum das passiert (technischer Befund)
+```text
+Super-Admin (AICONO)
+   │  sieht ALLE Partner + ALLE Tenants
+   ▼
+Partner-Admin (z. B. Elektrobetrieb Mustermann)
+   │  sieht NUR eigene Tenants + eigene Partner-User
+   ▼
+Tenant-Admin (Endkunde)
+   │  sieht NUR seinen eigenen Tenant
+```
 
-Der aktuelle Support-Modus überschreibt nur `tenant.id` im Frontend (`useTenant` liest `support_view_tenant_id` aus sessionStorage). Alles, was **am Backend an `auth.uid()` oder am Backend an die Login-Identität gebunden ist**, bleibt aber der Super-Admin:
+Neu eingeführt:
 
-1. **Dashboard-Layout** wird in `dashboard_widgets` **pro `user_id`** gespeichert (`useDashboardWidgets.tsx`, Z. 73 `.eq("user_id", user.id)`). Der Support sieht also seine eigene Widget-Reihenfolge / Größen, nicht die des Tenant-Admins. Daher die "falsche Reihenfolge".
+- Organisationseinheit **Partner** (heute fehlt sie — `partner_id` zeigt aktuell direkt auf einen einzelnen `auth.users`-Datensatz).
+- Rollen `**partner_admin**` und `**partner_user**` als Erweiterung der bestehenden `app_role`-Enum.
+- Harte Zuordnung `**tenants.partner_id**` (nullable; NULL = direkter AICONO-Tenant).
 
-2. **Aggregations-RPCs** wie `get_meter_daily_totals_split_with_fallback` rufen intern `get_user_tenant_id()` auf. Diese Funktion liest die Tenant-ID **aus `auth.uid()`** des eingeloggten Users — beim Super-Admin ist das NULL oder seine eigene Tenant-ID, **nicht** der Support-Ziel-Tenant. Ergebnis: archivierte Tageswerte (`meter_period_totals`) werden gar nicht gefunden, nur der "Heute"-Fallback aus laufenden Power-Readings liefert noch etwas. Genau das sieht man im Screenshot (nur Balken am 31.).
+## 2. URL- und App-Strategie
 
-3. Gleiches Muster betrifft praktisch **alle** SECURITY DEFINER RPCs (Spotpreise, PV-Forecast, EMS-Copilot, Reports, Sustainability KPIs …) sowie alle User-Settings (Sprache, Theme, Favoriten, Lesezeichen).
+Entscheidung: `**partner.aicono.org**` als Subdomain, **eine** gemeinsame Codebasis und ein gemeinsamer Auth-Cookie-Scope auf `.aicono.org`. Kein zweiter Vite-Build.
 
-Die in den letzten Iterationen hinzugefügten `super_admin`-RLS-Policies helfen nur für **direkte Tabellen-Selects**. RPCs mit eigener WHERE-Logik auf `get_user_tenant_id()` bleiben blind.
+- Beim Boot erkennt die App `window.location.hostname`:
+  - `partner.*` → mountet ausschließlich Partner-Routen, Sidebar/Branding „Partner-Portal".
+  - `ems-pro.*` / Hauptdomain → bestehendes Tenant- und Super-Admin-Verhalten unverändert.
+- Cross-Login wird über Rolle entschieden: ein Partner-Admin, der sich auf der Hauptdomain anmeldet, wird auf `partner.aicono.org` umgeleitet; ein Tenant-User auf der Partner-Subdomain wird auf seinen Tenant geschickt.
+- Caddyfile (Hetzner) bekommt zusätzlich `partner.aicono.org → frontend:80`. CSP wird minimal um `partner.aicono.org` ergänzt. TLS via vorhandenem Universal-SSL (siehe Cloudflare-Tunnel-Memo).
+- White-Label-Erweiterung später: optionale Partner-eigene Subdomain (`*.aicono.org`-CNAME oder Custom Domain) wird datenmodell-seitig vorbereitet (`partners.subdomain`, `partners.custom_domain`), aber nicht in Stufe 1 ausgerollt.
 
-## Bewertung der beiden Vorschläge
+## 3. Sales Scout
 
-### Vorschlag A: "Ansicht spiegeln" (jede Stelle support-aware machen)
-- Erfordert: `get_user_tenant_id()` und ca. 30–50 RPCs umbauen, damit sie eine optionale `p_tenant_id` akzeptieren bzw. die Support-Session aus einer Server-Side-Source lesen.
-- Zusätzlich: `dashboard_widgets`, `user_preferences`, Locale etc. müssten ebenfalls auf den Ziel-Tenant umgeleitet werden (z. B. via `effective_user_id`).
-- Großer Eingriff, hohe Regressionsgefahr, dauerhafte Wartungslast (jede neue RPC muss daran denken).
+Beibehalten und **doppelt zugänglich** machen (deine Vorgabe):
 
-### Vorschlag B: Versteckter Support-User je Tenant
-- Pro Tenant ein technischer User `support+<tenant>@…` mit `admin`-Rolle anlegen, der nur für Support-Sessions verwendet wird.
-- Super-Admin startet die Session → Edge Function `start-support-session` tauscht (mit Service-Role-Key) die Session des Super-Admins gegen einen **kurzlebigen JWT** dieses Support-Users (z. B. via `auth.admin.generateLink` + `verifyOtp`, oder eigene signierte Session über `auth.admin.createSession` Pattern).
-- Frontend: `supabase.auth.setSession({access_token, refresh_token})` → ab jetzt ist `auth.uid()` der Tenant-Support-User. **Alle** RPCs, RLS-Policies, Widgets, Preferences, Tracking funktionieren ohne Codeänderung exakt wie für einen Tenant-Admin.
-- Beim "Beenden": gespeicherter Original-Token des Super-Admins wird zurückgesetzt.
-- Vorteil: minimaler Code, keine Folgekosten, jede neue Funktion ist automatisch support-fähig.
-- Sicherheit: jede Aktion in der Support-Session wird zusätzlich in `support_sessions` + `support_audit_log` mit Original-User-ID protokolliert (Compliance).
+- Super-Admin erreicht Sales Scout über `/super-admin/sales` (alle Projekte, alle Partner).
+- Partner-Admin/-User erreicht Sales Scout im Partner-Portal über `/sales` (gefiltert auf eigene `partner_id`).
+- Das bestehende mobile PWA-Manifest `manifest-sales.json` bleibt für den Außendienst gültig, läuft aber zukünftig im Partner-Kontext.
+- Migration: aktuelle `sales_projects.partner_id` (zeigt auf `auth.users.id`) wird auf neue Partner-Organisation umgeschrieben (siehe Abschnitt 5, Schritt 2).
 
-**Empfehlung: Vorschlag B** — er liefert echte 1:1-Spiegelung ohne jede Hook/RPC umbauen zu müssen, und passt zu allen zukünftigen Features.
+## 4. Funktionsumfang Partner-Portal (Stufe 1)
 
-## Umsetzungsplan (wenn B freigegeben)
+Bewusst klein gehalten, baut auf vorhandenen Super-Admin-Bausteinen auf:
 
-### Phase 1 — Backend
-1. Neue Tabelle `tenant_support_users (tenant_id, auth_user_id)` (1 Zeile pro Tenant).
-2. Migration: für jeden bestehenden Tenant einen User `support+<short>@aicono.internal` anlegen (`auth.users` via service role), `profiles`-Eintrag mit `tenant_id`, `user_roles`-Eintrag mit Rolle `admin`. Kein Login per Passwort möglich (Random-Hash, E-Mail unbestätigt egal, da Login nur über Edge Function).
-3. Edge Function `support-session-impersonate`:
-   - Eingang: `target_tenant_id`, `reason`. Verifiziert: Caller ist `super_admin`.
-   - Legt Eintrag in `support_sessions` an (wie heute, 15 min TTL).
-   - Erzeugt mit Service Role einen Magic-Link / signierten Session-Token für den Support-User des Tenants und gibt `access_token` + `refresh_token` zurück.
-4. Edge Function `support-session-end`: schließt Session, gibt nichts zurück (Frontend stellt Original-Token wieder her).
-5. Audit-Trigger: jeder Insert/Update/Delete unter Support-User schreibt in `support_audit_log` (User-ID + Original-Super-Admin-ID aus `support_sessions`).
+1. Dashboard: Anzahl eigene Tenants, aktive Module, offene Tasks, Sales-Pipeline-Status.
+2. Tenants: Liste, Anlegen neuer Tenants (Wizard analog `SuperAdminTenants`, aber zwingend mit `partner_id = own`), Detailansicht, Remote-Support per bestehendem Impersonation-Flow (`supportView.ts`) — eingeschränkt auf eigene Tenants.
+3. Partner-User-Verwaltung: Einladen weiterer `partner_user`/`partner_admin` desselben Partners.
+4. Module aktivieren/deaktivieren je eigenem Tenant (vorhandener `ModuleGuard`).
+5. Sales Scout (Leads/Angebote/PDF), gefiltert.
+6. Abrechnung (Read-only Stufe 1): Übersicht der Großhandelskosten, die AICONO dem Partner pro Monat berechnet (Datenquelle: bestehende Module-Pricing-Tabellen + neue Aggregation).
+7. Eigenes Partner-Profil: Logo, Farben, Support-Mail (Vorlage für späteres White-Label).
 
-### Phase 2 — Frontend
-6. `SuperAdminSupport.tsx` → beim Start: aktuellen `supabase.auth.getSession()` in sessionStorage (`super_admin_original_session`) sichern, Impersonations-Tokens via `supabase.auth.setSession()` setzen, dann auf `/` navigieren.
-7. Roter Banner bleibt sichtbar (eigenes Hook `useSupportSession` → ersetzt das aktuelle Polling auf `support_sessions`).
-8. "Beenden" → `support-session-end` aufrufen, dann Original-Session via `supabase.auth.setSession(saved)` zurücksetzen, auf `/super-admin/support` navigieren.
-9. `support_view_tenant_id`-sessionStorage und `useTenant`-Override **entfernen** (nicht mehr nötig).
-10. Alle in den letzten Iterationen für `support_view_tenant_id` angepassten Hooks (`useChargePoints`, `useEnergyData`, `useAlertRules`, `useUserRole` super_admin→admin Mapping etc.) **zurückbauen** auf den einfachen Tenant-Filter — sie funktionieren dann von selbst, weil `auth.uid()` jetzt korrekt der Support-User ist.
+Bewusst **nicht** in Stufe 1: Endkunden-Rechnungsstellung im Partner-Namen, Custom Domain je Partner, Provisionsabrechnung. Erst nach Wirtschaftsmodell-Entscheidung.
 
-### Phase 3 — Cleanup
-11. Migration `20260531091839_…` (super_admin SELECT-Policies auf ~50 Tabellen) kann **entfernt** werden, da Super-Admin in Support-Sessions nicht mehr direkt auf Tenant-Tabellen zugreift. Reduziert Angriffsfläche.
+## 5. Technische Umsetzung
 
-## Risiken / offene Fragen
-- Tokens für Support-User müssen kurzlebig (≤15 min, identisch zur Session-TTL) und an die `support_sessions.id` gekoppelt sein. Server-seitige Sperre, wenn Session abgelaufen ist → Refresh-Token revoken.
-- Lexware-/Charging-Invoice-Generierung erzeugt evtl. Audit-Spuren mit "falschem" User → `support_audit_log` muss in Reports den Original-Super-Admin nachvollziehbar machen.
-- Live-Deployment: Migration für vorhandene Tenants muss idempotent sein (gleiches Muster wie zuletzt: `to_regclass` / `IF NOT EXISTS`).
+Reihenfolge der Migrationen (jeweils eigene SQL-Datei, Approval-pflichtig):
 
-## Erwartung nach Umsetzung
-- Support-Ansicht ist **byte-identisch** zur Tenant-Admin-Ansicht: gleiche Widget-Reihenfolge, gleiche Monats-Historie, gleiche Gauges, gleiche Berechtigungen — ohne dass je wieder ein einzelner Hook oder eine RPC angefasst werden muss.
+1. **Partner-Organisation**: Tabelle `partners` (id, name, slug, logo_url, primary_color, contact_email, billing_address, subdomain nullable, custom_domain nullable, is_active, timestamps). RLS: Super-Admin volle Sicht; Partner-User sehen nur eigene Zeile.
+2. **Partner-Mitgliedschaft**: Tabelle `partner_members` (partner_id, user_id, role enum `partner_admin`/`partner_user`, unique(partner_id,user_id)). Ablöser für `sales_projects.partner_id = auth.uid()`. Bestehende Sales-Projekte werden so migriert, dass für jeden bisherigen Partner-User automatisch ein „Solo-Partner"-Datensatz angelegt und `partner_id` umgehängt wird.
+3. **Tenants ↔ Partner**: Spalte `tenants.partner_id uuid NULL REFERENCES partners(id)`. Default NULL für AICONO-Direkt-Tenants. Migration: alle bestehenden Tenants bleiben NULL.
+4. **RBAC-Erweiterung**: `app_role` um `partner_admin`, `partner_user` ergänzen. Security-Definer-Funktionen `is_partner_member(uuid)` und `partner_has_tenant_access(uuid)`. **Wichtig**: `guard_privileged_roles`-Trigger so erweitern, dass Partner-Admins **nur** `partner_user` innerhalb ihres eigenen Partners vergeben dürfen — nie `super_admin`, nie fremde Partner.
+5. **RLS-Audit ALLER Tenant-Tabellen**: Bestehende Policies erlauben heute Zugriff bei `has_role(super_admin)` ODER `tenant_id = get_user_tenant_id()`. Neue Bedingung als dritter Zweig: `OR partner_has_tenant_access(tenant_id)`. Dieser Schritt ist der risikoreichste — siehe Risiko-Abschnitt.
+6. **Hostname-aware Routing in `App.tsx**`: Neuer Layout-Wrapper `PartnerLayout` analog `SuperAdminWrapper`/`SalesLayout`, eigene Sidebar, Guard `usePartnerAccess`. Bestehende Routen bleiben unverändert.
+7. **Impersonation-Scope**: `supportView.ts` so erweitern, dass ein Partner-Admin nur Tenants impersonieren darf, deren `partner_id` zu seinen `partner_members` passt. Audit-Log-Eintrag bei jeder Impersonation.
+8. **Caddyfile + DNS**: `partner.aicono.org`-Block hinzufügen, CSP `frame-ancestors`/`connect-src` ergänzen. DNS A-Record bzw. Cloudflare-Eintrag.
+9. **E-Mails**: Neue Templates „Partner-Einladung", „Tenant-Einladung im Partner-Namen" (Resend-Branding-Pipeline ist vorhanden).
+
+### ASCII-Datenfluss
+
+```text
+auth.users ── partner_members ──► partners ◄── tenants.partner_id
+     │                                            │
+     ▼                                            ▼
+ profiles.tenant_id ─────────► tenants (RLS: tenant own OR partner_has_tenant_access OR super_admin)
+```
+
+## 6. Risiken und Punkte zur Beachtung
+
+- **RLS-Regression (höchstes Risiko)**: Jede Tabelle mit `tenant_id` braucht den neuen Partner-Zweig. Übersieht man eine, ist entweder ein Partner blind oder ein Partner sieht zu viel. Gegenmaßnahme: automatisierter SQL-Test (Postgres-Script), der für jede Tabelle in `public` mit Spalte `tenant_id` prüft, ob mindestens eine Policy `partner_has_tenant_access` referenziert.
+- **Privilege Escalation**: Ein Partner-Admin darf niemals `super_admin` oder einen Partner-Admin eines fremden Partners erzeugen. `guard_privileged_roles` zwingend erweitern und mit Unit-Tests absichern (analog vorhandener Auth-Tests).
+- **Impersonation-Missbrauch**: Partner-Admin könnte versuchen, einen fremden Tenant zu impersonieren. Server-seitige Prüfung (Edge Function + DB-Funktion), nicht nur Client-Filter.
+- **Wirtschaftsmodell unklar**: Solange offen, keine Endkunden-Rechnungslogik im Partner-Namen bauen. Datenmodell aber so neutral halten, dass beide Varianten (Wholesale, Provision, White-Label-Billing) später ohne Schema-Bruch ergänzt werden können. Konkret heißt das: heute schon `partners.billing_mode` als Enum mit Default `wholesale` vorsehen.
+- **Sales-Scout-Migration**: Heute hängen `sales_projects`, `sales_project_attachments`, Storage-Pfade und Edge Functions an `partner_id = auth.uid()`. Migration muss atomar laufen, sonst verlieren Partner kurzzeitig Sicht auf eigene Projekte. Empfehlung: Phase mit Doppel-Policy (alter ODER neuer Pfad), dann Cutover, dann alte Policy entfernen.
+- **Subdomain-Auth-Cookie**: Supabase-Session-Token muss auf `.aicono.org` (Punkt davor) gesetzt sein, sonst doppelte Logins. Aktuell nutzt das Projekt zwei isolierte Clients (`client.ts`, `tenantClient.ts`); für das Partner-Portal entweder dritten isolierten Client einführen oder bewusst den Haupt-Client teilen.
+- **Branding-Konflikt**: `applyBrandingToCSS` in `useTenant.tsx` überschreibt heute globale CSS-Variablen. Auf `partner.aicono.org` darf das Tenant-Branding nicht in den Partner-Header lecken (Partner-Admin betreut viele Tenants). Lösung: Branding nur innerhalb von Tenant-Detail- / Impersonation-Scopes anwenden, nicht global.
+- **DSGVO / Auftragsverarbeitung**: Partner sehen personenbezogene Daten ihrer Tenants. Es braucht einen Partner-AVV (Vertrag), bevor die Funktion live geht — fachlich, nicht technisch, aber blockierend.
+- **Migration bestehender „indirekter" Tenants**: Aktuell gibt es Tenants, die de facto schon von Elektrobetrieben betreut werden, im System aber direkt AICONO zugeordnet sind. Vor Go-Live manueller Mapping-Schritt (Liste pflegen, dann ein `INSERT` in `tenants.partner_id`).
+- **Support-Pfad**: Tenant-Support-Anfragen müssen klar gerouted werden — geht der Tenant zu AICONO oder zum Partner? Empfehlung: Pro Tenant Feld `support_owner` (`platform` | `partner`).
+- **Berichte und PDF-Footer**: Tagesreports, Rechnungs-PDFs, E-Mail-Footer enthalten heute AICONO-Branding. Falls White-Label später kommt, müssen alle Generatoren (`generateCommunityInvoicePdf`, `generateChargingInvoicePdf`, EnergyReport, etc.) Partner-Branding akzeptieren. Heute nicht ändern, aber Liste führen.
+- **HA-Add-on / Gateway**: Gateways sind heute Tenant-gebunden, kein Partner-Bezug. Kein Änderungsbedarf in Stufe 1, aber Partner-Admin sollte Gateway-Status seiner Tenants im Read-Only sehen.
+
+## 7. Vorgeschlagene Reihenfolge (Stufen)
+
+```text
+Stufe 1  Schema + RBAC + RLS-Erweiterung (Migrationen 1-5)
+Stufe 2  Subdomain-Routing + PartnerLayout + Login-Redirect (Code, ohne Funktion)
+Stufe 3  Partner-Dashboard, Tenant-Liste read-only
+Stufe 4  Tenant anlegen + Partner-User-Verwaltung + eingeschränkte Impersonation
+Stufe 5  Sales Scout im Partner-Kontext (Migration der bestehenden Projekte)
+Stufe 6  Abrechnungs-Übersicht (read-only)
+Stufe 7  Optional White-Label / Custom Domain (nach Wirtschaftsmodell-Entscheidung)
+```
+
+Jede Stufe wird als eigene Migration + eigener Code-PR umgesetzt, damit Rollback möglich bleibt.
+
+## 8. Offene Punkte für deine Entscheidung vor Stufe 1
+
+1. Wirtschaftsmodell — sobald bekannt, beeinflusst es nur Stufe 6/7, nicht das Schema.
+2. Dürfen Partner eigene Tenants **anlegen** oder nur **verwalten** (Anlage durch AICONO)?
+3. Soll ein bestehender Tenant nachträglich einem Partner zugeordnet werden können (Partner-Wechsel), und wenn ja: nur durch Super-Admin?
+4. Soll der Partner Zugriff auf Roh-Energiedaten der Tenants haben oder nur auf aggregierte KPIs?  
+  
+Antworten und Kommentare:  
+1. Wirtschaftsmodell: Info kommt vor Stufe 6 späte  
+2. Ja, Partner sollen eigene Tenant anlegen können  
+3. Ja, bestehende und zukünftige Tenants sollen von Super-Admin einem Partner zugeteilt werden können. Oder von einem zu einem anderen Partner gewechselt werden können.  
+4. Partner soll auch auf Roh-Energiedaten Zugriff haben
