@@ -21,6 +21,7 @@ import PartnerBilling from "@/pages/partner/PartnerBilling";
 import PartnerSalesCatalog from "@/pages/partner/PartnerSalesCatalog";
 import PartnerSalesRules from "@/pages/partner/PartnerSalesRules";
 import RecoveryGuard from "@/components/RecoveryGuard";
+import SalesHostGuard from "@/components/SalesHostGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
 import SuperAdminImpersonationBar from "./components/SuperAdminImpersonationBar";
@@ -152,6 +153,7 @@ const App = () => (
                   <Sonner />
                   <ConfirmDialogHost />
                   <RecoveryGuard />
+                  <SalesHostGuard />
                   <UpdateBanner />
                   <SupportSessionBanner />
                   <SuperAdminImpersonationBar />
