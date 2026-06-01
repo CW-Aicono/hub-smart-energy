@@ -9,7 +9,6 @@ interface Row {
   id: string;
   name: string | null;
   created_at: string;
-  is_active: boolean | null;
 }
 
 export default function PartnerTenants() {
