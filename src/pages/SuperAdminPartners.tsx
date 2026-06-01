@@ -12,7 +12,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Briefcase, Loader2, Plus, Mail, Users, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Briefcase, Loader2, Plus, Mail, Users, AlertCircle, CheckCircle2, Send } from "lucide-react";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 
 interface Partner {
@@ -26,8 +26,6 @@ interface Partner {
   created_at: string;
 }
 
-// Slug-Normalisierung: erlaubt Bindestriche während des Tippens,
-// entfernt aber ungültige Zeichen. Trim auf '-' nur am Ende per onBlur.
 const normalizeSlug = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-{2,}/g, "-").slice(0, 50);
 
@@ -47,7 +45,6 @@ export default function SuperAdminPartners() {
   const [adminName, setAdminName] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Slug-Verfügbarkeit
   const [slugStatus, setSlugStatus] = useState<
     | { kind: "idle" }
     | { kind: "checking" }
@@ -56,12 +53,29 @@ export default function SuperAdminPartners() {
     | { kind: "invalid"; message: string }
   >({ kind: "idle" });
 
-  // Invite-later-Dialog
+  // Invite-Dialog (für neue oder erneute Einladungen)
   const [inviteOpen, setInviteOpen] = useState(false);
   const [invitePartner, setInvitePartner] = useState<Partner | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteSaving, setInviteSaving] = useState(false);
+
+  // Edit-Dialog
+  const [editOpen, setEditOpen] = useState(false);
+  const [editPartner, setEditPartner] = useState<Partner | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editSlug, setEditSlug] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editSubdomain, setEditSubdomain] = useState("");
+  const [editActive, setEditActive] = useState(true);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editSlugStatus, setEditSlugStatus] = useState<
+    | { kind: "idle" }
+    | { kind: "checking" }
+    | { kind: "available" }
+    | { kind: "taken" }
+    | { kind: "invalid"; message: string }
+  >({ kind: "idle" });
 
   const { data: partners = [], isLoading } = useQuery({
     queryKey: ["super-admin-partners"],
@@ -90,34 +104,38 @@ export default function SuperAdminPartners() {
     },
   });
 
-  // Debounced Slug-Check
+  // Debounced Slug-Check (Create)
   useEffect(() => {
-    if (!slug) {
-      setSlugStatus({ kind: "idle" });
-      return;
-    }
+    if (!slug) { setSlugStatus({ kind: "idle" }); return; }
     if (!/^[a-z0-9-]{2,50}$/.test(slug) || slug.startsWith("-") || slug.endsWith("-")) {
-      setSlugStatus({
-        kind: "invalid",
-        message: "2–50 Zeichen, nur a–z, 0–9 und '-' (nicht am Anfang/Ende).",
-      });
+      setSlugStatus({ kind: "invalid", message: "2–50 Zeichen, nur a–z, 0–9 und '-' (nicht am Anfang/Ende)." });
       return;
     }
     setSlugStatus({ kind: "checking" });
     const handle = setTimeout(async () => {
-      const { data, error } = await supabase
-        .from("partners")
-        .select("id")
-        .eq("slug", slug)
-        .maybeSingle();
-      if (error) {
-        setSlugStatus({ kind: "idle" });
-        return;
-      }
+      const { data } = await supabase.from("partners").select("id").eq("slug", slug).maybeSingle();
       setSlugStatus(data ? { kind: "taken" } : { kind: "available" });
     }, 350);
     return () => clearTimeout(handle);
   }, [slug]);
+
+  // Debounced Slug-Check (Edit)
+  useEffect(() => {
+    if (!editOpen || !editPartner) { setEditSlugStatus({ kind: "idle" }); return; }
+    if (editSlug === editPartner.slug) { setEditSlugStatus({ kind: "available" }); return; }
+    if (!editSlug) { setEditSlugStatus({ kind: "idle" }); return; }
+    if (!/^[a-z0-9-]{2,50}$/.test(editSlug) || editSlug.startsWith("-") || editSlug.endsWith("-")) {
+      setEditSlugStatus({ kind: "invalid", message: "2–50 Zeichen, nur a–z, 0–9 und '-' (nicht am Anfang/Ende)." });
+      return;
+    }
+    setEditSlugStatus({ kind: "checking" });
+    const handle = setTimeout(async () => {
+      const { data } = await supabase.from("partners").select("id").eq("slug", editSlug).maybeSingle();
+      if (data && data.id !== editPartner.id) setEditSlugStatus({ kind: "taken" });
+      else setEditSlugStatus({ kind: "available" });
+    }, 350);
+    return () => clearTimeout(handle);
+  }, [editSlug, editOpen, editPartner]);
 
   const reset = () => {
     setName(""); setSlug(""); setSlugTouched(false);
@@ -126,12 +144,8 @@ export default function SuperAdminPartners() {
   };
 
   const createDisabled =
-    saving ||
-    !name.trim() ||
-    !slug.trim() ||
-    slugStatus.kind === "checking" ||
-    slugStatus.kind === "taken" ||
-    slugStatus.kind === "invalid" ||
+    saving || !name.trim() || !slug.trim() ||
+    slugStatus.kind === "checking" || slugStatus.kind === "taken" || slugStatus.kind === "invalid" ||
     (adminEmail.trim() !== "" && !adminEmail.includes("@"));
 
   const handleCreate = async () => {
@@ -161,17 +175,11 @@ export default function SuperAdminPartners() {
       setOpen(false);
       reset();
     } catch (e) {
-      toast({
-        title: "Fehler",
-        description: e instanceof Error ? e.message : String(e),
-        variant: "destructive",
-      });
-    } finally {
-      setSaving(false);
-    }
+      toast({ title: "Fehler", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally { setSaving(false); }
   };
 
-  const openInviteDialog = (p: Partner) => {
+  const openInviteDialog = (p: Partner, mode: "new" | "resend") => {
     setInvitePartner(p);
     setInviteEmail(p.contact_email ?? "");
     setInviteName("");
@@ -203,27 +211,60 @@ export default function SuperAdminPartners() {
       setInviteOpen(false);
       setInvitePartner(null);
     } catch (e) {
-      toast({
-        title: "Fehler",
-        description: e instanceof Error ? e.message : String(e),
-        variant: "destructive",
-      });
-    } finally {
-      setInviteSaving(false);
+      toast({ title: "Fehler", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally { setInviteSaving(false); }
+  };
+
+  const openEditDialog = (p: Partner) => {
+    setEditPartner(p);
+    setEditName(p.name);
+    setEditSlug(p.slug);
+    setEditEmail(p.contact_email ?? "");
+    setEditSubdomain(p.subdomain ?? "");
+    setEditActive(p.is_active);
+    setEditSlugStatus({ kind: "available" });
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editPartner) return;
+    if (!editName.trim()) {
+      toast({ title: "Firmenname darf nicht leer sein.", variant: "destructive" });
+      return;
     }
+    if (editSlugStatus.kind === "taken" || editSlugStatus.kind === "invalid" || editSlugStatus.kind === "checking") {
+      toast({ title: "Slug prüfen", description: "Bitte gültigen, freien Slug wählen.", variant: "destructive" });
+      return;
+    }
+    setEditSaving(true);
+    try {
+      const { error } = await supabase
+        .from("partners")
+        .update({
+          name: editName.trim(),
+          slug: editSlug.trim(),
+          contact_email: editEmail.trim().toLowerCase() || null,
+          subdomain: editSubdomain.trim() || null,
+          is_active: editActive,
+        })
+        .eq("id", editPartner.id);
+      if (error) throw error;
+      toast({ title: "Partner gespeichert" });
+      qc.invalidateQueries({ queryKey: ["super-admin-partners"] });
+      setEditOpen(false);
+      setEditPartner(null);
+    } catch (e) {
+      toast({ title: "Fehler", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally { setEditSaving(false); }
   };
 
   const toggleActive = useMutation({
     mutationFn: async (p: Partner) => {
-      const { error } = await supabase
-        .from("partners")
-        .update({ is_active: !p.is_active })
-        .eq("id", p.id);
+      const { error } = await supabase.from("partners").update({ is_active: !p.is_active }).eq("id", p.id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["super-admin-partners"] }),
-    onError: (e: Error) =>
-      toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
   return (
@@ -236,7 +277,7 @@ export default function SuperAdminPartners() {
             <Briefcase className="h-6 w-6" /> Partner
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Vertriebspartner anlegen und verwalten. Jeder Partner verwaltet eigene Kunden.
+            Vertriebspartner anlegen und verwalten. Klick auf den Namen zum Bearbeiten.
           </p>
         </div>
 
@@ -270,13 +311,8 @@ export default function SuperAdminPartners() {
                 <Input
                   id="p-slug"
                   value={slug}
-                  onChange={(e) => {
-                    setSlugTouched(true);
-                    setSlug(normalizeSlug(e.target.value));
-                  }}
-                  onBlur={(e) =>
-                    setSlug(e.target.value.replace(/^-+|-+$/g, "").slice(0, 50))
-                  }
+                  onChange={(e) => { setSlugTouched(true); setSlug(normalizeSlug(e.target.value)); }}
+                  onBlur={(e) => setSlug(e.target.value.replace(/^-+|-+$/g, "").slice(0, 50))}
                   placeholder="mustermann-elektro"
                 />
                 <div className="text-xs min-h-[1rem]">
@@ -301,9 +337,7 @@ export default function SuperAdminPartners() {
                     </span>
                   )}
                   {slugStatus.kind === "idle" && (
-                    <span className="text-muted-foreground">
-                      a–z, 0–9 und Bindestriche, 2–50 Zeichen.
-                    </span>
+                    <span className="text-muted-foreground">a–z, 0–9 und Bindestriche, 2–50 Zeichen.</span>
                   )}
                 </div>
               </div>
@@ -317,23 +351,16 @@ export default function SuperAdminPartners() {
                   placeholder="admin@mustermann-elektro.de"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Wenn angegeben, wird sofort eine Einladung versendet. Andernfalls später nachholbar.
+                  Wenn angegeben, wird sofort eine Einladung versendet.
                 </p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="p-admin-name">Name Partner-Admin (optional)</Label>
-                <Input
-                  id="p-admin-name"
-                  value={adminName}
-                  onChange={(e) => setAdminName(e.target.value)}
-                  placeholder="Max Mustermann"
-                />
+                <Input id="p-admin-name" value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Max Mustermann" />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>
-                Abbrechen
-              </Button>
+              <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Abbrechen</Button>
               <Button onClick={handleCreate} disabled={createDisabled}>
                 {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Mail className="h-4 w-4 mr-2" />}
                 {adminEmail.trim() ? "Anlegen & Einladen" : "Anlegen"}
@@ -349,9 +376,7 @@ export default function SuperAdminPartners() {
             <Loader2 className="h-5 w-5 animate-spin inline mr-2" /> Lade Partner …
           </div>
         ) : partners.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">
-            Noch keine Partner angelegt.
-          </div>
+          <div className="p-8 text-center text-muted-foreground">Noch keine Partner angelegt.</div>
         ) : (
           <Table>
             <TableHeader>
@@ -371,7 +396,15 @@ export default function SuperAdminPartners() {
                 const needsInvite = count === 0;
                 return (
                   <TableRow key={p.id}>
-                    <TableCell className="font-medium">{p.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <button
+                        className="text-left hover:underline text-foreground hover:text-primary transition-colors"
+                        onClick={() => openEditDialog(p)}
+                        title="Bearbeiten"
+                      >
+                        {p.name}
+                      </button>
+                    </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{p.slug}</TableCell>
                     <TableCell className="text-sm">{p.contact_email ?? "–"}</TableCell>
                     <TableCell className="text-center">{count}</TableCell>
@@ -381,15 +414,19 @@ export default function SuperAdminPartners() {
                         {p.is_active ? "aktiv" : "inaktiv"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right space-x-1">
-                      {needsInvite && (
+                    <TableCell className="text-right space-x-1 whitespace-nowrap">
+                      {needsInvite ? (
+                        <Button variant="outline" size="sm" onClick={() => openInviteDialog(p, "new")}>
+                          <Mail className="h-3.5 w-3.5 mr-1" /> Einladen
+                        </Button>
+                      ) : (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => openInviteDialog(p)}
+                          onClick={() => openInviteDialog(p, "resend")}
+                          title="Einladungs-Mail erneut senden (z. B. nach Ablauf des Links)"
                         >
-                          <Mail className="h-3.5 w-3.5 mr-1" />
-                          Einladen
+                          <Send className="h-3.5 w-3.5 mr-1" /> Erneut einladen
                         </Button>
                       )}
                       <Button
@@ -409,7 +446,7 @@ export default function SuperAdminPartners() {
         )}
       </div>
 
-      {/* Invite-later-Dialog */}
+      {/* Invite-Dialog */}
       <Dialog
         open={inviteOpen}
         onOpenChange={(o) => {
@@ -421,7 +458,9 @@ export default function SuperAdminPartners() {
           <DialogHeader>
             <DialogTitle>Partner-Admin einladen</DialogTitle>
             <DialogDescription>
-              {invitePartner ? `Einladung für ${invitePartner.name} versenden.` : ""}
+              {invitePartner
+                ? `Einladungs-Mail mit neuem Passwort-Setz-Link an den Partner-Admin von ${invitePartner.name} senden. Vorherige Links werden ungültig.`
+                : ""}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
@@ -437,21 +476,108 @@ export default function SuperAdminPartners() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="inv-name">Name (optional)</Label>
-              <Input
-                id="inv-name"
-                value={inviteName}
-                onChange={(e) => setInviteName(e.target.value)}
-                placeholder="Max Mustermann"
-              />
+              <Input id="inv-name" value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="Max Mustermann" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setInviteOpen(false)} disabled={inviteSaving}>
-              Abbrechen
-            </Button>
+            <Button variant="outline" onClick={() => setInviteOpen(false)} disabled={inviteSaving}>Abbrechen</Button>
             <Button onClick={handleSendInvite} disabled={inviteSaving || !inviteEmail.includes("@")}>
               {inviteSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Mail className="h-4 w-4 mr-2" />}
               Einladung senden
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit-Dialog */}
+      <Dialog
+        open={editOpen}
+        onOpenChange={(o) => { setEditOpen(o); if (!o) setEditPartner(null); }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Partner bearbeiten</DialogTitle>
+            <DialogDescription>
+              Stammdaten des Partners anpassen.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="e-name">Firmenname *</Label>
+              <Input id="e-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="e-slug">Kürzel (Slug) *</Label>
+              <Input
+                id="e-slug"
+                value={editSlug}
+                onChange={(e) => setEditSlug(normalizeSlug(e.target.value))}
+                onBlur={(e) => setEditSlug(e.target.value.replace(/^-+|-+$/g, "").slice(0, 50))}
+              />
+              <div className="text-xs min-h-[1rem]">
+                {editSlugStatus.kind === "checking" && (
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Prüfe Verfügbarkeit…
+                  </span>
+                )}
+                {editSlugStatus.kind === "available" && (
+                  <span className="text-primary flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" /> Slug ist verfügbar.
+                  </span>
+                )}
+                {editSlugStatus.kind === "taken" && (
+                  <span className="text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> Slug ist bereits vergeben.
+                  </span>
+                )}
+                {editSlugStatus.kind === "invalid" && (
+                  <span className="text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> {editSlugStatus.message}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="e-email">Kontakt-E-Mail</Label>
+              <Input
+                id="e-email"
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                placeholder="kontakt@firma.de"
+              />
+              <p className="text-xs text-muted-foreground">
+                Wird für „Erneut einladen" als Standard-Empfänger vorgeschlagen.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="e-subdomain">Subdomain (optional)</Label>
+              <Input
+                id="e-subdomain"
+                value={editSubdomain}
+                onChange={(e) => setEditSubdomain(e.target.value.toLowerCase().trim())}
+                placeholder="z. B. partner-name (für partner-name.aicono.org)"
+              />
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                id="e-active"
+                type="checkbox"
+                checked={editActive}
+                onChange={(e) => setEditActive(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="e-active" className="cursor-pointer">Partner aktiv</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>Abbrechen</Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={editSaving || !editName.trim() || editSlugStatus.kind === "taken" || editSlugStatus.kind === "invalid" || editSlugStatus.kind === "checking"}
+            >
+              {editSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Speichern
             </Button>
           </DialogFooter>
         </DialogContent>
