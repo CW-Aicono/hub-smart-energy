@@ -200,10 +200,48 @@ const ChargingPoints = () => {
     } catch { /* ignore */ } finally { setAddGeocoding(false); }
   };
 
-  const getActiveSession = (cpId: string) => sessions.find((s) => s.charge_point_id === cpId && s.status === "active");
+  const connectorsByChargePoint = useMemo(() => {
+    const map = new Map<string, ChargePointConnector[]>();
+    for (const connector of allConnectors) {
+      const list = map.get(connector.charge_point_id) ?? [];
+      list.push(connector);
+      map.set(connector.charge_point_id, list);
+    }
+    return map;
+  }, [allConnectors]);
+
+  const activeSessions = useMemo(
+    () => sessions.filter((s) => s.status === "active" || !s.stop_time),
+    [sessions],
+  );
+
+  const getActiveSession = (cpId: string) => activeSessions.find((s) => s.charge_point_id === cpId);
+
+  const getEffectiveStatus = (cp: ChargePoint) => {
+    const wsOnline = cp.ws_connected !== false;
+    if (activeSessions.some((s) => s.charge_point_id === cp.id)) return "charging";
+
+    const connectorStatuses = (connectorsByChargePoint.get(cp.id) ?? [])
+      .map((connector) => normalizeConnectorStatus(connector.status, wsOnline));
+    const statuses = connectorStatuses.length > 0
+      ? connectorStatuses
+      : Array.from({ length: Math.max(1, cp.connector_count || 1) }, () => normalizeConnectorStatus(cp.status, wsOnline));
+    const priority = ["faulted", "offline", "unconfigured", "unavailable", "charging", "available"];
+    return priority.find((status) => statuses.includes(status)) ?? normalizeConnectorStatus(cp.status, wsOnline);
+  };
+
+  const getConnectorStatusCount = (status: string) => chargePoints.reduce((sum, cp) => {
+    const wsOnline = cp.ws_connected !== false;
+    const connectors = connectorsByChargePoint.get(cp.id) ?? [];
+    const activeConnectorIds = new Set(activeSessions.filter((s) => s.charge_point_id === cp.id).map((s) => s.connector_id));
+    const statuses = connectors.length > 0
+      ? connectors.map((connector) => activeConnectorIds.has(connector.connector_id) ? "charging" : normalizeConnectorStatus(connector.status, wsOnline))
+      : Array.from({ length: Math.max(1, cp.connector_count || 1) }, (_, index) => activeConnectorIds.has(index + 1) ? "charging" : normalizeConnectorStatus(cp.status, wsOnline));
+    return sum + statuses.filter((connectorStatus) => connectorStatus === status).length;
+  }, 0);
 
   const filteredChargePoints = statusFilter
-    ? chargePoints.filter((cp) => normalizeConnectorStatus(cp.status, cp.ws_connected !== false) === statusFilter)
+    ? chargePoints.filter((cp) => getEffectiveStatus(cp) === statusFilter)
     : chargePoints;
 
   const wsScheme = form.connection_protocol === "ws" ? "ws" : "wss";
