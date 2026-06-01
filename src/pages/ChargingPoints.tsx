@@ -1,14 +1,16 @@
-import { useState, lazy, Suspense } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState, lazy, Suspense } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useDemoPath } from "@/contexts/DemoMode";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useChargePoints, ChargePoint } from "@/hooks/useChargePoints";
+import type { ChargePointConnector } from "@/hooks/useChargePointConnectors";
 import { useChargerModels } from "@/hooks/useChargerModels";
 import { useChargingSessions } from "@/hooks/useChargingSessions";
 import { useTenant } from "@/hooks/useTenant";
+import { supabase } from "@/integrations/supabase/client";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,10 +53,38 @@ const ChargingPoints = () => {
   const { chargePoints, isLoading, addChargePoint, updateChargePoint, deleteChargePoint } = useChargePoints();
   const { sessions } = useChargingSessions();
   const { chargerModels, vendors: knownVendors, getModelsForVendor } = useChargerModels();
+  const chargePointIds = useMemo(() => chargePoints.map((cp) => cp.id).sort().join(","), [chargePoints]);
+  const { data: allConnectors = [] } = useQuery({
+    queryKey: ["charge-point-connectors", tenant?.id, "all", chargePointIds],
+    enabled: !!tenant?.id,
+    queryFn: async () => {
+      const ids = chargePoints.map((cp) => cp.id);
+      if (ids.length === 0) return [];
+      const { data, error } = await supabase
+        .from("charge_point_connectors")
+        .select("*")
+        .in("charge_point_id", ids)
+        .order("display_order");
+      if (error) throw error;
+      return (data ?? []) as unknown as ChargePointConnector[];
+    },
+  });
+
+  useEffect(() => {
+    if (!tenant?.id) return;
+    const channel = supabase
+      .channel(`charge-point-connectors-overview-${tenant.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "charge_point_connectors" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["charge-point-connectors", tenant.id, "all"] });
+        queryClient.invalidateQueries({ queryKey: ["charge-points", tenant.id] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient, tenant?.id]);
 
   const statusConfig: Record<string, { labelKey: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap; color: string }> = {
     available: { labelKey: "charging.statusAvailable", variant: "default", icon: Zap, color: "text-green-500" },
-    charging: { labelKey: "charging.statusCharging", variant: "secondary", icon: PlugZap, color: "text-blue-500" },
+    charging: { labelKey: "chargingStats.occupied", variant: "secondary", icon: PlugZap, color: "text-blue-500" },
     faulted: { labelKey: "charging.statusFaulted", variant: "destructive", icon: AlertTriangle, color: "text-red-500" },
     unavailable: { labelKey: "charging.statusUnavailable", variant: "outline", icon: ZapOff, color: "text-yellow-500" },
     offline: { labelKey: "charging.statusOffline", variant: "outline", icon: WifiOff, color: "text-orange-500" },
@@ -94,6 +124,52 @@ const ChargingPoints = () => {
   };
   const [addCoords, setAddCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [addGeocoding, setAddGeocoding] = useState(false);
+
+  const connectorsByChargePoint = useMemo(() => {
+    const map = new Map<string, ChargePointConnector[]>();
+    for (const connector of allConnectors) {
+      const list = map.get(connector.charge_point_id) ?? [];
+      list.push(connector);
+      map.set(connector.charge_point_id, list);
+    }
+    return map;
+  }, [allConnectors]);
+
+  const activeSessions = useMemo(
+    () => sessions.filter((s) => s.status === "active" || !s.stop_time),
+    [sessions],
+  );
+
+  const getActiveSession = (cpId: string) => activeSessions.find((s) => s.charge_point_id === cpId);
+
+  const getEffectiveStatus = (cp: ChargePoint) => {
+    const wsOnline = cp.ws_connected !== false;
+    if (activeSessions.some((s) => s.charge_point_id === cp.id)) return "charging";
+
+    const connectorStatuses = (connectorsByChargePoint.get(cp.id) ?? [])
+      .map((connector) => normalizeConnectorStatus(connector.status, wsOnline));
+    const statuses = connectorStatuses.length > 0
+      ? connectorStatuses
+      : Array.from({ length: Math.max(1, cp.connector_count || 1) }, () => normalizeConnectorStatus(cp.status, wsOnline));
+    const priority = ["faulted", "offline", "unconfigured", "unavailable", "charging", "available"];
+    return priority.find((status) => statuses.includes(status)) ?? normalizeConnectorStatus(cp.status, wsOnline);
+  };
+
+  const getConnectorStatusCount = (status: string) => chargePoints.reduce((sum, cp) => {
+    const wsOnline = cp.ws_connected !== false;
+    const connectors = connectorsByChargePoint.get(cp.id) ?? [];
+    const activeConnectorIds = new Set(activeSessions.filter((s) => s.charge_point_id === cp.id).map((s) => s.connector_id));
+    const statuses = connectors.length > 0
+      ? connectors.map((connector) => activeConnectorIds.has(connector.connector_id) ? "charging" : normalizeConnectorStatus(connector.status, wsOnline))
+      : Array.from({ length: Math.max(1, cp.connector_count || 1) }, (_, index) => activeConnectorIds.has(index + 1) ? "charging" : normalizeConnectorStatus(cp.status, wsOnline));
+    return sum + statuses.filter((connectorStatus) => connectorStatus === status).length;
+  }, 0);
+
+  const filteredChargePoints = statusFilter
+    ? chargePoints.filter((cp) => getEffectiveStatus(cp) === statusFilter)
+    : chargePoints;
+  const effectiveChargePoints = chargePoints.map((cp) => ({ ...cp, status: getEffectiveStatus(cp) }));
+  const effectiveFilteredChargePoints = filteredChargePoints.map((cp) => ({ ...cp, status: getEffectiveStatus(cp) }));
 
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
@@ -169,12 +245,6 @@ const ChargingPoints = () => {
       }
     } catch { /* ignore */ } finally { setAddGeocoding(false); }
   };
-
-  const getActiveSession = (cpId: string) => sessions.find((s) => s.charge_point_id === cpId && s.status === "active");
-
-  const filteredChargePoints = statusFilter
-    ? chargePoints.filter((cp) => normalizeConnectorStatus(cp.status, cp.ws_connected !== false) === statusFilter)
-    : chargePoints;
 
   const wsScheme = form.connection_protocol === "ws" ? "ws" : "wss";
   const wsHostUrl = `${wsScheme}://${getOcppHost()}`;
@@ -415,7 +485,7 @@ const ChargingPoints = () => {
               </CardContent>
             </Card>
             {Object.entries(statusConfig).map(([key, cfg]) => {
-              const count = chargePoints.filter((cp) => normalizeConnectorStatus(cp.status, cp.ws_connected !== false) === key).reduce((sum, cp) => sum + (cp.connector_count || 1), 0);
+              const count = getConnectorStatusCount(key);
               const isActive = statusFilter === key;
               return (
                 <Card
@@ -436,7 +506,7 @@ const ChargingPoints = () => {
           </div>
 
           {/* Statistics */}
-          <ChargingOverviewStats chargePoints={chargePoints} sessions={sessions} />
+          <ChargingOverviewStats chargePoints={effectiveChargePoints} sessions={sessions} />
 
           {/* Groups Manager */}
           <ChargePointGroupsManager isAdmin={isAdmin} />
@@ -476,7 +546,7 @@ const ChargingPoints = () => {
                       </TableHeader>
                       <TableBody>
                         {filteredChargePoints.map((cp) => {
-                          const cfg = statusConfig[normalizeConnectorStatus(cp.status, cp.ws_connected !== false)] || statusConfig.offline;
+                          const cfg = statusConfig[getEffectiveStatus(cp)] || statusConfig.offline;
                           const activeSession = getActiveSession(cp.id);
                           return (
                             <TableRow key={cp.id}>
@@ -552,7 +622,7 @@ const ChargingPoints = () => {
             <CardContent>
               <Suspense fallback={<div className="h-[400px] rounded-lg border bg-muted/50 flex items-center justify-center"><div className="animate-pulse text-muted-foreground">{t("charging.mapLoading" as any)}</div></div>}>
                 <LazyChargePointsMap
-                  chargePoints={filteredChargePoints}
+                  chargePoints={effectiveFilteredChargePoints}
                   onChargePointClick={(cp) => navigate(demoPath(`/charging/points/${cp.id}`))}
                   showEditPositionButton={true}
                   onPositionChange={(cpId, lat, lng) => {
