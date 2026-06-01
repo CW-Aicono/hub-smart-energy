@@ -11,7 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, ExternalLink, Building2, User, Mail, AlertCircle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQuery } from "@tanstack/react-query";
+import { Plus, Trash2, ExternalLink, Building2, User, Mail, AlertCircle, Users } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -34,7 +36,20 @@ const SuperAdminTenants = () => {
   const [newEmail, setNewEmail] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminName, setAdminName] = useState("");
+  const [newPartnerId, setNewPartnerId] = useState<string>("");
   const [creating, setCreating] = useState(false);
+
+  const { data: partnerOptions = [] } = useQuery({
+    queryKey: ["sa-tenants-partner-options"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("partners")
+        .select("id, name, is_active")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).filter((p: any) => p.is_active !== false);
+    },
+  });
 
   if (authLoading || roleLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
@@ -66,7 +81,13 @@ const SuperAdminTenants = () => {
       // 1. Create tenant
       const { data: tenant, error: tenantError } = await supabase
         .from("tenants")
-        .insert({ name: newName, slug: newSlug, contact_email: newEmail || adminEmail })
+        .insert({
+          name: newName,
+          slug: newSlug,
+          contact_email: newEmail || adminEmail,
+          partner_id: newPartnerId ? newPartnerId : null,
+          support_owner: newPartnerId ? "partner" : "platform",
+        })
         .select()
         .single();
 
@@ -119,6 +140,7 @@ const SuperAdminTenants = () => {
     setNewEmail("");
     setAdminEmail("");
     setAdminName("");
+    setNewPartnerId("");
   };
 
   return (
@@ -134,7 +156,7 @@ const SuperAdminTenants = () => {
             <DialogTrigger asChild>
               <Button><Plus className="h-4 w-4 mr-2" /> {t("tenants.new")}</Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>{t("tenants.create_title")}</DialogTitle></DialogHeader>
               <div className="space-y-5 pt-2">
 
@@ -157,6 +179,25 @@ const SuperAdminTenants = () => {
                     <Label>{t("tenants.contact_email")}</Label>
                     <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="info@firma.de" type="email" />
                     <p className="text-xs text-muted-foreground">Allgemeine Kontaktadresse des Mandanten (optional)</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" />
+                      Zuordnung zu Partner
+                    </Label>
+                    <Select
+                      value={newPartnerId || "__platform__"}
+                      onValueChange={(v) => setNewPartnerId(v === "__platform__" ? "" : v)}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__platform__">Direkt AICONO (Super-Admin)</SelectItem>
+                        {partnerOptions.map((p: any) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Wird kein Partner ausgewählt, betreut AICONO den Mandanten direkt.</p>
                   </div>
                 </div>
 

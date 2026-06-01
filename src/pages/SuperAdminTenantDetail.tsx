@@ -148,7 +148,21 @@ const SuperAdminTenantDetail = () => {
   const [licenseForm, setLicenseForm] = useState<Record<string, string | number>>({});
   const [editingTenantInfo, setEditingTenantInfo] = useState(false);
   const [savingTenantInfo, setSavingTenantInfo] = useState(false);
-  const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "", is_aicono_member: false, is_kommune: true });
+  const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "", is_aicono_member: false, is_kommune: true, partner_id: "" as string });
+
+  const { data: allPartners = [] } = useQuery({
+    queryKey: ["sa-tenant-detail-partners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("partners")
+        .select("id, name, is_active")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).filter((p: any) => p.is_active !== false);
+    },
+  });
+
+  const currentPartner = allPartners.find((p: any) => p.id === (tenant as any)?.partner_id);
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
 
   const { data: tenant } = useQuery({
@@ -592,6 +606,7 @@ const SuperAdminTenantDetail = () => {
                         contact_email: tenant?.contact_email ?? "",
                         is_aicono_member: (tenant as any)?.is_aicono_member ?? false,
                         is_kommune: (tenant as any)?.is_kommune !== false,
+                        partner_id: (tenant as any)?.partner_id ?? "",
                       });
                       setEditingTenantInfo(true);
                     }}>
@@ -612,6 +627,8 @@ const SuperAdminTenantDetail = () => {
                           contact_email: tenantInfoForm.contact_email.trim() || null,
                           is_aicono_member: tenantInfoForm.is_aicono_member,
                           is_kommune: tenantInfoForm.is_kommune,
+                          partner_id: tenantInfoForm.partner_id ? tenantInfoForm.partner_id : null,
+                          support_owner: tenantInfoForm.partner_id ? "partner" : "platform",
                         }).eq("id", tenant!.id);
                         setSavingTenantInfo(false);
                         if (error) { toast.error("Fehler beim Speichern"); console.error(error); }
@@ -679,6 +696,27 @@ const SuperAdminTenantDetail = () => {
                           </Label>
                         </div>
                       </div>
+                      <div className="space-y-2 pt-2 border-t">
+                        <Label className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          Zuordnung zu Partner
+                        </Label>
+                        <Select
+                          value={tenantInfoForm.partner_id || "__platform__"}
+                          onValueChange={(v) => setTenantInfoForm(f => ({ ...f, partner_id: v === "__platform__" ? "" : v }))}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__platform__">Direkt AICONO (Super-Admin)</SelectItem>
+                            {allPartners.map((p: any) => (
+                              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Legt fest, welcher Vertriebspartner diesen Mandanten betreut. „Direkt AICONO" = kein Partner, Mandant wird zentral verwaltet.
+                        </p>
+                      </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -734,6 +772,17 @@ const SuperAdminTenantDetail = () => {
                           <div>
                             <p className="text-sm font-medium text-muted-foreground">Sektor</p>
                             <p>{(tenant as any)?.is_kommune !== false ? <Badge variant="outline" className="text-xs">Kommune</Badge> : <Badge variant="outline" className="text-xs">Industrie</Badge>}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Users className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">Partner-Zuordnung</p>
+                            <p>
+                              {currentPartner
+                                ? <Badge variant="secondary" className="text-xs">{currentPartner.name}</Badge>
+                                : <Badge variant="outline" className="text-xs">Direkt AICONO</Badge>}
+                            </p>
                           </div>
                         </div>
                       </div>
