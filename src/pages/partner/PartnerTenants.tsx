@@ -62,7 +62,6 @@ export default function PartnerTenants() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Erstellt</TableHead>
-                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -71,13 +70,6 @@ export default function PartnerTenants() {
                     <TableCell className="font-medium">{r.name ?? "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {new Date(r.created_at).toLocaleDateString("de-DE")}
-                    </TableCell>
-                    <TableCell>
-                      {r.is_active === false ? (
-                        <Badge variant="outline">inaktiv</Badge>
-                      ) : (
-                        <Badge>aktiv</Badge>
-                      )}
                     </TableCell>
                   </TableRow>
                 ))}
