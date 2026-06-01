@@ -20,10 +20,16 @@ const Auth = () => {
   const { user, loading, signIn } = useAuth();
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { branding: partnerBranding } = usePartnerHostBranding();
   const [view, setView] = useState<AuthView>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const brandLogo = partnerBranding?.logo_url || aiconoLogo;
+  const brandName = partnerBranding?.brand_display_name || partnerBranding?.name || "AICONO";
+  const brandPrimary = partnerBranding?.primary_color || "hsl(220, 60%, 20%)";
+
 
   const authSchema = z.object({
     email: z.string().email(t("auth.invalidCredentials")),
