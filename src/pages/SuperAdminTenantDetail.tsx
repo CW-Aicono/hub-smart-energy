@@ -773,6 +773,7 @@ const SuperAdminTenantDetail = () => {
                             <p className="text-sm font-medium text-muted-foreground">Sektor</p>
                             <p>{(tenant as any)?.is_kommune !== false ? <Badge variant="outline" className="text-xs">Kommune</Badge> : <Badge variant="outline" className="text-xs">Industrie</Badge>}</p>
                           </div>
+                        </div>
                         <div className="flex items-start gap-2">
                           <Users className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
                           <div>
