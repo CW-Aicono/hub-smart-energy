@@ -148,7 +148,21 @@ const SuperAdminTenantDetail = () => {
   const [licenseForm, setLicenseForm] = useState<Record<string, string | number>>({});
   const [editingTenantInfo, setEditingTenantInfo] = useState(false);
   const [savingTenantInfo, setSavingTenantInfo] = useState(false);
-  const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "", is_aicono_member: false, is_kommune: true });
+  const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "", is_aicono_member: false, is_kommune: true, partner_id: "" as string });
+
+  const { data: allPartners = [] } = useQuery({
+    queryKey: ["sa-tenant-detail-partners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("partners")
+        .select("id, name, is_active")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).filter((p: any) => p.is_active !== false);
+    },
+  });
+
+  const currentPartner = allPartners.find((p: any) => p.id === (tenant as any)?.partner_id);
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
 
   const { data: tenant } = useQuery({
