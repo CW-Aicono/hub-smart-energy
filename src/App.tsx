@@ -46,6 +46,7 @@ const Help = lazy(() => import("./pages/Help"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
 const SuperAdminTenants = lazy(() => import("./pages/SuperAdminTenants"));
+const SuperAdminPartners = lazy(() => import("./pages/SuperAdminPartners"));
 const SuperAdminTenantDetail = lazy(() => import("./pages/SuperAdminTenantDetail"));
 const SuperAdminStatistics = lazy(() => import("./pages/SuperAdminStatistics"));
 const SuperAdminBilling = lazy(() => import("./pages/SuperAdminBilling"));
