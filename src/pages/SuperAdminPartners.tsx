@@ -247,8 +247,43 @@ export default function SuperAdminPartners() {
     setEditActive(p.is_active);
     setEditBillingMode((p.billing_mode === "commission" ? "commission" : "wholesale"));
     setEditCommissionPct(String(p.commission_pct ?? 20));
+    setEditWhiteLabel(p.white_label_enabled ?? false);
+    setEditBrandDisplayName(p.brand_display_name ?? "");
+    setEditCustomDomain(p.custom_domain ?? "");
+    setEditPrimaryColor(p.primary_color ?? "");
+    setEditSecondaryColor(p.secondary_color ?? "");
+    setEditAccentColor(p.accent_color ?? "");
+    setEditSupportEmail(p.support_email ?? "");
+    setEditLogoUrl(p.logo_url ?? null);
     setEditSlugStatus({ kind: "available" });
     setEditOpen(true);
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!editPartner) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "Logo zu groß", description: "Max. 2 MB.", variant: "destructive" });
+      return;
+    }
+    setLogoUploading(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+      const path = `${editPartner.id}/logo-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("partner-assets")
+        .upload(path, file, { cacheControl: "3600", upsert: true });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("partner-assets").getPublicUrl(path);
+      setEditLogoUrl(pub.publicUrl);
+      toast({ title: "Logo hochgeladen" });
+    } catch (err) {
+      toast({ title: "Upload-Fehler", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    } finally {
+      setLogoUploading(false);
+      e.target.value = "";
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -266,6 +301,8 @@ export default function SuperAdminPartners() {
       toast({ title: "Provisionssatz", description: "Bitte einen Wert zwischen 0 und 100 angeben.", variant: "destructive" });
       return;
     }
+    const normalizeDomain = (d: string) =>
+      d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "") || null;
     setEditSaving(true);
     try {
       const { error } = await supabase
@@ -278,6 +315,14 @@ export default function SuperAdminPartners() {
           is_active: editActive,
           billing_mode: editBillingMode,
           commission_pct: isNaN(pct) ? 20 : pct,
+          white_label_enabled: editWhiteLabel,
+          brand_display_name: editBrandDisplayName.trim() || null,
+          custom_domain: normalizeDomain(editCustomDomain),
+          primary_color: editPrimaryColor.trim() || null,
+          secondary_color: editSecondaryColor.trim() || null,
+          accent_color: editAccentColor.trim() || null,
+          support_email: editSupportEmail.trim().toLowerCase() || null,
+          logo_url: editLogoUrl,
         })
         .eq("id", editPartner.id);
       if (error) throw error;
@@ -289,6 +334,7 @@ export default function SuperAdminPartners() {
       toast({ title: "Fehler", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     } finally { setEditSaving(false); }
   };
+
 
   const toggleActive = useMutation({
     mutationFn: async (p: Partner) => {
