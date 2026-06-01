@@ -101,3 +101,86 @@ docker exec -it supabase-db psql -U postgres -d postgres -P pager=off
 6. Test: Super Admin → Users → "Nutzer einladen" → Logs prüfen.
    Erwartet: `200 OK` von Resend. Fehler `403` = Domain nicht verifiziert,
    `401` = Key falsch / Container nicht neu gestartet.
+
+---
+
+## Subdomain sales.aicono.org (Sales Scout PWA)
+
+Die Sales-Scout-PWA für Vertriebspartner läuft unter einer eigenen Subdomain.
+Sie zeigt die gleiche App wie ems-pro.aicono.org, leitet aber nach dem Login
+automatisch auf `/sales` weiter (Erkennung in `src/lib/hostname.ts → isSalesHost()`).
+
+So richtest du die Subdomain Schritt für Schritt ein:
+
+### 1. DNS-Eintrag setzen
+
+Im DNS-Provider (z. B. Hetzner DNS Console, Cloudflare) für die Zone `aicono.org`:
+
+| Typ   | Name  | Wert / Ziel               | TTL  |
+|-------|-------|---------------------------|------|
+| A     | sales | `<Server-IPv4>`           | 300  |
+| AAAA  | sales | `<Server-IPv6>` (optional)| 300  |
+
+Kontrolle:
+```bash
+dig +short sales.aicono.org
+```
+Erwartung: Es kommt die IP deines Hetzner-Servers zurück. Wenn nicht, 5–15 Min
+warten (DNS-Propagation).
+
+### 2. Traefik-Label am App-Container erweitern
+
+In `docker-compose.yml` beim Frontend-/App-Service den Host-Router um die neue
+Subdomain ergänzen. Beispiel:
+
+```yaml
+services:
+  app:
+    image: ghcr.io/cw-aicono/aicono-ems:latest
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=Host(`ems-pro.aicono.org`) || Host(`partner.aicono.org`) || Host(`sales.aicono.org`)"
+      - "traefik.http.routers.app.entrypoints=websecure"
+      - "traefik.http.routers.app.tls=true"
+      - "traefik.http.routers.app.tls.certresolver=letsencrypt"
+      - "traefik.http.services.app.loadbalancer.server.port=80"
+```
+
+Wichtig:
+- Die **gleiche Container-Instanz** bedient alle drei Hosts. Die Weiterleitung
+  auf `/sales` macht die App selbst (siehe `src/pages/Index.tsx`).
+- Wenn du Caddy statt Traefik nutzt, im `Caddyfile` einfach
+  `sales.aicono.org` als zusätzlichen Site-Block mit `reverse_proxy app:80`
+  ergänzen — Let's-Encrypt-Zertifikat zieht Caddy automatisch.
+
+### 3. Container neu laden
+
+```bash
+cd /opt/aicono
+docker compose up -d
+docker compose logs -f traefik | grep -i sales
+```
+Erwartung: Traefik meldet `Configuration loaded` und holt automatisch ein
+Let's-Encrypt-Zertifikat für `sales.aicono.org` (kann beim ersten Aufruf 10–30 s
+dauern).
+
+### 4. Test
+
+1. Im Browser `https://sales.aicono.org` öffnen → grünes Schloss prüfen.
+2. Mit einem Partner-Account einloggen → Weiterleitung auf `/sales`.
+3. Auf iPhone/iPad: Safari → Teilen-Menü → „Zum Home-Bildschirm“.
+   Erwartung: App-Icon „Sales Scout“, Vollbild-Start, Safe-Area oben sichtbar
+   (Header schiebt sich unter die Notch).
+4. Dev-Override ohne DNS (Lovable Preview):
+   `https://<preview-url>/?sales=1` → setzt Session-Flag und verhält sich
+   wie die echte Subdomain.
+
+### 5. Troubleshooting
+
+| Symptom                                   | Ursache / Fix                                                         |
+|-------------------------------------------|-----------------------------------------------------------------------|
+| `ERR_CERT_AUTHORITY_INVALID`              | Let's Encrypt noch nicht erteilt – 1–2 Min warten, Logs prüfen.       |
+| 404 von Traefik                           | Host-Regel falsch geschrieben (Backticks!), Service neu deployen.     |
+| Login funktioniert nicht                  | Supabase Auth → „Redirect URLs“ um `https://sales.aicono.org/**` ergänzen. |
+| Safe-Area oben fehlt im PWA-Modus         | App erneut zum Home-Bildschirm hinzufügen (Manifest wird neu gecacht).|

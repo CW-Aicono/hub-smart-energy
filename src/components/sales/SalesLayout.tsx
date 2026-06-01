@@ -76,8 +76,17 @@ export function SalesLayout({ children, title = "Sales Scout", showBack, backTo,
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="sticky top-0 z-30 bg-card/80 backdrop-blur border-b">
+    <div
+      className="min-h-screen bg-background flex flex-col"
+      style={{
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
+      }}
+    >
+      <header
+        className="sticky top-0 z-30 bg-card/80 backdrop-blur border-b"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
         <div className="flex items-center justify-between px-4 h-14 max-w-3xl mx-auto w-full">
           <div className="flex items-center gap-2 min-w-0">
             {showBack ? (
