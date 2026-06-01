@@ -33,6 +33,7 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     const body = await req.json();
+    const partnerIdInput = body.partnerId ? String(body.partnerId) : null;
     const partnerName = String(body.partnerName ?? "").trim();
     const partnerSlug = String(body.partnerSlug ?? "").trim().toLowerCase();
     const adminEmail = String(body.adminEmail ?? "").trim().toLowerCase();
@@ -40,34 +41,69 @@ const handler = async (req: Request): Promise<Response> => {
     const redirectTo =
       body.redirectTo ?? "https://hub-smart-energy.lovable.app/set-password";
 
-    if (!partnerName) throw new Error("Firmenname fehlt.");
-    if (!/^[a-z0-9-]{2,50}$/.test(partnerSlug))
-      throw new Error("Slug ungültig (a-z, 0-9, '-', 2–50 Zeichen).");
-    if (!adminEmail.includes("@")) throw new Error("E-Mail ungültig.");
+    // Resolve / create partner
+    let partner: { id: string; name: string };
 
-    // 1) Partner anlegen (oder Slug-Konflikt erkennen)
-    const { data: existing } = await supabase
-      .from("partners")
-      .select("id")
-      .eq("slug", partnerSlug)
-      .maybeSingle();
-    if (existing) throw new Error(`Slug '${partnerSlug}' ist bereits vergeben.`);
+    if (partnerIdInput) {
+      // Invite-later mode: partner already exists
+      const { data: existingPartner, error: pErr } = await supabase
+        .from("partners")
+        .select("id, name")
+        .eq("id", partnerIdInput)
+        .maybeSingle();
+      if (pErr || !existingPartner) throw new Error("Partner nicht gefunden.");
+      partner = existingPartner;
 
-    const { data: partner, error: insertError } = await supabase
-      .from("partners")
-      .insert({
-        name: partnerName,
-        slug: partnerSlug,
-        contact_email: adminEmail,
-        is_active: true,
-      })
-      .select("id, name")
-      .single();
-    if (insertError || !partner) {
-      throw new Error(
-        `Partner konnte nicht angelegt werden: ${insertError?.message ?? "unbekannt"}`,
+      if (adminEmail) {
+        // Persist contact_email on partner (only if empty or different — overwrite is fine)
+        await supabase
+          .from("partners")
+          .update({ contact_email: adminEmail })
+          .eq("id", partner.id);
+      }
+    } else {
+      if (!partnerName) throw new Error("Firmenname fehlt.");
+      if (!/^[a-z0-9-]{2,50}$/.test(partnerSlug))
+        throw new Error("Slug ungültig (a-z, 0-9, '-', 2–50 Zeichen).");
+
+      const { data: existing } = await supabase
+        .from("partners")
+        .select("id")
+        .eq("slug", partnerSlug)
+        .maybeSingle();
+      if (existing) throw new Error(`Slug '${partnerSlug}' ist bereits vergeben.`);
+
+      const { data: created, error: insertError } = await supabase
+        .from("partners")
+        .insert({
+          name: partnerName,
+          slug: partnerSlug,
+          contact_email: adminEmail || null,
+          is_active: true,
+        })
+        .select("id, name")
+        .single();
+      if (insertError || !created) {
+        throw new Error(
+          `Partner konnte nicht angelegt werden: ${insertError?.message ?? "unbekannt"}`,
+        );
+      }
+      partner = created;
+    }
+
+    // If no email provided: partner created/found, no invite to send
+    if (!adminEmail) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          partnerId: partner.id,
+          invited: false,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } },
       );
     }
+
+    if (!adminEmail.includes("@")) throw new Error("E-Mail ungültig.");
 
     // 2) Auth-User erstellen oder bestehenden wiederverwenden
     let newUserId: string;
@@ -184,6 +220,7 @@ const handler = async (req: Request): Promise<Response> => {
         success: true,
         partnerId: partner.id,
         userId: newUserId,
+        invited: true,
         emailId: emailResponse.data?.id ?? null,
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } },
