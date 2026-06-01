@@ -49,6 +49,9 @@ const Index = () => {
 
   if (!user) return <Navigate to="/auth" replace />;
 
+  // Sales-Scout-Subdomain (sales.aicono.org) leitet auf die mobile PWA /sales.
+  if (isSalesHost()) return <Navigate to="/sales" replace />;
+
   // Stufe 2: Partner-Subdomain (partner.aicono.org) zeigt ausschließlich das Partner-Portal.
   // Auch wenn der eingeloggte User Super-Admin oder Tenant-Admin ist, soll auf dieser
   // Subdomain das Partner-Portal greifen.
