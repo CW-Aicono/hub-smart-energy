@@ -10,7 +10,7 @@ const NAV = [
   { to: "/partner", icon: LayoutDashboard, label: "Übersicht", end: true },
   { to: "/partner/tenants", icon: Building2, label: "Meine Tenants" },
   { to: "/partner/members", icon: Users, label: "Partner-User" },
-  { to: "/partner/sales", icon: Briefcase, label: "Sales Scout" },
+  { to: "/sales", icon: Briefcase, label: "Sales Scout" },
 ];
 
 export default function PartnerSidebar() {
