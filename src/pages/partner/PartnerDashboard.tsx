@@ -65,22 +65,6 @@ export default function PartnerDashboard() {
         ))}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Willkommen</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>
-            Dies ist Stufe 2 des Partner-Portals (Gerüst). In den nächsten Stufen folgen Tenant-Anlage,
-            Partner-User-Verwaltung, eingeschränkte Remote-Support-Funktion sowie der Sales Scout im
-            Partner-Kontext.
-          </p>
-          <p>
-            Über den Menüpunkt <strong>Meine Tenants</strong> siehst du bereits jetzt alle dir
-            zugeordneten Mandanten (read-only).
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }
