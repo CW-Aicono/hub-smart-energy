@@ -18,6 +18,8 @@ import PartnerDashboard from "@/pages/partner/PartnerDashboard";
 import PartnerTenants from "@/pages/partner/PartnerTenants";
 import PartnerMembers from "@/pages/partner/PartnerMembers";
 import PartnerBilling from "@/pages/partner/PartnerBilling";
+import PartnerSalesCatalog from "@/pages/partner/PartnerSalesCatalog";
+import PartnerSalesRules from "@/pages/partner/PartnerSalesRules";
 import RecoveryGuard from "@/components/RecoveryGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
