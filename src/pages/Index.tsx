@@ -6,12 +6,15 @@ import { useTenant } from "@/hooks/useTenant";
 import { useTranslation } from "@/hooks/useTranslation";
 import { DashboardFilterProvider } from "@/hooks/useDashboardFilter";
 import { isImpersonating } from "@/lib/supportView";
+import { usePartnerAccess } from "@/hooks/usePartnerAccess";
+import { isPartnerHost } from "@/lib/hostname";
 import DashboardContent from "./DashboardContent";
 
 const Index = () => {
   const { user, loading, isRecovery } = useAuth();
   const { isSuperAdmin, loading: superAdminLoading } = useSuperAdmin();
   const { tenant, loading: tenantLoading } = useTenant();
+  const { isPartnerMember, loading: partnerLoading } = usePartnerAccess();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [onboardingChecked, setOnboardingChecked] = useState(false);
@@ -36,7 +39,7 @@ const Index = () => {
     }
   }, [user, onboardingChecked, navigate, tenant, tenantLoading]);
 
-  if (loading || superAdminLoading) {
+  if (loading || superAdminLoading || partnerLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>
@@ -45,6 +48,14 @@ const Index = () => {
   }
 
   if (!user) return <Navigate to="/auth" replace />;
+
+  // Stufe 2: Partner-Subdomain (partner.aicono.org) zeigt ausschließlich das Partner-Portal.
+  // Auch wenn der eingeloggte User Super-Admin oder Tenant-Admin ist, soll auf dieser
+  // Subdomain das Partner-Portal greifen.
+  if (isPartnerHost()) return <Navigate to="/partner" replace />;
+
+  // Partner-Mitglieder werden auf der Hauptdomain ebenfalls ins Partner-Portal geleitet.
+  if (isPartnerMember && !isSuperAdmin) return <Navigate to="/partner" replace />;
 
   // Super-Admins have no tenant context — redirect them to their dedicated area,
   // UNLESS they are actively viewing a tenant via Remote-Support (impersonation).

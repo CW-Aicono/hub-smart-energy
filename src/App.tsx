@@ -13,6 +13,9 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { DemoModeDetector } from "@/contexts/DemoMode";
 import ModuleGuard from "@/components/ModuleGuard";
 import { SuperAdminWrapper } from "@/components/super-admin/SuperAdminWrapper";
+import { PartnerLayout } from "@/components/partner/PartnerLayout";
+import PartnerDashboard from "@/pages/partner/PartnerDashboard";
+import PartnerTenants from "@/pages/partner/PartnerTenants";
 import RecoveryGuard from "@/components/RecoveryGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
@@ -265,6 +268,13 @@ const App = () => (
                       <Route path="/datenschutz" element={<LegalPageView pageKey="datenschutz" />} />
                       <Route path="/impressum" element={<LegalPageView pageKey="impressum" />} />
                       <Route path="/agb" element={<LegalPageView pageKey="agb" />} />
+
+                      {/* Stufe 2: Partner-Portal (partner.aicono.org → /partner/*) */}
+                      <Route path="/partner" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
+                      <Route path="/partner/tenants" element={<PartnerLayout><PartnerTenants /></PartnerLayout>} />
+                      <Route path="/partner/members" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
+                      <Route path="/partner/sales" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
+
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </Suspense>
