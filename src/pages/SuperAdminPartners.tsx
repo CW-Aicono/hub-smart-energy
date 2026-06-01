@@ -23,6 +23,7 @@ interface Partner {
   contact_email: string | null;
   is_active: boolean;
   billing_mode: string;
+  commission_pct: number | null;
   created_at: string;
 }
 
@@ -68,6 +69,8 @@ export default function SuperAdminPartners() {
   const [editEmail, setEditEmail] = useState("");
   const [editSubdomain, setEditSubdomain] = useState("");
   const [editActive, setEditActive] = useState(true);
+  const [editBillingMode, setEditBillingMode] = useState<"wholesale" | "commission">("wholesale");
+  const [editCommissionPct, setEditCommissionPct] = useState<string>("20");
   const [editSaving, setEditSaving] = useState(false);
   const [editSlugStatus, setEditSlugStatus] = useState<
     | { kind: "idle" }
@@ -82,7 +85,7 @@ export default function SuperAdminPartners() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("partners")
-        .select("id, name, slug, subdomain, contact_email, is_active, billing_mode, created_at")
+        .select("id, name, slug, subdomain, contact_email, is_active, billing_mode, commission_pct, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as Partner[];
