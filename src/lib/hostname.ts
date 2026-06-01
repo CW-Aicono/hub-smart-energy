@@ -19,3 +19,24 @@ export function isPartnerHost(): boolean {
   }
   return false;
 }
+
+/**
+ * Sales-Scout PWA: sales.aicono.org → /sales
+ * Optional: ?sales=1 als Dev-Override (z. B. Lovable Preview).
+ */
+export function isSalesHost(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname.toLowerCase();
+  if (host.startsWith("sales.")) return true;
+  try {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("sales") === "1") {
+      sessionStorage.setItem("aicono_sales_preview", "1");
+      return true;
+    }
+    if (sessionStorage.getItem("aicono_sales_preview") === "1") return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
