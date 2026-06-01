@@ -258,6 +258,12 @@ async function handle(action: string, body: Record<string, unknown>) {
           console.warn(
             `[ocpp-persistent-api] duplicate StartTransaction detected, returning existing session ${newest.id} (tx=${newest.transaction_id})`,
           );
+          await admin
+            .from("charge_point_connectors")
+            .update({ status: "Charging", last_status_at: new Date().toISOString() })
+            .eq("charge_point_id", chargePointId)
+            .eq("connector_id", connectorId);
+          await syncChargePointStatusFromConnectors(chargePointId);
           return ok({
             id: newest.id,
             transactionId: Number(newest.transaction_id ?? newTransactionId),
@@ -295,6 +301,12 @@ async function handle(action: string, body: Record<string, unknown>) {
         .select("id")
         .single();
       if (error) return fail(500, error.message);
+      await admin
+        .from("charge_point_connectors")
+        .update({ status: "Charging", last_status_at: new Date().toISOString() })
+        .eq("charge_point_id", chargePointId)
+        .eq("connector_id", connectorId);
+      await syncChargePointStatusFromConnectors(chargePointId);
       return ok({ id: data.id, transactionId: newTransactionId, duplicate: false });
     }
 
