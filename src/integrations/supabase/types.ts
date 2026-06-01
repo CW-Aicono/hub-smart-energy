@@ -7133,6 +7133,7 @@ export type Database = {
           kunde_typ: string
           notizen: string | null
           partner_id: string
+          partner_org_id: string | null
           public_token: string
           status: string
           updated_at: string
@@ -7150,6 +7151,7 @@ export type Database = {
           kunde_typ?: string
           notizen?: string | null
           partner_id: string
+          partner_org_id?: string | null
           public_token?: string
           status?: string
           updated_at?: string
@@ -7167,6 +7169,7 @@ export type Database = {
           kunde_typ?: string
           notizen?: string | null
           partner_id?: string
+          partner_org_id?: string | null
           public_token?: string
           status?: string
           updated_at?: string
@@ -7177,6 +7180,13 @@ export type Database = {
             columns: ["converted_tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_projects_partner_org_id_fkey"
+            columns: ["partner_org_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
@@ -9269,6 +9279,10 @@ export type Database = {
       bootstrap_user_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      can_access_sales_project: {
+        Args: { _project_id: string }
+        Returns: boolean
       }
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
