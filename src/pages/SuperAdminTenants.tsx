@@ -180,6 +180,25 @@ const SuperAdminTenants = () => {
                     <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="info@firma.de" type="email" />
                     <p className="text-xs text-muted-foreground">Allgemeine Kontaktadresse des Mandanten (optional)</p>
                   </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" />
+                      Zuordnung zu Partner
+                    </Label>
+                    <Select
+                      value={newPartnerId || "__platform__"}
+                      onValueChange={(v) => setNewPartnerId(v === "__platform__" ? "" : v)}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__platform__">Direkt AICONO (Super-Admin)</SelectItem>
+                        {partnerOptions.map((p: any) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Wird kein Partner ausgewählt, betreut AICONO den Mandanten direkt.</p>
+                  </div>
                 </div>
 
                 <div className="border-t" />
