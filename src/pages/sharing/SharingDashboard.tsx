@@ -103,7 +103,7 @@ function DashboardContent() {
                     borderRadius: 8,
                     fontSize: 12,
                   }}
-                  formatter={(v: number) => [`${fmt(v, 2)} kWh`, "Allokation"]}
+                  formatter={(v: number) => [`${fmt(v, 2)} kWh`, "Zuteilung"]}
                   labelFormatter={(l) => `Uhrzeit ${l}`}
                 />
                 <Area
