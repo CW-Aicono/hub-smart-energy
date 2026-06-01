@@ -13,6 +13,11 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { DemoModeDetector } from "@/contexts/DemoMode";
 import ModuleGuard from "@/components/ModuleGuard";
 import { SuperAdminWrapper } from "@/components/super-admin/SuperAdminWrapper";
+import { PartnerLayout } from "@/components/partner/PartnerLayout";
+import PartnerDashboard from "@/pages/partner/PartnerDashboard";
+import PartnerTenants from "@/pages/partner/PartnerTenants";
+import PartnerMembers from "@/pages/partner/PartnerMembers";
+import PartnerBilling from "@/pages/partner/PartnerBilling";
 import RecoveryGuard from "@/components/RecoveryGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
@@ -43,6 +48,7 @@ const Help = lazy(() => import("./pages/Help"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
 const SuperAdminTenants = lazy(() => import("./pages/SuperAdminTenants"));
+const SuperAdminPartners = lazy(() => import("./pages/SuperAdminPartners"));
 const SuperAdminTenantDetail = lazy(() => import("./pages/SuperAdminTenantDetail"));
 const SuperAdminStatistics = lazy(() => import("./pages/SuperAdminStatistics"));
 const SuperAdminBilling = lazy(() => import("./pages/SuperAdminBilling"));
@@ -200,6 +206,7 @@ const App = () => (
                       <Route path="/super-admin" element={<SA><SuperAdminDashboard /></SA>} />
                       <Route path="/super-admin/tenants" element={<SA><SuperAdminTenants /></SA>} />
                       <Route path="/super-admin/tenants/:id" element={<SA><SuperAdminTenantDetail /></SA>} />
+                      <Route path="/super-admin/partners" element={<SA><SuperAdminPartners /></SA>} />
                       <Route path="/super-admin/statistics" element={<SA><SuperAdminStatistics /></SA>} />
                       <Route path="/super-admin/users" element={<SA><SuperAdminUsers /></SA>} />
                       <Route path="/super-admin/roles" element={<SA><SuperAdminRoles /></SA>} />
@@ -265,6 +272,14 @@ const App = () => (
                       <Route path="/datenschutz" element={<LegalPageView pageKey="datenschutz" />} />
                       <Route path="/impressum" element={<LegalPageView pageKey="impressum" />} />
                       <Route path="/agb" element={<LegalPageView pageKey="agb" />} />
+
+                      {/* Stufe 2: Partner-Portal (partner.aicono.org → /partner/*) */}
+                      <Route path="/partner" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
+                      <Route path="/partner/tenants" element={<PartnerLayout><PartnerTenants /></PartnerLayout>} />
+                      <Route path="/partner/billing" element={<PartnerLayout><PartnerBilling /></PartnerLayout>} />
+                      <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
+                      {/* Sales Scout: gemeinsam genutzt unter /sales (Partner-Member sehen ihre eigene Org via RLS) */}
+
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </Suspense>

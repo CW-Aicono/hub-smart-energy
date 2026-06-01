@@ -5314,6 +5314,8 @@ export type Database = {
           industry_price_monthly: number
           industry_standard_price: number
           module_code: string
+          partner_industry_price_monthly: number
+          partner_price_monthly: number
           price_monthly: number
           standard_price: number
           updated_at: string
@@ -5324,6 +5326,8 @@ export type Database = {
           industry_price_monthly?: number
           industry_standard_price?: number
           module_code: string
+          partner_industry_price_monthly?: number
+          partner_price_monthly?: number
           price_monthly?: number
           standard_price?: number
           updated_at?: string
@@ -5334,6 +5338,8 @@ export type Database = {
           industry_price_monthly?: number
           industry_standard_price?: number
           module_code?: string
+          partner_industry_price_monthly?: number
+          partner_price_monthly?: number
           price_monthly?: number
           standard_price?: number
           updated_at?: string
@@ -5563,6 +5569,151 @@ export type Database = {
           id?: string
           message_type?: string | null
           raw_message?: Json
+        }
+        Relationships: []
+      }
+      partner_members: {
+        Row: {
+          created_at: string
+          id: string
+          partner_id: string
+          partner_role: Database["public"]["Enums"]["partner_member_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          partner_id: string
+          partner_role?: Database["public"]["Enums"]["partner_member_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          partner_id?: string
+          partner_role?: Database["public"]["Enums"]["partner_member_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_members_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_module_prices: {
+        Row: {
+          created_at: string
+          id: string
+          module_code: string
+          partner_id: string
+          sale_price_industry_monthly: number | null
+          sale_price_monthly: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          module_code: string
+          partner_id: string
+          sale_price_industry_monthly?: number | null
+          sale_price_monthly?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          module_code?: string
+          partner_id?: string
+          sale_price_industry_monthly?: number | null
+          sale_price_monthly?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_module_prices_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partners: {
+        Row: {
+          accent_color: string | null
+          billing_address: Json
+          billing_mode: string
+          brand_display_name: string | null
+          commission_pct: number
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          custom_domain: string | null
+          id: string
+          is_active: boolean
+          logo_url: string | null
+          name: string
+          notes: string | null
+          primary_color: string | null
+          secondary_color: string | null
+          slug: string
+          subdomain: string | null
+          support_email: string | null
+          updated_at: string
+          white_label_enabled: boolean
+        }
+        Insert: {
+          accent_color?: string | null
+          billing_address?: Json
+          billing_mode?: string
+          brand_display_name?: string | null
+          commission_pct?: number
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          custom_domain?: string | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name: string
+          notes?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          slug: string
+          subdomain?: string | null
+          support_email?: string | null
+          updated_at?: string
+          white_label_enabled?: boolean
+        }
+        Update: {
+          accent_color?: string | null
+          billing_address?: Json
+          billing_mode?: string
+          brand_display_name?: string | null
+          commission_pct?: number
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          custom_domain?: string | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name?: string
+          notes?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          slug?: string
+          subdomain?: string | null
+          support_email?: string | null
+          updated_at?: string
+          white_label_enabled?: boolean
         }
         Relationships: []
       }
@@ -7044,6 +7195,7 @@ export type Database = {
           kunde_typ: string
           notizen: string | null
           partner_id: string
+          partner_org_id: string | null
           public_token: string
           status: string
           updated_at: string
@@ -7061,6 +7213,7 @@ export type Database = {
           kunde_typ?: string
           notizen?: string | null
           partner_id: string
+          partner_org_id?: string | null
           public_token?: string
           status?: string
           updated_at?: string
@@ -7078,6 +7231,7 @@ export type Database = {
           kunde_typ?: string
           notizen?: string | null
           partner_id?: string
+          partner_org_id?: string | null
           public_token?: string
           status?: string
           updated_at?: string
@@ -7088,6 +7242,13 @@ export type Database = {
             columns: ["converted_tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_projects_partner_org_id_fkey"
+            columns: ["partner_org_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
@@ -8613,6 +8774,7 @@ export type Database = {
           logo_url: string | null
           name: string
           onboarding_completed: boolean
+          partner_id: string | null
           payment_method: string
           postal_code: string | null
           remote_support_enabled: boolean
@@ -8626,6 +8788,7 @@ export type Database = {
           show_manual_meters: boolean
           slug: string
           street: string | null
+          support_owner: string
           support_price_per_15min: number
           tenant_type: string
           updated_at: string
@@ -8647,6 +8810,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           onboarding_completed?: boolean
+          partner_id?: string | null
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
@@ -8660,6 +8824,7 @@ export type Database = {
           show_manual_meters?: boolean
           slug: string
           street?: string | null
+          support_owner?: string
           support_price_per_15min?: number
           tenant_type?: string
           updated_at?: string
@@ -8681,6 +8846,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           onboarding_completed?: boolean
+          partner_id?: string | null
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
@@ -8694,12 +8860,21 @@ export type Database = {
           show_manual_meters?: boolean
           slug?: string
           street?: string | null
+          support_owner?: string
           support_price_per_15min?: number
           tenant_type?: string
           updated_at?: string
           week_start_day?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tenants_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_invitations: {
         Row: {
@@ -9167,6 +9342,10 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      can_access_sales_project: {
+        Args: { _project_id: string }
+        Returns: boolean
+      }
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
@@ -9297,6 +9476,10 @@ export type Database = {
           total_value: number
         }[]
       }
+      get_partner_branding_for_tenant: {
+        Args: { _tenant_id: string }
+        Returns: Json
+      }
       get_power_readings_5min: {
         Args: { p_end: string; p_meter_ids: string[]; p_start: string }
         Returns: {
@@ -9378,6 +9561,7 @@ export type Database = {
         }[]
       }
       get_user_email: { Args: never; Returns: string }
+      get_user_partner_id: { Args: never; Returns: string }
       get_user_tenant_id: { Args: never; Returns: string }
       has_location_access: {
         Args: { _location_id: string; _user_id: string }
@@ -9395,14 +9579,27 @@ export type Database = {
         Returns: boolean
       }
       is_own_profile: { Args: { profile_user_id: string }; Returns: boolean }
+      is_partner_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_partner_member: {
+        Args: { _partner_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_support_user: { Args: { _user_id: string }; Returns: boolean }
       next_charging_invoice_number: {
         Args: { p_tenant_id: string; p_year: number }
         Returns: string
       }
+      partner_has_tenant_access: {
+        Args: { _tenant_id: string; _user_id: string }
+        Returns: boolean
+      }
       release_gateway_refresh_lock: {
         Args: { p_integration_id: string; p_owner: string }
         Returns: undefined
+      }
+      resolve_partner_branding_by_host: {
+        Args: { _host: string }
+        Returns: Json
       }
       snapshot_charge_point_uptime: { Args: never; Returns: number }
       try_acquire_gateway_refresh_lock: {
@@ -9421,6 +9618,8 @@ export type Database = {
         | "super_admin"
         | "sales_partner"
         | "community_member"
+        | "partner_admin"
+        | "partner_user"
       device_class:
         | "meter"
         | "gateway"
@@ -9443,6 +9642,7 @@ export type Database = {
         | "sonstiges"
         | "gewerbe"
         | "privat"
+      partner_member_role: "partner_admin" | "partner_user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -9576,6 +9776,8 @@ export const Constants = {
         "super_admin",
         "sales_partner",
         "community_member",
+        "partner_admin",
+        "partner_user",
       ],
       device_class: [
         "meter",
@@ -9601,6 +9803,7 @@ export const Constants = {
         "gewerbe",
         "privat",
       ],
+      partner_member_role: ["partner_admin", "partner_user"],
     },
   },
 } as const

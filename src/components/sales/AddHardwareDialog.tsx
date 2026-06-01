@@ -176,7 +176,7 @@ export function AddHardwareDialog({ open, onOpenChange, distributionId, onAdded 
             />
           </div>
 
-          <ScrollArea className="flex-1 min-h-0 -mx-1 px-1">
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -229,7 +229,8 @@ export function AddHardwareDialog({ open, onOpenChange, distributionId, onAdded 
                 ))}
               </div>
             )}
-          </ScrollArea>
+          </div>
+
         </div>
       </DialogContent>
     </Dialog>

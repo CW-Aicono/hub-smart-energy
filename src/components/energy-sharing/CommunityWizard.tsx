@@ -50,7 +50,7 @@ Der Vertrag läuft unbefristet und kann mit einer Frist von einem Monat zum Mona
 gekündigt werden.
 
 ## 4. Datenschutz
-Verbrauchsdaten werden ausschließlich zur Abrechnung und Allokation innerhalb der
+Verbrauchsdaten werden ausschließlich zur Abrechnung und Verteilung innerhalb der
 Energiegemeinschaft verarbeitet. Es erfolgt keine Weitergabe an Dritte.
 
 ## 5. Digitale Unterschrift
@@ -75,7 +75,7 @@ Reststromlieferanten **{{rest_supplier_name}}**.
 
 ## 2. Tarif
 Es gelten die Konditionen des Reststromlieferanten in der jeweils aktuellen Fassung.
-Energy Sharing deckt nur den in der Allokation berechneten Anteil.
+Energy Sharing deckt nur den in der Verteilung berechneten Anteil.
 
 ## 3. Netzentgelte, Umlagen, Steuern
 Auf Energy-Sharing-Mengen sind **alle gesetzlichen Netzentgelte, Umlagen und Steuern**

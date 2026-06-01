@@ -62,13 +62,25 @@ Deno.serve(async (req) => {
       _user_id: callerId,
       _role: "super_admin",
     });
-    if (!isSuper) return json({ error: "Forbidden" }, 403);
 
-    // 2) Input
+    // 2) Input (early, needed for partner-scope check)
     const body = await req.json().catch(() => ({}));
     const targetTenantId = String(body.target_tenant_id || "");
     const reason = body.reason ? String(body.reason) : "Remote-Support Sitzung";
     if (!targetTenantId) return json({ error: "target_tenant_id required" }, 400);
+
+    if (!isSuper) {
+      // Partner-Admin darf nur eigene Tenants impersonieren
+      const { data: isPartnerAdmin } = await admin.rpc("is_partner_admin", {
+        _user_id: callerId,
+      });
+      const { data: partnerOk } = await admin.rpc("partner_has_tenant_access", {
+        _user_id: callerId,
+        _tenant_id: targetTenantId,
+      });
+      if (!isPartnerAdmin || !partnerOk) return json({ error: "Forbidden" }, 403);
+    }
+
 
     // Tenant existiert?
     const { data: tenant, error: tenantErr } = await admin

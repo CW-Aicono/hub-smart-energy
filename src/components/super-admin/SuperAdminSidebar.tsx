@@ -87,7 +87,15 @@ export default function SuperAdminSidebar() {
 
   const navItems = [
     { to: "/super-admin", icon: LayoutDashboard, label: t("nav.dashboard") },
-    { to: "/super-admin/tenants", icon: Building2, label: t("nav.tenants") },
+    {
+      to: "/super-admin/tenants",
+      icon: Building2,
+      label: "Kunden",
+      children: [
+        { to: "/super-admin/tenants", icon: Building2, label: "Kunden" },
+        { to: "/super-admin/partners", icon: Briefcase, label: "Partner" },
+      ],
+    },
     { to: "/super-admin/statistics", icon: BarChart3, label: t("nav.statistics") },
     {
       to: "/super-admin/billing",
@@ -159,6 +167,9 @@ export default function SuperAdminSidebar() {
     }
     if (location.pathname.startsWith("/super-admin/sales")) {
       setOpenMenus((prev) => prev.includes("/super-admin/sales") ? prev : [...prev, "/super-admin/sales"]);
+    }
+    if (location.pathname.startsWith("/super-admin/tenants") || location.pathname.startsWith("/super-admin/partners")) {
+      setOpenMenus((prev) => prev.includes("/super-admin/tenants") ? prev : [...prev, "/super-admin/tenants"]);
     }
   }, [location.pathname]);
 
