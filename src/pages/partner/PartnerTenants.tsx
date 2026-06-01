@@ -25,7 +25,7 @@ export default function PartnerTenants() {
     (async () => {
       const { data } = await supabase
         .from("tenants")
-        .select("id, name, created_at, is_active")
+        .select("id, name, created_at")
         .eq("partner_id", partnerId)
         .order("created_at", { ascending: false });
       if (cancelled) return;
