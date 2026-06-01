@@ -73,7 +73,7 @@ function DashboardContent() {
           </div>
         ) : !alloc?.todayHourly.some((p) => p.kw > 0) ? (
           <div className="h-48 flex items-center justify-center text-xs text-muted-foreground text-center px-4">
-            Noch keine Allokationsdaten für heute vorhanden.
+            Noch keine Verteilungsdaten für heute vorhanden.
           </div>
         ) : (
           <div className="h-48 -ml-2">
@@ -103,7 +103,7 @@ function DashboardContent() {
                     borderRadius: 8,
                     fontSize: 12,
                   }}
-                  formatter={(v: number) => [`${fmt(v, 2)} kWh`, "Allokation"]}
+                  formatter={(v: number) => [`${fmt(v, 2)} kWh`, "Zuteilung"]}
                   labelFormatter={(l) => `Uhrzeit ${l}`}
                 />
                 <Area

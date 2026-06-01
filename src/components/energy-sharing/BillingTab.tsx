@@ -61,10 +61,17 @@ export default function BillingTab({ communityId }: { communityId: string }) {
     }
   };
 
+  const runStatusLabel = (s: string) => ({
+    completed: "abgeschlossen",
+    failed: "fehlgeschlagen",
+    running: "läuft",
+    pending: "ausstehend",
+  } as Record<string, string>)[s] ?? s;
+
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader><CardTitle>Allokation</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Verteilung</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="flex gap-2 items-end flex-wrap">
             <div><Label>Jahr</Label><Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-24" /></div>
@@ -73,7 +80,7 @@ export default function BillingTab({ communityId }: { communityId: string }) {
               const ps = new Date(Date.UTC(year, month - 1, 1)).toISOString();
               const pe = new Date(Date.UTC(year, month, 1)).toISOString();
               runAllocation.mutate({ period_start: ps, period_end: pe });
-            }}><Play className="h-4 w-4 mr-2" />Allokation für Monat berechnen</Button>
+            }}><Play className="h-4 w-4 mr-2" />Verteilung für Monat berechnen</Button>
             <Button variant="secondary" onClick={() => runBilling.mutate({ year, month })}>
               <Calculator className="h-4 w-4 mr-2" />Abrechnung erzeugen
             </Button>
@@ -82,15 +89,15 @@ export default function BillingTab({ communityId }: { communityId: string }) {
             <Table>
               <TableHeader><TableRow>
                 <TableHead>Zeitraum</TableHead><TableHead>Status</TableHead>
-                <TableHead className="text-right">Erzeugung kWh</TableHead>
-                <TableHead className="text-right">Alloziert kWh</TableHead>
+                <TableHead className="text-right">kWh erzeugt</TableHead>
+                <TableHead className="text-right">kWh zugeteilt</TableHead>
                 <TableHead className="text-right">Überschuss kWh</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {runs.slice(0, 6).map((r: any) => (
                   <TableRow key={r.id}>
                     <TableCell className="text-xs">{new Date(r.period_start).toLocaleDateString("de-DE")} – {new Date(r.period_end).toLocaleDateString("de-DE")}</TableCell>
-                    <TableCell><Badge variant={r.status === "completed" ? "default" : r.status === "failed" ? "destructive" : "secondary"}>{r.status}</Badge></TableCell>
+                    <TableCell><Badge variant={r.status === "completed" ? "default" : r.status === "failed" ? "destructive" : "secondary"}>{runStatusLabel(r.status)}</Badge></TableCell>
                     <TableCell className="text-right">{Number(r.total_generated_kwh ?? 0).toLocaleString("de-DE", { maximumFractionDigits: 1 })}</TableCell>
                     <TableCell className="text-right">{Number(r.total_allocated_kwh ?? 0).toLocaleString("de-DE", { maximumFractionDigits: 1 })}</TableCell>
                     <TableCell className="text-right">{Number(r.total_surplus_kwh ?? 0).toLocaleString("de-DE", { maximumFractionDigits: 1 })}</TableCell>
@@ -101,6 +108,7 @@ export default function BillingTab({ communityId }: { communityId: string }) {
           )}
         </CardContent>
       </Card>
+
 
       <Card>
         <CardHeader><CardTitle>Mitgliederrechnungen</CardTitle></CardHeader>

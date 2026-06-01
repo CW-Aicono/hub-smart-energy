@@ -25,7 +25,7 @@ export default function DataQualityTab({ communityId }: { communityId: string })
           <div className="text-lg">{data.last_reading_at ? new Date(data.last_reading_at).toLocaleString("de-DE") : "—"}</div>
         </CardContent>
       </Card>
-      <Card><CardHeader className="pb-2"><CardDescription>Letzter Allokationslauf</CardDescription></CardHeader>
+      <Card><CardHeader className="pb-2"><CardDescription>Letzte Verteilung</CardDescription></CardHeader>
         <CardContent>
           <div className="text-lg">{data.active_run_at ? new Date(data.active_run_at).toLocaleString("de-DE") : "—"}</div>
           <div className="text-xs text-muted-foreground mt-1">{data.assets_total.toLocaleString("de-DE")} Anlage(n)</div>
