@@ -5566,6 +5566,95 @@ export type Database = {
         }
         Relationships: []
       }
+      partner_members: {
+        Row: {
+          created_at: string
+          id: string
+          partner_id: string
+          partner_role: Database["public"]["Enums"]["partner_member_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          partner_id: string
+          partner_role?: Database["public"]["Enums"]["partner_member_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          partner_id?: string
+          partner_role?: Database["public"]["Enums"]["partner_member_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_members_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partners: {
+        Row: {
+          billing_address: Json
+          billing_mode: string
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          custom_domain: string | null
+          id: string
+          is_active: boolean
+          logo_url: string | null
+          name: string
+          notes: string | null
+          primary_color: string | null
+          slug: string
+          subdomain: string | null
+          updated_at: string
+        }
+        Insert: {
+          billing_address?: Json
+          billing_mode?: string
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          custom_domain?: string | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name: string
+          notes?: string | null
+          primary_color?: string | null
+          slug: string
+          subdomain?: string | null
+          updated_at?: string
+        }
+        Update: {
+          billing_address?: Json
+          billing_mode?: string
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          custom_domain?: string | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name?: string
+          notes?: string | null
+          primary_color?: string | null
+          slug?: string
+          subdomain?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pending_ocpp_commands: {
         Row: {
           charge_point_ocpp_id: string
@@ -8613,6 +8702,7 @@ export type Database = {
           logo_url: string | null
           name: string
           onboarding_completed: boolean
+          partner_id: string | null
           payment_method: string
           postal_code: string | null
           remote_support_enabled: boolean
@@ -8626,6 +8716,7 @@ export type Database = {
           show_manual_meters: boolean
           slug: string
           street: string | null
+          support_owner: string
           support_price_per_15min: number
           tenant_type: string
           updated_at: string
@@ -8647,6 +8738,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           onboarding_completed?: boolean
+          partner_id?: string | null
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
@@ -8660,6 +8752,7 @@ export type Database = {
           show_manual_meters?: boolean
           slug: string
           street?: string | null
+          support_owner?: string
           support_price_per_15min?: number
           tenant_type?: string
           updated_at?: string
@@ -8681,6 +8774,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           onboarding_completed?: boolean
+          partner_id?: string | null
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
@@ -8694,12 +8788,21 @@ export type Database = {
           show_manual_meters?: boolean
           slug?: string
           street?: string | null
+          support_owner?: string
           support_price_per_15min?: number
           tenant_type?: string
           updated_at?: string
           week_start_day?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tenants_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_invitations: {
         Row: {
@@ -9378,6 +9481,7 @@ export type Database = {
         }[]
       }
       get_user_email: { Args: never; Returns: string }
+      get_user_partner_id: { Args: never; Returns: string }
       get_user_tenant_id: { Args: never; Returns: string }
       has_location_access: {
         Args: { _location_id: string; _user_id: string }
@@ -9395,10 +9499,19 @@ export type Database = {
         Returns: boolean
       }
       is_own_profile: { Args: { profile_user_id: string }; Returns: boolean }
+      is_partner_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_partner_member: {
+        Args: { _partner_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_support_user: { Args: { _user_id: string }; Returns: boolean }
       next_charging_invoice_number: {
         Args: { p_tenant_id: string; p_year: number }
         Returns: string
+      }
+      partner_has_tenant_access: {
+        Args: { _tenant_id: string; _user_id: string }
+        Returns: boolean
       }
       release_gateway_refresh_lock: {
         Args: { p_integration_id: string; p_owner: string }
@@ -9421,6 +9534,8 @@ export type Database = {
         | "super_admin"
         | "sales_partner"
         | "community_member"
+        | "partner_admin"
+        | "partner_user"
       device_class:
         | "meter"
         | "gateway"
@@ -9443,6 +9558,7 @@ export type Database = {
         | "sonstiges"
         | "gewerbe"
         | "privat"
+      partner_member_role: "partner_admin" | "partner_user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -9576,6 +9692,8 @@ export const Constants = {
         "super_admin",
         "sales_partner",
         "community_member",
+        "partner_admin",
+        "partner_user",
       ],
       device_class: [
         "meter",
@@ -9601,6 +9719,7 @@ export const Constants = {
         "gewerbe",
         "privat",
       ],
+      partner_member_role: ["partner_admin", "partner_user"],
     },
   },
 } as const
