@@ -53,6 +53,33 @@ const ChargingPoints = () => {
   const { chargePoints, isLoading, addChargePoint, updateChargePoint, deleteChargePoint } = useChargePoints();
   const { sessions } = useChargingSessions();
   const { chargerModels, vendors: knownVendors, getModelsForVendor } = useChargerModels();
+  const { data: allConnectors = [] } = useQuery({
+    queryKey: ["charge-point-connectors", tenant?.id, "all"],
+    enabled: !!tenant?.id,
+    queryFn: async () => {
+      const ids = chargePoints.map((cp) => cp.id);
+      if (ids.length === 0) return [];
+      const { data, error } = await supabase
+        .from("charge_point_connectors")
+        .select("*")
+        .in("charge_point_id", ids)
+        .order("display_order");
+      if (error) throw error;
+      return (data ?? []) as unknown as ChargePointConnector[];
+    },
+  });
+
+  useEffect(() => {
+    if (!tenant?.id) return;
+    const channel = supabase
+      .channel(`charge-point-connectors-overview-${tenant.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "charge_point_connectors" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["charge-point-connectors", tenant.id, "all"] });
+        queryClient.invalidateQueries({ queryKey: ["charge-points", tenant.id] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient, tenant?.id]);
 
   const statusConfig: Record<string, { labelKey: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap; color: string }> = {
     available: { labelKey: "charging.statusAvailable", variant: "default", icon: Zap, color: "text-green-500" },
