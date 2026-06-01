@@ -120,18 +120,32 @@ Deno.serve(async (req) => {
     );
 
 
-    // Resolve tenant logo: stored as a path in the private "tenant-assets" bucket.
-    // Generate a long-lived signed URL so the public page can render it.
+    // Resolve tenant logo: stored as a path in the "tenant-assets" bucket.
+    // Try a signed URL first (private bucket), fall back to the public URL
+    // if the bucket is configured as public (or signing fails). This makes the
+    // resolution robust across Cloud + self-hosted (Hetzner) deployments.
     let logoUrl: string | null = null;
-    const rawLogo = tenantRes.data?.logo_url ?? null;
+    const rawLogo = (tenantRes.data?.logo_url ?? "").toString().trim();
     if (rawLogo) {
       if (/^https?:\/\//i.test(rawLogo)) {
         logoUrl = rawLogo;
       } else {
-        const { data: signed } = await admin.storage
-          .from("tenant-assets")
-          .createSignedUrl(rawLogo, 60 * 60 * 24 * 7); // 7 days
-        logoUrl = signed?.signedUrl ?? null;
+        const path = rawLogo.replace(/^\/+/, "");
+        try {
+          const { data: signed, error: signErr } = await admin.storage
+            .from("tenant-assets")
+            .createSignedUrl(path, 60 * 60 * 24 * 7); // 7 days
+          if (!signErr && signed?.signedUrl) {
+            logoUrl = signed.signedUrl;
+          }
+        } catch (e) {
+          console.warn("tenant logo signed URL failed", e);
+        }
+        if (!logoUrl) {
+          const { data: pub } = admin.storage.from("tenant-assets").getPublicUrl(path);
+          logoUrl = pub?.publicUrl ?? null;
+        }
+        console.log("public-charge-status tenant logo resolved", { path, logoUrl });
       }
     }
 
