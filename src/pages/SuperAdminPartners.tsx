@@ -120,7 +120,9 @@ export default function SuperAdminPartners() {
   });
 
   return (
-    <div className="p-3 md:p-6 space-y-4">
+    <div className="flex min-h-screen bg-background">
+      <SuperAdminSidebar />
+      <main className="flex-1 overflow-auto p-3 md:p-6 space-y-4">
       <header className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
