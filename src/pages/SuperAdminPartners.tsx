@@ -80,6 +80,16 @@ export default function SuperAdminPartners() {
   const [editActive, setEditActive] = useState(true);
   const [editBillingMode, setEditBillingMode] = useState<"wholesale" | "commission">("wholesale");
   const [editCommissionPct, setEditCommissionPct] = useState<string>("20");
+  // White-Label (Stage 7)
+  const [editWhiteLabel, setEditWhiteLabel] = useState(false);
+  const [editBrandDisplayName, setEditBrandDisplayName] = useState("");
+  const [editCustomDomain, setEditCustomDomain] = useState("");
+  const [editPrimaryColor, setEditPrimaryColor] = useState("");
+  const [editSecondaryColor, setEditSecondaryColor] = useState("");
+  const [editAccentColor, setEditAccentColor] = useState("");
+  const [editSupportEmail, setEditSupportEmail] = useState("");
+  const [editLogoUrl, setEditLogoUrl] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editSlugStatus, setEditSlugStatus] = useState<
     | { kind: "idle" }
@@ -88,6 +98,7 @@ export default function SuperAdminPartners() {
     | { kind: "taken" }
     | { kind: "invalid"; message: string }
   >({ kind: "idle" });
+
 
   const { data: partners = [], isLoading } = useQuery({
     queryKey: ["super-admin-partners"],
