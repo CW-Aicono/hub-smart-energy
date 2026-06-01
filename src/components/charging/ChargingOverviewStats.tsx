@@ -48,13 +48,21 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
       const dayLabel = format(d, "EEE", { locale: de });
       const dateStr = format(d, "yyyy-MM-dd");
       const isToday = dateStr === today;
+      const dayEnd = isToday ? new Date() : new Date(dateStr + "T23:59:59.999");
+
+      // Nur Ladepunkte berücksichtigen, die an diesem Tag bereits existierten.
+      const activeCps = chargePoints.filter((cp) => {
+        const created = (cp as any).created_at ? new Date((cp as any).created_at) : null;
+        return !created || created <= dayEnd;
+      });
+      const cpCount = activeCps.length;
+
+      if (cpCount === 0) { days.push({ day: dayLabel, available: 0, charging: 0, offline: 0, error: 0 }); continue; }
 
       const daySessions = periodSessions.filter(
         (s) => format(new Date(s.start_time), "yyyy-MM-dd") === dateStr
+              && activeCps.some((cp) => cp.id === s.charge_point_id),
       );
-
-      const cpCount = chargePoints.length;
-      if (cpCount === 0) { days.push({ day: dayLabel, available: 0, charging: 0, offline: 0, error: 0 }); continue; }
 
       const hoursInDay = isToday ? new Date().getHours() + (new Date().getMinutes() / 60) : 24;
       const totalHours = cpCount * hoursInDay;
@@ -63,7 +71,6 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
         const start = new Date(s.start_time);
         const end = s.stop_time ? new Date(s.stop_time) : new Date();
         const dayStart = new Date(dateStr + "T00:00:00");
-        const dayEnd = isToday ? new Date() : new Date(dateStr + "T23:59:59.999");
         const effectiveStart = start < dayStart ? dayStart : start;
         const effectiveEnd = end > dayEnd ? dayEnd : end;
         if (effectiveEnd <= effectiveStart) return sum;
@@ -73,7 +80,7 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
       // Approximate: project current status onto all days (no historic status log)
       let errorCpCount = 0;
       let offlineCpCount = 0;
-      for (const cp of chargePoints) {
+      for (const cp of activeCps) {
         const s = normalizeConnectorStatus(cp.status, (cp as any).ws_connected !== false);
         if (s === "faulted") errorCpCount++;
         else if (s === "offline") offlineCpCount++;
@@ -92,6 +99,7 @@ export default function ChargingOverviewStats({ chargePoints, sessions }: Props)
     }
     return days;
   }, [periodSessions, periodDays, chargePoints]);
+
 
   const statusLabel = (key: string) => {
     if (key === "available") return t("cos.available" as any);

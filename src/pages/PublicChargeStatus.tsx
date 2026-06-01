@@ -172,7 +172,13 @@ export default function PublicChargeStatus() {
       unavailable: 0,
       unconfigured: 0,
     };
-    for (const card of cards) c[card.status]++;
+    for (const card of cards) {
+      if (card.connectors && card.connectors.length > 0) {
+        for (const conn of card.connectors) c[conn.status]++;
+      } else {
+        c[card.status]++;
+      }
+    }
     return c;
   }, [cards]);
 

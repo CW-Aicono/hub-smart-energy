@@ -87,18 +87,65 @@ Deno.serve(async (req) => {
       connectors = data ?? [];
     }
 
-    // Resolve tenant logo: stored as a path in the private "tenant-assets" bucket.
-    // Generate a long-lived signed URL so the public page can render it.
+    // Aktive Ladevorgänge laden – manche Wallboxen (z. B. ESB Mennekes) melden
+    // während eines Ladevorgangs "Unavailable" statt "Charging". Wir markieren
+    // diese Connectors/CPs als belegt, damit die Übersicht den realen Zustand
+    // zeigt.
+    const activeConnKeys = new Set<string>();
+    const activeCpIds = new Set<string>();
+    if (cpIds.length > 0) {
+      const { data: sessions } = await admin
+        .from("charging_sessions")
+        .select("charge_point_id, connector_id")
+        .in("charge_point_id", cpIds)
+        .is("stop_time", null);
+      for (const s of sessions ?? []) {
+        activeCpIds.add(s.charge_point_id as string);
+        if (s.connector_id != null) {
+          activeConnKeys.add(`${s.charge_point_id}:${s.connector_id}`);
+        }
+      }
+    }
+
+    // Status der Connectors überschreiben, wenn aktiver Ladevorgang läuft.
+    connectors = connectors.map((c) => {
+      const k = `${c.charge_point_id}:${c.connector_id}`;
+      if (activeConnKeys.has(k)) return { ...c, status: "Charging" };
+      return c;
+    });
+
+    // CP-Level-Status ebenfalls überschreiben, wenn irgendein Ladevorgang läuft.
+    const cpsOut = cps.map((cp) =>
+      activeCpIds.has(cp.id) ? { ...cp, status: "Charging" } : cp,
+    );
+
+
+    // Resolve tenant logo: stored as a path in the "tenant-assets" bucket.
+    // Try a signed URL first (private bucket), fall back to the public URL
+    // if the bucket is configured as public (or signing fails). This makes the
+    // resolution robust across Cloud + self-hosted (Hetzner) deployments.
     let logoUrl: string | null = null;
-    const rawLogo = tenantRes.data?.logo_url ?? null;
+    const rawLogo = (tenantRes.data?.logo_url ?? "").toString().trim();
     if (rawLogo) {
       if (/^https?:\/\//i.test(rawLogo)) {
         logoUrl = rawLogo;
       } else {
-        const { data: signed } = await admin.storage
-          .from("tenant-assets")
-          .createSignedUrl(rawLogo, 60 * 60 * 24 * 7); // 7 days
-        logoUrl = signed?.signedUrl ?? null;
+        const path = rawLogo.replace(/^\/+/, "");
+        try {
+          const { data: signed, error: signErr } = await admin.storage
+            .from("tenant-assets")
+            .createSignedUrl(path, 60 * 60 * 24 * 7); // 7 days
+          if (!signErr && signed?.signedUrl) {
+            logoUrl = signed.signedUrl;
+          }
+        } catch (e) {
+          console.warn("tenant logo signed URL failed", e);
+        }
+        if (!logoUrl) {
+          const { data: pub } = admin.storage.from("tenant-assets").getPublicUrl(path);
+          logoUrl = pub?.publicUrl ?? null;
+        }
+        console.log("public-charge-status tenant logo resolved", { path, logoUrl });
       }
     }
 
@@ -108,10 +155,11 @@ Deno.serve(async (req) => {
         logo_url: logoUrl,
       },
       groups,
-      charge_points: cps,
+      charge_points: cpsOut,
       connectors,
       generated_at: new Date().toISOString(),
     }, 200);
+
   } catch (e) {
     console.error("public-charge-status error", e);
     return json({ error: "internal" }, 500);
