@@ -162,7 +162,6 @@ const SuperAdminTenantDetail = () => {
     },
   });
 
-  const currentPartner = allPartners.find((p: any) => p.id === (tenant as any)?.partner_id);
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
 
   const { data: tenant } = useQuery({
@@ -174,6 +173,9 @@ const SuperAdminTenantDetail = () => {
       return data;
     },
   });
+
+  const currentPartner = allPartners.find((p: any) => p.id === (tenant as any)?.partner_id);
+
 
   const { data: users = [] } = useQuery({
     queryKey: ["tenant-users", id],
