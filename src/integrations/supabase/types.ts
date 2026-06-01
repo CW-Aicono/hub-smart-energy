@@ -5647,8 +5647,10 @@ export type Database = {
       }
       partners: {
         Row: {
+          accent_color: string | null
           billing_address: Json
           billing_mode: string
+          brand_display_name: string | null
           commission_pct: number
           contact_email: string | null
           contact_phone: string | null
@@ -5660,13 +5662,18 @@ export type Database = {
           name: string
           notes: string | null
           primary_color: string | null
+          secondary_color: string | null
           slug: string
           subdomain: string | null
+          support_email: string | null
           updated_at: string
+          white_label_enabled: boolean
         }
         Insert: {
+          accent_color?: string | null
           billing_address?: Json
           billing_mode?: string
+          brand_display_name?: string | null
           commission_pct?: number
           contact_email?: string | null
           contact_phone?: string | null
@@ -5678,13 +5685,18 @@ export type Database = {
           name: string
           notes?: string | null
           primary_color?: string | null
+          secondary_color?: string | null
           slug: string
           subdomain?: string | null
+          support_email?: string | null
           updated_at?: string
+          white_label_enabled?: boolean
         }
         Update: {
+          accent_color?: string | null
           billing_address?: Json
           billing_mode?: string
+          brand_display_name?: string | null
           commission_pct?: number
           contact_email?: string | null
           contact_phone?: string | null
@@ -5696,9 +5708,12 @@ export type Database = {
           name?: string
           notes?: string | null
           primary_color?: string | null
+          secondary_color?: string | null
           slug?: string
           subdomain?: string | null
+          support_email?: string | null
           updated_at?: string
+          white_label_enabled?: boolean
         }
         Relationships: []
       }
@@ -9461,6 +9476,10 @@ export type Database = {
           total_value: number
         }[]
       }
+      get_partner_branding_for_tenant: {
+        Args: { _tenant_id: string }
+        Returns: Json
+      }
       get_power_readings_5min: {
         Args: { p_end: string; p_meter_ids: string[]; p_start: string }
         Returns: {
@@ -9577,6 +9596,10 @@ export type Database = {
       release_gateway_refresh_lock: {
         Args: { p_integration_id: string; p_owner: string }
         Returns: undefined
+      }
+      resolve_partner_branding_by_host: {
+        Args: { _host: string }
+        Returns: Json
       }
       snapshot_charge_point_uptime: { Args: never; Returns: number }
       try_acquire_gateway_refresh_lock: {
