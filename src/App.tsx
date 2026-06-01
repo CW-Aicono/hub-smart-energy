@@ -16,6 +16,7 @@ import { SuperAdminWrapper } from "@/components/super-admin/SuperAdminWrapper";
 import { PartnerLayout } from "@/components/partner/PartnerLayout";
 import PartnerDashboard from "@/pages/partner/PartnerDashboard";
 import PartnerTenants from "@/pages/partner/PartnerTenants";
+import PartnerMembers from "@/pages/partner/PartnerMembers";
 import RecoveryGuard from "@/components/RecoveryGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
@@ -274,7 +275,7 @@ const App = () => (
                       {/* Stufe 2: Partner-Portal (partner.aicono.org → /partner/*) */}
                       <Route path="/partner" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
                       <Route path="/partner/tenants" element={<PartnerLayout><PartnerTenants /></PartnerLayout>} />
-                      <Route path="/partner/members" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
+                      <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
                       <Route path="/partner/sales" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
 
                       <Route path="*" element={<NotFound />} />
