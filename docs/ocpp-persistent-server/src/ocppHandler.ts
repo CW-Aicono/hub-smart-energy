@@ -52,12 +52,22 @@ export async function handleCall(
           // wird gleich darauf per StatusNotification gesetzt.
           status: "available",
         });
+        // Capability-Probe und Aktivierung der gewünschten Measurands —
+        // wird fire-and-forget asynchron 2s nach BootNotification gestartet,
+        // damit der Charger erst seine StatusNotification senden kann.
+        setTimeout(() => {
+          probeChargePointConfiguration(session, {
+            vendor: (payload.chargePointVendor as string) ?? null,
+            model: (payload.chargePointModel as string) ?? null,
+          }).catch((e) => log.warn("config probe failed", { chargePointId, error: (e as Error).message }));
+        }, 2_000);
         return callResult(messageId, {
           currentTime: new Date().toISOString(),
           interval: 30,
           status: "Accepted",
         });
       }
+
 
       case "Heartbeat": {
         // Self-healing: jeder Heartbeat bestätigt ws_connected=true.
