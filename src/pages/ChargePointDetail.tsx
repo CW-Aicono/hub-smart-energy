@@ -27,8 +27,10 @@ import {
   Trash2, Save, X, MapPin, Search, MoreHorizontal, RefreshCw, Play,
   Square, Unlock, Power, Wrench, CheckCircle, Clock, BarChart3, Info, Settings,
   Shield, Bell, BatteryCharging, Users, Calendar, Timer, Gauge, ExternalLink,
-  Eye, EyeOff, Copy
+  Eye, EyeOff, Copy, Activity, Radio
 } from "lucide-react";
+import { useOcppLiveData, useOcppCapabilities } from "@/hooks/useOcppLiveData";
+import { LiveDataPanel } from "@/components/charging/LiveDataPanel";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
 import { fmtKwh, fmtKw, fmtNum, normalizeConnectorStatus, isChargePointOnline } from "@/lib/formatCharging";
