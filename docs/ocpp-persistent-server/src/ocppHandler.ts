@@ -4,10 +4,14 @@ import {
   authorizeIdTag,
   createChargingSession,
   getChargingSessionByTransaction,
+  insertMeterSamples,
   updateChargePoint,
   updateChargingSession,
   updateConnectorStatus,
+  type MeterSampleInput,
 } from "./backendApi";
+import { probeChargePointConfiguration } from "./configurationProbe";
+
 
 type OcppCall = [2, string, string, Record<string, unknown>];
 type OcppCallResult = [3, string, Record<string, unknown>];
