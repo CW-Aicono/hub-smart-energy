@@ -728,6 +728,32 @@ async function handleRemoteCommand(
 
       return { status: "Accepted" };
     }
+    case "GetConfiguration": {
+      const keys = body.keys as string[] | undefined;
+      await supabase
+        .from("pending_ocpp_commands")
+        .insert({
+          charge_point_ocpp_id: chargePointOcppId,
+          command: "GetConfiguration",
+          payload: keys && keys.length > 0 ? { key: keys } : {},
+          status: "pending",
+        });
+      return { status: "Accepted" };
+    }
+    case "ChangeConfiguration": {
+      const key = body.key as string;
+      const value = body.value;
+      if (!key) return { status: "Rejected", message: "key required" };
+      await supabase
+        .from("pending_ocpp_commands")
+        .insert({
+          charge_point_ocpp_id: chargePointOcppId,
+          command: "ChangeConfiguration",
+          payload: { key, value: String(value ?? "") },
+          status: "pending",
+        });
+      return { status: "Accepted" };
+    }
     default:
       return { status: "NotSupported" };
   }

@@ -35,6 +35,8 @@ function buildOcppCall(uniqueId: string, cmd: PendingRow): unknown[] | null {
         key: p.key as string,
         value: String(p.value ?? ""),
       }];
+    case "GetConfiguration":
+      return [2, uniqueId, "GetConfiguration", Array.isArray(p.key) ? { key: p.key as string[] } : {}];
     case "ChangeAvailability":
       return [2, uniqueId, "ChangeAvailability", {
         connectorId: (p.connectorId as number) ?? 0,
@@ -172,6 +174,35 @@ export async function resolvePendingCall(
       await updateChargePoint(pending.chargePointPk, { supports_charging_profile: true });
     } catch {
       /* ignore */
+    }
+  }
+
+  // GetConfiguration -> Capabilities upsert (für UI "Messgrößen prüfen").
+  if (pending.command === "GetConfiguration" && pending.chargePointPk && result.status === "Accepted") {
+    try {
+      const { upsertCapabilities } = await import("./backendApi");
+      const payload = (result.payload ?? {}) as {
+        configurationKey?: Array<{ key: string; readonly?: boolean; value?: string }>;
+        unknownKey?: string[];
+      };
+      const keys = payload.configurationKey ?? [];
+      const unknown = payload.unknownKey ?? [];
+      const configMap: Record<string, { value: string | null; readonly: boolean }> = {};
+      for (const k of keys) {
+        configMap[k.key] = { value: k.value ?? null, readonly: !!k.readonly };
+      }
+      const currentSampled = configMap["MeterValuesSampledData"]?.value ?? "";
+      const supported = currentSampled
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await upsertCapabilities(pending.chargePointPk, {
+        supported_measurands: supported,
+        unsupported_keys: unknown,
+        configuration: configMap,
+      });
+    } catch (e) {
+      log.warn("upsert-capabilities (GetConfiguration response) failed", { error: (e as Error).message });
     }
   }
 
