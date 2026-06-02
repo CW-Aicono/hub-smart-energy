@@ -132,3 +132,32 @@ export async function fetchPendingCommands(connectedIds: string[]): Promise<Pend
 export async function updatePendingCommand(id: string, patch: Record<string, unknown>): Promise<void> {
   await callBackend("update-pending-command", { id, patch });
 }
+
+export interface MeterSampleInput {
+  connector_id: number;
+  measurand: string;
+  phase: string | null;
+  unit: string | null;
+  value: number;
+  sampled_at: string;
+  context: string | null;
+  transaction_id?: number | null;
+}
+
+export async function insertMeterSamples(chargePointId: string, samples: MeterSampleInput[]): Promise<void> {
+  if (samples.length === 0) return;
+  await callBackend("insert-meter-samples", { chargePointId, samples });
+}
+
+export interface CapabilityInput {
+  supported_measurands: string[];
+  unsupported_keys: string[];
+  configuration: Record<string, { value: string | null; readonly: boolean }>;
+  vendor?: string | null;
+  model?: string | null;
+}
+
+export async function upsertCapabilities(chargePointId: string, capabilities: CapabilityInput): Promise<void> {
+  await callBackend("upsert-capabilities", { chargePointId, capabilities });
+}
+

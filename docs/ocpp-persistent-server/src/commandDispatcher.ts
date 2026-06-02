@@ -138,6 +138,15 @@ export async function resolvePendingCall(
   if (!pending) return false;
   session.pendingCalls.delete(uniqueId);
 
+  // In-process probes (configurationProbe.ts) tragen weder DB-Eintrag noch
+  // pending_command — direkt resolven und fertig.
+  if (pending.resolveProbe) {
+    pending.resolveProbe(result.status === "Accepted", result.payload);
+    return true;
+  }
+
+
+
   // Capability auto-detection: when a SetChargingProfile call comes back as
   // CALLERROR with NotSupported / NotImplemented, flip the wallbox flag so the
   // power-limit-scheduler uses ChangeConfiguration on the next tick.

@@ -7,7 +7,10 @@ export interface PendingCall {
   command?: string;
   /** Charge-point primary key — needed when reacting to CALLERROR */
   chargePointPk?: string;
+  /** Optional in-process resolver (used by configurationProbe). */
+  resolveProbe?: (ok: boolean, payload: unknown) => void;
 }
+
 
 export interface Session {
   sessionId: string;

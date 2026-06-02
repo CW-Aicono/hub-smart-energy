@@ -4,10 +4,14 @@ import {
   authorizeIdTag,
   createChargingSession,
   getChargingSessionByTransaction,
+  insertMeterSamples,
   updateChargePoint,
   updateChargingSession,
   updateConnectorStatus,
+  type MeterSampleInput,
 } from "./backendApi";
+import { probeChargePointConfiguration } from "./configurationProbe";
+
 
 type OcppCall = [2, string, string, Record<string, unknown>];
 type OcppCallResult = [3, string, Record<string, unknown>];
@@ -48,12 +52,22 @@ export async function handleCall(
           // wird gleich darauf per StatusNotification gesetzt.
           status: "available",
         });
+        // Capability-Probe und Aktivierung der gewünschten Measurands —
+        // wird fire-and-forget asynchron 2s nach BootNotification gestartet,
+        // damit der Charger erst seine StatusNotification senden kann.
+        setTimeout(() => {
+          probeChargePointConfiguration(session, {
+            vendor: (payload.chargePointVendor as string) ?? null,
+            model: (payload.chargePointModel as string) ?? null,
+          }).catch((e) => log.warn("config probe failed", { chargePointId, error: (e as Error).message }));
+        }, 2_000);
         return callResult(messageId, {
           currentTime: new Date().toISOString(),
           interval: 30,
           status: "Accepted",
         });
       }
+
 
       case "Heartbeat": {
         // Self-healing: jeder Heartbeat bestätigt ws_connected=true.
@@ -135,8 +149,44 @@ export async function handleCall(
       }
 
       case "MeterValues": {
+        const connectorId = (payload.connectorId as number) ?? 0;
+        const transactionId = (payload.transactionId as number) ?? null;
+        const meterValue = (payload.meterValue as Array<{
+          timestamp: string;
+          sampledValue: Array<{
+            value: string;
+            context?: string;
+            measurand?: string;
+            phase?: string;
+            unit?: string;
+          }>;
+        }>) ?? [];
+        const samples: MeterSampleInput[] = [];
+        for (const mv of meterValue) {
+          const ts = mv.timestamp ?? new Date().toISOString();
+          for (const sv of mv.sampledValue ?? []) {
+            const numeric = Number(sv.value);
+            if (!Number.isFinite(numeric)) continue;
+            samples.push({
+              connector_id: connectorId,
+              measurand: sv.measurand ?? "Energy.Active.Import.Register",
+              phase: sv.phase ?? null,
+              unit: sv.unit ?? null,
+              value: numeric,
+              sampled_at: ts,
+              context: sv.context ?? null,
+              transaction_id: transactionId,
+            });
+          }
+        }
+        if (samples.length > 0) {
+          insertMeterSamples(chargePointPk, samples).catch((e) =>
+            log.warn("insert meter samples failed", { chargePointId, error: (e as Error).message }),
+          );
+        }
         return callResult(messageId, {});
       }
+
 
       case "DataTransfer": {
         return callResult(messageId, { status: "Accepted" });
