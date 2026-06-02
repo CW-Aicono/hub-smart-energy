@@ -376,24 +376,22 @@ async function handle(action: string, body: Record<string, unknown>) {
     }
 
     case "insert-meter-samples": {
-      // body.samples: Array<{ charge_point_id, connector_id, transaction_id?, measurand, phase?, unit?, value, context?, sampled_at }>
+      // body: { chargePointId, samples: Array<{ connector_id, transaction_id?, measurand, phase?, unit?, value, context?, sampled_at }> }
+      const chargePointId = String(body.chargePointId ?? "");
       const samples = Array.isArray(body.samples) ? body.samples as Record<string, unknown>[] : [];
+      if (!chargePointId) return fail(400, "Missing charge_point_id");
       if (samples.length === 0) return ok({ inserted: 0 });
 
-      // Tenant je charge_point_id ableiten
-      const cpIds = Array.from(new Set(samples.map((s) => String(s.charge_point_id ?? "")).filter(Boolean)));
-      if (cpIds.length === 0) return fail(400, "Missing charge_point_id");
-      const { data: cps, error: cpErr } = await admin
+      const { data: cp, error: cpErr } = await admin
         .from("charge_points")
         .select("id, tenant_id, linked_meter_id")
-        .in("id", cpIds);
+        .eq("id", chargePointId)
+        .maybeSingle();
       if (cpErr) return fail(500, cpErr.message);
-      const cpMap = new Map((cps ?? []).map((c) => [c.id as string, c]));
+      if (!cp) return fail(404, "Unknown charge_point_id");
 
       const rows = samples
         .map((s) => {
-          const cp = cpMap.get(String(s.charge_point_id ?? ""));
-          if (!cp) return null;
           const value = Number(s.value);
           if (!Number.isFinite(value)) return null;
           return {
@@ -414,6 +412,10 @@ async function handle(action: string, body: Record<string, unknown>) {
       if (rows.length === 0) return ok({ inserted: 0 });
       const { error } = await admin.from("ocpp_meter_samples").insert(rows);
       if (error) return fail(500, error.message);
+
+      // cpMap kompatibel zum bestehenden Forwarding-Block unten halten
+      const cpMap = new Map([[cp.id as string, cp]]);
+
 
       // Power.Active.Import → meter_power_readings forwarden, wenn linked_meter_id gesetzt
       const powerRows: Array<Record<string, unknown>> = [];
