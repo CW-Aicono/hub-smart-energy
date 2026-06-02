@@ -81,7 +81,14 @@ const UserManagement = () => {
     }
 
     // Combine registered users
-    const registeredUsers: UserWithRole[] = profiles.map((profile: any) => {
+    // Technische Support-User (Remote-Support-Impersonation) ausblenden.
+    // Diese haben immer eine @aicono.internal E-Mail und sollen für Tenants
+    // nicht sichtbar sein.
+    const visibleProfiles = (profiles || []).filter(
+      (p: any) => !(typeof p.email === "string" && p.email.endsWith("@aicono.internal"))
+    );
+
+    const registeredUsers: UserWithRole[] = visibleProfiles.map((profile: any) => {
       const userRole = roles?.find((r: any) => r.user_id === profile.user_id);
       return {
         id: profile.id,
