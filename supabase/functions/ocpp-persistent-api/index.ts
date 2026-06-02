@@ -153,6 +153,7 @@ async function handle(action: string, body: Record<string, unknown>) {
         "supports_charging_profile",
         "supports_change_configuration",
         "rfid_read_mode",
+        "linked_meter_id",
       ]);
       const { error } = await admin.from("charge_points").update(safePatch).eq("id", id);
       if (error) return fail(500, error.message);
