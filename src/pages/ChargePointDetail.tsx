@@ -852,6 +852,13 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Auf inaktiv setzen")}>
                           <Power className="h-4 w-4" /> {t("cpd.setInactive" as any)}
                         </Button>
+                        <Separator className="my-1" />
+                        <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Messgrößen prüfen")} disabled={remoteLoading === "Messgrößen prüfen"}>
+                          <Radio className="h-4 w-4" /> Messgrößen prüfen
+                        </Button>
+                        <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Live-Daten aktivieren")} disabled={remoteLoading === "Live-Daten aktivieren"}>
+                          <Activity className="h-4 w-4" /> Live-Daten aktivieren
+                        </Button>
                       </CardContent>
                     </Card>
                   )}
