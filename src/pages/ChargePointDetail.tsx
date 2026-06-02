@@ -1236,6 +1236,21 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       <div><span className="text-muted-foreground">Firmware:</span></div><div className="font-medium">{cp.firmware_version || "—"}</div>
                     </div>
                   )}
+                  {!editing && (
+                    <div className="mt-6 pt-4 border-t">
+                      <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                        <Activity className="h-4 w-4 text-primary" /> Live-Daten
+                      </h3>
+                      <div className="max-w-xl">
+                        <LiveDataPanel live={liveData} />
+                        {ocppCapabilities?.supported_measurands?.length ? (
+                          <p className="text-xs text-muted-foreground mt-3">
+                            Unterstützte Messgrößen: {ocppCapabilities.supported_measurands.join(", ")}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
               <ModbusInstancePanel chargePointId={cp.id} canEdit={!!isAdmin} />
