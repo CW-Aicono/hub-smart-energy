@@ -241,6 +241,21 @@ const ChargePointDetail = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cp?.status, cp?.id, tenant?.id]);
 
+  // Auto-Probe: wenn noch keine Capabilities ermittelt wurden, einmalig
+  // GetConfiguration anstoßen, sobald die Wallbox online ist.
+  useEffect(() => {
+    if (!cp?.ocpp_id || capsLoading || probeTriggeredRef.current) return;
+    if (ocppCapabilities) return;
+    const online = isChargePointOnline(cp.last_heartbeat);
+    if (!online) return;
+    probeTriggeredRef.current = true;
+    callOcppCommand("GetConfiguration", { chargePointId: cp.ocpp_id }).catch(() => {
+      probeTriggeredRef.current = false;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cp?.ocpp_id, cp?.last_heartbeat, capsLoading, ocppCapabilities]);
+
+
   // Stats calculations
   const periodDays = parseInt(statsPeriod);
   const cutoff = subDays(new Date(), periodDays);
