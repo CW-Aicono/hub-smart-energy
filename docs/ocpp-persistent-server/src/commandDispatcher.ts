@@ -177,6 +177,35 @@ export async function resolvePendingCall(
     }
   }
 
+  // GetConfiguration -> Capabilities upsert (für UI "Messgrößen prüfen").
+  if (pending.command === "GetConfiguration" && pending.chargePointPk && result.status === "Accepted") {
+    try {
+      const { upsertCapabilities } = await import("./backendApi");
+      const payload = (result.payload ?? {}) as {
+        configurationKey?: Array<{ key: string; readonly?: boolean; value?: string }>;
+        unknownKey?: string[];
+      };
+      const keys = payload.configurationKey ?? [];
+      const unknown = payload.unknownKey ?? [];
+      const configMap: Record<string, { value: string | null; readonly: boolean }> = {};
+      for (const k of keys) {
+        configMap[k.key] = { value: k.value ?? null, readonly: !!k.readonly };
+      }
+      const currentSampled = configMap["MeterValuesSampledData"]?.value ?? "";
+      const supported = currentSampled
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await upsertCapabilities(pending.chargePointPk, {
+        supported_measurands: supported,
+        unsupported_keys: unknown,
+        configuration: configMap,
+      });
+    } catch (e) {
+      log.warn("upsert-capabilities (GetConfiguration response) failed", { error: (e as Error).message });
+    }
+  }
+
   await updatePendingCommand(pending.commandId, {
     status: errorCode ? "failed" : "completed",
     result: result as unknown as Record<string, unknown>,
