@@ -137,7 +137,6 @@ function sendAndAwait<T>(
       createdAt: Date.now(),
       command: action,
       chargePointPk: session.chargePointPk,
-      // @ts-expect-error: dynamic resolve hook
       resolveProbe: (ok: boolean, p: unknown) => finish(ok ? (p as T) : null),
     });
 
