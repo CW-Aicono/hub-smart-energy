@@ -120,6 +120,9 @@ const ChargePointDetail = () => {
 
   const cp = chargePoints.find((c) => c.id === id);
   const currentPhotoUrl = photoPreviewUrl || cp?.photo_url || null;
+  const liveData = useOcppLiveData(cp?.id);
+  const { capabilities: ocppCapabilities, loading: capsLoading } = useOcppCapabilities(cp?.id);
+  const probeTriggeredRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
