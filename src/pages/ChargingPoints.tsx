@@ -556,7 +556,9 @@ const ChargingPoints = () => {
                                 <ConnectorTypeIcons connectorType={cp.connector_type} connectorCount={cp.connector_count} />
                               </TableCell>
                               <TableCell>
-                                <Badge variant={cfg.variant}>{t(cfg.labelKey as any)}</Badge>
+                                <StatusLiveDataHover chargePointId={cp.id}>
+                                  <Badge variant={cfg.variant} className="cursor-help">{t(cfg.labelKey as any)}</Badge>
+                                </StatusLiveDataHover>
                                 {activeSession && (
                                   <span className="ml-2 text-xs text-muted-foreground">
                                     {fmtKwh(activeSession.energy_kwh, 1)}
