@@ -507,6 +507,22 @@ const ChargePointDetail = () => {
         case "Auf inaktiv setzen":
           result = await callOcppCommand("ChangeAvailability", { chargePointId: cp.ocpp_id, connectorId: 0, type: "Inoperative" });
           break;
+        case "Messgrößen prüfen":
+          result = await callOcppCommand("GetConfiguration", { chargePointId: cp.ocpp_id });
+          break;
+        case "Live-Daten aktivieren":
+          result = await callOcppCommand("ChangeConfiguration", {
+            chargePointId: cp.ocpp_id,
+            key: "MeterValuesSampledData",
+            value: "Energy.Active.Import.Register,Power.Active.Import,Voltage,Current.Import",
+          });
+          // zusätzlich Intervall auf 30s setzen (best-effort, kein Hard-Fail)
+          await callOcppCommand("ChangeConfiguration", {
+            chargePointId: cp.ocpp_id,
+            key: "MeterValueSampleInterval",
+            value: "30",
+          }).catch(() => undefined);
+          break;
         default:
           toast({ title: "Nicht unterstützt", description: action, variant: "destructive" });
           return;
