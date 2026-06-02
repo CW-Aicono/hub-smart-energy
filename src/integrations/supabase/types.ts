@@ -508,6 +508,50 @@ export type Database = {
           },
         ]
       }
+      charge_point_capabilities: {
+        Row: {
+          charge_point_id: string
+          created_at: string
+          last_probed_at: string
+          max_sample_length: number | null
+          min_sample_interval: number | null
+          raw_config: Json
+          supported_measurands: string[]
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          charge_point_id: string
+          created_at?: string
+          last_probed_at?: string
+          max_sample_length?: number | null
+          min_sample_interval?: number | null
+          raw_config?: Json
+          supported_measurands?: string[]
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          charge_point_id?: string
+          created_at?: string
+          last_probed_at?: string
+          max_sample_length?: number | null
+          min_sample_interval?: number | null
+          raw_config?: Json
+          supported_measurands?: string[]
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_capabilities_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: true
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_point_connectors: {
         Row: {
           charge_point_id: string
@@ -677,6 +721,7 @@ export type Database = {
           id: string
           last_heartbeat: string | null
           latitude: number | null
+          linked_meter_id: string | null
           location_id: string | null
           longitude: number | null
           max_power_kw: number
@@ -713,6 +758,7 @@ export type Database = {
           id?: string
           last_heartbeat?: string | null
           latitude?: number | null
+          linked_meter_id?: string | null
           location_id?: string | null
           longitude?: number | null
           max_power_kw?: number
@@ -749,6 +795,7 @@ export type Database = {
           id?: string
           last_heartbeat?: string | null
           latitude?: number | null
+          linked_meter_id?: string | null
           location_id?: string | null
           longitude?: number | null
           max_power_kw?: number
@@ -774,6 +821,13 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "charge_point_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_points_linked_meter_id_fkey"
+            columns: ["linked_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
             referencedColumns: ["id"]
           },
           {
@@ -5659,6 +5713,59 @@ export type Database = {
           raw_message?: Json
         }
         Relationships: []
+      }
+      ocpp_meter_samples: {
+        Row: {
+          charge_point_id: string
+          connector_id: number
+          context: string | null
+          created_at: string
+          id: string
+          measurand: string
+          phase: string | null
+          sampled_at: string
+          tenant_id: string
+          transaction_id: number | null
+          unit: string | null
+          value: number
+        }
+        Insert: {
+          charge_point_id: string
+          connector_id?: number
+          context?: string | null
+          created_at?: string
+          id?: string
+          measurand: string
+          phase?: string | null
+          sampled_at: string
+          tenant_id: string
+          transaction_id?: number | null
+          unit?: string | null
+          value: number
+        }
+        Update: {
+          charge_point_id?: string
+          connector_id?: number
+          context?: string | null
+          created_at?: string
+          id?: string
+          measurand?: string
+          phase?: string | null
+          sampled_at?: string
+          tenant_id?: string
+          transaction_id?: number | null
+          unit?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ocpp_meter_samples_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       partner_members: {
         Row: {

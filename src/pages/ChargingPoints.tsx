@@ -35,6 +35,7 @@ import { fmtKwh, fmtKw, normalizeConnectorStatus } from "@/lib/formatCharging";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import ChargingOverviewStats from "@/components/charging/ChargingOverviewStats";
 import ModbusWallboxWizard from "@/components/charging/ModbusWallboxWizard";
+import { StatusLiveDataHover } from "@/components/charging/StatusLiveDataHover";
 
 const LazyChargePointsMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
@@ -555,7 +556,9 @@ const ChargingPoints = () => {
                                 <ConnectorTypeIcons connectorType={cp.connector_type} connectorCount={cp.connector_count} />
                               </TableCell>
                               <TableCell>
-                                <Badge variant={cfg.variant}>{t(cfg.labelKey as any)}</Badge>
+                                <StatusLiveDataHover chargePointId={cp.id}>
+                                  <Badge variant={cfg.variant} className="cursor-help">{t(cfg.labelKey as any)}</Badge>
+                                </StatusLiveDataHover>
                                 {activeSession && (
                                   <span className="ml-2 text-xs text-muted-foreground">
                                     {fmtKwh(activeSession.energy_kwh, 1)}

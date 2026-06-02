@@ -153,6 +153,7 @@ async function handle(action: string, body: Record<string, unknown>) {
         "supports_charging_profile",
         "supports_change_configuration",
         "rfid_read_mode",
+        "linked_meter_id",
       ]);
       const { error } = await admin.from("charge_points").update(safePatch).eq("id", id);
       if (error) return fail(500, error.message);
@@ -370,6 +371,104 @@ async function handle(action: string, body: Record<string, unknown>) {
       if (!id) return fail(400, "Missing id");
       const safePatch = onlyPatch(patch, ["status", "processed_at", "result"]);
       const { error } = await admin.from("pending_ocpp_commands").update(safePatch).eq("id", id);
+      if (error) return fail(500, error.message);
+      return ok();
+    }
+
+    case "insert-meter-samples": {
+      // body: { chargePointId, samples: Array<{ connector_id, transaction_id?, measurand, phase?, unit?, value, context?, sampled_at }> }
+      const chargePointId = String(body.chargePointId ?? "");
+      const samples = Array.isArray(body.samples) ? body.samples as Record<string, unknown>[] : [];
+      if (!chargePointId) return fail(400, "Missing charge_point_id");
+      if (samples.length === 0) return ok({ inserted: 0 });
+
+      const { data: cp, error: cpErr } = await admin
+        .from("charge_points")
+        .select("id, tenant_id, linked_meter_id")
+        .eq("id", chargePointId)
+        .maybeSingle();
+      if (cpErr) return fail(500, cpErr.message);
+      if (!cp) return fail(404, "Unknown charge_point_id");
+
+      const rows = samples
+        .map((s) => {
+          const value = Number(s.value);
+          if (!Number.isFinite(value)) return null;
+          return {
+            tenant_id: cp.tenant_id,
+            charge_point_id: cp.id,
+            connector_id: Number(s.connector_id ?? 1) || 1,
+            transaction_id: s.transaction_id != null ? Number(s.transaction_id) : null,
+            measurand: String(s.measurand ?? "Energy.Active.Import.Register"),
+            phase: s.phase != null ? String(s.phase) : null,
+            unit: s.unit != null ? String(s.unit) : null,
+            value,
+            context: s.context != null ? String(s.context) : null,
+            sampled_at: String(s.sampled_at ?? new Date().toISOString()),
+          };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+
+      if (rows.length === 0) return ok({ inserted: 0 });
+      const { error } = await admin.from("ocpp_meter_samples").insert(rows);
+      if (error) return fail(500, error.message);
+
+      // cpMap kompatibel zum bestehenden Forwarding-Block unten halten
+      const cpMap = new Map([[cp.id as string, cp]]);
+
+
+      // Power.Active.Import → meter_power_readings forwarden, wenn linked_meter_id gesetzt
+      const powerRows: Array<Record<string, unknown>> = [];
+      for (const row of rows) {
+        if (row.measurand !== "Power.Active.Import") continue;
+        const cp = cpMap.get(row.charge_point_id);
+        if (!cp?.linked_meter_id) continue;
+        // OCPP-Einheit: W oder kW. Wir speichern in kW.
+        const unit = (row.unit ?? "W").toUpperCase();
+        const powerKw = unit === "KW" ? row.value : row.value / 1000;
+        powerRows.push({
+          tenant_id: row.tenant_id,
+          meter_id: cp.linked_meter_id,
+          energy_type: "electricity",
+          power_value: powerKw,
+          recorded_at: row.sampled_at,
+        });
+      }
+      if (powerRows.length > 0) {
+        await admin.from("meter_power_readings").insert(powerRows);
+      }
+      return ok({ inserted: rows.length, forwarded: powerRows.length });
+    }
+
+    case "upsert-capabilities": {
+      const chargePointId = String(body.chargePointId ?? "");
+      if (!chargePointId) return fail(400, "Missing chargePointId");
+      const supported = Array.isArray(body.supportedMeasurands)
+        ? body.supportedMeasurands.map(String)
+        : [];
+      const rawConfig = typeof body.rawConfig === "object" && body.rawConfig ? body.rawConfig : {};
+      const maxLen = body.maxSampleLength != null ? Number(body.maxSampleLength) : null;
+      const minInt = body.minSampleInterval != null ? Number(body.minSampleInterval) : null;
+
+      const { data: cp, error: cpErr } = await admin
+        .from("charge_points")
+        .select("tenant_id")
+        .eq("id", chargePointId)
+        .maybeSingle();
+      if (cpErr) return fail(500, cpErr.message);
+      if (!cp) return fail(404, "Charge point not found");
+
+      const { error } = await admin
+        .from("charge_point_capabilities")
+        .upsert({
+          charge_point_id: chargePointId,
+          tenant_id: cp.tenant_id,
+          supported_measurands: supported,
+          max_sample_length: maxLen,
+          min_sample_interval: minInt,
+          raw_config: rawConfig,
+          last_probed_at: new Date().toISOString(),
+        }, { onConflict: "charge_point_id" });
       if (error) return fail(500, error.message);
       return ok();
     }

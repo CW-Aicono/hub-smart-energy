@@ -27,8 +27,10 @@ import {
   Trash2, Save, X, MapPin, Search, MoreHorizontal, RefreshCw, Play,
   Square, Unlock, Power, Wrench, CheckCircle, Clock, BarChart3, Info, Settings,
   Shield, Bell, BatteryCharging, Users, Calendar, Timer, Gauge, ExternalLink,
-  Eye, EyeOff, Copy
+  Eye, EyeOff, Copy, Activity, Radio
 } from "lucide-react";
+import { useOcppLiveData, useOcppCapabilities } from "@/hooks/useOcppLiveData";
+import { LiveDataPanel } from "@/components/charging/LiveDataPanel";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
 import { fmtKwh, fmtKw, fmtNum, normalizeConnectorStatus, isChargePointOnline } from "@/lib/formatCharging";
@@ -118,6 +120,9 @@ const ChargePointDetail = () => {
 
   const cp = chargePoints.find((c) => c.id === id);
   const currentPhotoUrl = photoPreviewUrl || cp?.photo_url || null;
+  const liveData = useOcppLiveData(cp?.id);
+  const { capabilities: ocppCapabilities, loading: capsLoading } = useOcppCapabilities(cp?.id);
+  const probeTriggeredRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -235,6 +240,21 @@ const ChargePointDetail = () => {
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cp?.status, cp?.id, tenant?.id]);
+
+  // Auto-Probe: wenn noch keine Capabilities ermittelt wurden, einmalig
+  // GetConfiguration anstoßen, sobald die Wallbox online ist.
+  useEffect(() => {
+    if (!cp?.ocpp_id || capsLoading || probeTriggeredRef.current) return;
+    if (ocppCapabilities) return;
+    const online = isChargePointOnline((cp as any).ws_connected, cp.last_heartbeat);
+    if (!online) return;
+    probeTriggeredRef.current = true;
+    callOcppCommand("GetConfiguration", { chargePointId: cp.ocpp_id }).catch(() => {
+      probeTriggeredRef.current = false;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cp?.ocpp_id, cp?.last_heartbeat, capsLoading, ocppCapabilities]);
+
 
   // Stats calculations
   const periodDays = parseInt(statsPeriod);
@@ -501,6 +521,22 @@ const ChargePointDetail = () => {
           break;
         case "Auf inaktiv setzen":
           result = await callOcppCommand("ChangeAvailability", { chargePointId: cp.ocpp_id, connectorId: 0, type: "Inoperative" });
+          break;
+        case "Messgrößen prüfen":
+          result = await callOcppCommand("GetConfiguration", { chargePointId: cp.ocpp_id });
+          break;
+        case "Live-Daten aktivieren":
+          result = await callOcppCommand("ChangeConfiguration", {
+            chargePointId: cp.ocpp_id,
+            key: "MeterValuesSampledData",
+            value: "Energy.Active.Import.Register,Power.Active.Import,Voltage,Current.Import",
+          });
+          // zusätzlich Intervall auf 30s setzen (best-effort, kein Hard-Fail)
+          await callOcppCommand("ChangeConfiguration", {
+            chargePointId: cp.ocpp_id,
+            key: "MeterValueSampleInterval",
+            value: "30",
+          }).catch(() => undefined);
           break;
         default:
           toast({ title: "Nicht unterstützt", description: action, variant: "destructive" });
@@ -815,6 +851,13 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         </Button>
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Auf inaktiv setzen")}>
                           <Power className="h-4 w-4" /> {t("cpd.setInactive" as any)}
+                        </Button>
+                        <Separator className="my-1" />
+                        <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Messgrößen prüfen")} disabled={remoteLoading === "Messgrößen prüfen"}>
+                          <Radio className="h-4 w-4" /> Messgrößen prüfen
+                        </Button>
+                        <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Live-Daten aktivieren")} disabled={remoteLoading === "Live-Daten aktivieren"}>
+                          <Activity className="h-4 w-4" /> Live-Daten aktivieren
                         </Button>
                       </CardContent>
                     </Card>
@@ -1191,6 +1234,21 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       <div><span className="text-muted-foreground">Anschlüsse:</span></div><div className="font-medium">{cp.connector_count}</div>
                       <div><span className="text-muted-foreground">Max. Leistung:</span></div><div className="font-medium">{fmtKw(cp.max_power_kw)}</div>
                       <div><span className="text-muted-foreground">Firmware:</span></div><div className="font-medium">{cp.firmware_version || "—"}</div>
+                    </div>
+                  )}
+                  {!editing && (
+                    <div className="mt-6 pt-4 border-t">
+                      <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                        <Activity className="h-4 w-4 text-primary" /> Live-Daten
+                      </h3>
+                      <div className="max-w-xl">
+                        <LiveDataPanel live={liveData} />
+                        {ocppCapabilities?.supported_measurands?.length ? (
+                          <p className="text-xs text-muted-foreground mt-3">
+                            Unterstützte Messgrößen: {ocppCapabilities.supported_measurands.join(", ")}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                   )}
                 </CardContent>

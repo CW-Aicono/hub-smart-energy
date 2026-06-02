@@ -1,10 +1,15 @@
 # 🔄 Hetzner OCPP-Server – Update-Anleitung (für absolute Anfänger)
 
 Diese Anleitung zeigt dir, wie du deinen OCPP-Server auf dem Hetzner-Server aktualisierst.
-Du brauchst **keine Programmierkenntnisse** – du kopierst Befehle aus den grauen Kästen
-und fügst sie ins Terminal ein.
+Auf dem Server laufen **zwei getrennte Umgebungen** gleichzeitig:
+
+| Umgebung | Domain | Service-Name | Container-Name | Zweck |
+|---|---|---|---|---|
+| **Test** | `ocpp.aicono.org` | `ocpp` | `ocpp-server` | Entwicklung, Test-Wallboxen |
+| **Live** | `cp.aicono.org` | `ocpp-live` | `ocpp-server-live` | Echte Wallboxen der Kunden |
 
 > **Wichtig:** Lies jeden Schritt erst ganz durch, bevor du ihn ausführst.
+> **Ganz wichtig:** `docker compose down` darfst du **niemals** eingeben — das würde beide Umgebungen **und** den Caddy-Proxy gleichzeitig stoppen.
 
 ---
 
@@ -29,8 +34,8 @@ So nutzt du sie:
 ## 1️⃣ Auf den Hetzner-Server einloggen
 
 Öffne ein Terminal-Programm:
-- **Windows:** „Windows Terminal“ oder „PowerShell“ (im Startmenü tippen und öffnen)
-- **Mac:** „Terminal“ (Spotlight: `Cmd + Leertaste`, dann „Terminal" tippen)
+- **Windows:** „Windows Terminal" oder „PowerShell" (im Startmenü tippen und öffnen)
+- **Mac:** „Terminal" (Spotlight: `Cmd + Leertaste`, dann „Terminal" tippen)
 
 Gib folgendes ein (ersetze `DEINE.SERVER.IP` durch die echte IP deines Hetzner-Servers,
 z. B. `91.99.123.45`):
@@ -72,13 +77,7 @@ find / -name "docker-compose.yml" -path "*ocpp*" 2>/dev/null
 Das dauert 5–30 Sekunden. Danach erscheint z. B.:
 
 ```
-/opt/ocpp-persistent-server/docker-compose.yml
-```
-
-oder:
-
-```
-/root/ocpp-persistent-server/docker-compose.yml
+/opt/aicono/aicono-ems/docs/ocpp-persistent-server/docker-compose.yml
 ```
 
 > 📝 **Merk dir den Pfad** (alles **vor** `/docker-compose.yml`).
@@ -89,7 +88,7 @@ oder:
 Tippe `cd ` (mit Leerzeichen am Ende) und füge den Pfad ein. Beispiel:
 
 ```bash
-cd /opt/ocpp-persistent-server
+cd /opt/aicono/aicono-ems/docs/ocpp-persistent-server
 ```
 
 > Falls dein Pfad anders war, nimm **deinen** Pfad.
@@ -143,7 +142,7 @@ Already up to date.
 
 ---
 
-## 4️⃣ Den Server neu bauen und starten
+## 4️⃣ Update durchführen
 
 > **Wichtig:** Du musst weiterhin im Projektordner sein. Falls unsicher:
 > ```bash
@@ -151,24 +150,33 @@ Already up to date.
 > ```
 > Das zeigt dir den aktuellen Ordner.
 
+Entscheide jetzt, **welche Umgebung** du aktualisieren möchtest:
+- Nur die **Test-Umgebung** (`ocpp.aicono.org`)? → Weiter mit **4A**
+- Nur die **Live-Umgebung** (`cp.aicono.org`)? → Weiter mit **4B**
+- **Beide** gleichzeitig? → Führe zuerst **4A** durch, dann **4B**.
+
+> ⚠ **Achtung bei Live:** Während des Updates (ca. 1–2 Minuten) kann es kurz zu Verbindungsunterbrechungen bei den Live-Wallboxen kommen. Aktualisiere die Live-Umgebung daher nur zu ruhigen Zeiten.
+
+---
+
+### 4A — Test-Umgebung aktualisieren (`ocpp.aicono.org`)
+
 Führe nacheinander diese **drei** Befehle aus (jeden einzeln, erst Enter, dann warten,
 dann den nächsten):
 
-### Befehl 1 — Alles stoppen:
+#### Befehl 1 — Test-Container stoppen:
 
 ```bash
-docker compose down
+docker compose stop ocpp
 ```
 
 Erwartet:
 ```
-[+] Running 3/3
- ✔ Container ocpp-caddy   Removed
- ✔ Container ocpp-server  Removed
- ✔ Network …_ocppnet      Removed
+[+] Stopping 1/1
+ ✔ Container ocpp-server  Stopped
 ```
 
-### Befehl 2 — Neu bauen (dauert 1–3 Minuten):
+#### Befehl 2 — Test-Container neu bauen (dauert 1–3 Minuten):
 
 ```bash
 docker compose build --no-cache ocpp
@@ -179,19 +187,63 @@ Du siehst viele Zeilen mit `=> [build x/y]`. Am Ende:
  ✔ Service ocpp  Built
 ```
 
-### Befehl 3 — Wieder starten:
+#### Befehl 3 — Test-Container wieder starten:
 
 ```bash
-docker compose up -d
+docker compose up -d ocpp
 ```
 
 Erwartet:
 ```
-[+] Running 3/3
- ✔ Network …_ocppnet      Created
+[+] Running 1/1
  ✔ Container ocpp-server  Started
- ✔ Container ocpp-caddy   Started
 ```
+
+> ✅ Test-Umgebung ist aktualisiert.
+
+---
+
+### 4B — Live-Umgebung aktualisieren (`cp.aicono.org`)
+
+Führe nacheinander diese **drei** Befehle aus (jeden einzeln, erst Enter, dann warten,
+dann den nächsten):
+
+#### Befehl 1 — Live-Container stoppen:
+
+```bash
+docker compose stop ocpp-live
+```
+
+Erwartet:
+```
+[+] Stopping 1/1
+ ✔ Container ocpp-server-live  Stopped
+```
+
+#### Befehl 2 — Live-Container neu bauen (dauert 1–3 Minuten):
+
+```bash
+docker compose build --no-cache ocpp-live
+```
+
+Du siehst viele Zeilen mit `=> [build x/y]`. Am Ende:
+```
+ ✔ Service ocpp-live  Built
+```
+
+#### Befehl 3 — Live-Container wieder starten:
+
+```bash
+docker compose up -d ocpp-live
+```
+
+Erwartet:
+```
+[+] Running 1/1
+ ✔ Container ocpp-server-live  Started
+```
+
+> ✅ Live-Umgebung ist aktualisiert.
 
 ---
 
@@ -203,15 +255,19 @@ Erwartet:
 docker compose ps
 ```
 
-Du solltest **zwei Zeilen** sehen, beide mit `running` oder `healthy` in der Spalte „STATUS":
+Du solltest **drei Zeilen** sehen — Caddy und beide OCPP-Server — jeweils mit `Up` oder `healthy` in der Spalte „STATUS":
 
 ```
-NAME           STATUS                   PORTS
-ocpp-caddy     Up 30 seconds            0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp
-ocpp-server    Up 30 seconds (healthy)  8080/tcp
+NAME               STATUS                       PORTS
+ocpp-caddy         Up 10 days                   0.0.0.0:80->80/tcp, 0.0.0.0:443->443/tcp
+ocpp-server        Up 2 minutes (healthy)       8080/tcp
+ocpp-server-live   Up 2 minutes (healthy)       8080/tcp
 ```
 
-### Test B — Antwortet der Server?
+> ☝ Die genauen Zeiten (z. B. `2 minutes` oder `10 days`) sind egal — wichtig ist,
+> dass bei beiden `healthy` steht.
+
+### Test B — Antwortet die Test-Umgebung?
 
 ```bash
 curl https://ocpp.aicono.org/health
@@ -222,7 +278,18 @@ Erwartet (in einer Zeile):
 {"status":"ok","uptimeSeconds":12,"sessions":0}
 ```
 
-✅ Wenn das kommt: **Update erfolgreich.**
+### Test C — Antwortet die Live-Umgebung?
+
+```bash
+curl https://cp.aicono.org/health
+```
+
+Erwartet (in einer Zeile):
+```json
+{"status":"ok","uptimeSeconds":12,"sessions":0}
+```
+
+> ✅ Wenn bei **Test B** und/oder **Test C** die JSON-Antwort kommt: **Update erfolgreich.**
 
 ---
 
@@ -234,7 +301,7 @@ Erwartet (in einer Zeile):
 | `git pull` Konflikt | `git stash` → `git pull` → `git stash pop` |
 | `docker: command not found` | Docker nicht installiert → David fragen |
 | `permission denied` bei `docker` | `sudo` davor setzen, z. B. `sudo docker compose ps` |
-| Container startet nicht | `docker compose logs ocpp` ausführen, Ausgabe an David schicken |
+| Container startet nicht | `docker compose logs ocpp` oder `docker compose logs ocpp-live` ausführen, Ausgabe an David schicken |
 | `curl` auf `/health` schlägt fehl | `docker compose restart caddy` und nochmal probieren |
 | Wallboxen verbinden nicht mehr | In Hetzner-Firewall prüfen, ob Port 80/443 offen sind |
 
