@@ -149,8 +149,44 @@ export async function handleCall(
       }
 
       case "MeterValues": {
+        const connectorId = (payload.connectorId as number) ?? 0;
+        const transactionId = (payload.transactionId as number) ?? null;
+        const meterValue = (payload.meterValue as Array<{
+          timestamp: string;
+          sampledValue: Array<{
+            value: string;
+            context?: string;
+            measurand?: string;
+            phase?: string;
+            unit?: string;
+          }>;
+        }>) ?? [];
+        const samples: MeterSampleInput[] = [];
+        for (const mv of meterValue) {
+          const ts = mv.timestamp ?? new Date().toISOString();
+          for (const sv of mv.sampledValue ?? []) {
+            const numeric = Number(sv.value);
+            if (!Number.isFinite(numeric)) continue;
+            samples.push({
+              connector_id: connectorId,
+              measurand: sv.measurand ?? "Energy.Active.Import.Register",
+              phase: sv.phase ?? null,
+              unit: sv.unit ?? null,
+              value: numeric,
+              sampled_at: ts,
+              context: sv.context ?? null,
+              transaction_id: transactionId,
+            });
+          }
+        }
+        if (samples.length > 0) {
+          insertMeterSamples(chargePointPk, samples).catch((e) =>
+            log.warn("insert meter samples failed", { chargePointId, error: (e as Error).message }),
+          );
+        }
         return callResult(messageId, {});
       }
+
 
       case "DataTransfer": {
         return callResult(messageId, { status: "Accepted" });
