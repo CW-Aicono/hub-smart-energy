@@ -35,6 +35,8 @@ function buildOcppCall(uniqueId: string, cmd: PendingRow): unknown[] | null {
         key: p.key as string,
         value: String(p.value ?? ""),
       }];
+    case "GetConfiguration":
+      return [2, uniqueId, "GetConfiguration", Array.isArray(p.key) ? { key: p.key as string[] } : {}];
     case "ChangeAvailability":
       return [2, uniqueId, "ChangeAvailability", {
         connectorId: (p.connectorId as number) ?? 0,
