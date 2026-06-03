@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.community-marketplace-public]
 verify_jwt = false
+
+[functions.charge-point-auto-reboot]
+verify_jwt = false

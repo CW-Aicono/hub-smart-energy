@@ -708,6 +708,11 @@ export type Database = {
           access_settings: Json
           address: string | null
           auth_required: boolean
+          auto_reboot_enabled: boolean
+          auto_reboot_last_run_at: string | null
+          auto_reboot_skip_if_charging: boolean
+          auto_reboot_time: string
+          auto_reboot_type: string
           certificate_required: boolean
           certificate_type: string | null
           cheap_charging_schedule: Json | null
@@ -745,6 +750,11 @@ export type Database = {
           access_settings?: Json
           address?: string | null
           auth_required?: boolean
+          auto_reboot_enabled?: boolean
+          auto_reboot_last_run_at?: string | null
+          auto_reboot_skip_if_charging?: boolean
+          auto_reboot_time?: string
+          auto_reboot_type?: string
           certificate_required?: boolean
           certificate_type?: string | null
           cheap_charging_schedule?: Json | null
@@ -782,6 +792,11 @@ export type Database = {
           access_settings?: Json
           address?: string | null
           auth_required?: boolean
+          auto_reboot_enabled?: boolean
+          auto_reboot_last_run_at?: string | null
+          auto_reboot_skip_if_charging?: boolean
+          auto_reboot_time?: string
+          auto_reboot_type?: string
           certificate_required?: boolean
           certificate_type?: string | null
           cheap_charging_schedule?: Json | null

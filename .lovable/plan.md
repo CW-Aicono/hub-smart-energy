@@ -1,56 +1,66 @@
-## Diagnose
+## Ziel
 
-Seit dem Live-Update von heute früh enthält der OCPP-Server (`docs/ocpp-persistent-server`) die neue Funktion `probeChargePointConfiguration`. Diese wird in `ocppHandler.ts` **bei jedem BootNotification** (fire-and-forget, 2 s verzögert) aufgerufen und sendet u. a.:
+Pro Ladepunkt optionaler **täglicher Auto-Reboot** zur festen Uhrzeit, Soft oder Hard. Default: **deaktiviert**. Edge Function läuft **einmal pro Tag** (nicht alle 5 Minuten) und schreibt einen `Reset`-Befehl in `charge_point_commands`. Der bestehende Hetzner-OCPP-Server sendet ihn beim nächsten 2-Sekunden-Poll an die Wallbox — **keine Änderung am OCPP-Server nötig**.
 
-- `ChangeConfiguration` für `MeterValueSampleInterval=30`
-- `ChangeConfiguration` für `ClockAlignedDataInterval=60`
-- `ChangeConfiguration` für `MeterValuesSampledData=<Profil>` (in 4 Fallback-Stufen)
+## Datenbank-Migration
 
-In `configurationProbe.ts` gilt:
+Neue Spalten an `public.charge_points`:
 
-```ts
-return result?.status === "Accepted" || result?.status === "RebootRequired";
+```sql
+ALTER TABLE public.charge_points
+  ADD COLUMN auto_reboot_enabled      boolean      NOT NULL DEFAULT false,
+  ADD COLUMN auto_reboot_time         time         NOT NULL DEFAULT '04:00',
+  ADD COLUMN auto_reboot_type         text         NOT NULL DEFAULT 'Soft'
+    CHECK (auto_reboot_type IN ('Soft','Hard')),
+  ADD COLUMN auto_reboot_skip_if_charging boolean NOT NULL DEFAULT true,
+  ADD COLUMN auto_reboot_last_run_at  timestamptz;
 ```
 
-**Das ist die Falle.** Ältere wallbe Smart Charge Control (Firmware BF‑01.04.20) antworten auf diese Keys typischerweise mit `RebootRequired` — und führen den Reboot dann **selbst** durch. Nach dem Reboot kommt ein neues `BootNotification`, der Probe läuft erneut, die Werte werden wieder gesetzt (weil nichts den Soll-Zustand mit dem Ist-Zustand vergleicht), die Wallbox bootet wieder. Daraus entsteht exakt das beobachtete Muster: kurz online → nach wenigen Sekunden weg → ca. alle 10 min derselbe Zyklus.
+Keine Backfill-Probleme — alle Defaults gesetzt, Feature ist aus.
 
-Edge-Function-Logs sind hier nicht aussagekräftig, weil der OCPP-Server auf Hetzner läuft (`cp.aicono.org`). Die "besseren Logs in Lovable" gibt es nicht — Wallboxen brauchen die persistente WS-Verbindung am Hetzner-Server.
+## Edge Function `charge-point-auto-reboot`
 
-## Fix-Plan (Server-Code, kein UI)
+- Läuft täglich, schaut sich an, welche Wallbox **heute** (Europe/Berlin) zur gespeicherten Uhrzeit dran ist und noch nicht gelaufen ist.
+- Pseudologik:
+  1. `SELECT * FROM charge_points WHERE auto_reboot_enabled = true AND (auto_reboot_last_run_at IS NULL OR auto_reboot_last_run_at::date < (now() AT TIME ZONE 'Europe/Berlin')::date) AND auto_reboot_time <= (now() AT TIME ZONE 'Europe/Berlin')::time;`
+  2. Falls `skip_if_charging`: prüfen ob aktive `charging_sessions` (status `active`) existiert → skip (kein last_run_at-Update, wird beim nächsten Lauf erneut versucht).
+  3. `INSERT INTO charge_point_commands (charge_point_ocpp_id, command, payload, status) VALUES (ocpp_id, 'Reset', jsonb_build_object('type', auto_reboot_type), 'pending');`
+  4. `UPDATE charge_points SET auto_reboot_last_run_at = now() WHERE id = ...`
 
-Ziel: Probe darf nicht bei jedem Boot Reconfig-Befehle senden, und niemals einen Reboot auslösen, wenn der gewünschte Wert bereits gesetzt ist.
+## Scheduling: pg_cron, stündlich
 
-### 1. `docs/ocpp-persistent-server/src/configurationProbe.ts`
+Damit nutzerseitig **beliebige** Uhrzeit möglich ist (z. B. 03:30, 14:15), läuft der Cron **einmal pro Stunde zur vollen Stunde** (`5 * * * *`). Die Function selbst entscheidet pro Wallbox via `auto_reboot_time <= jetzt_lokal AND last_run_at::date < heute`. Das ist trotzdem **massiv weniger Traffic** als alle 5 Minuten (24 statt 288 Läufe/Tag) und erlaubt jede Wunschuhrzeit ohne extra Logik.
 
-- **Idempotenz**: Vor jedem `ChangeConfiguration` den aktuellen Wert aus `GetConfiguration` lesen (haben wir bereits in `configMap`). Nur senden, wenn `configMap[key].value !== gewünschterWert`. Bei `readonly: true` überspringen.
-- **RebootRequired ≠ Erfolg**: Status `RebootRequired` weiterhin als „akzeptiert" werten, aber **nur** wenn der Wert tatsächlich neu war (siehe oben). Zusätzlich `log.warn` mit Hinweis, dass die Wallbox neu starten wird.
-- **Einmal-Probe pro Charger**: Vor dem Probe in `charge_point_capabilities.last_probed_at` schauen. Wenn jünger als z. B. 24 h und `supported_measurands` nicht leer → Probe komplett überspringen (nur `upsert` mit aktualisiertem `last_seen` ohne ChangeConfiguration).
-- **MeterValuesSampledData-Fallback**: Schleife abbrechen, sobald der bereits aktive Wert dem ersten passenden Profil entspricht (kein Reset auf gleichen Inhalt).
+> Alternative falls strikt 1×/Tag gewünscht: Cron auf z. B. `0 3 * * *` und das Zeitfeld in der UI entfällt. Empfehlung: stündlicher Cron, weil User explizit „Uhrzeit einstellbar" wollte.
 
-### 2. `docs/ocpp-persistent-server/src/ocppHandler.ts`
+Registrierung via `supabase--insert` (nicht migration), weil URL+anon_key projektspezifisch sind.
 
-- Probe nicht mehr bedingungslos bei jedem `BootNotification` starten. Stattdessen Aufruf nur, wenn `charge_point_capabilities` für diese `chargePointPk` noch nicht existiert oder älter als 24 h ist (Check via neuer Helper in `backendApi.ts`, der die Zeile liest).
+## UI
 
-### 3. `docs/ocpp-persistent-server/src/backendApi.ts`
+Auf der bestehenden Ladepunkt-Detail-/Bearbeitungsseite (im Tenant-Bereich, evtl. `ChargePointDialog`/Settings-Tab) **eine neue Card "Automatischer Tages-Reboot"**:
 
-- Neue Funktion `getCapabilitiesAge(chargePointPk)` → liest `last_probed_at`. Wird in Punkt 2 verwendet.
+- Switch „Aktivieren" → `auto_reboot_enabled`
+- TimePicker / `<Input type="time">` → `auto_reboot_time` (default 04:00)
+- RadioGroup Soft / Hard → `auto_reboot_type` (default Soft, mit Hinweistext: „Soft ist schonender und reicht in den meisten Fällen aus.")
+- Checkbox „Nicht rebooten während aktiver Ladevorgang" → `auto_reboot_skip_if_charging` (default an)
+- Anzeige: „Letzter Auto-Reboot: TT.MM.JJJJ HH:MM" wenn `auto_reboot_last_run_at` gesetzt
+- Hilfetext: „Empfohlen für Wallboxen, die sich nach mehreren Tagen Laufzeit selten von alleine wieder mit dem Backend verbinden (z. B. einige Duosida-Modelle)."
 
-### 4. Update-Anleitung
+Speicherung läuft über bestehendes `useChargePoints.updateChargePoint`.
 
-- `docs/ocpp-persistent-server/UPDATE-ANLEITUNG.md` ergänzen: Schritt zum Hotfix-Deploy auf **Live** (`cp.aicono.org`), inkl. `docker compose build --no-cache ocpp-server && docker compose up -d ocpp-server` und Logfile-Check.
-- Hinweis: Nach dem ersten erfolgreichen Probe-Lauf laufen beide wallbe-Wallboxen wieder stabil; ein letzter Reboot pro Wallbox ist normal, falls der Sollwert noch nicht stimmt.
+## TypeScript-Typen
 
-## Was wir nicht anfassen
+`src/integrations/supabase/types.ts` wird vom System automatisch nach der Migration aktualisiert. `ChargePoint`-Interface in `src/hooks/useChargePoints.tsx` um die 5 Felder ergänzen.
 
-- Keine Änderungen an Cloud-Edge-Functions, UI oder DB-Schema (Tabelle `charge_point_capabilities` existiert bereits).
-- Test-Container `ocpp.aicono.org` bleibt unberührt — Fix wird zuerst dort getestet, dann auf Live deployed.
+## Was NICHT gemacht wird
 
-## Antwort auf die Zweitfrage
-
-Eine Wallbox „direkt in Lovable einbinden" bringt **keine besseren Logs** — OCPP-WebSockets können nicht direkt in Supabase Edge Functions terminiert werden (deshalb läuft ja der Hetzner-Server). Bessere Diagnose bekommst du stattdessen über `docker logs -f ocpp-server | jq` auf Hetzner und über die Cloud-Tabelle `ocpp_message_log`.
+- Kein Update des Hetzner-OCPP-Servers (`docs/ocpp-persistent-server/...`).
+- Keine WebSocket-/Pong-Watchdog-Änderung (Stufe 1 verworfen).
+- Keine Tasks-Integration (Stufe 3 verworfen).
+- Keine modell-/vendor-basierten Defaults (rein pro Wallbox).
 
 ## Verifikation nach Deploy
 
-1. `docker logs -f ocpp-server` auf Live → kein `MeterValuesSampledData accepted` mehr nach jedem Boot.
-2. In Cloud: `select charge_point_id, last_heartbeat, ws_connected from charge_points where ocpp_id in ('00000000683', …)` → Heartbeats alle ~30 s ohne 10-Minuten-Lücken.
-3. `select * from ocpp_message_log order by created_at desc limit 50` → kein wiederkehrendes `ChangeConfiguration` mehr.
+1. Test-Wallbox: Funktion aktivieren, Zeit auf „in 2 Min" stellen → nach ≤ 1 h kommt automatisch ein `Reset` (Soft) an, `auto_reboot_last_run_at` füllt sich, `ocpp_message_log` zeigt outgoing `Reset`-Frame, Wallbox bootet, neues `BootNotification` folgt.
+2. Mit aktivem Ladevorgang + `skip_if_charging=true`: kein Reset, `last_run_at` bleibt leer, beim nächsten Stundenlauf nach Sessionende wird ausgeführt.
+3. Function aus: keine Einträge mehr.
