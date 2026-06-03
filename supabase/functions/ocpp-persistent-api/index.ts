@@ -322,8 +322,8 @@ async function handle(action: string, body: Record<string, unknown>) {
           charge_point_id: chargePointId,
           connector_id: connectorId,
           id_tag: normalizedIdTag,
-
           meter_start: meterStart,
+
           start_time: startTime,
           transaction_id: newTransactionId,
           status: "active",
