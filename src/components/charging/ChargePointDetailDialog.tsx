@@ -213,6 +213,7 @@ export default function ChargePointDetailDialog({
             <TabsTrigger value="energy" className="flex-1 gap-1.5 text-xs"><Gauge className="h-3.5 w-3.5" />Energie</TabsTrigger>
             <TabsTrigger value="access" className="flex-1 gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" />Zugang</TabsTrigger>
             <TabsTrigger value="sessions" className="flex-1 gap-1.5 text-xs"><Clock className="h-3.5 w-3.5" />Ladevorgänge</TabsTrigger>
+            <TabsTrigger value="maintenance" className="flex-1 gap-1.5 text-xs"><Wrench className="h-3.5 w-3.5" />Wartung</TabsTrigger>
           </TabsList>
 
           <TabsContent value="details" className="mt-4 space-y-4">
