@@ -502,6 +502,15 @@ export default function ChargePointDetailDialog({
               </div>
             )}
           </TabsContent>
+
+          {/* Maintenance Tab */}
+          <TabsContent value="maintenance" className="mt-4">
+            <AutoRebootSettings
+              chargePoint={cp}
+              isAdmin={isAdmin}
+              onSave={(patch) => onUpdate({ id: cp.id, ...patch } as any)}
+            />
+          </TabsContent>
         </Tabs>
       </DialogContent>
     </Dialog>
