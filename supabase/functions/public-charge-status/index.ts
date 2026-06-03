@@ -92,7 +92,6 @@ Deno.serve(async (req) => {
     // diese Connectors/CPs als belegt, damit die Übersicht den realen Zustand
     // zeigt.
     const activeConnKeys = new Set<string>();
-    const activeCpIds = new Set<string>();
     if (cpIds.length > 0) {
       const { data: sessions } = await admin
         .from("charging_sessions")
@@ -100,7 +99,6 @@ Deno.serve(async (req) => {
         .in("charge_point_id", cpIds)
         .is("stop_time", null);
       for (const s of sessions ?? []) {
-        activeCpIds.add(s.charge_point_id as string);
         if (s.connector_id != null) {
           activeConnKeys.add(`${s.charge_point_id}:${s.connector_id}`);
         }
@@ -113,12 +111,6 @@ Deno.serve(async (req) => {
       if (activeConnKeys.has(k)) return { ...c, status: "Charging" };
       return c;
     });
-
-    // CP-Level-Status ebenfalls überschreiben, wenn irgendein Ladevorgang läuft.
-    const cpsOut = cps.map((cp) =>
-      activeCpIds.has(cp.id) ? { ...cp, status: "Charging" } : cp,
-    );
-
 
     // Resolve tenant logo: stored as a path in the "tenant-assets" bucket.
     // Try a signed URL first (private bucket), fall back to the public URL
@@ -155,7 +147,7 @@ Deno.serve(async (req) => {
         logo_url: logoUrl,
       },
       groups,
-      charge_points: cpsOut,
+      charge_points: cps,
       connectors,
       generated_at: new Date().toISOString(),
     }, 200);
