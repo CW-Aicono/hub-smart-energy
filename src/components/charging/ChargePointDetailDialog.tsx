@@ -21,6 +21,7 @@ import { fmtKwh, fmtKw, normalizeConnectorStatus, isChargePointOnline } from "@/
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { AccessControlSettings } from "@/components/charging/AccessControlSettings";
+import { AutoRebootSettings } from "@/components/charging/AutoRebootSettings";
 import { PowerLimitScheduler, defaultPowerLimitSchedule, type PowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
 import { getOcppHost } from "@/lib/ocppEnvironment";
 import { downloadSecureStorageObject } from "@/lib/secureStorage";
