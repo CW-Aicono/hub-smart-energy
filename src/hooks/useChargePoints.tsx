@@ -66,6 +66,11 @@ export interface ChargePoint {
   rfid_read_mode: "raw" | "byte_reversed" | "nibble_swap" | "byte_reversed_nibble_swap";
   ws_connected: boolean;
   ws_connected_since: string | null;
+  auto_reboot_enabled: boolean;
+  auto_reboot_time: string;
+  auto_reboot_type: "Soft" | "Hard";
+  auto_reboot_skip_if_charging: boolean;
+  auto_reboot_last_run_at: string | null;
   created_at: string;
   updated_at: string;
 }
