@@ -92,6 +92,7 @@ const ChargingPoints = () => {
     unconfigured: { labelKey: "charging.statusUnconfigured", variant: "outline", icon: Settings, color: "text-purple-500" },
   };
 
+
   const [addOpen, setAddOpen] = useState(false);
   const [publicLinkOpen, setPublicLinkOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -143,28 +144,74 @@ const ChargingPoints = () => {
 
   const getActiveSession = (cpId: string) => activeSessions.find((s) => s.charge_point_id === cpId);
 
-  const getEffectiveStatus = (cp: ChargePoint) => {
-    const wsOnline = cp.ws_connected !== false;
-    if (activeSessions.some((s) => s.charge_point_id === cp.id)) return "charging";
-
-    const connectorStatuses = (connectorsByChargePoint.get(cp.id) ?? [])
-      .map((connector) => normalizeConnectorStatus(connector.status, wsOnline));
-    const statuses = connectorStatuses.length > 0
-      ? connectorStatuses
-      : Array.from({ length: Math.max(1, cp.connector_count || 1) }, () => normalizeConnectorStatus(cp.status, wsOnline));
-    const priority = ["faulted", "offline", "unconfigured", "unavailable", "charging", "available"];
-    return priority.find((status) => statuses.includes(status)) ?? normalizeConnectorStatus(cp.status, wsOnline);
-  };
-
-  const getConnectorStatusCount = (status: string) => chargePoints.reduce((sum, cp) => {
+  // Liefert pro Stecker den aufbereiteten Status (inkl. aktiver Sessions pro connector_id)
+  const getConnectorStatuses = (cp: ChargePoint): { connectorId: number; status: string }[] => {
     const wsOnline = cp.ws_connected !== false;
     const connectors = connectorsByChargePoint.get(cp.id) ?? [];
-    const activeConnectorIds = new Set(activeSessions.filter((s) => s.charge_point_id === cp.id).map((s) => s.connector_id));
-    const statuses = connectors.length > 0
-      ? connectors.map((connector) => activeConnectorIds.has(connector.connector_id) ? "charging" : normalizeConnectorStatus(connector.status, wsOnline))
-      : Array.from({ length: Math.max(1, cp.connector_count || 1) }, (_, index) => activeConnectorIds.has(index + 1) ? "charging" : normalizeConnectorStatus(cp.status, wsOnline));
-    return sum + statuses.filter((connectorStatus) => connectorStatus === status).length;
-  }, 0);
+    const activeConnectorIds = new Set(
+      activeSessions
+        .filter((s) => s.charge_point_id === cp.id)
+        .map((s) => s.connector_id)
+        .filter((id) => typeof id === "number" && id > 0),
+    );
+    // Fallback: aktive Session ohne (oder mit 0) connector_id -> belegt den ersten Stecker
+    const hasUnassignedActive = activeSessions.some(
+      (s) => s.charge_point_id === cp.id && (!s.connector_id || s.connector_id <= 0),
+    );
+
+    if (connectors.length > 0) {
+      return connectors
+        .slice()
+        .sort((a, b) => a.connector_id - b.connector_id)
+        .map((c, idx) => {
+          // Bei offline-Wallbox immer "offline" — eine alte aktive Session darf nicht
+          // als "charging" erscheinen, weil der reale Zustand unbekannt ist.
+          if (!wsOnline) {
+            return { connectorId: c.connector_id, status: "offline" };
+          }
+          const isActive = activeConnectorIds.has(c.connector_id) || (hasUnassignedActive && idx === 0 && activeConnectorIds.size === 0);
+          return {
+            connectorId: c.connector_id,
+            status: isActive ? "charging" : normalizeConnectorStatus(c.status, wsOnline),
+          };
+        });
+    }
+
+    const count = Math.max(1, cp.connector_count || 1);
+    return Array.from({ length: count }, (_, i) => {
+      const connectorId = i + 1;
+      if (!wsOnline) {
+        return { connectorId, status: "offline" };
+      }
+      const isActive = activeConnectorIds.has(connectorId) || (hasUnassignedActive && i === 0 && activeConnectorIds.size === 0);
+      return {
+        connectorId,
+        status: isActive ? "charging" : normalizeConnectorStatus(cp.status, wsOnline),
+      };
+    });
+  };
+
+  const getEffectiveStatus = (cp: ChargePoint) => {
+    const statuses = getConnectorStatuses(cp).map((c) => c.status);
+    if (statuses.length === 0) {
+      return normalizeConnectorStatus(cp.status, cp.ws_connected !== false);
+    }
+    // Harte Zustände gewinnen immer
+    const hardPriority = ["faulted", "offline", "unconfigured", "unavailable"];
+    const hard = hardPriority.find((s) => statuses.includes(s));
+    if (hard) return hard;
+
+    if (statuses.some((s) => s === "charging")) return "charging";
+    if (statuses.some((s) => s === "available")) return "available";
+    return statuses[0];
+  };
+
+  const getConnectorStatusCount = (status: string) =>
+    chargePoints.reduce((sum, cp) => {
+      const statuses = getConnectorStatuses(cp).map((c) => c.status);
+      return sum + statuses.filter((s) => s === status).length;
+    }, 0);
+
 
   const filteredChargePoints = statusFilter
     ? chargePoints.filter((cp) => getEffectiveStatus(cp) === statusFilter)
@@ -547,17 +594,27 @@ const ChargingPoints = () => {
                       </TableHeader>
                       <TableBody>
                         {filteredChargePoints.map((cp) => {
-                          const cfg = statusConfig[getEffectiveStatus(cp)] || statusConfig.offline;
+                          const effectiveStatus = getEffectiveStatus(cp);
+                          const cfg = statusConfig[effectiveStatus] || statusConfig.offline;
                           const activeSession = getActiveSession(cp.id);
+                          const perConnectorStatuses = getConnectorStatuses(cp);
+                          const occupiedCount = perConnectorStatuses.filter((c) => c.status === "charging").length;
+                          const totalConnectors = perConnectorStatuses.length;
                           return (
                             <TableRow key={cp.id}>
                               <TableCell className="font-medium cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(demoPath(`/charging/points/${cp.id}`))}>{cp.name}</TableCell>
                               <TableCell>
-                                <ConnectorTypeIcons connectorType={cp.connector_type} connectorCount={cp.connector_count} />
+                                <ConnectorTypeIcons
+                                  connectorType={cp.connector_type}
+                                  connectorCount={cp.connector_count}
+                                  connectorStatuses={perConnectorStatuses}
+                                />
                               </TableCell>
                               <TableCell>
                                 <StatusLiveDataHover chargePointId={cp.id}>
-                                  <Badge variant={cfg.variant} className="cursor-help">{t(cfg.labelKey as any)}</Badge>
+                                  <Badge variant={cfg.variant} className="cursor-help">
+                                    {t(cfg.labelKey as any)}
+                                  </Badge>
                                 </StatusLiveDataHover>
                                 {activeSession && (
                                   <span className="ml-2 text-xs text-muted-foreground">
@@ -565,6 +622,7 @@ const ChargingPoints = () => {
                                   </span>
                                 )}
                               </TableCell>
+
                               <TableCell>{cp.address || "—"}</TableCell>
                               <TableCell>{fmtKw(cp.max_power_kw)}</TableCell>
                               <TableCell className="text-sm text-muted-foreground">
