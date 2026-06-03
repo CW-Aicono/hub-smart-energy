@@ -1671,7 +1671,16 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                 </>
               )}
             </TabsContent>
+
+            <TabsContent value="maintenance" className="mt-6">
+              <AutoRebootSettings
+                chargePoint={cp}
+                isAdmin={!!isAdmin}
+                onSave={(patch) => updateChargePoint.mutate({ id: cp.id, ...patch } as any)}
+              />
+            </TabsContent>
           </Tabs>
+
         </div>
       </main>
     </div>
