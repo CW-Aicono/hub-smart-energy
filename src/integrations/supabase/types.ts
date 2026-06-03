@@ -9796,6 +9796,10 @@ export type Database = {
         Args: { p_tenant_id: string; p_year: number }
         Returns: string
       }
+      normalize_rfid_tag: {
+        Args: { _mode: string; _raw: string }
+        Returns: string
+      }
       partner_has_tenant_access: {
         Args: { _tenant_id: string; _user_id: string }
         Returns: boolean
