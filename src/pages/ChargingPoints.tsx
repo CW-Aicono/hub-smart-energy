@@ -86,11 +86,13 @@ const ChargingPoints = () => {
   const statusConfig: Record<string, { labelKey: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap; color: string }> = {
     available: { labelKey: "charging.statusAvailable", variant: "default", icon: Zap, color: "text-green-500" },
     charging: { labelKey: "chargingStats.occupied", variant: "secondary", icon: PlugZap, color: "text-blue-500" },
+    partial: { labelKey: "charging.statusPartial", variant: "secondary", icon: PlugZap, color: "text-cyan-500" },
     faulted: { labelKey: "charging.statusFaulted", variant: "destructive", icon: AlertTriangle, color: "text-red-500" },
     unavailable: { labelKey: "charging.statusUnavailable", variant: "outline", icon: ZapOff, color: "text-yellow-500" },
     offline: { labelKey: "charging.statusOffline", variant: "outline", icon: WifiOff, color: "text-orange-500" },
     unconfigured: { labelKey: "charging.statusUnconfigured", variant: "outline", icon: Settings, color: "text-purple-500" },
   };
+
 
   const [addOpen, setAddOpen] = useState(false);
   const [publicLinkOpen, setPublicLinkOpen] = useState(false);
