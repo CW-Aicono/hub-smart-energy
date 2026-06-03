@@ -592,17 +592,30 @@ const ChargingPoints = () => {
                       </TableHeader>
                       <TableBody>
                         {filteredChargePoints.map((cp) => {
-                          const cfg = statusConfig[getEffectiveStatus(cp)] || statusConfig.offline;
+                          const effectiveStatus = getEffectiveStatus(cp);
+                          const cfg = statusConfig[effectiveStatus] || statusConfig.offline;
                           const activeSession = getActiveSession(cp.id);
+                          const perConnectorStatuses = getConnectorStatuses(cp);
+                          const occupiedCount = perConnectorStatuses.filter((c) => c.status === "charging").length;
+                          const totalConnectors = perConnectorStatuses.length;
                           return (
                             <TableRow key={cp.id}>
                               <TableCell className="font-medium cursor-pointer hover:text-primary transition-colors" onClick={() => navigate(demoPath(`/charging/points/${cp.id}`))}>{cp.name}</TableCell>
                               <TableCell>
-                                <ConnectorTypeIcons connectorType={cp.connector_type} connectorCount={cp.connector_count} />
+                                <ConnectorTypeIcons
+                                  connectorType={cp.connector_type}
+                                  connectorCount={cp.connector_count}
+                                  connectorStatuses={perConnectorStatuses}
+                                />
                               </TableCell>
                               <TableCell>
                                 <StatusLiveDataHover chargePointId={cp.id}>
-                                  <Badge variant={cfg.variant} className="cursor-help">{t(cfg.labelKey as any)}</Badge>
+                                  <Badge variant={cfg.variant} className="cursor-help">
+                                    {t(cfg.labelKey as any)}
+                                    {effectiveStatus === "partial" && totalConnectors > 1 && (
+                                      <span className="ml-1 opacity-80">{occupiedCount}/{totalConnectors}</span>
+                                    )}
+                                  </Badge>
                                 </StatusLiveDataHover>
                                 {activeSession && (
                                   <span className="ml-2 text-xs text-muted-foreground">
@@ -610,6 +623,7 @@ const ChargingPoints = () => {
                                   </span>
                                 )}
                               </TableCell>
+
                               <TableCell>{cp.address || "—"}</TableCell>
                               <TableCell>{fmtKw(cp.max_power_kw)}</TableCell>
                               <TableCell className="text-sm text-muted-foreground">
