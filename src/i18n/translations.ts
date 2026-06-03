@@ -3969,6 +3969,8 @@ export const translations = {
   "charging.statusUnavailable": { de: "Nicht verfügbar", en: "Unavailable", es: "No disponible", nl: "Niet beschikbaar" },
   "charging.statusOffline": { de: "Offline", en: "Offline", es: "Sin conexión", nl: "Offline" },
   "charging.statusUnconfigured": { de: "Nicht konfiguriert", en: "Unconfigured", es: "Sin configurar", nl: "Niet geconfigureerd" },
+  "charging.statusPartial": { de: "Teilweise belegt", en: "Partially occupied", es: "Parcialmente ocupado", nl: "Gedeeltelijk bezet" },
+
   "charging.all": { de: "Alle", en: "All", es: "Todos", nl: "Alle" },
   "charging.allChargePoints": { de: "Alle Ladepunkte", en: "All charge points", es: "Todos los puntos de carga", nl: "Alle laadpunten" },
   "charging.chargePointsFiltered": { de: "Ladepunkte:", en: "Charge points:", es: "Puntos de carga:", nl: "Laadpunten:" },

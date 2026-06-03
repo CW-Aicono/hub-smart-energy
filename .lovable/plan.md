@@ -1,44 +1,53 @@
-# OCPP Live-Daten (Voltage / Current / Power) — Aktivierung, Persistierung, Anzeige, EMS
+## Problem
 
-## Ist-Zustand (geprüft)
+In `/charging/points` (Datei `src/pages/ChargingPoints.tsx`) wird ein Ladepunkt sofort als **„Belegt"** angezeigt, sobald **irgendein** Stecker einen aktiven Ladevorgang hat — auch wenn der zweite Stecker noch frei ist. Ursache ist die Funktion `getEffectiveStatus` (Zeile 146–157):
 
-- Duosida „Ost 1" sendet nur `Energy.Active.Import.Register` (kWh) alle ~15 min. Keine Voltage/Current/Power.
-- Persistent-Server loggt MeterValues bereits in `ocpp_message_log`, parst aber nichts strukturiert.
-- `pending_ocpp_commands` + Dispatcher unterstützen `ChangeConfiguration` bereits. `GetConfiguration` fehlt noch.
-- `charge_points` hat schon `supports_change_configuration` und `supports_charging_profile`.
+```ts
+if (activeSessions.some((s) => s.charge_point_id === cp.id)) return "charging";
+```
 
-## OCPP-Standardisierung — wichtig
+Diese Zeile ignoriert den Status der einzelnen Stecker und liefert pauschal „charging" (= „Belegt") für den ganzen Ladepunkt.
 
-`MeterValuesSampledData`, `MeterValueSampleInterval`, `MeterValuesAlignedData`, `ClockAlignedDataInterval` sowie die Measurand-Namen sind **OCPP-1.6-Standard**. Funktioniert mit ABL/Bender, Alfen, KEBA, go-e, Wallbe, Mennekes, etc.
+Im öffentlichen Status-Link (`PublicChargeStatus.tsx`, Screenshot 3) ist die Pro-Stecker-Anzeige bereits korrekt — die interne Tenant-Übersicht (Screenshot 2) aber nicht.
 
-ABER: Was eine Wallbox tatsächlich liefern kann, variiert. Daher: **Capability Discovery vor Konfiguration**. Per `GetConfiguration` ermitteln, was die Wallbox kennt, und nur unterstützte Measurands aktivieren. Modelle wie die Duosida liefern oft nur Energy.
+## Ziel
 
-## Plan
+In der Tabelle auf `/charging/points` soll pro Ladepunkt erkennbar sein, **welcher** Stecker belegt ist und welcher frei — analog zur öffentlichen Statusseite. Wenn 1 von 2 Steckern lädt, darf der Ladepunkt nicht als komplett „Belegt" gelten.
 
-### Schritt 1 — Datenbank
-- Neue Tabelle `ocpp_meter_samples` (charge_point_id, connector_id, transaction_id, measurand, phase, unit, value, context, sampled_at, created_at) + RLS pro tenant, Realtime an.
-- Neue Tabelle `charge_point_capabilities` (charge_point_id PK, supported_measurands text[], max_sample_length int, min_sample_interval int, raw_config jsonb, last_probed_at).
-- `pending_ocpp_commands` bekommt zusätzlichen Command-Typ `GetConfiguration` im Dispatcher (kein Schema-Change nötig).
+## Änderungen (rein UI/Frontend, keine Logik im Backend)
 
-### Schritt 2 — Hetzner OCPP-Server-Update
-- `ocppHandler.ts`: MeterValues parsen → pro `sampledValue` einen Eintrag in `ocpp_meter_samples` via neuem Backend-Endpoint `insert-meter-sample`. Bei `Power.Active.Import` zusätzlich Forward in `meter_power_readings` wenn der CP mit einem Meter verknüpft ist.
-- `commandDispatcher.ts`: `GetConfiguration` ergänzen. Bei Response → Capabilities in `charge_point_capabilities` upserten.
-- `backendApi.ts`: Endpoints `insert-meter-sample`, `upsert-capabilities`.
-- Edge Function `ocpp-persistent-api`: neue Actions ergänzen.
+### 1. `src/pages/ChargingPoints.tsx` — Aggregations-Logik korrigieren
 
-### Schritt 3 — UI (Ladepunkt-Detail)
-- Button „Messgrößen prüfen" → triggert `GetConfiguration` → zeigt unterstützte Measurands.
-- Button „Live-Daten aktivieren" → triggert `ChangeConfiguration` mit Schnittmenge aus Wunsch-Profil und Capabilities. Fallback-Kaskade bei Rejected.
-- Live-Panel: Power (kW), Voltage (V), Current (A) je Phase, kWh, letzter Sample. Realtime via `ocpp_meter_samples`.
+- `getEffectiveStatus(cp)` so anpassen, dass es **alle** Connector-Status berücksichtigt (inkl. aktiver Sessions pro `connector_id`) und das Ergebnis nach folgender Priorität zurückgibt:
+  - `faulted` > `offline` > `unconfigured` > **`partial`** (mind. 1 belegt + mind. 1 frei) > `charging` (alle belegt) > `available` (alle frei) > `unavailable`
+- Aktive Sessions werden weiterhin berücksichtigt, aber **pro `connector_id`** (Session-Feld existiert bereits, siehe `useChargingSessions.tsx`), nicht pauschal für den ganzen CP.
+- Neuer Status-Key `"partial"` mit Label „Teilweise belegt" (DE) / „Partially occupied" (EN) / „Parcialmente ocupado" (ES) / „Gedeeltelijk bezet" (NL) wird in `statusConfig` ergänzt — Farbe: gemischtes Blau/Grün-Badge, damit auf einen Blick vom reinen „Belegt" unterscheidbar.
+- Die Stat-Karten (Zeile 488–505) zählen weiterhin **pro Stecker** (das funktioniert bereits korrekt über `getConnectorStatusCount`).
 
-### Schritt 4 — EMS-Integration
-- Optionale CP → Meter Zuordnung in `charge_points` (neue Spalte `linked_meter_id uuid`). Persistent-Server schiebt Power.Active.Import als `meter_power_readings`. Damit erscheint Wallbox in Energy-Flow, Charts, Automationen.
+### 2. `src/components/charging/ConnectorTypeIcons.tsx` — Icons pro Stecker einfärben
 
-## Umsetzungsreihenfolge
-1. Migration (Tabellen + linked_meter_id) — **dieser Commit**
-2. Edge Function ocpp-persistent-api: neue Actions
-3. Hetzner-Server: MeterValues-Parser + GetConfiguration-Dispatcher + Capability-Upsert
-4. UI Ladepunkt-Detail
-5. EMS-Forward
+Aktuell zeigt die Spalte „Steckertypen" 2 gleich eingefärbte Steckersymbole (immer typabhängig blau/orange/grün). Erweiterung:
 
-OCPP 2.0.1 bleibt out-of-scope, Tabellen sind protokoll-neutral.
+- Neuer optionaler Prop `connectorStatuses?: Array<{ connectorId: number; status: "available" | "charging" | "faulted" | "offline" | "unavailable" | "unconfigured" }>`.
+- Wenn übergeben: jedes Stecker-Icon wird zusätzlich mit einem kleinen Status-Punkt (oben rechts am Icon) versehen — grün = frei, blau = belegt/lädt, rot = Fehler, grau = offline/nicht konfiguriert.
+- Tooltip zeigt zusätzlich „Stecker 1: Verfügbar · Stecker 2: Belegt".
+- Ohne den Prop bleibt das bisherige Verhalten erhalten (Rückwärtskompatibilität).
+
+In `ChargingPoints.tsx` (Tabellen-Render, Zeile 555) wird dieser neue Prop aus `connectorsByChargePoint` + `activeSessions` befüllt.
+
+### 3. Badge in der Status-Spalte
+
+Bei Status `partial` zeigt die Badge zusätzlich den Zähler an, z. B. **„Belegt 1/2"** — so ist auf einen Blick sichtbar, dass nur ein Teil belegt ist. Bei `charging` (alle Stecker belegt) wie bisher nur „Belegt".
+
+### 4. Übersetzungen
+
+Neue Keys in `src/i18n/translations/{de,en,es,nl}/charging.ts` (oder dem entsprechenden Modul):
+- `charging.status.partial` = „Teilweise belegt" / „Partially occupied" / „Parcialmente ocupado" / „Gedeeltelijk bezet"
+- `charging.status.partialCount` = Format „Belegt {n}/{total}"
+
+## Nicht im Scope
+
+- Keine Änderungen an `PublicChargeStatus.tsx` (funktioniert bereits korrekt).
+- Keine Änderungen an `ChargePointDetail.tsx` (zeigt Pro-Stecker-Status bereits via `ConnectorStatusGrid`).
+- Keine DB-/Backend-/OCPP-Änderungen — alle nötigen Daten (`charge_point_connectors.status` und `charging_sessions.connector_id`) sind bereits vorhanden.
+- Keine Anpassung der „Ladevorgänge"-Tabelle (Screenshot 1) — die ist korrekt, dort geht es um Sessions, nicht um Ladepunkte.
