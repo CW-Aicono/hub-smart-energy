@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AutoRebootSettings } from "@/components/charging/AutoRebootSettings";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
@@ -658,7 +659,9 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
               <TabsTrigger value="details">{t("cpd.tabDetails" as any)}</TabsTrigger>
               <TabsTrigger value="energy">{t("cpd.tabEnergy" as any)}</TabsTrigger>
               <TabsTrigger value="access">{t("cpd.tabAccess" as any)}</TabsTrigger>
+              <TabsTrigger value="maintenance" className="gap-1.5"><Wrench className="h-3.5 w-3.5" />Wartung</TabsTrigger>
             </TabsList>
+
 
             <TabsContent value="overview" className="space-y-6 mt-6">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1668,7 +1671,16 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                 </>
               )}
             </TabsContent>
+
+            <TabsContent value="maintenance" className="mt-6">
+              <AutoRebootSettings
+                chargePoint={cp}
+                isAdmin={!!isAdmin}
+                onSave={(patch) => updateChargePoint.mutate({ id: cp.id, ...patch } as any)}
+              />
+            </TabsContent>
           </Tabs>
+
         </div>
       </main>
     </div>
