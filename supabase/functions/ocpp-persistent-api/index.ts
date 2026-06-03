@@ -502,10 +502,23 @@ async function handle(action: string, body: Record<string, unknown>) {
       return ok();
     }
 
+    case "get-capabilities-age": {
+      const chargePointId = String(body.chargePointId ?? "");
+      if (!chargePointId) return fail(400, "Missing chargePointId");
+      const { data, error } = await admin
+        .from("charge_point_capabilities")
+        .select("last_probed_at")
+        .eq("charge_point_id", chargePointId)
+        .maybeSingle();
+      if (error) return fail(500, error.message);
+      return ok({ lastProbedAt: data?.last_probed_at ?? null });
+    }
+
     default:
       return fail(400, `Unknown action: ${action}`);
   }
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
