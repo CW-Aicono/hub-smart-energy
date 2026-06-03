@@ -659,7 +659,9 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
               <TabsTrigger value="details">{t("cpd.tabDetails" as any)}</TabsTrigger>
               <TabsTrigger value="energy">{t("cpd.tabEnergy" as any)}</TabsTrigger>
               <TabsTrigger value="access">{t("cpd.tabAccess" as any)}</TabsTrigger>
+              <TabsTrigger value="maintenance" className="gap-1.5"><Wrench className="h-3.5 w-3.5" />Wartung</TabsTrigger>
             </TabsList>
+
 
             <TabsContent value="overview" className="space-y-6 mt-6">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
