@@ -86,7 +86,6 @@ const ChargingPoints = () => {
   const statusConfig: Record<string, { labelKey: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap; color: string }> = {
     available: { labelKey: "charging.statusAvailable", variant: "default", icon: Zap, color: "text-green-500" },
     charging: { labelKey: "chargingStats.occupied", variant: "secondary", icon: PlugZap, color: "text-blue-500" },
-    partial: { labelKey: "charging.statusPartial", variant: "secondary", icon: PlugZap, color: "text-cyan-500" },
     faulted: { labelKey: "charging.statusFaulted", variant: "destructive", icon: AlertTriangle, color: "text-red-500" },
     unavailable: { labelKey: "charging.statusUnavailable", variant: "outline", icon: ZapOff, color: "text-yellow-500" },
     offline: { labelKey: "charging.statusOffline", variant: "outline", icon: WifiOff, color: "text-orange-500" },
@@ -165,6 +164,11 @@ const ChargingPoints = () => {
         .slice()
         .sort((a, b) => a.connector_id - b.connector_id)
         .map((c, idx) => {
+          // Bei offline-Wallbox immer "offline" — eine alte aktive Session darf nicht
+          // als "charging" erscheinen, weil der reale Zustand unbekannt ist.
+          if (!wsOnline) {
+            return { connectorId: c.connector_id, status: "offline" };
+          }
           const isActive = activeConnectorIds.has(c.connector_id) || (hasUnassignedActive && idx === 0 && activeConnectorIds.size === 0);
           return {
             connectorId: c.connector_id,
@@ -176,6 +180,9 @@ const ChargingPoints = () => {
     const count = Math.max(1, cp.connector_count || 1);
     return Array.from({ length: count }, (_, i) => {
       const connectorId = i + 1;
+      if (!wsOnline) {
+        return { connectorId, status: "offline" };
+      }
       const isActive = activeConnectorIds.has(connectorId) || (hasUnassignedActive && i === 0 && activeConnectorIds.size === 0);
       return {
         connectorId,
@@ -194,19 +201,14 @@ const ChargingPoints = () => {
     const hard = hardPriority.find((s) => statuses.includes(s));
     if (hard) return hard;
 
-    const charging = statuses.filter((s) => s === "charging").length;
-    const available = statuses.filter((s) => s === "available").length;
-    if (charging > 0 && available > 0) return "partial";
-    if (charging > 0) return "charging";
-    if (available > 0) return "available";
+    if (statuses.some((s) => s === "charging")) return "charging";
+    if (statuses.some((s) => s === "available")) return "available";
     return statuses[0];
   };
 
   const getConnectorStatusCount = (status: string) =>
     chargePoints.reduce((sum, cp) => {
       const statuses = getConnectorStatuses(cp).map((c) => c.status);
-      // "partial" ist ein aggregierter CP-Status und zählt nicht pro Stecker
-      if (status === "partial") return sum;
       return sum + statuses.filter((s) => s === status).length;
     }, 0);
 
@@ -612,9 +614,6 @@ const ChargingPoints = () => {
                                 <StatusLiveDataHover chargePointId={cp.id}>
                                   <Badge variant={cfg.variant} className="cursor-help">
                                     {t(cfg.labelKey as any)}
-                                    {effectiveStatus === "partial" && totalConnectors > 1 && (
-                                      <span className="ml-1 opacity-80">{occupiedCount}/{totalConnectors}</span>
-                                    )}
                                   </Badge>
                                 </StatusLiveDataHover>
                                 {activeSession && (
