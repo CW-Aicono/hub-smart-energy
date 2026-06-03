@@ -41,8 +41,7 @@ export function useIdTagResolver() {
   const tagMap = useMemo(() => {
     const m = new Map<string, string>();
     for (const u of chargingUsers) {
-      const label = (u as any).rfid_label ? ` (${(u as any).rfid_label})` : "";
-      if (u.rfid_tag) m.set(u.rfid_tag.toUpperCase(), u.name + label);
+      if (u.rfid_tag) m.set(u.rfid_tag.toUpperCase(), u.name);
       if (u.app_tag) m.set(u.app_tag.toUpperCase(), u.name);
     }
     return m;
