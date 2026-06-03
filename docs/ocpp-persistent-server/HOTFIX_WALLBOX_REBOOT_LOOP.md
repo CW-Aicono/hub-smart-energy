@@ -1,4 +1,4 @@
-# Hotfix: Wallbox-Reboot-Loop (Live, `cp.aicono.org`)
+# Hotfix: Wallbox-Reboot-Loop (Test + Live)
 
 ## Was war das Problem?
 
@@ -23,115 +23,196 @@ Die Cloud-Edge-Function `ocpp-persistent-api` wurde bereits aktualisiert
 
 ---
 
-## Schritt-für-Schritt: Update auf dem Hetzner-Live-Server
+## Übersicht der beiden Umgebungen
 
-### Schritt 1 — Per SSH einloggen
+Auf dem Hetzner-Server laufen **zwei** OCPP-Server parallel — beide müssen
+aktualisiert werden, damit auch Test-Wallboxen sauber laufen:
 
-Auf deinem Rechner ein Terminal öffnen und einloggen. Ersetze
-`DEINE-SERVER-IP` mit der IP deines Live-Servers:
+| Umgebung | Domain | Service-Name | Container-Name |
+|---|---|---|---|
+| **Test** | `ocpp.aicono.org` | `ocpp` | `ocpp-server` |
+| **Live** | `cp.aicono.org` | `ocpp-live` | `ocpp-server-live` |
+
+> ⚠ **Wichtig:** Niemals `docker compose down` eingeben — das würde
+> beide Umgebungen **und** den Caddy-Proxy gleichzeitig stoppen.
+
+---
+
+## Schritt 1 — Per SSH einloggen
 
 ```bash
 ssh root@DEINE-SERVER-IP
 ```
 
-Erwartetes Ergebnis: Du bist als `root` eingeloggt und siehst eine
-Eingabeaufforderung wie `root@aicono-live:~#`.
+Erwartet: Eingabeaufforderung wie `root@OCPP-server:~#`.
 
-### Schritt 2 — In das richtige Verzeichnis wechseln
+## Schritt 2 — In den Projektordner wechseln
 
 ```bash
 cd /opt/aicono/aicono-ems/docs/ocpp-persistent-server
 ```
 
-Falls der Pfad bei dir anders ist, finde ihn so:
-
-```bash
-find / -path "*ocpp-persistent-server/docker-compose.yml" 2>/dev/null
-```
-
-### Schritt 3 — Sicherheits-Check: Bist du im Live-Container?
+## Schritt 3 — Container prüfen
 
 ```bash
 docker compose ps
 ```
 
-Du musst einen Container mit Namen `cp-server` (oder `ocpp-server` mit Bezug
-auf `cp.aicono.org`) sehen. **Wenn dort `ocpp-server` mit `ocpp.aicono.org`
-steht, abbrechen** — das wäre der Test-Container.
+Du musst genau diese drei Container sehen — alle mit `Up` bzw. `healthy`:
 
-### Schritt 4 — Neuesten Code holen
+```
+ocpp-caddy         ...   Up ...
+ocpp-server        ...   Up ... (healthy)
+ocpp-server-live   ...   Up ... (healthy)
+```
+
+Wenn das passt → weiter mit Schritt 4.
+
+## Schritt 4 — Neuesten Code holen
 
 ```bash
 git fetch --all
 git pull
 ```
 
-Erwartetes Ergebnis: U. a. diese geänderten Dateien:
+Erwartet: Geänderte Dateien u. a.:
 
 ```
 docs/ocpp-persistent-server/src/configurationProbe.ts
 docs/ocpp-persistent-server/src/backendApi.ts
-docs/ocpp-persistent-server/HOTFIX_WALLBOX_REBOOT_LOOP.md   (NEU)
+docs/ocpp-persistent-server/HOTFIX_WALLBOX_REBOOT_LOOP.md
 ```
 
-### Schritt 5 — Container neu bauen und starten
+Falls du den Fehler `Your local changes … would be overwritten` bekommst:
 
 ```bash
-docker compose build --no-cache cp-server && docker compose up -d cp-server
+git stash
+git pull
+git stash pop
 ```
 
-(Falls dein Service in der `docker-compose.yml` anders heißt, ersetze
-`cp-server` mit dem korrekten Namen aus Schritt 3.)
+---
 
-Erwartetes Ergebnis: Der Container wird neu gebaut (ca. 1–2 Minuten) und
-startet anschließend wieder.
+## Schritt 5 — Beide Container neu bauen und starten
 
-### Schritt 6 — Logs live mitlesen
+> **Reihenfolge:** Erst **Test** updaten (ungefährlich), dann **Live**.
+> Bei Live entstehen kurz (~30–60 s) Verbindungsabbrüche bei echten Wallboxen
+> — daher Live nur zu ruhigen Zeiten updaten.
+
+### 5A — Test-Umgebung (`ocpp.aicono.org`)
+
+Drei Befehle **einzeln** nacheinander, jeweils Enter abwarten:
 
 ```bash
-docker logs -f cp-server
+docker compose stop ocpp
 ```
 
-Was du **sehen solltest**, sobald die Wallboxen sich neu verbinden:
-
-```
-Skipping config probe (recently probed)   ← bei jedem Folge-Boot
+```bash
+docker compose build --no-cache ocpp
 ```
 
-oder beim ersten Lauf:
+(dauert 1–3 Minuten)
+
+```bash
+docker compose up -d ocpp
+```
+
+Erwartet am Ende:
+
+```
+✔ Container ocpp-server  Started
+```
+
+### 5B — Live-Umgebung (`cp.aicono.org`)
+
+Wieder drei Befehle einzeln:
+
+```bash
+docker compose stop ocpp-live
+```
+
+```bash
+docker compose build --no-cache ocpp-live
+```
+
+```bash
+docker compose up -d ocpp-live
+```
+
+Erwartet am Ende:
+
+```
+✔ Container ocpp-server-live  Started
+```
+
+---
+
+## Schritt 6 — Logs prüfen
+
+### Test-Container:
+
+```bash
+docker logs -f ocpp-server
+```
+
+### Live-Container (zweites Terminal-Fenster bzw. nach `Strg + C`):
+
+```bash
+docker logs -f ocpp-server-live
+```
+
+Was du **sehen solltest**, sobald Wallboxen sich neu verbinden:
+
+```
+Skipping config probe (recently probed)
+```
+
+oder beim allerersten Lauf:
 
 ```
 Config key already at desired value, skipping
 MeterValuesSampledData already matches profile, no change
 ```
 
-Was du **NICHT mehr sehen solltest**:
+Was du **NICHT mehr sehen darfst** (nach dem ersten Lauf):
 
 ```
-MeterValuesSampledData accepted    ← jedes Mal nach BootNotification
+MeterValuesSampledData accepted          ← bei jedem Boot
 ChangeConfiguration returned RebootRequired
 ```
 
-Mit `Strg + C` beendest du das Log-Mitlesen (der Container läuft weiter).
+Mit `Strg + C` beendest du das Log-Mitlesen (Container läuft weiter).
 
-### Schritt 7 — Wallboxen kurz prüfen
+---
+
+## Schritt 7 — Health-Checks
+
+```bash
+curl https://ocpp.aicono.org/health
+```
+
+```bash
+curl https://cp.aicono.org/health
+```
+
+Beide müssen jeweils so antworten:
+
+```json
+{"status":"ok","uptimeSeconds":12,"sessions":0}
+```
+
+## Schritt 8 — Wallboxen prüfen
 
 In der App `https://ems-pro.aicono.org` → Standort → Ladepunkte:
-Beide Wallboxen sollten innerhalb von 1–2 Minuten online gehen und
+Beide Live-Wallboxen sollten innerhalb von 1–2 Minuten online gehen und
 **dauerhaft** online bleiben (Heartbeat alle ~30 s, keine 10-Minuten-Lücken
 mehr).
 
 ---
 
-## Wenn es nach Schritt 7 immer noch reboots gibt
+## Wenn es nach Schritt 8 immer noch reboots gibt
 
-Dann ist der Probe-Lauf für diese Wallboxen noch nicht in
-`charge_point_capabilities` eingetragen (TTL leer). Einmaliges manuelles
-Anstoßen reicht — nach dem ersten erfolgreichen Lauf greift die 24 h-TTL.
-
-Falls eine Wallbox einen `RebootRequired` zurückmeldet **weil ein Wert
-tatsächlich abweicht**, ist genau **ein** letzter Reboot normal. Danach ist
-Ruhe.
-
-Bei anhaltenden Reboots: Logs sammeln und melden — bitte **nicht** versuchen,
-die Test-Schritte zu wiederholen, das bringt nichts.
+Beim **allerersten** Verbinden nach dem Update ist genau **ein** Reboot pro
+Wallbox normal (falls ein Sollwert tatsächlich abweicht). Danach muss Ruhe
+sein. Bei anhaltenden Reboots: Logs aus Schritt 6 sammeln und melden —
+bitte **nicht** dieselben Schritte mehrfach wiederholen.
