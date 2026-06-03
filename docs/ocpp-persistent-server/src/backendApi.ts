@@ -161,3 +161,16 @@ export async function upsertCapabilities(chargePointId: string, capabilities: Ca
   await callBackend("upsert-capabilities", { chargePointId, capabilities });
 }
 
+/**
+ * Liefert das Alter (in Millisekunden) des letzten erfolgreichen Probe-Laufs
+ * für diesen Ladepunkt zurück. `null` bedeutet: noch nie geprobt.
+ */
+export async function getCapabilitiesAgeMs(chargePointId: string): Promise<number | null> {
+  const res = await callBackend<{ lastProbedAt: string | null }>("get-capabilities-age", { chargePointId });
+  if (!res?.lastProbedAt) return null;
+  const t = Date.parse(res.lastProbedAt);
+  if (!Number.isFinite(t)) return null;
+  return Date.now() - t;
+}
+
+
