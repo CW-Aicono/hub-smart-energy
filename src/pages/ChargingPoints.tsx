@@ -145,28 +145,71 @@ const ChargingPoints = () => {
 
   const getActiveSession = (cpId: string) => activeSessions.find((s) => s.charge_point_id === cpId);
 
-  const getEffectiveStatus = (cp: ChargePoint) => {
-    const wsOnline = cp.ws_connected !== false;
-    if (activeSessions.some((s) => s.charge_point_id === cp.id)) return "charging";
-
-    const connectorStatuses = (connectorsByChargePoint.get(cp.id) ?? [])
-      .map((connector) => normalizeConnectorStatus(connector.status, wsOnline));
-    const statuses = connectorStatuses.length > 0
-      ? connectorStatuses
-      : Array.from({ length: Math.max(1, cp.connector_count || 1) }, () => normalizeConnectorStatus(cp.status, wsOnline));
-    const priority = ["faulted", "offline", "unconfigured", "unavailable", "charging", "available"];
-    return priority.find((status) => statuses.includes(status)) ?? normalizeConnectorStatus(cp.status, wsOnline);
-  };
-
-  const getConnectorStatusCount = (status: string) => chargePoints.reduce((sum, cp) => {
+  // Liefert pro Stecker den aufbereiteten Status (inkl. aktiver Sessions pro connector_id)
+  const getConnectorStatuses = (cp: ChargePoint): { connectorId: number; status: string }[] => {
     const wsOnline = cp.ws_connected !== false;
     const connectors = connectorsByChargePoint.get(cp.id) ?? [];
-    const activeConnectorIds = new Set(activeSessions.filter((s) => s.charge_point_id === cp.id).map((s) => s.connector_id));
-    const statuses = connectors.length > 0
-      ? connectors.map((connector) => activeConnectorIds.has(connector.connector_id) ? "charging" : normalizeConnectorStatus(connector.status, wsOnline))
-      : Array.from({ length: Math.max(1, cp.connector_count || 1) }, (_, index) => activeConnectorIds.has(index + 1) ? "charging" : normalizeConnectorStatus(cp.status, wsOnline));
-    return sum + statuses.filter((connectorStatus) => connectorStatus === status).length;
-  }, 0);
+    const activeConnectorIds = new Set(
+      activeSessions
+        .filter((s) => s.charge_point_id === cp.id)
+        .map((s) => s.connector_id)
+        .filter((id) => typeof id === "number" && id > 0),
+    );
+    // Fallback: aktive Session ohne (oder mit 0) connector_id -> belegt den ersten Stecker
+    const hasUnassignedActive = activeSessions.some(
+      (s) => s.charge_point_id === cp.id && (!s.connector_id || s.connector_id <= 0),
+    );
+
+    if (connectors.length > 0) {
+      return connectors
+        .slice()
+        .sort((a, b) => a.connector_id - b.connector_id)
+        .map((c, idx) => {
+          const isActive = activeConnectorIds.has(c.connector_id) || (hasUnassignedActive && idx === 0 && activeConnectorIds.size === 0);
+          return {
+            connectorId: c.connector_id,
+            status: isActive ? "charging" : normalizeConnectorStatus(c.status, wsOnline),
+          };
+        });
+    }
+
+    const count = Math.max(1, cp.connector_count || 1);
+    return Array.from({ length: count }, (_, i) => {
+      const connectorId = i + 1;
+      const isActive = activeConnectorIds.has(connectorId) || (hasUnassignedActive && i === 0 && activeConnectorIds.size === 0);
+      return {
+        connectorId,
+        status: isActive ? "charging" : normalizeConnectorStatus(cp.status, wsOnline),
+      };
+    });
+  };
+
+  const getEffectiveStatus = (cp: ChargePoint) => {
+    const statuses = getConnectorStatuses(cp).map((c) => c.status);
+    if (statuses.length === 0) {
+      return normalizeConnectorStatus(cp.status, cp.ws_connected !== false);
+    }
+    // Harte Zustände gewinnen immer
+    const hardPriority = ["faulted", "offline", "unconfigured", "unavailable"];
+    const hard = hardPriority.find((s) => statuses.includes(s));
+    if (hard) return hard;
+
+    const charging = statuses.filter((s) => s === "charging").length;
+    const available = statuses.filter((s) => s === "available").length;
+    if (charging > 0 && available > 0) return "partial";
+    if (charging > 0) return "charging";
+    if (available > 0) return "available";
+    return statuses[0];
+  };
+
+  const getConnectorStatusCount = (status: string) =>
+    chargePoints.reduce((sum, cp) => {
+      const statuses = getConnectorStatuses(cp).map((c) => c.status);
+      // "partial" ist ein aggregierter CP-Status und zählt nicht pro Stecker
+      if (status === "partial") return sum;
+      return sum + statuses.filter((s) => s === status).length;
+    }, 0);
+
 
   const filteredChargePoints = statusFilter
     ? chargePoints.filter((cp) => getEffectiveStatus(cp) === statusFilter)
