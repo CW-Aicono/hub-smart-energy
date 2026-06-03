@@ -1,53 +1,50 @@
 ## Problem
 
-In `/charging/points` (Datei `src/pages/ChargingPoints.tsx`) wird ein Ladepunkt sofort als **„Belegt"** angezeigt, sobald **irgendein** Stecker einen aktiven Ladevorgang hat — auch wenn der zweite Stecker noch frei ist. Ursache ist die Funktion `getEffectiveStatus` (Zeile 146–157):
+Die Wallbox sendet bei `StartTransaction` den idTag **roh** (z. B. `440393FC`). Für `Authorize` wird der Tag im Edge-Endpoint `ocpp-persistent-api` bereits gemäß `rfid_read_mode` der Wallbox normalisiert (z. B. „Hex-Stellen je Byte tauschen" → `443039CF`) und so gegen `charging_users.rfid_tag` gematcht — Freigabe funktioniert.
 
-```ts
-if (activeSessions.some((s) => s.charge_point_id === cp.id)) return "charging";
-```
-
-Diese Zeile ignoriert den Status der einzelnen Stecker und liefert pauschal „charging" (= „Belegt") für den ganzen Ladepunkt.
-
-Im öffentlichen Status-Link (`PublicChargeStatus.tsx`, Screenshot 3) ist die Pro-Stecker-Anzeige bereits korrekt — die interne Tenant-Übersicht (Screenshot 2) aber nicht.
+Bei `create-charging-session` wird der idTag dagegen **unverändert** (`440393FC`) in `charging_sessions.id_tag` geschrieben. Der Resolver `useIdTagResolver` (Map über `rfid_tag`) findet daher in der Ladevorgangs-Übersicht keinen Nutzer und zeigt nur die rohe ID an (Screenshot 2, Zeile „Wallbe West Rechts → 440393FC").
 
 ## Ziel
 
-In der Tabelle auf `/charging/points` soll pro Ladepunkt erkennbar sein, **welcher** Stecker belegt ist und welcher frei — analog zur öffentlichen Statusseite. Wenn 1 von 2 Steckern lädt, darf der Ladepunkt nicht als komplett „Belegt" gelten.
+Die in `charging_sessions.id_tag` gespeicherte Tag-ID soll **identisch zu dem Wert sein, mit dem auch autorisiert wurde** — also die normalisierte Form. Damit greift der bestehende Resolver automatisch und der Ladevorgang wird dem richtigen Nutzer zugeordnet (analog zu den anderen Zeilen mit `010 Hartmut Walzel` etc., die per RFID-Label gefunden werden).
 
-## Änderungen (rein UI/Frontend, keine Logik im Backend)
+## Änderungen
 
-### 1. `src/pages/ChargingPoints.tsx` — Aggregations-Logik korrigieren
+### 1. `supabase/functions/ocpp-persistent-api/index.ts` — Normalisierung in `create-charging-session`
 
-- `getEffectiveStatus(cp)` so anpassen, dass es **alle** Connector-Status berücksichtigt (inkl. aktiver Sessions pro `connector_id`) und das Ergebnis nach folgender Priorität zurückgibt:
-  - `faulted` > `offline` > `unconfigured` > **`partial`** (mind. 1 belegt + mind. 1 frei) > `charging` (alle belegt) > `available` (alle frei) > `unavailable`
-- Aktive Sessions werden weiterhin berücksichtigt, aber **pro `connector_id`** (Session-Feld existiert bereits, siehe `useChargingSessions.tsx`), nicht pauschal für den ganzen CP.
-- Neuer Status-Key `"partial"` mit Label „Teilweise belegt" (DE) / „Partially occupied" (EN) / „Parcialmente ocupado" (ES) / „Gedeeltelijk bezet" (NL) wird in `statusConfig` ergänzt — Farbe: gemischtes Blau/Grün-Badge, damit auf einen Blick vom reinen „Belegt" unterscheidbar.
-- Die Stat-Karten (Zeile 488–505) zählen weiterhin **pro Stecker** (das funktioniert bereits korrekt über `getConnectorStatusCount`).
+Vor dem Insert dieselbe Logik wie in `authorize-id-tag`:
 
-### 2. `src/components/charging/ConnectorTypeIcons.tsx` — Icons pro Stecker einfärben
+- `rfid_read_mode` der Wallbox aus `charge_points` laden (Default `raw`).
+- `normalizedIdTag = normalizeRfidTag(idTag, readMode)` berechnen.
+- In `charging_sessions.id_tag` **`normalizedIdTag`** speichern (statt rohem `idTag`).
+- Die Idempotenz-Prüfung (`sameTag`-Vergleich in Zeile 256) ebenfalls auf den normalisierten Wert umstellen, sonst schlagen Retries der Wallbox fehl.
+- Konsolen-Log zur Nachvollziehbarkeit: `raw="..." mode="..." normalized="..."`.
 
-Aktuell zeigt die Spalte „Steckertypen" 2 gleich eingefärbte Steckersymbole (immer typabhängig blau/orange/grün). Erweiterung:
+### 2. `supabase/functions/ocpp-persistent-api/index.ts` — `update-charging-session` (Stop)
 
-- Neuer optionaler Prop `connectorStatuses?: Array<{ connectorId: number; status: "available" | "charging" | "faulted" | "offline" | "unavailable" | "unconfigured" }>`.
-- Wenn übergeben: jedes Stecker-Icon wird zusätzlich mit einem kleinen Status-Punkt (oben rechts am Icon) versehen — grün = frei, blau = belegt/lädt, rot = Fehler, grau = offline/nicht konfiguriert.
-- Tooltip zeigt zusätzlich „Stecker 1: Verfügbar · Stecker 2: Belegt".
-- Ohne den Prop bleibt das bisherige Verhalten erhalten (Rückwärtskompatibilität).
+`StopTransaction` läuft heute über `getChargingSessionByTransaction(chargePointPk, transactionId)` — kein idTag-Vergleich nötig. **Keine Änderung erforderlich**, nur kurz verifizieren.
 
-In `ChargingPoints.tsx` (Tabellen-Render, Zeile 555) wird dieser neue Prop aus `connectorsByChargePoint` + `activeSessions` befüllt.
+### 3. Bestehende Datensätze (einmaliger Backfill)
 
-### 3. Badge in der Status-Spalte
+Bestehende offene/abgeschlossene Sessions mit rohem idTag bleiben unzugeordnet. Wir korrigieren das per Migration:
 
-Bei Status `partial` zeigt die Badge zusätzlich den Zähler an, z. B. **„Belegt 1/2"** — so ist auf einen Blick sichtbar, dass nur ein Teil belegt ist. Bei `charging` (alle Stecker belegt) wie bisher nur „Belegt".
+- SQL-Migration, die in `public.charging_sessions` für alle Rows der betroffenen Tenants die `id_tag` so umrechnet, wie es `normalizeRfidTag` mit dem `rfid_read_mode` der zugehörigen Wallbox tun würde.
+- Implementiert als PL/pgSQL-Funktion `public.normalize_rfid_tag(text, text)` (gleiche Logik wie TS-Util: Whitespace/Trenner entfernen, Uppercase, dann je nach Mode Byte-Reverse und/oder Nibble-Swap; nicht-hex Tags unverändert lassen).
+- Update-Statement: `UPDATE charging_sessions cs SET id_tag = normalize_rfid_tag(cs.id_tag, cp.rfid_read_mode) FROM charge_points cp WHERE cs.charge_point_id = cp.id AND cp.rfid_read_mode IS NOT NULL AND cp.rfid_read_mode <> 'raw';`
+- Die Hilfsfunktion danach belassen (kann später vom Insert-Pfad mitbenutzt werden, falls nötig).
 
-### 4. Übersetzungen
+### 4. Frontend-Resolver (optional, defensiv)
 
-Neue Keys in `src/i18n/translations/{de,en,es,nl}/charging.ts` (oder dem entsprechenden Modul):
-- `charging.status.partial` = „Teilweise belegt" / „Partially occupied" / „Parcialmente ocupado" / „Gedeeltelijk bezet"
-- `charging.status.partialCount` = Format „Belegt {n}/{total}"
+`src/hooks/useChargingSessions.tsx` matcht bereits per `toUpperCase()`. Das ist ausreichend, **sobald** die DB normalisiert speichert. **Keine Logik-Änderung**, nur ein kurzer Test, ob bestehende Tags (z. B. `443039CF`) jetzt aufgelöst werden.
 
 ## Nicht im Scope
 
-- Keine Änderungen an `PublicChargeStatus.tsx` (funktioniert bereits korrekt).
-- Keine Änderungen an `ChargePointDetail.tsx` (zeigt Pro-Stecker-Status bereits via `ConnectorStatusGrid`).
-- Keine DB-/Backend-/OCPP-Änderungen — alle nötigen Daten (`charge_point_connectors.status` und `charging_sessions.connector_id`) sind bereits vorhanden.
-- Keine Anpassung der „Ladevorgänge"-Tabelle (Screenshot 1) — die ist korrekt, dort geht es um Sessions, nicht um Ladepunkte.
+- Keine Änderungen an `docs/ocpp-persistent-server/src/ocppHandler.ts` — der ruft nur `createChargingSession` über `backendApi.ts → ocpp-persistent-api` auf; die Normalisierung passiert serverseitig im Edge.
+- Keine Änderung der UI / Spalten / Übersetzungen.
+- Kein Eingriff in `Authorize`-Flow (funktioniert bereits).
+
+## Verifikation
+
+1. Mit `rfid_read_mode = nibble_swap` einen Tag scannen → `charging_sessions.id_tag` enthält den **normalisierten** Wert; ID-Tag-Spalte zeigt den Nutzernamen aus `charging_users`.
+2. Migration auf Testdaten: vorhandene Zeile `440393FC` wird zu `443039CF` und matcht dann den User mit RFID-Tag `443039CF`.
+3. Doppelte `StartTransaction` (Retry der Wallbox) → wird weiterhin als Duplicate erkannt (sameTag jetzt auf normalisiertem Vergleich).

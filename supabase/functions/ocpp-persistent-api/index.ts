@@ -239,6 +239,33 @@ async function handle(action: string, body: Record<string, unknown>) {
       const startTime = String(body.startTime ?? new Date().toISOString());
       const newTransactionId = Number(body.transactionId ?? 0);
 
+      // RFID-Tag gemäß rfid_read_mode der Wallbox normalisieren, damit
+      // charging_sessions.id_tag identisch zum Wert in charging_users.rfid_tag
+      // ist und der Resolver den Ladevorgang dem Nutzer zuordnen kann.
+      let readMode: RfidReadMode = "raw";
+      if (chargePointId) {
+        const { data: cp } = await admin
+          .from("charge_points")
+          .select("rfid_read_mode")
+          .eq("id", chargePointId)
+          .maybeSingle();
+        const mode = (cp as { rfid_read_mode?: string } | null)?.rfid_read_mode;
+        if (
+          mode === "raw" ||
+          mode === "byte_reversed" ||
+          mode === "nibble_swap" ||
+          mode === "byte_reversed_nibble_swap"
+        ) {
+          readMode = mode;
+        }
+      }
+      const normalizedIdTag = idTag ? normalizeRfidTag(idTag, readMode) : idTag;
+      if (normalizedIdTag !== idTag) {
+        console.log(
+          `[ocpp-persistent-api] create-charging-session raw="${idTag}" mode="${readMode}" normalized="${normalizedIdTag}"`,
+        );
+      }
+
       // Dedup: bestehende aktive Session auf demselben CP+Connector suchen.
       const { data: activeSessions } = await admin
         .from("charging_sessions")
@@ -253,7 +280,8 @@ async function handle(action: string, body: Record<string, unknown>) {
         const newest = active[0];
         const ageMs = Date.now() - new Date(newest.start_time as string).getTime();
         const sameStart = Number(newest.meter_start ?? -1) === meterStart;
-        const sameTag = String(newest.id_tag ?? "") === idTag;
+        const sameTag = String(newest.id_tag ?? "") === normalizedIdTag;
+
         // Idempotenz: identischer meterStart + idTag innerhalb 5 Minuten -> Duplicate-Retry der Wallbox.
         if (sameStart && sameTag && ageMs < 5 * 60 * 1000) {
           console.warn(
@@ -293,8 +321,9 @@ async function handle(action: string, body: Record<string, unknown>) {
           tenant_id: tenantId,
           charge_point_id: chargePointId,
           connector_id: connectorId,
-          id_tag: idTag,
+          id_tag: normalizedIdTag,
           meter_start: meterStart,
+
           start_time: startTime,
           transaction_id: newTransactionId,
           status: "active",
