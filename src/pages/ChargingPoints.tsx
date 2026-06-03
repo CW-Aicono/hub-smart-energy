@@ -201,8 +201,8 @@ const ChargingPoints = () => {
     const hard = hardPriority.find((s) => statuses.includes(s));
     if (hard) return hard;
 
-    if (statuses.some((s) => s === "charging")) return "charging";
     if (statuses.some((s) => s === "available")) return "available";
+    if (statuses.every((s) => s === "charging")) return "charging";
     return statuses[0];
   };
 

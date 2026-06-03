@@ -147,9 +147,18 @@ export default function PublicChargeStatus() {
         };
       });
 
-      // Aggregierter Status für die Kachel: schlechtester Status hat Vorrang
-      const priority: StatusKey[] = ["faulted", "offline", "unconfigured", "unavailable", "charging", "available"];
-      const aggregated = priority.find((s) => connectors.some((c) => c.status === s)) ?? connectors[0].status;
+      // Aggregierter Status für die Kachel: Eine Ladestation gilt erst als
+      // "Belegt", wenn alle nutzbaren Stecker belegt sind. Sobald ein Stecker
+      // verfügbar ist, bleibt die Station als verfügbar erkennbar.
+      const aggregated = (() => {
+        const statuses = connectors.map((c) => c.status);
+        const hardPriority: StatusKey[] = ["faulted", "offline", "unconfigured", "unavailable"];
+        const hard = hardPriority.find((s) => statuses.includes(s));
+        if (hard) return hard;
+        if (statuses.includes("available")) return "available";
+        if (statuses.length > 0 && statuses.every((s) => s === "charging")) return "charging";
+        return statuses[0] ?? "unconfigured";
+      })();
 
       result.push({
         key: cp.id,
