@@ -614,9 +614,6 @@ const ChargingPoints = () => {
                                 <StatusLiveDataHover chargePointId={cp.id}>
                                   <Badge variant={cfg.variant} className="cursor-help">
                                     {t(cfg.labelKey as any)}
-                                    {effectiveStatus === "partial" && totalConnectors > 1 && (
-                                      <span className="ml-1 opacity-80">{occupiedCount}/{totalConnectors}</span>
-                                    )}
                                   </Badge>
                                 </StatusLiveDataHover>
                                 {activeSession && (
