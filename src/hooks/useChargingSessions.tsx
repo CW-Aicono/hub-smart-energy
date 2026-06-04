@@ -29,7 +29,7 @@ export function useIdTagResolver() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("charging_users")
-        .select("name, rfid_tag, rfid_label, app_tag")
+        .select("id, name, rfid_tag, rfid_label, app_tag")
         .eq("tenant_id", tenant!.id)
         .neq("status", "archived");
       if (error) throw error;
@@ -38,14 +38,34 @@ export function useIdTagResolver() {
     staleTime: 60_000,
   });
 
+  const { data: extraTags = [] } = useQuery({
+    queryKey: ["charging-user-tags-for-resolution", tenant?.id],
+    enabled: !!tenant?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charging_user_rfid_tags")
+        .select("tag, user_id")
+        .eq("tenant_id", tenant!.id);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
+
   const tagMap = useMemo(() => {
     const m = new Map<string, string>();
+    const byId = new Map(chargingUsers.map((u: any) => [u.id, u.name]));
     for (const u of chargingUsers) {
       if (u.rfid_tag) m.set(u.rfid_tag.toUpperCase(), u.name);
       if (u.app_tag) m.set(u.app_tag.toUpperCase(), u.name);
     }
+    for (const t of extraTags as any[]) {
+      const name = byId.get(t.user_id);
+      if (name && t.tag) m.set((t.tag as string).toUpperCase(), name);
+    }
     return m;
-  }, [chargingUsers]);
+  }, [chargingUsers, extraTags]);
+
 
   return (idTag: string | null): string | null => {
     if (!idTag) return null;
