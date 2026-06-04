@@ -177,16 +177,17 @@ const ChargingBilling = () => {
     <div className="space-y-4">
       <div><Label>{t("charging.name" as any)}</Label><Input value={tariffForm.name} onChange={(e) => setTariffForm({ ...tariffForm, name: e.target.value })} /></div>
       <div className="grid grid-cols-2 gap-4">
-        <div><Label>{t("charging.pricePerKwh" as any)}</Label><Input type="number" step="0.01" value={tariffForm.price_per_kwh} onChange={(e) => setTariffForm({ ...tariffForm, price_per_kwh: e.target.value })} /></div>
-        <div><Label>{t("charging.baseFee" as any)}</Label><Input type="number" step="0.01" value={tariffForm.base_fee} onChange={(e) => setTariffForm({ ...tariffForm, base_fee: e.target.value })} /></div>
+        <div><Label>{t("charging.pricePerKwh" as any)} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={tariffForm.price_per_kwh} onChange={(e) => setTariffForm({ ...tariffForm, price_per_kwh: e.target.value })} /></div>
+        <div><Label>{t("charging.baseFee" as any)} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={tariffForm.base_fee} onChange={(e) => setTariffForm({ ...tariffForm, base_fee: e.target.value })} /></div>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div><Label>MwSt-Satz (%)</Label><Input type="number" step="0.1" min="0" max="100" value={tariffForm.tax_rate_percent} onChange={(e) => setTariffForm({ ...tariffForm, tax_rate_percent: e.target.value })} /></div>
       </div>
+      <p className="text-xs text-muted-foreground -mt-2">Alle Preisangaben verstehen sich inklusive der angegebenen Mehrwertsteuer.</p>
       <div className="border-t pt-4">
         <Label className="text-sm font-medium flex items-center gap-2 mb-3"><Clock className="h-4 w-4" />{t("charging.idleFee" as any)}</Label>
         <div className="grid grid-cols-2 gap-4">
-          <div><Label>{t("charging.idleFeePerMin" as any)}</Label><Input type="number" step="0.01" min="0" value={tariffForm.idle_fee_per_minute} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_per_minute: e.target.value })} /></div>
+          <div><Label>{t("charging.idleFeePerMin" as any)} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" min="0" value={tariffForm.idle_fee_per_minute} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_per_minute: e.target.value })} /></div>
           <div><Label>{t("charging.idleFeeGrace" as any)}</Label><Input type="number" step="1" min="0" value={tariffForm.idle_fee_grace_minutes} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_grace_minutes: e.target.value })} /></div>
         </div>
         <p className="text-xs text-muted-foreground mt-2">{t("charging.idleFeeDesc" as any)}</p>
@@ -295,9 +296,9 @@ const ChargingBilling = () => {
                       <TableHeader>
                         <TableRow>
                            <TableHead>{t("charging.name" as any)}</TableHead>
-                          <TableHead>{t("charging.priceKwh" as any)}</TableHead>
-                          <TableHead>{t("charging.baseFee" as any)}</TableHead>
-                          <TableHead>{t("charging.idleFee" as any)}</TableHead>
+                          <TableHead>{t("charging.priceKwh" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead>
+                          <TableHead>{t("charging.baseFee" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead>
+                          <TableHead>{t("charging.idleFee" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead>
                           <TableHead>MwSt</TableHead>
                           <TableHead>{t("charging.active" as any)}</TableHead>
                           <TableHead>Standard</TableHead>
