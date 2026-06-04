@@ -26,11 +26,34 @@ export interface ChargingUser {
   rfid_label: string | null;
   phone: string | null;
   status: "active" | "blocked" | "archived";
+export interface ChargingUserTag {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  tag: string;
+  label: string | null;
+  created_at: string;
+}
+
+export interface ChargingUser {
+  id: string;
+  tenant_id: string;
+  group_id: string | null;
+  auth_user_id: string | null;
+  name: string;
+  email: string | null;
+  rfid_tag: string | null;
+  rfid_label: string | null;
+  phone: string | null;
+  status: "active" | "blocked" | "archived";
   notes: string | null;
   tariff_id: string | null;
   created_at: string;
   updated_at: string;
+  /** Alle RFID-Tags inkl. dem Legacy-Tag aus rfid_tag/rfid_label (deduped, uppercase). */
+  tags: ChargingUserTag[];
 }
+
 
 export function useChargingUserGroups() {
   const qc = useQueryClient();
