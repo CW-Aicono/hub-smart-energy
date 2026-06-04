@@ -138,6 +138,13 @@ serve(async (req) => {
           console.error(`[loxone-periodic-sync] HTTP ${response.status} for integration ${integrationId}: ${data?.error || response.statusText}`);
         }
 
+        // Variante B: Anker auf START zurücksetzen (loxone-api hat ihn am ENDE überschrieben).
+        await supabase
+          .from("location_integrations")
+          .update({ last_sync_at: syncStartIso })
+          .eq("id", integrationId);
+
+
         if (data.success) {
           const sensors = data.sensors || [];
           const systemMessages = data.systemMessages || [];
