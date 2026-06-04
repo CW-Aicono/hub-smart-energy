@@ -31,8 +31,9 @@ const ChargingUsersTab = () => {
   const { tenant } = useTenant();
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
-  const { users, isLoading: usersLoading, addUser, updateUser, deleteUser } = useChargingUsers();
+  const { users, isLoading: usersLoading, addUser, updateUser, deleteUser, setUserTags } = useChargingUsers();
   const { groups, isLoading: groupsLoading, addGroup, updateGroup, deleteGroup } = useChargingUserGroups();
+
   const { tariffs } = useChargingTariffs();
 
   const [userDialogOpen, setUserDialogOpen] = useState(false);
