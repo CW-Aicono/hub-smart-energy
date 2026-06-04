@@ -59,10 +59,13 @@ const ChargingUsersTab = () => {
       return (
         u.name?.toLowerCase().includes(q) ||
         (u.email?.toLowerCase().includes(q) ?? false) ||
-        (u.rfid_tag?.toLowerCase().includes(q) ?? false) ||
-        (u.rfid_label?.toLowerCase().includes(q) ?? false)
+        (u.tags ?? []).some((t) =>
+          (t.tag?.toLowerCase().includes(q) ?? false) ||
+          (t.label?.toLowerCase().includes(q) ?? false),
+        )
       );
     });
+
 
   const getGroupName = (gid: string | null) => groups.find((g) => g.id === gid)?.name || "—";
   const getTariffName = (tid: string | null) => tariffs.find((t) => t.id === tid)?.name || null;
