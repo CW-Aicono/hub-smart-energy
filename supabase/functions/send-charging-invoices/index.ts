@@ -482,13 +482,15 @@ serve(async (req) => {
               const totalAmount = invoiceData?.total_amount ?? Math.round((netAmount + taxAmount) * 100) / 100;
               const invoiceNumber = invoiceData?.invoice_number ?? "—";
 
+              const userTagsForInvoice = tagsByUserId.get(userId) ?? [];
               const htmlContent = buildInvoiceHTML(
-                invoiceNumber, user.name, user.email, userSessionList,
+                invoiceNumber, user.name, user.email, userTagsForInvoice, userSessionList,
                 tariffName, pricePerKwh, baseFee, idleFeePerMinute, idleFeeGraceMinutes, currency,
                 netAmount, taxAmount, totalAmount, taxRatePercent,
                 totalEnergy, totalIdleFee, period, tenantName, logoUrl,
                 primaryColor, accentColor, invoiceData?.invoice_date ?? invoiceDate,
               );
+
 
               // Upload invoice HTML to storage and get signed download URL
               let downloadUrl = "";
