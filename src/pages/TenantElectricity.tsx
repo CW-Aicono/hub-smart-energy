@@ -446,7 +446,7 @@ function TariffsTab() {
       </Card>
 
       <Table>
-        <TableHeader><TableRow><TableHead>{t("common.name" as any)}</TableHead><TableHead>{t("common.location" as any)}</TableHead><TableHead>{T(t, "te.local")}</TableHead><TableHead>{T(t, "te.grid")}</TableHead><TableHead>{T(t, "te.baseFee")}</TableHead><TableHead>{T(t, "te.validFrom")}</TableHead><TableHead>{T(t, "te.validUntilOpt")}</TableHead><TableHead></TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><TableHead>{t("common.name" as any)}</TableHead><TableHead>{t("common.location" as any)}</TableHead><TableHead>{T(t, "te.local")} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead><TableHead>{T(t, "te.grid")} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead><TableHead>{T(t, "te.baseFee")} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead><TableHead>{T(t, "te.validFrom")}</TableHead><TableHead>{T(t, "te.validUntilOpt")}</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
           {tariffs.map((tariff: any) => (
             <TableRow key={tariff.id}>
