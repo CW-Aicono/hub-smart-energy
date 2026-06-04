@@ -307,6 +307,7 @@ export interface CommunityTariff {
   feed_in_ct_kwh: number;
   created_at: string;
   updated_at: string;
+  price_includes_vat: boolean;
 }
 
 export function useCommunityTariffs(communityId: string | null) {

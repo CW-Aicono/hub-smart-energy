@@ -18,6 +18,7 @@ const makePrices = (overrides: Partial<{ location_id: string; energy_type: strin
     price_per_unit: o.price_per_unit ?? 0.30,
     meter_id: null,
     direction: "consumption" as const,
+    price_includes_vat: true,
   }));
 
 describe("getActivePrice", () => {

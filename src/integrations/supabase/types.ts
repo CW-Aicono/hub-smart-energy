@@ -1247,6 +1247,7 @@ export type Database = {
           is_active: boolean
           is_default: boolean
           name: string
+          price_includes_vat: boolean | null
           price_per_kwh: number
           tax_rate_percent: number
           tenant_id: string
@@ -1262,6 +1263,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean
           name: string
+          price_includes_vat?: boolean | null
           price_per_kwh?: number
           tax_rate_percent?: number
           tenant_id: string
@@ -1277,6 +1279,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean
           name?: string
+          price_includes_vat?: boolean | null
           price_per_kwh?: number
           tax_rate_percent?: number
           tenant_id?: string
@@ -2253,6 +2256,7 @@ export type Database = {
           feed_in_ct_kwh: number
           id: string
           price_ct_kwh: number
+          price_includes_vat: boolean | null
           tenant_id: string
           updated_at: string
           valid_from: string
@@ -2264,6 +2268,7 @@ export type Database = {
           feed_in_ct_kwh?: number
           id?: string
           price_ct_kwh?: number
+          price_includes_vat?: boolean | null
           tenant_id: string
           updated_at?: string
           valid_from: string
@@ -2275,6 +2280,7 @@ export type Database = {
           feed_in_ct_kwh?: number
           id?: string
           price_ct_kwh?: number
+          price_includes_vat?: boolean | null
           tenant_id?: string
           updated_at?: string
           valid_from?: string
@@ -3087,6 +3093,7 @@ export type Database = {
           is_dynamic: boolean
           location_id: string
           meter_id: string | null
+          price_includes_vat: boolean | null
           price_per_unit: number
           spot_markup_per_unit: number
           tenant_id: string
@@ -3104,6 +3111,7 @@ export type Database = {
           is_dynamic?: boolean
           location_id: string
           meter_id?: string | null
+          price_includes_vat?: boolean | null
           price_per_unit?: number
           spot_markup_per_unit?: number
           tenant_id: string
@@ -3121,6 +3129,7 @@ export type Database = {
           is_dynamic?: boolean
           location_id?: string
           meter_id?: string | null
+          price_includes_vat?: boolean | null
           price_per_unit?: number
           spot_markup_per_unit?: number
           tenant_id?: string
