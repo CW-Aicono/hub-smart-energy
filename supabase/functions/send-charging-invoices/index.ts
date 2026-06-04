@@ -42,6 +42,7 @@ function buildInvoiceHTML(
   invoiceNumber: string,
   userName: string,
   userEmail: string,
+  userTags: { tag: string; label: string | null }[],
   sessions: any[],
   tariffName: string,
   pricePerKwh: number,
@@ -64,27 +65,72 @@ function buildInvoiceHTML(
 ): string {
   const currencySymbol = currency === "EUR" ? "€" : currency;
 
-  const sessionRows = sessions.map((s: any, i: number) => {
+  const tagLabelMap = new Map<string, string | null>();
+  for (const t of userTags) tagLabelMap.set(t.tag.toUpperCase(), t.label);
+
+  // Group sessions by tag
+  const groups = new Map<string, any[]>();
+  for (const s of sessions) {
+    const key = (s.id_tag || "—").toUpperCase();
+    const arr = groups.get(key) ?? [];
+    arr.push(s);
+    groups.set(key, arr);
+  }
+
+  const renderSessionRow = (s: any, i: number) => {
     const startDate = new Date(s.start_time);
     const endDate = s.stop_time ? new Date(s.stop_time) : null;
     const duration = endDate ? Math.round((endDate.getTime() - startDate.getTime()) / 60000) : 0;
     const durationStr = duration > 60 ? `${Math.floor(duration / 60)}h ${duration % 60}min` : `${duration}min`;
     const idleMinutes = Math.max(0, duration - idleFeeGraceMinutes);
     const sessionIdleFee = idleFeePerMinute > 0 && idleMinutes > 0 ? idleMinutes * idleFeePerMinute : 0;
+    const energyNet = (s.energy_kwh || 0) * pricePerKwh;
+    const net = energyNet + sessionIdleFee;
+    const gross = net * (1 + taxRatePercent / 100);
     const bg = i % 2 === 0 ? "#ffffff" : "#f8fafc";
     return `<tr>
-      <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${startDate.toLocaleDateString("de-DE")}</td>
-      <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${startDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}${endDate ? " – " + endDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : ""}</td>
+      <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${startDate.toLocaleDateString("de-DE")} ${startDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</td>
       <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${durationStr}</td>
       <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${formatDE(s.energy_kwh)} kWh</td>
-      <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${formatDE(s.energy_kwh * pricePerKwh)} ${currencySymbol}</td>
-      ${idleFeePerMinute > 0 ? `<td style="padding:8px 12px;font-size:12px;color:${sessionIdleFee > 0 ? '#dc2626' : '#94a3b8'};border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${sessionIdleFee > 0 ? formatDE(sessionIdleFee) + ' ' + currencySymbol : '—'}</td>` : ""}
+      <td style="padding:8px 12px;font-size:12px;color:${sessionIdleFee > 0 ? '#dc2626' : '#94a3b8'};border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${sessionIdleFee > 0 ? formatDE(sessionIdleFee) + ' ' + currencySymbol : '—'}</td>
+      <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${formatDE(net)} ${currencySymbol}</td>
+      <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right;font-weight:600">${formatDE(gross)} ${currencySymbol}</td>
     </tr>`;
+  };
+
+  const tagGroupsHtml = Array.from(groups.entries()).map(([tagKey, sess]) => {
+    const label = tagLabelMap.get(tagKey);
+    const header = label ? `${tagKey} · ${label}` : tagKey;
+    const rows = sess.map((s, i) => renderSessionRow(s, i)).join("");
+    return `<div style="margin-bottom:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+      <div style="padding:8px 12px;background:#f1f5f9;font-size:12px;color:#1e293b">
+        <strong style="font-family:ui-monospace,monospace">${tagKey}</strong>${label ? `<span style="color:#64748b"> · ${label}</span>` : ""}
+        <span style="float:right;color:#64748b">${sess.length} Vorgang/Vorgänge</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr>
+            <th style="padding:6px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;background:#fafbfc;border-bottom:1px solid #e2e8f0">Zeitpunkt</th>
+            <th style="padding:6px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;background:#fafbfc;border-bottom:1px solid #e2e8f0">Dauer</th>
+            <th style="padding:6px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;background:#fafbfc;border-bottom:1px solid #e2e8f0">Energie</th>
+            <th style="padding:6px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;background:#fafbfc;border-bottom:1px solid #e2e8f0">Blockiergeb.</th>
+            <th style="padding:6px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;background:#fafbfc;border-bottom:1px solid #e2e8f0">Netto</th>
+            <th style="padding:6px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;background:#fafbfc;border-bottom:1px solid #e2e8f0">Brutto</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
   }).join("");
+
+  const tagsListHtml = userTags.length
+    ? userTags.map(t => `<span style="display:inline-block;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;margin:2px 4px 2px 0;font-size:11px"><span style="font-family:ui-monospace,monospace;font-weight:600">${t.tag}</span>${t.label ? `<span style="color:#64748b"> · ${t.label}</span>` : ""}</span>`).join("")
+    : `<span style="font-size:12px;color:#94a3b8">—</span>`;
 
   const logoImgTag = logoUrl
     ? `<img src="${logoUrl}" alt="Logo" style="max-height:52px;max-width:160px;object-fit:contain;border-radius:6px" />`
     : "";
+
 
   const colCount = idleFeePerMinute > 0 ? 6 : 5;
 
