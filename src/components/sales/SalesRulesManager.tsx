@@ -85,18 +85,53 @@ export function SalesRulesManager({ scope, partnerId, canManage = true }: SalesR
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormData>(emptyForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [aiMode, setAiMode] = useState<"standard" | "high_performance">("standard");
+  const [aiModeSaving, setAiModeSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
-    const [rulesRes, devicesRes] = await Promise.all([
+    const reqs: Promise<any>[] = [
       supabase.from("device_selection_rules").select("*").order("prio").order("name"),
       supabase.from("device_catalog").select("id,hersteller,modell,owner_scope,partner_id").order("hersteller").order("modell"),
-    ]);
+    ];
+    if (scope === "partner" && partnerId) {
+      reqs.push(supabase.from("partners").select("ai_analysis_mode").eq("id", partnerId).maybeSingle());
+    }
+    const results = await Promise.all(reqs);
+    const rulesRes = results[0];
+    const devicesRes = results[1];
+    const partnerRes = results[2];
     if (rulesRes.error) toast({ title: "Fehler", description: rulesRes.error.message, variant: "destructive" });
     else setRules((rulesRes.data || []) as Rule[]);
     if (devicesRes.error) toast({ title: "Fehler", description: devicesRes.error.message, variant: "destructive" });
     else setDevices((devicesRes.data || []) as Device[]);
+    if (partnerRes && !partnerRes.error && partnerRes.data) {
+      setAiMode((partnerRes.data.ai_analysis_mode === "high_performance" ? "high_performance" : "standard"));
+    }
     setLoading(false);
+  };
+
+  const saveAiMode = async (next: "standard" | "high_performance") => {
+    if (!partnerId) return;
+    setAiModeSaving(true);
+    const prev = aiMode;
+    setAiMode(next);
+    const { error } = await supabase
+      .from("partners")
+      .update({ ai_analysis_mode: next })
+      .eq("id", partnerId);
+    setAiModeSaving(false);
+    if (error) {
+      setAiMode(prev);
+      toast({ title: "Speichern fehlgeschlagen", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({
+      title: "KI-Modus gespeichert",
+      description: next === "high_performance"
+        ? "Foto-Analyse läuft jetzt mit Hochleistungs-KI (gemini-2.5-pro, Zwei-Pass)."
+        : "Foto-Analyse läuft jetzt mit Standard-KI (gemini-2.5-flash).",
+    });
   };
 
   useEffect(() => {
