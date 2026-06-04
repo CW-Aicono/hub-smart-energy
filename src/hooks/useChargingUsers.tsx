@@ -15,17 +15,6 @@ export interface ChargingUserGroup {
   updated_at: string;
 }
 
-export interface ChargingUser {
-  id: string;
-  tenant_id: string;
-  group_id: string | null;
-  auth_user_id: string | null;
-  name: string;
-  email: string | null;
-  rfid_tag: string | null;
-  rfid_label: string | null;
-  phone: string | null;
-  status: "active" | "blocked" | "archived";
 export interface ChargingUserTag {
   id: string;
   tenant_id: string;
@@ -50,9 +39,10 @@ export interface ChargingUser {
   tariff_id: string | null;
   created_at: string;
   updated_at: string;
-  /** Alle RFID-Tags inkl. dem Legacy-Tag aus rfid_tag/rfid_label (deduped, uppercase). */
+  /** Alle RFID-Tags des Nutzers (inkl. Legacy rfid_tag/rfid_label, dedupliziert). */
   tags: ChargingUserTag[];
 }
+
 
 
 export function useChargingUserGroups() {
