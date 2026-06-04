@@ -18,6 +18,7 @@ export interface ChargingTariff {
   is_default: boolean;
   created_at: string;
   updated_at: string;
+  price_includes_vat: boolean;
 }
 
 export function useChargingTariffs() {
