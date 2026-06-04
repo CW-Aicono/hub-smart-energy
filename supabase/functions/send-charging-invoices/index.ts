@@ -270,18 +270,29 @@ serve(async (req) => {
         const userByRfid = new Map<string, any>();
         const userByAppTag = new Map<string, any>();
         for (const cu of chargingUsers) {
-          if (cu.rfid_tag) userByRfid.set(cu.rfid_tag, cu);
+          if (cu.rfid_tag) userByRfid.set(cu.rfid_tag.toUpperCase(), cu);
           if (cu.app_tag) userByAppTag.set(cu.app_tag, cu);
+        }
+        // Multi-Tag-Tabelle einbeziehen
+        const { data: extraTags } = await supabase
+          .from("charging_user_rfid_tags")
+          .select("tag, user_id")
+          .eq("tenant_id", tenantId);
+        const usersById = new Map(chargingUsers.map((u: any) => [u.id, u]));
+        for (const t of (extraTags ?? [])) {
+          const u = usersById.get((t as any).user_id);
+          if (u && (t as any).tag) userByRfid.set(((t as any).tag as string).toUpperCase(), u);
         }
         const groupById = new Map<string, any>();
         for (const g of (chargingGroups || [])) groupById.set(g.id, g);
+
 
         // Group sessions by charging user
         const userSessions = new Map<string, { user: any; sessions: any[] }>();
         for (const session of sessions) {
           const idTag = session.id_tag;
           if (!idTag) continue;
-          const chargingUser = userByRfid.get(idTag) || userByAppTag.get(idTag);
+          const chargingUser = userByRfid.get(idTag.toUpperCase()) || userByAppTag.get(idTag);
           if (!chargingUser) continue;
 
           if (!userSessions.has(chargingUser.id)) {
@@ -289,6 +300,7 @@ serve(async (req) => {
           }
           userSessions.get(chargingUser.id)!.sessions.push(session);
         }
+
 
         const invoiceDate = new Date().toISOString().split("T")[0];
         const invoiceYear = new Date().getFullYear();

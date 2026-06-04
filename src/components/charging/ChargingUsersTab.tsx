@@ -16,21 +16,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, MoreHorizontal, Edit, Trash2, Ban, Archive, Users, FolderOpen, Check, Smartphone, FileSpreadsheet } from "lucide-react";
+import { Plus, MoreHorizontal, Edit, Trash2, Ban, Archive, Users, FolderOpen, Check, Smartphone, FileSpreadsheet, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { ChargingImportExportDialog } from "@/components/charging/ChargingImportExportDialog";
 import type { ExportType } from "@/lib/chargingImportExport";
 
-const emptyUserForm = { name: "", email: "", rfid_tag: "", rfid_label: "", phone: "", group_id: "", tariff_id: "", notes: "" };
+interface TagDraft { tag: string; label: string }
+const emptyUserForm = { name: "", email: "", phone: "", group_id: "", tariff_id: "", notes: "", tags: [] as TagDraft[] };
+
 const emptyGroupForm = { name: "", description: "", is_app_user: false, tariff_id: "" };
 
 const ChargingUsersTab = () => {
   const { tenant } = useTenant();
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
-  const { users, isLoading: usersLoading, addUser, updateUser, deleteUser } = useChargingUsers();
+  const { users, isLoading: usersLoading, addUser, updateUser, deleteUser, setUserTags } = useChargingUsers();
   const { groups, isLoading: groupsLoading, addGroup, updateGroup, deleteGroup } = useChargingUserGroups();
+
   const { tariffs } = useChargingTariffs();
 
   const [userDialogOpen, setUserDialogOpen] = useState(false);
@@ -56,10 +59,13 @@ const ChargingUsersTab = () => {
       return (
         u.name?.toLowerCase().includes(q) ||
         (u.email?.toLowerCase().includes(q) ?? false) ||
-        (u.rfid_tag?.toLowerCase().includes(q) ?? false) ||
-        (u.rfid_label?.toLowerCase().includes(q) ?? false)
+        (u.tags ?? []).some((t) =>
+          (t.tag?.toLowerCase().includes(q) ?? false) ||
+          (t.label?.toLowerCase().includes(q) ?? false),
+        )
       );
     });
+
 
   const getGroupName = (gid: string | null) => groups.find((g) => g.id === gid)?.name || "—";
   const getTariffName = (tid: string | null) => tariffs.find((t) => t.id === tid)?.name || null;
@@ -83,27 +89,66 @@ const ChargingUsersTab = () => {
   };
 
   // --- User CRUD ---
-  const openAddUser = () => { setUserForm({ ...emptyUserForm, tariff_id: defaultTariff?.id || "" }); setEditingUser(null); setUserDialogOpen(true); };
-  const openEditUser = (u: ChargingUser) => {
-    setUserForm({ name: u.name, email: u.email || "", rfid_tag: u.rfid_tag || "", rfid_label: u.rfid_label || "", phone: u.phone || "", group_id: u.group_id || "", tariff_id: u.tariff_id || "", notes: u.notes || "" });
-    setEditingUser(u); setUserDialogOpen(true);
+  const openAddUser = () => {
+    setUserForm({ ...emptyUserForm, tariff_id: defaultTariff?.id || "", tags: [{ tag: "", label: "" }] });
+    setEditingUser(null);
+    setUserDialogOpen(true);
   };
-  const handleSaveUser = () => {
+  const openEditUser = (u: ChargingUser) => {
+    // Tags zusammenführen: Multi-Tag-Tabelle ist Wahrheit. Fallback: Legacy-Feld,
+    // falls (warum auch immer) noch nicht migriert wurde.
+    let tags: TagDraft[] = (u.tags ?? []).map((t) => ({ tag: t.tag ?? "", label: t.label ?? "" }));
+    if (tags.length === 0 && u.rfid_tag) {
+      tags = [{ tag: u.rfid_tag, label: u.rfid_label ?? "" }];
+    }
+    if (tags.length === 0) tags = [{ tag: "", label: "" }];
+    setUserForm({
+      name: u.name,
+      email: u.email || "",
+      phone: u.phone || "",
+      group_id: u.group_id || "",
+      tariff_id: u.tariff_id || "",
+      notes: u.notes || "",
+      tags,
+    });
+    setEditingUser(u);
+    setUserDialogOpen(true);
+  };
+  const handleSaveUser = async () => {
     if (!tenant?.id) return;
+    const cleanedTags = userForm.tags
+      .map((t) => ({ tag: t.tag.replace(/\s+/g, "").trim(), label: (t.label || "").trim() || null }))
+      .filter((t) => t.tag.length > 0);
     const payload = {
       name: userForm.name,
       email: userForm.email || undefined,
-      rfid_tag: userForm.rfid_tag || undefined,
-      rfid_label: userForm.rfid_label || undefined,
       phone: userForm.phone || undefined,
       group_id: userForm.group_id || null,
       tariff_id: userForm.tariff_id || null,
       notes: userForm.notes || undefined,
     };
-    if (editingUser) { updateUser.mutate({ id: editingUser.id, ...payload }); } else { addUser.mutate({ tenant_id: tenant.id, ...payload }); }
-    setUserDialogOpen(false);
+    try {
+      let userId: string;
+      if (editingUser) {
+        await updateUser.mutateAsync({ id: editingUser.id, ...payload });
+        userId = editingUser.id;
+      } else {
+        userId = await addUser.mutateAsync({ tenant_id: tenant.id, ...payload });
+      }
+      await setUserTags.mutateAsync({ tenant_id: tenant.id, user_id: userId, tags: cleanedTags });
+    } finally {
+      setUserDialogOpen(false);
+    }
   };
   const handleSetStatus = (id: string, status: string) => { updateUser.mutate({ id, status }); };
+
+  const addTagRow = () => setUserForm((p) => ({ ...p, tags: [...p.tags, { tag: "", label: "" }] }));
+  const removeTagRow = (i: number) => setUserForm((p) => ({ ...p, tags: p.tags.filter((_, idx) => idx !== i) }));
+  const updateTagRow = (i: number, patch: Partial<TagDraft>) => setUserForm((p) => ({
+    ...p,
+    tags: p.tags.map((t, idx) => (idx === i ? { ...t, ...patch } : t)),
+  }));
+
 
   // --- Group CRUD ---
   const openAddGroup = () => { setGroupForm(emptyGroupForm); setEditingGroup(null); setGroupDialogOpen(true); };
@@ -191,8 +236,7 @@ const ChargingUsersTab = () => {
                     <TableRow>
                       <TableHead>{t("common.name" as any)}</TableHead>
                       <TableHead>{t("common.email" as any)}</TableHead>
-                      <TableHead>{t("cu.rfidTag" as any)}</TableHead>
-                      <TableHead>Tag-Bezeichnung</TableHead>
+                      <TableHead>RFID-Tags</TableHead>
                       <TableHead>{t("cu.userGroup" as any)}</TableHead>
                       <TableHead>Tarif</TableHead>
                       <TableHead>{t("common.status" as any)}</TableHead>
@@ -201,12 +245,28 @@ const ChargingUsersTab = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredUsers.map((u) => (
+                    {filteredUsers.map((u) => {
+                      const tagList = (u.tags ?? []).length > 0
+                        ? u.tags
+                        : (u.rfid_tag ? [{ tag: u.rfid_tag, label: u.rfid_label }] as any[] : []);
+                      return (
                       <TableRow key={u.id}>
                         <TableCell className="font-medium">{u.name}</TableCell>
                         <TableCell>{u.email || "—"}</TableCell>
-                        <TableCell className="font-mono text-sm">{u.rfid_tag || "—"}</TableCell>
-                        <TableCell className="text-sm">{u.rfid_label || "—"}</TableCell>
+                        <TableCell>
+                          {tagList.length === 0 ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {tagList.map((t: any, i: number) => (
+                                <Badge key={t.id ?? i} variant="outline" className="font-mono text-xs">
+                                  {t.tag}{t.label ? ` · ${t.label}` : ""}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
+
                         <TableCell>{getGroupName(u.group_id)}</TableCell>
                         <TableCell className="text-sm">{getEffectiveTariff(u)}</TableCell>
                         <TableCell>{statusBadge(u.status)}</TableCell>
@@ -228,7 +288,9 @@ const ChargingUsersTab = () => {
                           </TableCell>
                         )}
                       </TableRow>
-                    ))}
+                      );
+                    })}
+
                   </TableBody>
                 </Table>
               )}
@@ -311,10 +373,36 @@ const ChargingUsersTab = () => {
               <div><Label>{t("common.email" as any)}</Label><Input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} /></div>
               <div><Label>{t("cu.phone" as any)}</Label><Input value={userForm.phone} onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })} /></div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>{t("cu.rfidTag" as any)}</Label><Input value={userForm.rfid_tag} onChange={(e) => setUserForm({ ...userForm, rfid_tag: e.target.value })} placeholder="z. B. AB12CD34" /></div>
-              <div><Label>Tag-Bezeichnung</Label><Input value={userForm.rfid_label} onChange={(e) => setUserForm({ ...userForm, rfid_label: e.target.value })} placeholder="z. B. Karte 042" /></div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>RFID-Tags</Label>
+                <Button type="button" size="sm" variant="outline" onClick={addTagRow}>
+                  <Plus className="h-3.5 w-3.5 mr-1" />Tag hinzufügen
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Ein Nutzer kann beliebig viele Tags mit unterschiedlichen IDs haben. Tags werden case-insensitiv eindeutig pro Mandant gespeichert.
+              </p>
+              {userForm.tags.length === 0 && (
+                <p className="text-sm text-muted-foreground">Noch keine Tags hinterlegt.</p>
+              )}
+              {userForm.tags.map((row, i) => (
+                <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                  <div>
+                    {i === 0 && <Label className="text-xs">Tag-ID</Label>}
+                    <Input value={row.tag} onChange={(e) => updateTagRow(i, { tag: e.target.value })} placeholder="z. B. AB12CD34" className="font-mono" />
+                  </div>
+                  <div>
+                    {i === 0 && <Label className="text-xs">Tag-Bezeichnung</Label>}
+                    <Input value={row.label} onChange={(e) => updateTagRow(i, { label: e.target.value })} placeholder="z. B. Karte 042" />
+                  </div>
+                  <Button type="button" size="icon" variant="ghost" onClick={() => removeTagRow(i)} title="Tag entfernen">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>{t("cu.userGroup" as any)}</Label>

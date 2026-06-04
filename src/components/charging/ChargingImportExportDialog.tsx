@@ -100,7 +100,8 @@ export function ChargingImportExportDialog({ open, onOpenChange, initialType = "
       let res: { created: number; updated: number; failed: number };
       if (preview.kind === "users") res = await executeUserImport(preview.preview.records, tenant.id);
       else if (preview.kind === "groups") res = await executeGroupImport(preview.preview.records, tenant.id);
-      else res = await executeNfcImport(preview.preview.records);
+      else res = await executeNfcImport(preview.preview.records, tenant.id);
+
 
       queryClient.invalidateQueries({ queryKey: ["charging-users"] });
       queryClient.invalidateQueries({ queryKey: ["charging-user-groups"] });
@@ -161,7 +162,7 @@ export function ChargingImportExportDialog({ open, onOpenChange, initialType = "
             <Alert>
               <AlertDescription className="text-xs">
                 Aktueller Bestand: <strong>{users.length}</strong> Nutzer · <strong>{groups.length}</strong> Gruppen ·{" "}
-                <strong>{users.filter((u) => u.rfid_tag).length}</strong> NFC-Tags.
+                <strong>{users.reduce((acc, u) => acc + ((u.tags?.length ?? 0) || (u.rfid_tag ? 1 : 0)), 0)}</strong> NFC-Tags.
                 Export enthält die aktuell sichtbaren Datensätze gemäß Berechtigung.
               </AlertDescription>
             </Alert>

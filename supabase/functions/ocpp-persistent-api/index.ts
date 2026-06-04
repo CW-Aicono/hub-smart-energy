@@ -208,12 +208,25 @@ async function handle(action: string, body: Record<string, unknown>) {
       // Case-insensitiver Match: in der DB können RFID-Tags in beliebiger
       // Schreibweise gespeichert sein (z.B. lowercase), normalizeRfidTag liefert
       // jedoch immer Uppercase-Hex. Daher ilike statt eq.
+      // 1) Legacy rfid_tag column on charging_users
       let { data: user, error } = await admin
         .from("charging_users")
         .select("id, status")
         .eq("tenant_id", tenantId)
         .ilike("rfid_tag", normalizedIdTag)
         .maybeSingle();
+
+      // 2) Neue Multi-Tag-Tabelle
+      if (!user && !error) {
+        const { data: tagRow, error: tagErr } = await admin
+          .from("charging_user_rfid_tags")
+          .select("user:charging_users!inner(id, status)")
+          .eq("tenant_id", tenantId)
+          .ilike("tag", normalizedIdTag)
+          .maybeSingle();
+        user = (tagRow as any)?.user ?? null;
+        error = tagErr;
+      }
 
       if (!user && !error) {
         const result = await admin
@@ -229,6 +242,7 @@ async function handle(action: string, body: Record<string, unknown>) {
       if (error) return fail(500, error.message);
       return ok({ status: user && user.status === "active" ? "Accepted" : "Invalid" });
     }
+
 
     case "create-charging-session": {
       const tenantId = String(body.tenantId ?? "");
