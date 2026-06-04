@@ -265,7 +265,7 @@ Erstelle JSON in diesem Schema:
     let vorschlaege: any[] = [];
     const unsicherheiten: string[] = Array.isArray(observ?.nicht_eindeutig_erkennbar) ? observ.nicht_eindeutig_erkennbar : [];
 
-    const pass2 = await callAI(LOVABLE_API_KEY, MODEL_HIGH, [
+    const pass2 = await callAI(LOVABLE_API_KEY, MODEL_HIGH_REASON, [
       { role: "system", content: pass2System },
       { role: "user", content: pass2User },
     ]);
