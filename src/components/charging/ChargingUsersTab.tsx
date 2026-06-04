@@ -288,7 +288,9 @@ const ChargingUsersTab = () => {
                           </TableCell>
                         )}
                       </TableRow>
-                    ))}
+                      );
+                    })}
+
                   </TableBody>
                 </Table>
               )}
