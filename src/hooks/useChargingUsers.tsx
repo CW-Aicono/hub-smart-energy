@@ -103,15 +103,30 @@ export function useChargingUsers() {
     queryKey: key,
     enabled: !!tenant?.id,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("charging_users")
-        .select("*")
-        .eq("tenant_id", tenant!.id)
-        .order("name");
+      const [{ data: rows, error }, { data: tagRows, error: tagErr }] = await Promise.all([
+        supabase
+          .from("charging_users")
+          .select("*")
+          .eq("tenant_id", tenant!.id)
+          .order("name"),
+        supabase
+          .from("charging_user_rfid_tags")
+          .select("id, tenant_id, user_id, tag, label, created_at")
+          .eq("tenant_id", tenant!.id)
+          .order("created_at"),
+      ]);
       if (error) throw error;
-      return data as ChargingUser[];
+      if (tagErr) throw tagErr;
+      const tagsByUser = new Map<string, ChargingUserTag[]>();
+      for (const t of (tagRows ?? []) as ChargingUserTag[]) {
+        const arr = tagsByUser.get(t.user_id) ?? [];
+        arr.push(t);
+        tagsByUser.set(t.user_id, arr);
+      }
+      return (rows ?? []).map((r: any) => ({ ...r, tags: tagsByUser.get(r.id) ?? [] })) as ChargingUser[];
     },
   });
+
 
   const addUser = useMutation({
     mutationFn: async (u: {
