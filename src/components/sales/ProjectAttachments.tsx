@@ -199,7 +199,7 @@ export function ProjectAttachments({ projectId }: { projectId: string }) {
         ) : (
           <ul className="space-y-2">
             {items.map((a) => {
-              const isImg = a.content_type?.startsWith("image/");
+              const isImg = isImageAttachment(a);
               return (
                 <li key={a.id} className="flex items-center gap-2 rounded-md border bg-card p-2">
                   <button
