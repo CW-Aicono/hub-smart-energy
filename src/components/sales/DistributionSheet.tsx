@@ -116,7 +116,7 @@ export function DistributionSheet({ open, onOpenChange, projektId, editing, onSa
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[90vh] sm:h-auto sm:max-w-lg sm:mx-auto rounded-t-xl overflow-y-auto">
+      <SheetContent side="bottom" className="h-[90vh] sm:h-[90vh] sm:max-h-[90vh] sm:max-w-lg sm:mx-auto rounded-t-xl overflow-y-auto overscroll-contain">
         <SheetHeader>
           <SheetTitle>{currentId ? "Verteilung bearbeiten" : "Neue Verteilung"}</SheetTitle>
           <SheetDescription>NSHV (Hauptverteilung) oder UV (Unterverteilung).</SheetDescription>
