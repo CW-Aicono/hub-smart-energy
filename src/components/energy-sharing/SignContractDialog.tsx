@@ -53,6 +53,7 @@ export default function SignContractDialog({ open, onOpenChange, communityId, co
       price_ct_kwh: currentTariff?.price_ct_kwh != null
         ? Number(currentTariff.price_ct_kwh).toLocaleString("de-DE", { maximumFractionDigits: 2 })
         : "—",
+      price_includes_vat: currentTariff?.price_includes_vat !== false ? "inkl. MwSt." : "zzgl. MwSt.",
     });
   }, [selectedTpl, member, communityName, currentTariff]);
 
