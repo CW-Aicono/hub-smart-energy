@@ -6,7 +6,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const MODEL = "google/gemini-2.5-pro";
+const MODEL_STANDARD = "google/gemini-2.5-flash";
+const MODEL_HIGH = "google/gemini-2.5-pro";
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
 function jsonResp(body: unknown, status = 200) {
@@ -18,6 +19,7 @@ function jsonResp(body: unknown, status = 200) {
 
 async function callAI(
   apiKey: string,
+  model: string,
   messages: any[],
 ): Promise<{ ok: true; data: any } | { ok: false; status: number; detail: string }> {
   const res = await fetch(AI_URL, {
@@ -27,7 +29,7 @@ async function callAI(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       messages,
       response_format: { type: "json_object" },
     }),
@@ -71,6 +73,35 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "distribution_id and image_path required" }, 400);
     }
 
+    // Partner-Modus auflösen: distribution → project → partner_org_id → partners.ai_analysis_mode
+    let aiMode: "standard" | "high_performance" = "standard";
+    try {
+      const { data: dist } = await supabase
+        .from("sales_distributions")
+        .select("project_id")
+        .eq("id", distribution_id)
+        .maybeSingle();
+      if (dist?.project_id) {
+        const { data: proj } = await supabase
+          .from("sales_projects")
+          .select("partner_org_id")
+          .eq("id", dist.project_id)
+          .maybeSingle();
+        if (proj?.partner_org_id) {
+          const { data: partner } = await supabase
+            .from("partners")
+            .select("ai_analysis_mode")
+            .eq("id", proj.partner_org_id)
+            .maybeSingle();
+          if (partner?.ai_analysis_mode === "high_performance") {
+            aiMode = "high_performance";
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Could not resolve partner AI mode, defaulting to standard:", e);
+    }
+
     const { data: signed, error: signErr } = await supabase.storage
       .from("sales-photos")
       .createSignedUrl(image_path, 300);
@@ -89,7 +120,48 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    // =============== PASS 1: reine Beobachtung ===============
+    // ============================================================
+    // STANDARD-MODUS: ein einzelner schneller Call (gemini-2.5-flash)
+    // ============================================================
+    if (aiMode === "standard") {
+      const systemPrompt = `Du bist Experte für elektrische Verteilungen in Deutschland. Analysiere das Foto und schlage 1–4 sinnvolle Messpunkte vor. Erfinde KEINE Verbraucher, die im Bild nicht beschriftet sind. Antworte AUSSCHLIESSLICH mit gültigem JSON.`;
+      const userPrompt = `Antworte mit JSON:
+{
+  "zusammenfassung": "kurzer Text",
+  "erkannte_sicherungen": number,
+  "freie_hutschienen_plaetze": number,
+  "vorschlaege": [
+    { "bezeichnung": string, "energieart": "electricity"|"heat"|"gas"|"water", "phasen": 1|3, "strombereich_a": 16|25|32|63|125|250, "anwendungsfall": "Hauptzähler"|"Abgang"|"Maschine"|"PV"|"Speicher"|"Wallbox"|"Wärmepumpe"|"Sonstiges", "montage": "Hutschiene"|"Wandlermessung"|"Sammelschiene"|"Steckdose", "hinweise": string }
+  ]
+}`;
+      const single = await callAI(LOVABLE_API_KEY, MODEL_STANDARD, [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: userPrompt },
+            { type: "image_url", image_url: { url: `data:${mime};base64,${b64}` } },
+          ],
+        },
+      ]);
+      if (!single.ok) {
+        if (single.status === 429) return jsonResp({ error: "Rate-Limit erreicht. Bitte gleich erneut versuchen." }, 429);
+        if (single.status === 402) return jsonResp({ error: "AI-Guthaben aufgebraucht. Bitte Workspace-Credits aufladen." }, 402);
+        console.error("Standard AI failed:", single.status, single.detail);
+        return jsonResp({ error: "AI gateway error", detail: single.detail }, 500);
+      }
+      const result = { ...single.data, ki_modus: "standard" };
+      await supabase
+        .from("sales_distributions")
+        .update({ foto_url: image_path, ki_analyse: result })
+        .eq("id", distribution_id);
+      return jsonResp(result);
+    }
+
+    // ============================================================
+    // HOCHLEISTUNGS-MODUS: Zwei-Pass mit gemini-2.5-pro
+    // ============================================================
+
     const pass1System = `Du bist eine erfahrene Elektrofachkraft in Deutschland und analysierst Fotos von Unterverteilungen (UV) und Niederspannungs-Hauptverteilungen (NSHV).
 DEINE EINZIGE AUFGABE: Zählen und Beschreiben, was im Bild EINDEUTIG sichtbar ist.
 HARTE REGELN:
@@ -115,7 +187,7 @@ HARTE REGELN:
   "nicht_eindeutig_erkennbar": [ string ]
 }`;
 
-    const pass1 = await callAI(LOVABLE_API_KEY, [
+    const pass1 = await callAI(LOVABLE_API_KEY, MODEL_HIGH, [
       { role: "system", content: pass1System },
       {
         role: "user",
@@ -135,7 +207,6 @@ HARTE REGELN:
 
     const observ = pass1.data;
 
-    // Serverseitige Zählungen (Quelle der Wahrheit)
     const erkannte_sicherungen = Array.isArray(observ?.leitungsschutzschalter)
       ? observ.leitungsschutzschalter.reduce((sum: number, g: any) => sum + (Number(g?.anzahl) || 0), 0)
       : 0;
@@ -144,7 +215,6 @@ HARTE REGELN:
     const beschriftungen: string[] = Array.isArray(observ?.beschriftungen_sichtbar) ? observ.beschriftungen_sichtbar : [];
     const beschriftungen_joined = beschriftungen.join(" | ").toLowerCase();
 
-    // =============== PASS 2: Vorschläge ===============
     const pass2System = `Du bist Energie-Monitoring-Planer. Du bekommst eine strukturierte BEOBACHTUNG einer Unterverteilung (KEIN Bild).
 HARTE REGELN:
 - Du darfst KEINE Verbraucher erfinden. PV, Wallbox, Wärmepumpe, Speicher oder Maschine darfst du NUR vorschlagen, wenn ein eindeutiger Hinweis in "beschriftungen_sichtbar" steht.
@@ -163,13 +233,13 @@ Erstelle JSON in diesem Schema:
   "zusammenfassung": "1–3 Sätze, was tatsächlich beobachtet wurde",
   "vorschlaege": [
     {
-      "bezeichnung": "kurz",
+      "bezeichnung": string,
       "energieart": "electricity" | "heat" | "gas" | "water",
       "phasen": 1 | 3,
       "strombereich_a": 16 | 25 | 32 | 63 | 125 | 250,
       "anwendungsfall": "Hauptzähler" | "Abgang" | "Maschine" | "PV" | "Speicher" | "Wallbox" | "Wärmepumpe" | "Sonstiges",
       "montage": "Hutschiene" | "Wandlermessung" | "Sammelschiene" | "Steckdose",
-      "hinweise": "optional, kann leer sein",
+      "hinweise": string,
       "sicherheit": "hoch" | "mittel" | "niedrig"
     }
   ]
@@ -179,7 +249,7 @@ Erstelle JSON in diesem Schema:
     let vorschlaege: any[] = [];
     const unsicherheiten: string[] = Array.isArray(observ?.nicht_eindeutig_erkennbar) ? observ.nicht_eindeutig_erkennbar : [];
 
-    const pass2 = await callAI(LOVABLE_API_KEY, [
+    const pass2 = await callAI(LOVABLE_API_KEY, MODEL_HIGH, [
       { role: "system", content: pass2System },
       { role: "user", content: pass2User },
     ]);
@@ -187,7 +257,6 @@ Erstelle JSON in diesem Schema:
     if (pass2.ok) {
       if (typeof pass2.data?.zusammenfassung === "string") zusammenfassung = pass2.data.zusammenfassung;
       if (Array.isArray(pass2.data?.vorschlaege)) {
-        // Plausibilitäts-Filter: erfundene Spezial-Verbraucher entfernen
         const forbiddenWhenUnlabeled = new Set(["PV", "Wallbox", "Wärmepumpe", "Speicher", "Maschine"]);
         const hints = {
           pv: /\b(pv|photovoltaik|wechselrichter|inverter)\b/.test(beschriftungen_joined),
@@ -222,6 +291,7 @@ Erstelle JSON in diesem Schema:
       erkannte_komponenten: observ,
       unsicherheiten,
       vorschlaege,
+      ki_modus: "high_performance",
     };
 
     await supabase

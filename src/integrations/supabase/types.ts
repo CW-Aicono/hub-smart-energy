@@ -5931,6 +5931,7 @@ export type Database = {
       partners: {
         Row: {
           accent_color: string | null
+          ai_analysis_mode: string
           billing_address: Json
           billing_mode: string
           brand_display_name: string | null
@@ -5954,6 +5955,7 @@ export type Database = {
         }
         Insert: {
           accent_color?: string | null
+          ai_analysis_mode?: string
           billing_address?: Json
           billing_mode?: string
           brand_display_name?: string | null
@@ -5977,6 +5979,7 @@ export type Database = {
         }
         Update: {
           accent_color?: string | null
+          ai_analysis_mode?: string
           billing_address?: Json
           billing_mode?: string
           brand_display_name?: string | null
