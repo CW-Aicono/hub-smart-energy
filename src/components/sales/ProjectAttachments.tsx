@@ -33,6 +33,13 @@ const KATEGORIEN: Record<string, string> = {
   sonstiges: "Sonstiges",
 };
 
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|heic|heif|bmp|avif)$/i;
+function isImageAttachment(a: { content_type: string | null; file_name: string }) {
+  if (a.content_type?.startsWith("image/")) return true;
+  return IMAGE_EXT.test(a.file_name || "");
+}
+
+
 export function ProjectAttachments({ projectId }: { projectId: string }) {
   const { user } = useAuth();
   const [items, setItems] = useState<Attachment[]>([]);
