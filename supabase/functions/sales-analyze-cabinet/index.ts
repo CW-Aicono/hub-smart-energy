@@ -27,18 +27,29 @@ async function callAI(
   model: string,
   messages: any[],
 ): Promise<{ ok: true; data: any } | { ok: false; status: number; detail: string }> {
-  const res = await fetch(AI_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      response_format: { type: "json_object" },
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_CALL_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(AI_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        response_format: { type: "json_object" },
+      }),
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    clearTimeout(timer);
+    const aborted = e?.name === "AbortError";
+    return { ok: false, status: aborted ? 504 : 500, detail: aborted ? `AI call timeout (${AI_CALL_TIMEOUT_MS}ms) for model ${model}` : String(e?.message ?? e) };
+  }
+  clearTimeout(timer);
   if (!res.ok) {
     const detail = await res.text();
     return { ok: false, status: res.status, detail };
