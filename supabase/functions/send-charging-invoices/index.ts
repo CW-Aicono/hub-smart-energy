@@ -292,7 +292,7 @@ serve(async (req) => {
         for (const session of sessions) {
           const idTag = session.id_tag;
           if (!idTag) continue;
-          const chargingUser = userByRfid.get(idTag) || userByAppTag.get(idTag);
+          const chargingUser = userByRfid.get(idTag.toUpperCase()) || userByAppTag.get(idTag);
           if (!chargingUser) continue;
 
           if (!userSessions.has(chargingUser.id)) {
@@ -300,6 +300,7 @@ serve(async (req) => {
           }
           userSessions.get(chargingUser.id)!.sessions.push(session);
         }
+
 
         const invoiceDate = new Date().toISOString().split("T")[0];
         const invoiceYear = new Date().getFullYear();
