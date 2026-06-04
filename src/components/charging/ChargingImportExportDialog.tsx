@@ -100,7 +100,8 @@ export function ChargingImportExportDialog({ open, onOpenChange, initialType = "
       let res: { created: number; updated: number; failed: number };
       if (preview.kind === "users") res = await executeUserImport(preview.preview.records, tenant.id);
       else if (preview.kind === "groups") res = await executeGroupImport(preview.preview.records, tenant.id);
-      else res = await executeNfcImport(preview.preview.records);
+      else res = await executeNfcImport(preview.preview.records, tenant.id);
+
 
       queryClient.invalidateQueries({ queryKey: ["charging-users"] });
       queryClient.invalidateQueries({ queryKey: ["charging-user-groups"] });
