@@ -296,9 +296,9 @@ const ChargingBilling = () => {
                       <TableHeader>
                         <TableRow>
                            <TableHead>{t("charging.name" as any)}</TableHead>
-                          <TableHead>{t("charging.priceKwh" as any)}</TableHead>
-                          <TableHead>{t("charging.baseFee" as any)}</TableHead>
-                          <TableHead>{t("charging.idleFee" as any)}</TableHead>
+                          <TableHead>{t("charging.priceKwh" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead>
+                          <TableHead>{t("charging.baseFee" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead>
+                          <TableHead>{t("charging.idleFee" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead>
                           <TableHead>MwSt</TableHead>
                           <TableHead>{t("charging.active" as any)}</TableHead>
                           <TableHead>Standard</TableHead>
