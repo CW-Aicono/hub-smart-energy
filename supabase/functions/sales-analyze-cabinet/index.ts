@@ -89,9 +89,34 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const systemPrompt = `Du bist ein Experte für elektrische Verteilungen und Energiemessung in Deutschland. Du analysierst Fotos von Schaltschränken, NSHV und UV. Erkenne: Anzahl Sicherungsabgänge, Phasen (1- oder 3-phasig), vermutete Strombereiche, freie Hutschienen-Plätze, Hauptzähler-Position. Schlage konkrete Messpunkte vor, die für ein Energie-Monitoring sinnvoll wären (Hauptzähler, große Abgänge, Maschinen, PV, Wallbox etc.).`;
+    const systemPrompt = `Du bist ein Experte für elektrische Verteilungen und Energiemessung in Deutschland. Du analysierst Fotos von Schaltschränken, NSHV und UV. Erkenne: Anzahl Sicherungsabgänge, Phasen (1- oder 3-phasig), vermutete Strombereiche, freie Hutschienen-Plätze, Hauptzähler-Position. Schlage konkrete Messpunkte vor, die für ein Energie-Monitoring sinnvoll wären (Hauptzähler, große Abgänge, Maschinen, PV, Wallbox etc.). Antworte AUSSCHLIESSLICH mit gültigem JSON, ohne Markdown-Codeblöcke, ohne Erklärtext drumherum.`;
 
-    const userPrompt = `Analysiere dieses Schaltschrank-Foto und schlage 1–8 sinnvolle Messpunkte vor. Gib für jeden Messpunkt: bezeichnung (kurz, sprechend), energieart (immer "electricity"), phasen (1 oder 3), strombereich_a (z. B. 16, 25, 32, 63, 125, 250), anwendungsfall (Hauptzähler/Abgang/Maschine/PV/Wallbox/Wärmepumpe/Sonstiges), montage (Hutschiene/Wandlermessung/Sammelschiene/Steckdose), hinweise (optional). Liefere zusätzlich eine kurze "zusammenfassung" der Schaltschrank-Situation.`;
+    const userPrompt = `Analysiere dieses Schaltschrank-Foto und schlage 1–8 sinnvolle Messpunkte vor.
+
+Antworte nur mit JSON in genau diesem Schema:
+{
+  "zusammenfassung": "kurzer Text zur Verteilung",
+  "erkannte_sicherungen": 0,
+  "freie_hutschienen_plaetze": 0,
+  "vorschlaege": [
+    {
+      "bezeichnung": "kurz, sprechend",
+      "energieart": "electricity",
+      "phasen": 1,
+      "strombereich_a": 16,
+      "anwendungsfall": "Hauptzähler",
+      "montage": "Hutschiene",
+      "hinweise": "optional, kann leer sein"
+    }
+  ]
+}
+
+Erlaubte Werte:
+- energieart: "electricity" | "heat" | "gas" | "water"
+- phasen: 1 oder 3
+- strombereich_a: 16, 25, 32, 63, 125 oder 250
+- anwendungsfall: "Hauptzähler" | "Abgang" | "Maschine" | "PV" | "Speicher" | "Wallbox" | "Wärmepumpe" | "Sonstiges"
+- montage: "Hutschiene" | "Wandlermessung" | "Sammelschiene" | "Steckdose"`;
 
     const aiRes = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -102,7 +127,7 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
+          model: "google/gemini-2.5-flash",
           messages: [
             { role: "system", content: systemPrompt },
             {
@@ -116,76 +141,7 @@ Deno.serve(async (req) => {
               ],
             },
           ],
-          tools: [
-            {
-              type: "function",
-              function: {
-                name: "schlage_messpunkte_vor",
-                description: "Liefere strukturierte Messpunkt-Vorschläge",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    zusammenfassung: { type: "string" },
-                    erkannte_sicherungen: { type: "number" },
-                    freie_hutschienen_plaetze: { type: "number" },
-                    vorschlaege: {
-                      type: "array",
-                      items: {
-                        type: "object",
-                        properties: {
-                          bezeichnung: { type: "string" },
-                          energieart: {
-                            type: "string",
-                            enum: ["electricity", "heat", "gas", "water"],
-                          },
-                          phasen: { type: "number", enum: [1, 3] },
-                          strombereich_a: { type: "number" },
-                          anwendungsfall: {
-                            type: "string",
-                            enum: [
-                              "Hauptzähler",
-                              "Abgang",
-                              "Maschine",
-                              "PV",
-                              "Speicher",
-                              "Wallbox",
-                              "Wärmepumpe",
-                              "Sonstiges",
-                            ],
-                          },
-                          montage: {
-                            type: "string",
-                            enum: [
-                              "Hutschiene",
-                              "Wandlermessung",
-                              "Sammelschiene",
-                              "Steckdose",
-                            ],
-                          },
-                          hinweise: { type: "string" },
-                        },
-                        required: [
-                          "bezeichnung",
-                          "energieart",
-                          "phasen",
-                          "strombereich_a",
-                          "anwendungsfall",
-                          "montage",
-                        ],
-                        additionalProperties: false,
-                      },
-                    },
-                  },
-                  required: ["zusammenfassung", "vorschlaege"],
-                  additionalProperties: false,
-                },
-              },
-            },
-          ],
-          tool_choice: {
-            type: "function",
-            function: { name: "schlage_messpunkte_vor" },
-          },
+          response_format: { type: "json_object" },
         }),
       }
     );
@@ -211,24 +167,37 @@ Deno.serve(async (req) => {
       }
       const t = await aiRes.text();
       console.error("AI error:", aiRes.status, t);
-      return new Response(JSON.stringify({ error: "AI gateway error" }), {
+      return new Response(JSON.stringify({ error: "AI gateway error", detail: t }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const aiJson = await aiRes.json();
-    const toolCall = aiJson.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall?.function?.arguments) {
+    const rawContent: string | undefined = aiJson.choices?.[0]?.message?.content;
+    if (!rawContent) {
       return new Response(
-        JSON.stringify({ error: "AI returned no structured result" }),
+        JSON.stringify({ error: "AI returned no result" }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
-    const parsed = JSON.parse(toolCall.function.arguments);
+    const cleaned = rawContent.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "");
+    let parsed: any;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (e) {
+      console.error("JSON parse error:", e, rawContent);
+      return new Response(
+        JSON.stringify({ error: "AI returned invalid JSON" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     // Speichere KI-Analyse zurück in Verteilung
     await supabase
