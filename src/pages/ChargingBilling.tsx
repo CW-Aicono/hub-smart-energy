@@ -583,7 +583,9 @@ const ChargingBilling = () => {
                             const blob = await generateChargingInvoicePdf({
                               invoice: selectedInvoice,
                               settings: invoiceSettings,
+                              userName: selectedInvoice.user_name,
                             });
+
                             const filename = `Rechnung_${selectedInvoice.invoice_number || selectedInvoice.id}.pdf`;
                             downloadBlob(blob, filename);
                           } catch (e: any) {
