@@ -7,8 +7,13 @@ const corsHeaders = {
 };
 
 const MODEL_STANDARD = "google/gemini-2.5-flash";
-const MODEL_HIGH = "google/gemini-2.5-pro";
+// Pass 1 (Bild) muss schnell sein, sonst 150-s-Timeout der Edge Function.
+// Flash-Preview ist beim reinen Zählen von LS/FI nahezu so gut wie Pro,
+// aber 3-5x schneller. Pass 2 ist text-only und nutzt weiterhin Pro.
+const MODEL_HIGH_VISION = "google/gemini-3-flash-preview";
+const MODEL_HIGH_REASON = "google/gemini-2.5-pro";
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const AI_CALL_TIMEOUT_MS = 60_000;
 
 function jsonResp(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -22,18 +27,29 @@ async function callAI(
   model: string,
   messages: any[],
 ): Promise<{ ok: true; data: any } | { ok: false; status: number; detail: string }> {
-  const res = await fetch(AI_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      response_format: { type: "json_object" },
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_CALL_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(AI_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        response_format: { type: "json_object" },
+      }),
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    clearTimeout(timer);
+    const aborted = e?.name === "AbortError";
+    return { ok: false, status: aborted ? 504 : 500, detail: aborted ? `AI call timeout (${AI_CALL_TIMEOUT_MS}ms) for model ${model}` : String(e?.message ?? e) };
+  }
+  clearTimeout(timer);
   if (!res.ok) {
     const detail = await res.text();
     return { ok: false, status: res.status, detail };
@@ -187,7 +203,7 @@ HARTE REGELN:
   "nicht_eindeutig_erkennbar": [ string ]
 }`;
 
-    const pass1 = await callAI(LOVABLE_API_KEY, MODEL_HIGH, [
+    const pass1 = await callAI(LOVABLE_API_KEY, MODEL_HIGH_VISION, [
       { role: "system", content: pass1System },
       {
         role: "user",
@@ -249,7 +265,7 @@ Erstelle JSON in diesem Schema:
     let vorschlaege: any[] = [];
     const unsicherheiten: string[] = Array.isArray(observ?.nicht_eindeutig_erkennbar) ? observ.nicht_eindeutig_erkennbar : [];
 
-    const pass2 = await callAI(LOVABLE_API_KEY, MODEL_HIGH, [
+    const pass2 = await callAI(LOVABLE_API_KEY, MODEL_HIGH_REASON, [
       { role: "system", content: pass2System },
       { role: "user", content: pass2User },
     ]);
