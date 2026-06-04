@@ -162,7 +162,7 @@ export function ChargingImportExportDialog({ open, onOpenChange, initialType = "
             <Alert>
               <AlertDescription className="text-xs">
                 Aktueller Bestand: <strong>{users.length}</strong> Nutzer · <strong>{groups.length}</strong> Gruppen ·{" "}
-                <strong>{users.filter((u) => u.rfid_tag).length}</strong> NFC-Tags.
+                <strong>{users.reduce((acc, u) => acc + ((u.tags?.length ?? 0) || (u.rfid_tag ? 1 : 0)), 0)}</strong> NFC-Tags.
                 Export enthält die aktuell sichtbaren Datensätze gemäß Berechtigung.
               </AlertDescription>
             </Alert>
