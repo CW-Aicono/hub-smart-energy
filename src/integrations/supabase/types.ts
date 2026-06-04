@@ -1340,6 +1340,58 @@ export type Database = {
           },
         ]
       }
+      charging_user_rfid_tags: {
+        Row: {
+          created_at: string
+          id: string
+          label: string | null
+          tag: string
+          tenant_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          tag: string
+          tenant_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          tag?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_user_rfid_tags_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_user_rfid_tags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "charging_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_user_rfid_tags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "charging_users_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charging_users: {
         Row: {
           app_tag: string | null
