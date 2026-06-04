@@ -16,13 +16,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, MoreHorizontal, Edit, Trash2, Ban, Archive, Users, FolderOpen, Check, Smartphone, FileSpreadsheet } from "lucide-react";
+import { Plus, MoreHorizontal, Edit, Trash2, Ban, Archive, Users, FolderOpen, Check, Smartphone, FileSpreadsheet, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { ChargingImportExportDialog } from "@/components/charging/ChargingImportExportDialog";
 import type { ExportType } from "@/lib/chargingImportExport";
 
-const emptyUserForm = { name: "", email: "", rfid_tag: "", rfid_label: "", phone: "", group_id: "", tariff_id: "", notes: "" };
+interface TagDraft { tag: string; label: string }
+const emptyUserForm = { name: "", email: "", phone: "", group_id: "", tariff_id: "", notes: "", tags: [] as TagDraft[] };
+
 const emptyGroupForm = { name: "", description: "", is_app_user: false, tariff_id: "" };
 
 const ChargingUsersTab = () => {
