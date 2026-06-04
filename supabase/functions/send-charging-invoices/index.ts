@@ -171,29 +171,20 @@ function buildInvoiceHTML(
         <div style="font-size:11px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-bottom:4px">Kunde</div>
         <div style="font-size:14px;font-weight:600">${userName}</div>
         <div style="font-size:13px;color:#64748b">${userEmail}</div>
+        <div style="font-size:11px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-top:12px;margin-bottom:4px">RFID-Tags</div>
+        <div>${tagsListHtml}</div>
         <div style="font-size:11px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-top:12px;margin-bottom:4px">Tarif</div>
         <div style="font-size:13px">${tariffName} (${formatDE(pricePerKwh, 4)} ${currencySymbol}/kWh)</div>
       </td>
     </tr>
   </table>
 
-  <!-- Sessions Table -->
+  <!-- Sessions grouped by Tag -->
   <div style="margin-bottom:24px">
-    <div style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:12px">Ladevorgänge</div>
-    <table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
-      <thead>
-        <tr>
-          <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Datum</th>
-          <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Zeitraum</th>
-          <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Dauer</th>
-          <th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Energie</th>
-          <th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Betrag</th>
-          ${idleFeePerMinute > 0 ? `<th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Blockiergebühr</th>` : ""}
-        </tr>
-      </thead>
-      <tbody>${sessionRows}</tbody>
-    </table>
+    <div style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:12px">Ladevorgänge (gruppiert nach Tag)</div>
+    ${tagGroupsHtml || '<div style="font-size:12px;color:#94a3b8">Keine Ladevorgänge verknüpft.</div>'}
   </div>
+
 
   <!-- Totals with MwSt -->
   <table style="width:100%;margin-bottom:24px;border-collapse:collapse">
