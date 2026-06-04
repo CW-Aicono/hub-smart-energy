@@ -139,13 +139,15 @@ export function useChargingUsers() {
       group_id?: string | null;
       tariff_id?: string | null;
       notes?: string;
-    }) => {
-      const { error } = await supabase.from("charging_users").insert(u);
+    }): Promise<string> => {
+      const { data, error } = await supabase.from("charging_users").insert(u).select("id").single();
       if (error) throw error;
+      return data!.id as string;
     },
     onSuccess: () => { const t = getT(); qc.invalidateQueries({ queryKey: key }); toast.success(t("chargingUser.created")); },
     onError: () => { const t = getT(); toast.error(t("common.errorCreate")); },
   });
+
 
   const updateUser = useMutation({
     mutationFn: async ({ id, ...rest }: {
