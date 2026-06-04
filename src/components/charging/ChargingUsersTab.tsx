@@ -86,27 +86,66 @@ const ChargingUsersTab = () => {
   };
 
   // --- User CRUD ---
-  const openAddUser = () => { setUserForm({ ...emptyUserForm, tariff_id: defaultTariff?.id || "" }); setEditingUser(null); setUserDialogOpen(true); };
-  const openEditUser = (u: ChargingUser) => {
-    setUserForm({ name: u.name, email: u.email || "", rfid_tag: u.rfid_tag || "", rfid_label: u.rfid_label || "", phone: u.phone || "", group_id: u.group_id || "", tariff_id: u.tariff_id || "", notes: u.notes || "" });
-    setEditingUser(u); setUserDialogOpen(true);
+  const openAddUser = () => {
+    setUserForm({ ...emptyUserForm, tariff_id: defaultTariff?.id || "", tags: [{ tag: "", label: "" }] });
+    setEditingUser(null);
+    setUserDialogOpen(true);
   };
-  const handleSaveUser = () => {
+  const openEditUser = (u: ChargingUser) => {
+    // Tags zusammenführen: Multi-Tag-Tabelle ist Wahrheit. Fallback: Legacy-Feld,
+    // falls (warum auch immer) noch nicht migriert wurde.
+    let tags: TagDraft[] = (u.tags ?? []).map((t) => ({ tag: t.tag ?? "", label: t.label ?? "" }));
+    if (tags.length === 0 && u.rfid_tag) {
+      tags = [{ tag: u.rfid_tag, label: u.rfid_label ?? "" }];
+    }
+    if (tags.length === 0) tags = [{ tag: "", label: "" }];
+    setUserForm({
+      name: u.name,
+      email: u.email || "",
+      phone: u.phone || "",
+      group_id: u.group_id || "",
+      tariff_id: u.tariff_id || "",
+      notes: u.notes || "",
+      tags,
+    });
+    setEditingUser(u);
+    setUserDialogOpen(true);
+  };
+  const handleSaveUser = async () => {
     if (!tenant?.id) return;
+    const cleanedTags = userForm.tags
+      .map((t) => ({ tag: t.tag.replace(/\s+/g, "").trim(), label: (t.label || "").trim() || null }))
+      .filter((t) => t.tag.length > 0);
     const payload = {
       name: userForm.name,
       email: userForm.email || undefined,
-      rfid_tag: userForm.rfid_tag || undefined,
-      rfid_label: userForm.rfid_label || undefined,
       phone: userForm.phone || undefined,
       group_id: userForm.group_id || null,
       tariff_id: userForm.tariff_id || null,
       notes: userForm.notes || undefined,
     };
-    if (editingUser) { updateUser.mutate({ id: editingUser.id, ...payload }); } else { addUser.mutate({ tenant_id: tenant.id, ...payload }); }
-    setUserDialogOpen(false);
+    try {
+      let userId: string;
+      if (editingUser) {
+        await updateUser.mutateAsync({ id: editingUser.id, ...payload });
+        userId = editingUser.id;
+      } else {
+        userId = await addUser.mutateAsync({ tenant_id: tenant.id, ...payload });
+      }
+      await setUserTags.mutateAsync({ tenant_id: tenant.id, user_id: userId, tags: cleanedTags });
+    } finally {
+      setUserDialogOpen(false);
+    }
   };
   const handleSetStatus = (id: string, status: string) => { updateUser.mutate({ id, status }); };
+
+  const addTagRow = () => setUserForm((p) => ({ ...p, tags: [...p.tags, { tag: "", label: "" }] }));
+  const removeTagRow = (i: number) => setUserForm((p) => ({ ...p, tags: p.tags.filter((_, idx) => idx !== i) }));
+  const updateTagRow = (i: number, patch: Partial<TagDraft>) => setUserForm((p) => ({
+    ...p,
+    tags: p.tags.map((t, idx) => (idx === i ? { ...t, ...patch } : t)),
+  }));
+
 
   // --- Group CRUD ---
   const openAddGroup = () => { setGroupForm(emptyGroupForm); setEditingGroup(null); setGroupDialogOpen(true); };
