@@ -108,6 +108,14 @@ serve(async (req) => {
 
       console.log(`Syncing integration: ${integrationId}`);
 
+      // Variante B: Anker für Intervall-Drosselung = START des Syncs (nicht ENDE).
+      // Verhindert Drift: Sync-Dauer (10–30 s) wird sonst auf das Poll-Intervall addiert
+      // und führt zu ~6-min-Takt statt sauberen 5 min.
+      const syncStartIso = new Date().toISOString();
+      await supabase
+        .from("location_integrations")
+        .update({ last_sync_at: syncStartIso })
+        .eq("id", integrationId);
 
       try {
         const response = await fetch(
@@ -129,6 +137,13 @@ serve(async (req) => {
         if (!response.ok || !data.success) {
           console.error(`[loxone-periodic-sync] HTTP ${response.status} for integration ${integrationId}: ${data?.error || response.statusText}`);
         }
+
+        // Variante B: Anker auf START zurücksetzen (loxone-api hat ihn am ENDE überschrieben).
+        await supabase
+          .from("location_integrations")
+          .update({ last_sync_at: syncStartIso })
+          .eq("id", integrationId);
+
 
         if (data.success) {
           const sensors = data.sensors || [];
