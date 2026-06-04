@@ -91,11 +91,11 @@ export function SalesRulesManager({ scope, partnerId, canManage = true }: SalesR
   const load = async () => {
     setLoading(true);
     const reqs: Promise<any>[] = [
-      supabase.from("device_selection_rules").select("*").order("prio").order("name"),
-      supabase.from("device_catalog").select("id,hersteller,modell,owner_scope,partner_id").order("hersteller").order("modell"),
+      Promise.resolve(supabase.from("device_selection_rules").select("*").order("prio").order("name")),
+      Promise.resolve(supabase.from("device_catalog").select("id,hersteller,modell,owner_scope,partner_id").order("hersteller").order("modell")),
     ];
     if (scope === "partner" && partnerId) {
-      reqs.push(supabase.from("partners").select("ai_analysis_mode").eq("id", partnerId).maybeSingle());
+      reqs.push(Promise.resolve(supabase.from("partners").select("ai_analysis_mode").eq("id", partnerId).maybeSingle()));
     }
     const results = await Promise.all(reqs);
     const rulesRes = results[0];
