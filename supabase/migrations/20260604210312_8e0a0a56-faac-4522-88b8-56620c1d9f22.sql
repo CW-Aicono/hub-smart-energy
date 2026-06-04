@@ -1,0 +1,1 @@
+ALTER TABLE public.charging_tariffs ADD COLUMN IF NOT EXISTS price_includes_vat BOOLEAN DEFAULT true; ALTER TABLE public.energy_prices ADD COLUMN IF NOT EXISTS price_includes_vat BOOLEAN DEFAULT true; ALTER TABLE public.community_tariffs ADD COLUMN IF NOT EXISTS price_includes_vat BOOLEAN DEFAULT true;
