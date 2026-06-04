@@ -7,8 +7,13 @@ const corsHeaders = {
 };
 
 const MODEL_STANDARD = "google/gemini-2.5-flash";
-const MODEL_HIGH = "google/gemini-2.5-pro";
+// Pass 1 (Bild) muss schnell sein, sonst 150-s-Timeout der Edge Function.
+// Flash-Preview ist beim reinen Zählen von LS/FI nahezu so gut wie Pro,
+// aber 3-5x schneller. Pass 2 ist text-only und nutzt weiterhin Pro.
+const MODEL_HIGH_VISION = "google/gemini-3-flash-preview";
+const MODEL_HIGH_REASON = "google/gemini-2.5-pro";
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const AI_CALL_TIMEOUT_MS = 60_000;
 
 function jsonResp(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
