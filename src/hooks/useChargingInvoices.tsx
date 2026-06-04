@@ -3,6 +3,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useTenant } from "@/hooks/useTenant";
 
+export interface ChargingInvoiceSession {
+  id: string;
+  start_time: string;
+  stop_time: string | null;
+  energy_kwh: number;
+  id_tag: string | null;
+}
+
+export interface ChargingInvoiceTag {
+  tag: string;
+  label: string | null;
+}
+
 export interface ChargingInvoice {
   id: string;
   tenant_id: string;
@@ -23,6 +36,14 @@ export interface ChargingInvoice {
   period_end: string | null;
   issued_at: string | null;
   created_at: string;
+  // Joined data
+  user_name?: string;
+  user_email?: string;
+  user_tags?: ChargingInvoiceTag[];
+  sessions?: ChargingInvoiceSession[];
+  tariff_price_per_kwh?: number;
+  tariff_idle_fee_per_minute?: number;
+  tariff_idle_fee_grace_minutes?: number;
 }
 
 export function useChargingInvoices() {
@@ -39,7 +60,65 @@ export function useChargingInvoices() {
         .eq("tenant_id", tenant!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as ChargingInvoice[];
+      const invs = (data ?? []) as ChargingInvoice[];
+      if (invs.length === 0) return invs;
+
+      const userIds = Array.from(new Set(invs.map(i => i.user_id).filter(Boolean) as string[]));
+      const invoiceIds = invs.map(i => i.id);
+      const tariffIds = Array.from(new Set(invs.map(i => i.tariff_id).filter(Boolean) as string[]));
+
+      const [usersRes, tagsRes, linksRes, tariffsRes] = await Promise.all([
+        userIds.length
+          ? supabase.from("charging_users").select("id, name, email").in("id", userIds)
+          : Promise.resolve({ data: [] } as any),
+        userIds.length
+          ? supabase.from("charging_user_rfid_tags").select("user_id, tag, label").in("user_id", userIds)
+          : Promise.resolve({ data: [] } as any),
+        supabase
+          .from("charging_invoice_sessions")
+          .select("invoice_id, charging_sessions(id, start_time, stop_time, energy_kwh, id_tag)")
+          .in("invoice_id", invoiceIds),
+        tariffIds.length
+          ? supabase.from("charging_tariffs").select("id, price_per_kwh, idle_fee_per_minute, idle_fee_grace_minutes").in("id", tariffIds)
+          : Promise.resolve({ data: [] } as any),
+      ]);
+
+      const userById = new Map<string, any>();
+      for (const u of (usersRes.data ?? [])) userById.set((u as any).id, u);
+      const tagsByUser = new Map<string, ChargingInvoiceTag[]>();
+      for (const t of (tagsRes.data ?? [])) {
+        const arr = tagsByUser.get((t as any).user_id) ?? [];
+        arr.push({ tag: (t as any).tag, label: (t as any).label });
+        tagsByUser.set((t as any).user_id, arr);
+      }
+      const sessionsByInvoice = new Map<string, ChargingInvoiceSession[]>();
+      for (const link of (linksRes.data ?? [])) {
+        const s = (link as any).charging_sessions;
+        if (!s) continue;
+        const arr = sessionsByInvoice.get((link as any).invoice_id) ?? [];
+        arr.push(s);
+        sessionsByInvoice.set((link as any).invoice_id, arr);
+      }
+      const tariffById = new Map<string, any>();
+      for (const t of (tariffsRes.data ?? [])) tariffById.set((t as any).id, t);
+
+      return invs.map(inv => {
+        const u = inv.user_id ? userById.get(inv.user_id) : null;
+        const tariff = inv.tariff_id ? tariffById.get(inv.tariff_id) : null;
+        const sessions = (sessionsByInvoice.get(inv.id) ?? []).sort(
+          (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+        );
+        return {
+          ...inv,
+          user_name: u?.name,
+          user_email: u?.email,
+          user_tags: inv.user_id ? (tagsByUser.get(inv.user_id) ?? []) : [],
+          sessions,
+          tariff_price_per_kwh: tariff?.price_per_kwh,
+          tariff_idle_fee_per_minute: tariff?.idle_fee_per_minute,
+          tariff_idle_fee_grace_minutes: tariff?.idle_fee_grace_minutes,
+        };
+      });
     },
   });
 

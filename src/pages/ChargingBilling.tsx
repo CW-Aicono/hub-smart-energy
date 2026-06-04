@@ -419,10 +419,8 @@ const ChargingBilling = () => {
                         <TableRow>
                           <TableHead>{t("charging.invoiceNo" as any)}</TableHead>
                           <TableHead>Rechnungsdatum</TableHead>
+                          <TableHead>Kunde</TableHead>
                           <TableHead>Zeitraum</TableHead>
-                          <TableHead>{t("charging.energyCol" as any)}</TableHead>
-                          <TableHead>Netto</TableHead>
-                          <TableHead>MwSt</TableHead>
                           <TableHead>{t("charging.totalAmount" as any)}</TableHead>
                           <TableHead>{t("common.status" as any)}</TableHead>
                         </TableRow>
@@ -432,87 +430,149 @@ const ChargingBilling = () => {
                           <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedInvoice(inv)}>
                             <TableCell className="font-mono">{inv.invoice_number || "—"}</TableCell>
                             <TableCell>{inv.invoice_date ? format(new Date(inv.invoice_date), "dd.MM.yyyy") : format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
+                            <TableCell className="font-medium">{inv.user_name || "—"}</TableCell>
                             <TableCell className="text-sm">
                               {inv.period_start && inv.period_end
                                 ? `${format(new Date(inv.period_start), "dd.MM.")} – ${format(new Date(inv.period_end), "dd.MM.yyyy")}`
                                 : "—"}
                             </TableCell>
-                            <TableCell>{fmtKwh(inv.total_energy_kwh)}</TableCell>
-                            <TableCell>{fmtCurrency(inv.net_amount || (inv.total_amount - (inv.tax_amount || 0)))}</TableCell>
-                            <TableCell>{fmtCurrency(inv.tax_amount || 0)}</TableCell>
                             <TableCell className="font-medium">{fmtCurrency(inv.total_amount)}</TableCell>
                             <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? t("charging.statusPaid" as any) : inv.status === "issued" ? t("charging.statusIssued" as any) : t("charging.statusDraft" as any)}</Badge></TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
+
                   )}
                 </CardContent>
               </Card>
 
               {/* Invoice Preview Dialog */}
               <Dialog open={!!selectedInvoice} onOpenChange={(open) => { if (!open) setSelectedInvoice(null); }}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Rechnungsvorschau</DialogTitle>
                   </DialogHeader>
-                  {selectedInvoice && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Rechnungsnummer</p>
-                          <p className="font-mono font-semibold">{selectedInvoice.invoice_number || "—"}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Status</p>
-                          <Badge variant={selectedInvoice.status === "paid" ? "default" : selectedInvoice.status === "issued" ? "secondary" : "outline"}>
-                            {selectedInvoice.status === "paid" ? "Bezahlt" : selectedInvoice.status === "issued" ? "Ausgestellt" : "Entwurf"}
-                          </Badge>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Rechnungsdatum</p>
-                          <p>{selectedInvoice.invoice_date ? format(new Date(selectedInvoice.invoice_date), "dd.MM.yyyy") : "—"}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Zeitraum</p>
-                          <p>{selectedInvoice.period_start && selectedInvoice.period_end
-                            ? `${format(new Date(selectedInvoice.period_start), "dd.MM.")} – ${format(new Date(selectedInvoice.period_end), "dd.MM.yyyy")}`
-                            : "—"}</p>
-                        </div>
-                      </div>
+                  {selectedInvoice && (() => {
+                    const inv = selectedInvoice;
+                    const taxRate = inv.tax_rate_percent || 19;
+                    const pricePerKwh = inv.tariff_price_per_kwh ?? 0;
+                    const idleFeePerMin = inv.tariff_idle_fee_per_minute ?? 0;
+                    const idleGrace = inv.tariff_idle_fee_grace_minutes ?? 60;
+                    const tagLabelMap = new Map<string, string | null>();
+                    for (const t of (inv.user_tags || [])) {
+                      tagLabelMap.set(t.tag.toUpperCase(), t.label);
+                    }
+                    // Group sessions by tag
+                    const grouped = new Map<string, typeof inv.sessions>();
+                    for (const s of (inv.sessions || [])) {
+                      const key = (s.id_tag || "—").toUpperCase();
+                      const arr = grouped.get(key) ?? [];
+                      arr.push(s);
+                      grouped.set(key, arr);
+                    }
+                    const computeSession = (s: any) => {
+                      const duration = s.stop_time ? Math.round((new Date(s.stop_time).getTime() - new Date(s.start_time).getTime()) / 60000) : 0;
+                      const idleMin = Math.max(0, duration - idleGrace);
+                      const idleFee = idleFeePerMin > 0 ? idleMin * idleFeePerMin : 0;
+                      const energyNet = (s.energy_kwh || 0) * pricePerKwh;
+                      const net = energyNet + idleFee;
+                      const gross = net * (1 + taxRate / 100);
+                      return { duration, idleFee, energyNet, net, gross };
+                    };
 
-                      <div className="border rounded-lg p-4 space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span>Energie</span>
-                          <span>{fmtKwh(selectedInvoice.total_energy_kwh)}</span>
-                        </div>
-                        {selectedInvoice.idle_fee_amount > 0 && (
-                          <div className="flex justify-between text-sm text-destructive">
-                            <span>Blockiergebühr</span>
-                            <span>{fmtCurrency(selectedInvoice.idle_fee_amount)}</span>
+                    return (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Rechnungsnummer</p>
+                            <p className="font-mono font-semibold">{inv.invoice_number || "—"}</p>
                           </div>
-                        )}
-                        <div className="flex justify-between text-sm border-t pt-2">
-                          <span>Nettobetrag</span>
-                          <span>{fmtCurrency(selectedInvoice.net_amount || (selectedInvoice.total_amount - (selectedInvoice.tax_amount || 0)))}</span>
+                          <div>
+                            <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Status</p>
+                            <Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>
+                              {inv.status === "paid" ? "Bezahlt" : inv.status === "issued" ? "Ausgestellt" : "Entwurf"}
+                            </Badge>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Rechnungsdatum</p>
+                            <p>{inv.invoice_date ? format(new Date(inv.invoice_date), "dd.MM.yyyy") : "—"}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Zeitraum</p>
+                            <p>{inv.period_start && inv.period_end
+                              ? `${format(new Date(inv.period_start), "dd.MM.")} – ${format(new Date(inv.period_end), "dd.MM.yyyy")}`
+                              : "—"}</p>
+                          </div>
+                          <div className="col-span-2 border-t pt-3">
+                            <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Kunde</p>
+                            <p className="font-semibold">{inv.user_name || "—"}</p>
+                            {inv.user_email && <p className="text-xs text-muted-foreground">{inv.user_email}</p>}
+                          </div>
                         </div>
-                        <div className="flex justify-between text-sm text-muted-foreground">
-                          <span>MwSt ({fmtNum(selectedInvoice.tax_rate_percent, 0)} %)</span>
-                          <span>{fmtCurrency(selectedInvoice.tax_amount || 0)}</span>
-                        </div>
-                        <div className="flex justify-between font-semibold text-base border-t pt-2">
-                          <span>Gesamtbetrag (brutto)</span>
-                          <span>{fmtCurrency(selectedInvoice.total_amount)}</span>
-                        </div>
-                      </div>
 
-                      {selectedInvoice.issued_at && (
-                        <p className="text-xs text-muted-foreground">
-                          Ausgestellt am {format(new Date(selectedInvoice.issued_at), "dd.MM.yyyy HH:mm")}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                        {/* Sessions grouped by tag */}
+                        <div className="space-y-4">
+                          {Array.from(grouped.entries()).map(([tagKey, sess]) => {
+                            const label = tagLabelMap.get(tagKey);
+                            return (
+                              <div key={tagKey} className="border rounded-lg overflow-hidden">
+                                <div className="bg-muted/50 px-3 py-2 text-xs flex items-center justify-between">
+                                  <span>
+                                    <span className="font-mono font-semibold">{tagKey}</span>
+                                    {label && <span className="text-muted-foreground ml-2">· {label}</span>}
+                                  </span>
+                                  <span className="text-muted-foreground">{sess!.length} Vorgang/Vorgänge</span>
+                                </div>
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="text-xs">Zeitpunkt</TableHead>
+                                      <TableHead className="text-xs text-right">Energie</TableHead>
+                                      <TableHead className="text-xs text-right">Blockier­gebühr</TableHead>
+                                      <TableHead className="text-xs text-right">Netto</TableHead>
+                                      <TableHead className="text-xs text-right">Brutto</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {sess!.map(s => {
+                                      const c = computeSession(s);
+                                      return (
+                                        <TableRow key={s.id}>
+                                          <TableCell className="text-xs">{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
+                                          <TableCell className="text-xs text-right">{fmtKwh(s.energy_kwh)}</TableCell>
+                                          <TableCell className="text-xs text-right">{c.idleFee > 0 ? fmtCurrency(c.idleFee) : "—"}</TableCell>
+                                          <TableCell className="text-xs text-right">{fmtCurrency(c.net)}</TableCell>
+                                          <TableCell className="text-xs text-right font-medium">{fmtCurrency(c.gross)}</TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            );
+                          })}
+                          {grouped.size === 0 && (
+                            <p className="text-sm text-muted-foreground text-center py-4">Keine Ladevorgänge verknüpft.</p>
+                          )}
+                        </div>
+
+                        <div className="border rounded-lg p-4 bg-muted/30">
+                          <div className="flex justify-between font-semibold text-base">
+                            <span>Gesamtbetrag (brutto, inkl. {fmtNum(taxRate, 0)} % MwSt.)</span>
+                            <span>{fmtCurrency(inv.total_amount)}</span>
+                          </div>
+                        </div>
+
+                        {inv.issued_at && (
+                          <p className="text-xs text-muted-foreground">
+                            Ausgestellt am {format(new Date(inv.issued_at), "dd.MM.yyyy HH:mm")}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setSelectedInvoice(null)}>Schließen</Button>
                     {selectedInvoice && invoiceSettings && (
@@ -523,7 +583,9 @@ const ChargingBilling = () => {
                             const blob = await generateChargingInvoicePdf({
                               invoice: selectedInvoice,
                               settings: invoiceSettings,
+                              userName: selectedInvoice.user_name,
                             });
+
                             const filename = `Rechnung_${selectedInvoice.invoice_number || selectedInvoice.id}.pdf`;
                             downloadBlob(blob, filename);
                           } catch (e: any) {
