@@ -339,14 +339,27 @@ async function isUserInAllowedGroups(
     const { data } = await query;
     userGroupId = data?.group_id ?? null;
   } else {
+    // 1) Legacy rfid_tag column auf charging_users
     const { data } = await supabase
       .from("charging_users")
       .select("group_id")
       .eq("tenant_id", tenantId)
       .ilike("rfid_tag", idTag)
-      .single();
+      .maybeSingle();
     userGroupId = data?.group_id ?? null;
+
+    // 2) Neue Multi-Tag-Tabelle
+    if (!userGroupId) {
+      const { data: tagRow } = await supabase
+        .from("charging_user_rfid_tags")
+        .select("user:charging_users!inner(group_id)")
+        .eq("tenant_id", tenantId)
+        .ilike("tag", idTag)
+        .maybeSingle();
+      userGroupId = (tagRow as any)?.user?.group_id ?? null;
+    }
   }
+
 
   if (!userGroupId) return false;
   return allowedGroupIds.includes(userGroupId);
