@@ -310,16 +310,34 @@ serve(async (req) => {
           if (cu.rfid_tag) userByRfid.set(cu.rfid_tag.toUpperCase(), cu);
           if (cu.app_tag) userByAppTag.set(cu.app_tag, cu);
         }
-        // Multi-Tag-Tabelle einbeziehen
+        // Multi-Tag-Tabelle einbeziehen (inkl. Label)
         const { data: extraTags } = await supabase
           .from("charging_user_rfid_tags")
-          .select("tag, user_id")
+          .select("tag, label, user_id")
           .eq("tenant_id", tenantId);
         const usersById = new Map(chargingUsers.map((u: any) => [u.id, u]));
+        const tagsByUserId = new Map<string, { tag: string; label: string | null }[]>();
+        // legacy single tag
+        for (const cu of chargingUsers) {
+          if (cu.rfid_tag) {
+            const arr = tagsByUserId.get(cu.id) ?? [];
+            arr.push({ tag: cu.rfid_tag, label: cu.rfid_label ?? null });
+            tagsByUserId.set(cu.id, arr);
+          }
+        }
         for (const t of (extraTags ?? [])) {
           const u = usersById.get((t as any).user_id);
-          if (u && (t as any).tag) userByRfid.set(((t as any).tag as string).toUpperCase(), u);
+          if (u && (t as any).tag) {
+            userByRfid.set(((t as any).tag as string).toUpperCase(), u);
+            const arr = tagsByUserId.get((t as any).user_id) ?? [];
+            // avoid duplicates
+            if (!arr.some(x => x.tag.toUpperCase() === ((t as any).tag as string).toUpperCase())) {
+              arr.push({ tag: (t as any).tag, label: (t as any).label ?? null });
+            }
+            tagsByUserId.set((t as any).user_id, arr);
+          }
         }
+
         const groupById = new Map<string, any>();
         for (const g of (chargingGroups || [])) groupById.set(g.id, g);
 
