@@ -176,5 +176,52 @@ export function useChargingUsers() {
     onError: () => { const t = getT(); toast.error(t("common.errorDelete")); },
   });
 
-  return { users, isLoading, addUser, updateUser, deleteUser };
+  /**
+   * Ersetzt die komplette Tag-Liste eines Nutzers (atomar: löschen + neu einfügen).
+   * Tags werden case-insensitiv eindeutig gehalten (UPPER + Trim).
+   * Schreibt zusätzlich den ersten Tag in die Legacy-Spalten rfid_tag/rfid_label,
+   * damit Backwards-Kompat erhalten bleibt.
+   */
+  const setUserTags = useMutation({
+    mutationFn: async (args: { tenant_id: string; user_id: string; tags: { tag: string; label: string | null }[] }) => {
+      const seen = new Set<string>();
+      const clean = args.tags
+        .map((t) => ({ tag: (t.tag ?? "").replace(/\s+/g, "").trim().toUpperCase(), label: (t.label ?? "").trim() || null }))
+        .filter((t) => {
+          if (!t.tag) return false;
+          if (seen.has(t.tag)) return false;
+          seen.add(t.tag);
+          return true;
+        });
+
+      const { error: delErr } = await supabase
+        .from("charging_user_rfid_tags")
+        .delete()
+        .eq("user_id", args.user_id);
+      if (delErr) throw delErr;
+
+      if (clean.length > 0) {
+        const { error: insErr } = await supabase
+          .from("charging_user_rfid_tags")
+          .insert(clean.map((t) => ({ tenant_id: args.tenant_id, user_id: args.user_id, tag: t.tag, label: t.label })));
+        if (insErr) throw insErr;
+      }
+
+      // Legacy-Spiegel: ersten Tag in charging_users zurückschreiben
+      const primary = clean[0] ?? null;
+      const { error: updErr } = await supabase
+        .from("charging_users")
+        .update({
+          rfid_tag: primary?.tag ?? null,
+          rfid_label: primary?.label ?? null,
+        })
+        .eq("id", args.user_id);
+      if (updErr) throw updErr;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: key }); },
+    onError: () => { const t = getT(); toast.error(t("common.errorUpdate")); },
+  });
+
+  return { users, isLoading, addUser, updateUser, deleteUser, setUserTags };
 }
+
