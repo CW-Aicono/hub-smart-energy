@@ -52,8 +52,8 @@ export function ProjectAttachments({ projectId }: { projectId: string }) {
     setItems(list);
     setLoading(false);
 
-    // Load signed URLs for image previews
-    const imgs = list.filter((a) => a.content_type?.startsWith("image/"));
+    // Load signed URLs for image previews (fallback: detect by file extension)
+    const imgs = list.filter((a) => isImageAttachment(a));
     const map: Record<string, string> = {};
     await Promise.all(
       imgs.map(async (a) => {
