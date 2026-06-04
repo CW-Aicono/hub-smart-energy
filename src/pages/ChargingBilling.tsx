@@ -419,10 +419,8 @@ const ChargingBilling = () => {
                         <TableRow>
                           <TableHead>{t("charging.invoiceNo" as any)}</TableHead>
                           <TableHead>Rechnungsdatum</TableHead>
+                          <TableHead>Kunde</TableHead>
                           <TableHead>Zeitraum</TableHead>
-                          <TableHead>{t("charging.energyCol" as any)}</TableHead>
-                          <TableHead>Netto</TableHead>
-                          <TableHead>MwSt</TableHead>
                           <TableHead>{t("charging.totalAmount" as any)}</TableHead>
                           <TableHead>{t("common.status" as any)}</TableHead>
                         </TableRow>
@@ -432,20 +430,19 @@ const ChargingBilling = () => {
                           <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedInvoice(inv)}>
                             <TableCell className="font-mono">{inv.invoice_number || "—"}</TableCell>
                             <TableCell>{inv.invoice_date ? format(new Date(inv.invoice_date), "dd.MM.yyyy") : format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
+                            <TableCell className="font-medium">{inv.user_name || "—"}</TableCell>
                             <TableCell className="text-sm">
                               {inv.period_start && inv.period_end
                                 ? `${format(new Date(inv.period_start), "dd.MM.")} – ${format(new Date(inv.period_end), "dd.MM.yyyy")}`
                                 : "—"}
                             </TableCell>
-                            <TableCell>{fmtKwh(inv.total_energy_kwh)}</TableCell>
-                            <TableCell>{fmtCurrency(inv.net_amount || (inv.total_amount - (inv.tax_amount || 0)))}</TableCell>
-                            <TableCell>{fmtCurrency(inv.tax_amount || 0)}</TableCell>
                             <TableCell className="font-medium">{fmtCurrency(inv.total_amount)}</TableCell>
                             <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? t("charging.statusPaid" as any) : inv.status === "issued" ? t("charging.statusIssued" as any) : t("charging.statusDraft" as any)}</Badge></TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
+
                   )}
                 </CardContent>
               </Card>
