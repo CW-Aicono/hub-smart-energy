@@ -353,10 +353,36 @@ const ChargingUsersTab = () => {
               <div><Label>{t("common.email" as any)}</Label><Input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} /></div>
               <div><Label>{t("cu.phone" as any)}</Label><Input value={userForm.phone} onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })} /></div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>{t("cu.rfidTag" as any)}</Label><Input value={userForm.rfid_tag} onChange={(e) => setUserForm({ ...userForm, rfid_tag: e.target.value })} placeholder="z. B. AB12CD34" /></div>
-              <div><Label>Tag-Bezeichnung</Label><Input value={userForm.rfid_label} onChange={(e) => setUserForm({ ...userForm, rfid_label: e.target.value })} placeholder="z. B. Karte 042" /></div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>RFID-Tags</Label>
+                <Button type="button" size="sm" variant="outline" onClick={addTagRow}>
+                  <Plus className="h-3.5 w-3.5 mr-1" />Tag hinzufügen
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Ein Nutzer kann beliebig viele Tags mit unterschiedlichen IDs haben. Tags werden case-insensitiv eindeutig pro Mandant gespeichert.
+              </p>
+              {userForm.tags.length === 0 && (
+                <p className="text-sm text-muted-foreground">Noch keine Tags hinterlegt.</p>
+              )}
+              {userForm.tags.map((row, i) => (
+                <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                  <div>
+                    {i === 0 && <Label className="text-xs">Tag-ID</Label>}
+                    <Input value={row.tag} onChange={(e) => updateTagRow(i, { tag: e.target.value })} placeholder="z. B. AB12CD34" className="font-mono" />
+                  </div>
+                  <div>
+                    {i === 0 && <Label className="text-xs">Tag-Bezeichnung</Label>}
+                    <Input value={row.label} onChange={(e) => updateTagRow(i, { label: e.target.value })} placeholder="z. B. Karte 042" />
+                  </div>
+                  <Button type="button" size="icon" variant="ghost" onClick={() => removeTagRow(i)} title="Tag entfernen">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>{t("cu.userGroup" as any)}</Label>
