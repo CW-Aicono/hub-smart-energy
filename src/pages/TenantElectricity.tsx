@@ -399,10 +399,11 @@ function TariffsTab() {
                 </Select>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <div><Label>{T(t, "te.localElectricity")}</Label><Input type="number" step="0.01" value={form.price_per_kwh_local} onChange={(e) => setForm({ ...form, price_per_kwh_local: Number(e.target.value) })} /></div>
-                <div><Label>{T(t, "te.gridElectricity")}</Label><Input type="number" step="0.01" value={form.price_per_kwh_grid} onChange={(e) => setForm({ ...form, price_per_kwh_grid: Number(e.target.value) })} /></div>
-                <div><Label>{T(t, "te.baseFeeMonthly")}</Label><Input type="number" step="0.5" value={form.base_fee_monthly} onChange={(e) => setForm({ ...form, base_fee_monthly: Number(e.target.value) })} /></div>
+                <div><Label>{T(t, "te.localElectricity")} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={form.price_per_kwh_local} onChange={(e) => setForm({ ...form, price_per_kwh_local: Number(e.target.value) })} /></div>
+                <div><Label>{T(t, "te.gridElectricity")} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={form.price_per_kwh_grid} onChange={(e) => setForm({ ...form, price_per_kwh_grid: Number(e.target.value) })} /></div>
+                <div><Label>{T(t, "te.baseFeeMonthly")} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.5" value={form.base_fee_monthly} onChange={(e) => setForm({ ...form, base_fee_monthly: Number(e.target.value) })} /></div>
               </div>
+              <p className="text-xs text-muted-foreground">Alle Preisangaben verstehen sich inklusive der gesetzlichen Mehrwertsteuer.</p>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>{T(t, "te.validFrom")}</Label><Input type="date" value={form.valid_from} onChange={(e) => setForm({ ...form, valid_from: e.target.value })} /></div>
                 <div><Label>{T(t, "te.validUntilOpt")}</Label><Input type="date" value={form.valid_until} onChange={(e) => setForm({ ...form, valid_until: e.target.value })} /></div>
