@@ -236,8 +236,7 @@ const ChargingUsersTab = () => {
                     <TableRow>
                       <TableHead>{t("common.name" as any)}</TableHead>
                       <TableHead>{t("common.email" as any)}</TableHead>
-                      <TableHead>{t("cu.rfidTag" as any)}</TableHead>
-                      <TableHead>Tag-Bezeichnung</TableHead>
+                      <TableHead>RFID-Tags</TableHead>
                       <TableHead>{t("cu.userGroup" as any)}</TableHead>
                       <TableHead>Tarif</TableHead>
                       <TableHead>{t("common.status" as any)}</TableHead>
@@ -246,12 +245,28 @@ const ChargingUsersTab = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredUsers.map((u) => (
+                    {filteredUsers.map((u) => {
+                      const tagList = (u.tags ?? []).length > 0
+                        ? u.tags
+                        : (u.rfid_tag ? [{ tag: u.rfid_tag, label: u.rfid_label }] as any[] : []);
+                      return (
                       <TableRow key={u.id}>
                         <TableCell className="font-medium">{u.name}</TableCell>
                         <TableCell>{u.email || "—"}</TableCell>
-                        <TableCell className="font-mono text-sm">{u.rfid_tag || "—"}</TableCell>
-                        <TableCell className="text-sm">{u.rfid_label || "—"}</TableCell>
+                        <TableCell>
+                          {tagList.length === 0 ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {tagList.map((t: any, i: number) => (
+                                <Badge key={t.id ?? i} variant="outline" className="font-mono text-xs">
+                                  {t.tag}{t.label ? ` · ${t.label}` : ""}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
+
                         <TableCell>{getGroupName(u.group_id)}</TableCell>
                         <TableCell className="text-sm">{getEffectiveTariff(u)}</TableCell>
                         <TableCell>{statusBadge(u.status)}</TableCell>
