@@ -1667,7 +1667,7 @@ serve(async (req) => {
               sample_count: d.count,
             }));
 
-          if (fiveMinInserts.length > 0) {
+          if (fiveMinInserts.length > 0 && !onlyTotals) {
             for (let i = 0; i < fiveMinInserts.length; i += 500) {
               const chunk = fiveMinInserts.slice(i, i + 500);
               const { error: insertError } = await supabase
@@ -1681,6 +1681,8 @@ serve(async (req) => {
               }
             }
             console.log(`Upserted ${fiveMinInserts.length} 5-min buckets for ${file.filename}`);
+          } else if (onlyTotals) {
+            console.log(`Skipping 5-min upsert for ${file.filename} (totalsOnly mode)`);
           }
 
           // Compute and upsert daily totals
