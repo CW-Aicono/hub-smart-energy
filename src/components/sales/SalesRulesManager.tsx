@@ -276,6 +276,47 @@ export function SalesRulesManager({ scope, partnerId, canManage = true }: SalesR
         </Card>
       )}
 
+      {scope === "partner" && partnerId && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              KI-Analyse-Modus (Foto-Erkennung Unterverteilung)
+              <Badge variant="outline" className="ml-2 gap-1 text-[10px]">
+                <Lock className="h-3 w-3" /> Pflicht-Einstellung
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="text-sm space-y-1">
+                <div className="font-medium">
+                  {aiMode === "high_performance" ? "Hochleistungs-KI" : "Standard-KI"}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {aiMode === "high_performance"
+                    ? "Zwei-Pass-Analyse mit gemini-2.5-pro: deutlich präzisere Zählung von FI/LS/Plätzen, weniger erfundene Verbraucher. ~6–10× teurer pro Analyse, ~3× langsamer."
+                    : "Einzel-Pass mit gemini-2.5-flash: schnell und günstig, aber bei komplexen Verteilungen ungenauer."}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-muted-foreground">Standard</span>
+                <Switch
+                  checked={aiMode === "high_performance"}
+                  disabled={!canManage || aiModeSaving}
+                  onCheckedChange={(v) => saveAiMode(v ? "high_performance" : "standard")}
+                />
+                <span className="text-xs text-muted-foreground">Hochleistung</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Diese Einstellung gilt für alle Sales-Mitarbeiter dieses Partners und kann nicht gelöscht werden. Mehrkosten der Hochleistungs-KI können dem Partner in Rechnung gestellt werden.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+
       <Card>
         <CardHeader>
           <CardTitle>Regeln ({visibleRules.length})</CardTitle>
