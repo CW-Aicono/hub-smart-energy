@@ -203,7 +203,7 @@ HARTE REGELN:
   "nicht_eindeutig_erkennbar": [ string ]
 }`;
 
-    const pass1 = await callAI(LOVABLE_API_KEY, MODEL_HIGH, [
+    const pass1 = await callAI(LOVABLE_API_KEY, MODEL_HIGH_VISION, [
       { role: "system", content: pass1System },
       {
         role: "user",
