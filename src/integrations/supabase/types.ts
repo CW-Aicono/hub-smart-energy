@@ -648,6 +648,7 @@ export type Database = {
           description: string | null
           energy_settings: Json
           id: string
+          location_id: string | null
           name: string
           tenant_id: string
           updated_at: string
@@ -658,6 +659,7 @@ export type Database = {
           description?: string | null
           energy_settings?: Json
           id?: string
+          location_id?: string | null
           name: string
           tenant_id: string
           updated_at?: string
@@ -668,11 +670,20 @@ export type Database = {
           description?: string | null
           energy_settings?: Json
           id?: string
+          location_id?: string | null
           name?: string
           tenant_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_groups_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       charge_point_uptime_snapshots: {
         Row: {

@@ -32,6 +32,7 @@ export interface ChargePointGroup {
   tenant_id: string;
   name: string;
   description: string | null;
+  location_id: string | null;
   energy_settings: ChargePointGroupEnergySettings;
   access_settings: ChargePointGroupAccessSettings;
   created_at: string;
@@ -58,7 +59,7 @@ export function useChargePointGroups() {
   });
 
   const createGroup = useMutation({
-    mutationFn: async (group: { name: string; description?: string }) => {
+    mutationFn: async (group: { name: string; description?: string; location_id?: string | null }) => {
       if (!tenant?.id) throw new Error("No tenant");
       const { data, error } = await supabase
         .from("charge_point_groups")

@@ -18,21 +18,28 @@ import { PowerLimitScheduler, PowerLimitSchedule, defaultPowerLimitSchedule } fr
 import { AccessControlSettings, AccessSettings } from "@/components/charging/AccessControlSettings";
 import GroupSolarChargingConfig from "@/components/charging/GroupSolarChargingConfig";
 import { useMeters } from "@/hooks/useMeters";
+import { useLocations } from "@/hooks/useLocations";
 
 export function ChargePointGroupsManager({ isAdmin }: { isAdmin: boolean }) {
   const { groups, isLoading, createGroup, updateGroup, deleteGroup, assignChargePointToGroup } = useChargePointGroups();
   const { chargePoints } = useChargePoints();
+  const { locations } = useLocations();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  const [newLocationId, setNewLocationId] = useState<string>("__none__");
   const [selectedGroup, setSelectedGroup] = useState<ChargePointGroup | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
   const handleCreate = () => {
     if (!newName.trim()) return;
-    createGroup.mutate({ name: newName.trim(), description: newDesc.trim() || undefined }, {
-      onSuccess: () => { setCreateOpen(false); setNewName(""); setNewDesc(""); },
+    createGroup.mutate({
+      name: newName.trim(),
+      description: newDesc.trim() || undefined,
+      location_id: newLocationId === "__none__" ? null : newLocationId,
+    }, {
+      onSuccess: () => { setCreateOpen(false); setNewName(""); setNewDesc(""); setNewLocationId("__none__"); },
     });
   };
 
@@ -67,6 +74,16 @@ export function ChargePointGroupsManager({ isAdmin }: { isAdmin: boolean }) {
               <div className="space-y-4 pt-2">
                 <div><Label>Name</Label><Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="z.B. Parkdeck Ost" autoFocus /></div>
                 <div><Label>Beschreibung (optional)</Label><Textarea value={newDesc} onChange={(e) => setNewDesc(e.target.value)} rows={2} /></div>
+                <div>
+                  <Label>Liegenschaft (optional)</Label>
+                  <Select value={newLocationId} onValueChange={setNewLocationId}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— keine Zuordnung —</SelectItem>
+                      {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Button onClick={handleCreate} disabled={!newName.trim() || createGroup.isPending} className="w-full">Erstellen</Button>
               </div>
             </DialogContent>
@@ -158,6 +175,7 @@ export function ChargePointGroupsManager({ isAdmin }: { isAdmin: boolean }) {
           open={detailOpen}
           onOpenChange={(v) => { setDetailOpen(v); if (!v) setSelectedGroup(null); }}
           chargePoints={chargePoints}
+          locations={locations}
           isAdmin={isAdmin}
           onUpdate={updateGroup.mutate}
           onAssign={assignChargePointToGroup.mutate}
@@ -172,12 +190,13 @@ interface GroupDetailProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   chargePoints: any[];
+  locations: { id: string; name: string }[];
   isAdmin: boolean;
   onUpdate: (data: any) => void;
   onAssign: (data: { chargePointId: string; groupId: string | null }) => void;
 }
 
-function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, isAdmin, onUpdate, onAssign }: GroupDetailProps) {
+function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, locations, isAdmin, onUpdate, onAssign }: GroupDetailProps) {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(group.name);
   const [energy, setEnergy] = useState<ChargePointGroupEnergySettings>({ ...group.energy_settings });
@@ -237,6 +256,22 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, isAdm
             )}
           </div>
         </DialogHeader>
+
+        {isAdmin && (
+          <div className="px-1">
+            <Label className="text-xs">Liegenschaft</Label>
+            <Select
+              value={group.location_id ?? "__none__"}
+              onValueChange={(v) => onUpdate({ id: group.id, location_id: v === "__none__" ? null : v })}
+            >
+              <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">— keine Zuordnung —</SelectItem>
+                {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <Tabs defaultValue="members">
           <TabsList className="w-full">

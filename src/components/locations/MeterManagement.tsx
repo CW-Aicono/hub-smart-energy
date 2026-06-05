@@ -29,6 +29,8 @@ import { MeterTreeView } from "./MeterTreeView";
 import { MeterAggregationWidget } from "./MeterAggregationWidget";
 import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors";
 import { filterAssignedGatewayDevices } from "@/lib/gatewayDeviceFiltering";
+import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
+import { LocationChargingInfrastructure } from "./LocationChargingInfrastructure";
 
 interface MeterManagementProps {
   locationId: string;
@@ -210,6 +212,11 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const [showArchived, setShowArchived] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [pendingSensorUuid, setPendingSensorUuid] = useState<string | null>(null);
+
+  // Ladeinfrastruktur – Tab nur einblenden, wenn mindestens ein Ladepunkt
+  // direkt oder über eine Gruppe dieser Liegenschaft zugeordnet ist.
+  const { data: locationChargePoints = [] } = useLocationChargePoints(locationId);
+  const hasChargingInfra = locationChargePoints.length > 0;
 
   // Gateway integrations for sensor/actuator tabs
   const { locationIntegrations, loading: intLoading } = useLocationIntegrations(locationId);
@@ -424,6 +431,12 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               {t("mm.tabs.tree" as any)}
             </TabsTrigger>
             <TabsTrigger value="alerts">{t("mm.tabs.alerts" as any)} ({alertRules.length})</TabsTrigger>
+            {hasChargingInfra && (
+              <TabsTrigger value="charging" className="gap-1">
+                <Zap className="h-3.5 w-3.5" />
+                Ladeinfrastruktur ({locationChargePoints.length})
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {unassignedDevicesCount > 0 && (
@@ -799,6 +812,12 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               </Table>
             )}
           </TabsContent>
+
+          {hasChargingInfra && (
+            <TabsContent value="charging" className="space-y-4">
+              <LocationChargingInfrastructure locationId={locationId} />
+            </TabsContent>
+          )}
         </Tabs>
 
         <AddMeterDialog
