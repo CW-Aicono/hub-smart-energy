@@ -114,6 +114,7 @@ const ChargingPoints = () => {
     connection_protocol: "wss" as "ws" | "wss",
     auth_required: true,
     ocpp_password: generatePw(),
+    location_id: "__none__",
   });
   const CONNECTOR_OPTIONS = [
     { value: "Type2", label: "Typ 2" },
