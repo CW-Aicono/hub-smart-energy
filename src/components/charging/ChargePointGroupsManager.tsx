@@ -190,12 +190,13 @@ interface GroupDetailProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   chargePoints: any[];
+  locations: { id: string; name: string }[];
   isAdmin: boolean;
   onUpdate: (data: any) => void;
   onAssign: (data: { chargePointId: string; groupId: string | null }) => void;
 }
 
-function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, isAdmin, onUpdate, onAssign }: GroupDetailProps) {
+function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, locations, isAdmin, onUpdate, onAssign }: GroupDetailProps) {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(group.name);
   const [energy, setEnergy] = useState<ChargePointGroupEnergySettings>({ ...group.energy_settings });
