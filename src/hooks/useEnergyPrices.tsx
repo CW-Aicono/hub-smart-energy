@@ -23,6 +23,7 @@ export interface EnergyPrice {
   spot_markup_per_unit: number;
   meter_id: string | null;
   direction: EnergyPriceDirection;
+  price_includes_vat: boolean;
 }
 
 export function useEnergyPrices(locationId?: string) {

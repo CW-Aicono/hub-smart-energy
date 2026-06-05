@@ -33,6 +33,13 @@ const KATEGORIEN: Record<string, string> = {
   sonstiges: "Sonstiges",
 };
 
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|heic|heif|bmp|avif)$/i;
+function isImageAttachment(a: { content_type: string | null; file_name: string }) {
+  if (a.content_type?.startsWith("image/")) return true;
+  return IMAGE_EXT.test(a.file_name || "");
+}
+
+
 export function ProjectAttachments({ projectId }: { projectId: string }) {
   const { user } = useAuth();
   const [items, setItems] = useState<Attachment[]>([]);
@@ -52,8 +59,8 @@ export function ProjectAttachments({ projectId }: { projectId: string }) {
     setItems(list);
     setLoading(false);
 
-    // Load signed URLs for image previews
-    const imgs = list.filter((a) => a.content_type?.startsWith("image/"));
+    // Load signed URLs for image previews (fallback: detect by file extension)
+    const imgs = list.filter((a) => isImageAttachment(a));
     const map: Record<string, string> = {};
     await Promise.all(
       imgs.map(async (a) => {
@@ -192,7 +199,7 @@ export function ProjectAttachments({ projectId }: { projectId: string }) {
         ) : (
           <ul className="space-y-2">
             {items.map((a) => {
-              const isImg = a.content_type?.startsWith("image/");
+              const isImg = isImageAttachment(a);
               return (
                 <li key={a.id} className="flex items-center gap-2 rounded-md border bg-card p-2">
                   <button

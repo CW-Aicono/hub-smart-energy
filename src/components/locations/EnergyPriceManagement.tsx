@@ -213,9 +213,10 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                                   ({T("ep.currently")} {((currentSpotPrice.price_eur_mwh / 1000) + Number(p.spot_markup_per_unit)).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €/{p.unit})
                                 </span>
                               )}
+                              {p.price_includes_vat !== false && <span className="text-xs text-muted-foreground ml-1">inkl. MwSt.</span>}
                             </span>
                           ) : (
-                            <>{Number(p.price_per_unit).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €/{p.unit}</>
+                            <>{Number(p.price_per_unit).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €/{p.unit}{p.price_includes_vat !== false && <span className="text-xs text-muted-foreground ml-1">inkl. MwSt.</span>}</>
                           )}
                         </TableCell>
                         <TableCell>{new Date(p.valid_from).toLocaleDateString("de-DE")}</TableCell>

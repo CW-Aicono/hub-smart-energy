@@ -212,7 +212,7 @@ export default function MarketplaceTab({ communityId }: Props) {
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <Label>Preis (ct/kWh)</Label>
+                    <Label>Preis (ct/kWh) <span className="text-xs text-muted-foreground">inkl. MwSt.</span></Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -221,7 +221,7 @@ export default function MarketplaceTab({ communityId }: Props) {
                     />
                   </div>
                   <div>
-                    <Label>Einspeisung (ct/kWh)</Label>
+                    <Label>Einspeisung (ct/kWh) <span className="text-xs text-muted-foreground">inkl. MwSt.</span></Label>
                     <Input
                       type="number"
                       step="0.01"

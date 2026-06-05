@@ -1396,10 +1396,14 @@ serve(async (req) => {
     //     - 2x uint16 (UUID parts) + 1x uint32 (Loxone timestamp) + N x float64 (values)
     //   Loxone timestamp = seconds since 2009-01-01 00:00:00 UTC
     if (action === "backfillStatistics") {
-      const { fromDate, toDate } = requestBody;
+      const { fromDate, toDate, totalsOnly } = requestBody;
       if (!fromDate || !toDate) throw new Error("fromDate und toDate sind erforderlich (YYYY-MM-DD)");
 
-      console.log(`Backfill statistics (binary): ${fromDate} to ${toDate} for integration ${locationIntegrationId}`);
+      // totalsOnly=true: nur meter_period_totals (Tagessummen) abgleichen,
+      // die 5-Min-Werte in meter_power_readings_5min werden NICHT überschrieben.
+      // Verwendet vom täglichen Cron, damit der feine Live-Graph erhalten bleibt.
+      const onlyTotals = totalsOnly === true;
+      console.log(`Backfill statistics (binary): ${fromDate} to ${toDate} for integration ${locationIntegrationId} (totalsOnly=${onlyTotals})`);
 
       const LOXONE_EPOCH_OFFSET = 1230768000; // 2009-01-01 00:00:00 UTC in Unix seconds
 
@@ -1663,7 +1667,7 @@ serve(async (req) => {
               sample_count: d.count,
             }));
 
-          if (fiveMinInserts.length > 0) {
+          if (fiveMinInserts.length > 0 && !onlyTotals) {
             for (let i = 0; i < fiveMinInserts.length; i += 500) {
               const chunk = fiveMinInserts.slice(i, i + 500);
               const { error: insertError } = await supabase
@@ -1677,6 +1681,8 @@ serve(async (req) => {
               }
             }
             console.log(`Upserted ${fiveMinInserts.length} 5-min buckets for ${file.filename}`);
+          } else if (onlyTotals) {
+            console.log(`Skipping 5-min upsert for ${file.filename} (totalsOnly mode)`);
           }
 
           // Compute and upsert daily totals

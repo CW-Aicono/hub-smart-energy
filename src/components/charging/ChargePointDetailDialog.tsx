@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Wifi, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Gauge } from "lucide-react";
+import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Wifi, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Gauge, Wrench } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
@@ -21,6 +21,7 @@ import { fmtKwh, fmtKw, normalizeConnectorStatus, isChargePointOnline } from "@/
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { AccessControlSettings } from "@/components/charging/AccessControlSettings";
+import { AutoRebootSettings } from "@/components/charging/AutoRebootSettings";
 import { PowerLimitScheduler, defaultPowerLimitSchedule, type PowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
 import { getOcppHost } from "@/lib/ocppEnvironment";
 import { downloadSecureStorageObject } from "@/lib/secureStorage";
@@ -212,6 +213,7 @@ export default function ChargePointDetailDialog({
             <TabsTrigger value="energy" className="flex-1 gap-1.5 text-xs"><Gauge className="h-3.5 w-3.5" />Energie</TabsTrigger>
             <TabsTrigger value="access" className="flex-1 gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" />Zugang</TabsTrigger>
             <TabsTrigger value="sessions" className="flex-1 gap-1.5 text-xs"><Clock className="h-3.5 w-3.5" />Ladevorgänge</TabsTrigger>
+            <TabsTrigger value="maintenance" className="flex-1 gap-1.5 text-xs"><Wrench className="h-3.5 w-3.5" />Wartung</TabsTrigger>
           </TabsList>
 
           <TabsContent value="details" className="mt-4 space-y-4">
@@ -499,6 +501,15 @@ export default function ChargePointDetailDialog({
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          {/* Maintenance Tab */}
+          <TabsContent value="maintenance" className="mt-4">
+            <AutoRebootSettings
+              chargePoint={cp}
+              isAdmin={isAdmin}
+              onSave={(patch) => onUpdate({ id: cp.id, ...patch } as any)}
+            />
           </TabsContent>
         </Tabs>
       </DialogContent>

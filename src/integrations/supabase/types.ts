@@ -708,6 +708,11 @@ export type Database = {
           access_settings: Json
           address: string | null
           auth_required: boolean
+          auto_reboot_enabled: boolean
+          auto_reboot_last_run_at: string | null
+          auto_reboot_skip_if_charging: boolean
+          auto_reboot_time: string
+          auto_reboot_type: string
           certificate_required: boolean
           certificate_type: string | null
           cheap_charging_schedule: Json | null
@@ -745,6 +750,11 @@ export type Database = {
           access_settings?: Json
           address?: string | null
           auth_required?: boolean
+          auto_reboot_enabled?: boolean
+          auto_reboot_last_run_at?: string | null
+          auto_reboot_skip_if_charging?: boolean
+          auto_reboot_time?: string
+          auto_reboot_type?: string
           certificate_required?: boolean
           certificate_type?: string | null
           cheap_charging_schedule?: Json | null
@@ -782,6 +792,11 @@ export type Database = {
           access_settings?: Json
           address?: string | null
           auth_required?: boolean
+          auto_reboot_enabled?: boolean
+          auto_reboot_last_run_at?: string | null
+          auto_reboot_skip_if_charging?: boolean
+          auto_reboot_time?: string
+          auto_reboot_type?: string
           certificate_required?: boolean
           certificate_type?: string | null
           cheap_charging_schedule?: Json | null
@@ -1232,6 +1247,7 @@ export type Database = {
           is_active: boolean
           is_default: boolean
           name: string
+          price_includes_vat: boolean | null
           price_per_kwh: number
           tax_rate_percent: number
           tenant_id: string
@@ -1247,6 +1263,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean
           name: string
+          price_includes_vat?: boolean | null
           price_per_kwh?: number
           tax_rate_percent?: number
           tenant_id: string
@@ -1262,6 +1279,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean
           name?: string
+          price_includes_vat?: boolean | null
           price_per_kwh?: number
           tax_rate_percent?: number
           tenant_id?: string
@@ -1321,6 +1339,58 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charging_user_rfid_tags: {
+        Row: {
+          created_at: string
+          id: string
+          label: string | null
+          tag: string
+          tenant_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          tag: string
+          tenant_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          tag?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_user_rfid_tags_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_user_rfid_tags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "charging_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_user_rfid_tags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "charging_users_public"
             referencedColumns: ["id"]
           },
         ]
@@ -2186,6 +2256,7 @@ export type Database = {
           feed_in_ct_kwh: number
           id: string
           price_ct_kwh: number
+          price_includes_vat: boolean | null
           tenant_id: string
           updated_at: string
           valid_from: string
@@ -2197,6 +2268,7 @@ export type Database = {
           feed_in_ct_kwh?: number
           id?: string
           price_ct_kwh?: number
+          price_includes_vat?: boolean | null
           tenant_id: string
           updated_at?: string
           valid_from: string
@@ -2208,6 +2280,7 @@ export type Database = {
           feed_in_ct_kwh?: number
           id?: string
           price_ct_kwh?: number
+          price_includes_vat?: boolean | null
           tenant_id?: string
           updated_at?: string
           valid_from?: string
@@ -3020,6 +3093,7 @@ export type Database = {
           is_dynamic: boolean
           location_id: string
           meter_id: string | null
+          price_includes_vat: boolean | null
           price_per_unit: number
           spot_markup_per_unit: number
           tenant_id: string
@@ -3037,6 +3111,7 @@ export type Database = {
           is_dynamic?: boolean
           location_id: string
           meter_id?: string | null
+          price_includes_vat?: boolean | null
           price_per_unit?: number
           spot_markup_per_unit?: number
           tenant_id: string
@@ -3054,6 +3129,7 @@ export type Database = {
           is_dynamic?: boolean
           location_id?: string
           meter_id?: string | null
+          price_includes_vat?: boolean | null
           price_per_unit?: number
           spot_markup_per_unit?: number
           tenant_id?: string
@@ -5855,6 +5931,7 @@ export type Database = {
       partners: {
         Row: {
           accent_color: string | null
+          ai_analysis_mode: string
           billing_address: Json
           billing_mode: string
           brand_display_name: string | null
@@ -5878,6 +5955,7 @@ export type Database = {
         }
         Insert: {
           accent_color?: string | null
+          ai_analysis_mode?: string
           billing_address?: Json
           billing_mode?: string
           brand_display_name?: string | null
@@ -5901,6 +5979,7 @@ export type Database = {
         }
         Update: {
           accent_color?: string | null
+          ai_analysis_mode?: string
           billing_address?: Json
           billing_mode?: string
           brand_display_name?: string | null

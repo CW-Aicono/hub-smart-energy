@@ -339,14 +339,27 @@ async function isUserInAllowedGroups(
     const { data } = await query;
     userGroupId = data?.group_id ?? null;
   } else {
+    // 1) Legacy rfid_tag column auf charging_users
     const { data } = await supabase
       .from("charging_users")
       .select("group_id")
       .eq("tenant_id", tenantId)
       .ilike("rfid_tag", idTag)
-      .single();
+      .maybeSingle();
     userGroupId = data?.group_id ?? null;
+
+    // 2) Neue Multi-Tag-Tabelle
+    if (!userGroupId) {
+      const { data: tagRow } = await supabase
+        .from("charging_user_rfid_tags")
+        .select("user:charging_users!inner(group_id)")
+        .eq("tenant_id", tenantId)
+        .ilike("tag", idTag)
+        .maybeSingle();
+      userGroupId = (tagRow as any)?.user?.group_id ?? null;
+    }
   }
+
 
   if (!userGroupId) return false;
   return allowedGroupIds.includes(userGroupId);
@@ -429,12 +442,25 @@ async function validateIdTag(
     }
     userId = appUser.id;
   } else {
-    const { data: user } = await supabase
+    // 1) Legacy rfid_tag column
+    let { data: user } = await supabase
       .from("charging_users")
       .select("id, status, group_id")
       .eq("tenant_id", cp.tenant_id)
       .ilike("rfid_tag", idTag)
-      .single();
+      .maybeSingle();
+
+    // 2) Neue Multi-Tag-Tabelle
+    if (!user) {
+      const { data: tagRow } = await supabase
+        .from("charging_user_rfid_tags")
+        .select("user:charging_users!inner(id, status, group_id)")
+        .eq("tenant_id", cp.tenant_id)
+        .ilike("tag", idTag)
+        .maybeSingle();
+      user = (tagRow as any)?.user ?? null;
+    }
+
     if (!user) {
       console.log(`[ocpp-central] RFID tag not found: "${idTag}" in tenant ${cp.tenant_id}`);
       await logAccessAttempt(supabase, cp.tenant_id, cp.id, chargePointId, idTag, "Invalid", "RFID tag not found");
@@ -446,6 +472,7 @@ async function validateIdTag(
     }
     userId = user.id;
   }
+
 
   // User group restriction check
   if (accessSettings.user_group_restriction) {

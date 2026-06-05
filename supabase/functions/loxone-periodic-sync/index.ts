@@ -84,21 +84,25 @@ serve(async (req) => {
       const locationId = (li as any).location_id;
       const integrationType = (li.integration as any)?.type || "loxone";
 
-      // ── Intervall-Drosselung: pro Liegenschaft konfigurierbar (1–15 Min, Default 5) ──
+      // ── Wall-Clock-Alignment: Pollen exakt an Uhrzeit-Rastern (00:00, 00:05, 00:10 …) ──
+      // Vorteil ggü. „elapsed seit last_sync_at": die Sync-Dauer driftet das Raster NIE.
+      // Solange ein Sync < intervalMin dauert, ist der Takt mathematisch lückenfrei.
       if (respectPollInterval) {
         const cfg = ((li as any).config as Record<string, any> | null) || {};
         const rawInterval = Number(cfg.poll_interval_minutes);
         const intervalMin = Number.isFinite(rawInterval) && rawInterval >= 1 && rawInterval <= 15
           ? Math.floor(rawInterval)
           : 5;
+        const intervalMs = intervalMin * 60_000;
         const lastSyncIso = (li as any).last_sync_at as string | null;
         if (lastSyncIso) {
           const lastMs = new Date(lastSyncIso).getTime();
-          const elapsedMs = nowMs - lastMs;
-          const requiredMs = intervalMin * 60_000 - TOLERANCE_MS;
-          if (elapsedMs < requiredMs) {
-            const remainingSec = Math.ceil((requiredMs - elapsedMs) / 1000);
-            console.log(`Skipping integration ${integrationId} – next sync in ${remainingSec}s (interval=${intervalMin}min)`);
+          // Bucket = wall-clock-Slot, in den der Zeitpunkt fällt
+          const currentBucket = Math.floor(nowMs / intervalMs);
+          const lastBucket = Math.floor(lastMs / intervalMs);
+          if (currentBucket === lastBucket) {
+            const remainingSec = Math.ceil(((currentBucket + 1) * intervalMs - nowMs) / 1000);
+            console.log(`Skipping integration ${integrationId} – same wall-clock bucket, next slot in ${remainingSec}s (interval=${intervalMin}min)`);
             results.push({ id: integrationId, success: true, skipped: true });
             skippedCount++;
             continue;
@@ -106,8 +110,18 @@ serve(async (req) => {
         }
       }
 
+
+
       console.log(`Syncing integration: ${integrationId}`);
 
+      // Variante B: Anker für Intervall-Drosselung = START des Syncs (nicht ENDE).
+      // Verhindert Drift: Sync-Dauer (10–30 s) wird sonst auf das Poll-Intervall addiert
+      // und führt zu ~6-min-Takt statt sauberen 5 min.
+      const syncStartIso = new Date().toISOString();
+      await supabase
+        .from("location_integrations")
+        .update({ last_sync_at: syncStartIso })
+        .eq("id", integrationId);
 
       try {
         const response = await fetch(
@@ -129,6 +143,13 @@ serve(async (req) => {
         if (!response.ok || !data.success) {
           console.error(`[loxone-periodic-sync] HTTP ${response.status} for integration ${integrationId}: ${data?.error || response.statusText}`);
         }
+
+        // Variante B: Anker auf START zurücksetzen (loxone-api hat ihn am ENDE überschrieben).
+        await supabase
+          .from("location_integrations")
+          .update({ last_sync_at: syncStartIso })
+          .eq("id", integrationId);
+
 
         if (data.success) {
           const sensors = data.sensors || [];

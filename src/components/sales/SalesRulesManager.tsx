@@ -20,7 +20,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, ListChecks } from "lucide-react";
+import { Plus, Pencil, Trash2, ListChecks, Sparkles, Lock } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 interface Rule {
@@ -85,18 +85,53 @@ export function SalesRulesManager({ scope, partnerId, canManage = true }: SalesR
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormData>(emptyForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [aiMode, setAiMode] = useState<"standard" | "high_performance">("standard");
+  const [aiModeSaving, setAiModeSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
-    const [rulesRes, devicesRes] = await Promise.all([
-      supabase.from("device_selection_rules").select("*").order("prio").order("name"),
-      supabase.from("device_catalog").select("id,hersteller,modell,owner_scope,partner_id").order("hersteller").order("modell"),
-    ]);
+    const reqs: Promise<any>[] = [
+      Promise.resolve(supabase.from("device_selection_rules").select("*").order("prio").order("name")),
+      Promise.resolve(supabase.from("device_catalog").select("id,hersteller,modell,owner_scope,partner_id").order("hersteller").order("modell")),
+    ];
+    if (scope === "partner" && partnerId) {
+      reqs.push(Promise.resolve(supabase.from("partners").select("ai_analysis_mode").eq("id", partnerId).maybeSingle()));
+    }
+    const results = await Promise.all(reqs);
+    const rulesRes = results[0];
+    const devicesRes = results[1];
+    const partnerRes = results[2];
     if (rulesRes.error) toast({ title: "Fehler", description: rulesRes.error.message, variant: "destructive" });
     else setRules((rulesRes.data || []) as Rule[]);
     if (devicesRes.error) toast({ title: "Fehler", description: devicesRes.error.message, variant: "destructive" });
     else setDevices((devicesRes.data || []) as Device[]);
+    if (partnerRes && !partnerRes.error && partnerRes.data) {
+      setAiMode((partnerRes.data.ai_analysis_mode === "high_performance" ? "high_performance" : "standard"));
+    }
     setLoading(false);
+  };
+
+  const saveAiMode = async (next: "standard" | "high_performance") => {
+    if (!partnerId) return;
+    setAiModeSaving(true);
+    const prev = aiMode;
+    setAiMode(next);
+    const { error } = await supabase
+      .from("partners")
+      .update({ ai_analysis_mode: next })
+      .eq("id", partnerId);
+    setAiModeSaving(false);
+    if (error) {
+      setAiMode(prev);
+      toast({ title: "Speichern fehlgeschlagen", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({
+      title: "KI-Modus gespeichert",
+      description: next === "high_performance"
+        ? "Foto-Analyse läuft jetzt mit Hochleistungs-KI (gemini-2.5-pro, Zwei-Pass)."
+        : "Foto-Analyse läuft jetzt mit Standard-KI (gemini-2.5-flash).",
+    });
   };
 
   useEffect(() => {
@@ -240,6 +275,47 @@ export function SalesRulesManager({ scope, partnerId, canManage = true }: SalesR
           </CardContent>
         </Card>
       )}
+
+      {scope === "partner" && partnerId && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              KI-Analyse-Modus (Foto-Erkennung Unterverteilung)
+              <Badge variant="outline" className="ml-2 gap-1 text-[10px]">
+                <Lock className="h-3 w-3" /> Pflicht-Einstellung
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="text-sm space-y-1">
+                <div className="font-medium">
+                  {aiMode === "high_performance" ? "Hochleistungs-KI" : "Standard-KI"}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {aiMode === "high_performance"
+                    ? "Zwei-Pass-Analyse mit gemini-2.5-pro: deutlich präzisere Zählung von FI/LS/Plätzen, weniger erfundene Verbraucher. ~6–10× teurer pro Analyse, ~3× langsamer."
+                    : "Einzel-Pass mit gemini-2.5-flash: schnell und günstig, aber bei komplexen Verteilungen ungenauer."}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-muted-foreground">Standard</span>
+                <Switch
+                  checked={aiMode === "high_performance"}
+                  disabled={!canManage || aiModeSaving}
+                  onCheckedChange={(v) => saveAiMode(v ? "high_performance" : "standard")}
+                />
+                <span className="text-xs text-muted-foreground">Hochleistung</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Diese Einstellung gilt für alle Sales-Mitarbeiter dieses Partners und kann nicht gelöscht werden. Mehrkosten der Hochleistungs-KI können dem Partner in Rechnung gestellt werden.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
 
       <Card>
         <CardHeader>
