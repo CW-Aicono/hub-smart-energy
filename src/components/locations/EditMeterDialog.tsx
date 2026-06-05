@@ -23,6 +23,8 @@ import { MeterOffsetSection } from "./MeterOffsetSection";
 import { ReplaceDeviceDialog } from "./ReplaceDeviceDialog";
 import type { MeterOffsetReason } from "@/lib/meterOffset";
 import { ArrowRightLeft } from "lucide-react";
+import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
+import { useChargePointGroups } from "@/hooks/useChargePointGroups";
 
 interface Floor {
   id: string;
@@ -52,6 +54,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const { t } = useTranslation();
   const T = (key: string) => t(key as any);
   const { meters: allMeters } = useMeters(meter.location_id);
+  const { data: locationChargePoints = [] } = useLocationChargePoints(meter.location_id);
+  const { groups: allCpGroups = [] } = useChargePointGroups();
+  const locationCpGroups = allCpGroups.filter((g) => g.location_id === meter.location_id);
   const [name, setName] = useState(meter.name);
   const [deviceType, setDeviceType] = useState((meter as any).device_type || "meter");
   const [meterNumber, setMeterNumber] = useState(meter.meter_number || "");
@@ -171,11 +176,13 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     if (meter.capture_type === "virtual") {
       supabase
         .from("virtual_meter_sources")
-        .select("source_meter_id, operator")
+        .select(
+          "source_meter_id, source_charge_point_id, source_charge_point_group_id, source_all_charge_points, operator",
+        )
         .eq("virtual_meter_id", meter.id)
         .order("sort_order")
         .then(({ data }) => {
-          setVirtualSources((data as VirtualMeterSource[]) || []);
+          setVirtualSources((data as unknown as VirtualMeterSource[]) || []);
         });
     } else {
       setVirtualSources([]);
@@ -352,7 +359,10 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       if (virtualSources.length > 0) {
         const rows = virtualSources.map((s, i) => ({
           virtual_meter_id: meter.id,
-          source_meter_id: s.source_meter_id,
+          source_meter_id: s.source_meter_id ?? null,
+          source_charge_point_id: s.source_charge_point_id ?? null,
+          source_charge_point_group_id: s.source_charge_point_group_id ?? null,
+          source_all_charge_points: s.source_all_charge_points ?? false,
           operator: s.operator,
           sort_order: i,
         }));
@@ -476,6 +486,8 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               sources={virtualSources}
               onSourcesChange={setVirtualSources}
               availableMeters={allMeters.filter((m) => !m.is_archived && m.id !== meter.id)}
+              availableChargePoints={locationChargePoints.map((cp) => ({ id: cp.id, name: cp.name }))}
+              availableChargePointGroups={locationCpGroups.map((g) => ({ id: g.id, name: g.name }))}
             />
           )}
 

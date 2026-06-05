@@ -9339,7 +9339,10 @@ export type Database = {
           id: string
           operator: string
           sort_order: number
-          source_meter_id: string
+          source_all_charge_points: boolean
+          source_charge_point_group_id: string | null
+          source_charge_point_id: string | null
+          source_meter_id: string | null
           virtual_meter_id: string
         }
         Insert: {
@@ -9347,7 +9350,10 @@ export type Database = {
           id?: string
           operator?: string
           sort_order?: number
-          source_meter_id: string
+          source_all_charge_points?: boolean
+          source_charge_point_group_id?: string | null
+          source_charge_point_id?: string | null
+          source_meter_id?: string | null
           virtual_meter_id: string
         }
         Update: {
@@ -9355,10 +9361,27 @@ export type Database = {
           id?: string
           operator?: string
           sort_order?: number
-          source_meter_id?: string
+          source_all_charge_points?: boolean
+          source_charge_point_group_id?: string | null
+          source_charge_point_id?: string | null
+          source_meter_id?: string | null
           virtual_meter_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "virtual_meter_sources_source_charge_point_group_id_fkey"
+            columns: ["source_charge_point_group_id"]
+            isOneToOne: false
+            referencedRelation: "charge_point_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "virtual_meter_sources_source_charge_point_id_fkey"
+            columns: ["source_charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "virtual_meter_sources_source_meter_id_fkey"
             columns: ["source_meter_id"]

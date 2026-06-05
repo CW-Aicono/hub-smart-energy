@@ -18,6 +18,8 @@ import { AlertCircle } from "lucide-react";
 import { VirtualMeterFormulaBuilder, VirtualMeterSource } from "./VirtualMeterFormulaBuilder";
 import { MeterOffsetSection } from "./MeterOffsetSection";
 import type { MeterOffsetReason } from "@/lib/meterOffset";
+import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
+import { useChargePointGroups } from "@/hooks/useChargePointGroups";
 
 interface AddMeterDialogProps {
   locationId: string;
@@ -37,6 +39,9 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
   const { t } = useTranslation();
   const T = (key: string) => t(key as any);
   const { locationIntegrations, loading: integrationsLoading } = useLocationIntegrations(locationId);
+  const { data: locationChargePoints = [] } = useLocationChargePoints(locationId);
+  const { groups: allCpGroups = [] } = useChargePointGroups();
+  const locationCpGroups = allCpGroups.filter((g) => g.location_id === locationId);
   const [name, setName] = useState("");
   const [meterNumber, setMeterNumber] = useState("");
   const [energyType, setEnergyType] = useState("strom");
@@ -247,6 +252,8 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
               sources={virtualSources}
               onSourcesChange={setVirtualSources}
               availableMeters={activeMeters}
+              availableChargePoints={locationChargePoints.map((cp) => ({ id: cp.id, name: cp.name }))}
+              availableChargePointGroups={locationCpGroups.map((g) => ({ id: g.id, name: g.name }))}
             />
           )}
 

@@ -66,7 +66,13 @@ export function useMeters(locationId?: string) {
     parentMeterId?: string | null,
     isMainMeter?: boolean,
     meterFunction?: string,
-    virtualSources?: { source_meter_id: string; operator: "+" | "-" }[],
+    virtualSources?: {
+      operator: "+" | "-";
+      source_meter_id?: string | null;
+      source_charge_point_id?: string | null;
+      source_charge_point_group_id?: string | null;
+      source_all_charge_points?: boolean;
+    }[],
   ) => {
     if (!tenantId) return;
 
@@ -88,12 +94,15 @@ export function useMeters(locationId?: string) {
       console.error(error);
     } else {
       if (virtualSources && virtualSources.length > 0 && inserted?.id) {
-        const rows: VirtualMeterSourceInsert[] = virtualSources.map((s, i) => ({
+        const rows = virtualSources.map((s, i) => ({
           virtual_meter_id: inserted.id,
-          source_meter_id: s.source_meter_id,
+          source_meter_id: s.source_meter_id ?? null,
+          source_charge_point_id: s.source_charge_point_id ?? null,
+          source_charge_point_group_id: s.source_charge_point_group_id ?? null,
+          source_all_charge_points: s.source_all_charge_points ?? false,
           operator: s.operator,
           sort_order: i,
-        }));
+        })) as unknown as VirtualMeterSourceInsert[];
         const { error: srcErr } = await supabase.from("virtual_meter_sources").insert(rows);
         if (srcErr) {
           console.error("Error saving virtual sources:", srcErr);
