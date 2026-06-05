@@ -812,6 +812,12 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               </Table>
             )}
           </TabsContent>
+
+          {hasChargingInfra && (
+            <TabsContent value="charging" className="space-y-4">
+              <LocationChargingInfrastructure locationId={locationId} />
+            </TabsContent>
+          )}
         </Tabs>
 
         <AddMeterDialog
