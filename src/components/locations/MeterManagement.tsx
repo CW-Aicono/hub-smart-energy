@@ -431,6 +431,12 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               {t("mm.tabs.tree" as any)}
             </TabsTrigger>
             <TabsTrigger value="alerts">{t("mm.tabs.alerts" as any)} ({alertRules.length})</TabsTrigger>
+            {hasChargingInfra && (
+              <TabsTrigger value="charging" className="gap-1">
+                <Zap className="h-3.5 w-3.5" />
+                Ladeinfrastruktur ({locationChargePoints.length})
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {unassignedDevicesCount > 0 && (
