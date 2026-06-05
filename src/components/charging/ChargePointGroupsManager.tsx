@@ -255,6 +255,22 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, isAdm
           </div>
         </DialogHeader>
 
+        {isAdmin && (
+          <div className="px-1">
+            <Label className="text-xs">Liegenschaft</Label>
+            <Select
+              value={group.location_id ?? "__none__"}
+              onValueChange={(v) => onUpdate({ id: group.id, location_id: v === "__none__" ? null : v })}
+            >
+              <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">— keine Zuordnung —</SelectItem>
+                {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         <Tabs defaultValue="members">
           <TabsList className="w-full">
             <TabsTrigger value="members" className="flex-1 gap-1.5 text-xs"><PlugZap className="h-3.5 w-3.5" />Ladepunkte ({members.length})</TabsTrigger>
