@@ -486,6 +486,8 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               sources={virtualSources}
               onSourcesChange={setVirtualSources}
               availableMeters={allMeters.filter((m) => !m.is_archived && m.id !== meter.id)}
+              availableChargePoints={locationChargePoints.map((cp) => ({ id: cp.id, name: cp.name }))}
+              availableChargePointGroups={locationCpGroups.map((g) => ({ id: g.id, name: g.name }))}
             />
           )}
 
