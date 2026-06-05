@@ -24,7 +24,10 @@ export const config = {
   port: num("PORT", 8080),
   logLevel: (process.env.LOG_LEVEL ?? "info") as "debug" | "info" | "warn" | "error",
   pingIntervalSec: num("PING_INTERVAL_SECONDS", 25),
-  idleTimeoutSec: num("IDLE_TIMEOUT_SECONDS", 120),
+  // 25 h: muss größer sein als unsere Heartbeat-Antwort (interval: 86400 = 24h),
+  // sonst werden OCPP-stille Wallboxen (z. B. wallbe BF-01.04.x) fälschlich
+  // alle 2 Minuten als „idle" geschlossen.
+  idleTimeoutSec: num("IDLE_TIMEOUT_SECONDS", 90000),
   commandPollIntervalMs: num("COMMAND_POLL_INTERVAL_MS", 2000),
   enableRealtime: bool("ENABLE_REALTIME", false),
   startupCheckOcppId: process.env.OCPP_STARTUP_CHECK_ID ?? "",
