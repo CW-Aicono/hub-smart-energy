@@ -465,9 +465,9 @@ const LiveValues = () => {
     return manualDailyTotals.get(meterId) ?? null;
   }, [liveValues, manualDailyTotals]);
 
-  // Compute virtual meter values (instantaneous + daily total)
+  // Compute virtual meter values (instantaneous + daily total) — supports meter and CP sources (mixed)
   const virtualValues = useMemo(() => {
-    const map = new Map<string, { value: number; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string }>();
+    const map = new Map<string, { value: number; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null }>();
     const virtualMeterIds = new Set(virtualSources.map((s) => s.virtual_meter_id));
 
     for (const vmId of virtualMeterIds) {
@@ -475,53 +475,44 @@ const LiveValues = () => {
         .filter((s) => s.virtual_meter_id === vmId)
         .sort((a, b) => a.sort_order - b.sort_order);
 
-      let total: number | null = null;
-      let totalDay: number | null = null;
+      let total = 0;
+      let totalDay = 0;
       let allResolved = true;
       let allDayResolved = true;
+      let hasMeterSource = false;
 
       for (const src of sources) {
-        if (!src.source_meter_id) {
-          // CP-based sources werden hier (Live-Werte-Seite) nicht aufgelöst — siehe useEnergyData für Dashboards.
-          allResolved = false;
-          break;
-        }
+        if (!src.source_meter_id) continue; // CP sources handled via cpVirtualValues
+        hasMeterSource = true;
         const val = getSourceValue(src.source_meter_id);
-        if (val === null) {
-          allResolved = false;
-          break;
-        }
-        if (total === null) {
-          total = src.operator === "-" ? -val : val;
-        } else {
-          total = src.operator === "-" ? total - val : total + val;
-        }
-
-        // Accumulate daily totals from sources
+        if (val === null) { allResolved = false; break; }
+        total += src.operator === "-" ? -val : val;
         const dayVal = getSourceTotalDay(src.source_meter_id);
-        if (dayVal === null) {
-          allDayResolved = false;
-        } else if (allDayResolved) {
-          if (totalDay === null) {
-            totalDay = src.operator === "-" ? -dayVal : dayVal;
-          } else {
-            totalDay = src.operator === "-" ? totalDay - dayVal : totalDay + dayVal;
-          }
-        }
+        if (dayVal === null) allDayResolved = false;
+        else if (allDayResolved) totalDay += src.operator === "-" ? -dayVal : dayVal;
       }
 
-      if (allResolved && total !== null) {
-        map.set(vmId, { value: total, totalDay: allDayResolved ? totalDay : null, totalWeek: null, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "" });
-      }
+      const cp = cpVirtualValues.get(vmId);
+      if (!allResolved) continue;
+      if (!hasMeterSource && !cp) continue;
+
+      const finalValue = total + (cp?.value ?? 0);
+      const finalDay = (hasMeterSource && !allDayResolved) ? null : (totalDay + (cp?.totalDay ?? 0));
+      const finalMonth = cp?.totalMonth ?? null;
+      const finalYear = cp?.totalYear ?? null;
+      const finalReading = cp?.meterReading ?? null;
+
+      map.set(vmId, { value: finalValue, totalDay: finalDay, totalMonth: finalMonth, totalYear: finalYear, meterReading: finalReading });
     }
     return map;
-  }, [virtualSources, getSourceValue, getSourceTotalDay]);
+  }, [virtualSources, getSourceValue, getSourceTotalDay, cpVirtualValues]);
 
   const getValue = (meter: typeof meters[0]): { value: number | null; unit: string; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string; source: "live" | "manual" | "virtual" | "none"; date?: string } => {
     if (meter.capture_type === "virtual" && virtualValues.has(meter.id)) {
       const vv = virtualValues.get(meter.id)!;
-      return { value: vv.value, unit: "", totalDay: vv.totalDay, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "", source: "virtual" };
+      return { value: vv.value, unit: "", totalDay: vv.totalDay, totalMonth: vv.totalMonth, totalYear: vv.totalYear, meterReading: vv.meterReading, meterReadingUnit: "kWh", source: "virtual" };
     }
+
     if (meter.capture_type === "automatic" && liveValues.has(meter.id)) {
       const live = liveValues.get(meter.id)!;
       return { value: live.value, unit: live.unit, totalDay: live.totalDay, totalMonth: live.totalMonth, totalYear: live.totalYear, meterReading: live.meterReading, meterReadingUnit: live.meterReadingUnit, source: "live" };
