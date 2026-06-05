@@ -63,7 +63,7 @@ export function LocationChargingInfrastructure({ locationId }: Props) {
 
       <div className="space-y-2">
         {chargePoints.map((cp) => (
-          <ChargePointRow key={cp.id} cp={cp} onOpen={() => navigate(`/charging/${cp.id}`)} />
+          <ChargePointRow key={cp.id} cp={cp} onOpen={() => navigate(`/charging/points/${cp.id}`)} />
         ))}
       </div>
     </div>
