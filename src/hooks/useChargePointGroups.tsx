@@ -32,6 +32,7 @@ export interface ChargePointGroup {
   tenant_id: string;
   name: string;
   description: string | null;
+  location_id: string | null;
   energy_settings: ChargePointGroupEnergySettings;
   access_settings: ChargePointGroupAccessSettings;
   created_at: string;
