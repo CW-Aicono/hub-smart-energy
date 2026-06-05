@@ -1,68 +1,105 @@
-# Wallbe BF-01.04.20 Reboot-Loop: Revidierte Diagnose nach Monta-Vergleich
+## Verifizierter Befund
 
-## Was der Monta-Log eindeutig zeigt
+Der Heartbeat-Fix ist auf dem Hetzner-Server angekommen:
 
-Monta spricht mit **derselben** Wallbe-Firmware (BF-01.04.20) erfolgreich. Auffälligkeiten gegenüber unserem Server:
-
-1. **BootNotification-Antwort von Monta:**
-   ```
-   {"currentTime":"...","interval":86400,"status":"Accepted"}
-   ```
-   → Heartbeat-Intervall **86 400 s (= 24 h)**.
-   Unser Server antwortet derzeit mit `"interval": 30` (30 s).
-
-2. **Monta sendet GetConfiguration** sogar mehrfach nach dem Boot (mit konkreten Key-Listen) — die Wallbe **rebootet trotzdem nicht**. Der Reboot-Loop bei uns liegt also **nicht** an `GetConfiguration` selbst.
-
-3. Monta sendet danach ganz normale OCPP-Frames (`TriggerMessage`, `SetChargingProfile`, `MeterValues`-Empfang, `Authorize`, `StartTransaction` usw.) — alles funktioniert.
-
-4. Nach dem Boot sieht man bei Monta exakt **eine** weitere BootNotification (Reconnect nach ~1 min, FW-typisch) und dann **stundenlang Ruhe** — kein 10-Minuten-Loop.
-
-## Daraus folgt die echte Ursache
-
-Die Wallbe BF-01.04.20 verkraftet das von uns gesetzte Heartbeat-Intervall von **30 s** offenbar nicht: Sie sendet zwischen den Boots **gar keine** Heartbeats (in unseren DB-Logs nachweisbar — 10 Minuten Funkstille zwischen jeder BootNotification), läuft intern in einen Watchdog und rebootet.
-
-Monta gibt `interval: 86400` und die Wallbe ist zufrieden.
-
-Der bisher angenommene „Probe-/ChangeConfiguration-Loop" ist **nicht** die Ursache. Unser Hotfix hat das bereits korrekt entschärft (kein ChangeConfiguration mehr in den Logs).
-
-## Fix-Plan (eine minimale Änderung)
-
-### Einzige Änderung: BootNotification-Intervall auf 86 400 setzen
-
-In `docs/ocpp-persistent-server/src/ocppHandler.ts`, Case `BootNotification`:
-
-```ts
-return callResult(messageId, {
-  currentTime: new Date().toISOString(),
-  interval: 86400,        // statt 30 — wie Monta. Wallbe BF-01.04.x bracht das.
-  status: "Accepted",
-});
+```text
+interval: 86400
 ```
 
-Das ist eine reine Server-Antwort (kein ChangeConfiguration, kein Reboot-Risiko). Wirkt für **alle** Wallboxen identisch — `interval` ist nur eine Obergrenze für Heartbeats; jede saubere Wallbox sendet ohnehin nur dann Heartbeats, wenn sonst keine OCPP-Frames fließen. Unser `idleTimeoutSec=120` bleibt davon unberührt (WebSocket-Pings laufen ja weiter alle 25 s und halten die TCP-Verbindung wach).
+Der neue Log zeigt aber eine andere, jetzt sehr konkrete Ursache:
 
-### Was zusätzlich angepasst wird (Folgekorrektur, kein neuer Fix)
+```text
+BootNotification
+GetConfiguration wird gesendet
+Wallbe antwortet teilweise
+WebSocket closed code=1006 nach 1–2 Sekunden
+```
 
-Damit der bestehende `PROBE_TTL`-Schutz beim nächsten echten Lauf nicht wieder umsonst greift, wird die Payload-Inkompatibilität in der Edge-Function `ocpp-persistent-api` (Case `upsert-capabilities`) korrigiert:
+Zusätzlich liegt in der Datenbank noch mindestens ein offener Befehl für genau diese Wallbox:
 
-- aktuell liest die Funktion `body.supportedMeasurands`, `body.rawConfig` flach
-- der OCPP-Server sendet sie verschachtelt als `body.capabilities.supported_measurands`, `body.capabilities.configuration` usw.
+```text
+00000001305 | GetConfiguration | pending
+```
 
-→ Edge-Function so anpassen, dass sie beide Varianten akzeptiert und `last_probed_at = now()` immer schreibt. Damit greift der bestehende 24-h-Skip wirklich. (Keine Verhaltensänderung für andere Modelle.)
+Das heißt: Die alte Wallbe trennt nicht wegen `interval: 86400`, sondern sehr wahrscheinlich wegen `GetConfiguration` bzw. wegen der Capability-/Live-Daten-Abfrage.
 
-### Was NICHT geändert wird
+## Plan
 
-- Keine wallbe-spezifischen Sonderpfade (`vendor === "wallbe"`).
-- Keine Änderung an `GetConfiguration` / `ChangeConfiguration` (funktioniert nachweislich auch unter Monta).
-- Keine Änderungen an Ping-/Idle-Logik.
-- Keine PWA-Änderungen.
+### 1. Sofortmaßnahme in der Datenbank
 
-## Deployment
+Ich markiere offene `GetConfiguration`-Befehle für `00000001305` als fehlgeschlagen/abgebrochen, damit sie beim nächsten Online-Gehen nicht erneut an die Wallbox gesendet werden.
 
-- Edge-Function `ocpp-persistent-api`: deployt Lovable Cloud automatisch.
-- OCPP-Server (`docs/ocpp-persistent-server`): muss auf Hetzner für **beide** Container (`ocpp` und `ocpp-live`) neu gebaut werden — gleiche Schritte wie im bestehenden `HOTFIX_WALLBOX_REBOOT_LOOP.md`. Ich ergänze das Dokument um einen Absatz „Nachtrag 2: BootNotification interval auf 86400".
+Betroffen ist nur:
 
-## Erwartetes Verhalten nach Deploy
+```text
+pending_ocpp_commands
+charge_point_ocpp_id = 00000001305
+command = GetConfiguration
+status = pending oder scheduled
+```
 
-- Wallbe sendet BootNotification → bekommt `interval: 86400` → bleibt verbunden, sendet bei Bedarf Heartbeats, kein Reboot mehr alle 10 Minuten, Ladevorgang per RemoteStart wieder möglich.
-- Alle anderen Modelle: unverändert (sie senden weiterhin so oft, wie sie wollen, und liefern MeterValues; das hohe Intervall ist nur ein zulässiger Maximalwert).
+### 2. OCPP-Server robuster machen
+
+Im OCPP-Server ergänze ich einen Wallbe-Kompatibilitäts-Schutz:
+
+- Bei Wallbe `Smart Charge Control` mit Firmware `BF-01.04.x` wird die automatische Konfigurationsprüfung nach `BootNotification` nicht mehr gestartet.
+- Dadurch sendet der Server nach dem Boot keine automatische `GetConfiguration` und keine automatische `ChangeConfiguration` mehr an dieses alte Modell.
+- Moderne Wallboxen bleiben unverändert.
+
+### 3. Befehls-Warteschlange absichern
+
+Im Command-Dispatcher ergänze ich eine Sperre:
+
+- Wenn eine bekannte alte Wallbe verbunden ist, werden `GetConfiguration`-Befehle aus der Warteschlange nicht an die Wallbox gesendet.
+- Der Befehl wird stattdessen sauber als `rejected`/nicht kompatibel abgeschlossen.
+- Dadurch kann auch ein UI-Klick oder ein alter offener Befehl keinen neuen Reboot-/Disconnect-Loop auslösen.
+
+### 4. UI-Auto-Probe deaktivieren
+
+In der Ladepunkt-Detailseite gibt es aktuell eine automatische Prüfung:
+
+```text
+wenn Wallbox online und keine Capabilities vorhanden → GetConfiguration senden
+```
+
+Diese Automatik entferne oder begrenze ich so, dass sie nicht mehr ungefragt `GetConfiguration` an Wallboxen sendet. Die Prüfung soll nur noch bewusst über den Button „Messgrößen prüfen“ ausgelöst werden — und für alte Wallbe-Modelle zusätzlich blockiert werden.
+
+### 5. Hetzner-Anleitung danach
+
+Nach der Codeänderung brauchst du wieder nur den OCPP-Server auf Hetzner neu bauen:
+
+```bash
+cd /opt/aicono/aicono-ems/docs/ocpp-persistent-server
+
+git fetch --all
+git pull
+
+docker compose stop ocpp
+docker compose build --no-cache ocpp
+docker compose up -d ocpp
+
+docker compose stop ocpp-live
+docker compose build --no-cache ocpp-live
+docker compose up -d ocpp-live
+```
+
+### 6. Erfolgskriterium
+
+Nach dem Neustart darf im Log bei `00000001305` Folgendes nicht mehr erscheinen:
+
+```text
+Command dispatched cmd=GetConfiguration
+```
+
+Erwartet ist dann:
+
+```text
+BootNotification
+StatusNotification
+kein sofortiger WebSocket close nach GetConfiguration
+keine zweite BootNotification nach 10 Minuten
+```
+
+## Wichtig
+
+Meine erste Annahme war unvollständig. `interval: 86400` war korrekt, aber der aktuelle Log beweist: Der akute Abbruch passiert direkt nach `GetConfiguration`. Deshalb ist der nächste Fix gezielt ein Wallbe-Kompatibilitätsmodus gegen diese Abfrage.
