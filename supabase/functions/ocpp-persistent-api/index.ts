@@ -486,10 +486,25 @@ async function handle(action: string, body: Record<string, unknown>) {
     case "upsert-capabilities": {
       const chargePointId = String(body.chargePointId ?? "");
       if (!chargePointId) return fail(400, "Missing chargePointId");
-      const supported = Array.isArray(body.supportedMeasurands)
-        ? body.supportedMeasurands.map(String)
-        : [];
-      const rawConfig = typeof body.rawConfig === "object" && body.rawConfig ? body.rawConfig : {};
+
+      // Der OCPP-Server (docs/ocpp-persistent-server/src/backendApi.ts) schickt
+      // die Felder verschachtelt unter `capabilities` (snake_case). Frühere
+      // Versionen schickten sie flach (camelCase). Beide Varianten akzeptieren.
+      const caps = (typeof body.capabilities === "object" && body.capabilities)
+        ? body.capabilities as Record<string, unknown>
+        : {};
+
+      const supportedRaw = caps.supported_measurands ?? body.supportedMeasurands;
+      const supported = Array.isArray(supportedRaw) ? supportedRaw.map(String) : [];
+
+      const configuration = (typeof caps.configuration === "object" && caps.configuration)
+        ? caps.configuration
+        : {};
+      const unsupportedKeys = Array.isArray(caps.unsupported_keys) ? caps.unsupported_keys : [];
+      const rawConfigSource = (typeof body.rawConfig === "object" && body.rawConfig)
+        ? body.rawConfig
+        : { configuration, unsupported_keys: unsupportedKeys, vendor: caps.vendor ?? null, model: caps.model ?? null };
+
       const maxLen = body.maxSampleLength != null ? Number(body.maxSampleLength) : null;
       const minInt = body.minSampleInterval != null ? Number(body.minSampleInterval) : null;
 
@@ -509,7 +524,7 @@ async function handle(action: string, body: Record<string, unknown>) {
           supported_measurands: supported,
           max_sample_length: maxLen,
           min_sample_interval: minInt,
-          raw_config: rawConfig,
+          raw_config: rawConfigSource,
           last_probed_at: new Date().toISOString(),
         }, { onConflict: "charge_point_id" });
       if (error) return fail(500, error.message);

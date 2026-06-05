@@ -61,9 +61,14 @@ export async function handleCall(
             model: (payload.chargePointModel as string) ?? null,
           }).catch((e) => log.warn("config probe failed", { chargePointId, error: (e as Error).message }));
         }, 2_000);
+        // interval = Heartbeat-Obergrenze in Sekunden. Wallbe BF-01.04.x
+        // rebootet bei kleinen Werten (z. B. 30) alle ~10 Minuten in einen
+        // internen Watchdog. Monta antwortet mit 86400 (= 24 h) — exakt das
+        // gleiche Verhalten übernehmen wir hier. Für andere Modelle harmlos:
+        // sie senden Heartbeats nur, wenn sonst keine OCPP-Frames fließen.
         return callResult(messageId, {
           currentTime: new Date().toISOString(),
-          interval: 30,
+          interval: 86400,
           status: "Accepted",
         });
       }
