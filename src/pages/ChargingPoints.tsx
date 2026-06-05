@@ -53,6 +53,7 @@ const ChargingPoints = () => {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { chargePoints, isLoading, addChargePoint, updateChargePoint, deleteChargePoint } = useChargePoints();
+  const { locations } = useLocations();
   const { sessions } = useChargingSessions();
   const { chargerModels, vendors: knownVendors, getModelsForVendor } = useChargerModels();
   const chargePointIds = useMemo(() => chargePoints.map((cp) => cp.id).sort().join(","), [chargePoints]);
