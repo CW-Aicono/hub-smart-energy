@@ -147,16 +147,17 @@ export default function PublicChargeStatus() {
         };
       });
 
-      // Aggregierter Status für die Kachel: Eine Ladestation gilt erst als
-      // "Belegt", wenn alle nutzbaren Stecker belegt sind. Sobald ein Stecker
-      // verfügbar ist, bleibt die Station als verfügbar erkennbar.
+      // Aggregierter Status für die Kachel: Sobald mindestens ein Stecker
+      // belegt ist, gilt die Station als "Belegt" (Realität auf dem Parkplatz).
+      // Harte Fehlerzustände haben Vorrang. Nur wenn ALLE Stecker frei sind,
+      // wird die Station als "Verfügbar" gezeigt.
       const aggregated = (() => {
         const statuses = connectors.map((c) => c.status);
         const hardPriority: StatusKey[] = ["faulted", "offline", "unconfigured", "unavailable"];
         const hard = hardPriority.find((s) => statuses.includes(s));
         if (hard) return hard;
+        if (statuses.includes("charging")) return "charging";
         if (statuses.includes("available")) return "available";
-        if (statuses.length > 0 && statuses.every((s) => s === "charging")) return "charging";
         return statuses[0] ?? "unconfigured";
       })();
 
