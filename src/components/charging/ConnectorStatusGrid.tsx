@@ -126,16 +126,23 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
           const stale = getStaleness(c.last_status_at, lastHeartbeat);
 
           return (
-            <button
+            <div
               key={c.id}
-              type="button"
-              disabled={!selectable && !editable}
+              role={selectable ? "button" : undefined}
+              tabIndex={selectable ? 0 : -1}
+              aria-disabled={!selectable && !editable}
               draggable={canDrag ? true : false}
               onDragStart={() => canDrag && handleDragStart(index)}
               onDragEnter={() => canDrag && handleDragEnter(index)}
               onDragEnd={() => canDrag && handleDragEnd()}
               onDragOver={(e) => canDrag && e.preventDefault()}
               onClick={() => selectable && onSelectConnector?.(c.connector_id)}
+              onKeyDown={(e) => {
+                if (selectable && (e.key === "Enter" || e.key === " ")) {
+                  e.preventDefault();
+                  onSelectConnector?.(c.connector_id);
+                }
+              }}
               className={`
                 border rounded-lg p-3 text-center transition-all relative group
                 ${selectable ? "cursor-pointer hover:border-primary/50" : editable ? "cursor-default" : "cursor-default"}
@@ -212,7 +219,7 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
                   )}
                 </TooltipContent>
               </Tooltip>
-            </button>
+            </div>
           );
         })}
       </div>
