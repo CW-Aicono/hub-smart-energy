@@ -71,6 +71,31 @@ async function dispatchOne(cmd: PendingRow): Promise<void> {
     return; // Wallbox nicht verbunden — beim nächsten Tick erneut versuchen
   }
 
+  // Kompatibilitäts-Schutz: ältere wallbe BF-01.04.x trennt nach
+  // GetConfiguration die Verbindung. Solche Befehle gar nicht erst senden.
+  if (
+    isLegacyWallbe({
+      vendor: session.vendor,
+      model: session.model,
+      firmware_version: session.firmwareVersion,
+    }) &&
+    LEGACY_WALLBE_BLOCKED_ACTIONS.has(cmd.command)
+  ) {
+    log.warn("Blocking incompatible OCPP command for legacy wallbe", {
+      chargePointId: cmd.charge_point_ocpp_id,
+      command: cmd.command,
+      firmware: session.firmwareVersion,
+    });
+    await updatePendingCommand(cmd.id, {
+      status: "rejected",
+      processed_at: new Date().toISOString(),
+      result: {
+        error: `${cmd.command} is not supported on wallbe firmware ${session.firmwareVersion ?? "BF-01.04.x"} (disconnects WebSocket)`,
+      },
+    });
+    return;
+  }
+
   const uniqueId = randomUUID();
   const ocppCall = buildOcppCall(uniqueId, cmd);
   if (!ocppCall) {
