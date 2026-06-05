@@ -18,6 +18,8 @@ import { AlertCircle } from "lucide-react";
 import { VirtualMeterFormulaBuilder, VirtualMeterSource } from "./VirtualMeterFormulaBuilder";
 import { MeterOffsetSection } from "./MeterOffsetSection";
 import type { MeterOffsetReason } from "@/lib/meterOffset";
+import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
+import { useChargePointGroups } from "@/hooks/useChargePointGroups";
 
 interface AddMeterDialogProps {
   locationId: string;
