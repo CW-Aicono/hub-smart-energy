@@ -244,11 +244,22 @@ const ChargePointDetail = () => {
 
   // Auto-Probe: wenn noch keine Capabilities ermittelt wurden, einmalig
   // GetConfiguration anstoßen, sobald die Wallbox online ist.
+  // Ausnahme: ältere wallbe BF-01.04.x (Smart Charge Control) trennt nach
+  // GetConfiguration die WebSocket-Verbindung — Auto-Probe deshalb sperren.
   useEffect(() => {
     if (!cp?.ocpp_id || capsLoading || probeTriggeredRef.current) return;
     if (ocppCapabilities) return;
     const online = isChargePointOnline((cp as any).ws_connected, cp.last_heartbeat);
     if (!online) return;
+    const vendor = String((cp as any).vendor ?? "").trim().toLowerCase();
+    const model = String((cp as any).model ?? "").trim().toLowerCase();
+    const fw = String((cp as any).firmware_version ?? "").trim().toLowerCase();
+    const isLegacyWallbe =
+      vendor === "wallbe" && (fw.startsWith("bf-01.04") || model.includes("smart charge control"));
+    if (isLegacyWallbe) {
+      probeTriggeredRef.current = true; // dauerhaft unterdrücken
+      return;
+    }
     probeTriggeredRef.current = true;
     callOcppCommand("GetConfiguration", { chargePointId: cp.ocpp_id }).catch(() => {
       probeTriggeredRef.current = false;
