@@ -39,6 +39,9 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
   const { t } = useTranslation();
   const T = (key: string) => t(key as any);
   const { locationIntegrations, loading: integrationsLoading } = useLocationIntegrations(locationId);
+  const { data: locationChargePoints = [] } = useLocationChargePoints(locationId);
+  const { groups: allCpGroups = [] } = useChargePointGroups();
+  const locationCpGroups = allCpGroups.filter((g) => g.location_id === locationId);
   const [name, setName] = useState("");
   const [meterNumber, setMeterNumber] = useState("");
   const [energyType, setEnergyType] = useState("strom");
