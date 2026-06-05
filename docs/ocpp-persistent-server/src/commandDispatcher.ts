@@ -4,6 +4,7 @@ import { log } from "./logger";
 import { getSession, listSessions } from "./chargePointRegistry";
 import { logOcppMessage } from "./messageLog";
 import { fetchPendingCommands, updatePendingCommand } from "./backendApi";
+import { isLegacyWallbe, LEGACY_WALLBE_BLOCKED_ACTIONS } from "./wallboxCompat";
 
 interface PendingRow {
   id: string;
