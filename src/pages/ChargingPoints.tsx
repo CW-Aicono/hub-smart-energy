@@ -36,6 +36,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import ChargingOverviewStats from "@/components/charging/ChargingOverviewStats";
 import ModbusWallboxWizard from "@/components/charging/ModbusWallboxWizard";
 import { StatusLiveDataHover } from "@/components/charging/StatusLiveDataHover";
+import { useLocations } from "@/hooks/useLocations";
 
 const LazyChargePointsMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
