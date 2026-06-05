@@ -36,6 +36,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import ChargingOverviewStats from "@/components/charging/ChargingOverviewStats";
 import ModbusWallboxWizard from "@/components/charging/ModbusWallboxWizard";
 import { StatusLiveDataHover } from "@/components/charging/StatusLiveDataHover";
+import { useLocations } from "@/hooks/useLocations";
 
 const LazyChargePointsMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
@@ -52,6 +53,7 @@ const ChargingPoints = () => {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { chargePoints, isLoading, addChargePoint, updateChargePoint, deleteChargePoint } = useChargePoints();
+  const { locations } = useLocations();
   const { sessions } = useChargingSessions();
   const { chargerModels, vendors: knownVendors, getModelsForVendor } = useChargerModels();
   const chargePointIds = useMemo(() => chargePoints.map((cp) => cp.id).sort().join(","), [chargePoints]);
@@ -112,6 +114,7 @@ const ChargingPoints = () => {
     connection_protocol: "wss" as "ws" | "wss",
     auth_required: true,
     ocpp_password: generatePw(),
+    location_id: "__none__",
   });
   const CONNECTOR_OPTIONS = [
     { value: "Type2", label: "Typ 2" },
@@ -227,6 +230,7 @@ const ChargingPoints = () => {
       name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22",
       vendor: "", model: "", connector_type: "Type2",
       connection_protocol: "wss", auth_required: true, ocpp_password: generatePw(),
+      location_id: "__none__",
     });
     setAddCoords({ lat: null, lng: null });
     setShowAddPassword(false);
@@ -249,6 +253,7 @@ const ChargingPoints = () => {
       connection_protocol: form.connection_protocol,
       auth_required: form.auth_required,
       ocpp_password: form.auth_required ? form.ocpp_password : null,
+      location_id: form.location_id && form.location_id !== "__none__" ? form.location_id : null,
       ...(duplicateSource?.group_id ? { group_id: duplicateSource.group_id } : {}),
     } as any);
     setAddOpen(false);
@@ -270,6 +275,7 @@ const ChargingPoints = () => {
       connection_protocol: ((cp as any).connection_protocol === "ws" ? "ws" : "wss"),
       auth_required: (cp as any).auth_required ?? true,
       ocpp_password: generatePw(),
+      location_id: cp.location_id ?? "__none__",
     });
     setAddCoords({
       lat: cp.latitude ?? null,
@@ -422,6 +428,18 @@ const ChargingPoints = () => {
             <MapPin className="h-3 w-3" /> {addCoords.lat.toFixed(5)}, {addCoords.lng.toFixed(5)}
           </p>
         )}
+      </div>
+      <div>
+        <Label>Liegenschaft <span className="text-xs text-muted-foreground font-normal">— optional, direkte Zuordnung</span></Label>
+        <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
+          <SelectTrigger><SelectValue placeholder="Keine / via Gruppe" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">Keine / via Gruppe</SelectItem>
+            {locations.map((loc) => (
+              <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div><Label>{t("charging.connectors" as any)}</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
