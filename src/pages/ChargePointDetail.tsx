@@ -75,6 +75,7 @@ const ChargePointDetail = () => {
   const { chargePoints, updateChargePoint, deleteChargePoint } = useChargePoints();
   const { groups, assignChargePointToGroup } = useChargePointGroups();
   const { meters } = useMeters();
+  const { locations } = useLocations();
   const { createTask } = useTasks();
   const { sessions } = useChargingSessions(id);
   const resolveTag = useIdTagResolver();
