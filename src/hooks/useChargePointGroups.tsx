@@ -59,7 +59,7 @@ export function useChargePointGroups() {
   });
 
   const createGroup = useMutation({
-    mutationFn: async (group: { name: string; description?: string }) => {
+    mutationFn: async (group: { name: string; description?: string; location_id?: string | null }) => {
       if (!tenant?.id) throw new Error("No tenant");
       const { data, error } = await supabase
         .from("charge_point_groups")
