@@ -441,6 +441,7 @@ const ChargingPoints = () => {
           </SelectContent>
         </Select>
       </div>
+      <div className="grid grid-cols-2 gap-4">
         <div><Label>{t("charging.connectors" as any)}</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
         <div><Label>{t("charging.maxPower" as any)}</Label><Input type="number" min="0.1" step="0.1" value={form.max_power_kw} onChange={(e) => { const v = e.target.value; if (v === "" || parseFloat(v) >= 0) setForm({ ...form, max_power_kw: v }); }} /></div>
       </div>
