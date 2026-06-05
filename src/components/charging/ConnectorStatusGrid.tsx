@@ -219,7 +219,7 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
                   )}
                 </TooltipContent>
               </Tooltip>
-            </button>
+            </div>
           );
         })}
       </div>
