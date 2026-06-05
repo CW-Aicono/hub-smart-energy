@@ -443,6 +443,38 @@ export function useEnergyData(locationId?: string | null) {
       readingsByMeter.set(r.meter_id, arr);
     });
 
+    // Helper: resolve a single source to a numeric live value (kW for power readings).
+    const vmLocationMap = new Map<string, string>();
+    meters.forEach((m) => {
+      if (m.capture_type === "virtual" && m.location_id) vmLocationMap.set(m.id, m.location_id);
+    });
+    const resolveSourceValue = (
+      src: (typeof virtualSources)[number],
+      vmId: string,
+    ): number | null => {
+      if (src.source_meter_id) {
+        const r = readingsByMeter.get(src.source_meter_id);
+        if (!r || r.length === 0) return null;
+        return r[r.length - 1].value;
+      }
+      if (src.source_charge_point_id) {
+        return cpLivePower?.[src.source_charge_point_id] ?? 0;
+      }
+      if (src.source_charge_point_group_id && chargePointContext) {
+        return chargePointContext
+          .filter((cp) => cp.group_id === src.source_charge_point_group_id)
+          .reduce((sum, cp) => sum + (cpLivePower?.[cp.id] ?? 0), 0);
+      }
+      if (src.source_all_charge_points && chargePointContext) {
+        const locId = vmLocationMap.get(vmId);
+        if (!locId) return 0;
+        return chargePointContext
+          .filter((cp) => cp.location_id === locId)
+          .reduce((sum, cp) => sum + (cpLivePower?.[cp.id] ?? 0), 0);
+      }
+      return null;
+    };
+
     const virtualReadings: ReadingRow[] = [];
     for (const vmId of virtualMeterIds) {
       const sources = virtualSources
@@ -452,16 +484,15 @@ export function useEnergyData(locationId?: string | null) {
       let total: number | null = null;
       let allResolved = true;
       for (const src of sources) {
-        const srcReadings = readingsByMeter.get(src.source_meter_id);
-        if (!srcReadings || srcReadings.length === 0) {
+        const val = resolveSourceValue(src, vmId);
+        if (val === null) {
           allResolved = false;
           break;
         }
-        const latestVal = srcReadings[srcReadings.length - 1].value;
         if (total === null) {
-          total = src.operator === "-" ? -latestVal : latestVal;
+          total = src.operator === "-" ? -val : val;
         } else {
-          total = src.operator === "-" ? total - latestVal : total + latestVal;
+          total = src.operator === "-" ? total - val : total + val;
         }
       }
 
@@ -475,7 +506,7 @@ export function useEnergyData(locationId?: string | null) {
     }
 
     return [...combined, ...virtualReadings];
-  }, [readings, liveReadings, meters, virtualSources, showManualMeters]);
+  }, [readings, liveReadings, meters, virtualSources, showManualMeters, cpLivePower, chargePointContext]);
 
   // Build a meter_id -> energy_type + location_id map
   const meterMap = useMemo(() => {
