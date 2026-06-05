@@ -230,6 +230,7 @@ const ChargingPoints = () => {
       name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22",
       vendor: "", model: "", connector_type: "Type2",
       connection_protocol: "wss", auth_required: true, ocpp_password: generatePw(),
+      location_id: "__none__",
     });
     setAddCoords({ lat: null, lng: null });
     setShowAddPassword(false);
