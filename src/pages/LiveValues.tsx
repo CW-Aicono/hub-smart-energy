@@ -47,7 +47,8 @@ const LiveValues = () => {
   const [liveValues, setLiveValues] = useState<Map<string, { value: number; unit: string; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string }>>(new Map());
   const [manualValues, setManualValues] = useState<Map<string, { value: number; date: string }>>(new Map());
   const [manualDailyTotals, setManualDailyTotals] = useState<Map<string, number>>(new Map());
-  const [virtualSources, setVirtualSources] = useState<{ virtual_meter_id: string; source_meter_id: string | null; operator: string; sort_order: number }[]>([]);
+  const [virtualSources, setVirtualSources] = useState<{ virtual_meter_id: string; source_meter_id: string | null; source_charge_point_id: string | null; source_charge_point_group_id: string | null; source_all_charge_points: boolean | null; operator: string; sort_order: number }[]>([]);
+  const [cpVirtualValues, setCpVirtualValues] = useState<Map<string, { value: number; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null }>>(new Map());
   const [loadingLive, setLoadingLive] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
@@ -57,12 +58,13 @@ const LiveValues = () => {
     const fetchVirtualSources = async () => {
       const { data } = await supabase
         .from("virtual_meter_sources")
-        .select("virtual_meter_id, source_meter_id, operator, sort_order")
+        .select("virtual_meter_id, source_meter_id, source_charge_point_id, source_charge_point_group_id, source_all_charge_points, operator, sort_order")
         .order("sort_order");
-      if (data) setVirtualSources(data);
+      if (data) setVirtualSources(data as any);
     };
     fetchVirtualSources();
   }, [user]);
+
 
   // Fetch latest manual readings + compute daily totals for manual meters
   useEffect(() => {
