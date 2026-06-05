@@ -175,6 +175,7 @@ export function ChargePointGroupsManager({ isAdmin }: { isAdmin: boolean }) {
           open={detailOpen}
           onOpenChange={(v) => { setDetailOpen(v); if (!v) setSelectedGroup(null); }}
           chargePoints={chargePoints}
+          locations={locations}
           isAdmin={isAdmin}
           onUpdate={updateGroup.mutate}
           onAssign={assignChargePointToGroup.mutate}
