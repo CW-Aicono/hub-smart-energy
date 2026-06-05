@@ -452,7 +452,15 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
             disabled={
               !name.trim() ||
               (captureType === "automatic" && (!selectedIntegration || !selectedSensor)) ||
-              (captureType === "virtual" && virtualSources.length < 2)
+              (captureType === "virtual" &&
+                (virtualSources.length === 0 ||
+                  (virtualSources.length < 2 &&
+                    !virtualSources.some(
+                      (s) =>
+                        s.source_charge_point_id ||
+                        s.source_charge_point_group_id ||
+                        s.source_all_charge_points,
+                    ))))
             }
           >
             Anlegen
