@@ -112,32 +112,43 @@ Deno.serve(async (req) => {
       return c;
     });
 
-    // Resolve tenant logo: stored as a path in the "tenant-assets" bucket.
-    // Try a signed URL first (private bucket), fall back to the public URL
-    // if the bucket is configured as public (or signing fails). This makes the
-    // resolution robust across Cloud + self-hosted (Hetzner) deployments.
+    // Resolve tenant logo. Stored as a path in the private "tenant-assets" bucket.
+    // We download the bytes server-side and embed them as a data: URL. This avoids
+    // all hostname issues with signed/public storage URLs (e.g. on self-hosted
+    // Supabase / Hetzner where the storage URL points at an internal hostname
+    // like http://kong:8000 that the public browser cannot reach).
     let logoUrl: string | null = null;
     const rawLogo = (tenantRes.data?.logo_url ?? "").toString().trim();
     if (rawLogo) {
-      if (/^https?:\/\//i.test(rawLogo)) {
+      if (/^https?:\/\//i.test(rawLogo) || rawLogo.startsWith("data:")) {
         logoUrl = rawLogo;
       } else {
         const path = rawLogo.replace(/^\/+/, "");
         try {
-          const { data: signed, error: signErr } = await admin.storage
+          const { data: blob, error: dlErr } = await admin.storage
             .from("tenant-assets")
-            .createSignedUrl(path, 60 * 60 * 24 * 7); // 7 days
-          if (!signErr && signed?.signedUrl) {
-            logoUrl = signed.signedUrl;
+            .download(path);
+          if (dlErr || !blob) {
+            console.warn("tenant logo download failed", dlErr);
+          } else if (blob.size <= 512 * 1024) { // hard cap 512KB to keep payload sane
+            const buf = new Uint8Array(await blob.arrayBuffer());
+            let bin = "";
+            for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+            const b64 = btoa(bin);
+            const ext = (path.split(".").pop() || "").toLowerCase();
+            const mime = blob.type
+              || (ext === "svg" ? "image/svg+xml"
+                : ext === "jpg" || ext === "jpeg" ? "image/jpeg"
+                : ext === "webp" ? "image/webp"
+                : ext === "gif" ? "image/gif"
+                : "image/png");
+            logoUrl = `data:${mime};base64,${b64}`;
+          } else {
+            console.warn("tenant logo too large for inline data URL", { size: blob.size });
           }
         } catch (e) {
-          console.warn("tenant logo signed URL failed", e);
+          console.warn("tenant logo inline failed", e);
         }
-        if (!logoUrl) {
-          const { data: pub } = admin.storage.from("tenant-assets").getPublicUrl(path);
-          logoUrl = pub?.publicUrl ?? null;
-        }
-        console.log("public-charge-status tenant logo resolved", { path, logoUrl });
       }
     }
 
