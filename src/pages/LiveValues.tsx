@@ -109,6 +109,137 @@ const LiveValues = () => {
     fetchLatestReadings();
   }, [user]);
 
+  // Resolve CP-based virtual meter values (live kW from ocpp_meter_samples + kWh sums from charging_sessions)
+  const fetchCpVirtualValues = useCallback(async () => {
+    const cpSources = virtualSources.filter(
+      (s) => s.source_charge_point_id || s.source_charge_point_group_id || s.source_all_charge_points
+    );
+    if (cpSources.length === 0) {
+      setCpVirtualValues(new Map());
+      return;
+    }
+
+    // Load all CPs of the tenant once (RLS scopes by tenant automatically)
+    const { data: allCps } = await supabase
+      .from("charge_points")
+      .select("id, location_id, group_id");
+    if (!allCps) return;
+
+    const virtualMeters = meters.filter((m) => m.capture_type === "virtual");
+
+    // Resolve each CP-based source row to a concrete list of charge_point_ids
+    const resolveSourceCps = (
+      src: typeof cpSources[number],
+      vmLocationId: string | null,
+    ): string[] => {
+      if (src.source_charge_point_id) return [src.source_charge_point_id];
+      if (src.source_charge_point_group_id) {
+        return allCps.filter((cp) => cp.group_id === src.source_charge_point_group_id).map((cp) => cp.id);
+      }
+      if (src.source_all_charge_points && vmLocationId) {
+        return allCps.filter((cp) => cp.location_id === vmLocationId).map((cp) => cp.id);
+      }
+      return [];
+    };
+
+    // Collect all CP IDs we need data for
+    const vmIds = Array.from(new Set(cpSources.map((s) => s.virtual_meter_id)));
+    const vmToCps = new Map<string, { cpIds: string[]; operator: string }[]>();
+    const allCpIds = new Set<string>();
+    for (const vmId of vmIds) {
+      const vm = virtualMeters.find((m) => m.id === vmId);
+      const vmLocationId = vm?.location_id || null;
+      const entries = cpSources
+        .filter((s) => s.virtual_meter_id === vmId)
+        .map((s) => {
+          const cpIds = resolveSourceCps(s, vmLocationId);
+          cpIds.forEach((id) => allCpIds.add(id));
+          return { cpIds, operator: s.operator };
+        });
+      vmToCps.set(vmId, entries);
+    }
+
+    if (allCpIds.size === 0) {
+      setCpVirtualValues(new Map());
+      return;
+    }
+    const cpIdList = Array.from(allCpIds);
+
+    // 1) Live power: latest Power.Active.Import (and Export) sample per CP within last 5 min
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: powerSamples } = await supabase
+      .from("ocpp_meter_samples")
+      .select("charge_point_id, measurand, unit, value, sampled_at")
+      .in("charge_point_id", cpIdList)
+      .in("measurand", ["Power.Active.Import", "Power.Active.Export"])
+      .gte("sampled_at", fiveMinAgo)
+      .order("sampled_at", { ascending: false });
+
+    // Build per-CP latest import/export in kW
+    const livePerCp = new Map<string, number>(); // net kW (import - export)
+    if (powerSamples) {
+      const seen = new Set<string>();
+      for (const s of powerSamples) {
+        const key = `${s.charge_point_id}::${s.measurand}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const factor = (s.unit === "W" || s.unit == null) ? 0.001 : 1; // assume W if no unit
+        const kw = Number(s.value) * factor;
+        const cur = livePerCp.get(s.charge_point_id) ?? 0;
+        livePerCp.set(s.charge_point_id, cur + (s.measurand === "Power.Active.Export" ? -kw : kw));
+      }
+    }
+
+    // 2) Energy sums per CP: today / month / year / total
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString();
+
+    const { data: sessions } = await supabase
+      .from("charging_sessions")
+      .select("charge_point_id, energy_kwh, start_time")
+      .in("charge_point_id", cpIdList);
+
+    const sumPerCp = { day: new Map<string, number>(), month: new Map<string, number>(), year: new Map<string, number>(), total: new Map<string, number>() };
+    if (sessions) {
+      for (const s of sessions) {
+        if (!s.charge_point_id) continue;
+        const kwh = Number(s.energy_kwh) || 0;
+        sumPerCp.total.set(s.charge_point_id, (sumPerCp.total.get(s.charge_point_id) ?? 0) + kwh);
+        if (s.start_time >= startOfYear) sumPerCp.year.set(s.charge_point_id, (sumPerCp.year.get(s.charge_point_id) ?? 0) + kwh);
+        if (s.start_time >= startOfMonth) sumPerCp.month.set(s.charge_point_id, (sumPerCp.month.get(s.charge_point_id) ?? 0) + kwh);
+        if (s.start_time >= startOfDay) sumPerCp.day.set(s.charge_point_id, (sumPerCp.day.get(s.charge_point_id) ?? 0) + kwh);
+      }
+    }
+
+    // 3) Aggregate per virtual meter with operator
+    const result = new Map<string, { value: number; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null }>();
+    for (const [vmId, entries] of vmToCps) {
+      let kw = 0, day = 0, month = 0, year = 0, total = 0;
+      for (const entry of entries) {
+        const sign = entry.operator === "-" ? -1 : 1;
+        for (const cpId of entry.cpIds) {
+          kw += sign * (livePerCp.get(cpId) ?? 0);
+          day += sign * (sumPerCp.day.get(cpId) ?? 0);
+          month += sign * (sumPerCp.month.get(cpId) ?? 0);
+          year += sign * (sumPerCp.year.get(cpId) ?? 0);
+          total += sign * (sumPerCp.total.get(cpId) ?? 0);
+        }
+      }
+      result.set(vmId, { value: kw, totalDay: day, totalMonth: month, totalYear: year, meterReading: total });
+    }
+    setCpVirtualValues(result);
+  }, [virtualSources, meters]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchCpVirtualValues();
+    const interval = setInterval(fetchCpVirtualValues, 60_000);
+    return () => clearInterval(interval);
+  }, [user, fetchCpVirtualValues]);
+
+
   // Load initial power values from DB (last known value per meter)
   const loadInitialPowerValues = useCallback(async () => {
     const autoMeters = meters.filter(
