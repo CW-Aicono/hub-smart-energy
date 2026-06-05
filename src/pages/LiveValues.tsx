@@ -726,7 +726,7 @@ const LiveValues = () => {
                             )}
                           </div>
                         )}
-                        {source === "live" && meterReading != null && (
+                        {(source === "live" || source === "virtual") && meterReading != null && (
                           <div className="text-sm text-muted-foreground">
                             <span className="font-medium">
                               {Number(meterReading).toLocaleString(dateLocale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}{" "}
@@ -735,20 +735,25 @@ const LiveValues = () => {
                             <span className="ml-1 font-normal">{t("liveValues.meterReading" as any)}</span>
                           </div>
                         )}
-                        {source === "live" && (totalMonth != null || totalYear != null) && (
+                        {(source === "live" || source === "virtual") && (totalMonth != null || totalYear != null) && (
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                             {totalMonth != null && (
                               <span>{t("liveValues.month" as any)}: {meter.energy_type === "wasser" || meter.energy_type === "gas"
                                 ? `${Number(totalMonth).toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³`
-                                : formatEnergy(Number(totalMonth) * (((meter as any).source_unit_energy || "kWh") === "Wh" ? 1 : 1000))}</span>
+                                : source === "virtual"
+                                  ? formatEnergy(Number(totalMonth) * 1000)
+                                  : formatEnergy(Number(totalMonth) * (((meter as any).source_unit_energy || "kWh") === "Wh" ? 1 : 1000))}</span>
                             )}
                             {totalYear != null && (
                               <span>{t("liveValues.year" as any)}: {meter.energy_type === "wasser" || meter.energy_type === "gas"
                                 ? `${Number(totalYear).toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³`
-                                : formatEnergy(Number(totalYear) * (((meter as any).source_unit_energy || "kWh") === "Wh" ? 1 : 1000))}</span>
+                                : source === "virtual"
+                                  ? formatEnergy(Number(totalYear) * 1000)
+                                  : formatEnergy(Number(totalYear) * (((meter as any).source_unit_energy || "kWh") === "Wh" ? 1 : 1000))}</span>
                             )}
                           </div>
                         )}
+
                         <div className="space-y-1">
                           <p className="text-xs text-muted-foreground truncate">
                             {location?.name || "–"}
