@@ -29,6 +29,8 @@ import { MeterTreeView } from "./MeterTreeView";
 import { MeterAggregationWidget } from "./MeterAggregationWidget";
 import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors";
 import { filterAssignedGatewayDevices } from "@/lib/gatewayDeviceFiltering";
+import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
+import { LocationChargingInfrastructure } from "./LocationChargingInfrastructure";
 
 interface MeterManagementProps {
   locationId: string;
