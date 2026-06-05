@@ -1135,6 +1135,18 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         </p>
                       </div>
                       <div>
+                        <Label>Liegenschaft <span className="text-xs text-muted-foreground font-normal">— optional, direkte Zuordnung</span></Label>
+                        <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
+                          <SelectTrigger><SelectValue placeholder="Keine / via Gruppe" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Keine / via Gruppe</SelectItem>
+                            {locations.map((loc) => (
+                              <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
                         <Label>Adresse / Standort</Label>
                         <div className="flex gap-2">
                           <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="z.B. Musterstraße 1, 12345 Berlin" className="flex-1" />
