@@ -366,7 +366,7 @@ export default function PublicChargeStatus() {
                             return (
                               <div
                                 key={conn.id}
-                                className="flex items-center justify-between gap-2 text-xs bg-white/15 rounded px-2 py-1"
+                                className={`flex items-center justify-between gap-2 text-xs rounded px-2 py-1 ${cMeta.bg}`}
                               >
                                 <span className="truncate">{conn.label}</span>
                                 <span className="inline-flex items-center gap-1 opacity-95 shrink-0">
