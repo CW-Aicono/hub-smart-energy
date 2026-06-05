@@ -11,6 +11,7 @@ import {
   type MeterSampleInput,
 } from "./backendApi";
 import { probeChargePointConfiguration } from "./configurationProbe";
+import { isLegacyWallbe } from "./wallboxCompat";
 
 
 type OcppCall = [2, string, string, Record<string, unknown>];
@@ -52,15 +53,35 @@ export async function handleCall(
           // wird gleich darauf per StatusNotification gesetzt.
           status: "available",
         });
+        // Identität für Kompatibilitäts-Checks im Dispatcher cachen.
+        session.vendor = (payload.chargePointVendor as string) ?? null;
+        session.model = (payload.chargePointModel as string) ?? null;
+        session.firmwareVersion = (payload.firmwareVersion as string) ?? null;
         // Capability-Probe und Aktivierung der gewünschten Measurands —
         // wird fire-and-forget asynchron 2s nach BootNotification gestartet,
         // damit der Charger erst seine StatusNotification senden kann.
-        setTimeout(() => {
-          probeChargePointConfiguration(session, {
-            vendor: (payload.chargePointVendor as string) ?? null,
-            model: (payload.chargePointModel as string) ?? null,
-          }).catch((e) => log.warn("config probe failed", { chargePointId, error: (e as Error).message }));
-        }, 2_000);
+        // Ausnahme: alte wallbe BF-01.04.x trennt nach GetConfiguration die
+        // Verbindung (Code 1006) und läuft sonst in einen Disconnect-Loop.
+        const cpMeta = {
+          vendor: (payload.chargePointVendor as string) ?? null,
+          model: (payload.chargePointModel as string) ?? null,
+          firmware_version: (payload.firmwareVersion as string) ?? null,
+        };
+        if (isLegacyWallbe(cpMeta)) {
+          log.info("Skipping config probe for legacy wallbe (BF-01.04.x compat mode)", {
+            chargePointId,
+            vendor: cpMeta.vendor,
+            model: cpMeta.model,
+            firmware: cpMeta.firmware_version,
+          });
+        } else {
+          setTimeout(() => {
+            probeChargePointConfiguration(session, {
+              vendor: cpMeta.vendor,
+              model: cpMeta.model,
+            }).catch((e) => log.warn("config probe failed", { chargePointId, error: (e as Error).message }));
+          }, 2_000);
+        }
         // interval = Heartbeat-Obergrenze in Sekunden. Wallbe BF-01.04.x
         // rebootet bei kleinen Werten (z. B. 30) alle ~10 Minuten in einen
         // internen Watchdog. Monta antwortet mit 86400 (= 24 h) — exakt das
