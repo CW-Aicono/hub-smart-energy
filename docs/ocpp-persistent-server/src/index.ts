@@ -83,7 +83,13 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
   void markConnectedWithRetry(chargePointPk, sessionId, chargePointId);
 
   const pingTimer = startPing(ws, sessionId, chargePointId);
-  ws.on("pong", () => log.debug("pong", { sessionId, chargePointId }));
+  // Pong vom Charger zählt als Lebenszeichen — sonst würde der Idle-Sweeper
+  // OCPP-stille, aber TCP-lebende Sessions (z. B. wallbe mit 24h-Heartbeat)
+  // nach 2 Minuten abräumen.
+  ws.on("pong", () => {
+    session.lastIncomingAt = Date.now();
+    log.debug("pong", { sessionId, chargePointId });
+  });
 
   ws.on("message", async (raw) => {
     const text = raw.toString();
