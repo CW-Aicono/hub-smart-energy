@@ -176,11 +176,13 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     if (meter.capture_type === "virtual") {
       supabase
         .from("virtual_meter_sources")
-        .select("source_meter_id, operator")
+        .select(
+          "source_meter_id, source_charge_point_id, source_charge_point_group_id, source_all_charge_points, operator",
+        )
         .eq("virtual_meter_id", meter.id)
         .order("sort_order")
         .then(({ data }) => {
-          setVirtualSources((data as VirtualMeterSource[]) || []);
+          setVirtualSources((data as unknown as VirtualMeterSource[]) || []);
         });
     } else {
       setVirtualSources([]);
