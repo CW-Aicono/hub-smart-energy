@@ -213,6 +213,11 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [pendingSensorUuid, setPendingSensorUuid] = useState<string | null>(null);
 
+  // Ladeinfrastruktur – Tab nur einblenden, wenn mindestens ein Ladepunkt
+  // direkt oder über eine Gruppe dieser Liegenschaft zugeordnet ist.
+  const { data: locationChargePoints = [] } = useLocationChargePoints(locationId);
+  const hasChargingInfra = locationChargePoints.length > 0;
+
   // Gateway integrations for sensor/actuator tabs
   const { locationIntegrations, loading: intLoading } = useLocationIntegrations(locationId);
 
