@@ -348,6 +348,11 @@ const LiveValues = () => {
       let allDayResolved = true;
 
       for (const src of sources) {
+        if (!src.source_meter_id) {
+          // CP-based sources werden hier (Live-Werte-Seite) nicht aufgelöst — siehe useEnergyData für Dashboards.
+          allResolved = false;
+          break;
+        }
         const val = getSourceValue(src.source_meter_id);
         if (val === null) {
           allResolved = false;
