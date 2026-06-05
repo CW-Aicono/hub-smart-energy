@@ -400,6 +400,7 @@ const ChargePointDetail = () => {
       model: form.model || null,
       connector_type: form.connector_type || "Type2",
       rfid_read_mode: form.rfid_read_mode || "raw",
+      location_id: form.location_id && form.location_id !== "__none__" ? form.location_id : null,
       photo_url: photoUrl,
     } as any);
     setEditing(false);
