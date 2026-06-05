@@ -53,6 +53,10 @@ export async function handleCall(
           // wird gleich darauf per StatusNotification gesetzt.
           status: "available",
         });
+        // Identität für Kompatibilitäts-Checks im Dispatcher cachen.
+        session.vendor = (payload.chargePointVendor as string) ?? null;
+        session.model = (payload.chargePointModel as string) ?? null;
+        session.firmwareVersion = (payload.firmwareVersion as string) ?? null;
         // Capability-Probe und Aktivierung der gewünschten Measurands —
         // wird fire-and-forget asynchron 2s nach BootNotification gestartet,
         // damit der Charger erst seine StatusNotification senden kann.
