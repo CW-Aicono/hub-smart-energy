@@ -23,6 +23,8 @@ import { MeterOffsetSection } from "./MeterOffsetSection";
 import { ReplaceDeviceDialog } from "./ReplaceDeviceDialog";
 import type { MeterOffsetReason } from "@/lib/meterOffset";
 import { ArrowRightLeft } from "lucide-react";
+import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
+import { useChargePointGroups } from "@/hooks/useChargePointGroups";
 
 interface Floor {
   id: string;
