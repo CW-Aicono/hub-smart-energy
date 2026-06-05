@@ -74,6 +74,16 @@ export function ChargePointGroupsManager({ isAdmin }: { isAdmin: boolean }) {
               <div className="space-y-4 pt-2">
                 <div><Label>Name</Label><Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="z.B. Parkdeck Ost" autoFocus /></div>
                 <div><Label>Beschreibung (optional)</Label><Textarea value={newDesc} onChange={(e) => setNewDesc(e.target.value)} rows={2} /></div>
+                <div>
+                  <Label>Liegenschaft (optional)</Label>
+                  <Select value={newLocationId} onValueChange={setNewLocationId}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— keine Zuordnung —</SelectItem>
+                      {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Button onClick={handleCreate} disabled={!newName.trim() || createGroup.isPending} className="w-full">Erstellen</Button>
               </div>
             </DialogContent>
