@@ -274,6 +274,7 @@ const ChargingPoints = () => {
       connection_protocol: ((cp as any).connection_protocol === "ws" ? "ws" : "wss"),
       auth_required: (cp as any).auth_required ?? true,
       ocpp_password: generatePw(),
+      location_id: cp.location_id ?? "__none__",
     });
     setAddCoords({
       lat: cp.latitude ?? null,
