@@ -252,6 +252,8 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
               sources={virtualSources}
               onSourcesChange={setVirtualSources}
               availableMeters={activeMeters}
+              availableChargePoints={locationChargePoints.map((cp) => ({ id: cp.id, name: cp.name }))}
+              availableChargePointGroups={locationCpGroups.map((g) => ({ id: g.id, name: g.name }))}
             />
           )}
 
