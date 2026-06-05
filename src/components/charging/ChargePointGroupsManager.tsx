@@ -18,21 +18,28 @@ import { PowerLimitScheduler, PowerLimitSchedule, defaultPowerLimitSchedule } fr
 import { AccessControlSettings, AccessSettings } from "@/components/charging/AccessControlSettings";
 import GroupSolarChargingConfig from "@/components/charging/GroupSolarChargingConfig";
 import { useMeters } from "@/hooks/useMeters";
+import { useLocations } from "@/hooks/useLocations";
 
 export function ChargePointGroupsManager({ isAdmin }: { isAdmin: boolean }) {
   const { groups, isLoading, createGroup, updateGroup, deleteGroup, assignChargePointToGroup } = useChargePointGroups();
   const { chargePoints } = useChargePoints();
+  const { locations } = useLocations();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  const [newLocationId, setNewLocationId] = useState<string>("__none__");
   const [selectedGroup, setSelectedGroup] = useState<ChargePointGroup | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
   const handleCreate = () => {
     if (!newName.trim()) return;
-    createGroup.mutate({ name: newName.trim(), description: newDesc.trim() || undefined }, {
-      onSuccess: () => { setCreateOpen(false); setNewName(""); setNewDesc(""); },
+    createGroup.mutate({
+      name: newName.trim(),
+      description: newDesc.trim() || undefined,
+      location_id: newLocationId === "__none__" ? null : newLocationId,
+    }, {
+      onSuccess: () => { setCreateOpen(false); setNewName(""); setNewDesc(""); setNewLocationId("__none__"); },
     });
   };
 
