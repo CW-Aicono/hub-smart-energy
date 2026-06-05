@@ -11,6 +11,7 @@ import {
   type MeterSampleInput,
 } from "./backendApi";
 import { probeChargePointConfiguration } from "./configurationProbe";
+import { isLegacyWallbe } from "./wallboxCompat";
 
 
 type OcppCall = [2, string, string, Record<string, unknown>];
