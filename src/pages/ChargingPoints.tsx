@@ -429,7 +429,18 @@ const ChargingPoints = () => {
           </p>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div>
+        <Label>Liegenschaft <span className="text-xs text-muted-foreground font-normal">— optional, direkte Zuordnung</span></Label>
+        <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
+          <SelectTrigger><SelectValue placeholder="Keine / via Gruppe" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">Keine / via Gruppe</SelectItem>
+            {locations.map((loc) => (
+              <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
         <div><Label>{t("charging.connectors" as any)}</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
         <div><Label>{t("charging.maxPower" as any)}</Label><Input type="number" min="0.1" step="0.1" value={form.max_power_kw} onChange={(e) => { const v = e.target.value; if (v === "" || parseFloat(v) >= 0) setForm({ ...form, max_power_kw: v }); }} /></div>
       </div>
