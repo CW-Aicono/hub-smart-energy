@@ -359,7 +359,10 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       if (virtualSources.length > 0) {
         const rows = virtualSources.map((s, i) => ({
           virtual_meter_id: meter.id,
-          source_meter_id: s.source_meter_id,
+          source_meter_id: s.source_meter_id ?? null,
+          source_charge_point_id: s.source_charge_point_id ?? null,
+          source_charge_point_group_id: s.source_charge_point_group_id ?? null,
+          source_all_charge_points: s.source_all_charge_points ?? false,
           operator: s.operator,
           sort_order: i,
         }));
