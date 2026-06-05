@@ -1,33 +1,50 @@
+# Virtueller Zähler erweitert um Ladepunkt-Quellen
+
 ## Ziel
-Ladepunkte und Ladepunkt-Gruppen können einer Liegenschaft zugeordnet werden. Auf der Liegenschaftsseite erscheint ein neues Tab "Ladeinfrastruktur" mit den Messdaten der Ladepunkte – analog zur Zähler-Ansicht.
+Im „Zähler hinzufügen"-Dialog kann unter dem Baustein „Virtueller Zähler" zusätzlich zu echten Zählern auch eine beliebige Kombination aus Ladepunkten, Ladepunkt-Gruppen oder „Alle Ladepunkte dieser Liegenschaft" als Quelle gewählt werden. Mischen mit normalen Zählern ist erlaubt. Live-Leistung kommt aus OCPP MeterValues, kWh-Summen aus `charging_sessions`. Vorbereitet für V2G/V2H (bidirektional).
 
-## Datenbank
-- `charge_points.location_id` existiert bereits (nullable FK auf `locations`).
-- Neue Spalte `charge_point_groups.location_id uuid` (nullable, FK `locations(id) ON DELETE SET NULL`) + Index.
-- Effektive Zuordnung eines Ladepunkts: `charge_points.location_id` falls gesetzt, sonst `charge_point_groups.location_id` der Gruppe.
+## Wichtiger Datenbefund
+- Live-Leistung der Ladepunkte liegt **nicht** als Spalte vor, sondern in `ocpp_meter_samples` (measurand = `Power.Active.Import` / `Power.Active.Export`, Spalte `value` in W).
+- kWh-Summen kommen aus `charging_sessions.energy_kwh` (Felder `start_time`, `stop_time`, `charge_point_id`).
+- Bidirektionalität ist heute nur über Export-measurands sichtbar — Schema dafür ist bereits ausreichend, kein extra DB-Feld nötig.
 
-## UI – Zuordnung
-- In Ladepunkt-Bearbeitungsdialog (`ChargePointDialog`): Liegenschaft-Auswahl (Dropdown, leer = "keine / via Gruppe").
-- In Gruppen-Bearbeitungsdialog (`ChargePointGroupDialog`): gleiche Liegenschaft-Auswahl.
+## Änderungen
 
-## UI – Tab "Ladeinfrastruktur"
-- Datei: `src/pages/LocationDetail.tsx` (oder zuständige Tab-Komponente unter "Messstellen, Aktoren und Sensoren") um Tab erweitern.
-- Tab sichtbar **nur**, wenn mindestens ein Ladepunkt direkt oder über eine zugeordnete Gruppe der Liegenschaft zugeordnet ist.
-- Inhalt pro Ladepunkt (wie Zähler-Karten):
-  - Name, Status-Badge, Standort-Quelle (direkt/Gruppe)
-  - Aktueller Zählerstand (Summe kWh aus `charging_sessions.energy_kwh`)
-  - Letzte 30 Tage kWh, letzte Session Zeit
-  - Klick → führt zu `ChargePointDetail`
-- Neuer Hook `useLocationChargePoints(locationId)` liefert effektiv zugeordnete Ladepunkte (Union direkt + via Gruppe).
-- Neuer Hook `useChargePointMeterStats(chargePointIds)` aggregiert kWh aus `charging_sessions`.
+### 1. Datenbank (Migration)
+Tabelle `public.virtual_meter_sources` erweitern:
+- `source_meter_id`: NOT NULL → NULLABLE
+- Neue Spalten (alle nullable, alle FK ON DELETE CASCADE):
+  - `source_charge_point_id` → `charge_points(id)`
+  - `source_charge_point_group_id` → `charge_point_groups(id)`
+  - `source_all_charge_points` boolean DEFAULT false (löst zur Laufzeit alle CPs der Liegenschaft des virtuellen Zählers auf)
+- Bestehende `UNIQUE(virtual_meter_id, source_meter_id)` droppen, ersetzen durch partielle Unique-Indizes je Quelltyp.
+- CHECK-Constraint: genau eine der vier Quellen pro Zeile gesetzt.
 
-## Scope
-- Keine Änderungen an OCPP-Server, Billing oder DLM-Logik.
-- Reine Zuordnungs- und Anzeigefunktion.
+### 2. Formel-Builder UI (`VirtualMeterFormulaBuilder.tsx`)
+- Props um `availableChargePoints` und `availableChargePointGroups` erweitern.
+- Quell-Dropdown in vier Gruppen (Select-Groups): Zähler / Ladepunkte / Ladepunkt-Gruppen / „Alle Ladepunkte dieser Liegenschaft".
+- Source-Item rendert je nach Typ Icon (PlugZap für CPs, Users für Gruppen, MapPin für „Alle"), Operator + / − wie bisher.
+- Formel-Vorschau zeigt den jeweiligen Namen/Label.
 
-## Schritte
-1. Migration: `location_id` zu `charge_point_groups` hinzufügen.
-2. Hooks `useChargePointGroups` / `useChargePoints` um `location_id` erweitern.
-3. Dropdown in beiden Edit-Dialogen.
-4. Neuer Hook `useLocationChargePoints` + Stats-Hook.
-5. Neues Tab + Karten-Komponente in LocationDetail einbinden.
+### 3. Add/Edit-Dialoge (`AddMeterDialog.tsx`, `EditMeterDialog.tsx`)
+- Über `useLocationChargePoints(locationId)` und `useChargePointGroups` (gefiltert auf Liegenschaft) die Listen laden und an den Builder reichen.
+- `useMeters.addMeter` / Update-Logik erweitern, sodass die neuen Quell-Typen mitgespeichert werden (Insert in `virtual_meter_sources` mit dem jeweils passenden Feld).
+
+### 4. Berechnungs-Layer
+- `src/hooks/useEnergyData.tsx`: 
+  - Beim Laden auch `source_charge_point_id`, `source_charge_point_group_id`, `source_all_charge_points` aus `virtual_meter_sources` selecten.
+  - Für CP-Quellen die jüngsten `ocpp_meter_samples` (Power.Active.Import minus Power.Active.Export, Fenster letzte 5 Min) als Live-kW heranziehen. Tagessumme aus `charging_sessions.energy_kwh` (`start_time >= heute_00:00`).
+  - Gruppen/„Alle"-Auflösung anhand bereits geladener CPs der Liegenschaft.
+- `src/pages/LiveValues.tsx`: dieselbe Auflösungslogik in den `virtualValues`-Memo einbauen.
+
+### 5. Bidirektional-Vorbereitung
+- Wenn beide measurands (Import + Export) für einen CP existieren, wird `virtuell` automatisch als bidirektional behandelt: positiver Wert = Bezug (Laden), negativer Wert = Einspeisung (V2G/V2H). Kein extra UI-Flag nötig — passt automatisch in das bestehende `meters.is_bidirectional`-System, das `MeterManagement` schon rendert.
+
+## Was nicht geändert wird
+- OCPP-Server-Code, Billing-Pipeline, DLM/PV-Surplus-Logik. 
+- Bestehende virtuelle Zähler mit reiner Zähler-Formel funktionieren unverändert weiter.
+
+## Reihenfolge (Migration zuerst)
+1. Migration einreichen → User bestätigt → Types werden regeneriert
+2. Builder + Dialoge + Hooks in einem Commit
+3. Sichtkontrolle: neuen virtuellen Zähler „Alle Wallboxen" anlegen, prüfen ob Live-kW und Tagessumme stimmen.
