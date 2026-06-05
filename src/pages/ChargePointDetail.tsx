@@ -378,6 +378,7 @@ const ChargePointDetail = () => {
       model: cp.model || "",
       connector_type: cp.connector_type || "Type2",
       rfid_read_mode: (cp as any).rfid_read_mode || "raw",
+      location_id: cp.location_id ?? "__none__",
     });
     setCoords({ lat: cp.latitude, lng: cp.longitude });
     setPhotoUrl(cp.photo_storage_path || cp.photo_url || null);
