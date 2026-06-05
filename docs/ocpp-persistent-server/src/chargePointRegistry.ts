@@ -22,6 +22,10 @@ export interface Session {
   lastIncomingAt: number;
   lastOutgoingAt: number;
   pendingCalls: Map<string, PendingCall>;
+  /** Aus BootNotification gemeldete Identität — für Kompatibilitäts-Checks. */
+  vendor?: string | null;
+  model?: string | null;
+  firmwareVersion?: string | null;
 }
 
 const sessions = new Map<string, Session>(); // key = chargePointId
