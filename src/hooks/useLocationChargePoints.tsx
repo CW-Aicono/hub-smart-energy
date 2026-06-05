@@ -42,11 +42,11 @@ export function useLocationChargePoints(locationId?: string) {
     staleTime: 30_000,
     queryFn: async (): Promise<LocationChargePoint[]> => {
       // 1) Gruppen dieser Liegenschaft holen
-      const { data: groups, error: gErr } = await supabase
-        .from("charge_point_groups")
+      const { data: groups, error: gErr } = await (supabase
+        .from("charge_point_groups") as any)
         .select("id, name, location_id")
         .eq("tenant_id", tenant!.id)
-        .eq("location_id" as any, locationId!);
+        .eq("location_id", locationId!);
       if (gErr) throw gErr;
       const groupIds = (groups ?? []).map((g: any) => g.id as string);
       const groupMap = new Map<string, { name: string; location_id: string }>();
