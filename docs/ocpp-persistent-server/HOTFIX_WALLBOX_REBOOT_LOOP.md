@@ -1,5 +1,29 @@
 # Hotfix: Wallbox-Reboot-Loop (Test + Live)
 
+> ## ⚡ Nachtrag 2 (05.06.2026) — die eigentliche Ursache
+>
+> Der Vergleich mit dem Monta-Backend hat gezeigt: die Wallbe
+> `Smart Charge Control` mit Firmware **BF-01.04.20** rebootet alle ~10 Minuten,
+> wenn der Server in der `BootNotification`-Antwort einen kleinen
+> Heartbeat-`interval` schickt (wir hatten `30`). Monta antwortet mit
+> **`interval: 86400`** (= 24 h) und dieselbe Wallbox läuft stabil, lädt und
+> rebootet nicht mehr.
+>
+> **Fix:** In `src/ocppHandler.ts` (Case `BootNotification`) ist `interval` jetzt
+> fest auf `86400` gesetzt. Für alle anderen Modelle ist das harmlos —
+> `interval` ist nur die Obergrenze, eine Wallbox sendet bei Bedarf jederzeit
+> früher Heartbeats.
+>
+> **Aktion auf dem Server:** Genau dieselben Schritte wie unten in **Schritt 4
+> und 5** ausführen (Test und Live je einmal `stop` → `build --no-cache` →
+> `up -d`). Danach in den Logs für die Wallbe prüfen: nach einer einzigen
+> Boot-Sequenz darf **keine** weitere `BootNotification` mehr alle 10 Minuten
+> auftauchen.
+
+---
+
+
+
 ## Was war das Problem?
 
 Nach dem Live-Update vom 03.06.2026 starteten die wallbe Smart Charge Control
