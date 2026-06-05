@@ -198,13 +198,23 @@ export function useEnergyData(locationId?: string | null) {
       const sourcesRes = tenantMeterIds.length > 0
         ? await supabase
             .from("virtual_meter_sources")
-            .select("virtual_meter_id, source_meter_id, operator, sort_order")
+            .select(
+              "virtual_meter_id, source_meter_id, source_charge_point_id, source_charge_point_group_id, source_all_charge_points, operator, sort_order",
+            )
             .in("virtual_meter_id", tenantMeterIds)
             .order("sort_order")
         : { data: [] as any[] };
       return {
         readings: (readingsRes.data ?? []) as ReadingRow[],
-        virtualSources: (sourcesRes.data ?? []) as { virtual_meter_id: string; source_meter_id: string; operator: string; sort_order: number }[],
+        virtualSources: (sourcesRes.data ?? []) as {
+          virtual_meter_id: string;
+          source_meter_id: string | null;
+          source_charge_point_id: string | null;
+          source_charge_point_group_id: string | null;
+          source_all_charge_points: boolean;
+          operator: string;
+          sort_order: number;
+        }[],
       };
     },
     enabled: !!user && !!tenant?.id,
@@ -213,6 +223,89 @@ export function useEnergyData(locationId?: string | null) {
 
   const readings = dbData?.readings ?? [];
   const virtualSources = dbData?.virtualSources ?? [];
+
+  // Charge-point context (for virtual meters that aggregate wallbox values).
+  // We only fetch when at least one virtual source references CPs to avoid extra round-trips.
+  const needsChargePointContext = useMemo(
+    () =>
+      virtualSources.some(
+        (s) => s.source_charge_point_id || s.source_charge_point_group_id || s.source_all_charge_points,
+      ),
+    [virtualSources],
+  );
+
+  const { data: chargePointContext } = useQuery({
+    queryKey: ["energy-data-charge-points", tenant?.id],
+    enabled: !!tenant?.id && needsChargePointContext,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charge_points")
+        .select("id, location_id, group_id")
+        .eq("tenant_id", tenant!.id);
+      if (error) throw error;
+      return (data ?? []) as { id: string; location_id: string | null; group_id: string | null }[];
+    },
+  });
+
+  // Live power per charge point (latest ocpp_meter_samples within the last 5 minutes,
+  // measurand = Power.Active.Import minus Power.Active.Export → bidirectional-ready kW).
+  const cpIdsNeeded = useMemo(() => {
+    if (!needsChargePointContext || !chargePointContext) return [] as string[];
+    const ids = new Set<string>();
+    // Find virtual meters' locations to resolve "all CPs of this location"
+    const vmLocationMap = new Map<string, string>();
+    meters.forEach((m) => {
+      if (m.capture_type === "virtual" && m.location_id) vmLocationMap.set(m.id, m.location_id);
+    });
+    virtualSources.forEach((s) => {
+      if (s.source_charge_point_id) ids.add(s.source_charge_point_id);
+      else if (s.source_charge_point_group_id) {
+        chargePointContext
+          .filter((cp) => cp.group_id === s.source_charge_point_group_id)
+          .forEach((cp) => ids.add(cp.id));
+      } else if (s.source_all_charge_points) {
+        const locId = vmLocationMap.get(s.virtual_meter_id);
+        if (locId) {
+          chargePointContext.filter((cp) => cp.location_id === locId).forEach((cp) => ids.add(cp.id));
+        }
+      }
+    });
+    return Array.from(ids);
+  }, [virtualSources, chargePointContext, needsChargePointContext, meters]);
+
+  const { data: cpLivePower } = useQuery({
+    queryKey: ["energy-data-cp-live-power", tenant?.id, cpIdsNeeded.join(",")],
+    enabled: !!tenant?.id && cpIdsNeeded.length > 0,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    queryFn: async (): Promise<Record<string, number>> => {
+      const since = new Date(Date.now() - 5 * 60_000).toISOString();
+      const { data, error } = await supabase
+        .from("ocpp_meter_samples")
+        .select("charge_point_id, measurand, unit, value, sampled_at")
+        .eq("tenant_id", tenant!.id)
+        .in("charge_point_id", cpIdsNeeded)
+        .in("measurand", ["Power.Active.Import", "Power.Active.Export"])
+        .gte("sampled_at", since)
+        .order("sampled_at", { ascending: false });
+      if (error) throw error;
+      // latest import + export per CP, value in W → kW
+      const seen = new Map<string, { imp?: number; exp?: number }>();
+      (data ?? []).forEach((row: any) => {
+        const entry = seen.get(row.charge_point_id) ?? {};
+        const valKw = (row.unit === "kW" ? Number(row.value) : Number(row.value) / 1000);
+        if (row.measurand === "Power.Active.Import" && entry.imp === undefined) entry.imp = valKw;
+        if (row.measurand === "Power.Active.Export" && entry.exp === undefined) entry.exp = valKw;
+        seen.set(row.charge_point_id, entry);
+      });
+      const out: Record<string, number> = {};
+      seen.forEach((v, k) => {
+        out[k] = (v.imp ?? 0) - (v.exp ?? 0);
+      });
+      return out;
+    },
+  });
 
   // Group automatic meters by integration ID
   const integrationIds = useMemo(() => {
