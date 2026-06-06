@@ -99,7 +99,7 @@ export function useChargingUsers() {
   const { tenant } = useTenant();
   const key = ["charging-users", tenant?.id];
 
-  const { data: users = [], isLoading } = useQuery({
+  const { data: users = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: key,
     enabled: !!tenant?.id,
     queryFn: async () => {
