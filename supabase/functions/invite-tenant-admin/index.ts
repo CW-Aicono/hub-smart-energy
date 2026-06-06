@@ -97,6 +97,7 @@ const handler = async (req: Request): Promise<Response> => {
         email: adminEmail,
         password: tempPassword,
         email_confirm: true,
+        user_metadata: { must_change_password: true },
       });
       if (createError || !newUserData?.user) {
         throw new Error(`Benutzer konnte nicht erstellt werden: ${createError?.message ?? "unbekannt"}`);

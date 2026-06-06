@@ -17,6 +17,7 @@ import { Plus, Trash2, ExternalLink, Building2, User, Mail, AlertCircle, Users }
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import TenantLifecycleActions, { TenantStatusBadge } from "@/components/super-admin/TenantLifecycleActions";
 
 const SuperAdminTenants = () => {
   const { user, loading: authLoading } = useAuth();
@@ -248,29 +249,32 @@ const SuperAdminTenants = () => {
                   <TableRow>
                     <TableHead>{t("common.name")}</TableHead>
                     <TableHead>Slug</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>{t("common.email")}</TableHead>
                     <TableHead>{t("common.created")}</TableHead>
-                    <TableHead className="w-24">{t("common.actions")}</TableHead>
+                    <TableHead className="w-48">{t("common.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
                   ) : filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("tenants.not_found")}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("tenants.not_found")}</TableCell></TableRow>
                   ) : (
-                    filtered.map((tenant) => (
+                    filtered.map((tenant: any) => (
                       <TableRow key={tenant.id} className="cursor-pointer" onClick={() => navigate(`/super-admin/tenants/${tenant.id}`)}>
                         <TableCell className="font-medium">{tenant.name}</TableCell>
                         <TableCell className="text-muted-foreground">{tenant.slug}</TableCell>
+                        <TableCell><TenantStatusBadge status={tenant.status} /></TableCell>
                         <TableCell className="text-muted-foreground">{tenant.contact_email || "–"}</TableCell>
                         <TableCell className="text-muted-foreground">{new Date(tenant.created_at).toLocaleDateString("de-DE")}</TableCell>
                         <TableCell>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); navigate(`/super-admin/tenants/${tenant.id}`); }}>
+                          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" onClick={() => navigate(`/super-admin/tenants/${tenant.id}`)}>
                               <ExternalLink className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: tenant.id, name: tenant.name }); setConfirmName(""); }}>
+                            <TenantLifecycleActions tenant={{ id: tenant.id, name: tenant.name, status: tenant.status }} />
+                            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => { setDeleteTarget({ id: tenant.id, name: tenant.name }); setConfirmName(""); }}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
