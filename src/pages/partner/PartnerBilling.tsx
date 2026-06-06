@@ -286,7 +286,7 @@ export default function PartnerBilling() {
                 <p className="text-xs text-muted-foreground mt-4">
                   <strong>Einkauf</strong>: vereinbarter Partner-Einstandspreis bei AICONO.{" "}
                   <strong>Empf. Verkaufspreis</strong>: empfohlener Endkundenpreis (auch Default für deinen Verkaufspreis).{" "}
-                  {canEditPrices ? "Du kannst deinen Verkaufspreis frei festlegen." : "Nur Mitglieder mit Berechtigung „Abrechnung" können Preise ändern."}
+                  {canEditPrices ? "Du kannst deinen Verkaufspreis frei festlegen." : 'Nur Mitglieder mit Berechtigung „Abrechnung" können Preise ändern.'}
                 </p>
               </CardContent>
             </Card>
