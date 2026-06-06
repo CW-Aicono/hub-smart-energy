@@ -9936,6 +9936,25 @@ export type Database = {
         Args: { _permission: string; _user_id: string }
         Returns: boolean
       }
+      partner_reporting_growth: {
+        Args: { _partner_id: string }
+        Returns: {
+          month_start: string
+          mrr_eur: number
+          tenants_total: number
+        }[]
+      }
+      partner_reporting_modules: {
+        Args: { _partner_id: string }
+        Returns: {
+          module_code: string
+          tenants_count: number
+        }[]
+      }
+      partner_reporting_overview: {
+        Args: { _partner_id: string }
+        Returns: Json
+      }
       release_gateway_refresh_lock: {
         Args: { p_integration_id: string; p_owner: string }
         Returns: undefined
