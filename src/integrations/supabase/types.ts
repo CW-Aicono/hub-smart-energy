@@ -662,6 +662,57 @@ export type Database = {
           },
         ]
       }
+      charge_point_economics: {
+        Row: {
+          capex_cents: number
+          charge_point_id: string
+          commissioned_on: string | null
+          created_at: string
+          electricity_cost_eur_per_kwh: number
+          notes: string | null
+          opex_monthly_cents: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          capex_cents?: number
+          charge_point_id: string
+          commissioned_on?: string | null
+          created_at?: string
+          electricity_cost_eur_per_kwh?: number
+          notes?: string | null
+          opex_monthly_cents?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          capex_cents?: number
+          charge_point_id?: string
+          commissioned_on?: string | null
+          created_at?: string
+          electricity_cost_eur_per_kwh?: number
+          notes?: string | null
+          opex_monthly_cents?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_economics_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: true
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_economics_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_point_group_allowed_user_groups: {
         Row: {
           created_at: string

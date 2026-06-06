@@ -33,6 +33,9 @@ import {
 } from "lucide-react";
 import { useOcppLiveData, useOcppCapabilities } from "@/hooks/useOcppLiveData";
 import { LiveDataPanel } from "@/components/charging/LiveDataPanel";
+import { UtilizationHeatmap } from "@/components/charging/UtilizationHeatmap";
+import { RoiCard } from "@/components/charging/RoiCard";
+import { useChargingTariffs } from "@/hooks/useChargingTariffs";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
 import { fmtKwh, fmtKw, fmtNum, normalizeConnectorStatus, isChargePointOnline } from "@/lib/formatCharging";
@@ -78,6 +81,11 @@ const ChargePointDetail = () => {
   const { locations } = useLocations();
   const { createTask } = useTasks();
   const { sessions } = useChargingSessions(id);
+  const { tariffs } = useChargingTariffs();
+  const defaultSalePrice = useMemo(() => {
+    const t = (tariffs ?? []).find((x: any) => x.is_default) ?? (tariffs ?? [])[0];
+    return Number(t?.price_per_kwh ?? 0.5);
+  }, [tariffs]);
   const resolveTag = useIdTagResolver();
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
@@ -674,6 +682,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
               <TabsTrigger value="details">{t("cpd.tabDetails" as any)}</TabsTrigger>
               <TabsTrigger value="energy">{t("cpd.tabEnergy" as any)}</TabsTrigger>
               <TabsTrigger value="access">{t("cpd.tabAccess" as any)}</TabsTrigger>
+              <TabsTrigger value="utilization" className="gap-1.5"><BarChart3 className="h-3.5 w-3.5" />Auslastung &amp; ROI</TabsTrigger>
               <TabsTrigger value="maintenance" className="gap-1.5"><Wrench className="h-3.5 w-3.5" />Wartung</TabsTrigger>
             </TabsList>
 
@@ -1691,6 +1700,15 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   </Card>
                 </>
               )}
+            </TabsContent>
+
+            <TabsContent value="utilization" className="mt-6 space-y-6">
+              <UtilizationHeatmap sessions={sessions ?? []} />
+              <RoiCard
+                chargePointId={cp.id}
+                sessions={(sessions ?? []).map((s) => ({ start_time: s.start_time, energy_kwh: s.energy_kwh }))}
+                defaultSalePriceEurPerKwh={defaultSalePrice}
+              />
             </TabsContent>
 
             <TabsContent value="maintenance" className="mt-6">
