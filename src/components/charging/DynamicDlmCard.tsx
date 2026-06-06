@@ -7,7 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Activity, AlertTriangle, ArrowDown, ArrowUp, Zap, Trash2 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Activity, AlertTriangle, ArrowDown, ArrowUp, Zap, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { useLocationDlmConfig } from "@/hooks/useLocationDlmConfig";
 import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
 import { useMeters } from "@/hooks/useMeters";
@@ -26,6 +27,7 @@ export function DynamicDlmCard({ locationId }: Props) {
   const { tenant } = useTenant();
   const qc = useQueryClient();
 
+  const [isOpen, setIsOpen] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [referenceMeterId, setReferenceMeterId] = useState<string>("");
   const [gridLimitKw, setGridLimitKw] = useState<number>(50);
@@ -106,27 +108,38 @@ export function DynamicDlmCard({ locationId }: Props) {
   if (cps.length === 0) return null;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5" />
-              Dynamisches Lastmanagement (DLM)
-            </CardTitle>
-            <CardDescription>
-              Drosselt Wallboxen automatisch, wenn der Hausanschluss-Messwert sich der Grenzleistung nähert.
-              Reaktion ≤ 60 s.
-            </CardDescription>
-          </div>
-          {config && (
-            <Badge variant={config.is_active ? "default" : "secondary"}>
-              {config.is_active ? "Aktiv" : "Inaktiv"}
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <Card>
+        <CardHeader>
+          <CollapsibleTrigger asChild>
+            <button className="flex w-full items-start justify-between gap-2 text-left">
+              <div className="flex items-start gap-2">
+                {isOpen ? (
+                  <ChevronDown className="mt-1 h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="mt-1 h-4 w-4 text-muted-foreground" />
+                )}
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Zap className="h-5 w-5" />
+                    Dynamisches Lastmanagement (DLM)
+                  </CardTitle>
+                  <CardDescription>
+                    Drosselt Wallboxen automatisch, wenn der Hausanschluss-Messwert sich der Grenzleistung nähert.
+                    Reaktion ≤ 60 s.
+                  </CardDescription>
+                </div>
+              </div>
+              {config && (
+                <Badge variant={config.is_active ? "default" : "secondary"}>
+                  {config.is_active ? "Aktiv" : "Inaktiv"}
+                </Badge>
+              )}
+            </button>
+          </CollapsibleTrigger>
+        </CardHeader>
+        <CollapsibleContent>
+        <CardContent className="space-y-6">
         {/* Live-Panel */}
         {config && (
           <div className="grid gap-4 sm:grid-cols-3 rounded-md border bg-muted/30 p-4">
@@ -298,6 +311,8 @@ export function DynamicDlmCard({ locationId }: Props) {
           </Button>
         </div>
       </CardContent>
-    </Card>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }
