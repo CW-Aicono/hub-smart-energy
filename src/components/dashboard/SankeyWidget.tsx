@@ -310,18 +310,18 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       if (!allowedTypes.has(m.energy_type || "strom")) return;
 
       if (period === "day") {
-        // Use max(live, db) so widget works even when gateway cache is empty
-        const liveVal = livePeriodTotals[m.id]?.totalDay ?? 0;
+        // For today: use max(live, db). For past days: use db only.
+        const liveVal = todayInRange ? (livePeriodTotals[m.id]?.totalDay ?? 0) : 0;
         const dbVal = dbPeriodSums?.[m.id] ?? 0;
         const val = Math.max(liveVal, dbVal);
         if (val <= 0) return;
         const converted = toBaseUnit(m.id, val);
         addFlow(m.energy_type || "strom", m.location_id, m.floor_id || null, m.room_id || null, converted);
       } else {
-        // DB sum for past days
+        // DB sum for the selected range
         const dbVal = dbPeriodSums?.[m.id] ?? 0;
-        // Add live totalDay for today (which is within the current period)
-        const todayVal = livePeriodTotals[m.id]?.totalDay ?? 0;
+        // Only add live totalDay if today actually falls in the selected range
+        const todayVal = todayInRange ? (livePeriodTotals[m.id]?.totalDay ?? 0) : 0;
         const total = dbVal + todayVal;
         if (total <= 0) return;
         const converted = toBaseUnit(m.id, total);
