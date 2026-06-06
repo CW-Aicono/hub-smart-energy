@@ -81,6 +81,11 @@ const ChargePointDetail = () => {
   const { locations } = useLocations();
   const { createTask } = useTasks();
   const { sessions } = useChargingSessions(id);
+  const { tariffs } = useChargingTariffs();
+  const defaultSalePrice = useMemo(() => {
+    const t = (tariffs ?? []).find((x: any) => x.is_default) ?? (tariffs ?? [])[0];
+    return Number(t?.price_per_kwh ?? 0.5);
+  }, [tariffs]);
   const resolveTag = useIdTagResolver();
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
