@@ -401,7 +401,18 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
               </SelectContent>
             </Select>
           </div>
-          <p className="text-sm text-muted-foreground">{subtitle}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">{subtitle}</p>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7" disabled={period === "all"} onClick={() => setOffset((o) => o - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <PeriodPickerLabel period={period} label={periodLabel} refDate={refDate} className="min-w-[160px]" />
+              <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((o) => o + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
