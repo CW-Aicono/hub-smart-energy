@@ -18,7 +18,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock, Pencil, Save, Blocks, Plus, X, Award, Trash2, Send, CalendarClock } from "lucide-react";
+import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock, Pencil, Save, Blocks, Plus, X, Award, Trash2, Send, CalendarClock, FileSearch } from "lucide-react";
+import { AuditLogList } from "@/components/audit/AuditLogList";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -463,6 +464,7 @@ const SuperAdminTenantDetail = () => {
               <TabsTrigger value="license">{t("tenant_detail.license")}</TabsTrigger>
               <TabsTrigger value="users">{t("nav.users")}</TabsTrigger>
               <TabsTrigger value="billing"><Receipt className="h-4 w-4 mr-1" />{t("tenant_detail.billing")}</TabsTrigger>
+              <TabsTrigger value="audit"><FileSearch className="h-4 w-4 mr-1" />Aktivitätslog</TabsTrigger>
             </TabsList>
 
             <TabsContent value="info" className="mt-6 space-y-6">
@@ -1261,6 +1263,10 @@ const SuperAdminTenantDetail = () => {
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="audit" className="mt-6">
+              <AuditLogList tenantId={id} title="Aktivitätslog dieses Mandanten" />
             </TabsContent>
           </Tabs>
         </div>

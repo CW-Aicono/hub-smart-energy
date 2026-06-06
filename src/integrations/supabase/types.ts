@@ -208,6 +208,63 @@ export type Database = {
           },
         ]
       }
+      audit_logs: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          after: Json | null
+          before: Json | null
+          created_at: string
+          entity_id: string | null
+          entity_label: string | null
+          entity_type: string
+          id: string
+          ip_address: unknown
+          metadata: Json | null
+          partner_id: string | null
+          tenant_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_label?: string | null
+          entity_type: string
+          id?: string
+          ip_address?: unknown
+          metadata?: Json | null
+          partner_id?: string | null
+          tenant_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_label?: string | null
+          entity_type?: string
+          id?: string
+          ip_address?: unknown
+          metadata?: Json | null
+          partner_id?: string | null
+          tenant_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       automation_execution_log: {
         Row: {
           actions_executed: Json | null
@@ -9750,6 +9807,7 @@ export type Database = {
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_cron_job_history: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
+      cleanup_old_audit_logs: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
       cleanup_old_node_metrics: { Args: never; Returns: number }
       cleanup_old_ocpp_logs: { Args: never; Returns: number }

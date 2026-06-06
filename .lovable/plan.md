@@ -1,66 +1,89 @@
-# Welle 5 — Backend-Härtung & Performance
+## A4 – Systemweites Audit-Log
 
-## Verifikation (Ist-Zustand)
+### Ist-Zustand (verifiziert)
 
+- `user_role_audit_log` existiert (nur Rollenänderungen, via Trigger).
+- `email_send_audit` existiert (nur E-Mail-Versand).
+- `task_history` existiert (nur Tasks).
+- **Keine** generische `audit_logs`-Tabelle; Modul-Toggles, Tenant-Sperren, Preisänderungen, Member-Removals sind nicht nachvollziehbar.
 
-| Pkt | Befund                                                                                                                                              | Status                                                                 |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| B1  | `ingest-node-metrics`: Wildcard-CORS (`*`), `provided !== expected` String-Compare, kein Rate-Limit.                                                | **Offen**                                                              |
-| B2  | `community-marketplace-public`: nur E-Mail-Dedup (24h), IP wird zwar erfasst, aber nicht limitiert.                                                 | **Offen**                                                              |
-| B3  | Cron `cleanup-node-metrics-daily` (03:15) existiert bereits, ruft `cleanup_old_node_metrics()` (>7 Tage).                                           | **Erledigt** (Hinweis: Retention 7 Tage, nicht 30 — siehe Frage unten) |
-| B4  | Crons `aggregate-pv-actual-hourly` (5 * * * *) und `ppa-alert-check-daily` (30 6 * * *) sind aktiv.                                                 | **Erledigt**                                                           |
-| B5  | Indizes auf `meter_power_readings`: `(meter_id, recorded_at)` + `(recorded_at)`. Kein Index `(tenant_id, recorded_at DESC)`.                        | **Offen**                                                              |
-| B6  | `supabase_realtime` enthält `meter_power_readings`, aber **nicht** `meter_power_readings_5min`.                                                     | **Offen**                                                              |
-| B7  | `QueryClient` in `src/App.tsx`: `refetchOnWindowFocus: false`, `staleTime: 5 min`.                                                                  | **Erledigt**                                                           |
-| B8  | `useCopilotAnalysis`: History-Query ohne `staleTime`. AI-Calls selbst sind Mutations (kein Cache-Refetch-Problem), aber History sollte stabil sein. | **Teilweise offen**                                                    |
+### Plan
 
+**1. Migration – Tabelle `audit_logs**`
+Felder:
 
-## Umsetzungsplan
+- `id`, `created_at`
+- `actor_user_id` (uuid, nullable für Backend-Jobs), `actor_email` (text), `actor_role` (text)
+- `tenant_id` (uuid, nullable – für Super-Admin-Aktionen ohne Tenant)
+- `partner_id` (uuid, nullable)
+- `action` (text, z.B. `tenant.suspend`, `module.toggle`, `pricing.update`, `member.remove`, `partner.update`, `license.change`)
+- `entity_type` (text, z.B. `tenant`, `module`, `partner`, `member`, `license`)
+- `entity_id` (uuid, nullable), `entity_label` (text – lesbarer Name für UI)
+- `before` (jsonb), `after` (jsonb), `metadata` (jsonb)
+- `ip_address` (inet), `user_agent` (text)
 
-### B1 — `ingest-node-metrics` härten
+GRANTs: `SELECT, INSERT` → `authenticated`; `ALL` → `service_role`. Kein anon.
 
-- `corsHeaders` ersetzen durch `getCorsHeaders(req)` aus `supabase/functions/_shared/cors.ts` (zusätzlich `x-node-token` in `Access-Control-Allow-Headers` aufnehmen).
-- Token-Vergleich auf konstante Laufzeit umstellen: eigener `timingSafeEqual(a, b)`-Helper in der Datei (Längen-Check + XOR-Schleife über `TextEncoder`-Bytes).
-- Simples DB-Rate-Limit: pro `node_name` max. 20 Inserts / Minute. Implementierung: vor Insert `count(*)` aus `node_metrics` für letzten 60s; bei Überschreitung HTTP 429 mit `Retry-After: 60`.
+RLS:
 
-### B2 — Marktplatz IP-Rate-Limit
+- Super-Admin: alles lesen.
+- Tenant-Admin: nur Einträge mit eigener `tenant_id` lesen.
+- Partner-Admin: nur Einträge mit eigener `partner_id` oder Tenants des Partners lesen (via `is_partner_member`).
+- INSERT nur via Edge-Function (service_role) – kein direkter Insert aus dem Frontend.
 
-- In `community-marketplace-public` `/join-request`: zusätzlich zur E-Mail-Dedup ein IP-Limit von **10 Anträgen / Stunde**.
-- Query: `count(*)` aus `community_join_requests` mit `source_ip = ip` und `created_at >= now() - 1h`.
-- Bei Überschreitung: HTTP 429 mit deutscher Fehlermeldung (analog zum bestehenden Stil).
-- Keine neue Tabelle nötig — `source_ip` wird heute schon geschrieben.
+Indizes: `(tenant_id, created_at DESC)`, `(partner_id, created_at DESC)`, `(action, created_at DESC)`, `(entity_type, entity_id)`.
 
-### B5 — Index `meter_power_readings(tenant_id, recorded_at DESC)`
+Retention-Job (cron, monatlich): Einträge > 365 Tage löschen.
 
-- Migration: `CREATE INDEX CONCURRENTLY` ist in Supabase-Migrations nicht erlaubt → normales `CREATE INDEX IF NOT EXISTS idx_mpr_tenant_recorded_at ON public.meter_power_readings (tenant_id, recorded_at DESC);`
-- Hinweis: Tabelle ist groß → Migration kann mehrere Minuten dauern (Lock auf Inserts während Build). Akzeptabel, da nachts deploybar.
+**2. Edge-Function `audit-log-write**`
 
-### B6 — Realtime-Publication für `meter_power_readings_5min`
+- POST, `verify_jwt = true` (Standard) – validiert User-Session via `authClient`.
+- Body (Zod): `{ action, entity_type, entity_id?, entity_label?, tenant_id?, partner_id?, before?, after?, metadata? }`
+- Ermittelt `actor_user_id`, `actor_email`, `actor_role`, `ip_address` (x-forwarded-for), `user_agent` aus Request serverseitig (nicht aus Body, gegen Spoofing).
+- Schreibt mit `SUPABASE_SERVICE_ROLE_KEY`.
+- Rate-Limit: 60 Inserts/min pro `actor_user_id`.
+- CORS via `getCorsHeaders(req)`.
 
-- Migration: `ALTER PUBLICATION supabase_realtime ADD TABLE public.meter_power_readings_5min;`
-- Replica Identity auf `FULL` setzen, damit Updates vollständig propagieren: `ALTER TABLE public.meter_power_readings_5min REPLICA IDENTITY FULL;`
-- `useRealtimeDataInvalidation` (siehe Memory) kann dadurch zusätzlich auf 5min-Inserts reagieren — Hook-Änderung ist **nicht Teil dieser Welle** (nur Infrastruktur).
+**3. Client-Helper `src/lib/auditLog.ts**`
 
-### B8 — Copilot staleTime
+- `writeAuditLog(payload)` ruft `supabase.functions.invoke('audit-log-write', ...)`.
+- Fire-and-forget mit `try/catch` (Audit-Failure darf User-Aktion nicht blocken), Fehler in `console.warn`.
 
-- In `useCopilotAnalysis.tsx` der History-Query `staleTime: Infinity` + `gcTime: 30 * 60 * 1000` hinzufügen.
-- Invalidiert wird sie nach jeder erfolgreichen `runAnalysis` / `runSavingsAnalysis` ohnehin → kein veralteter Cache.
+**4. Aufrufe in kritischen `onSuccess`-Callbacks**
 
-## Technische Details
+- `SuperAdminTenants.tsx` / `SuperAdminTenantDetail.tsx`: Tenant suspend / reactivate / delete → `action: 'tenant.status_change'` mit `before/after = { status }`.
+- `SuperAdminModulePricing.tsx` & `SuperAdminBundles.tsx`: Preisänderungen → `pricing.update` / `bundle.update`.
+- Tenant-Modul-Toggle (überall wo `tenant_modules.is_enabled` mutiert wird – Module-Management Card): `module.toggle`.
+- `SuperAdminPartners.tsx`: Partner-Erstellung/-Update/-Branding → `partner.update`.
+- Member-Removal (Partner-Members, Sharing-Members): `member.remove`.
+- License-Änderungen (`tenant_licenses`): `license.change`.
 
-**Geänderte Dateien (Code):**
+Suche im Code nach den relevanten Mutations (`useMutation` mit Update auf diese Tabellen) und ergänze jeweils `onSuccess` um `writeAuditLog(...)`.
 
-- `supabase/functions/ingest-node-metrics/index.ts`
-- `supabase/functions/community-marketplace-public/index.ts`
-- `src/hooks/useCopilotAnalysis.tsx`
+**5. UI – Tab „Aktivitätslog"**
 
-**Migrationen:**
+- Neue Komponente `src/components/audit/AuditLogList.tsx`:
+  - Props: `{ tenantId?: string; partnerId?: string; limit?: number }`
+  - Hook `useAuditLogs({ tenantId, partnerId })` – React-Query, `staleTime: 30_000`.
+  - Tabelle: Zeitstempel (de-DE), Actor (Email+Rolle), Aktion (i18n-Label), Entity, Diff-Button (Dialog mit before/after JSON), Filter: Aktion, Zeitraum (7/30/90 Tage).
+- Einbau:
+  - `SuperAdminTenantDetail.tsx` → neuer Tab „Aktivitätslog".
+  - `SuperAdminPartners.tsx` Edit-Dialog → neuer Tab „Aktivitätslog" (zusätzlich zu Billing/Branding aus X2).
 
-1. Index auf `meter_power_readings(tenant_id, recorded_at DESC)`
-2. Publication-ADD + Replica-Identity für `meter_power_readings_5min`
+**6. i18n**
+DE/EN/ES/NL – Aktionscodes → lesbare Labels (`audit.action.tenant.suspend` etc.) in allen 4 Sprachen.
 
-**Keine neuen Pakete, keine Schema-Änderungen außer Index + Publication.**
+### Geänderte/neue Dateien
 
-## Offene Frage
+- 1 Migration (Tabelle + RLS + Indizes + Retention-Funktion + Cron)
+- `supabase/functions/audit-log-write/index.ts` (neu)
+- `src/lib/auditLog.ts` (neu)
+- `src/hooks/useAuditLogs.tsx` (neu)
+- `src/components/audit/AuditLogList.tsx` (neu)
+- `src/pages/SuperAdminTenantDetail.tsx`, `SuperAdminPartners.tsx`, `SuperAdminTenants.tsx`, `SuperAdminModulePricing.tsx`, `SuperAdminBundles.tsx` und Module-Toggle-Komponenten (jeweils nur `onSuccess`-Erweiterung)
+- `src/i18n/translations.ts`
 
-B3 ist erledigt, aber der bestehende Cron löscht nach **7 Tagen** (`cleanup_old_node_metrics()`), die Anforderung nannte **30 Tage**. Soll die Funktion auf 30 Tage Retention erweitert werden, oder bleibt es bei 7 Tagen? Antwort: Nein, wir belassen den bestehenden Cron bei 7 Tagen.
+### Offene Frage
+
+Retention 365 Tage ok, oder anderer Zeitraum gewünscht (z.B. 2 Jahre für Compliance)?  
+Antwort: Du entscheidest: was ist für Compliance besser?
