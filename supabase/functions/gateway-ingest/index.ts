@@ -455,6 +455,16 @@ async function handleGetLocationsSummary(url: URL): Promise<Response> {
     .eq("is_archived", false)
     .order("name");
 
+async function handleGetLocationsSummary(url: URL, scopeTenantId: string | null): Promise<Response> {
+  const supabase = getSupabase();
+  const tenantId = scopeTenantId ?? url.searchParams.get("tenant_id");
+
+  let locQuery = supabase
+    .from("locations")
+    .select("id, tenant_id, name, address, city, type, usage_type, energy_sources, latitude, longitude")
+    .eq("is_archived", false)
+    .order("name");
+
   if (tenantId) {
     locQuery = locQuery.eq("tenant_id", tenantId);
   }
