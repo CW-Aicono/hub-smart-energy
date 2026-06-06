@@ -27,6 +27,7 @@ export function DynamicDlmCard({ locationId }: Props) {
   const { tenant } = useTenant();
   const qc = useQueryClient();
 
+  const [isOpen, setIsOpen] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [referenceMeterId, setReferenceMeterId] = useState<string>("");
   const [gridLimitKw, setGridLimitKw] = useState<number>(50);
