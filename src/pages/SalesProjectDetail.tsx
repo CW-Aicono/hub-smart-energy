@@ -29,6 +29,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { QueryErrorState } from "@/components/common/QueryErrorState";
 
 interface Project {
   id: string;
@@ -186,6 +187,18 @@ export default function SalesProjectDetail() {
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-48 w-full" />
         </div>
+      </SalesLayout>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <SalesLayout title="Fehler" showBack backTo="/sales">
+        <QueryErrorState
+          title="Projekt konnte nicht geladen werden"
+          message={loadError}
+          onRetry={() => { setLoading(true); load(); }}
+        />
       </SalesLayout>
     );
   }
