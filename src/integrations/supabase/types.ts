@@ -4523,6 +4523,123 @@ export type Database = {
           },
         ]
       }
+      grid_curtailment_events: {
+        Row: {
+          applied_at: string | null
+          applied_result: Json | null
+          connection_id: string
+          created_at: string
+          curtailment_percent: number
+          id: string
+          payload: Json
+          received_at: string
+          source: string
+          tenant_id: string
+          valid_from: string
+          valid_until: string
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_result?: Json | null
+          connection_id: string
+          created_at?: string
+          curtailment_percent: number
+          id?: string
+          payload?: Json
+          received_at?: string
+          source?: string
+          tenant_id: string
+          valid_from: string
+          valid_until: string
+        }
+        Update: {
+          applied_at?: string | null
+          applied_result?: Json | null
+          connection_id?: string
+          created_at?: string
+          curtailment_percent?: number
+          id?: string
+          payload?: Json
+          received_at?: string
+          source?: string
+          tenant_id?: string
+          valid_from?: string
+          valid_until?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grid_curtailment_events_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "grid_operator_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grid_curtailment_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grid_operator_connections: {
+        Row: {
+          active: boolean
+          connection_id: string | null
+          created_at: string
+          dso_name: string
+          id: string
+          location_id: string
+          module: string
+          notes: string | null
+          tenant_id: string
+          updated_at: string
+          webhook_secret: string
+        }
+        Insert: {
+          active?: boolean
+          connection_id?: string | null
+          created_at?: string
+          dso_name: string
+          id?: string
+          location_id: string
+          module?: string
+          notes?: string | null
+          tenant_id: string
+          updated_at?: string
+          webhook_secret?: string
+        }
+        Update: {
+          active?: boolean
+          connection_id?: string | null
+          created_at?: string
+          dso_name?: string
+          id?: string
+          location_id?: string
+          module?: string
+          notes?: string | null
+          tenant_id?: string
+          updated_at?: string
+          webhook_secret?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grid_operator_connections_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grid_operator_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       infrastructure_metrics: {
         Row: {
           id: string
@@ -8446,6 +8563,60 @@ export type Database = {
           timestamp?: string
         }
         Relationships: []
+      }
+      steuve_devices: {
+        Row: {
+          active: boolean
+          connection_id: string
+          created_at: string
+          device_ref_id: string
+          device_type: string
+          id: string
+          min_power_kw: number
+          priority: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          connection_id: string
+          created_at?: string
+          device_ref_id: string
+          device_type?: string
+          id?: string
+          min_power_kw?: number
+          priority?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          connection_id?: string
+          created_at?: string
+          device_ref_id?: string
+          device_type?: string
+          id?: string
+          min_power_kw?: number
+          priority?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "steuve_devices_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "grid_operator_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "steuve_devices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       support_sessions: {
         Row: {
