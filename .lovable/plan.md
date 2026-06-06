@@ -56,3 +56,11 @@ Ziel: Sieben klar abgegrenzte Sicherheitslücken schließen, ohne neue Features 
 - Keine Feature-Erweiterungen (kommen ab Welle 2+).
 - Keine UI-Redesigns.
 - Keine Performance-Optimierungen (Welle 5).
+
+## Welle 2 — Status (umgesetzt)
+- A1: `must_change_password` Flag + `MustChangePasswordGuard` (App.tsx) + invite-tenant-admin setzt user_metadata
+- A2: Migration tenants.status/suspended_at/suspended_reason/deleted_at + Validation-Trigger; `useTenants` (suspend/reactivate/softDelete); `TenantLifecycleActions` + Status-Badge in SuperAdminTenants; `TenantStatusGuard` blockt gesperrte/gelöschte Mandanten
+- A3: SuperAdminLicenses Create/Edit/Cancel via `LicenseDialog`
+- A5: SuperAdminUsers — Plattform-Badge + erklärende Subline (strikte Trennung war bereits implementiert)
+
+Offen: A4 (Audit-Log) — separater Schritt.
