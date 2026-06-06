@@ -800,7 +800,31 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       </CardContent>
                     </Card>
                   )}
+
+                  {/* Standortkarte – read-only Anzeige (Bearbeiten erfolgt im Bearbeiten-Dialog) */}
+                  <Card>
+                    <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-primary" />
+                        Standort auf Karte
+                      </CardTitle>
+                      {cp.latitude && cp.longitude && (
+                        <span className="text-xs font-mono text-muted-foreground hidden sm:inline">
+                          {cp.latitude.toFixed(5)}, {cp.longitude.toFixed(5)}
+                        </span>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      <SingleChargePointMap
+                        latitude={cp.latitude}
+                        longitude={cp.longitude}
+                        onPositionChange={() => {}}
+                        readOnly
+                      />
+                    </CardContent>
+                  </Card>
                 </div>
+
 
                 {/* Right sidebar */}
                 <div className="space-y-6">
@@ -983,36 +1007,6 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   </Card>
                 </div>
               </div>
-
-              {/* Standortkarte – Drag&Drop des Markers aktualisiert die Koordinaten überall (Übersichtskarte, Lade-App, Detail) */}
-              <Card className="mt-6">
-                <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-primary" />
-                      Standort auf Karte
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Marker per Drag &amp; Drop auf die exakte Position ziehen. Die
-                      Änderung wird automatisch in der Übersichtskarte und der Lade-App übernommen.
-                    </p>
-                  </div>
-                  {cp.latitude && cp.longitude && (
-                    <span className="text-xs font-mono text-muted-foreground hidden sm:inline">
-                      {cp.latitude.toFixed(5)}, {cp.longitude.toFixed(5)}
-                    </span>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <SingleChargePointMap
-                    latitude={cp.latitude}
-                    longitude={cp.longitude}
-                    onPositionChange={(lat, lng) => {
-                      updateChargePoint.mutate({ id: cp.id, latitude: lat, longitude: lng } as any);
-                    }}
-                  />
-                </CardContent>
-              </Card>
             </TabsContent>
 
             {/* Sessions tab */}
