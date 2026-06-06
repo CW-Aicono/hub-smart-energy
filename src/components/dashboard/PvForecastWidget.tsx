@@ -512,7 +512,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
 
         {isToday && typeof summary.ai_correction_factor === "number" && summary.ai_correction_factor !== 1 && (
           <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">KI-Faktor: {summary.ai_correction_factor.toFixed(2)}</Badge>
+            <Badge variant="outline">KI-Faktor: {fmtNum(summary.ai_correction_factor, 2)}</Badge>
           </div>
         )}
 
