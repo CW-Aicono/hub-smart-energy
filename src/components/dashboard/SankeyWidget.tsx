@@ -26,17 +26,8 @@ type SankeyViewMode = "leistung" | "kosten";
 
 // Period labels are now dynamic via t() below
 
-function getPeriodStart(period: TimePeriod, weekStartsOn: 0|1|2|3|4|5|6 = 1): Date | null {
-  const now = new Date();
-  switch (period) {
-    case "day": return startOfDay(now);
-    case "week": return startOfWeek(now, { weekStartsOn });
-    case "month": return startOfMonth(now);
-    case "quarter": return startOfQuarter(now);
-    case "year": return startOfYear(now);
-    case "all": return null;
-  }
-}
+
+
 
 interface SankeyWidgetProps {
   locationId: string | null;
