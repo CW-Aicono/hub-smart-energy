@@ -77,7 +77,13 @@ export function DynamicDlmCard({ locationId }: Props) {
     };
   }, [tenant?.id, locationId, qc]);
 
-  const electricityMeters = meters.filter((m) => m.energy_type === "electricity" || m.medium === "electricity");
+  const electricityMeters = meters.filter(
+    (m) =>
+      m.energy_type === "strom" ||
+      m.energy_type === "electricity" ||
+      (m.medium ?? "").toLowerCase() === "strom" ||
+      (m.medium ?? "").toLowerCase() === "electricity",
+  );
 
   const move = (id: string, dir: -1 | 1) => {
     setPriority((prev) => {
