@@ -445,15 +445,6 @@ async function handleGetReadings(url: URL, scopeTenantId: string | null): Promis
   });
 }
 
-async function handleGetLocationsSummary(url: URL): Promise<Response> {
-  const supabase = getSupabase();
-  const tenantId = url.searchParams.get("tenant_id");
-
-  let locQuery = supabase
-    .from("locations")
-    .select("id, tenant_id, name, address, city, type, usage_type, energy_sources, latitude, longitude")
-    .eq("is_archived", false)
-    .order("name");
 
 async function handleGetLocationsSummary(url: URL, scopeTenantId: string | null): Promise<Response> {
   const supabase = getSupabase();
