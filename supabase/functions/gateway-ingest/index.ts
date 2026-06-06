@@ -220,14 +220,17 @@ function parseMeterIds(url: URL): string[] {
 
 /* ── GET Route handlers ──────────────────────────────────────────────────────── */
 
-async function handleListLocations(): Promise<Response> {
+async function handleListLocations(scopeTenantId: string | null): Promise<Response> {
   const supabase = getSupabase();
-  const { data, error } = await supabase
+  let query = supabase
     .from("locations")
     .select("id, tenant_id, name, address, city, postal_code, country, type, usage_type, energy_sources, latitude, longitude")
     .eq("is_archived", false)
     .order("name");
 
+  if (scopeTenantId) query = query.eq("tenant_id", scopeTenantId);
+
+  const { data, error } = await query;
   if (error) {
     console.error("[gateway-ingest] list-locations error:", error.message);
     return json({ success: false, error: "Internal error" }, 500);
