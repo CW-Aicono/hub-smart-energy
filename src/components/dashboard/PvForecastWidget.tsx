@@ -498,12 +498,12 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
           )}
           <div>
             <p className="text-xs text-muted-foreground">{T("dashboard.pvForecast")}</p>
-            <p className="text-xl font-bold text-energy-strom">{forecastDayTotal > 0 ? `${forecastDayTotal.toFixed(0)} kWh` : "–"}</p>
-            {delta != null && <p className="text-xs text-muted-foreground">Δ {delta > 0 ? "+" : ""}{delta}%</p>}
+            <p className="text-xl font-bold text-energy-strom">{forecastDayTotal > 0 ? `${fmtNum(forecastDayTotal, 0)} kWh` : "–"}</p>
+            {delta != null && <p className="text-xs text-muted-foreground">Δ {delta > 0 ? "+" : ""}{fmtNum(delta, 1)}%</p>}
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{isDay ? (isToday ? T("pv.todayActual") : T("pv.dateActual").replace("{date}", format(refDate, "d. MMM", { locale: dateLocale }))) : T("pv.periodActual").replace("{period}", T(PERIOD_LABEL_KEYS[selectedPeriod]))}</p>
-            <p className="text-xl font-bold text-pv-actual">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
+            <p className="text-xl font-bold text-pv-actual">{hasActualTotal ? `${fmtNum(actualTotalKwh, 1)} kWh` : "–"}</p>
             {isDay && actualReadingsEstimated && hasActualTotal && (
               <p className="text-xs text-muted-foreground">{T("pv.estimatedFromDailyTotal")}</p>
             )}
