@@ -293,6 +293,7 @@ const App = () => (
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </Suspense>
+                  </TenantStatusGuard>
                 </TooltipProvider>
               </ThemeProvider>
             </TranslationProvider>
