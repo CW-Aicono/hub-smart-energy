@@ -667,7 +667,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOffset((o) => o - 1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <PeriodPickerLabel period={period} label={periodLabel} className="min-w-[160px]" />
+            <PeriodPickerLabel period={period} label={periodLabel} refDate={refDate} className="min-w-[160px]" />
             <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((o) => o + 1)}>
               <ChevronRight className="h-4 w-4" />
             </Button>
