@@ -682,6 +682,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
               <TabsTrigger value="details">{t("cpd.tabDetails" as any)}</TabsTrigger>
               <TabsTrigger value="energy">{t("cpd.tabEnergy" as any)}</TabsTrigger>
               <TabsTrigger value="access">{t("cpd.tabAccess" as any)}</TabsTrigger>
+              <TabsTrigger value="utilization" className="gap-1.5"><BarChart3 className="h-3.5 w-3.5" />Auslastung &amp; ROI</TabsTrigger>
               <TabsTrigger value="maintenance" className="gap-1.5"><Wrench className="h-3.5 w-3.5" />Wartung</TabsTrigger>
             </TabsList>
 
