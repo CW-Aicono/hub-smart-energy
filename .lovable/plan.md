@@ -102,3 +102,9 @@ Reihenfolge: **P4 → P5 → P1 → P3 → P2** (erst Rechte- und Server-Härtun
 - Audit-Log (A4 — eigene Welle).
 - Lexware-Integration für Partner-eigene Rechnungen (Roadmap).
 - Multi-Tier-Partner (Partner-of-Partner) — nicht im Scope.
+## Welle 3 — Status (umgesetzt)
+- P4: usePartnerAccess liefert granulare permissions (manageSalesCatalog/createTenant/viewBilling/useSalesScout); PartnerSidebar rendert konditional
+- P5: partner_module_prices INSERT/UPDATE/DELETE Policies an partner_member_can('view_billing') gebunden; UI prüft canEditPrices
+- P1: PartnerBranding-Seite (Logo-Upload partner-assets/<partner_id>/, Farben, Support-Mail); RLS + Trigger schützen Slug/Domain/White-Label/Billing-Felder
+- P3: PartnerTenantDetail mit Tabs (Stammdaten, Standorte, Module/Lizenzen, Aktivität) + Edit-Dialog; Tenant-Zeilen klickbar; Trigger schützt Status/Lifecycle/Billing
+- P2: PartnerReporting mit RPCs partner_reporting_overview/growth/modules, KPI-Kacheln, 12-Monats-Charts, CSV-Export (de-DE)
