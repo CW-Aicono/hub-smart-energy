@@ -85,7 +85,7 @@ export default function PartnerBranding() {
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from("partner-assets").getPublicUrl(path);
       setForm((f) => ({ ...f, logo_url: pub.publicUrl }));
-      toast({ title: "Logo hochgeladen", description: "Bitte „Speichern" klicken, um zu übernehmen." });
+      toast({ title: "Logo hochgeladen", description: 'Bitte „Speichern" klicken, um zu übernehmen.' });
     } catch (e: any) {
       toast({ title: "Upload fehlgeschlagen", description: e.message, variant: "destructive" });
     } finally {

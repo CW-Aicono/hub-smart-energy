@@ -274,7 +274,7 @@ export default function PartnerBilling() {
                           recommended={recommended}
                           sale={sale}
                           margin={margin}
-                          disabled={!isPartnerAdmin}
+                          disabled={!canEditPrices}
                           onSave={(val) =>
                             saveSale.mutate({ moduleCode: mod.code, value: val })
                           }
