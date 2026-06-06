@@ -472,8 +472,8 @@ async function handleGetLocationsSummary(url: URL): Promise<Response> {
 /* ── POST Route handlers ─────────────────────────────────────────────────────── */
 
 async function handleCompactDay(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   const supabase = getSupabase();
 
@@ -572,8 +572,8 @@ async function handleCompactDay(req: Request): Promise<Response> {
 }
 
 async function handlePostReadings(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: { readings?: PowerReading[] };
   try {
@@ -747,8 +747,8 @@ async function validateBasicAuth(
   }
 
   // Fall back to API key auth
-  const apiKeyErr = await validateApiKey(req);
-  if (apiKeyErr) return apiKeyErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   // If using API key, load config from any matching integration for this tenant
   const locIntegrations = await findSchneiderIntegrations();
@@ -869,8 +869,8 @@ async function handleSchneiderPush(req: Request): Promise<Response> {
 /* ── Heartbeat handler ────────────────────────────────────────────────────────── */
 
 async function handleHeartbeat(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: {
     device_name?: string;
@@ -1054,8 +1054,8 @@ async function handleHeartbeat(req: Request): Promise<Response> {
  * POST ?action=worker-heartbeat   Body: { worker_id?: string, version?: string }
  */
 async function handleWorkerHeartbeat(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: { worker_id?: string; version?: string } = {};
   try { body = await req.json(); } catch { /* body optional */ }
@@ -1079,8 +1079,8 @@ async function handleWorkerHeartbeat(req: Request): Promise<Response> {
 /* ── Gateway backup handler ──────────────────────────────────────────────────── */
 
 async function handleGatewayBackup(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: {
     tenant_id?: string;
@@ -1378,8 +1378,8 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
 /* ── Push Execution Logs handler (Hub → Cloud) ────────────────────────────────── */
 
 async function handlePushExecutionLogs(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: {
     logs?: Array<{
@@ -1548,8 +1548,8 @@ Deno.serve(async (req) => {
 
   // GET routes
   if (req.method === "GET") {
-    const authErr = await validateApiKey(req);
-    if (authErr) return authErr;
+    const _auth = await validateApiKey(req);
+    if (isAuthError(_auth)) return _auth;
     if (action === "list-locations") return handleListLocations();
     if (action === "list-meters") return handleListMeters(url);
     if (action === "get-daily-totals") return handleGetDailyTotals(url);
