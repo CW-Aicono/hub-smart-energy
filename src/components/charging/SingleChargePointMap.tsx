@@ -150,24 +150,29 @@ export default function SingleChargePointMap({
           }}
           position={center}
           icon={createIcon(PRIMARY)}
-          draggable={editMode}
-          eventHandlers={{
-            dragend: (e) => {
-              const m = e.target as LeafletMarker;
-              const pos = m.getLatLng();
-              onPositionChange(pos.lat, pos.lng);
-              toast.success("Position aktualisiert");
-            },
-          }}
+          draggable={!readOnly && editMode}
+          eventHandlers={
+            readOnly
+              ? {}
+              : {
+                  dragend: (e) => {
+                    const m = e.target as LeafletMarker;
+                    const pos = m.getLatLng();
+                    onPositionChange(pos.lat, pos.lng);
+                    toast.success("Position aktualisiert");
+                  },
+                }
+          }
         />
       </MapContainer>
 
-      {editMode && (
+      {!readOnly && editMode && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-primary text-primary-foreground px-4 py-2 rounded-full shadow-lg text-sm font-medium flex items-center gap-2">
           <Move className="h-4 w-4" />
           Marker an die exakte Position ziehen
         </div>
       )}
+
 
       <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
         {!alwaysEditable && (
