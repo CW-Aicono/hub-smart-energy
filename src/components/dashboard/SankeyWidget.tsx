@@ -1,38 +1,33 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useLocations } from "@/hooks/useLocations";
-import { useEnergyData } from "@/hooks/useEnergyData";
-import { useMeters } from "@/hooks/useMeters";
-import { useEnergyPrices } from "@/hooks/useEnergyPrices";
-import { Skeleton } from "@/components/ui/skeleton";
-import { HelpTooltip } from "@/components/ui/help-tooltip";
-import { useTranslation } from "@/hooks/useTranslation";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useMemo, useState, useRef, useEffect } from "react";
-import { formatEnergy, formatEnergyByType, gasM3ToKWh } from "@/lib/formatEnergy";
-import { supabase } from "@/integrations/supabase/client";
-import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
-import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, format } from "date-fns";
-import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
-import { useWeekStartDay } from "@/hooks/useWeekStartDay";
-import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
-import { useSpotPrices } from "@/hooks/useSpotPrices";
-import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
+ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+ import { Button } from "@/components/ui/button";
+ import { ChevronLeft, ChevronRight } from "lucide-react";
+ import { useLocations } from "@/hooks/useLocations";
+ import { useEnergyData } from "@/hooks/useEnergyData";
+ import { useMeters } from "@/hooks/useMeters";
+ import { useEnergyPrices } from "@/hooks/useEnergyPrices";
+ import { Skeleton } from "@/components/ui/skeleton";
+ import { HelpTooltip } from "@/components/ui/help-tooltip";
+ import { useTranslation } from "@/hooks/useTranslation";
+ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+ import { useMemo, useState, useRef, useEffect } from "react";
+ import { formatEnergy, formatEnergyByType, gasM3ToKWh } from "@/lib/formatEnergy";
+ import { supabase } from "@/integrations/supabase/client";
+ import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
+ import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, endOfDay, addDays, addWeeks, addMonths, addQuarters, addYears, getISOWeek, format } from "date-fns";
+ import { de } from "date-fns/locale";
+ import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
+ import { useWeekStartDay } from "@/hooks/useWeekStartDay";
+ import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
+ import { useSpotPrices } from "@/hooks/useSpotPrices";
+ import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
+ import PeriodPickerLabel from "./PeriodPickerLabel";
 
 type SankeyViewMode = "leistung" | "kosten";
 
 // Period labels are now dynamic via t() below
 
-function getPeriodStart(period: TimePeriod, weekStartsOn: 0|1|2|3|4|5|6 = 1): Date | null {
-  const now = new Date();
-  switch (period) {
-    case "day": return startOfDay(now);
-    case "week": return startOfWeek(now, { weekStartsOn });
-    case "month": return startOfMonth(now);
-    case "quarter": return startOfQuarter(now);
-    case "year": return startOfYear(now);
-    case "all": return null;
-  }
-}
+
+
 
 interface SankeyWidgetProps {
   locationId: string | null;
@@ -69,40 +64,70 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { meters } = useMeters();
   const { prices, loading: pricesLoading } = useEnergyPrices();
   const svgRef = useRef<SVGSVGElement>(null);
-  const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
+  const { selectedPeriod: period, setSelectedPeriod: setPeriod, selectedOffset: offset, setSelectedOffset: setOffset } = useDashboardFilter();
   const weekStartsOn = useWeekStartDay();
   const [viewMode, setViewMode] = useState<SankeyViewMode>("leistung");
   const allowedTypes = useLocationEnergyTypesSet(locationId);
   const { currentPrice: currentSpotPrice } = useSpotPrices();
 
-  // Compute date range for DB query (always current period, no offset)
-  const { rangeStart, rangeEnd } = useMemo(() => {
+  // Compute reference date and range based on selected period + offset (back/forward arrows)
+  const refDate = useMemo(() => {
     const now = new Date();
+    switch (period) {
+      case "day": return addDays(now, offset);
+      case "week": return addWeeks(now, offset);
+      case "month": return addMonths(now, offset);
+      case "quarter": return addQuarters(now, offset);
+      case "year": return addYears(now, offset);
+      default: return now;
+    }
+  }, [period, offset]);
+
+  const { rangeStart, rangeEnd } = useMemo(() => {
     let start: Date;
     let end: Date;
     switch (period) {
       case "week":
-        start = startOfWeek(now, { weekStartsOn });
-        end = endOfWeek(now, { weekStartsOn });
+        start = startOfWeek(refDate, { weekStartsOn });
+        end = endOfWeek(refDate, { weekStartsOn });
         break;
       case "month":
-        start = startOfMonth(now);
-        end = endOfMonth(now);
+        start = startOfMonth(refDate);
+        end = endOfMonth(refDate);
         break;
       case "quarter":
-        start = startOfQuarter(now);
-        end = endOfQuarter(now);
+        start = startOfQuarter(refDate);
+        end = endOfQuarter(refDate);
         break;
       case "year":
-        start = startOfYear(now);
-        end = endOfYear(now);
+        start = startOfYear(refDate);
+        end = endOfYear(refDate);
+        break;
+      case "all":
+        start = new Date(0);
+        end = new Date();
         break;
       default:
-        start = startOfDay(now);
-        end = now;
+        start = startOfDay(refDate);
+        end = endOfDay(refDate);
     }
     return { rangeStart: start, rangeEnd: end };
-  }, [period, weekStartsOn]);
+  }, [period, weekStartsOn, refDate]);
+
+  const periodLabel = useMemo(() => {
+    switch (period) {
+      case "day": return format(refDate, "EEEE, d. MMM yyyy", { locale: de });
+      case "week": return `KW ${getISOWeek(refDate)}, ${format(refDate, "yyyy")}`;
+      case "month": return format(refDate, "MMMM yyyy", { locale: de });
+      case "quarter": return `Q${Math.floor(refDate.getMonth() / 3) + 1} ${format(refDate, "yyyy")}`;
+      case "year": return format(refDate, "yyyy");
+      default: return T("chart.periodAll");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, refDate]);
+
+  const canGoForward = period !== "all" && offset < 0;
+  const todayInRange = new Date() >= rangeStart && new Date() <= rangeEnd;
 
   // Fetch DB-backed period sums for non-day periods
   const mainAutoMeterIds = useMemo(
@@ -188,12 +213,14 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     return map;
   }, [meters]);
 
-  // Filter readings by selected time period
+  // Filter readings by selected time range (period + offset)
   const filteredReadings = useMemo(() => {
-    const periodStart = getPeriodStart(period, weekStartsOn);
-    if (!periodStart) return readings;
-    return readings.filter((r) => new Date(r.reading_date) >= periodStart);
-  }, [readings, period]);
+    if (period === "all") return readings;
+    return readings.filter((r) => {
+      const d = new Date(r.reading_date);
+      return d >= rangeStart && d <= rangeEnd;
+    });
+  }, [readings, period, rangeStart, rangeEnd]);
 
   // Compute flows
   const flows = useMemo((): FlowLink[] => {
@@ -274,18 +301,18 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       if (!allowedTypes.has(m.energy_type || "strom")) return;
 
       if (period === "day") {
-        // Use max(live, db) so widget works even when gateway cache is empty
-        const liveVal = livePeriodTotals[m.id]?.totalDay ?? 0;
+        // For today: use max(live, db). For past days: use db only.
+        const liveVal = todayInRange ? (livePeriodTotals[m.id]?.totalDay ?? 0) : 0;
         const dbVal = dbPeriodSums?.[m.id] ?? 0;
         const val = Math.max(liveVal, dbVal);
         if (val <= 0) return;
         const converted = toBaseUnit(m.id, val);
         addFlow(m.energy_type || "strom", m.location_id, m.floor_id || null, m.room_id || null, converted);
       } else {
-        // DB sum for past days
+        // DB sum for the selected range
         const dbVal = dbPeriodSums?.[m.id] ?? 0;
-        // Add live totalDay for today (which is within the current period)
-        const todayVal = livePeriodTotals[m.id]?.totalDay ?? 0;
+        // Only add live totalDay if today actually falls in the selected range
+        const todayVal = todayInRange ? (livePeriodTotals[m.id]?.totalDay ?? 0) : 0;
         const total = dbVal + todayVal;
         if (total <= 0) return;
         const converted = toBaseUnit(m.id, total);
@@ -299,7 +326,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         return { sourceName, targetName, sourceColor, sourceType, value };
       })
       .filter((f) => f.value > 0);
-  }, [filteredReadings, meterMap, locationId, locations, floors, rooms, viewMode, priceLookup, livePeriodTotals, meters, period, allowedTypes, dbPeriodSums]);
+  }, [filteredReadings, meterMap, locationId, locations, floors, rooms, viewMode, priceLookup, livePeriodTotals, meters, period, allowedTypes, dbPeriodSums, todayInRange]);
 
   // Format helper based on view mode
   const formatValue = (value: number, sourceType?: string) => {
@@ -365,7 +392,18 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
               </SelectContent>
             </Select>
           </div>
-          <p className="text-sm text-muted-foreground">{subtitle}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">{subtitle}</p>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7" disabled={period === "all"} onClick={() => setOffset((o) => o - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <PeriodPickerLabel period={period} label={periodLabel} refDate={refDate} className="min-w-[160px]" />
+              <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((o) => o + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
@@ -531,7 +569,18 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
             </SelectContent>
           </Select>
         </div>
-        <p className="text-sm text-muted-foreground">{subtitle}</p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-7 w-7" disabled={period === "all"} onClick={() => setOffset((o) => o - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <PeriodPickerLabel period={period} label={periodLabel} refDate={refDate} className="min-w-[160px]" />
+            <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((o) => o + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="px-2 pb-2">
         <div className="w-full relative" style={{ minHeight: 200 }}>
