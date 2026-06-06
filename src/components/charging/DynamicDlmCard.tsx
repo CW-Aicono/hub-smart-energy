@@ -108,27 +108,38 @@ export function DynamicDlmCard({ locationId }: Props) {
   if (cps.length === 0) return null;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5" />
-              Dynamisches Lastmanagement (DLM)
-            </CardTitle>
-            <CardDescription>
-              Drosselt Wallboxen automatisch, wenn der Hausanschluss-Messwert sich der Grenzleistung nähert.
-              Reaktion ≤ 60 s.
-            </CardDescription>
-          </div>
-          {config && (
-            <Badge variant={config.is_active ? "default" : "secondary"}>
-              {config.is_active ? "Aktiv" : "Inaktiv"}
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <Card>
+        <CardHeader>
+          <CollapsibleTrigger asChild>
+            <button className="flex w-full items-start justify-between gap-2 text-left">
+              <div className="flex items-start gap-2">
+                {isOpen ? (
+                  <ChevronDown className="mt-1 h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="mt-1 h-4 w-4 text-muted-foreground" />
+                )}
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Zap className="h-5 w-5" />
+                    Dynamisches Lastmanagement (DLM)
+                  </CardTitle>
+                  <CardDescription>
+                    Drosselt Wallboxen automatisch, wenn der Hausanschluss-Messwert sich der Grenzleistung nähert.
+                    Reaktion ≤ 60 s.
+                  </CardDescription>
+                </div>
+              </div>
+              {config && (
+                <Badge variant={config.is_active ? "default" : "secondary"}>
+                  {config.is_active ? "Aktiv" : "Inaktiv"}
+                </Badge>
+              )}
+            </button>
+          </CollapsibleTrigger>
+        </CardHeader>
+        <CollapsibleContent>
+        <CardContent className="space-y-6">
         {/* Live-Panel */}
         {config && (
           <div className="grid gap-4 sm:grid-cols-3 rounded-md border bg-muted/30 p-4">
