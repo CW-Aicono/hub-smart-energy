@@ -31,16 +31,17 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Validate the user (any authenticated user; UI restricts to super_admin)
+    // Validate the JWT statelessly via getClaims (avoids 401 when the auth
+    // server session was rotated/invalidated but the JWT is still valid).
     const authClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
     );
-    const { data: { user }, error: userErr } = await authClient.auth.getUser(
-      authHeader.replace("Bearer ", ""),
-    );
-    if (userErr || !user) return json(corsHeaders, { error: "Invalid token" }, 401);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsErr } = await authClient.auth.getClaims(token);
+    if (claimsErr || !claimsData?.claims?.sub) {
+      return json(corsHeaders, { error: "Invalid token" }, 401);
+    }
 
     // 1) System settings (worker_active, worker_last_heartbeat, worker_meta)
     const { data: settings } = await supabase
