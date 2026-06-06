@@ -524,7 +524,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
                 <YAxis tick={{ fontSize: 10 }} width={35} tickFormatter={(v: number) => fmtNum(v, 0)} />
                 <Tooltip
                   formatter={(value: number, name: string) => [
-                    `${value.toFixed(2)} kWh`,
+                    `${fmtNum(value, 2)} kWh`,
                     name === "forecast" ? T("dashboard.pvForecast") : actualSeriesLabel,
                   ]}
                 />
