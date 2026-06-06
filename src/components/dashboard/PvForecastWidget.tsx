@@ -537,7 +537,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={multiDayChart} margin={{ left: -10, right: 0 }}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 10 }} width={35} />
+                <YAxis tick={{ fontSize: 10 }} width={35} tickFormatter={(v: number) => fmtNum(v, 0)} />
                 <Tooltip
                   formatter={(value: number, name: string) => [
                     `${value.toFixed(1)} kWh`,
