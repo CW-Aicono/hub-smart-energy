@@ -222,12 +222,14 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     return map;
   }, [meters]);
 
-  // Filter readings by selected time period
+  // Filter readings by selected time range (period + offset)
   const filteredReadings = useMemo(() => {
-    const periodStart = getPeriodStart(period, weekStartsOn);
-    if (!periodStart) return readings;
-    return readings.filter((r) => new Date(r.reading_date) >= periodStart);
-  }, [readings, period]);
+    if (period === "all") return readings;
+    return readings.filter((r) => {
+      const d = new Date(r.reading_date);
+      return d >= rangeStart && d <= rangeEnd;
+    });
+  }, [readings, period, rangeStart, rangeEnd]);
 
   // Compute flows
   const flows = useMemo((): FlowLink[] => {
