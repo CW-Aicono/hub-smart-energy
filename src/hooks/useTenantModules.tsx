@@ -85,11 +85,20 @@ export function useTenantModules(tenantId: string | null) {
       }
 
       await upsertModule(moduleCode, enabled);
+      return { moduleCode, enabled };
     },
-    onSuccess: () => {
+    onSuccess: ({ moduleCode, enabled }) => {
       const t = getT();
       queryClient.invalidateQueries({ queryKey: ["tenant-modules", tenantId] });
       toast({ title: t("module.updated") });
+      writeAuditLog({
+        action: "module.toggle",
+        entity_type: "module",
+        entity_label: moduleCode,
+        tenant_id: tenantId ?? null,
+        before: { is_enabled: !enabled },
+        after: { is_enabled: enabled },
+      });
     },
     onError: (e: Error) => {
       const t = getT();
