@@ -18,7 +18,8 @@ const fmtEur = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits:
 const fmtPct = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " %";
 
 export default function PartnerBilling() {
-  const { partnerId, loading, isPartnerAdmin } = usePartnerAccess();
+  const { partnerId, loading, isPartnerAdmin, permissions } = usePartnerAccess();
+  const canEditPrices = permissions.viewBilling;
   const qc = useQueryClient();
   const [sector, setSector] = useState<"kommune" | "industrie">("kommune");
 
