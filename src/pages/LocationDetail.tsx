@@ -211,6 +211,7 @@ const LocationDetail = () => {
           <MeterManagement locationId={location.id} />
           <EnergyPriceManagement locationId={location.id} />
           {location.latitude && location.longitude && <PvForecastSection locationId={location.id} />}
+          {isModuleEnabled("ev_charging") && <DynamicDlmCard locationId={location.id} />}
           {isModuleEnabled("automation_building") && <LocationAutomation locationId={location.id} />}
           {isModuleEnabled("integrations") && <LocationIntegrationsList locationId={location.id} />}
           {isModuleEnabled("brighthub_api") && <BrightHubSettings locationId={location.id} />}
