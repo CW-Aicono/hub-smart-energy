@@ -5575,6 +5575,48 @@ export type Database = {
         }
         Relationships: []
       }
+      monitoring_alert_rules: {
+        Row: {
+          comparator: string
+          created_at: string
+          created_by: string | null
+          enabled: boolean
+          id: string
+          metric_category: string
+          metric_name: string
+          notify_email: string | null
+          severity: string
+          threshold: number
+          updated_at: string
+        }
+        Insert: {
+          comparator: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          id?: string
+          metric_category: string
+          metric_name: string
+          notify_email?: string | null
+          severity?: string
+          threshold: number
+          updated_at?: string
+        }
+        Update: {
+          comparator?: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          id?: string
+          metric_category?: string
+          metric_name?: string
+          notify_email?: string | null
+          severity?: string
+          threshold?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       mqtt_actuators: {
         Row: {
           actuator_uuid: string
@@ -6074,6 +6116,33 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+        }
+        Relationships: []
+      }
+      platform_metrics: {
+        Row: {
+          created_at: string
+          dimension: string | null
+          id: string
+          metric_key: string
+          metric_value: number
+          recorded_at: string
+        }
+        Insert: {
+          created_at?: string
+          dimension?: string | null
+          id?: string
+          metric_key: string
+          metric_value: number
+          recorded_at?: string
+        }
+        Update: {
+          created_at?: string
+          dimension?: string | null
+          id?: string
+          metric_key?: string
+          metric_value?: number
+          recorded_at?: string
         }
         Relationships: []
       }

@@ -1,57 +1,56 @@
-# Welle 4 — U1 bis U8
+# Welle 6 — Super-Admin Komfort
 
-Reine UI/Frontend-Arbeit. Keine DB-Migrationen, keine Edge-Functions, keine neue Logik.
+Umfang: X1 (Map in Sidebar), X2 (Partner-Edit mit Tabs), X4 (Monitoring Alert-Regeln), X5 (Statistics historisch). X3 (Lexware) bleibt explizit aus.
 
-## Status der "bitte prüfen"-Punkte
+## X1 — Map in SuperAdminSidebar
+- `src/components/super-admin/SuperAdminSidebar.tsx`: neuen Eintrag `{ to: "/super-admin/map", icon: Map, label: "Karte" }` zwischen `gateways` und `monitoring` ergänzen.
+- `Map`-Icon aus `lucide-react` importieren.
+- Keine Routing-Änderung nötig (Route existiert bereits in `App.tsx`).
 
+## X2 — Partner-Edit-Dialog mit Tabs „Basis | Billing | Branding"
+- `src/pages/SuperAdminPartners.tsx`: Edit-Dialog (`editOpen`) umschließen mit `<Tabs defaultValue="basic">`.
+  - **Basis**: Name, Slug (inkl. Slug-Check), E-Mail, Subdomain, Aktiv-Toggle.
+  - **Billing**: BillingMode (wholesale/commission) + CommissionPct.
+  - **Branding**: WhiteLabel-Toggle + alle bestehenden White-Label-Felder (BrandDisplayName, CustomDomain, Primary/Secondary/AccentColor, SupportEmail, LogoUrl/Upload).
+- Reine UI-Umgruppierung — bestehende State-Variablen, Save-Logik und Validierung bleiben unverändert.
+- Speichern-/Abbrechen-Footer bleibt außerhalb der Tabs.
 
-| #      | Behauptung                                           | Prüfergebnis                                                                                                                                                                                      | Aktion                                                                                                          |
-| ------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **U4** | Export in EnergyData/EnergyReport bereits drin       | ✅ `EnergyData.tsx` hat CSV-, XLSX- und PDF-Export (`handleExport`, `handleXlsxExport`, `handlePdfExport`). `EnergyReport` ist ein Dispatcher; die Template-Reports haben eigene PDF/HTML-Reports. | **Nichts zu tun.** Wird im Plan abgehakt.                                                                       |
-| **U5** | PDF-Download in ChargingBilling vorhanden (im Popup) | ✅ Im Detail-Dialog ist `generateChargingInvoicePdf` + `downloadBlob` verdrahtet (Zeile 584–597).                                                                                                  | **Nichts zu tun.** Optional: zusätzlicher Direkt-Download-Button in der Zeilenaktion der Tabelle — frage unten. |
-| **U6** | Bulk-Actions in Tasks bereits drin                   | ✅ `Checkbox` + `selectedIds` + `BulkActionsToolbar` aktiv.                                                                                                                                        | **Nichts zu tun.**                                                                                              |
+## X4 — Monitoring Alert-Regeln
+**DB-Migration** (`monitoring_alert_rules`):
+- Felder: `metric_category` (text), `metric_name` (text), `comparator` (enum: `>`, `>=`, `<`, `<=`), `threshold` (numeric), `severity` (enum: `info`, `warning`, `critical`), `enabled` (bool, default true), `notify_email` (text, nullable), `created_by` (uuid).
+- GRANTs für `authenticated` + `service_role`.
+- RLS: nur `super_admin` (über `has_role`) darf lesen/schreiben.
+- Unique-Constraint `(metric_category, metric_name, comparator)`.
 
+**UI** (`src/pages/SuperAdminMonitoring.tsx`):
+- Neue Card „Alert-Regeln" oberhalb der Health-Sektion.
+- Tabelle: Kategorie, Metrik, Vergleich, Schwellwert, Severity, Status, Aktionen.
+- „Regel hinzufügen"-Dialog mit Select (Kategorie/Metrik aus bekannten Metriken: `db_connections`, `disk_usage`, `app_counts`, …), Comparator, Threshold, Severity, optionale Notify-E-Mail.
+- Inline-Toggle für `enabled`, Löschen pro Zeile.
+- Auswertung clientseitig: für jede aktive Regel wird der letzte Wert (`getLatest`) geprüft; verletzte Regeln werden als Warn-Badge in der Card angezeigt. (Kein Mail-Versand in dieser Welle — Hook für späteren Edge-Job vorbereitet via `notify_email`-Spalte.)
 
-→ U4, U5, U6 werden im Plan dokumentiert als „verifiziert, kein Handlungsbedarf". Keine Code-Änderung.
+## X5 — Statistics-Historie
+**DB-Migration** (`platform_metrics`):
+- Felder: `recorded_at` (timestamptz, default now), `metric_key` (text, z. B. `mrr_eur`, `active_tenants`, `module_adoption_<modul>`), `metric_value` (numeric), `dimension` (text, nullable, für Modul-Namen).
+- Index `(metric_key, recorded_at desc)`.
+- GRANTs `authenticated` SELECT, `service_role` ALL. RLS: nur `super_admin` darf lesen.
+- Befüllung: in dieser Welle KEIN Cron — stattdessen liefert ein neuer Hook `useHistoricalPlatformMetrics()` Mock-/Live-Daten:
+  - Live aus vorhandener `platform_statistics`-Tabelle (bereits abgefragt in `usePlatformStats`) plus den neuen `platform_metrics`-Inserts (initial leer, später durch separaten Job).
+- Hinweis-Banner in UI: „Historie wird seit <erstes Datum> gesammelt".
 
-## Umzusetzende Punkte
-
-### U1 — NetworkInfrastructure als Beta markieren
-
-- `src/pages/NetworkInfrastructure.tsx`: Badge „Beta" neben H1, dezenter Hinweis-Banner („Zeigt aktuell Beispieldaten. Echte Geräteanbindung folgt."). Keine Funktionsänderung.
-
-### U2 — TenantElectricity: `formatNumber()` statt `toFixed(2)`
-
-- Helper in der Datei (oder Import aus `@/lib/utils` falls vorhanden): `fmtEur(n)` → `n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })`.
-- 10 Fundstellen in `src/pages/TenantElectricity.tsx` ersetzen (Z. 88, 455–457, 527–530, 550). KWh-Werte ebenfalls auf `de-DE` umstellen.
-
-### U3 — Automation: `CATEGORY_CONFIG` i18n-fähig
-
-- `src/pages/Automation.tsx`: `CATEGORY_CONFIG` → `getCategoryConfig(t)`-Funktion. Labels über `t("automation.category.<key>")` ziehen.
-- Translation-Keys ergänzen in `src/i18n/locales/de.ts`, `en.ts`, `es.ts`, `nl.ts` (Sektion `automation.category.*`).
-
-### U7 — Einheitliches Error-Pattern für Silent-Fails
-
-- Reusable Komponente `src/components/common/QueryErrorState.tsx`: zeigt `AlertCircle`-Icon, Fehlermeldung, Retry-Button.
-- In `SalesProjects`, `SalesProjectDetail`, `ChargingAppAdmin`, `sharing/SharingInvoices` jeweils `isError`/`error` aus `useQuery` lesen und `<QueryErrorState onRetry={refetch} />` rendern statt leerer UI. Zusätzlich `toast.error(...)` im `onError`-Callback / `useEffect`.
-
-### U8 — EnergySharingMemberDetail: CTA bei „nicht unterzeichnet"
-
-- Vertrag-Card: Wenn `!latestSig`, statt nur Text → Button „Jetzt unterzeichnen" öffnet vorhandenen `SignContractDialog`.
-- Zusätzlicher Button „Erinnerung senden" ruft bestehende Edge-Function für Member-Invite erneut auf (`resend-community-invite` o.ä. — prüfe Namen in `supabase/functions`, falls nicht vorhanden, verwende vorhandenen Invite-Flow oder lasse den Button bewusst weg und melde es).
+**UI** (`src/pages/SuperAdminStatistics.tsx`):
+- Bestehende 3 KPIs + 1 BarChart bleiben.
+- Neue Sektion „Verlauf":
+  - **LineChart MRR-Verlauf** (`metric_key = 'mrr_eur'`).
+  - **LineChart aktive Tenants über Zeit** (`metric_key = 'active_tenants'`).
+  - **PieChart Modul-Adoption** (Aggregation `metric_key LIKE 'module_adoption_%'`, letzter Wert pro `dimension`).
+- Zahlen mit `toLocaleString("de-DE")`.
 
 ## Technische Details
-
-- **Keine** neuen Routen, **keine** DB-Migration, **keine** Edge-Function (außer evtl. Aufruf einer bestehenden in U8).
-- Build-Verifikation am Ende.
-
-## Klärungsfrage zu U8
-
-Eine Sache muss ich vor U8 wissen — ich finde im Repo keine offensichtliche Edge-Function nur für „Erinnerung an Community-Member senden". Soll ich:
-
-- **A)** den vorhandenen Invite-/Onboarding-Flow erneut auslösen (gleiche Funktion wie initial), oder
-- **B)** den „Erinnerung senden"-Button weglassen und nur den „Jetzt unterzeichnen"-CTA bauen?
-
-(Wenn keine Antwort: Default = **B**, weil sauberer und kein Risiko, eine falsche Funktion zu treffen.)  
-  
-Antwort zur Frage zu U8: B
+- Migration X4 + X5 als zwei getrennte SQL-Migrationen.
+- Kein Lexware-Code anfassen.
+- Keine neuen npm-Pakete (Recharts, shadcn Tabs/Dialog/Select bereits vorhanden).
+- Datei-Liste (geschätzt):
+  - edit: `SuperAdminSidebar.tsx`, `SuperAdminPartners.tsx`, `SuperAdminMonitoring.tsx`, `SuperAdminStatistics.tsx`
+  - new: `src/hooks/useMonitoringAlertRules.tsx`, `src/hooks/useHistoricalPlatformMetrics.tsx`, ggf. `src/components/super-admin/AlertRuleDialog.tsx`
+  - 2 DB-Migrationen
