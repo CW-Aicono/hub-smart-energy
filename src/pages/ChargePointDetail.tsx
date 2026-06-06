@@ -800,7 +800,31 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       </CardContent>
                     </Card>
                   )}
+
+                  {/* Standortkarte – read-only Anzeige (Bearbeiten erfolgt im Bearbeiten-Dialog) */}
+                  <Card>
+                    <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-primary" />
+                        Standort auf Karte
+                      </CardTitle>
+                      {cp.latitude && cp.longitude && (
+                        <span className="text-xs font-mono text-muted-foreground hidden sm:inline">
+                          {cp.latitude.toFixed(5)}, {cp.longitude.toFixed(5)}
+                        </span>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      <SingleChargePointMap
+                        latitude={cp.latitude}
+                        longitude={cp.longitude}
+                        onPositionChange={() => {}}
+                        readOnly
+                      />
+                    </CardContent>
+                  </Card>
                 </div>
+
 
                 {/* Right sidebar */}
                 <div className="space-y-6">
