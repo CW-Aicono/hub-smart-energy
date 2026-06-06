@@ -21,6 +21,8 @@ import PartnerBilling from "@/pages/partner/PartnerBilling";
 import PartnerSalesCatalog from "@/pages/partner/PartnerSalesCatalog";
 import PartnerSalesRules from "@/pages/partner/PartnerSalesRules";
 import RecoveryGuard from "@/components/RecoveryGuard";
+import MustChangePasswordGuard from "@/components/MustChangePasswordGuard";
+import TenantStatusGuard from "@/components/TenantStatusGuard";
 import SalesHostGuard from "@/components/SalesHostGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
@@ -153,11 +155,13 @@ const App = () => (
                   <Sonner />
                   <ConfirmDialogHost />
                   <RecoveryGuard />
+                  <MustChangePasswordGuard />
                   <SalesHostGuard />
                   <UpdateBanner />
                   <SupportSessionBanner />
                   <SuperAdminImpersonationBar />
                   {!window.location.pathname.startsWith("/public/") && <CookieConsent />}
+                  <TenantStatusGuard>
                   <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
                     <Routes>
                       {/* Demo routes */}
