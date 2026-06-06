@@ -71,6 +71,7 @@ const Automation = () => {
   const { t } = useTranslation();
   const { tenant } = useTenant();
   const T = (key: string) => t(key as any);
+  const CATEGORY_CONFIG = useMemo(() => getCategoryConfig(t), [t]);
   const [activeTab, setActiveTab] = useState("automations");
 
   // Data hooks
