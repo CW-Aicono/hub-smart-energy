@@ -1143,7 +1143,7 @@ async function handleAddonVersion(): Promise<Response> {
 async function validateApiKeyOrAdmin(req: Request): Promise<Response | null> {
   // Try API key first
   const apiKeyResult = await validateApiKey(req);
-  if (!apiKeyResult) return null; // API key is valid
+  if (!isAuthError(apiKeyResult)) return null; // API key is valid
 
   // Fall back to JWT auth for admin users
   const authHeader = req.headers.get("Authorization") || "";
