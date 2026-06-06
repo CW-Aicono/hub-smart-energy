@@ -335,7 +335,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
         return { sourceName, targetName, sourceColor, sourceType, value };
       })
       .filter((f) => f.value > 0);
-  }, [filteredReadings, meterMap, locationId, locations, floors, rooms, viewMode, priceLookup, livePeriodTotals, meters, period, allowedTypes, dbPeriodSums]);
+  }, [filteredReadings, meterMap, locationId, locations, floors, rooms, viewMode, priceLookup, livePeriodTotals, meters, period, allowedTypes, dbPeriodSums, todayInRange]);
 
   // Format helper based on view mode
   const formatValue = (value: number, sourceType?: string) => {
