@@ -311,6 +311,8 @@ export function DynamicDlmCard({ locationId }: Props) {
           </Button>
         </div>
       </CardContent>
-    </Card>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }
