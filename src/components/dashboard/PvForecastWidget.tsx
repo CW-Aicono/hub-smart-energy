@@ -107,6 +107,9 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const { t, language } = useTranslation();
   const T = (key: string) => t(key as any);
   const dateLocale = dfLocaleMap[language] || de;
+  const numberLocale = ({ de: "de-DE", en: "en-US", es: "es-ES", nl: "nl-NL" } as Record<string, string>)[language] || "de-DE";
+  const fmtNum = (v: number, digits = 0) =>
+    v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
   const cwPrefix = T("chart.cwPrefix");
   const tenantId = tenant?.id ?? null;
   const { forecast, isLoading, error } = usePvForecast(locationId);
