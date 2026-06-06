@@ -99,7 +99,7 @@ export function useChargingUsers() {
   const { tenant } = useTenant();
   const key = ["charging-users", tenant?.id];
 
-  const { data: users = [], isLoading } = useQuery({
+  const { data: users = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: key,
     enabled: !!tenant?.id,
     queryFn: async () => {
@@ -224,6 +224,6 @@ export function useChargingUsers() {
     onError: () => { const t = getT(); toast.error(t("common.errorUpdate")); },
   });
 
-  return { users, isLoading, addUser, updateUser, deleteUser, setUserTags };
+  return { users, isLoading, isError, error, refetch, addUser, updateUser, deleteUser, setUserTags };
 }
 

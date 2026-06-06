@@ -1,65 +1,57 @@
+# Welle 4 — U1 bis U8
 
-## Ziel
+Reine UI/Frontend-Arbeit. Keine DB-Migrationen, keine Edge-Functions, keine neue Logik.
 
-In allen Dashboard-Widgets, die eine Zeitraum-Navigation (`< KW 23, 2026 >`) zeigen, wird das Label **klickbar**. Ein Klick öffnet einen **Date-Picker**, mit dem der Nutzer direkt zu einem beliebigen Tag / Woche / Monat / Quartal / Jahr springen kann — statt sich mit den Pfeil-Buttons durchklicken zu müssen.
+## Status der "bitte prüfen"-Punkte
 
-## Betroffene Widgets
 
-Alle drei Dashboard-Widgets, die `useDashboardFilter().selectedOffset` nutzen und identische Navigation rendern:
+| #      | Behauptung                                           | Prüfergebnis                                                                                                                                                                                      | Aktion                                                                                                          |
+| ------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **U4** | Export in EnergyData/EnergyReport bereits drin       | ✅ `EnergyData.tsx` hat CSV-, XLSX- und PDF-Export (`handleExport`, `handleXlsxExport`, `handlePdfExport`). `EnergyReport` ist ein Dispatcher; die Template-Reports haben eigene PDF/HTML-Reports. | **Nichts zu tun.** Wird im Plan abgehakt.                                                                       |
+| **U5** | PDF-Download in ChargingBilling vorhanden (im Popup) | ✅ Im Detail-Dialog ist `generateChargingInvoicePdf` + `downloadBlob` verdrahtet (Zeile 584–597).                                                                                                  | **Nichts zu tun.** Optional: zusätzlicher Direkt-Download-Button in der Zeilenaktion der Tabelle — frage unten. |
+| **U6** | Bulk-Actions in Tasks bereits drin                   | ✅ `Checkbox` + `selectedIds` + `BulkActionsToolbar` aktiv.                                                                                                                                        | **Nichts zu tun.**                                                                                              |
 
-1. `src/components/dashboard/EnergyChart.tsx` (Energieverbrauch)
-2. `src/components/dashboard/PvForecastWidget.tsx` (PV-Prognose)
-3. `src/components/dashboard/CustomWidget.tsx` (alle vom User gebauten Custom-Widgets)
 
-Da alle drei Widgets `setSelectedOffset` aus `useDashboardFilter` setzen, propagiert sich die Datums-Auswahl **automatisch** auf alle Widgets gleichzeitig (Dashboard-weiter Filter, wie bisher).
+→ U4, U5, U6 werden im Plan dokumentiert als „verifiziert, kein Handlungsbedarf". Keine Code-Änderung.
 
-## Umsetzung
+## Umzusetzende Punkte
 
-### 1. Neue gemeinsame Komponente
+### U1 — NetworkInfrastructure als Beta markieren
 
-`src/components/dashboard/PeriodPickerLabel.tsx`
+- `src/pages/NetworkInfrastructure.tsx`: Badge „Beta" neben H1, dezenter Hinweis-Banner („Zeigt aktuell Beispieldaten. Echte Geräteanbindung folgt."). Keine Funktionsänderung.
 
-- Rendert das bisherige `<span>{periodLabel}</span>` als `<button>` innerhalb eines shadcn `Popover`.
-- Popover-Content: shadcn `Calendar` (`mode="single"`, `pointer-events-auto`, `locale=de`, `weekStartsOn=1`, `ISOWeek`).
-- Bei `onSelect(date)`:
-  - berechnet aus `selectedPeriod` + gewähltem Datum den neuen **Offset relativ zum heutigen Tag** (z. B. `differenceInCalendarWeeks(date, today)` für `week`, analog `Days/Months/Quarters/Years`) und ruft `setSelectedOffset(newOffset)`.
-  - schließt den Popover.
-- Für Period `"all"` ist der Picker deaktiviert (Button rendert ein nicht-klickbares Label, wie heute).
-- Übernimmt visuell exakt das bisherige Styling (`text-xs text-muted-foreground min-w-[160px] text-center`), bekommt zusätzlich `hover:text-foreground cursor-pointer` als Affordance.
+### U2 — TenantElectricity: `formatNumber()` statt `toFixed(2)`
 
-### 2. Integration
+- Helper in der Datei (oder Import aus `@/lib/utils` falls vorhanden): `fmtEur(n)` → `n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })`.
+- 10 Fundstellen in `src/pages/TenantElectricity.tsx` ersetzen (Z. 88, 455–457, 527–530, 550). KWh-Werte ebenfalls auf `de-DE` umstellen.
 
-In allen drei Widgets wird die Zeile
+### U3 — Automation: `CATEGORY_CONFIG` i18n-fähig
 
-```tsx
-<span className="text-xs ...">{periodLabel}</span>
-```
+- `src/pages/Automation.tsx`: `CATEGORY_CONFIG` → `getCategoryConfig(t)`-Funktion. Labels über `t("automation.category.<key>")` ziehen.
+- Translation-Keys ergänzen in `src/i18n/locales/de.ts`, `en.ts`, `es.ts`, `nl.ts` (Sektion `automation.category.*`).
 
-ersetzt durch
+### U7 — Einheitliches Error-Pattern für Silent-Fails
 
-```tsx
-<PeriodPickerLabel period={period} refDate={refDate} label={periodLabel} />
-```
+- Reusable Komponente `src/components/common/QueryErrorState.tsx`: zeigt `AlertCircle`-Icon, Fehlermeldung, Retry-Button.
+- In `SalesProjects`, `SalesProjectDetail`, `ChargingAppAdmin`, `sharing/SharingInvoices` jeweils `isError`/`error` aus `useQuery` lesen und `<QueryErrorState onRetry={refetch} />` rendern statt leerer UI. Zusätzlich `toast.error(...)` im `onError`-Callback / `useEffect`.
 
-(`period`, `refDate`, `periodLabel` sind in allen drei Widgets bereits lokal berechnet.)
+### U8 — EnergySharingMemberDetail: CTA bei „nicht unterzeichnet"
 
-Keine Änderung an Pfeil-Buttons, `useDashboardFilter`, Datenfluss oder Backend.
+- Vertrag-Card: Wenn `!latestSig`, statt nur Text → Button „Jetzt unterzeichnen" öffnet vorhandenen `SignContractDialog`.
+- Zusätzlicher Button „Erinnerung senden" ruft bestehende Edge-Function für Member-Invite erneut auf (`resend-community-invite` o.ä. — prüfe Namen in `supabase/functions`, falls nicht vorhanden, verwende vorhandenen Invite-Flow oder lasse den Button bewusst weg und melde es).
 
-### 3. Locale & Format
+## Technische Details
 
-- Verwendet `date-fns` mit `de`-Locale (bereits im Projekt vorhanden).
-- Kalender zeigt KW-Spalte (`ISOWeek`) — passt zur bisherigen `KW 23, 2026`-Anzeige.
-- Bei `quarter` / `year` wird Tagesgenauigkeit im Picker akzeptiert, intern aber auf den jeweiligen Zeitraum gemappt (Quartal/Jahr, in dem das Datum liegt).
+- **Keine** neuen Routen, **keine** DB-Migration, **keine** Edge-Function (außer evtl. Aufruf einer bestehenden in U8).
+- Build-Verifikation am Ende.
 
-### 4. Verifikation
+## Klärungsfrage zu U8
 
-- Klick auf `KW 23, 2026` öffnet Kalender → Auswahl `15.03.2026` → Label springt auf `KW 11, 2026`, alle drei Widgets aktualisieren synchron.
-- Klick im Modus `Tag` / `Monat` / `Quartal` / `Jahr` → identisches Verhalten, passender Zeitraum-Sprung.
-- `Alle`-Modus: Label nicht klickbar.
-- Bestehende Pfeil-Navigation funktioniert unverändert.
+Eine Sache muss ich vor U8 wissen — ich finde im Repo keine offensichtliche Edge-Function nur für „Erinnerung an Community-Member senden". Soll ich:
 
-## Nicht enthalten
+- **A)** den vorhandenen Invite-/Onboarding-Flow erneut auslösen (gleiche Funktion wie initial), oder
+- **B)** den „Erinnerung senden"-Button weglassen und nur den „Jetzt unterzeichnen"-CTA bauen?
 
-- Keine Änderungen an Geschäftslogik, Aggregation oder RPCs.
-- Keine Änderungen an Super-Admin- oder Partner-Widgets (nur Tenant-Dashboard-Widgets nutzen `useDashboardFilter`).
-- Kein Refactor der drei Widgets darüber hinaus.
+(Wenn keine Antwort: Default = **B**, weil sauberer und kein Risiko, eine falsche Funktion zu treffen.)  
+  
+Antwort zur Frage zu U8: B

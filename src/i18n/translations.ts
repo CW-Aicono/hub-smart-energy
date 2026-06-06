@@ -5950,6 +5950,13 @@ export const translations = {
   "aiconoHub.token.create": { de: "Token erzeugen", en: "Generate token", es: "Generar token", nl: "Token genereren" },
   "aiconoHub.token.delete": { de: "Löschen", en: "Delete", es: "Eliminar", nl: "Verwijderen" },
   "aiconoHub.token.openCount": { de: "{count} offene Token", en: "{count} open tokens", es: "{count} tokens abiertos", nl: "{count} open tokens" },
+
+  // Automation category labels (i18n for Automation.tsx CATEGORY_CONFIG)
+  "automation.category.heating": { de: "Heizung", en: "Heating", es: "Calefacción", nl: "Verwarming" },
+  "automation.category.lighting": { de: "Beleuchtung", en: "Lighting", es: "Iluminación", nl: "Verlichting" },
+  "automation.category.hvac": { de: "Lüftung/Klima", en: "HVAC", es: "Ventilación/Clima", nl: "Ventilatie/Klimaat" },
+  "automation.category.peak_shaving": { de: "Lastmanagement", en: "Peak shaving", es: "Gestión de carga", nl: "Lastbeheer" },
+  "automation.category.custom": { de: "Sonstige", en: "Other", es: "Otros", nl: "Overige" },
 } as const;
 
 export type TranslationKey = keyof typeof translations;

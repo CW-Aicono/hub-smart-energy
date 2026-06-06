@@ -31,13 +31,25 @@ import {
   RefreshCw, Download, XCircle, Timer, FileText, Search, Filter, GitBranch, WifiOff,
 } from "lucide-react";
 
-const CATEGORY_CONFIG: Record<string, { label: string; icon: typeof Thermometer; color: string }> = {
-  heating: { label: "Heizung", icon: Thermometer, color: "#ef4444" },
-  lighting: { label: "Beleuchtung", icon: Lightbulb, color: "#f59e0b" },
-  hvac: { label: "Lüftung/Klima", icon: Wind, color: "#06b6d4" },
-  peak_shaving: { label: "Lastmanagement", icon: TrendingDown, color: "#8b5cf6" },
-  custom: { label: "Sonstige", icon: Zap, color: "#10b981" },
+type TFn = (key: any) => string;
+
+const CATEGORY_META: Record<string, { icon: typeof Thermometer; color: string }> = {
+  heating: { icon: Thermometer, color: "#ef4444" },
+  lighting: { icon: Lightbulb, color: "#f59e0b" },
+  hvac: { icon: Wind, color: "#06b6d4" },
+  peak_shaving: { icon: TrendingDown, color: "#8b5cf6" },
+  custom: { icon: Zap, color: "#10b981" },
 };
+
+/** i18n-fähige Category-Config. Labels werden via t() aufgelöst. */
+function getCategoryConfig(t: TFn): Record<string, { label: string; icon: typeof Thermometer; color: string }> {
+  return Object.fromEntries(
+    Object.entries(CATEGORY_META).map(([key, meta]) => [
+      key,
+      { ...meta, label: t(`automation.category.${key}` as any) },
+    ]),
+  );
+}
 
 /** Consider a gateway offline if last sync > 10 minutes ago */
 const OFFLINE_THRESHOLD_MIN = 10;
@@ -59,6 +71,7 @@ const Automation = () => {
   const { t } = useTranslation();
   const { tenant } = useTenant();
   const T = (key: string) => t(key as any);
+  const CATEGORY_CONFIG = useMemo(() => getCategoryConfig(t), [t]);
   const [activeTab, setActiveTab] = useState("automations");
 
   // Data hooks

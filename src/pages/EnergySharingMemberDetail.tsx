@@ -150,7 +150,12 @@ export default function EnergySharingMemberDetail() {
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   {!latestSig ? (
-                    <p className="text-muted-foreground">Noch nicht unterzeichnet.</p>
+                    <div className="space-y-3">
+                      <p className="text-muted-foreground">Noch nicht unterzeichnet.</p>
+                      <Button size="sm" onClick={() => setSignOpen(true)}>
+                        <PenLine className="h-4 w-4 mr-1" />Jetzt unterzeichnen
+                      </Button>
+                    </div>
                   ) : (
                     <>
                       <Row k="Unterzeichner" v={latestSig.signer_name} />
