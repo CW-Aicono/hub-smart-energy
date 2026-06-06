@@ -126,6 +126,11 @@ const SuperAdminMonitoring = () => {
               {/* Loxone-Abfrage-Intervalle pro Liegenschaft */}
               <LoxonePollingOverviewCard />
 
+              {/* Alert-Regeln */}
+              <AlertRulesCard getLatest={getLatest} />
+
+
+
 
               {/* System Health */}
               <Card>
