@@ -45,8 +45,14 @@ async function sha256Hex(key: string): Promise<string> {
  * Validates the request authentication.
  * Supports Basic Auth (username/password) and the global GATEWAY_API_KEY.
  * Per-device API keys have been removed.
+ *
+ * Returns { tenantId } context for Basic Auth requests (used to scope GET
+ * routes to the device's own tenant). For the global GATEWAY_API_KEY
+ * tenantId is null and the caller is treated as trusted server-to-server.
  */
-async function validateApiKey(req: Request): Promise<Response | null> {
+export interface GatewayAuthContext { tenantId: string | null }
+
+async function validateApiKey(req: Request): Promise<Response | GatewayAuthContext> {
   const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
   if (!gatewayApiKey) {
     console.error("[gateway-ingest] GATEWAY_API_KEY secret not configured");
@@ -57,7 +63,7 @@ async function validateApiKey(req: Request): Promise<Response | null> {
   // 1) Basic Auth (username + password against gateway_devices)
   if (/^Basic\s+/i.test(authHeader)) {
     const ctx = await getDeviceFromBasicAuth(req);
-    if (ctx) return null;
+    if (ctx) return { tenantId: ctx.tenant_id };
     return json({ error: "Unauthorized" }, 401);
   }
 
@@ -68,10 +74,14 @@ async function validateApiKey(req: Request): Promise<Response | null> {
 
   // 2) Global GATEWAY_API_KEY (legacy server-to-server)
   if (providedKey === gatewayApiKey) {
-    return null;
+    return { tenantId: null };
   }
 
   return json({ error: "Unauthorized" }, 401);
+}
+
+function isAuthError(v: Response | GatewayAuthContext): v is Response {
+  return v instanceof Response;
 }
 
 /**
