@@ -1550,11 +1550,12 @@ Deno.serve(async (req) => {
   if (req.method === "GET") {
     const _auth = await validateApiKey(req);
     if (isAuthError(_auth)) return _auth;
-    if (action === "list-locations") return handleListLocations();
-    if (action === "list-meters") return handleListMeters(url);
-    if (action === "get-daily-totals") return handleGetDailyTotals(url);
-    if (action === "get-readings") return handleGetReadings(url);
-    if (action === "get-locations-summary") return handleGetLocationsSummary(url);
+    const scopeTenantId = _auth.tenantId; // null = global server key (trusted)
+    if (action === "list-locations") return handleListLocations(scopeTenantId);
+    if (action === "list-meters") return handleListMeters(url, scopeTenantId);
+    if (action === "get-daily-totals") return handleGetDailyTotals(url, scopeTenantId);
+    if (action === "get-readings") return handleGetReadings(url, scopeTenantId);
+    if (action === "get-locations-summary") return handleGetLocationsSummary(url, scopeTenantId);
     if (action === "addon-version") return handleAddonVersion();
     if (action === "sync-automations") return handleSyncAutomations(url, req);
   }
