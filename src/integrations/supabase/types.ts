@@ -2966,6 +2966,39 @@ export type Database = {
           },
         ]
       }
+      dlm_control_log: {
+        Row: {
+          applied_profiles: Json
+          available_kw: number | null
+          executed_at: string
+          id: number
+          location_id: string
+          measured_kw: number | null
+          reason: string | null
+          tenant_id: string
+        }
+        Insert: {
+          applied_profiles?: Json
+          available_kw?: number | null
+          executed_at?: string
+          id?: number
+          location_id: string
+          measured_kw?: number | null
+          reason?: string | null
+          tenant_id: string
+        }
+        Update: {
+          applied_profiles?: Json
+          available_kw?: number | null
+          executed_at?: string
+          id?: number
+          location_id?: string
+          measured_kw?: number | null
+          reason?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       email_send_audit: {
         Row: {
           created_at: string
@@ -4887,6 +4920,69 @@ export type Database = {
             columns: ["scope_room_id"]
             isOneToOne: false
             referencedRelation: "floor_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      location_dlm_config: {
+        Row: {
+          control_interval_s: number
+          created_at: string
+          fallback_kw_per_cp: number
+          grid_limit_kw: number
+          id: string
+          is_active: boolean
+          location_id: string
+          min_charge_kw: number
+          priority_order: Json
+          reference_meter_id: string | null
+          safety_buffer_kw: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          control_interval_s?: number
+          created_at?: string
+          fallback_kw_per_cp?: number
+          grid_limit_kw: number
+          id?: string
+          is_active?: boolean
+          location_id: string
+          min_charge_kw?: number
+          priority_order?: Json
+          reference_meter_id?: string | null
+          safety_buffer_kw?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          control_interval_s?: number
+          created_at?: string
+          fallback_kw_per_cp?: number
+          grid_limit_kw?: number
+          id?: string
+          is_active?: boolean
+          location_id?: string
+          min_charge_kw?: number
+          priority_order?: Json
+          reference_meter_id?: string | null
+          safety_buffer_kw?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_dlm_config_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_dlm_config_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
