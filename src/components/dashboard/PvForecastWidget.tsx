@@ -107,6 +107,9 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const { t, language } = useTranslation();
   const T = (key: string) => t(key as any);
   const dateLocale = dfLocaleMap[language] || de;
+  const numberLocale = ({ de: "de-DE", en: "en-US", es: "es-ES", nl: "nl-NL" } as Record<string, string>)[language] || "de-DE";
+  const fmtNum = (v: number, digits = 0) =>
+    v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
   const cwPrefix = T("chart.cwPrefix");
   const tenantId = tenant?.id ?? null;
   const { forecast, isLoading, error } = usePvForecast(locationId);
@@ -495,12 +498,12 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
           )}
           <div>
             <p className="text-xs text-muted-foreground">{T("dashboard.pvForecast")}</p>
-            <p className="text-xl font-bold text-energy-strom">{forecastDayTotal > 0 ? `${forecastDayTotal.toFixed(0)} kWh` : "–"}</p>
-            {delta != null && <p className="text-xs text-muted-foreground">Δ {delta > 0 ? "+" : ""}{delta}%</p>}
+            <p className="text-xl font-bold text-energy-strom">{forecastDayTotal > 0 ? `${fmtNum(forecastDayTotal, 0)} kWh` : "–"}</p>
+            {delta != null && <p className="text-xs text-muted-foreground">Δ {delta > 0 ? "+" : ""}{fmtNum(delta, 1)}%</p>}
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{isDay ? (isToday ? T("pv.todayActual") : T("pv.dateActual").replace("{date}", format(refDate, "d. MMM", { locale: dateLocale }))) : T("pv.periodActual").replace("{period}", T(PERIOD_LABEL_KEYS[selectedPeriod]))}</p>
-            <p className="text-xl font-bold text-pv-actual">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
+            <p className="text-xl font-bold text-pv-actual">{hasActualTotal ? `${fmtNum(actualTotalKwh, 1)} kWh` : "–"}</p>
             {isDay && actualReadingsEstimated && hasActualTotal && (
               <p className="text-xs text-muted-foreground">{T("pv.estimatedFromDailyTotal")}</p>
             )}
@@ -509,7 +512,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
 
         {isToday && typeof summary.ai_correction_factor === "number" && summary.ai_correction_factor !== 1 && (
           <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">KI-Faktor: {summary.ai_correction_factor.toFixed(2)}</Badge>
+            <Badge variant="outline">KI-Faktor: {fmtNum(summary.ai_correction_factor, 2)}</Badge>
           </div>
         )}
 
@@ -518,10 +521,10 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={chartData} margin={{ left: -10, right: 0 }}>
                 <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 10 }} width={35} />
+                <YAxis tick={{ fontSize: 10 }} width={35} tickFormatter={(v: number) => fmtNum(v, 0)} />
                 <Tooltip
                   formatter={(value: number, name: string) => [
-                    `${value.toFixed(2)} kWh`,
+                    `${fmtNum(value, 2)} kWh`,
                     name === "forecast" ? T("dashboard.pvForecast") : actualSeriesLabel,
                   ]}
                 />
@@ -534,10 +537,10 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={multiDayChart} margin={{ left: -10, right: 0 }}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 10 }} width={35} />
+                <YAxis tick={{ fontSize: 10 }} width={35} tickFormatter={(v: number) => fmtNum(v, 0)} />
                 <Tooltip
                   formatter={(value: number, name: string) => [
-                    `${value.toFixed(1)} kWh`,
+                    `${fmtNum(value, 1)} kWh`,
                     name === "forecast" ? T("dashboard.pvForecast") : T("pv.actualGeneration"),
                   ]}
                 />
