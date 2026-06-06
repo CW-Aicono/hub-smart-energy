@@ -224,6 +224,6 @@ export function useChargingUsers() {
     onError: () => { const t = getT(); toast.error(t("common.errorUpdate")); },
   });
 
-  return { users, isLoading, addUser, updateUser, deleteUser, setUserTags };
+  return { users, isLoading, isError, error, refetch, addUser, updateUser, deleteUser, setUserTags };
 }
 
