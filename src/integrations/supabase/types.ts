@@ -648,6 +648,7 @@ export type Database = {
           description: string | null
           energy_settings: Json
           id: string
+          location_id: string | null
           name: string
           tenant_id: string
           updated_at: string
@@ -658,6 +659,7 @@ export type Database = {
           description?: string | null
           energy_settings?: Json
           id?: string
+          location_id?: string | null
           name: string
           tenant_id: string
           updated_at?: string
@@ -668,11 +670,20 @@ export type Database = {
           description?: string | null
           energy_settings?: Json
           id?: string
+          location_id?: string | null
           name?: string
           tenant_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_groups_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       charge_point_uptime_snapshots: {
         Row: {
@@ -9328,7 +9339,10 @@ export type Database = {
           id: string
           operator: string
           sort_order: number
-          source_meter_id: string
+          source_all_charge_points: boolean
+          source_charge_point_group_id: string | null
+          source_charge_point_id: string | null
+          source_meter_id: string | null
           virtual_meter_id: string
         }
         Insert: {
@@ -9336,7 +9350,10 @@ export type Database = {
           id?: string
           operator?: string
           sort_order?: number
-          source_meter_id: string
+          source_all_charge_points?: boolean
+          source_charge_point_group_id?: string | null
+          source_charge_point_id?: string | null
+          source_meter_id?: string | null
           virtual_meter_id: string
         }
         Update: {
@@ -9344,10 +9361,27 @@ export type Database = {
           id?: string
           operator?: string
           sort_order?: number
-          source_meter_id?: string
+          source_all_charge_points?: boolean
+          source_charge_point_group_id?: string | null
+          source_charge_point_id?: string | null
+          source_meter_id?: string | null
           virtual_meter_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "virtual_meter_sources_source_charge_point_group_id_fkey"
+            columns: ["source_charge_point_group_id"]
+            isOneToOne: false
+            referencedRelation: "charge_point_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "virtual_meter_sources_source_charge_point_id_fkey"
+            columns: ["source_charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "virtual_meter_sources_source_meter_id_fkey"
             columns: ["source_meter_id"]
@@ -9633,10 +9667,12 @@ export type Database = {
         Returns: boolean
       }
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
+      cleanup_cron_job_history: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
       cleanup_old_node_metrics: { Args: never; Returns: number }
       cleanup_old_ocpp_logs: { Args: never; Returns: number }
+      cleanup_pg_net_responses: { Args: never; Returns: number }
       collect_db_metrics: { Args: never; Returns: Json }
       community_data_quality: {
         Args: { p_community_id: string }

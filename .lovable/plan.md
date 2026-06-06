@@ -1,105 +1,50 @@
-## Verifizierter Befund
+# Virtueller Zähler erweitert um Ladepunkt-Quellen
 
-Der Heartbeat-Fix ist auf dem Hetzner-Server angekommen:
+## Ziel
+Im „Zähler hinzufügen"-Dialog kann unter dem Baustein „Virtueller Zähler" zusätzlich zu echten Zählern auch eine beliebige Kombination aus Ladepunkten, Ladepunkt-Gruppen oder „Alle Ladepunkte dieser Liegenschaft" als Quelle gewählt werden. Mischen mit normalen Zählern ist erlaubt. Live-Leistung kommt aus OCPP MeterValues, kWh-Summen aus `charging_sessions`. Vorbereitet für V2G/V2H (bidirektional).
 
-```text
-interval: 86400
-```
+## Wichtiger Datenbefund
+- Live-Leistung der Ladepunkte liegt **nicht** als Spalte vor, sondern in `ocpp_meter_samples` (measurand = `Power.Active.Import` / `Power.Active.Export`, Spalte `value` in W).
+- kWh-Summen kommen aus `charging_sessions.energy_kwh` (Felder `start_time`, `stop_time`, `charge_point_id`).
+- Bidirektionalität ist heute nur über Export-measurands sichtbar — Schema dafür ist bereits ausreichend, kein extra DB-Feld nötig.
 
-Der neue Log zeigt aber eine andere, jetzt sehr konkrete Ursache:
+## Änderungen
 
-```text
-BootNotification
-GetConfiguration wird gesendet
-Wallbe antwortet teilweise
-WebSocket closed code=1006 nach 1–2 Sekunden
-```
+### 1. Datenbank (Migration)
+Tabelle `public.virtual_meter_sources` erweitern:
+- `source_meter_id`: NOT NULL → NULLABLE
+- Neue Spalten (alle nullable, alle FK ON DELETE CASCADE):
+  - `source_charge_point_id` → `charge_points(id)`
+  - `source_charge_point_group_id` → `charge_point_groups(id)`
+  - `source_all_charge_points` boolean DEFAULT false (löst zur Laufzeit alle CPs der Liegenschaft des virtuellen Zählers auf)
+- Bestehende `UNIQUE(virtual_meter_id, source_meter_id)` droppen, ersetzen durch partielle Unique-Indizes je Quelltyp.
+- CHECK-Constraint: genau eine der vier Quellen pro Zeile gesetzt.
 
-Zusätzlich liegt in der Datenbank noch mindestens ein offener Befehl für genau diese Wallbox:
+### 2. Formel-Builder UI (`VirtualMeterFormulaBuilder.tsx`)
+- Props um `availableChargePoints` und `availableChargePointGroups` erweitern.
+- Quell-Dropdown in vier Gruppen (Select-Groups): Zähler / Ladepunkte / Ladepunkt-Gruppen / „Alle Ladepunkte dieser Liegenschaft".
+- Source-Item rendert je nach Typ Icon (PlugZap für CPs, Users für Gruppen, MapPin für „Alle"), Operator + / − wie bisher.
+- Formel-Vorschau zeigt den jeweiligen Namen/Label.
 
-```text
-00000001305 | GetConfiguration | pending
-```
+### 3. Add/Edit-Dialoge (`AddMeterDialog.tsx`, `EditMeterDialog.tsx`)
+- Über `useLocationChargePoints(locationId)` und `useChargePointGroups` (gefiltert auf Liegenschaft) die Listen laden und an den Builder reichen.
+- `useMeters.addMeter` / Update-Logik erweitern, sodass die neuen Quell-Typen mitgespeichert werden (Insert in `virtual_meter_sources` mit dem jeweils passenden Feld).
 
-Das heißt: Die alte Wallbe trennt nicht wegen `interval: 86400`, sondern sehr wahrscheinlich wegen `GetConfiguration` bzw. wegen der Capability-/Live-Daten-Abfrage.
+### 4. Berechnungs-Layer
+- `src/hooks/useEnergyData.tsx`: 
+  - Beim Laden auch `source_charge_point_id`, `source_charge_point_group_id`, `source_all_charge_points` aus `virtual_meter_sources` selecten.
+  - Für CP-Quellen die jüngsten `ocpp_meter_samples` (Power.Active.Import minus Power.Active.Export, Fenster letzte 5 Min) als Live-kW heranziehen. Tagessumme aus `charging_sessions.energy_kwh` (`start_time >= heute_00:00`).
+  - Gruppen/„Alle"-Auflösung anhand bereits geladener CPs der Liegenschaft.
+- `src/pages/LiveValues.tsx`: dieselbe Auflösungslogik in den `virtualValues`-Memo einbauen.
 
-## Plan
+### 5. Bidirektional-Vorbereitung
+- Wenn beide measurands (Import + Export) für einen CP existieren, wird `virtuell` automatisch als bidirektional behandelt: positiver Wert = Bezug (Laden), negativer Wert = Einspeisung (V2G/V2H). Kein extra UI-Flag nötig — passt automatisch in das bestehende `meters.is_bidirectional`-System, das `MeterManagement` schon rendert.
 
-### 1. Sofortmaßnahme in der Datenbank
+## Was nicht geändert wird
+- OCPP-Server-Code, Billing-Pipeline, DLM/PV-Surplus-Logik. 
+- Bestehende virtuelle Zähler mit reiner Zähler-Formel funktionieren unverändert weiter.
 
-Ich markiere offene `GetConfiguration`-Befehle für `00000001305` als fehlgeschlagen/abgebrochen, damit sie beim nächsten Online-Gehen nicht erneut an die Wallbox gesendet werden.
-
-Betroffen ist nur:
-
-```text
-pending_ocpp_commands
-charge_point_ocpp_id = 00000001305
-command = GetConfiguration
-status = pending oder scheduled
-```
-
-### 2. OCPP-Server robuster machen
-
-Im OCPP-Server ergänze ich einen Wallbe-Kompatibilitäts-Schutz:
-
-- Bei Wallbe `Smart Charge Control` mit Firmware `BF-01.04.x` wird die automatische Konfigurationsprüfung nach `BootNotification` nicht mehr gestartet.
-- Dadurch sendet der Server nach dem Boot keine automatische `GetConfiguration` und keine automatische `ChangeConfiguration` mehr an dieses alte Modell.
-- Moderne Wallboxen bleiben unverändert.
-
-### 3. Befehls-Warteschlange absichern
-
-Im Command-Dispatcher ergänze ich eine Sperre:
-
-- Wenn eine bekannte alte Wallbe verbunden ist, werden `GetConfiguration`-Befehle aus der Warteschlange nicht an die Wallbox gesendet.
-- Der Befehl wird stattdessen sauber als `rejected`/nicht kompatibel abgeschlossen.
-- Dadurch kann auch ein UI-Klick oder ein alter offener Befehl keinen neuen Reboot-/Disconnect-Loop auslösen.
-
-### 4. UI-Auto-Probe deaktivieren
-
-In der Ladepunkt-Detailseite gibt es aktuell eine automatische Prüfung:
-
-```text
-wenn Wallbox online und keine Capabilities vorhanden → GetConfiguration senden
-```
-
-Diese Automatik entferne oder begrenze ich so, dass sie nicht mehr ungefragt `GetConfiguration` an Wallboxen sendet. Die Prüfung soll nur noch bewusst über den Button „Messgrößen prüfen“ ausgelöst werden — und für alte Wallbe-Modelle zusätzlich blockiert werden.
-
-### 5. Hetzner-Anleitung danach
-
-Nach der Codeänderung brauchst du wieder nur den OCPP-Server auf Hetzner neu bauen:
-
-```bash
-cd /opt/aicono/aicono-ems/docs/ocpp-persistent-server
-
-git fetch --all
-git pull
-
-docker compose stop ocpp
-docker compose build --no-cache ocpp
-docker compose up -d ocpp
-
-docker compose stop ocpp-live
-docker compose build --no-cache ocpp-live
-docker compose up -d ocpp-live
-```
-
-### 6. Erfolgskriterium
-
-Nach dem Neustart darf im Log bei `00000001305` Folgendes nicht mehr erscheinen:
-
-```text
-Command dispatched cmd=GetConfiguration
-```
-
-Erwartet ist dann:
-
-```text
-BootNotification
-StatusNotification
-kein sofortiger WebSocket close nach GetConfiguration
-keine zweite BootNotification nach 10 Minuten
-```
-
-## Wichtig
-
-Meine erste Annahme war unvollständig. `interval: 86400` war korrekt, aber der aktuelle Log beweist: Der akute Abbruch passiert direkt nach `GetConfiguration`. Deshalb ist der nächste Fix gezielt ein Wallbe-Kompatibilitätsmodus gegen diese Abfrage.
+## Reihenfolge (Migration zuerst)
+1. Migration einreichen → User bestätigt → Types werden regeneriert
+2. Builder + Dialoge + Hooks in einem Commit
+3. Sichtkontrolle: neuen virtuellen Zähler „Alle Wallboxen" anlegen, prüfen ob Live-kW und Tagessumme stimmen.

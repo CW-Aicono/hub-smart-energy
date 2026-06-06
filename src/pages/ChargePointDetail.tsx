@@ -10,6 +10,7 @@ import { useChargingSessions, useIdTagResolver } from "@/hooks/useChargingSessio
 import { useTenant } from "@/hooks/useTenant";
 import { useTasks } from "@/hooks/useTasks";
 import { useChargePointGroups } from "@/hooks/useChargePointGroups";
+import { useLocations } from "@/hooks/useLocations";
 import { useMeters } from "@/hooks/useMeters";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,13 +75,14 @@ const ChargePointDetail = () => {
   const { chargePoints, updateChargePoint, deleteChargePoint } = useChargePoints();
   const { groups, assignChargePointToGroup } = useChargePointGroups();
   const { meters } = useMeters();
+  const { locations } = useLocations();
   const { createTask } = useTasks();
   const { sessions } = useChargingSessions(id);
   const resolveTag = useIdTagResolver();
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", ocpp_id: "", ocpp_password: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2", rfid_read_mode: "raw" });
+  const [form, setForm] = useState({ name: "", ocpp_id: "", ocpp_password: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2", rfid_read_mode: "raw", location_id: "__none__" });
   const [showPassword, setShowPassword] = useState(false);
   const generatePassword = () => {
     const bytes = new Uint8Array(18);
@@ -376,6 +378,7 @@ const ChargePointDetail = () => {
       model: cp.model || "",
       connector_type: cp.connector_type || "Type2",
       rfid_read_mode: (cp as any).rfid_read_mode || "raw",
+      location_id: cp.location_id ?? "__none__",
     });
     setCoords({ lat: cp.latitude, lng: cp.longitude });
     setPhotoUrl(cp.photo_storage_path || cp.photo_url || null);
@@ -397,6 +400,7 @@ const ChargePointDetail = () => {
       model: form.model || null,
       connector_type: form.connector_type || "Type2",
       rfid_read_mode: form.rfid_read_mode || "raw",
+      location_id: form.location_id && form.location_id !== "__none__" ? form.location_id : null,
       photo_url: photoUrl,
     } as any);
     setEditing(false);
@@ -1129,6 +1133,18 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         <p className="text-xs text-muted-foreground mt-1">
                           Wird vom Ladepunkt im <code>Authorization: Basic</code>-Header beim WebSocket-Handshake gesendet. Leer lassen nur bei Test-Servern ohne Auth.
                         </p>
+                      </div>
+                      <div>
+                        <Label>Liegenschaft <span className="text-xs text-muted-foreground font-normal">— optional, direkte Zuordnung</span></Label>
+                        <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
+                          <SelectTrigger><SelectValue placeholder="Keine / via Gruppe" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Keine / via Gruppe</SelectItem>
+                            {locations.map((loc) => (
+                              <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div>
                         <Label>Adresse / Standort</Label>
