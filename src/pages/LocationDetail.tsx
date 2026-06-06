@@ -15,6 +15,7 @@ import { MeterManagement } from "@/components/locations/MeterManagement";
 import { BrightHubSettings } from "@/components/settings/BrightHubSettings";
 import { EnergyPriceManagement } from "@/components/locations/EnergyPriceManagement";
 import { PvForecastSection } from "@/components/locations/PvForecastSection";
+import { DynamicDlmCard } from "@/components/charging/DynamicDlmCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -210,6 +211,7 @@ const LocationDetail = () => {
           <MeterManagement locationId={location.id} />
           <EnergyPriceManagement locationId={location.id} />
           {location.latitude && location.longitude && <PvForecastSection locationId={location.id} />}
+          {isModuleEnabled("ev_charging") && <DynamicDlmCard locationId={location.id} />}
           {isModuleEnabled("automation_building") && <LocationAutomation locationId={location.id} />}
           {isModuleEnabled("integrations") && <LocationIntegrationsList locationId={location.id} />}
           {isModuleEnabled("brighthub_api") && <BrightHubSettings locationId={location.id} />}

@@ -53,7 +53,7 @@ RLS: tenant_id-Scope (analog `charge_points`). GRANTs Standard.
 
 ---
 
-## K6 — Dynamisches DLM auf Hausanschluss-Messung  (mittel, ~3–4 Tage)
+## K6 — Dynamisches DLM auf Hausanschluss-Messung  (mittel, ~3–4 Tage) ✅ Welle 1 umgesetzt
 
 ### Ziel
 Echtzeit-Lastregelung: Wenn Hausanschluss­messung (Smart Meter / Schneider PM / Modbus) sich einer konfigurierten Obergrenze nähert, drosselt das System die Wallboxen automatisch via OCPP `SetChargingProfile`, statt nur statischer Zeitfenster.
