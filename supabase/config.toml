@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.charge-point-auto-reboot]
 verify_jwt = false
+
+[functions.grid-curtailment-webhook]
+verify_jwt = false
