@@ -1,50 +1,65 @@
-# Virtueller Zähler erweitert um Ladepunkt-Quellen
 
 ## Ziel
-Im „Zähler hinzufügen"-Dialog kann unter dem Baustein „Virtueller Zähler" zusätzlich zu echten Zählern auch eine beliebige Kombination aus Ladepunkten, Ladepunkt-Gruppen oder „Alle Ladepunkte dieser Liegenschaft" als Quelle gewählt werden. Mischen mit normalen Zählern ist erlaubt. Live-Leistung kommt aus OCPP MeterValues, kWh-Summen aus `charging_sessions`. Vorbereitet für V2G/V2H (bidirektional).
 
-## Wichtiger Datenbefund
-- Live-Leistung der Ladepunkte liegt **nicht** als Spalte vor, sondern in `ocpp_meter_samples` (measurand = `Power.Active.Import` / `Power.Active.Export`, Spalte `value` in W).
-- kWh-Summen kommen aus `charging_sessions.energy_kwh` (Felder `start_time`, `stop_time`, `charge_point_id`).
-- Bidirektionalität ist heute nur über Export-measurands sichtbar — Schema dafür ist bereits ausreichend, kein extra DB-Feld nötig.
+In allen Dashboard-Widgets, die eine Zeitraum-Navigation (`< KW 23, 2026 >`) zeigen, wird das Label **klickbar**. Ein Klick öffnet einen **Date-Picker**, mit dem der Nutzer direkt zu einem beliebigen Tag / Woche / Monat / Quartal / Jahr springen kann — statt sich mit den Pfeil-Buttons durchklicken zu müssen.
 
-## Änderungen
+## Betroffene Widgets
 
-### 1. Datenbank (Migration)
-Tabelle `public.virtual_meter_sources` erweitern:
-- `source_meter_id`: NOT NULL → NULLABLE
-- Neue Spalten (alle nullable, alle FK ON DELETE CASCADE):
-  - `source_charge_point_id` → `charge_points(id)`
-  - `source_charge_point_group_id` → `charge_point_groups(id)`
-  - `source_all_charge_points` boolean DEFAULT false (löst zur Laufzeit alle CPs der Liegenschaft des virtuellen Zählers auf)
-- Bestehende `UNIQUE(virtual_meter_id, source_meter_id)` droppen, ersetzen durch partielle Unique-Indizes je Quelltyp.
-- CHECK-Constraint: genau eine der vier Quellen pro Zeile gesetzt.
+Alle drei Dashboard-Widgets, die `useDashboardFilter().selectedOffset` nutzen und identische Navigation rendern:
 
-### 2. Formel-Builder UI (`VirtualMeterFormulaBuilder.tsx`)
-- Props um `availableChargePoints` und `availableChargePointGroups` erweitern.
-- Quell-Dropdown in vier Gruppen (Select-Groups): Zähler / Ladepunkte / Ladepunkt-Gruppen / „Alle Ladepunkte dieser Liegenschaft".
-- Source-Item rendert je nach Typ Icon (PlugZap für CPs, Users für Gruppen, MapPin für „Alle"), Operator + / − wie bisher.
-- Formel-Vorschau zeigt den jeweiligen Namen/Label.
+1. `src/components/dashboard/EnergyChart.tsx` (Energieverbrauch)
+2. `src/components/dashboard/PvForecastWidget.tsx` (PV-Prognose)
+3. `src/components/dashboard/CustomWidget.tsx` (alle vom User gebauten Custom-Widgets)
 
-### 3. Add/Edit-Dialoge (`AddMeterDialog.tsx`, `EditMeterDialog.tsx`)
-- Über `useLocationChargePoints(locationId)` und `useChargePointGroups` (gefiltert auf Liegenschaft) die Listen laden und an den Builder reichen.
-- `useMeters.addMeter` / Update-Logik erweitern, sodass die neuen Quell-Typen mitgespeichert werden (Insert in `virtual_meter_sources` mit dem jeweils passenden Feld).
+Da alle drei Widgets `setSelectedOffset` aus `useDashboardFilter` setzen, propagiert sich die Datums-Auswahl **automatisch** auf alle Widgets gleichzeitig (Dashboard-weiter Filter, wie bisher).
 
-### 4. Berechnungs-Layer
-- `src/hooks/useEnergyData.tsx`: 
-  - Beim Laden auch `source_charge_point_id`, `source_charge_point_group_id`, `source_all_charge_points` aus `virtual_meter_sources` selecten.
-  - Für CP-Quellen die jüngsten `ocpp_meter_samples` (Power.Active.Import minus Power.Active.Export, Fenster letzte 5 Min) als Live-kW heranziehen. Tagessumme aus `charging_sessions.energy_kwh` (`start_time >= heute_00:00`).
-  - Gruppen/„Alle"-Auflösung anhand bereits geladener CPs der Liegenschaft.
-- `src/pages/LiveValues.tsx`: dieselbe Auflösungslogik in den `virtualValues`-Memo einbauen.
+## Umsetzung
 
-### 5. Bidirektional-Vorbereitung
-- Wenn beide measurands (Import + Export) für einen CP existieren, wird `virtuell` automatisch als bidirektional behandelt: positiver Wert = Bezug (Laden), negativer Wert = Einspeisung (V2G/V2H). Kein extra UI-Flag nötig — passt automatisch in das bestehende `meters.is_bidirectional`-System, das `MeterManagement` schon rendert.
+### 1. Neue gemeinsame Komponente
 
-## Was nicht geändert wird
-- OCPP-Server-Code, Billing-Pipeline, DLM/PV-Surplus-Logik. 
-- Bestehende virtuelle Zähler mit reiner Zähler-Formel funktionieren unverändert weiter.
+`src/components/dashboard/PeriodPickerLabel.tsx`
 
-## Reihenfolge (Migration zuerst)
-1. Migration einreichen → User bestätigt → Types werden regeneriert
-2. Builder + Dialoge + Hooks in einem Commit
-3. Sichtkontrolle: neuen virtuellen Zähler „Alle Wallboxen" anlegen, prüfen ob Live-kW und Tagessumme stimmen.
+- Rendert das bisherige `<span>{periodLabel}</span>` als `<button>` innerhalb eines shadcn `Popover`.
+- Popover-Content: shadcn `Calendar` (`mode="single"`, `pointer-events-auto`, `locale=de`, `weekStartsOn=1`, `ISOWeek`).
+- Bei `onSelect(date)`:
+  - berechnet aus `selectedPeriod` + gewähltem Datum den neuen **Offset relativ zum heutigen Tag** (z. B. `differenceInCalendarWeeks(date, today)` für `week`, analog `Days/Months/Quarters/Years`) und ruft `setSelectedOffset(newOffset)`.
+  - schließt den Popover.
+- Für Period `"all"` ist der Picker deaktiviert (Button rendert ein nicht-klickbares Label, wie heute).
+- Übernimmt visuell exakt das bisherige Styling (`text-xs text-muted-foreground min-w-[160px] text-center`), bekommt zusätzlich `hover:text-foreground cursor-pointer` als Affordance.
+
+### 2. Integration
+
+In allen drei Widgets wird die Zeile
+
+```tsx
+<span className="text-xs ...">{periodLabel}</span>
+```
+
+ersetzt durch
+
+```tsx
+<PeriodPickerLabel period={period} refDate={refDate} label={periodLabel} />
+```
+
+(`period`, `refDate`, `periodLabel` sind in allen drei Widgets bereits lokal berechnet.)
+
+Keine Änderung an Pfeil-Buttons, `useDashboardFilter`, Datenfluss oder Backend.
+
+### 3. Locale & Format
+
+- Verwendet `date-fns` mit `de`-Locale (bereits im Projekt vorhanden).
+- Kalender zeigt KW-Spalte (`ISOWeek`) — passt zur bisherigen `KW 23, 2026`-Anzeige.
+- Bei `quarter` / `year` wird Tagesgenauigkeit im Picker akzeptiert, intern aber auf den jeweiligen Zeitraum gemappt (Quartal/Jahr, in dem das Datum liegt).
+
+### 4. Verifikation
+
+- Klick auf `KW 23, 2026` öffnet Kalender → Auswahl `15.03.2026` → Label springt auf `KW 11, 2026`, alle drei Widgets aktualisieren synchron.
+- Klick im Modus `Tag` / `Monat` / `Quartal` / `Jahr` → identisches Verhalten, passender Zeitraum-Sprung.
+- `Alle`-Modus: Label nicht klickbar.
+- Bestehende Pfeil-Navigation funktioniert unverändert.
+
+## Nicht enthalten
+
+- Keine Änderungen an Geschäftslogik, Aggregation oder RPCs.
+- Keine Änderungen an Super-Admin- oder Partner-Widgets (nur Tenant-Dashboard-Widgets nutzen `useDashboardFilter`).
+- Kein Refactor der drei Widgets darüber hinaus.

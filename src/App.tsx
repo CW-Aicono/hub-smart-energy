@@ -20,7 +20,12 @@ import PartnerMembers from "@/pages/partner/PartnerMembers";
 import PartnerBilling from "@/pages/partner/PartnerBilling";
 import PartnerSalesCatalog from "@/pages/partner/PartnerSalesCatalog";
 import PartnerSalesRules from "@/pages/partner/PartnerSalesRules";
+import PartnerBranding from "@/pages/partner/PartnerBranding";
+import PartnerReporting from "@/pages/partner/PartnerReporting";
+import PartnerTenantDetail from "@/pages/partner/PartnerTenantDetail";
 import RecoveryGuard from "@/components/RecoveryGuard";
+import MustChangePasswordGuard from "@/components/MustChangePasswordGuard";
+import TenantStatusGuard from "@/components/TenantStatusGuard";
 import SalesHostGuard from "@/components/SalesHostGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
@@ -153,11 +158,13 @@ const App = () => (
                   <Sonner />
                   <ConfirmDialogHost />
                   <RecoveryGuard />
+                  <MustChangePasswordGuard />
                   <SalesHostGuard />
                   <UpdateBanner />
                   <SupportSessionBanner />
                   <SuperAdminImpersonationBar />
                   {!window.location.pathname.startsWith("/public/") && <CookieConsent />}
+                  <TenantStatusGuard>
                   <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
                     <Routes>
                       {/* Demo routes */}
@@ -280,7 +287,10 @@ const App = () => (
                       {/* Stufe 2: Partner-Portal (partner.aicono.org → /partner/*) */}
                       <Route path="/partner" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
                       <Route path="/partner/tenants" element={<PartnerLayout><PartnerTenants /></PartnerLayout>} />
+                      <Route path="/partner/tenants/:tenantId" element={<PartnerLayout><PartnerTenantDetail /></PartnerLayout>} />
+                      <Route path="/partner/reporting" element={<PartnerLayout><PartnerReporting /></PartnerLayout>} />
                       <Route path="/partner/billing" element={<PartnerLayout><PartnerBilling /></PartnerLayout>} />
+                      <Route path="/partner/branding" element={<PartnerLayout><PartnerBranding /></PartnerLayout>} />
                       <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
                       <Route path="/partner/sales/catalog" element={<PartnerLayout><PartnerSalesCatalog /></PartnerLayout>} />
                       <Route path="/partner/sales/rules" element={<PartnerLayout><PartnerSalesRules /></PartnerLayout>} />
@@ -289,6 +299,7 @@ const App = () => (
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </Suspense>
+                  </TenantStatusGuard>
                 </TooltipProvider>
               </ThemeProvider>
             </TranslationProvider>

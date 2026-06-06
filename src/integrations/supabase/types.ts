@@ -9063,6 +9063,7 @@ export type Database = {
           contact_person: string | null
           contact_phone: string | null
           created_at: string
+          deleted_at: string | null
           house_number: string | null
           id: string
           is_aicono_member: boolean
@@ -9084,9 +9085,12 @@ export type Database = {
           sepa_mandate_ref: string | null
           show_manual_meters: boolean
           slug: string
+          status: string
           street: string | null
           support_owner: string
           support_price_per_15min: number
+          suspended_at: string | null
+          suspended_reason: string | null
           tenant_type: string
           updated_at: string
           week_start_day: number
@@ -9099,6 +9103,7 @@ export type Database = {
           contact_person?: string | null
           contact_phone?: string | null
           created_at?: string
+          deleted_at?: string | null
           house_number?: string | null
           id?: string
           is_aicono_member?: boolean
@@ -9120,9 +9125,12 @@ export type Database = {
           sepa_mandate_ref?: string | null
           show_manual_meters?: boolean
           slug: string
+          status?: string
           street?: string | null
           support_owner?: string
           support_price_per_15min?: number
+          suspended_at?: string | null
+          suspended_reason?: string | null
           tenant_type?: string
           updated_at?: string
           week_start_day?: number
@@ -9135,6 +9143,7 @@ export type Database = {
           contact_person?: string | null
           contact_phone?: string | null
           created_at?: string
+          deleted_at?: string | null
           house_number?: string | null
           id?: string
           is_aicono_member?: boolean
@@ -9156,9 +9165,12 @@ export type Database = {
           sepa_mandate_ref?: string | null
           show_manual_meters?: boolean
           slug?: string
+          status?: string
           street?: string | null
           support_owner?: string
           support_price_per_15min?: number
+          suspended_at?: string | null
+          suspended_reason?: string | null
           tenant_type?: string
           updated_at?: string
           week_start_day?: number
@@ -9882,6 +9894,7 @@ export type Database = {
           estimated_kwh: number
         }[]
       }
+      get_tenant_status: { Args: { _tenant_id: string }; Returns: string }
       get_user_email: { Args: never; Returns: string }
       get_user_partner_id: { Args: never; Returns: string }
       get_user_tenant_id: { Args: never; Returns: string }
@@ -9922,6 +9935,25 @@ export type Database = {
       partner_member_can: {
         Args: { _permission: string; _user_id: string }
         Returns: boolean
+      }
+      partner_reporting_growth: {
+        Args: { _partner_id: string }
+        Returns: {
+          month_start: string
+          mrr_eur: number
+          tenants_total: number
+        }[]
+      }
+      partner_reporting_modules: {
+        Args: { _partner_id: string }
+        Returns: {
+          module_code: string
+          tenants_count: number
+        }[]
+      }
+      partner_reporting_overview: {
+        Args: { _partner_id: string }
+        Returns: Json
       }
       release_gateway_refresh_lock: {
         Args: { p_integration_id: string; p_owner: string }

@@ -26,6 +26,50 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+  // --- Auth ---------------------------------------------------------------
+  // Erlaubt sind:
+  //   a) Cron / interner Server-Aufruf mit Bearer <SERVICE_ROLE_KEY>
+  //   b) Eingeloggter Super-Admin (Bearer <user JWT>)
+  const authHeader = req.headers.get("Authorization") || "";
+  const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!bearer) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  let authorized = false;
+  if (bearer === serviceKey) {
+    authorized = true; // Cron / Server
+  } else {
+    try {
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: `Bearer ${bearer}` } },
+      });
+      const { data: claimsData } = await userClient.auth.getClaims(bearer);
+      const uid = claimsData?.claims?.sub as string | undefined;
+      if (uid) {
+        const adminClient = createClient(supabaseUrl, serviceKey);
+        const { data: isSuper } = await adminClient.rpc("has_role", {
+          _user_id: uid,
+          _role: "super_admin",
+        });
+        if (isSuper) authorized = true;
+      }
+    } catch (_) {
+      // fall through to 401
+    }
+  }
+  if (!authorized) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   const supabase = createClient(supabaseUrl, serviceKey);
 
   // Aktuelles Datum/Uhrzeit in Europe/Berlin

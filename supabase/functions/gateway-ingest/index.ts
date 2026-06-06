@@ -45,8 +45,14 @@ async function sha256Hex(key: string): Promise<string> {
  * Validates the request authentication.
  * Supports Basic Auth (username/password) and the global GATEWAY_API_KEY.
  * Per-device API keys have been removed.
+ *
+ * Returns { tenantId } context for Basic Auth requests (used to scope GET
+ * routes to the device's own tenant). For the global GATEWAY_API_KEY
+ * tenantId is null and the caller is treated as trusted server-to-server.
  */
-async function validateApiKey(req: Request): Promise<Response | null> {
+export interface GatewayAuthContext { tenantId: string | null }
+
+async function validateApiKey(req: Request): Promise<Response | GatewayAuthContext> {
   const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
   if (!gatewayApiKey) {
     console.error("[gateway-ingest] GATEWAY_API_KEY secret not configured");
@@ -57,7 +63,7 @@ async function validateApiKey(req: Request): Promise<Response | null> {
   // 1) Basic Auth (username + password against gateway_devices)
   if (/^Basic\s+/i.test(authHeader)) {
     const ctx = await getDeviceFromBasicAuth(req);
-    if (ctx) return null;
+    if (ctx) return { tenantId: ctx.tenant_id };
     return json({ error: "Unauthorized" }, 401);
   }
 
@@ -68,10 +74,14 @@ async function validateApiKey(req: Request): Promise<Response | null> {
 
   // 2) Global GATEWAY_API_KEY (legacy server-to-server)
   if (providedKey === gatewayApiKey) {
-    return null;
+    return { tenantId: null };
   }
 
   return json({ error: "Unauthorized" }, 401);
+}
+
+function isAuthError(v: Response | GatewayAuthContext): v is Response {
+  return v instanceof Response;
 }
 
 /**
@@ -210,14 +220,17 @@ function parseMeterIds(url: URL): string[] {
 
 /* ── GET Route handlers ──────────────────────────────────────────────────────── */
 
-async function handleListLocations(): Promise<Response> {
+async function handleListLocations(scopeTenantId: string | null): Promise<Response> {
   const supabase = getSupabase();
-  const { data, error } = await supabase
+  let query = supabase
     .from("locations")
     .select("id, tenant_id, name, address, city, postal_code, country, type, usage_type, energy_sources, latitude, longitude")
     .eq("is_archived", false)
     .order("name");
 
+  if (scopeTenantId) query = query.eq("tenant_id", scopeTenantId);
+
+  const { data, error } = await query;
   if (error) {
     console.error("[gateway-ingest] list-locations error:", error.message);
     return json({ success: false, error: "Internal error" }, 500);
@@ -225,7 +238,7 @@ async function handleListLocations(): Promise<Response> {
   return json({ success: true, locations: data || [] });
 }
 
-async function handleListMeters(url: URL): Promise<Response> {
+async function handleListMeters(url: URL, scopeTenantId: string | null): Promise<Response> {
   const supabase = getSupabase();
   const locationId = url.searchParams.get("location_id");
 
@@ -254,6 +267,7 @@ async function handleListMeters(url: URL): Promise<Response> {
     `)
     .eq("is_archived", false);
 
+  if (scopeTenantId) query = query.eq("tenant_id", scopeTenantId);
   if (locationId) {
     query = query.eq("location_id", locationId);
   }
@@ -267,7 +281,7 @@ async function handleListMeters(url: URL): Promise<Response> {
   return json({ success: true, meters: data || [] });
 }
 
-async function handleGetDailyTotals(url: URL): Promise<Response> {
+async function handleGetDailyTotals(url: URL, scopeTenantId: string | null): Promise<Response> {
   const range = parseDateRange(url);
   if (!range) {
     return json({ error: "Parameters 'from' and 'to' required (ISO date, max 90 days)" }, 400);
@@ -282,14 +296,25 @@ async function handleGetDailyTotals(url: URL): Promise<Response> {
 
   const supabase = getSupabase();
 
-  // If location_id provided but no meter_ids, resolve meters first
+  // If explicit meter_ids supplied, restrict them to scope tenant
   let resolvedMeterIds = meterIds;
+  if (resolvedMeterIds.length > 0 && scopeTenantId) {
+    const { data: own } = await supabase
+      .from("meters")
+      .select("id")
+      .eq("tenant_id", scopeTenantId)
+      .in("id", resolvedMeterIds);
+    resolvedMeterIds = (own || []).map((m: { id: string }) => m.id);
+  }
+
   if (resolvedMeterIds.length === 0 && locationId) {
-    const { data: meters, error: mErr } = await supabase
+    let q = supabase
       .from("meters")
       .select("id")
       .eq("location_id", locationId)
       .eq("is_archived", false);
+    if (scopeTenantId) q = q.eq("tenant_id", scopeTenantId);
+    const { data: meters, error: mErr } = await q;
     if (mErr) return json({ error: "Internal error" }, 500);
     resolvedMeterIds = (meters || []).map((m: { id: string }) => m.id);
   }
@@ -357,7 +382,7 @@ async function handleGetDailyTotals(url: URL): Promise<Response> {
   return json({ success: true, daily_totals: results });
 }
 
-async function handleGetReadings(url: URL): Promise<Response> {
+async function handleGetReadings(url: URL, scopeTenantId: string | null): Promise<Response> {
   const range = parseDateRange(url);
   if (!range) {
     return json({ error: "Parameters 'from' and 'to' required (ISO date, max 90 days)" }, 400);
@@ -373,12 +398,22 @@ async function handleGetReadings(url: URL): Promise<Response> {
   const supabase = getSupabase();
 
   let resolvedMeterIds = meterIds;
+  if (resolvedMeterIds.length > 0 && scopeTenantId) {
+    const { data: own } = await supabase
+      .from("meters")
+      .select("id")
+      .eq("tenant_id", scopeTenantId)
+      .in("id", resolvedMeterIds);
+    resolvedMeterIds = (own || []).map((m: { id: string }) => m.id);
+  }
   if (resolvedMeterIds.length === 0 && locationId) {
-    const { data: meters, error: mErr } = await supabase
+    let q = supabase
       .from("meters")
       .select("id")
       .eq("location_id", locationId)
       .eq("is_archived", false);
+    if (scopeTenantId) q = q.eq("tenant_id", scopeTenantId);
+    const { data: meters, error: mErr } = await q;
     if (mErr) return json({ error: "Internal error" }, 500);
     resolvedMeterIds = (meters || []).map((m: { id: string }) => m.id);
   }
@@ -410,9 +445,10 @@ async function handleGetReadings(url: URL): Promise<Response> {
   });
 }
 
-async function handleGetLocationsSummary(url: URL): Promise<Response> {
+
+async function handleGetLocationsSummary(url: URL, scopeTenantId: string | null): Promise<Response> {
   const supabase = getSupabase();
-  const tenantId = url.searchParams.get("tenant_id");
+  const tenantId = scopeTenantId ?? url.searchParams.get("tenant_id");
 
   let locQuery = supabase
     .from("locations")
@@ -462,8 +498,8 @@ async function handleGetLocationsSummary(url: URL): Promise<Response> {
 /* ── POST Route handlers ─────────────────────────────────────────────────────── */
 
 async function handleCompactDay(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   const supabase = getSupabase();
 
@@ -562,8 +598,8 @@ async function handleCompactDay(req: Request): Promise<Response> {
 }
 
 async function handlePostReadings(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: { readings?: PowerReading[] };
   try {
@@ -737,8 +773,8 @@ async function validateBasicAuth(
   }
 
   // Fall back to API key auth
-  const apiKeyErr = await validateApiKey(req);
-  if (apiKeyErr) return apiKeyErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   // If using API key, load config from any matching integration for this tenant
   const locIntegrations = await findSchneiderIntegrations();
@@ -859,8 +895,8 @@ async function handleSchneiderPush(req: Request): Promise<Response> {
 /* ── Heartbeat handler ────────────────────────────────────────────────────────── */
 
 async function handleHeartbeat(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: {
     device_name?: string;
@@ -1044,8 +1080,8 @@ async function handleHeartbeat(req: Request): Promise<Response> {
  * POST ?action=worker-heartbeat   Body: { worker_id?: string, version?: string }
  */
 async function handleWorkerHeartbeat(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: { worker_id?: string; version?: string } = {};
   try { body = await req.json(); } catch { /* body optional */ }
@@ -1069,8 +1105,8 @@ async function handleWorkerHeartbeat(req: Request): Promise<Response> {
 /* ── Gateway backup handler ──────────────────────────────────────────────────── */
 
 async function handleGatewayBackup(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: {
     tenant_id?: string;
@@ -1133,7 +1169,7 @@ async function handleAddonVersion(): Promise<Response> {
 async function validateApiKeyOrAdmin(req: Request): Promise<Response | null> {
   // Try API key first
   const apiKeyResult = await validateApiKey(req);
-  if (!apiKeyResult) return null; // API key is valid
+  if (!isAuthError(apiKeyResult)) return null; // API key is valid
 
   // Fall back to JWT auth for admin users
   const authHeader = req.headers.get("Authorization") || "";
@@ -1368,8 +1404,8 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
 /* ── Push Execution Logs handler (Hub → Cloud) ────────────────────────────────── */
 
 async function handlePushExecutionLogs(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: {
     logs?: Array<{
@@ -1538,13 +1574,14 @@ Deno.serve(async (req) => {
 
   // GET routes
   if (req.method === "GET") {
-    const authErr = await validateApiKey(req);
-    if (authErr) return authErr;
-    if (action === "list-locations") return handleListLocations();
-    if (action === "list-meters") return handleListMeters(url);
-    if (action === "get-daily-totals") return handleGetDailyTotals(url);
-    if (action === "get-readings") return handleGetReadings(url);
-    if (action === "get-locations-summary") return handleGetLocationsSummary(url);
+    const _auth = await validateApiKey(req);
+    if (isAuthError(_auth)) return _auth;
+    const scopeTenantId = _auth.tenantId; // null = global server key (trusted)
+    if (action === "list-locations") return handleListLocations(scopeTenantId);
+    if (action === "list-meters") return handleListMeters(url, scopeTenantId);
+    if (action === "get-daily-totals") return handleGetDailyTotals(url, scopeTenantId);
+    if (action === "get-readings") return handleGetReadings(url, scopeTenantId);
+    if (action === "get-locations-summary") return handleGetLocationsSummary(url, scopeTenantId);
     if (action === "addon-version") return handleAddonVersion();
     if (action === "sync-automations") return handleSyncAutomations(url, req);
   }

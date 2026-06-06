@@ -90,8 +90,13 @@ const SuperAdminUsers = () => {
       <main className="flex-1 overflow-auto">
         <header className="border-b p-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">{t("users.title")}</h1>
-            <p className="text-sm text-muted-foreground mt-1">{t("users.subtitle")}</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">{t("users.title")}</h1>
+              <Badge variant="secondary">Nur Plattform-User</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              {t("users.subtitle")} — Mandanten-User werden ausschließlich in der jeweiligen Tenant-Benutzerverwaltung verwaltet.
+            </p>
           </div>
           <SuperAdminInviteDialog />
         </header>

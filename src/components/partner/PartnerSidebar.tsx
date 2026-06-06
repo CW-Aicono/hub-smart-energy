@@ -1,26 +1,28 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Building2, LogOut, Briefcase, Users, Receipt, Cpu, ListChecks } from "lucide-react";
+import { LayoutDashboard, Building2, LogOut, Briefcase, Users, Receipt, Cpu, ListChecks, Palette, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
 
-const NAV = [
-  { to: "/partner", icon: LayoutDashboard, label: "Übersicht", end: true },
-  { to: "/partner/tenants", icon: Building2, label: "Meine Tenants" },
-  { to: "/partner/billing", icon: Receipt, label: "Abrechnung" },
-  { to: "/partner/members", icon: Users, label: "Partner-User" },
-  { to: "/partner/sales/catalog", icon: Cpu, label: "Geräte-Katalog" },
-  { to: "/partner/sales/rules", icon: ListChecks, label: "Auswahl-Regeln" },
-  { to: "/sales", icon: Briefcase, label: "Sales Scout" },
-];
-
 export default function PartnerSidebar() {
   const { user, signOut } = useAuth();
-  const { partnerName, partnerLogoUrl } = usePartnerAccess();
+  const { partnerName, partnerLogoUrl, isPartnerAdmin, permissions } = usePartnerAccess();
   const navigate = useNavigate();
   const initials = (partnerName || user?.email || "P").substring(0, 2).toUpperCase();
+
+  const NAV: Array<{ to: string; icon: any; label: string; end?: boolean; show: boolean }> = [
+    { to: "/partner", icon: LayoutDashboard, label: "Übersicht", end: true, show: true },
+    { to: "/partner/tenants", icon: Building2, label: "Meine Tenants", show: true },
+    { to: "/partner/reporting", icon: BarChart3, label: "Reporting", show: permissions.viewBilling },
+    { to: "/partner/billing", icon: Receipt, label: "Abrechnung", show: permissions.viewBilling },
+    { to: "/partner/branding", icon: Palette, label: "Branding", show: isPartnerAdmin },
+    { to: "/partner/members", icon: Users, label: "Partner-User", show: true },
+    { to: "/partner/sales/catalog", icon: Cpu, label: "Geräte-Katalog", show: permissions.manageSalesCatalog },
+    { to: "/partner/sales/rules", icon: ListChecks, label: "Auswahl-Regeln", show: permissions.manageSalesCatalog },
+    { to: "/sales", icon: Briefcase, label: "Sales Scout", show: permissions.useSalesScout },
+  ];
 
   return (
     <aside className="hidden md:flex flex-col w-64 shrink-0 border-r bg-card sticky top-0 h-screen">
@@ -39,7 +41,7 @@ export default function PartnerSidebar() {
       </div>
 
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {NAV.map((item) => (
+        {NAV.filter((i) => i.show).map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -63,7 +65,7 @@ export default function PartnerSidebar() {
         </Avatar>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{user?.email}</p>
-          <p className="text-xs text-muted-foreground">Partner-Admin</p>
+          <p className="text-xs text-muted-foreground">{isPartnerAdmin ? "Partner-Admin" : "Partner-User"}</p>
         </div>
         <Button
           variant="ghost"

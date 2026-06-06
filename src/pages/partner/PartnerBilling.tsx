@@ -18,7 +18,8 @@ const fmtEur = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits:
 const fmtPct = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " %";
 
 export default function PartnerBilling() {
-  const { partnerId, loading, isPartnerAdmin } = usePartnerAccess();
+  const { partnerId, loading, isPartnerAdmin, permissions } = usePartnerAccess();
+  const canEditPrices = permissions.viewBilling;
   const qc = useQueryClient();
   const [sector, setSector] = useState<"kommune" | "industrie">("kommune");
 
@@ -273,7 +274,7 @@ export default function PartnerBilling() {
                           recommended={recommended}
                           sale={sale}
                           margin={margin}
-                          disabled={!isPartnerAdmin}
+                          disabled={!canEditPrices}
                           onSave={(val) =>
                             saveSale.mutate({ moduleCode: mod.code, value: val })
                           }
@@ -285,7 +286,7 @@ export default function PartnerBilling() {
                 <p className="text-xs text-muted-foreground mt-4">
                   <strong>Einkauf</strong>: vereinbarter Partner-Einstandspreis bei AICONO.{" "}
                   <strong>Empf. Verkaufspreis</strong>: empfohlener Endkundenpreis (auch Default für deinen Verkaufspreis).{" "}
-                  {isPartnerAdmin ? "Du kannst deinen Verkaufspreis frei festlegen." : "Nur Partner-Admins können Preise ändern."}
+                  {canEditPrices ? "Du kannst deinen Verkaufspreis frei festlegen." : 'Nur Mitglieder mit Berechtigung „Abrechnung" können Preise ändern.'}
                 </p>
               </CardContent>
             </Card>
