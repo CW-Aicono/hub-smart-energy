@@ -174,44 +174,47 @@ export default function SingleChargePointMap({
       )}
 
 
-      <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
-        {!alwaysEditable && (
+      {!readOnly && (
+        <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
+          {!alwaysEditable && (
+            <Button
+              size={editMode ? "default" : "icon"}
+              variant={editMode ? "default" : "secondary"}
+              className={cn(
+                "shadow-lg backdrop-blur-sm border",
+                editMode
+                  ? "rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+                  : "h-10 w-10 rounded-full bg-background/95",
+              )}
+              onClick={() => setEditMode((v) => !v)}
+            >
+              {editMode ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  Fertig
+                </>
+              ) : (
+                <Move className="h-5 w-5" />
+              )}
+            </Button>
+          )}
           <Button
-            size={editMode ? "default" : "icon"}
-            variant={editMode ? "default" : "secondary"}
-            className={cn(
-              "shadow-lg backdrop-blur-sm border",
-              editMode
-                ? "rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-                : "h-10 w-10 rounded-full bg-background/95",
-            )}
-            onClick={() => setEditMode((v) => !v)}
+            size="icon"
+            variant="secondary"
+            className="h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border"
+            onClick={handleLocate}
+            disabled={locating}
+            title="Mein Standort"
           >
-            {editMode ? (
-              <>
-                <Check className="h-4 w-4" />
-                Fertig
-              </>
+            {locating ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
-              <Move className="h-5 w-5" />
+              <LocateFixed className="h-5 w-5" />
             )}
           </Button>
-        )}
-        <Button
-          size="icon"
-          variant="secondary"
-          className="h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border"
-          onClick={handleLocate}
-          disabled={locating}
-          title="Mein Standort"
-        >
-          {locating ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <LocateFixed className="h-5 w-5" />
-          )}
-        </Button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
+
