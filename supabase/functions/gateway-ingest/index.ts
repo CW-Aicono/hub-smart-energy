@@ -382,7 +382,7 @@ async function handleGetDailyTotals(url: URL, scopeTenantId: string | null): Pro
   return json({ success: true, daily_totals: results });
 }
 
-async function handleGetReadings(url: URL): Promise<Response> {
+async function handleGetReadings(url: URL, scopeTenantId: string | null): Promise<Response> {
   const range = parseDateRange(url);
   if (!range) {
     return json({ error: "Parameters 'from' and 'to' required (ISO date, max 90 days)" }, 400);
@@ -398,12 +398,22 @@ async function handleGetReadings(url: URL): Promise<Response> {
   const supabase = getSupabase();
 
   let resolvedMeterIds = meterIds;
+  if (resolvedMeterIds.length > 0 && scopeTenantId) {
+    const { data: own } = await supabase
+      .from("meters")
+      .select("id")
+      .eq("tenant_id", scopeTenantId)
+      .in("id", resolvedMeterIds);
+    resolvedMeterIds = (own || []).map((m: { id: string }) => m.id);
+  }
   if (resolvedMeterIds.length === 0 && locationId) {
-    const { data: meters, error: mErr } = await supabase
+    let q = supabase
       .from("meters")
       .select("id")
       .eq("location_id", locationId)
       .eq("is_archived", false);
+    if (scopeTenantId) q = q.eq("tenant_id", scopeTenantId);
+    const { data: meters, error: mErr } = await q;
     if (mErr) return json({ error: "Internal error" }, 500);
     resolvedMeterIds = (meters || []).map((m: { id: string }) => m.id);
   }
