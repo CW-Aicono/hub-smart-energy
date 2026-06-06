@@ -60,6 +60,12 @@ export default function SalesProjects() {
             <Skeleton key={i} className="h-24 w-full" />
           ))}
         </div>
+      ) : errorMsg ? (
+        <QueryErrorState
+          title="Projekte konnten nicht geladen werden"
+          message={errorMsg}
+          onRetry={load}
+        />
       ) : projects.length === 0 ? (
         <div className="text-center py-16 space-y-4">
           <Briefcase className="h-12 w-12 mx-auto text-muted-foreground" />
