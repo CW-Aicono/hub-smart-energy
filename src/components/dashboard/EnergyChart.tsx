@@ -7,6 +7,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import PeriodPickerLabel from "./PeriodPickerLabel";
 import { useEnergyData } from "@/hooks/useEnergyData";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocations } from "@/hooks/useLocations";
@@ -666,7 +667,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOffset((o) => o - 1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-xs text-muted-foreground min-w-[160px] text-center">{periodLabel}</span>
+            <PeriodPickerLabel period={period} label={periodLabel} className="min-w-[160px]" />
             <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((o) => o + 1)}>
               <ChevronRight className="h-4 w-4" />
             </Button>

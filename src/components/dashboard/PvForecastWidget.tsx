@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sun, CloudSun, Sparkles, ChevronLeft, ChevronRight, CloudOff } from "lucide-react";
+import PeriodPickerLabel from "./PeriodPickerLabel";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
@@ -477,7 +478,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOffset((value) => value - 1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-xs text-muted-foreground min-w-[180px] text-center">{periodLabel}</span>
+            <PeriodPickerLabel period={selectedPeriod} label={periodLabel} className="min-w-[180px]" />
             <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((value) => value + 1)}>
               <ChevronRight className="h-4 w-4" />
             </Button>
