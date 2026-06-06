@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { SharingLayout } from "@/components/sharing/SharingLayout";
 import { SharingMemberGuard } from "@/components/sharing/SharingMemberGuard";
 import { useMyMembership } from "@/hooks/useMyMembership";
 import { Button } from "@/components/ui/button";
+import { QueryErrorState } from "@/components/common/QueryErrorState";
 
 function InvoicesContent() {
   const { data: membership } = useMyMembership();
@@ -15,7 +17,7 @@ function InvoicesContent() {
     document.title = "Rechnungen — Meine Energie-Community";
   }, []);
 
-  const { data: invoices, isLoading } = useQuery({
+  const { data: invoices, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["my-invoices", memberId],
     enabled: !!memberId,
     queryFn: async () => {
@@ -29,12 +31,23 @@ function InvoicesContent() {
     },
   });
 
+  useEffect(() => {
+    if (isError && error) {
+      toast.error("Rechnungen konnten nicht geladen werden", {
+        description: (error as Error).message,
+      });
+    }
+  }, [isError, error]);
+
   const handleDownload = async (path: string | null) => {
     if (!path) return;
     const { data, error } = await supabase.storage
       .from("community-invoices")
       .createSignedUrl(path, 60);
-    if (error || !data?.signedUrl) return;
+    if (error || !data?.signedUrl) {
+      toast.error("PDF konnte nicht geöffnet werden", { description: error?.message });
+      return;
+    }
     window.open(data.signedUrl, "_blank");
   };
 
@@ -44,6 +57,12 @@ function InvoicesContent() {
         <div className="flex justify-center py-12">
           <Loader2 className="h-5 w-5 animate-spin text-primary" />
         </div>
+      ) : isError ? (
+        <QueryErrorState
+          title="Rechnungen konnten nicht geladen werden"
+          message={(error as Error)?.message ?? "Unbekannter Fehler"}
+          onRetry={() => refetch()}
+        />
       ) : !invoices?.length ? (
         <div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
           Noch keine Rechnungen vorhanden.
