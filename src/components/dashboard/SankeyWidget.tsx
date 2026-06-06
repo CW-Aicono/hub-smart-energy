@@ -73,40 +73,70 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const { meters } = useMeters();
   const { prices, loading: pricesLoading } = useEnergyPrices();
   const svgRef = useRef<SVGSVGElement>(null);
-  const { selectedPeriod: period, setSelectedPeriod: setPeriod } = useDashboardFilter();
+  const { selectedPeriod: period, setSelectedPeriod: setPeriod, selectedOffset: offset, setSelectedOffset: setOffset } = useDashboardFilter();
   const weekStartsOn = useWeekStartDay();
   const [viewMode, setViewMode] = useState<SankeyViewMode>("leistung");
   const allowedTypes = useLocationEnergyTypesSet(locationId);
   const { currentPrice: currentSpotPrice } = useSpotPrices();
 
-  // Compute date range for DB query (always current period, no offset)
-  const { rangeStart, rangeEnd } = useMemo(() => {
+  // Compute reference date and range based on selected period + offset (back/forward arrows)
+  const refDate = useMemo(() => {
     const now = new Date();
+    switch (period) {
+      case "day": return addDays(now, offset);
+      case "week": return addWeeks(now, offset);
+      case "month": return addMonths(now, offset);
+      case "quarter": return addQuarters(now, offset);
+      case "year": return addYears(now, offset);
+      default: return now;
+    }
+  }, [period, offset]);
+
+  const { rangeStart, rangeEnd } = useMemo(() => {
     let start: Date;
     let end: Date;
     switch (period) {
       case "week":
-        start = startOfWeek(now, { weekStartsOn });
-        end = endOfWeek(now, { weekStartsOn });
+        start = startOfWeek(refDate, { weekStartsOn });
+        end = endOfWeek(refDate, { weekStartsOn });
         break;
       case "month":
-        start = startOfMonth(now);
-        end = endOfMonth(now);
+        start = startOfMonth(refDate);
+        end = endOfMonth(refDate);
         break;
       case "quarter":
-        start = startOfQuarter(now);
-        end = endOfQuarter(now);
+        start = startOfQuarter(refDate);
+        end = endOfQuarter(refDate);
         break;
       case "year":
-        start = startOfYear(now);
-        end = endOfYear(now);
+        start = startOfYear(refDate);
+        end = endOfYear(refDate);
+        break;
+      case "all":
+        start = new Date(0);
+        end = new Date();
         break;
       default:
-        start = startOfDay(now);
-        end = now;
+        start = startOfDay(refDate);
+        end = endOfDay(refDate);
     }
     return { rangeStart: start, rangeEnd: end };
-  }, [period, weekStartsOn]);
+  }, [period, weekStartsOn, refDate]);
+
+  const periodLabel = useMemo(() => {
+    switch (period) {
+      case "day": return format(refDate, "EEEE, d. MMM yyyy", { locale: de });
+      case "week": return `KW ${getISOWeek(refDate)}, ${format(refDate, "yyyy")}`;
+      case "month": return format(refDate, "MMMM yyyy", { locale: de });
+      case "quarter": return `Q${Math.floor(refDate.getMonth() / 3) + 1} ${format(refDate, "yyyy")}`;
+      case "year": return format(refDate, "yyyy");
+      default: return T("chart.periodAll");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, refDate]);
+
+  const canGoForward = period !== "all" && offset < 0;
+  const todayInRange = new Date() >= rangeStart && new Date() <= rangeEnd;
 
   // Fetch DB-backed period sums for non-day periods
   const mainAutoMeterIds = useMemo(
