@@ -1,56 +1,66 @@
-# Welle 6 — Super-Admin Komfort
+# Welle 5 — Backend-Härtung & Performance
 
-Umfang: X1 (Map in Sidebar), X2 (Partner-Edit mit Tabs), X4 (Monitoring Alert-Regeln), X5 (Statistics historisch). X3 (Lexware) bleibt explizit aus.
+## Verifikation (Ist-Zustand)
 
-## X1 — Map in SuperAdminSidebar
-- `src/components/super-admin/SuperAdminSidebar.tsx`: neuen Eintrag `{ to: "/super-admin/map", icon: Map, label: "Karte" }` zwischen `gateways` und `monitoring` ergänzen.
-- `Map`-Icon aus `lucide-react` importieren.
-- Keine Routing-Änderung nötig (Route existiert bereits in `App.tsx`).
 
-## X2 — Partner-Edit-Dialog mit Tabs „Basis | Billing | Branding"
-- `src/pages/SuperAdminPartners.tsx`: Edit-Dialog (`editOpen`) umschließen mit `<Tabs defaultValue="basic">`.
-  - **Basis**: Name, Slug (inkl. Slug-Check), E-Mail, Subdomain, Aktiv-Toggle.
-  - **Billing**: BillingMode (wholesale/commission) + CommissionPct.
-  - **Branding**: WhiteLabel-Toggle + alle bestehenden White-Label-Felder (BrandDisplayName, CustomDomain, Primary/Secondary/AccentColor, SupportEmail, LogoUrl/Upload).
-- Reine UI-Umgruppierung — bestehende State-Variablen, Save-Logik und Validierung bleiben unverändert.
-- Speichern-/Abbrechen-Footer bleibt außerhalb der Tabs.
+| Pkt | Befund                                                                                                                                              | Status                                                                 |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| B1  | `ingest-node-metrics`: Wildcard-CORS (`*`), `provided !== expected` String-Compare, kein Rate-Limit.                                                | **Offen**                                                              |
+| B2  | `community-marketplace-public`: nur E-Mail-Dedup (24h), IP wird zwar erfasst, aber nicht limitiert.                                                 | **Offen**                                                              |
+| B3  | Cron `cleanup-node-metrics-daily` (03:15) existiert bereits, ruft `cleanup_old_node_metrics()` (>7 Tage).                                           | **Erledigt** (Hinweis: Retention 7 Tage, nicht 30 — siehe Frage unten) |
+| B4  | Crons `aggregate-pv-actual-hourly` (5 * * * *) und `ppa-alert-check-daily` (30 6 * * *) sind aktiv.                                                 | **Erledigt**                                                           |
+| B5  | Indizes auf `meter_power_readings`: `(meter_id, recorded_at)` + `(recorded_at)`. Kein Index `(tenant_id, recorded_at DESC)`.                        | **Offen**                                                              |
+| B6  | `supabase_realtime` enthält `meter_power_readings`, aber **nicht** `meter_power_readings_5min`.                                                     | **Offen**                                                              |
+| B7  | `QueryClient` in `src/App.tsx`: `refetchOnWindowFocus: false`, `staleTime: 5 min`.                                                                  | **Erledigt**                                                           |
+| B8  | `useCopilotAnalysis`: History-Query ohne `staleTime`. AI-Calls selbst sind Mutations (kein Cache-Refetch-Problem), aber History sollte stabil sein. | **Teilweise offen**                                                    |
 
-## X4 — Monitoring Alert-Regeln
-**DB-Migration** (`monitoring_alert_rules`):
-- Felder: `metric_category` (text), `metric_name` (text), `comparator` (enum: `>`, `>=`, `<`, `<=`), `threshold` (numeric), `severity` (enum: `info`, `warning`, `critical`), `enabled` (bool, default true), `notify_email` (text, nullable), `created_by` (uuid).
-- GRANTs für `authenticated` + `service_role`.
-- RLS: nur `super_admin` (über `has_role`) darf lesen/schreiben.
-- Unique-Constraint `(metric_category, metric_name, comparator)`.
 
-**UI** (`src/pages/SuperAdminMonitoring.tsx`):
-- Neue Card „Alert-Regeln" oberhalb der Health-Sektion.
-- Tabelle: Kategorie, Metrik, Vergleich, Schwellwert, Severity, Status, Aktionen.
-- „Regel hinzufügen"-Dialog mit Select (Kategorie/Metrik aus bekannten Metriken: `db_connections`, `disk_usage`, `app_counts`, …), Comparator, Threshold, Severity, optionale Notify-E-Mail.
-- Inline-Toggle für `enabled`, Löschen pro Zeile.
-- Auswertung clientseitig: für jede aktive Regel wird der letzte Wert (`getLatest`) geprüft; verletzte Regeln werden als Warn-Badge in der Card angezeigt. (Kein Mail-Versand in dieser Welle — Hook für späteren Edge-Job vorbereitet via `notify_email`-Spalte.)
+## Umsetzungsplan
 
-## X5 — Statistics-Historie
-**DB-Migration** (`platform_metrics`):
-- Felder: `recorded_at` (timestamptz, default now), `metric_key` (text, z. B. `mrr_eur`, `active_tenants`, `module_adoption_<modul>`), `metric_value` (numeric), `dimension` (text, nullable, für Modul-Namen).
-- Index `(metric_key, recorded_at desc)`.
-- GRANTs `authenticated` SELECT, `service_role` ALL. RLS: nur `super_admin` darf lesen.
-- Befüllung: in dieser Welle KEIN Cron — stattdessen liefert ein neuer Hook `useHistoricalPlatformMetrics()` Mock-/Live-Daten:
-  - Live aus vorhandener `platform_statistics`-Tabelle (bereits abgefragt in `usePlatformStats`) plus den neuen `platform_metrics`-Inserts (initial leer, später durch separaten Job).
-- Hinweis-Banner in UI: „Historie wird seit <erstes Datum> gesammelt".
+### B1 — `ingest-node-metrics` härten
 
-**UI** (`src/pages/SuperAdminStatistics.tsx`):
-- Bestehende 3 KPIs + 1 BarChart bleiben.
-- Neue Sektion „Verlauf":
-  - **LineChart MRR-Verlauf** (`metric_key = 'mrr_eur'`).
-  - **LineChart aktive Tenants über Zeit** (`metric_key = 'active_tenants'`).
-  - **PieChart Modul-Adoption** (Aggregation `metric_key LIKE 'module_adoption_%'`, letzter Wert pro `dimension`).
-- Zahlen mit `toLocaleString("de-DE")`.
+- `corsHeaders` ersetzen durch `getCorsHeaders(req)` aus `supabase/functions/_shared/cors.ts` (zusätzlich `x-node-token` in `Access-Control-Allow-Headers` aufnehmen).
+- Token-Vergleich auf konstante Laufzeit umstellen: eigener `timingSafeEqual(a, b)`-Helper in der Datei (Längen-Check + XOR-Schleife über `TextEncoder`-Bytes).
+- Simples DB-Rate-Limit: pro `node_name` max. 20 Inserts / Minute. Implementierung: vor Insert `count(*)` aus `node_metrics` für letzten 60s; bei Überschreitung HTTP 429 mit `Retry-After: 60`.
+
+### B2 — Marktplatz IP-Rate-Limit
+
+- In `community-marketplace-public` `/join-request`: zusätzlich zur E-Mail-Dedup ein IP-Limit von **10 Anträgen / Stunde**.
+- Query: `count(*)` aus `community_join_requests` mit `source_ip = ip` und `created_at >= now() - 1h`.
+- Bei Überschreitung: HTTP 429 mit deutscher Fehlermeldung (analog zum bestehenden Stil).
+- Keine neue Tabelle nötig — `source_ip` wird heute schon geschrieben.
+
+### B5 — Index `meter_power_readings(tenant_id, recorded_at DESC)`
+
+- Migration: `CREATE INDEX CONCURRENTLY` ist in Supabase-Migrations nicht erlaubt → normales `CREATE INDEX IF NOT EXISTS idx_mpr_tenant_recorded_at ON public.meter_power_readings (tenant_id, recorded_at DESC);`
+- Hinweis: Tabelle ist groß → Migration kann mehrere Minuten dauern (Lock auf Inserts während Build). Akzeptabel, da nachts deploybar.
+
+### B6 — Realtime-Publication für `meter_power_readings_5min`
+
+- Migration: `ALTER PUBLICATION supabase_realtime ADD TABLE public.meter_power_readings_5min;`
+- Replica Identity auf `FULL` setzen, damit Updates vollständig propagieren: `ALTER TABLE public.meter_power_readings_5min REPLICA IDENTITY FULL;`
+- `useRealtimeDataInvalidation` (siehe Memory) kann dadurch zusätzlich auf 5min-Inserts reagieren — Hook-Änderung ist **nicht Teil dieser Welle** (nur Infrastruktur).
+
+### B8 — Copilot staleTime
+
+- In `useCopilotAnalysis.tsx` der History-Query `staleTime: Infinity` + `gcTime: 30 * 60 * 1000` hinzufügen.
+- Invalidiert wird sie nach jeder erfolgreichen `runAnalysis` / `runSavingsAnalysis` ohnehin → kein veralteter Cache.
 
 ## Technische Details
-- Migration X4 + X5 als zwei getrennte SQL-Migrationen.
-- Kein Lexware-Code anfassen.
-- Keine neuen npm-Pakete (Recharts, shadcn Tabs/Dialog/Select bereits vorhanden).
-- Datei-Liste (geschätzt):
-  - edit: `SuperAdminSidebar.tsx`, `SuperAdminPartners.tsx`, `SuperAdminMonitoring.tsx`, `SuperAdminStatistics.tsx`
-  - new: `src/hooks/useMonitoringAlertRules.tsx`, `src/hooks/useHistoricalPlatformMetrics.tsx`, ggf. `src/components/super-admin/AlertRuleDialog.tsx`
-  - 2 DB-Migrationen
+
+**Geänderte Dateien (Code):**
+
+- `supabase/functions/ingest-node-metrics/index.ts`
+- `supabase/functions/community-marketplace-public/index.ts`
+- `src/hooks/useCopilotAnalysis.tsx`
+
+**Migrationen:**
+
+1. Index auf `meter_power_readings(tenant_id, recorded_at DESC)`
+2. Publication-ADD + Replica-Identity für `meter_power_readings_5min`
+
+**Keine neuen Pakete, keine Schema-Änderungen außer Index + Publication.**
+
+## Offene Frage
+
+B3 ist erledigt, aber der bestehende Cron löscht nach **7 Tagen** (`cleanup_old_node_metrics()`), die Anforderung nannte **30 Tage**. Soll die Funktion auf 30 Tage Retention erweitert werden, oder bleibt es bei 7 Tagen? Antwort: Nein, wir belassen den bestehenden Cron bei 7 Tagen.
