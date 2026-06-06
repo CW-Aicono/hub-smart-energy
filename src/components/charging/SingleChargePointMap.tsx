@@ -46,8 +46,11 @@ interface SingleChargePointMapProps {
   onPositionChange: (lat: number, lng: number) => void;
   /** When true, marker is always draggable and no edit toggle is shown. */
   alwaysEditable?: boolean;
+  /** When true, marker is locked: no drag, no edit/locate buttons, no hint banner. */
+  readOnly?: boolean;
   className?: string;
 }
+
 
 /**
  * A single-marker map for a charge point that lets the user drag the marker
