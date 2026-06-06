@@ -1702,6 +1702,15 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
               )}
             </TabsContent>
 
+            <TabsContent value="utilization" className="mt-6 space-y-6">
+              <UtilizationHeatmap sessions={sessions ?? []} />
+              <RoiCard
+                chargePointId={cp.id}
+                sessions={(sessions ?? []).map((s) => ({ start_time: s.start_time, energy_kwh: s.energy_kwh }))}
+                defaultSalePriceEurPerKwh={defaultSalePrice}
+              />
+            </TabsContent>
+
             <TabsContent value="maintenance" className="mt-6">
               <AutoRebootSettings
                 chargePoint={cp}
