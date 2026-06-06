@@ -33,6 +33,9 @@ import {
 } from "lucide-react";
 import { useOcppLiveData, useOcppCapabilities } from "@/hooks/useOcppLiveData";
 import { LiveDataPanel } from "@/components/charging/LiveDataPanel";
+import { UtilizationHeatmap } from "@/components/charging/UtilizationHeatmap";
+import { RoiCard } from "@/components/charging/RoiCard";
+import { useChargingTariffs } from "@/hooks/useChargingTariffs";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
 import { fmtKwh, fmtKw, fmtNum, normalizeConnectorStatus, isChargePointOnline } from "@/lib/formatCharging";
