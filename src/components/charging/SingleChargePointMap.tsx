@@ -62,8 +62,10 @@ export default function SingleChargePointMap({
   longitude,
   onPositionChange,
   alwaysEditable = false,
+  readOnly = false,
   className,
 }: SingleChargePointMapProps) {
+
   const isTouchDevice =
     typeof window !== "undefined" &&
     ("ontouchstart" in window || navigator.maxTouchPoints > 0);
