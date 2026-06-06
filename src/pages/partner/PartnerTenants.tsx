@@ -31,7 +31,8 @@ const slugify = (s: string) =>
     .replace(/^-+|-+$/g, "");
 
 export default function PartnerTenants() {
-  const { partnerId, isPartnerAdmin } = usePartnerAccess();
+  const { partnerId, isPartnerAdmin, permissions } = usePartnerAccess();
+  const canCreate = permissions.createTenant;
   const { toast } = useToast();
   const navigate = useNavigate();
   const [rows, setRows] = useState<Row[]>([]);
@@ -167,7 +168,7 @@ export default function PartnerTenants() {
           <h1 className="text-2xl font-bold">Meine Tenants</h1>
           <p className="text-muted-foreground">Alle Mandanten, die diesem Partner zugeordnet sind.</p>
         </div>
-        {isPartnerAdmin && (
+        {canCreate && (
           <Dialog open={createOpen} onOpenChange={(o) => { setCreateOpen(o); if (!o) resetForm(); }}>
             <DialogTrigger asChild>
               <Button><Plus className="h-4 w-4 mr-2" />Neuer Tenant</Button>
@@ -250,14 +251,18 @@ export default function PartnerTenants() {
               </TableHeader>
               <TableBody>
                 {filtered.map((r) => (
-                  <TableRow key={r.id}>
+                  <TableRow
+                    key={r.id}
+                    className="cursor-pointer hover:bg-muted/40"
+                    onClick={() => navigate(`/partner/tenants/${r.id}`)}
+                  >
                     <TableCell className="font-medium">{r.name ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{r.slug}</TableCell>
                     <TableCell className="text-muted-foreground">{r.contact_email ?? "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {new Date(r.created_at).toLocaleDateString("de-DE")}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       {isPartnerAdmin && (
                         <Button
                           variant="outline"

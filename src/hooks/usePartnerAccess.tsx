@@ -4,6 +4,13 @@ import { useAuth } from "./useAuth";
 
 export type PartnerRole = "partner_admin" | "partner_user";
 
+export interface PartnerPermissions {
+  manageSalesCatalog: boolean;
+  createTenant: boolean;
+  viewBilling: boolean;
+  useSalesScout: boolean;
+}
+
 interface PartnerAccessState {
   loading: boolean;
   isPartnerMember: boolean;
@@ -12,7 +19,22 @@ interface PartnerAccessState {
   partnerName: string | null;
   partnerLogoUrl: string | null;
   role: PartnerRole | null;
+  permissions: PartnerPermissions;
 }
+
+const NO_PERMS: PartnerPermissions = {
+  manageSalesCatalog: false,
+  createTenant: false,
+  viewBilling: false,
+  useSalesScout: false,
+};
+
+const ALL_PERMS: PartnerPermissions = {
+  manageSalesCatalog: true,
+  createTenant: true,
+  viewBilling: true,
+  useSalesScout: true,
+};
 
 const INITIAL: PartnerAccessState = {
   loading: true,
@@ -22,20 +44,15 @@ const INITIAL: PartnerAccessState = {
   partnerName: null,
   partnerLogoUrl: null,
   role: null,
+  permissions: NO_PERMS,
 };
 
-/**
- * Stufe 2 (Partner-Portal): liest die Mitgliedschaft des aktuellen
- * Users in einer Partner-Organisation. Liefert Partner-Stammdaten
- * (Name, Logo) für Header/Sidebar mit.
- */
 export function usePartnerAccess(): PartnerAccessState {
   const { user, loading: authLoading } = useAuth();
   const [state, setState] = useState<PartnerAccessState>(INITIAL);
 
   useEffect(() => {
     let cancelled = false;
-
     if (authLoading) return;
     if (!user) {
       setState({ ...INITIAL, loading: false });
@@ -45,12 +62,13 @@ export function usePartnerAccess(): PartnerAccessState {
     (async () => {
       const { data, error } = await supabase
         .from("partner_members")
-        .select("partner_role, partner_id, partners:partner_id(name, logo_url, is_active)")
+        .select(
+          "partner_role, partner_id, can_manage_sales_catalog, can_create_tenant, can_view_billing, can_use_sales_scout, partners:partner_id(name, logo_url, is_active)",
+        )
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (cancelled) return;
-
       const partner = (data as any)?.partners as
         | { name: string; logo_url: string | null; is_active: boolean }
         | null;
@@ -61,14 +79,25 @@ export function usePartnerAccess(): PartnerAccessState {
       }
 
       const role = (data as any).partner_role as PartnerRole;
+      const isAdmin = role === "partner_admin";
+      const permissions: PartnerPermissions = isAdmin
+        ? ALL_PERMS
+        : {
+            manageSalesCatalog: !!(data as any).can_manage_sales_catalog,
+            createTenant: !!(data as any).can_create_tenant,
+            viewBilling: !!(data as any).can_view_billing,
+            useSalesScout: (data as any).can_use_sales_scout !== false,
+          };
+
       setState({
         loading: false,
         isPartnerMember: true,
-        isPartnerAdmin: role === "partner_admin",
+        isPartnerAdmin: isAdmin,
         partnerId: (data as any).partner_id,
         partnerName: partner.name,
         partnerLogoUrl: partner.logo_url,
         role,
+        permissions,
       });
     })();
 

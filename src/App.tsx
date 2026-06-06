@@ -20,6 +20,9 @@ import PartnerMembers from "@/pages/partner/PartnerMembers";
 import PartnerBilling from "@/pages/partner/PartnerBilling";
 import PartnerSalesCatalog from "@/pages/partner/PartnerSalesCatalog";
 import PartnerSalesRules from "@/pages/partner/PartnerSalesRules";
+import PartnerBranding from "@/pages/partner/PartnerBranding";
+import PartnerReporting from "@/pages/partner/PartnerReporting";
+import PartnerTenantDetail from "@/pages/partner/PartnerTenantDetail";
 import RecoveryGuard from "@/components/RecoveryGuard";
 import MustChangePasswordGuard from "@/components/MustChangePasswordGuard";
 import TenantStatusGuard from "@/components/TenantStatusGuard";
@@ -284,7 +287,10 @@ const App = () => (
                       {/* Stufe 2: Partner-Portal (partner.aicono.org → /partner/*) */}
                       <Route path="/partner" element={<PartnerLayout><PartnerDashboard /></PartnerLayout>} />
                       <Route path="/partner/tenants" element={<PartnerLayout><PartnerTenants /></PartnerLayout>} />
+                      <Route path="/partner/tenants/:tenantId" element={<PartnerLayout><PartnerTenantDetail /></PartnerLayout>} />
+                      <Route path="/partner/reporting" element={<PartnerLayout><PartnerReporting /></PartnerLayout>} />
                       <Route path="/partner/billing" element={<PartnerLayout><PartnerBilling /></PartnerLayout>} />
+                      <Route path="/partner/branding" element={<PartnerLayout><PartnerBranding /></PartnerLayout>} />
                       <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
                       <Route path="/partner/sales/catalog" element={<PartnerLayout><PartnerSalesCatalog /></PartnerLayout>} />
                       <Route path="/partner/sales/rules" element={<PartnerLayout><PartnerSalesRules /></PartnerLayout>} />
