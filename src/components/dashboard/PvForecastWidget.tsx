@@ -477,7 +477,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOffset((value) => value - 1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-xs text-muted-foreground min-w-[180px] text-center">{periodLabel}</span>
+            <PeriodPickerLabel period={selectedPeriod} label={periodLabel} className="min-w-[180px]" />
             <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((value) => value + 1)}>
               <ChevronRight className="h-4 w-4" />
             </Button>
