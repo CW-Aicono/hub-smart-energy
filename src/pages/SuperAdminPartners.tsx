@@ -12,6 +12,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Briefcase, Loader2, Plus, Mail, Users, AlertCircle, CheckCircle2, Send } from "lucide-react";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 
@@ -580,7 +581,14 @@ export default function SuperAdminPartners() {
               Stammdaten des Partners anpassen.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <Tabs defaultValue="basic" className="py-2">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="basic">Basis</TabsTrigger>
+              <TabsTrigger value="billing">Billing</TabsTrigger>
+              <TabsTrigger value="branding">Branding</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="basic" className="space-y-3 pt-3">
             <div className="space-y-1.5">
               <Label htmlFor="e-name">Firmenname *</Label>
               <Input id="e-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
@@ -648,8 +656,9 @@ export default function SuperAdminPartners() {
               />
               <Label htmlFor="e-active" className="cursor-pointer">Partner aktiv</Label>
             </div>
+            </TabsContent>
 
-            <div className="border-t pt-3 mt-2 space-y-2">
+            <TabsContent value="billing" className="space-y-2 pt-3">
               <Label>Abrechnungsmodell</Label>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -688,10 +697,9 @@ export default function SuperAdminPartners() {
                   />
                 </div>
               )}
-            </div>
+            </TabsContent>
 
-            {/* Stage 7: White-Label / Custom Domain */}
-            <div className="border-t pt-3 mt-2 space-y-3">
+            <TabsContent value="branding" className="space-y-3 pt-3">
               <div className="flex items-center justify-between">
                 <Label className="text-base">White-Label</Label>
                 <div className="flex items-center gap-2">
@@ -841,8 +849,9 @@ export default function SuperAdminPartners() {
                   disabled={!editWhiteLabel}
                 />
               </div>
-            </div>
-          </div>
+            </TabsContent>
+          </Tabs>
+
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>Abbrechen</Button>
