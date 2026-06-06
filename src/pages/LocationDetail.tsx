@@ -15,6 +15,7 @@ import { MeterManagement } from "@/components/locations/MeterManagement";
 import { BrightHubSettings } from "@/components/settings/BrightHubSettings";
 import { EnergyPriceManagement } from "@/components/locations/EnergyPriceManagement";
 import { PvForecastSection } from "@/components/locations/PvForecastSection";
+import { DynamicDlmCard } from "@/components/charging/DynamicDlmCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
