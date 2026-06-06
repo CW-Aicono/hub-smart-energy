@@ -1,66 +1,104 @@
-# Welle 1 — Sicherheits-Sofortmaßnahmen (S1–S7)
+# Welle 3 — Partner-Portal Ausbau (P1–P5)
 
-Ziel: Sieben klar abgegrenzte Sicherheitslücken schließen, ohne neue Features zu bauen. Jede Maßnahme ist einzeln verifizierbar.
+Ziel: Das Partner-Portal von „read-only / Basis" zu einem voll nutzbaren Self-Service-Backend ausbauen — White-Label, Reporting, Tenant-Verwaltung, feingranulare Rechte, harte Server-Guards.
 
-## S1 — `charge-point-auto-reboot` absichern
-**Problem:** Edge Function läuft mit `verify_jwt=false` und ohne eigenen Auth-Check → jeder mit der URL kann beliebige Wallboxen rebooten.
+Reihenfolge: **P4 → P5 → P1 → P3 → P2** (erst Rechte- und Server-Härtung, dann UI-Erweiterungen, zuletzt das größte Feature Reporting).
+
+---
+
+## P4 — `usePartnerAccess` um granulare Permissions erweitern
+**Problem:** Hook liefert nur `isPartnerAdmin` / `isPartnerMember`. Die DB-Spalten `can_manage_sales_catalog`, `can_create_tenant`, `can_view_billing`, `can_use_sales_scout` (+ Funktion `partner_member_can`) existieren bereits, werden aber im UI nirgends gelesen → entweder „alles oder nichts".
+
 **Fix:**
-- In `supabase/functions/charge-point-auto-reboot/index.ts` Authorization-Header prüfen.
-- Zwei erlaubte Aufrufer: (a) Cron via `SUPABASE_SERVICE_ROLE_KEY` (Header-Vergleich), (b) eingeloggte User mit Tenant-Zugriff auf den Charge-Point via `getClaims()` + RLS-Check.
-- Bei Fehlauth → 401, sonst wie bisher.
+- `src/hooks/usePartnerAccess.tsx`: Select um die vier `can_*`-Spalten erweitern. State zusätzlich exposed:
+  ```ts
+  permissions: {
+    manageSalesCatalog: boolean;
+    createTenant: boolean;
+    viewBilling: boolean;
+    useSalesScout: boolean;
+  }
+  ```
+  `partner_admin` ⇒ alle `true` (Fallback wie heute).
+- Konsumenten anpassen:
+  - `PartnerSalesCatalog` / `PartnerSalesRules`: `canManage = permissions.manageSalesCatalog`.
+  - `PartnerBilling`: Sichtbarkeit der Seite an `permissions.viewBilling` koppeln (Route-Guard + Sidebar-Hide).
+  - `PartnerTenants`: Button „Tenant anlegen" an `permissions.createTenant`.
+  - Sales-Scout-Einträge (falls in Partner-Nav) an `permissions.useSalesScout`.
+- Sidebar `PartnerLayout`: Items conditionally rendern.
 
-## S2 — `gateway-ingest` GET-Routes mit Tenant-Scope
-**Problem:** GET-Endpoints nutzen Service-Role-Client ohne `eq("tenant_id", ...)` → Cross-Tenant-Lesezugriff möglich.
+---
+
+## P5 — `PartnerBilling.saveSale` hinter Server-Guard
+**Problem:** Frontend versteckt den Save-Button nur via `disabled={!isPartnerAdmin}` — ein manipulierter Request kann jeden Verkaufspreis ändern. RLS auf `partner_module_prices` (o.ä.) prüft den Rolle/Permission-Status nicht zwingend.
+
 **Fix:**
-- Tenant-ID aus dem Gateway-Key (bereits beim Auth-Schritt aufgelöst) in allen GET-Branches strikt als `.eq("tenant_id", gatewayTenantId)` an jede Query anhängen.
-- Code-Review: alle `supabase.from(...).select(...)` in `gateway-ingest/index.ts` GET-Pfade.
+- RLS-Policy der Preis-Tabelle so verschärfen, dass `INSERT`/`UPDATE` nur erlaubt ist, wenn `partner_member_can(auth.uid(),'view_billing')` **und** Mitglied des passenden `partner_id`. (Migration; vorher Tabellenname verifizieren — vermutlich `partner_module_prices` oder `partner_sales_prices`.)
+- Frontend: `saveSale.mutate` zusätzlich an `permissions.viewBilling` koppeln (statt nur `isPartnerAdmin`).
 
-## S3 — `PartnerTenants` Remote-Support-Button hinter `isPartnerAdmin`
-**Problem:** Button "Remote-Support starten" wird allen Partner-Membern angezeigt, nicht nur Admins.
+---
+
+## P1 — White-Label-Settings-Seite im Partner-Portal
+**Problem:** White-Label-Felder (`logo_url`, `primary_color`, `secondary_color`, `accent_color`, `brand_display_name`, `support_email`, `custom_domain`, `subdomain`, `white_label_enabled`) liegen in `partners`, sind aber heute nur über Super-Admin pflegbar. Partner-Admin hat keinen Self-Service.
+
 **Fix:**
-- In `src/pages/partner/PartnerTenants.tsx` Button nur rendern wenn `isPartnerAdmin === true`.
-- Server-seitig zusätzlich in der aufgerufenen Funktion `support-session-impersonate` den Role-Check ergänzen (falls noch nicht vorhanden).
+- Neue Seite `src/pages/partner/PartnerBranding.tsx` (Route `/partner/branding`, in Sidebar nur für `isPartnerAdmin`).
+- Felder als Form (react-hook-form + zod): Display-Name, Support-Email, drei Color-Pickers (HSL-Tokens), Logo-Upload (`partner-assets`-Bucket), Read-only: `custom_domain`/`subdomain`/`white_label_enabled` (mit Hinweis „bitte Super-Admin kontaktieren, um Domain freizuschalten").
+- Migration: RLS auf `partners` UPDATE für den eigenen Datensatz erlauben — Spalten-Whitelist via Trigger (`partners_partner_admin_update_guard`), der bei Änderung von `white_label_enabled`/`custom_domain`/`subdomain`/`commission_*`/`billing_*` durch Nicht-Super-Admins ein `RAISE EXCEPTION` wirft.
+- Storage-Policy `partner_assets_super_admin_write|update|delete` um Partner-Admin erweitern, scoped auf Pfadprefix `<partner_id>/`.
+- Live-Preview-Komponente: Header-Bar mit Logo + Farben rendern.
 
-## S4 — `support-session-impersonate` Refresh-Token revoken
-**Problem:** Beim Beenden der Support-Session bleibt der Refresh-Token gültig → Impersonation kann verlängert werden.
+---
+
+## P3 — `PartnerTenants` Detail- & Edit-View
+**Problem:** Tenant-Liste zeigt nur Stammdaten; kein Drilldown auf Standorte, Lizenzen, Module, Statusverlauf. Bearbeitung (Name, Kontakt, Notizen, Modul-Zuweisung) fehlt komplett.
+
 **Fix:**
-- Beim Session-Ende `supabase.auth.admin.signOut(userId, 'others')` mit Service-Role aufrufen, um alle Refresh-Tokens der Impersonation zu invalidieren.
-- Ablauf der Access-Tokens kurz halten (bereits konfiguriert prüfen).
+- Neue Route `/partner/tenants/:tenantId` → `PartnerTenantDetail.tsx`.
+  - Tabs: **Übersicht** (Stammdaten, Status, Lifecycle aus Welle 2 read-only sichtbar), **Standorte** (Liste), **Module/Lizenzen** (aktive Module + Plan), **Aktivität** (letzte Logins, letzter Gateway-Heartbeat).
+  - Edit-Dialog `PartnerTenantEditDialog`: Name, Kontaktdaten, Notiz, Sprache. Nur Felder, die der Partner verwalten darf (keine `status`/`tenant_id`/Billing-Felder).
+- RLS-Check: `tenants` UPDATE für Partner-Admin nur auf eigene Tenants — über `tenant_partner_links` / `partners.id` + `partner_member_can('create_tenant')` (separate Policy via Trigger-Whitelist analog P1).
+- `PartnerTenants.tsx`: Zeilen klickbar → Detail-Route. Bestehende Lifecycle-Buttons aus Welle 2 bleiben Super-Admin-only.
 
-## S5 — Sales-PWA `sales_projects` RLS verifizieren
-**Problem:** Queries in der Sales-PWA filtern clientseitig nicht auf `user_id`/`tenant_id`. RLS-Status unklar.
+---
+
+## P2 — Partner-Reporting & Analytics
+**Problem:** Partner sehen weder Umsatz pro Tenant noch aktive Module, Wachstum, MRR oder Tenant-Health. Es existiert keine Reporting-Seite.
+
 **Fix:**
-- RLS-Policies auf `sales_projects` prüfen und bei Bedarf nachziehen: Lese-/Schreibrechte nur für `auth.uid() = user_id` bzw. Mitglieder desselben Sales-Teams.
-- Bei vorhandener RLS: ok, keine Code-Änderung. Bei fehlender RLS: Migration mit Policies + GRANTs.
+- Neue Seite `src/pages/partner/PartnerReporting.tsx` (Route `/partner/reporting`, nur sichtbar mit `permissions.viewBilling`).
+- KPI-Kacheln (alle scoped auf Partner via RLS / RPC):
+  - Aktive Tenants, neue Tenants (30d), gesperrte/gelöschte Tenants
+  - MRR (Summe `monthly_price` aller aktiven Lizenzen)
+  - Provision/Marge (`commission_mode` aus `partners` + `partner_module_prices`)
+  - Aktive Module pro Tenant (Top-Liste)
+- Charts (recharts): Tenant-Wachstum 12 Monate, MRR-Verlauf 12 Monate, Modul-Verteilung (BarChart).
+- Datenzugriff über drei RPCs (read-only, SECURITY DEFINER, Partner-Scope):
+  - `partner_reporting_overview(_partner_id uuid)` → JSON KPIs
+  - `partner_reporting_growth(_partner_id uuid)` → monatliche Tenant-/MRR-Zeitreihen
+  - `partner_reporting_modules(_partner_id uuid)` → Modul-Aggregation
+  Innerhalb der RPCs jeweils `is_partner_member(auth.uid(), _partner_id)`-Check.
+- Export-Button: CSV-Download der KPI-Tabelle (jeden Wert via `toLocaleString("de-DE")`).
+- Performance: `staleTime: 5 * 60_000` auf alle drei Queries.
 
-## S6 — Storage-Buckets `floor-plans` / `floor-3d-models` privat
-**Problem:** Buckets sind `public=true` ohne Pfad-RLS → Grundrisse via direkte URL ohne Login abrufbar.
-**Fix:**
-- Beide Buckets auf `public=false` umstellen (`storage_update_bucket`).
-- RLS-Policies auf `storage.objects` schreiben: Lesen/Schreiben nur wenn `split_part(name, '/', 1)::uuid = tenant_id` des Users (gemäß Storage-RLS-Memory).
-- Im Frontend signed URLs statt public URLs nutzen, wo die Buckets eingebunden sind (Floorplan-Viewer, 3D-Viewer).
+---
 
-## S7 — `node_metrics` RLS einschränken
-**Problem:** SELECT-Policy erlaubt allen Authenticated → Infra-Metriken anderer Tenants einsehbar.
-**Fix:**
-- Migration: bestehende Policy droppen, neue Policy nur für Super-Admins (`has_role(auth.uid(), 'super_admin')`).
-- GRANTs prüfen (nur `authenticated` + `service_role`).
+## Cross-Cutting
 
-## Reihenfolge & Verifikation
-1. S6 + S7 (Migration + Storage) zuerst — DB-/Storage-Änderungen.
-2. S1, S2, S4 (Edge Functions) parallel.
-3. S3, S5 (Frontend + RLS-Check).
-4. Nach jedem Schritt: kurzer Smoke-Test (z. B. unauth Call auf `charge-point-auto-reboot` → 401, Public-URL auf Floorplan → 400/403, Cross-Tenant-Query auf `node_metrics` → leer).
+- **i18n:** Alle neuen Strings in DE/EN/ES/NL (4-Sprachen-Regel).
+- **Design:** AICONO CI (Blue/Teal/White), Capsule-Shapes, Montserrat/Inter, dunkle/helle Mode kompatibel. Status-Badges aus dem bestehenden Token-Set.
+- **Zahlenformat:** `toLocaleString("de-DE")` für alle KPIs/Charts/Exports.
+- **Sidebar:** `PartnerLayout` Items conditionally rendern nach P4-Permissions.
+- **Tests:** Smoke je Seite (Render, RLS-Block für nicht-berechtigte Partner-Members), 1 Unit-Test pro neuer RPC.
+
+## Verifikation pro Schritt
+1. P4: Member ohne `view_billing` sieht `PartnerBilling` nicht; `partner_admin` weiterhin alles.
+2. P5: Direct-Insert via SQL/curl als non-billing-Member → RLS lehnt ab.
+3. P1: Partner-Admin ändert Logo & Farben → Tenant-User mit eigener Subdomain sieht das geänderte Branding nach Reload.
+4. P3: Partner-Admin öffnet Tenant-Detail, ändert Name → erscheint in Super-Admin sofort. Cross-Partner-Zugriff per URL → RLS blockt.
+5. P2: KPIs konsistent mit Super-Admin-Statistiken (gleiche Tenants/MRR-Summen, gefiltert auf Partner).
 
 ## Nicht enthalten
-- Keine Feature-Erweiterungen (kommen ab Welle 2+).
-- Keine UI-Redesigns.
-- Keine Performance-Optimierungen (Welle 5).
-
-## Welle 2 — Status (umgesetzt)
-- A1: `must_change_password` Flag + `MustChangePasswordGuard` (App.tsx) + invite-tenant-admin setzt user_metadata
-- A2: Migration tenants.status/suspended_at/suspended_reason/deleted_at + Validation-Trigger; `useTenants` (suspend/reactivate/softDelete); `TenantLifecycleActions` + Status-Badge in SuperAdminTenants; `TenantStatusGuard` blockt gesperrte/gelöschte Mandanten
-- A3: SuperAdminLicenses Create/Edit/Cancel via `LicenseDialog`
-- A5: SuperAdminUsers — Plattform-Badge + erklärende Subline (strikte Trennung war bereits implementiert)
-
-Offen: A4 (Audit-Log) — separater Schritt.
+- Audit-Log (A4 — eigene Welle).
+- Lexware-Integration für Partner-eigene Rechnungen (Roadmap).
+- Multi-Tier-Partner (Partner-of-Partner) — nicht im Scope.
