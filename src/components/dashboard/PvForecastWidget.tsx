@@ -540,7 +540,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
                 <YAxis tick={{ fontSize: 10 }} width={35} tickFormatter={(v: number) => fmtNum(v, 0)} />
                 <Tooltip
                   formatter={(value: number, name: string) => [
-                    `${value.toFixed(1)} kWh`,
+                    `${fmtNum(value, 1)} kWh`,
                     name === "forecast" ? T("dashboard.pvForecast") : T("pv.actualGeneration"),
                   ]}
                 />
