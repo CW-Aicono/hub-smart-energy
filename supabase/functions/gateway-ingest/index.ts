@@ -238,7 +238,7 @@ async function handleListLocations(scopeTenantId: string | null): Promise<Respon
   return json({ success: true, locations: data || [] });
 }
 
-async function handleListMeters(url: URL): Promise<Response> {
+async function handleListMeters(url: URL, scopeTenantId: string | null): Promise<Response> {
   const supabase = getSupabase();
   const locationId = url.searchParams.get("location_id");
 
@@ -267,6 +267,7 @@ async function handleListMeters(url: URL): Promise<Response> {
     `)
     .eq("is_archived", false);
 
+  if (scopeTenantId) query = query.eq("tenant_id", scopeTenantId);
   if (locationId) {
     query = query.eq("location_id", locationId);
   }
@@ -280,7 +281,7 @@ async function handleListMeters(url: URL): Promise<Response> {
   return json({ success: true, meters: data || [] });
 }
 
-async function handleGetDailyTotals(url: URL): Promise<Response> {
+async function handleGetDailyTotals(url: URL, scopeTenantId: string | null): Promise<Response> {
   const range = parseDateRange(url);
   if (!range) {
     return json({ error: "Parameters 'from' and 'to' required (ISO date, max 90 days)" }, 400);
@@ -295,14 +296,25 @@ async function handleGetDailyTotals(url: URL): Promise<Response> {
 
   const supabase = getSupabase();
 
-  // If location_id provided but no meter_ids, resolve meters first
+  // If explicit meter_ids supplied, restrict them to scope tenant
   let resolvedMeterIds = meterIds;
+  if (resolvedMeterIds.length > 0 && scopeTenantId) {
+    const { data: own } = await supabase
+      .from("meters")
+      .select("id")
+      .eq("tenant_id", scopeTenantId)
+      .in("id", resolvedMeterIds);
+    resolvedMeterIds = (own || []).map((m: { id: string }) => m.id);
+  }
+
   if (resolvedMeterIds.length === 0 && locationId) {
-    const { data: meters, error: mErr } = await supabase
+    let q = supabase
       .from("meters")
       .select("id")
       .eq("location_id", locationId)
       .eq("is_archived", false);
+    if (scopeTenantId) q = q.eq("tenant_id", scopeTenantId);
+    const { data: meters, error: mErr } = await q;
     if (mErr) return json({ error: "Internal error" }, 500);
     resolvedMeterIds = (meters || []).map((m: { id: string }) => m.id);
   }
