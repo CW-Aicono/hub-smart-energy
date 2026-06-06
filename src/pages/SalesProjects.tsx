@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { SalesLayout, SalesFab } from "@/components/sales/SalesLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Briefcase, ChevronRight, MapPin } from "lucide-react";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
+import { QueryErrorState } from "@/components/common/QueryErrorState";
 
 interface SalesProject {
   id: string;
@@ -30,17 +32,25 @@ const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secon
 export default function SalesProjects() {
   const [projects, setProjects] = useState<SalesProject[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      const { data, error } = await supabase
-        .from("sales_projects")
-        .select("id, kunde_name, kontakt_name, status, adresse, created_at, updated_at")
-        .order("updated_at", { ascending: false });
-      if (!error && data) setProjects(data as unknown as SalesProject[]);
-      setLoading(false);
-    })();
+  const load = useCallback(async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    const { data, error } = await supabase
+      .from("sales_projects")
+      .select("id, kunde_name, kontakt_name, status, adresse, created_at, updated_at")
+      .order("updated_at", { ascending: false });
+    if (error) {
+      setErrorMsg(error.message);
+      toast.error("Projekte konnten nicht geladen werden", { description: error.message });
+    } else if (data) {
+      setProjects(data as unknown as SalesProject[]);
+    }
+    setLoading(false);
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   return (
     <SalesLayout title="Meine Projekte">
