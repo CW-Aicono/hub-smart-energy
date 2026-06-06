@@ -91,6 +91,8 @@ export function useCopilotAnalysis() {
   const { data: analyses = [], isLoading: isLoadingHistory } = useQuery({
     queryKey: ["copilot-analyses", tenantId],
     enabled: !!tenantId,
+    staleTime: Infinity,
+    gcTime: 30 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("copilot_analyses" as any)

@@ -88,6 +88,22 @@ Deno.serve(async (req) => {
 
       const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
 
+      // IP-Rate-Limit: max. 10 Anträge / Stunde pro IP (über alle Listings)
+      if (ip) {
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        const { count: ipCount } = await admin
+          .from("community_join_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("source_ip", ip)
+          .gte("created_at", oneHourAgo);
+        if ((ipCount ?? 0) >= 10) {
+          return json(
+            { error: "rate_limited", message: "Zu viele Anfragen. Bitte später erneut versuchen." },
+            429,
+          );
+        }
+      }
+
       const { error: insErr } = await admin.from("community_join_requests").insert({
         tenant_id: listing.tenant_id,
         community_id: listing.community_id,
