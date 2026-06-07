@@ -226,7 +226,7 @@ export async function verifyOcmfSignature(
     const sigBytes = decodeSignature(parsed.signature.SD, parsed.signature.SE);
     const rawSig = derToRaw(sigBytes, namedCurve === "P-384" ? 48 : 32);
 
-    const ok = await crypto.subtle.verify({ name: "ECDSA", hash }, cryptoKey, rawSig, data);
+    const ok = await crypto.subtle.verify({ name: "ECDSA", hash }, cryptoKey, rawSig as BufferSource, data as BufferSource);
     return ok ? "signed" : "invalid";
   } catch (e) {
     console.warn("[ocmf] verify failed:", (e as Error).message);
@@ -253,7 +253,6 @@ function decodeSignature(sd: string, encoding?: string): Uint8Array {
 function derToRaw(der: Uint8Array, intLen: number): Uint8Array {
   // Minimal DER parser for SEQUENCE { INTEGER r, INTEGER s }
   if (der[0] !== 0x30) {
-    // Already raw (r||s)?
     if (der.length === intLen * 2) return der;
     throw new Error("invalid DER signature");
   }
@@ -261,19 +260,18 @@ function derToRaw(der: Uint8Array, intLen: number): Uint8Array {
   if (der[1] & 0x80) offset += der[1] & 0x7f;
   if (der[offset] !== 0x02) throw new Error("DER: expected INTEGER for r");
   const rLen = der[offset + 1];
-  let r = der.slice(offset + 2, offset + 2 + rLen);
+  let r: Uint8Array = der.slice(offset + 2, offset + 2 + rLen);
   offset += 2 + rLen;
   if (der[offset] !== 0x02) throw new Error("DER: expected INTEGER for s");
   const sLen = der[offset + 1];
-  let s = der.slice(offset + 2, offset + 2 + sLen);
+  let s: Uint8Array = der.slice(offset + 2, offset + 2 + sLen);
 
-  // Strip leading zero / pad to intLen
-  const norm = (x: Uint8Array) => {
-    if (x.length > intLen) x = x.slice(x.length - intLen);
+  const norm = (x: Uint8Array): Uint8Array => {
+    if (x.length > intLen) return x.slice(x.length - intLen);
     if (x.length < intLen) {
       const padded = new Uint8Array(intLen);
       padded.set(x, intLen - x.length);
-      x = padded;
+      return padded;
     }
     return x;
   };
@@ -315,7 +313,7 @@ export async function publicKeyFingerprint(pem: string): Promise<string> {
     bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   }
-  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  const hash = await crypto.subtle.digest("SHA-256", bytes as BufferSource);
   return Array.from(new Uint8Array(hash))
     .map((b) => b.toString(16).padStart(2, "0").toUpperCase())
     .join(":");
