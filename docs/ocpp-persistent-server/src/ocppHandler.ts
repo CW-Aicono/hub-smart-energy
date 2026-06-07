@@ -5,6 +5,7 @@ import {
   createChargingSession,
   getChargingSessionByTransaction,
   insertMeterSamples,
+  insertOcmfRecord,
   updateChargePoint,
   updateChargingSession,
   updateConnectorStatus,
