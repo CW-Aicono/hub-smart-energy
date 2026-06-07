@@ -58,6 +58,10 @@ import SingleChargePointMap from "@/components/charging/SingleChargePointMap";
 import { AccessControlSettings, AccessSettings } from "@/components/charging/AccessControlSettings";
 import ChargePointSolarChargingConfig from "@/components/charging/ChargePointSolarChargingConfig";
 import ModbusInstancePanel from "@/components/charging/ModbusInstancePanel";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EichrechtTab } from "@/components/charging/EichrechtTab";
+import { ChargePointEichrechtForm } from "@/components/charging/ChargePointEichrechtForm";
+import { ShieldCheck } from "lucide-react";
 import { downloadSecureStorageObject } from "@/lib/secureStorage";
 
 const STATUS_KEYS: Record<string, { labelKey: string; color: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
