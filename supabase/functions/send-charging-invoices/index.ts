@@ -14,6 +14,23 @@ function formatDateDE(d: string): string {
   return d;
 }
 
+/**
+ * K1 Eichrecht: HMAC-SHA256 Token für public-ocmf-download.
+ * Muss identisch sein zur Berechnung in supabase/functions/public-ocmf-download.
+ */
+async function ocmfDownloadToken(sessionId: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(sessionId));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
 function getLastMonth(): { from: string; to: string; label: string } {
   const now = new Date();
   const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
@@ -535,12 +552,43 @@ serve(async (req) => {
                 `${downloadSection}\n  <!-- Footer -->`
               );
 
+              // K1 Eichrecht: pro Session OCMF-Download-Link (public, token-signiert)
+              let eichrechtSection = "";
+              try {
+                const ocmfSecret = Deno.env.get("OCMF_DOWNLOAD_SECRET") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+                const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+                const sessionsWithOcmf = userSessionList.filter((s: any) => s.ocmf_payload);
+                if (sessionsWithOcmf.length > 0 && ocmfSecret && supabaseUrl) {
+                  const items: string[] = [];
+                  for (const s of sessionsWithOcmf) {
+                    const tok = await ocmfDownloadToken(s.id, ocmfSecret);
+                    const url = `${supabaseUrl}/functions/v1/public-ocmf-download?session=${encodeURIComponent(s.id)}&token=${tok}`;
+                    const dateLabel = s.start_time ? new Date(s.start_time).toLocaleDateString("de-DE") : "";
+                    const tx = s.transaction_id ?? s.id.substring(0, 8);
+                    items.push(
+                      `<li style="margin:4px 0"><a href="${url}" style="color:${primaryColor};text-decoration:underline">Transaktion ${tx} (${dateLabel})</a></li>`,
+                    );
+                  }
+                  eichrechtSection = `<div style="margin:24px 0;padding:16px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc">
+                    <div style="font-size:14px;font-weight:600;margin-bottom:8px;color:#0f172a">🛡️ Eichrechtskonforme Transparenz-Belege (OCMF)</div>
+                    <div style="font-size:12px;color:#475569;margin-bottom:8px">Für jede Ladesitzung können Sie hier den signierten Messbeleg herunterladen und mit der Transparenzsoftware der S.A.F.E. e. V. prüfen:</div>
+                    <ul style="font-size:12px;color:#1e293b;padding-left:18px;margin:0">${items.join("")}</ul>
+                  </div>`;
+                }
+              } catch (ocmfErr: any) {
+                console.warn("[send-charging-invoices] OCMF section failed:", ocmfErr.message);
+              }
+
+              const emailHtmlFinal = (downloadSection || eichrechtSection)
+                ? emailHtml.replace("<!-- Footer -->", `${eichrechtSection}\n  <!-- Footer -->`)
+                : emailHtml;
+
               try {
                 await resend.emails.send({
                   from: resendFrom(tenantName || "Ladeinfrastruktur"),
                   to: [user.email],
                   subject: `Laderechnung ${invoiceNumber} – ${period.label}`,
-                  html: emailHtml,
+                  html: emailHtmlFinal,
                 });
                 tenantResult.emails_sent++;
               } catch (emailErr: any) {
