@@ -285,6 +285,15 @@ const ChargingBilling = () => {
                   )}
                 </CardContent>
               </Card>
+
+              <Dialog open={!!ocmfSessionId} onOpenChange={(o) => !o && setOcmfSessionId(null)}>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Eichrechts-Beleg (OCMF)</DialogTitle>
+                  </DialogHeader>
+                  {ocmfSessionId && <EichrechtTab sessionId={ocmfSessionId} />}
+                </DialogContent>
+              </Dialog>
             </TabsContent>
 
             {/* Tariffs Tab */}
