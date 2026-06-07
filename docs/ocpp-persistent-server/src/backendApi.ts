@@ -149,6 +149,21 @@ export async function insertMeterSamples(chargePointId: string, samples: MeterSa
   await callBackend("insert-meter-samples", { chargePointId, samples });
 }
 
+export interface OcmfRecordInput {
+  sessionId: string;
+  chargePointId: string | null;
+  sampled_at: string;
+  context: string;
+  meter_format: "OCMF" | "ALFEN" | "NONE";
+  raw_payload: string;
+  signed_value?: string | null;
+  reading_wh?: number | null;
+}
+
+export async function insertOcmfRecord(input: OcmfRecordInput): Promise<void> {
+  await callBackend("insert-ocmf-record", input as unknown as Record<string, unknown>);
+}
+
 export interface CapabilityInput {
   supported_measurands: string[];
   unsupported_keys: string[];
