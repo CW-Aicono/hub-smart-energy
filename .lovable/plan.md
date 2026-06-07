@@ -1,142 +1,120 @@
-# Tiefenanalyse: Warum steigt das Disk-IO-Budget weiter?
+# K1 — Eichrecht + Transparenz-Export (OCMF)
 
-## TL;DR
+## Ziel
 
-Die bisherigen Maßnahmen waren **nicht wirkungslos, aber zu schwach**, weil sie die **eigentlichen IO-Treiber nicht angefasst haben**. Die Lastquellen sind woanders als vermutet. Zusätzlich sind durch die neuen Features (K6 DLM, K2 §14a, Stability-Score) **doppelte Cron-Jobs** entstanden, die im Minutentakt laufen. Es gibt 2-3 konkrete, kleine Code-Änderungen, die das IO-Budget messbar entlasten — **ohne Instance-Upgrade**.
+Ladevorgänge an eichrechtskonformen Wallboxen (z. B. ABL eMH3, Alfen Eve, Compleo) sollen so erfasst, gespeichert und ausgegeben werden, dass der Endkunde einen **gerichtsfesten OCMF-Beleg** (Open Charge Metering Format) zu jeder Sitzung herunterladen und mit der **Transparenzsoftware der S.A.F.E. e. V.** prüfen kann. Damit erfüllen wir die rechtliche Pflicht für abrechnungsrelevante E-Mobilitäts-Ladungen in Deutschland (MessEG/MessEV §33, Eichrecht).
 
----
+## Scope (was umgesetzt wird)
 
-## Befunde aus der Live-Datenbank
+1. **Erfassung signierter Messwerte** aus OCPP 1.6-J MeterValues (Feld `signedMeterValue` / OCPP-Extension `Format=OCMF`).
+2. **Persistente Ablage** dieser Werte pro Session (Start- und Stop-Reading, optional Zwischenstände).
+3. **Serverseitige OCMF-Erzeugung** als Fallback, wenn die Wallbox nur Rohwerte liefert (CP-Modell-Flag steuert das).
+4. **Lokale Anzeige & Download**: Im Detail einer Charging-Session ein neuer Tab "Eichrecht / Transparenz" mit
+  - OCMF-Klartext (.ocmf)
+  - QR-Code mit Inline-OCMF (Kurzform)
+  - Direkt-Link "In Transparenzsoftware öffnen" (S.A.F.E.)
+  - Status-Badge ("Signiert geprüft", "Unsigniert", "Signatur ungültig")
+5. **Endkunden-Portal**: Auf `PublicChargeStatus` und in der Charging-App (PWA) bekommt der Fahrer denselben Download per öffentlich-zugänglichem signierten Link (analog zu Public-Charge-Status-Links, scoped auf Session).
+6. **Rechnungsanhang**: Beim Rechnungsversand (`send-charging-invoices`) hängt jede Session-Zeile ihren OCMF-Beleg als Anhang an die PDF-Rechnung.
+7. **Konfigurations-UI**: Pro Charge-Point ein neuer Block "Eichrecht" — Wallbox als eichrechtsfähig markieren, Public-Key der Wallbox hinterlegen (kommt vom Hersteller), Anzeige-Verhalten setzen.
+8. **Backfill / Tests**: 55+ Unit-Tests für OCMF-Parser/Serializer + Signatur-Verifikation (sec256k1 / sec384r1, je nach Hersteller).
 
-### 1. **Tabellenbloat (größter, ungelöster IO-Killer)**
+## Out of Scope (bewusst nicht in K1)
 
+- Eigene PTB-Zulassung — wir sind reines Anzeigesystem (Backend für Eichrecht-Daten, das selbst nicht eichpflichtig ist, weil Messwert + Signatur unverändert durchgereicht werden).
+- Wallboxen ohne Hersteller-Public-Key — werden als "Unsigniert" markiert, OCMF wird trotzdem gespeichert.
+- AC-Rohwert-Signierung durch uns selbst (würde Zulassung erfordern).
 
-| Tabelle                     | Größe auf Disk | Tatsächliche Zeilen | Bloat-Faktor |
-| --------------------------- | -------------- | ------------------- | ------------ |
-| `cron.job_run_details`      | **610 MB**     | 77.824              | hoch         |
-| `net._http_response`        | **538 MB**     | **3.004**           | **~180×**    |
-| `meter_power_readings_5min` | 386 MB         | 1.298.803           | ok           |
-| `meter_power_readings`      | 229 MB         | 839.773             | ok           |
-| `ocpp_message_log`          | 153 MB         | 244.921             | ok           |
-
-
-→ `net._http_response` ist die **dramatischste Fehlquelle**: 3.000 Zeilen belegen 538 MB. Der tägliche Cleanup-Job (`cleanup-pg-net-daily`) löscht zwar, aber **VACUUM FULL läuft nie**, daher wird der Speicher nie freigegeben. Jeder Realtime-Scan dieser Tabelle (z. B. Edge-Function-Antworten) liest die toten Pages mit → IO-Verbrauch.
-
-→ Bei `cron.job_run_details` dasselbe Muster: 1,52 Mio. gelöschte Zeilen, der freie Platz bleibt im Heap.
-
-### 2. **Cron-Storm: doppelte Minuten-Jobs**
-
-Aktuell laufen **gleichzeitig** im Minutentakt:
-
-```
-ems-automation-scheduler           */1  ✅ aktiv  (1440 Runs/24h)
-ems-solar-charging-scheduler       */1  ✅ aktiv  (1440)
-ems-power-limit-scheduler          */1  ✅ aktiv  (1440)
-ems-loxone-periodic-sync           */1  ✅ aktiv  (1440)
-ems-gateway-periodic-sync          */1  ✅ aktiv  (1440)
-ems-dlm-scheduler                  */1  ✅ aktiv  (1440)
-ems-cheap-charging-scheduler       */1  ✅ aktiv  (1440)
-dlm-realtime-controller-every-min  */1  ✅ aktiv  (509 — schlägt teils fehl)
-```
-
-Macht ~**10.000 Edge-Function-Calls pro Tag**, die jeder eine vollständige Tenant-/Location-/Meter-/Integration-Auflösung machen.
-
-Beweis: `tenants` (5 Zeilen) hatte **12,2 Mio. Seq-Scans**, `locations` (11 Zeilen) **2,0 Mio.**, `meters` (90 Zeilen) **564.000**, `integrations` (14 Zeilen) **5,16 Mio.**. Diese Seq-Scans entstehen in RLS-Policies, die bei jedem Function-Call neu evaluiert werden.
-
-`dlm-realtime-controller-every-minute` und `ems-dlm-scheduler` machen **denselben Job** parallel — einer ist bei K6 dazugekommen, der andere blieb stehen.
-
-### 3. `**integration_errors`: 28,27 Milliarden Tuple-Reads (!)**
-
-Der partielle Index `idx_integration_errors_active WHERE is_resolved=false` wurde 1,55 Mio. Mal gescannt und lieferte dabei 28,3 Mrd. Zeilen zurück — d. h. **im Schnitt 18.000 offene Fehler pro Scan**. Das Auto-Resolve funktioniert offensichtlich nicht: 70.896 Live-Tupel, davon der Großteil unresolved. Jeder Polling-Tick eines UI-Widgets oder Scheduler-Jobs zieht die komplette Liste durch.
-
-### 4. `**meter_power_readings_recorded_at_idx`: 7,13 Mrd. Heap-Fetches**
-
-Der Index `(recorded_at)` allein (ohne `meter_id`) wird für "letzte N Stunden über alle Meter" verwendet. Mit 840 k Zeilen heißt jeder Range-Scan = viele Heap-Pages = viel Disk-IO. Index ist 21 MB, Heap 229 MB → fast jeder Scan landet auf Disk.
-
-### 5. **Profiles-Seq-Scan-Storm**
-
-`profiles` (15 Zeilen) hat **170,9 Mio. Seq-Scans** mit 1,11 Mrd. Tuple-Reads. Das ist RLS-Policy-Overhead in fast jeder authentifizierten Query.
-
----
-
-## Warum stieg IO von 62% → 75%?
-
-1. **K6 (DLM) + K2 (§14a)** haben neue Cron-Jobs und Webhook-Apply-Pfade eingeführt, die jede Minute laufen.
-2. Der CP-Stability-Score (`charge_point_uptime_snapshots`) schreibt alle 5 Minuten 50.734 kumulative Inserts.
-3. Der bestehende Bloat in `net._http_response` und `cron.job_run_details` wächst weiter.
-4. Keiner der bisherigen Cleanup-Jobs macht `VACUUM FULL` oder `pg_repack`, der Heap-Bloat bleibt also vorhanden.
-
-**Die bisherigen Maßnahmen** (vermutlich Index-Anpassungen / Query-Limits) griffen am falschen Ende: sie haben Logik optimiert, nicht das Bloat-Problem.
-
----
-
-## Maßnahmen (priorisiert, niedrigster Aufwand zuerst)
-
-### **P0 — Sofort, ohne Code-Änderung (eigene Migration)**
-
-1. **Bloat zurückholen** (einmaliger Effekt: vermutlich −400 MB Disk-IO-Budget):
-  - `VACUUM FULL net._http_response;` → erwartet: 538 MB → < 5 MB
-  - `VACUUM FULL cron.job_run_details;` → erwartet: 610 MB → < 80 MB
-  - Wichtig: muss **außerhalb einer Transaktion** laufen und sperrt die Tabelle kurz. Beide sind unkritisch.
-2. **Aggressivere Retention** für die zwei Bloat-Quellen:
-  - `cleanup-pg-net-daily`: Retention von z. B. 7 Tagen auf **24 h** runter
-  - `cleanup-cron-history-daily`: Retention von 7 Tagen auf **48 h** runter
-  - Beide laufen bereits, nur Parameter ändern.
-
-### **P1 — Cron-Konsolidierung (10 Min Arbeit)**
-
-3. **Doppelten DLM-Job deaktivieren**: `SELECT cron.unschedule('dlm-realtime-controller-every-minute');`
-  (der `ems-dlm-scheduler` ruft denselben Edge-Controller intern auf)
-4. **Minuten-Jobs auf 2-Minuten-Takt** wo fachlich vertretbar:
-  - `ems-loxone-periodic-sync`, `ems-gateway-periodic-sync`, `ems-cheap-charging-scheduler`, `ems-solar-charging-scheduler` → `*/2 * * * *`
-  - **Nicht** ändern: `ems-automation-scheduler`, `ems-power-limit-scheduler`, `ems-dlm-scheduler` (Echtzeit-Steuerung)
-  - Effekt: −2880 Function-Calls/Tag = ca. −20 % DB-Last aus Cron
-
-### **P2 — Integration-Errors aufräumen (15 Min)**
-
-5. **Massen-Auto-Resolve** für stale Einträge:
-  ```sql
-   UPDATE integration_errors
-     SET is_resolved = true, resolved_at = now()
-     WHERE is_resolved = false
-       AND last_seen_at < now() - interval '24 hours';
-  ```
-   Erwartet: ~60 k Zeilen schließen → Partial-Index schrumpft drastisch, jeder UI-Tick wird billiger.
-6. **TTL-Cleanup-Job** ergänzen, der das täglich tut.
-
-### **P3 — Query-Hotspots (nur falls IO nach P0–P2 noch hoch)**
-
-7. `**meter_power_readings_recorded_at_idx` ersetzen** durch besseren Composite, wenn Top-Queries `WHERE recorded_at >= X` ohne `meter_id` nutzen — das müsste man dann mit `pg_stat_statements` (Extension einschalten lassen) verifizieren.
-8. **Realtime-Subscriptions auf `meters`/`tenants`/`integrations**` prüfen — die 170 Mio. seq_scans auf `profiles` deuten auf eine RLS-Helper-Funktion ohne `STABLE`/`SECURITY DEFINER`-Caching hin.
-
----
-
-## Was ich konkret als Build-Schritt vorschlage
-
-Nur **P0 + P1 + P2** in einer einzigen Migration + Cron-Update:
+## Architektur / Datenfluss
 
 ```text
-1. Migration:
-   - VACUUM FULL net._http_response
-   - VACUUM FULL cron.job_run_details
-   - UPDATE integration_errors SET is_resolved=true WHERE last_seen_at < now()-'24h'
-   - Anpassung der zwei cleanup-Funktionen (Retention)
-   - cron.unschedule('dlm-realtime-controller-every-minute')
-   - cron.alter_job(...) für 4 Loxone/Gateway-Jobs → */2
+Wallbox ──OCPP MeterValues(signedMeterValue, OCMF)──▶ ocpp-persistent-server
+                                                           │
+                                                           ▼
+                                       INSERT charging_session_meter_records
+                                       (raw_ocmf, sample_context, ts)
+                                                           │
+                                                           ▼
+              StopTransaction ──▶ Edge Fn 'ocmf-finalize' ─┴─▶ charging_sessions.ocmf_payload
+                                                           │
+                                                           ▼
+                                              Frontend Session-Detail
+                                              ├── Download .ocmf
+                                              ├── QR-Code Inline
+                                              ├── S.A.F.E. Deeplink
+                                              └── Signatur-Verifikations-Badge
 
-2. Keine UI/Code-Änderung nötig
+Public/PWA  ──signed link──▶  Edge Fn 'public-ocmf-download' (verify_jwt=false, Token-basiert)
 ```
 
-Erwartung: IO-Budget fällt sofort um ~25–35 Punkte (zurück auf < 50 %), ohne Instance-Upgrade.
+## Schritte (Reihenfolge der Umsetzung)
 
----
+1. **DB-Migration**
+  - Neue Tabelle `charging_session_meter_records` (session_id, ts, context, raw_ocmf, signed_value, public_key_ref, verification_status).
+  - Spalten an `charging_sessions`: `ocmf_payload TEXT`, `ocmf_status TEXT` (`signed|unsigned|invalid|pending`), `ocmf_public_key_fingerprint TEXT`.
+  - Spalten an `charge_points`: `eichrecht_enabled BOOL`, `meter_public_key TEXT`, `meter_format TEXT` (`OCMF|ALFEN|NONE`).
+  - GRANTs + RLS (Tenant-Scope; öffentliche Reads nur über Edge Function mit Token).
+2. `**docs/ocpp-persistent-server`-Update**
+  - In `ocppHandler.ts` `MeterValues`-Case erweitern: `signedMeterValue` und Sample-`format=OCMF`-Felder erkennen und in `charging_session_meter_records` schreiben.
+  - StopTransaction: finales OCMF (sofern Wallbox liefert) in `charging_sessions.ocmf_payload` ablegen.
+  - Update-Anleitung im Ordner aktualisieren (Anfänger-tauglich, da auf Hetzner-VM deployed).
+3. **Edge Function `ocmf-finalize**` (cron-frei, getriggert aus persistentem Server nach StopTransaction)
+  - Liest Meter-Records einer Session, baut OCMF zusammen (Start- + Stop-Reading + Identifier-Block), verifiziert Signatur mit hinterlegtem Public-Key, setzt `ocmf_status`.
+  - Bei `meter_format=NONE`: erzeugt unsignierten OCMF-Stub (für reine Anzeige, nicht eichrechtskonform — wird im UI klar gelabelt).
+4. **Lib `src/lib/charging/ocmf.ts**`
+  - Parser (OCMF → JS-Objekt), Serializer, Signatur-Verifier (secp256r1 / secp384r1 via WebCrypto), QR-Generator, S.A.F.E.-URL-Builder. Inkl. Vitest-Suite.
+5. **Edge Function `public-ocmf-download**` (`verify_jwt=false`)
+  - Nimmt `?session=<uuid>&token=<hmac>` entgegen, validiert Token, gibt `.ocmf` mit `Content-Disposition: attachment` zurück. Token-Generator in `chargingShareLinks.ts`.
+6. **Frontend**
+  - Neuer Tab "Eichrecht" in `ChargingSessionDetail` (Cloud + PWA): Status-Badge, Download-Button, QR, S.A.F.E.-Link, "Token-Link teilen"-Button für Endkunde.
+  - Charge-Point-Edit-Form: neue Sektion "Eichrecht" (Toggle, Public-Key-Paste-Feld, Format-Select).
+  - In `PublicChargeStatus`: Download-Button pro abgeschlossener Session.
+7. **Rechnungs-Edge-Function**
+  - `send-charging-invoices`: bei jeder Session-Zeile OCMF als zweiten PDF-Anhang einbetten (oder ZIP mit OCMFs, wenn >5 Sessions).
+8. **Tests**
+  - Unit: OCMF-Parser-Roundtrip, ECDSA-Verify mit Testvektoren von S.A.F.E.
+  - Edge-Integration: `ocmf-finalize` mit Mock-Session, `public-ocmf-download` Happy + invalid Token.
+  - Manual smoke nach Deploy gegen reale ABL eMH3 (steht bereits in Live-Umgebung).
 
-## Wichtige Einschränkung
+## Sicherheit / Konformität
 
-`pg_stat_statements` ist **nicht aktiv** (Read-only-Transaktion verhindert das Aktivieren über diesen Tool-Zugang). Für eine **abschließende** Query-Identifikation müsste die Extension einmal in einer schreibenden Migration aktiviert werden. Ich kann das in derselben Migration mit hineinnehmen — möchtest du das?
+- Public-Keys werden als Plaintext gespeichert (sind öffentlich qua Definition).
+- Tokens für Public-Download sind HMAC-SHA256 (geteilt mit OCPP-Server-Secret) und session-scoped, kein Listing möglich.
+- Rohdaten (`raw_ocmf`) werden **niemals modifiziert** — wir reichen byte-identisch durch. Das ist die rechtliche Voraussetzung dafür, dass wir selbst nicht eichpflichtig sind.
+- Audit-Log-Eintrag bei jedem Endkunden-Download.
 
-## Frage an dich
+## Erwartete Datei-Änderungen
 
-Soll ich die Maßnahmen **P0 + P1 + P2** jetzt als eine Migration umsetzen, oder zuerst nur P0 (reines Aufräumen) und das Ergebnis abwarten? Letzteres ist sicherer, aber zwei Iterationen statt einer.  
+```text
+supabase/migrations/<ts>_eichrecht_ocmf.sql               (neu)
+supabase/functions/ocmf-finalize/index.ts                 (neu)
+supabase/functions/public-ocmf-download/index.ts          (neu)
+supabase/config.toml                                      (verify_jwt=false für public-ocmf-download)
+src/lib/charging/ocmf.ts                                  (neu)
+src/lib/charging/__tests__/ocmf.test.ts                   (neu)
+src/components/charging/EichrechtTab.tsx                  (neu)
+src/components/charging/ChargePointEichrechtForm.tsx      (neu)
+src/pages/PublicChargeStatus.tsx                          (Edit: Download-Button)
+src/pages/ChargingAppAdmin.tsx / Session-Detail           (Edit: neuer Tab)
+supabase/functions/send-charging-invoices/index.ts        (Edit: OCMF-Anhang)
+docs/ocpp-persistent-server/src/ocppHandler.ts            (Edit: signedMeterValue)
+docs/ocpp-persistent-server/UPDATE-ANLEITUNG.md           (Edit: laienfreundlich)
+.lovable/plan.md                                          (ersetzt durch K1-Plan)
+```
+
+## Risiken / offene Punkte
+
+- **Hersteller-Varianten**: Alfen nutzt teils proprietäres Format vor OCMF — wir starten mit echtem OCMF + ABL eMH3 als Referenz; Alfen-Adapter ggf. in K1.5.
+- **PDF-Größe bei vielen Sessions**: Falls Rechnung mit 30+ Sessions: ZIP-Anhang statt einzelner OCMFs.
+- **PWA-Offline**: OCMF-Download braucht Netz — akzeptiert.
+
+## Frage vor Implementierung
+
+1. Sollen wir bei der initialen Umsetzung **nur ABL eMH3** (Live-Referenz vorhanden) als signiertes Format unterstützen und alle anderen als "Unsigniert" einstufen, oder direkt auch **Alfen Eve** mitnehmen (kostet ~30 % mehr Aufwand für Parser-Varianten)?
+2. Soll der **Endkunden-Download-Link** per E-Mail mit jeder Rechnung verschickt werden, oder reicht der direkte Download aus der Charging-App/PWA?
+
+Sag mir kurz deine Antworten, dann setze ich K1 in einem Rutsch um.  
   
-Antwort: Ja, jetzt P0 + P1 + P2 in einer Migration umsetzen bitte
+Antworten:  
+zu 1: Ja, direkt auch Alfen Eve mitnehmen. Was fertig ist, ist fertig.  
+zu 2: Endkunden-Download-Link per Mail mitverschicken, da nicht jeder Lade-User die App nutzen wird.

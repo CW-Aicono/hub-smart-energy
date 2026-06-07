@@ -839,6 +839,7 @@ export type Database = {
           connector_count: number
           connector_type: string
           created_at: string
+          eichrecht_enabled: boolean
           energy_settings: Json
           firmware_version: string | null
           group_id: string | null
@@ -849,6 +850,8 @@ export type Database = {
           location_id: string | null
           longitude: number | null
           max_power_kw: number
+          meter_format: string
+          meter_public_key: string | null
           model: string | null
           name: string
           ocpp_id: string | null
@@ -881,6 +884,7 @@ export type Database = {
           connector_count?: number
           connector_type?: string
           created_at?: string
+          eichrecht_enabled?: boolean
           energy_settings?: Json
           firmware_version?: string | null
           group_id?: string | null
@@ -891,6 +895,8 @@ export type Database = {
           location_id?: string | null
           longitude?: number | null
           max_power_kw?: number
+          meter_format?: string
+          meter_public_key?: string | null
           model?: string | null
           name: string
           ocpp_id?: string | null
@@ -923,6 +929,7 @@ export type Database = {
           connector_count?: number
           connector_type?: string
           created_at?: string
+          eichrecht_enabled?: boolean
           energy_settings?: Json
           firmware_version?: string | null
           group_id?: string | null
@@ -933,6 +940,8 @@ export type Database = {
           location_id?: string | null
           longitude?: number | null
           max_power_kw?: number
+          meter_format?: string
+          meter_public_key?: string | null
           model?: string | null
           name?: string
           ocpp_id?: string | null
@@ -1289,6 +1298,76 @@ export type Database = {
           },
         ]
       }
+      charging_session_meter_records: {
+        Row: {
+          charge_point_id: string | null
+          context: string
+          created_at: string
+          id: string
+          meter_format: string
+          public_key_fingerprint: string | null
+          raw_payload: string
+          reading_wh: number | null
+          sampled_at: string
+          session_id: string
+          signed_value: string | null
+          tenant_id: string
+          verification_status: string
+        }
+        Insert: {
+          charge_point_id?: string | null
+          context?: string
+          created_at?: string
+          id?: string
+          meter_format?: string
+          public_key_fingerprint?: string | null
+          raw_payload: string
+          reading_wh?: number | null
+          sampled_at: string
+          session_id: string
+          signed_value?: string | null
+          tenant_id: string
+          verification_status?: string
+        }
+        Update: {
+          charge_point_id?: string | null
+          context?: string
+          created_at?: string
+          id?: string
+          meter_format?: string
+          public_key_fingerprint?: string | null
+          raw_payload?: string
+          reading_wh?: number | null
+          sampled_at?: string
+          session_id?: string
+          signed_value?: string | null
+          tenant_id?: string
+          verification_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_session_meter_records_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_session_meter_records_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "charging_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_session_meter_records_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charging_sessions: {
         Row: {
           charge_point_id: string | null
@@ -1299,6 +1378,10 @@ export type Database = {
           id_tag: string | null
           meter_start: number | null
           meter_stop: number | null
+          ocmf_finalized_at: string | null
+          ocmf_payload: string | null
+          ocmf_public_key_fingerprint: string | null
+          ocmf_status: string | null
           start_time: string
           status: string
           stop_reason: string | null
@@ -1315,6 +1398,10 @@ export type Database = {
           id_tag?: string | null
           meter_start?: number | null
           meter_stop?: number | null
+          ocmf_finalized_at?: string | null
+          ocmf_payload?: string | null
+          ocmf_public_key_fingerprint?: string | null
+          ocmf_status?: string | null
           start_time?: string
           status?: string
           stop_reason?: string | null
@@ -1331,6 +1418,10 @@ export type Database = {
           id_tag?: string | null
           meter_start?: number | null
           meter_stop?: number | null
+          ocmf_finalized_at?: string | null
+          ocmf_payload?: string | null
+          ocmf_public_key_fingerprint?: string | null
+          ocmf_status?: string | null
           start_time?: string
           status?: string
           stop_reason?: string | null
