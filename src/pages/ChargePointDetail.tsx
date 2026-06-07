@@ -1730,10 +1730,27 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                 onSave={(patch) => updateChargePoint.mutate({ id: cp.id, ...patch } as any)}
               />
             </TabsContent>
+
+            <TabsContent value="eichrecht" className="mt-6 space-y-4">
+              <ChargePointEichrechtForm chargePointId={cp.id} />
+              <p className="text-xs text-muted-foreground">
+                Belege je Ladevorgang können Sie im Tab &quot;Ladevorgänge&quot; über die Schaltfläche &quot;OCMF&quot; herunterladen oder als
+                Endkunden-Link teilen.
+              </p>
+            </TabsContent>
           </Tabs>
 
         </div>
       </main>
+
+      <Dialog open={!!ocmfSessionId} onOpenChange={(o) => !o && setOcmfSessionId(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Eichrechtskonformer Beleg</DialogTitle>
+          </DialogHeader>
+          {ocmfSessionId && <EichrechtTab sessionId={ocmfSessionId} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
