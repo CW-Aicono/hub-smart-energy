@@ -1084,6 +1084,11 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                               <TableCell className="text-sm text-muted-foreground">
                                 {s.stop_reason ? (reasonMap[s.stop_reason] || s.stop_reason) : "—"}
                               </TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="sm" onClick={() => setOcmfSessionId(s.id)}>
+                                  <ShieldCheck className="mr-1 h-3.5 w-3.5" /> OCMF
+                                </Button>
+                              </TableCell>
                             </TableRow>
                           );
                         })}
