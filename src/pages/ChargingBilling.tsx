@@ -255,6 +255,7 @@ const ChargingBilling = () => {
                           <TableHead>{t("charging.energy" as any)}</TableHead>
                           <TableHead>{t("common.status" as any)}</TableHead>
                           <TableHead>{t("charging.idTag" as any)}</TableHead>
+                          <TableHead className="w-20 text-right">Beleg</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -266,6 +267,16 @@ const ChargingBilling = () => {
                             <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
                             <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? t("charging.statusActive" as any) : s.status === "completed" ? t("charging.statusCompleted" as any) : t("charging.statusError" as any)}</Badge></TableCell>
                             <TableCell className="text-sm">{resolveTag(s.id_tag) || s.id_tag || "—"}</TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Eichrechts-Beleg (OCMF) anzeigen"
+                                onClick={() => setOcmfSessionId(s.id)}
+                              >
+                                <ShieldCheck className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
