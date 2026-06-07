@@ -374,6 +374,46 @@ async function handle(action: string, body: Record<string, unknown>) {
       const safePatch = onlyPatch(patch, ["meter_stop", "stop_time", "stop_reason", "status", "energy_kwh"]);
       const { error } = await admin.from("charging_sessions").update(safePatch).eq("id", id);
       if (error) return fail(500, error.message);
+
+      // K1 Eichrecht: bei Abschluss automatisch OCMF finalisieren (fire-and-forget)
+      if (safePatch.status === "completed") {
+        fetch(`${supabaseUrl}/functions/v1/ocmf-finalize`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+          body: JSON.stringify({ session_id: id }),
+        }).catch((e) => console.warn("[ocpp-persistent-api] ocmf-finalize trigger failed", e));
+      }
+      return ok();
+    }
+
+    case "insert-ocmf-record": {
+      // body: { sessionId, chargePointId, sampled_at, context, meter_format, raw_payload, signed_value?, reading_wh? }
+      const sessionId = String(body.sessionId ?? "");
+      const chargePointId = body.chargePointId ? String(body.chargePointId) : null;
+      const rawPayload = String(body.raw_payload ?? "");
+      if (!sessionId || !rawPayload) return fail(400, "Missing sessionId or raw_payload");
+
+      const { data: sess, error: sErr } = await admin
+        .from("charging_sessions")
+        .select("tenant_id")
+        .eq("id", sessionId)
+        .maybeSingle();
+      if (sErr) return fail(500, sErr.message);
+      if (!sess) return fail(404, "Unknown session");
+
+      const { error } = await admin.from("charging_session_meter_records").insert({
+        tenant_id: sess.tenant_id,
+        session_id: sessionId,
+        charge_point_id: chargePointId,
+        sampled_at: String(body.sampled_at ?? new Date().toISOString()),
+        context: String(body.context ?? "Sample.Periodic"),
+        meter_format: String(body.meter_format ?? "OCMF"),
+        raw_payload: rawPayload,
+        signed_value: body.signed_value != null ? String(body.signed_value) : null,
+        reading_wh: body.reading_wh != null ? Number(body.reading_wh) : null,
+        verification_status: "pending",
+      });
+      if (error) return fail(500, error.message);
       return ok();
     }
 
