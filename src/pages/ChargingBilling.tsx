@@ -25,7 +25,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, TrendingUp, Percent, FileText, Send, Settings, Download } from "lucide-react";
+import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, TrendingUp, Percent, FileText, Send, Settings, Download, ShieldCheck } from "lucide-react";
+import { EichrechtTab } from "@/components/charging/EichrechtTab";
 import { format } from "date-fns";
 import { fmtNum, fmtCurrency, fmtKwh } from "@/lib/formatCharging";
 import { generateChargingInvoicePdf, downloadBlob } from "@/lib/generateChargingInvoicePdf";
@@ -38,6 +39,7 @@ const ChargingBilling = () => {
   const { t } = useTranslation();
   const { tenant } = useTenant();
   const { sessions, isLoading: sessionsLoading } = useChargingSessions();
+  const [ocmfSessionId, setOcmfSessionId] = useState<string | null>(null);
   const resolveTag = useIdTagResolver();
   const { tariffs, isLoading: tariffsLoading, addTariff, updateTariff, deleteTariff } = useChargingTariffs();
   const { invoices, generateInvoices, sendInvoices, finalizeInvoice, markAsPaid } = useChargingInvoices();
@@ -254,6 +256,7 @@ const ChargingBilling = () => {
                           <TableHead>{t("charging.energy" as any)}</TableHead>
                           <TableHead>{t("common.status" as any)}</TableHead>
                           <TableHead>{t("charging.idTag" as any)}</TableHead>
+                          <TableHead className="w-20 text-right">Beleg</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -265,6 +268,16 @@ const ChargingBilling = () => {
                             <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
                             <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? t("charging.statusActive" as any) : s.status === "completed" ? t("charging.statusCompleted" as any) : t("charging.statusError" as any)}</Badge></TableCell>
                             <TableCell className="text-sm">{resolveTag(s.id_tag) || s.id_tag || "—"}</TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Eichrechts-Beleg (OCMF) anzeigen"
+                                onClick={() => setOcmfSessionId(s.id)}
+                              >
+                                <ShieldCheck className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -272,6 +285,15 @@ const ChargingBilling = () => {
                   )}
                 </CardContent>
               </Card>
+
+              <Dialog open={!!ocmfSessionId} onOpenChange={(o) => !o && setOcmfSessionId(null)}>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Eichrechts-Beleg (OCMF)</DialogTitle>
+                  </DialogHeader>
+                  {ocmfSessionId && <EichrechtTab sessionId={ocmfSessionId} />}
+                </DialogContent>
+              </Dialog>
             </TabsContent>
 
             {/* Tariffs Tab */}
