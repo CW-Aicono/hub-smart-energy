@@ -1044,6 +1044,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           <TableHead>RFID</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Grund</TableHead>
+                          <TableHead>Beleg</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
