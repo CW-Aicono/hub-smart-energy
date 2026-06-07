@@ -39,6 +39,7 @@ const ChargingBilling = () => {
   const { t } = useTranslation();
   const { tenant } = useTenant();
   const { sessions, isLoading: sessionsLoading } = useChargingSessions();
+  const [ocmfSessionId, setOcmfSessionId] = useState<string | null>(null);
   const resolveTag = useIdTagResolver();
   const { tariffs, isLoading: tariffsLoading, addTariff, updateTariff, deleteTariff } = useChargingTariffs();
   const { invoices, generateInvoices, sendInvoices, finalizeInvoice, markAsPaid } = useChargingInvoices();
