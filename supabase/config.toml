@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.grid-curtailment-webhook]
 verify_jwt = false
+
+[functions.public-ocmf-download]
+verify_jwt = false
