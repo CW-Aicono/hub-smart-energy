@@ -583,10 +583,74 @@ async function handle(action: string, body: Record<string, unknown>) {
       return ok({ lastProbedAt: data?.last_probed_at ?? null });
     }
 
+    case "record-firmware-status": {
+      const chargePointId = String(body.chargePointId ?? "");
+      const status = String(body.status ?? "");
+      const rawPayload = (typeof body.rawPayload === "object" && body.rawPayload) ? body.rawPayload : {};
+      if (!chargePointId || !status) return fail(400, "Missing chargePointId or status");
+
+      const { data: cp, error: cpErr } = await admin
+        .from("charge_points")
+        .select("id, tenant_id")
+        .eq("id", chargePointId)
+        .maybeSingle();
+      if (cpErr) return fail(500, cpErr.message);
+      if (!cp) return fail(404, "Unknown charge_point_id");
+
+      // Aktuell offenen Job ermitteln (neuester nicht-terminaler)
+      const { data: openJob } = await admin
+        .from("cp_firmware_jobs")
+        .select("id, status")
+        .eq("charge_point_id", chargePointId)
+        .not("status", "in", "(installed,failed,cancelled)")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const nowIso = new Date().toISOString();
+      const insertEvt = await admin.from("cp_firmware_status_events").insert({
+        tenant_id: cp.tenant_id,
+        job_id: openJob?.id ?? null,
+        charge_point_id: cp.id,
+        status,
+        raw_payload: rawPayload,
+        received_at: nowIso,
+      });
+      if (insertEvt.error) return fail(500, insertEvt.error.message);
+
+      if (openJob) {
+        // Status auf normalisierten Wert mappen
+        const map: Record<string, string> = {
+          Downloading: "downloading",
+          Downloaded: "downloaded",
+          DownloadFailed: "failed",
+          Installing: "installing",
+          Installed: "installed",
+          InstallationFailed: "failed",
+          Idle: openJob.status, // unverändert
+        };
+        const newStatus = map[status] ?? openJob.status;
+        const patch: Record<string, unknown> = {
+          status: newStatus,
+          last_status_at: nowIso,
+        };
+        if (newStatus === "installed" || newStatus === "failed") {
+          patch.finished_at = nowIso;
+          if (status === "DownloadFailed" || status === "InstallationFailed") {
+            patch.error_code = status;
+            patch.error_message = status === "DownloadFailed" ? "Wallbox meldet Download fehlgeschlagen" : "Wallbox meldet Installation fehlgeschlagen";
+          }
+        }
+        await admin.from("cp_firmware_jobs").update(patch).eq("id", openJob.id);
+      }
+      return ok();
+    }
+
     default:
       return fail(400, `Unknown action: ${action}`);
   }
 }
+
 
 
 Deno.serve(async (req) => {

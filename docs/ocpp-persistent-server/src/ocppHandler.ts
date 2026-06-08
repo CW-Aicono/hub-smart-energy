@@ -260,10 +260,22 @@ export async function handleCall(
         return callResult(messageId, { status: "Accepted" });
       }
 
-      case "FirmwareStatusNotification":
+      case "FirmwareStatusNotification": {
+        // Persistieren via Backend-Edge-Function (Eichrecht-Audit: 6 Mon. nach Eichfrist)
+        const status = String((payload as Record<string, unknown>).status ?? "");
+        try {
+          const { recordFirmwareStatus } = await import("./backendApi");
+          await recordFirmwareStatus(chargePointPk, status, payload as Record<string, unknown>);
+        } catch (e) {
+          log.warn("recordFirmwareStatus failed", { chargePointId, error: (e as Error).message });
+        }
+        return callResult(messageId, {});
+      }
+
       case "DiagnosticsStatusNotification": {
         return callResult(messageId, {});
       }
+
 
       default:
         log.warn("Unsupported OCPP action", { action, chargePointId });

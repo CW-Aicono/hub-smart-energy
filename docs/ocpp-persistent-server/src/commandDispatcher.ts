@@ -60,10 +60,23 @@ function buildOcppCall(uniqueId: string, cmd: PendingRow): unknown[] | null {
         connectorId: (p.connectorId as number) ?? 0,
         duration: (p.duration as number) ?? 3600,
       }];
+    case "UpdateFirmware":
+      return [2, uniqueId, "UpdateFirmware", {
+        location: p.location as string,
+        retrieveDate: p.retrieveDate as string,
+        ...(p.retries !== undefined ? { retries: Number(p.retries) } : {}),
+        ...(p.retryInterval !== undefined ? { retryInterval: Number(p.retryInterval) } : {}),
+      }];
+    case "TriggerMessage":
+      return [2, uniqueId, "TriggerMessage", {
+        requestedMessage: (p.requestedMessage as string) ?? "FirmwareStatusNotification",
+        ...(p.connectorId !== undefined ? { connectorId: Number(p.connectorId) } : {}),
+      }];
     default:
       return null;
   }
 }
+
 
 async function dispatchOne(cmd: PendingRow): Promise<void> {
   const session = getSession(cmd.charge_point_ocpp_id);
