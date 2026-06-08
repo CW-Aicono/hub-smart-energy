@@ -80,6 +80,7 @@ const Tasks = lazy(() => import("./pages/Tasks"));
 const NetworkInfrastructure = lazy(() => import("./pages/NetworkInfrastructure"));
 const SuperAdminOcppIntegrations = lazy(() => import("./pages/SuperAdminOcppIntegrations"));
 const SuperAdminOcppControl = lazy(() => import("./pages/SuperAdminOcppControl"));
+const SuperAdminOcppFirmware = lazy(() => import("./pages/SuperAdminOcppFirmware"));
 const SuperAdminSimulators = lazy(() => import("./pages/SuperAdminSimulators"));
 
 const SuperAdminChargePointOnboarding = lazy(() => import("./pages/SuperAdminChargePointOnboarding"));
@@ -232,6 +233,7 @@ const App = () => (
                       <Route path="/super-admin/wallbox-templates" element={<SA><SuperAdminWallboxTemplates /></SA>} />
                       <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />
                       <Route path="/super-admin/ocpp/control" element={<SA><SuperAdminOcppControl /></SA>} />
+                      <Route path="/super-admin/ocpp/firmware" element={<SA><SuperAdminOcppFirmware /></SA>} />
                       <Route path="/super-admin/ocpp/simulators" element={<SA><SuperAdminSimulators /></SA>} />
                       
                       <Route path="/super-admin/ocpp/onboarding" element={<SA><SuperAdminChargePointOnboarding /></SA>} />
