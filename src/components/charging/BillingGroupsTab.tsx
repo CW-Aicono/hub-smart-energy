@@ -201,6 +201,7 @@ export default function BillingGroupsTab({ isAdmin, periodStart, periodEnd, peri
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </CardContent>
 
