@@ -80,12 +80,14 @@ const Tasks = lazy(() => import("./pages/Tasks"));
 const NetworkInfrastructure = lazy(() => import("./pages/NetworkInfrastructure"));
 const SuperAdminOcppIntegrations = lazy(() => import("./pages/SuperAdminOcppIntegrations"));
 const SuperAdminOcppControl = lazy(() => import("./pages/SuperAdminOcppControl"));
+const SuperAdminOcppFirmware = lazy(() => import("./pages/SuperAdminOcppFirmware"));
 const SuperAdminSimulators = lazy(() => import("./pages/SuperAdminSimulators"));
 
 const SuperAdminChargePointOnboarding = lazy(() => import("./pages/SuperAdminChargePointOnboarding"));
 const ChargingApp = lazy(() => import("./pages/ChargingApp"));
 const ChargingAppAdmin = lazy(() => import("./pages/ChargingAppAdmin"));
 const ArbitrageTrading = lazy(() => import("./pages/ArbitrageTrading"));
+const PeakShaving = lazy(() => import("./pages/PeakShaving"));
 const Copilot = lazy(() => import("./pages/Copilot"));
 const TenantElectricity = lazy(() => import("./pages/TenantElectricity"));
 const EnergySharing = lazy(() => import("./pages/EnergySharing"));
@@ -232,6 +234,7 @@ const App = () => (
                       <Route path="/super-admin/wallbox-templates" element={<SA><SuperAdminWallboxTemplates /></SA>} />
                       <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />
                       <Route path="/super-admin/ocpp/control" element={<SA><SuperAdminOcppControl /></SA>} />
+                      <Route path="/super-admin/ocpp/firmware" element={<SA><SuperAdminOcppFirmware /></SA>} />
                       <Route path="/super-admin/ocpp/simulators" element={<SA><SuperAdminSimulators /></SA>} />
                       
                       <Route path="/super-admin/ocpp/onboarding" element={<SA><SuperAdminChargePointOnboarding /></SA>} />
@@ -254,6 +257,8 @@ const App = () => (
                       <Route path="/tasks" element={<M><Tasks /></M>} />
                       <Route path="/network" element={<M><NetworkInfrastructure /></M>} />
                       <Route path="/arbitrage" element={<M><ArbitrageTrading /></M>} />
+                      <Route path="/peak-shaving" element={<M><PeakShaving /></M>} />
+                      <Route path="/demo/peak-shaving" element={<PeakShaving />} />
                       <Route path="/copilot" element={<M><Copilot /></M>} />
                       <Route path="/energy-report" element={<M><EnergyReport /></M>} />
                       <Route path="/energy-sharing" element={<M><EnergySharing /></M>} />

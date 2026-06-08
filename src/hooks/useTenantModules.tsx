@@ -21,6 +21,7 @@ export const ALL_MODULES = [
   { code: "task_management", label: "Aufgabenverwaltung" },
   { code: "brighthub_api", label: "BrightHub API" },
   { code: "arbitrage_trading", label: "Arbitragehandel (Strom)" },
+  { code: "peak_shaving", label: "Peak-Shaving (Lastspitzenkappung)" },
   { code: "tenant_electricity", label: "Mieterstrom" },
   { code: "energy_report", label: "Energiebericht" },
   { code: "energy_sharing", label: "Energy-Sharing (Communitys)" },

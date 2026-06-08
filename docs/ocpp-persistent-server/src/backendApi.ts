@@ -188,4 +188,13 @@ export async function getCapabilitiesAgeMs(chargePointId: string): Promise<numbe
   return Date.now() - t;
 }
 
+export async function recordFirmwareStatus(
+  chargePointId: string,
+  status: string,
+  rawPayload: Record<string, unknown>,
+): Promise<void> {
+  await callBackend("record-firmware-status", { chargePointId, status, rawPayload });
+}
+
+
 
