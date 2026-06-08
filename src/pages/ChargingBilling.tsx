@@ -477,12 +477,88 @@ const ChargingBilling = () => {
   };
 
   const periodKeys = [
-    { key: "day" as const, labelKey: "charging.periodDay" },
-    { key: "week" as const, labelKey: "charging.periodWeek" },
-    { key: "month" as const, labelKey: "charging.periodMonth" },
-    { key: "quarter" as const, labelKey: "charging.periodQuarter" },
-    { key: "year" as const, labelKey: "charging.periodYear" },
+    { key: "all" as const, label: "Alle" },
+    { key: "day" as const, label: t("charging.periodDay" as any) },
+    { key: "week" as const, label: t("charging.periodWeek" as any) },
+    { key: "month" as const, label: t("charging.periodMonth" as any) },
+    { key: "quarter" as const, label: t("charging.periodQuarter" as any) },
+    { key: "year" as const, label: t("charging.periodYear" as any) },
   ];
+
+  // Paginate helper
+  const paginate = <T,>(arr: T[], page: number) => {
+    const total = Math.max(1, Math.ceil(arr.length / pageSize));
+    const p = Math.min(Math.max(1, page), total);
+    return { items: arr.slice((p - 1) * pageSize, p * pageSize), total, page: p };
+  };
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setSessionPage(1); }, [period, periodAnchor, sessionSearch, sessionView, pageSize]);
+  useEffect(() => { setInvoicePage(1); }, [period, periodAnchor, invoiceSearch, pageSize]);
+  useEffect(() => { setGroupPage(1); }, [period, periodAnchor, sessionSearch, pageSize]);
+
+  const PaginationBar = ({ page, total, onChange, count }: { page: number; total: number; onChange: (p: number) => void; count: number }) => {
+    if (count === 0) return null;
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Einträge pro Seite:</span>
+          <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v) as 25 | 50 | 100)}>
+            <SelectTrigger className="h-8 w-[80px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="25">25</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+          <span>· {fmtNum(count, 0)} Einträge gesamt</span>
+        </div>
+        {total > 1 && (
+          <Pagination className="mx-0 w-auto justify-end">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); if (page > 1) onChange(page - 1); }}
+                  className={page <= 1 ? "pointer-events-none opacity-50" : ""}
+                />
+              </PaginationItem>
+              {Array.from({ length: total }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === total || Math.abs(p - page) <= 1)
+                .map((p, idx, arr) => (
+                  <>
+                    {idx > 0 && arr[idx - 1] !== p - 1 && (
+                      <PaginationItem key={`e-${p}`}><PaginationEllipsis /></PaginationItem>
+                    )}
+                    <PaginationItem key={p}>
+                      <PaginationLink
+                        href="#"
+                        isActive={p === page}
+                        onClick={(e) => { e.preventDefault(); onChange(p); }}
+                      >
+                        {p}
+                      </PaginationLink>
+                    </PaginationItem>
+                  </>
+                ))}
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); if (page < total) onChange(page + 1); }}
+                  className={page >= total ? "pointer-events-none opacity-50" : ""}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        )}
+      </div>
+    );
+  };
+
+  const sessionsPaged = paginate(displayedSessions, sessionPage);
+  const invoicesPaged = paginate(displayedInvoices, invoicePage);
+  const groupsPaged = paginate(groupedSessionRows, groupPage);
+
 
   const tariffFormFields = (
     <div className="space-y-4">
