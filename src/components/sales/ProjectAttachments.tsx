@@ -126,7 +126,10 @@ export function ProjectAttachments({ projectId }: { projectId: string }) {
 
   const openItem = async (a: Attachment) => {
     const { data } = await supabase.storage.from("sales-photos").createSignedUrl(a.file_path, 3600);
-    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+    if (!data?.signedUrl) return;
+    const isImage = isImageAttachment(a);
+    const isPdf = (a.content_type === "application/pdf") || /\.pdf$/i.test(a.file_name);
+    setPreview({ url: data.signedUrl, name: a.file_name, isImage, isPdf });
   };
 
   const updateKategorie = async (id: string, kategorie: string) => {
