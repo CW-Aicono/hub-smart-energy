@@ -262,11 +262,8 @@ const ChargingBilling = () => {
     return map;
   }, [billingGroups]);
 
-  const userNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const u of chargingUsers) map.set(u.id, u.name);
-    return map;
-  }, [chargingUsers]);
+
+
 
   const NO_GROUP_KEY = "__no_group__";
 
