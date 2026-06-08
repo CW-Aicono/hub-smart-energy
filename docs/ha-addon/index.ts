@@ -153,7 +153,7 @@ function loadConfig(): AddonConfig {
     gateway_username: process.env.GATEWAY_USERNAME || "",
     gateway_password: process.env.GATEWAY_PASSWORD || "",
     poll_interval_seconds: Number(process.env.POLL_INTERVAL_SECONDS) || 30,
-    flush_interval_seconds: Number(process.env.FLUSH_INTERVAL_SECONDS) || 5,
+    flush_interval_seconds: Number(process.env.FLUSH_INTERVAL_SECONDS) || 60,
     heartbeat_interval_seconds: Number(process.env.HEARTBEAT_INTERVAL_SECONDS) || 60,
     entity_filter: process.env.ENTITY_FILTER || "sensor.*_energy,sensor.*_power",
     offline_buffer_max_mb: Number(process.env.OFFLINE_BUFFER_MAX_MB) || 100,
@@ -203,7 +203,7 @@ function applyRemoteConfig(incoming: Record<string, unknown> | null | undefined,
   if (incoming.poll_interval_seconds !== undefined)
     config.poll_interval_seconds = clampInt(incoming.poll_interval_seconds, 5, 3600, before.poll);
   if (incoming.flush_interval_seconds !== undefined)
-    config.flush_interval_seconds = clampInt(incoming.flush_interval_seconds, 1, 600, before.flush);
+    config.flush_interval_seconds = clampInt(incoming.flush_interval_seconds, 15, 600, before.flush);
   if (incoming.heartbeat_interval_seconds !== undefined)
     config.heartbeat_interval_seconds = clampInt(incoming.heartbeat_interval_seconds, 10, 600, before.heartbeat);
   if (incoming.automation_eval_seconds !== undefined)
@@ -1291,7 +1291,7 @@ async function pushExecutionLogs(): Promise<void> {
 
 /* ── Flush Buffer to Cloud ───────────────────────────────────────────────────── */
 
-const FLUSH_BATCH_SIZE = 200;
+const FLUSH_BATCH_SIZE = 1000;
 
 async function flushBuffer(): Promise<void> {
   // Always attempt flush – cloud status is determined by heartbeat/sync
