@@ -248,7 +248,7 @@ const ChargingBilling = () => {
               <Card>
                 <CardHeader><CardTitle>{t("charging.sessions" as any)}</CardTitle></CardHeader>
                 <CardContent>
-                  {sessionsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : sessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
+                  {sessionsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : filteredSessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -262,7 +262,7 @@ const ChargingBilling = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sessions.map((s) => (
+                        {filteredSessions.map((s) => (
                           <TableRow key={s.id}>
                             <TableCell className="font-medium">{getCpName(s.charge_point_id)}</TableCell>
                             <TableCell>{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
