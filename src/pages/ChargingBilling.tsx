@@ -147,16 +147,48 @@ const ChargingBilling = () => {
     return { start: format(start, "yyyy-MM-dd"), end: format(end, "yyyy-MM-dd"), label: format(start, "MMMM yyyy") };
   }, [genMonth]);
 
-  const periodStart = useMemo(() => {
-    const now = new Date();
+  const weekStartsOn = (tenant?.week_start_day ?? 1) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  const periodRange = useMemo(() => {
+    const a = periodAnchor;
     switch (period) {
-      case "day": return startOfDay(now);
-      case "week": return startOfWeek(now, { weekStartsOn: tenant?.week_start_day ?? 1 });
-      case "month": return startOfMonth(now);
-      case "quarter": return startOfQuarter(now);
-      case "year": return startOfYear(now);
+      case "all": return null;
+      case "day": return { start: startOfDay(a), end: endOfDay(a) };
+      case "week": return { start: startOfWeek(a, { weekStartsOn }), end: endOfWeek(a, { weekStartsOn }) };
+      case "month": return { start: startOfMonth(a), end: endOfMonth(a) };
+      case "quarter": return { start: startOfQuarter(a), end: endOfQuarter(a) };
+      case "year": return { start: startOfYear(a), end: endOfYear(a) };
     }
-  }, [period]);
+  }, [period, periodAnchor, weekStartsOn]);
+
+  const periodLabel = useMemo(() => {
+    if (!periodRange) return "Alle Zeiträume";
+    const a = periodAnchor;
+    switch (period) {
+      case "day": return format(a, "EEEE, dd.MM.yyyy", { locale: de });
+      case "week": return `KW ${format(periodRange.start, "II yyyy", { locale: de })} (${format(periodRange.start, "dd.MM.", { locale: de })}–${format(periodRange.end, "dd.MM.yyyy", { locale: de })})`;
+      case "month": return format(a, "MMMM yyyy", { locale: de });
+      case "quarter": return `Q${Math.floor(a.getMonth() / 3) + 1} ${a.getFullYear()}`;
+      case "year": return String(a.getFullYear());
+      default: return "";
+    }
+  }, [period, periodAnchor, periodRange]);
+
+  const shiftPeriod = (dir: -1 | 1) => {
+    setPeriodAnchor((a) => {
+      switch (period) {
+        case "day": return addDays(a, dir);
+        case "week": return addWeeks(a, dir);
+        case "month": return addMonths(a, dir);
+        case "quarter": return addQuarters(a, dir);
+        case "year": return addYears(a, dir);
+        default: return a;
+      }
+    });
+  };
+
+  // Reset anchor to "now" whenever the period type changes
+  useEffect(() => { setPeriodAnchor(new Date()); }, [period]);
+
 
   // Search state
   const [sessionSearch, setSessionSearch] = useState("");
