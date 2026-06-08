@@ -126,7 +126,12 @@ const ChargingBilling = () => {
       applySetDefault(tariff.id);
     }
   };
-  const [period, setPeriod] = useState<"day" | "week" | "month" | "quarter" | "year">("month");
+  const [period, setPeriod] = useState<"all" | "day" | "week" | "month" | "quarter" | "year">("month");
+  const [periodAnchor, setPeriodAnchor] = useState<Date>(new Date());
+  const [pageSize, setPageSize] = useState<25 | 50 | 100>(25);
+  const [sessionPage, setSessionPage] = useState(1);
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [groupPage, setGroupPage] = useState(1);
 
   // Invoice generation dialog
   const [generateOpen, setGenerateOpen] = useState(false);
