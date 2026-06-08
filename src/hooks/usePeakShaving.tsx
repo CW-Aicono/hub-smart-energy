@@ -17,6 +17,8 @@ export interface PeakShavingConfig {
   hysteresis_pct: number;
   active: boolean;
   notes: string | null;
+  report_enabled?: boolean;
+  report_recipients?: string[] | null;
   created_at: string;
   updated_at: string;
 }
