@@ -42,6 +42,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/network": "network_infra",
   "/tasks": "task_management",
   "/arbitrage": "arbitrage_trading",
+  "/peak-shaving": "peak_shaving",
   "/tenant-electricity": "tenant_electricity",
   "/energy-report": "energy_report",
   "/energy-sharing": "energy_sharing",
