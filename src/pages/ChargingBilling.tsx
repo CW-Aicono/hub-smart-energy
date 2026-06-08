@@ -102,42 +102,6 @@ const ChargingBilling = () => {
     [sessions, periodStart]
   );
 
-  // Session table sorting
-  const [sortColumn, setSortColumn] = useState<"charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag" | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-
-  const displayedSessions = useMemo(() => {
-    if (!sortColumn) return filteredSessions;
-    const dir = sortDirection === "asc" ? 1 : -1;
-    return [...filteredSessions].sort((a, b) => {
-      let cmp = 0;
-      switch (sortColumn) {
-        case "charge_point":
-          cmp = getCpName(a.charge_point_id).localeCompare(getCpName(b.charge_point_id));
-          break;
-        case "start_time":
-          cmp = new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
-          break;
-        case "stop_time":
-          const aStop = a.stop_time ? new Date(a.stop_time).getTime() : 0;
-          const bStop = b.stop_time ? new Date(b.stop_time).getTime() : 0;
-          cmp = aStop - bStop;
-          break;
-        case "energy":
-          cmp = a.energy_kwh - b.energy_kwh;
-          break;
-        case "status":
-          cmp = a.status.localeCompare(b.status);
-          break;
-        case "id_tag":
-          const aTag = resolveTag(a.id_tag) || a.id_tag || "";
-          const bTag = resolveTag(b.id_tag) || b.id_tag || "";
-          cmp = aTag.localeCompare(bTag);
-          break;
-      }
-      return cmp * dir;
-    });
-  }, [filteredSessions, sortColumn, sortDirection, getCpName, resolveTag]);
 
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
