@@ -34,6 +34,48 @@ import { generateChargingInvoicePdf, downloadBlob } from "@/lib/generateCharging
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
+// Sortable table header for charging sessions
+function SortableHead({
+  column,
+  label,
+  sortColumn,
+  sortDirection,
+  onSort,
+  onDir,
+}: {
+  column: "charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag";
+  label: string;
+  sortColumn: string | null;
+  sortDirection: "asc" | "desc";
+  onSort: (c: "charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag" | null) => void;
+  onDir: (d: "asc" | "desc") => void;
+}) {
+  const active = sortColumn === column;
+  return (
+    <TableHead
+      className="cursor-pointer select-none"
+      onClick={() => {
+        if (active) {
+          onDir(sortDirection === "asc" ? "desc" : "asc");
+        } else {
+          onSort(column);
+          onDir("asc");
+        }
+      }}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (
+          sortDirection === "asc" ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
+        ) : (
+          <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
+        )}
+      </span>
+    </TableHead>
+  );
+}
+
+
 const ChargingBilling = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin } = useUserRole();
