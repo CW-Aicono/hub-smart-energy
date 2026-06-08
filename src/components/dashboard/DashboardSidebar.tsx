@@ -120,6 +120,7 @@ const DashboardSidebar = () => {
     }
     if (
       currentPath === "/arbitrage" ||
+      currentPath === "/peak-shaving" ||
       currentPath.startsWith("/ppa") ||
       currentPath === "/tenant-electricity" ||
       currentPath.startsWith("/energy-sharing")
