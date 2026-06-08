@@ -1292,6 +1292,7 @@ export type Database = {
       }
       charging_invoices: {
         Row: {
+          billing_group_id: string | null
           created_at: string
           currency: string
           id: string
@@ -1314,6 +1315,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          billing_group_id?: string | null
           created_at?: string
           currency?: string
           id?: string
@@ -1336,6 +1338,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          billing_group_id?: string | null
           created_at?: string
           currency?: string
           id?: string
@@ -1358,6 +1361,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "charging_invoices_billing_group_id_fkey"
+            columns: ["billing_group_id"]
+            isOneToOne: false
+            referencedRelation: "charging_billing_groups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "charging_invoices_session_id_fkey"
             columns: ["session_id"]

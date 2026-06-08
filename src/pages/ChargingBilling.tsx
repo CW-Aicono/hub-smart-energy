@@ -655,7 +655,7 @@ const ChargingBilling = () => {
 
             {/* Billing Groups Tab */}
             <TabsContent value="billing-groups">
-              <BillingGroupsTab isAdmin={isAdmin} />
+              <BillingGroupsTab isAdmin={isAdmin} periodStart={genPeriod.start} periodEnd={genPeriod.end} periodLabel={genPeriod.label} />
             </TabsContent>
 
             {/* Roaming Tab */}

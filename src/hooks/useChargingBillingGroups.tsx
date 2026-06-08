@@ -158,3 +158,32 @@ export function useChargingBillingGroupMembers(groupId: string | null) {
 
   return { memberUserIds, isLoading, setMembers };
 }
+
+export function useGenerateGroupInvoices() {
+  const qc = useQueryClient();
+  const { tenant } = useTenant();
+
+  return useMutation({
+    mutationFn: async (params: {
+      period_start: string;
+      period_end: string;
+      group_id?: string;
+      mode?: "generate" | "send" | "both";
+    }) => {
+      if (!tenant?.id) throw new Error("No tenant");
+      const { data, error } = await supabase.functions.invoke("send-charging-group-invoices", {
+        body: { tenant_id: tenant.id, ...params, mode: params.mode ?? "both" },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["charging-invoices"] });
+      const created = (data?.results ?? []).reduce((s: number, r: any) => s + (r.invoices_created ?? 0), 0);
+      const sent = (data?.results ?? []).reduce((s: number, r: any) => s + (r.emails_sent ?? 0), 0);
+      toast({ title: "Sammelrechnung", description: `${created} erstellt, ${sent} versendet.` });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+}
+
