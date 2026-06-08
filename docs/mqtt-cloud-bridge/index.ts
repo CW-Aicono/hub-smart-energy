@@ -186,7 +186,7 @@ client.on("message", (topic, payload) => {
     return;
   }
   const readings = parsePayload(topic, payload, route.payloadFormat, route.deviceMapping);
-  if (readings.length > 0) void forward(route.tenantId, readings);
+  if (readings.length > 0) enqueue(route.tenantId, readings);
 });
 
 function handleDiscovery(topic: string, payload: Buffer): void {
