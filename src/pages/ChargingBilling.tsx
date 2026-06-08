@@ -598,21 +598,27 @@ const ChargingBilling = () => {
                     </div>
                   )}
                 </CardHeader>
-                <CardContent>
-                  {invoices.length === 0 ? <p className="text-muted-foreground">{t("charging.noInvoices" as any)}</p> : (
+                <CardContent className="space-y-3">
+                  <Input
+                    placeholder="Rechnungen durchsuchen (Nummer, Kunde, E-Mail, Status, Datum…)"
+                    value={invoiceSearch}
+                    onChange={(e) => setInvoiceSearch(e.target.value)}
+                    className="max-w-md h-9"
+                  />
+                  {displayedInvoices.length === 0 ? <p className="text-muted-foreground">{t("charging.noInvoices" as any)}</p> : (
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>{t("charging.invoiceNo" as any)}</TableHead>
-                          <TableHead>Rechnungsdatum</TableHead>
-                          <TableHead>Kunde</TableHead>
-                          <TableHead>Zeitraum</TableHead>
-                          <TableHead>{t("charging.totalAmount" as any)}</TableHead>
-                          <TableHead>{t("common.status" as any)}</TableHead>
+                          <SortableHead column="invoice_number" label={t("charging.invoiceNo" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                          <SortableHead column="invoice_date" label="Rechnungsdatum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                          <SortableHead column="user_name" label="Kunde" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                          <SortableHead column="period" label="Zeitraum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                          <SortableHead column="total_amount" label={t("charging.totalAmount" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                          <SortableHead column="status" label={t("common.status" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {invoices.map((inv) => (
+                        {displayedInvoices.map((inv: any) => (
                           <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedInvoice(inv)}>
                             <TableCell className="font-mono">{inv.invoice_number || "—"}</TableCell>
                             <TableCell>{inv.invoice_date ? format(new Date(inv.invoice_date), "dd.MM.yyyy") : format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
