@@ -505,36 +505,35 @@ const ChargingBilling = () => {
             {/* Sessions Tab */}
             <TabsContent value="sessions">
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
+                <CardHeader className="flex flex-row items-center justify-between gap-4">
                   <CardTitle>{t("charging.sessions" as any)}</CardTitle>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex gap-1 bg-muted rounded-lg p-1">
-                      <Button
-                        variant={sessionView === "users" ? "default" : "ghost"}
-                        size="sm"
-                        className="h-7 text-xs px-3"
-                        onClick={() => setSessionView("users")}
-                      >
-                        Nach Nutzern
-                      </Button>
-                      <Button
-                        variant={sessionView === "groups" ? "default" : "ghost"}
-                        size="sm"
-                        className="h-7 text-xs px-3"
-                        onClick={() => setSessionView("groups")}
-                      >
-                        Nach Abrechnungsgruppen
-                      </Button>
-                    </div>
-                    <Input
-                      placeholder={sessionView === "users" ? "Suchen (Ladepunkt, Tag, Status, Datum…)" : "Gruppe suchen…"}
-                      value={sessionSearch}
-                      onChange={(e) => setSessionSearch(e.target.value)}
-                      className="max-w-xs h-9"
-                    />
+                  <div className="flex gap-1 bg-muted rounded-lg p-1">
+                    <Button
+                      variant={sessionView === "users" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-7 text-xs px-3"
+                      onClick={() => setSessionView("users")}
+                    >
+                      Nach Nutzern
+                    </Button>
+                    <Button
+                      variant={sessionView === "groups" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-7 text-xs px-3"
+                      onClick={() => setSessionView("groups")}
+                    >
+                      Nach Abrechnungsgruppen
+                    </Button>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-3">
+                  <Input
+                    placeholder={sessionView === "users" ? "Suchen (Ladepunkt, Tag, Status, Datum…)" : "Gruppe suchen…"}
+                    value={sessionSearch}
+                    onChange={(e) => setSessionSearch(e.target.value)}
+                    className="max-w-md h-9"
+                  />
+
                   {sessionsLoading ? (
                     <p className="text-muted-foreground">{t("charging.loading" as any)}</p>
                   ) : sessionView === "users" ? (
