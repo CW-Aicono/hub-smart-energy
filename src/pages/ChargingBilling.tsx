@@ -926,36 +926,39 @@ const ChargingBilling = () => {
                     className="max-w-md h-9"
                   />
                   {displayedInvoices.length === 0 ? <p className="text-muted-foreground">{t("charging.noInvoices" as any)}</p> : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <SortableHead column="invoice_number" label={t("charging.invoiceNo" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                          <SortableHead column="invoice_date" label="Rechnungsdatum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                          <SortableHead column="user_name" label="Kunde" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                          <SortableHead column="period" label="Zeitraum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                          <SortableHead column="total_amount" label={t("charging.totalAmount" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                          <SortableHead column="status" label={t("common.status" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {displayedInvoices.map((inv: any) => (
-                          <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedInvoice(inv)}>
-                            <TableCell className="font-mono">{inv.invoice_number || "—"}</TableCell>
-                            <TableCell>{inv.invoice_date ? format(new Date(inv.invoice_date), "dd.MM.yyyy") : format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
-                            <TableCell className="font-medium">{inv.user_name || "—"}</TableCell>
-                            <TableCell className="text-sm">
-                              {inv.period_start && inv.period_end
-                                ? `${format(new Date(inv.period_start), "dd.MM.")} – ${format(new Date(inv.period_end), "dd.MM.yyyy")}`
-                                : "—"}
-                            </TableCell>
-                            <TableCell className="font-medium">{fmtCurrency(inv.total_amount)}</TableCell>
-                            <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? t("charging.statusPaid" as any) : inv.status === "issued" ? t("charging.statusIssued" as any) : t("charging.statusDraft" as any)}</Badge></TableCell>
+                    <>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <SortableHead column="invoice_number" label={t("charging.invoiceNo" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                            <SortableHead column="invoice_date" label="Rechnungsdatum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                            <SortableHead column="user_name" label="Kunde" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                            <SortableHead column="period" label="Zeitraum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                            <SortableHead column="total_amount" label={t("charging.totalAmount" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                            <SortableHead column="status" label={t("common.status" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-
+                        </TableHeader>
+                        <TableBody>
+                          {invoicesPaged.items.map((inv: any) => (
+                            <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedInvoice(inv)}>
+                              <TableCell className="font-mono">{inv.invoice_number || "—"}</TableCell>
+                              <TableCell>{inv.invoice_date ? format(new Date(inv.invoice_date), "dd.MM.yyyy") : format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
+                              <TableCell className="font-medium">{inv.user_name || "—"}</TableCell>
+                              <TableCell className="text-sm">
+                                {inv.period_start && inv.period_end
+                                  ? `${format(new Date(inv.period_start), "dd.MM.")} – ${format(new Date(inv.period_end), "dd.MM.yyyy")}`
+                                  : "—"}
+                              </TableCell>
+                              <TableCell className="font-medium">{fmtCurrency(inv.total_amount)}</TableCell>
+                              <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? t("charging.statusPaid" as any) : inv.status === "issued" ? t("charging.statusIssued" as any) : t("charging.statusDraft" as any)}</Badge></TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      <PaginationBar page={invoicesPaged.page} total={invoicesPaged.total} onChange={setInvoicePage} count={displayedInvoices.length} />
+                    </>
                   )}
+
                 </CardContent>
               </Card>
 
