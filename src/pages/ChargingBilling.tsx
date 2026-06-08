@@ -10,6 +10,9 @@ import { useChargingInvoices } from "@/hooks/useChargingInvoices";
 import { useChargePoints } from "@/hooks/useChargePoints";
 import { useTenant } from "@/hooks/useTenant";
 import { useChargingInvoiceSettings } from "@/hooks/useChargingInvoiceSettings";
+import { useChargingUsers } from "@/hooks/useChargingUsers";
+import { useChargingBillingGroups } from "@/hooks/useChargingBillingGroups";
+import { useQuery } from "@tanstack/react-query";
 
 import RoamingTab from "@/components/charging/RoamingTab";
 import BillingGroupsTab from "@/components/charging/BillingGroupsTab";
@@ -154,7 +157,33 @@ const ChargingBilling = () => {
   const [invSortColumn, setInvSortColumn] = useState<"invoice_number" | "invoice_date" | "user_name" | "period" | "total_amount" | "status" | null>("invoice_date");
   const [invSortDirection, setInvSortDirection] = useState<"asc" | "desc">("desc");
 
+  // Sessions view mode: by individual users (rows = sessions) vs by billing groups (aggregated)
+  const [sessionView, setSessionView] = useState<"users" | "groups">("users");
+
+  // Group aggregation sort
+  const [groupSortColumn, setGroupSortColumn] = useState<"group_name" | "user_count" | "session_count" | "energy" | null>("energy");
+  const [groupSortDirection, setGroupSortDirection] = useState<"asc" | "desc">("desc");
+
+  // Charging users (to resolve session id_tag -> user_id)
+  const { users: chargingUsers } = useChargingUsers();
+  const { groups: billingGroups } = useChargingBillingGroups();
+
+  // Billing group membership map: user_id -> { group_id, group_name }
+  const { data: billingMemberships = [] } = useQuery({
+    queryKey: ["charging-billing-group-members-all", tenant?.id],
+    enabled: !!tenant?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charging_billing_group_members" as any)
+        .select("user_id, group_id")
+        .eq("tenant_id", tenant!.id);
+      if (error) throw error;
+      return ((data ?? []) as unknown) as Array<{ user_id: string; group_id: string }>;
+    },
+  });
+
   const getCpName = (id: string) => chargePoints.find((cp) => cp.id === id)?.name || "—";
+
 
   const filteredSessions = useMemo(() => {
     const q = sessionSearch.trim().toLowerCase();
@@ -203,6 +232,83 @@ const ChargingBilling = () => {
       return cmp * dir;
     });
   }, [filteredSessions, sortColumn, sortDirection, chargePoints, resolveTag]);
+
+  // ---- Aggregation by billing group ----
+  // Map RFID tag (uppercase, no spaces) -> charging user id
+  const tagToUserId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of chargingUsers) {
+      const all = [
+        ...(u.tags ?? []).map((t) => t.tag),
+        u.rfid_tag,
+      ].filter(Boolean) as string[];
+      for (const raw of all) {
+        const k = raw.replace(/\s+/g, "").toUpperCase();
+        if (k) map.set(k, u.id);
+      }
+    }
+    return map;
+  }, [chargingUsers]);
+
+  const userIdToBillingGroup = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of billingMemberships) map.set(m.user_id, m.group_id);
+    return map;
+  }, [billingMemberships]);
+
+  const groupNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const g of billingGroups) map.set(g.id, g.name);
+    return map;
+  }, [billingGroups]);
+
+
+
+
+  const NO_GROUP_KEY = "__no_group__";
+
+  const groupedSessionRows = useMemo(() => {
+    type Row = { key: string; group_name: string; user_ids: Set<string>; session_count: number; energy_kwh: number };
+    const rows = new Map<string, Row>();
+    for (const s of filteredSessions) {
+      const tagKey = (s.id_tag || "").replace(/\s+/g, "").toUpperCase();
+      const userId = tagToUserId.get(tagKey);
+      const groupId = userId ? userIdToBillingGroup.get(userId) : undefined;
+      const key = groupId ?? NO_GROUP_KEY;
+      const name = groupId ? (groupNameById.get(groupId) ?? "—") : "Ohne Abrechnungsgruppe";
+      let row = rows.get(key);
+      if (!row) {
+        row = { key, group_name: name, user_ids: new Set(), session_count: 0, energy_kwh: 0 };
+        rows.set(key, row);
+      }
+      row.session_count += 1;
+      row.energy_kwh += s.energy_kwh || 0;
+      if (userId) row.user_ids.add(userId);
+      else if (s.id_tag) row.user_ids.add(`tag:${s.id_tag}`);
+    }
+    // Search filter
+    const q = sessionSearch.trim().toLowerCase();
+    const list = Array.from(rows.values())
+      .map((r) => ({ ...r, user_count: r.user_ids.size }))
+      .filter((r) => !q || r.group_name.toLowerCase().includes(q));
+
+    // Sort
+    const dir = groupSortDirection === "asc" ? 1 : -1;
+    list.sort((a, b) => {
+      let cmp = 0;
+      switch (groupSortColumn) {
+        case "group_name": cmp = a.group_name.localeCompare(b.group_name); break;
+        case "user_count": cmp = a.user_count - b.user_count; break;
+        case "session_count": cmp = a.session_count - b.session_count; break;
+        case "energy":
+        default: cmp = a.energy_kwh - b.energy_kwh; break;
+      }
+      return cmp * dir;
+    });
+    return list;
+  }, [filteredSessions, tagToUserId, userIdToBillingGroup, groupNameById, sessionSearch, groupSortColumn, groupSortDirection]);
+
+
 
   const filteredInvoices = useMemo(() => {
     const q = invoiceSearch.trim().toLowerCase();
@@ -399,55 +505,108 @@ const ChargingBilling = () => {
             {/* Sessions Tab */}
             <TabsContent value="sessions">
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between gap-4">
+                <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
                   <CardTitle>{t("charging.sessions" as any)}</CardTitle>
-                  <Input
-                    placeholder="Suchen (Ladepunkt, Tag, Status, Datum…)"
-                    value={sessionSearch}
-                    onChange={(e) => setSessionSearch(e.target.value)}
-                    className="max-w-xs h-9"
-                  />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex gap-1 bg-muted rounded-lg p-1">
+                      <Button
+                        variant={sessionView === "users" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-7 text-xs px-3"
+                        onClick={() => setSessionView("users")}
+                      >
+                        Nach Nutzern
+                      </Button>
+                      <Button
+                        variant={sessionView === "groups" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-7 text-xs px-3"
+                        onClick={() => setSessionView("groups")}
+                      >
+                        Nach Abrechnungsgruppen
+                      </Button>
+                    </div>
+                    <Input
+                      placeholder={sessionView === "users" ? "Suchen (Ladepunkt, Tag, Status, Datum…)" : "Gruppe suchen…"}
+                      value={sessionSearch}
+                      onChange={(e) => setSessionSearch(e.target.value)}
+                      className="max-w-xs h-9"
+                    />
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  {sessionsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : displayedSessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <SortableHead column="charge_point" label={t("charging.chargePoint" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                          <SortableHead column="start_time" label={t("charging.start" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                          <SortableHead column="stop_time" label={t("charging.end" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                          <SortableHead column="energy" label={t("charging.energy" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                          <SortableHead column="status" label={t("common.status" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                          <SortableHead column="id_tag" label={t("charging.idTag" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                          <TableHead className="w-20 text-right">Beleg</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {displayedSessions.map((s) => (
-                          <TableRow key={s.id}>
-                            <TableCell className="font-medium">{getCpName(s.charge_point_id)}</TableCell>
-                            <TableCell>{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
-                            <TableCell>{s.stop_time ? format(new Date(s.stop_time), "dd.MM.yyyy HH:mm") : "—"}</TableCell>
-                            <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
-                            <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? t("charging.statusActive" as any) : s.status === "completed" ? t("charging.statusCompleted" as any) : t("charging.statusError" as any)}</Badge></TableCell>
-                            <TableCell className="text-sm">{resolveTag(s.id_tag) || s.id_tag || "—"}</TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Eichrechts-Beleg (OCMF) anzeigen"
-                                onClick={() => setOcmfSessionId(s.id)}
-                              >
-                                <ShieldCheck className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
+                  {sessionsLoading ? (
+                    <p className="text-muted-foreground">{t("charging.loading" as any)}</p>
+                  ) : sessionView === "users" ? (
+                    displayedSessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <SortableHead column="charge_point" label={t("charging.chargePoint" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                            <SortableHead column="start_time" label={t("charging.start" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                            <SortableHead column="stop_time" label={t("charging.end" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                            <SortableHead column="energy" label={t("charging.energy" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                            <SortableHead column="status" label={t("common.status" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                            <SortableHead column="id_tag" label={t("charging.idTag" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                            <TableHead className="w-20 text-right">Beleg</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {displayedSessions.map((s) => (
+                            <TableRow key={s.id}>
+                              <TableCell className="font-medium">{getCpName(s.charge_point_id)}</TableCell>
+                              <TableCell>{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
+                              <TableCell>{s.stop_time ? format(new Date(s.stop_time), "dd.MM.yyyy HH:mm") : "—"}</TableCell>
+                              <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
+                              <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? t("charging.statusActive" as any) : s.status === "completed" ? t("charging.statusCompleted" as any) : t("charging.statusError" as any)}</Badge></TableCell>
+                              <TableCell className="text-sm">{resolveTag(s.id_tag) || s.id_tag || "—"}</TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Eichrechts-Beleg (OCMF) anzeigen"
+                                  onClick={() => setOcmfSessionId(s.id)}
+                                >
+                                  <ShieldCheck className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )
+                  ) : (
+                    groupedSessionRows.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <SortableHead column="group_name" label="Abrechnungsgruppe" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
+                            <SortableHead column="user_count" label="Nutzer" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
+                            <SortableHead column="session_count" label="Ladevorgänge" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
+                            <SortableHead column="energy" label="Energie" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {groupedSessionRows.map((row) => (
+                            <TableRow key={row.key}>
+                              <TableCell className="font-medium">
+                                {row.group_name}
+                                {row.key === NO_GROUP_KEY && (
+                                  <Badge variant="outline" className="ml-2 text-xs">keine Gruppe</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>{fmtNum(row.user_count, 0)}</TableCell>
+                              <TableCell>{fmtNum(row.session_count, 0)}</TableCell>
+                              <TableCell>{fmtKwh(row.energy_kwh, 1)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )
                   )}
                 </CardContent>
               </Card>
+
 
               <Dialog open={!!ocmfSessionId} onOpenChange={(o) => !o && setOcmfSessionId(null)}>
                 <DialogContent className="max-w-2xl">
