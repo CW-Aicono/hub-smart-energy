@@ -157,7 +157,33 @@ const ChargingBilling = () => {
   const [invSortColumn, setInvSortColumn] = useState<"invoice_number" | "invoice_date" | "user_name" | "period" | "total_amount" | "status" | null>("invoice_date");
   const [invSortDirection, setInvSortDirection] = useState<"asc" | "desc">("desc");
 
+  // Sessions view mode: by individual users (rows = sessions) vs by billing groups (aggregated)
+  const [sessionView, setSessionView] = useState<"users" | "groups">("users");
+
+  // Group aggregation sort
+  const [groupSortColumn, setGroupSortColumn] = useState<"group_name" | "user_count" | "session_count" | "energy" | null>("energy");
+  const [groupSortDirection, setGroupSortDirection] = useState<"asc" | "desc">("desc");
+
+  // Charging users (to resolve session id_tag -> user_id)
+  const { users: chargingUsers } = useChargingUsers();
+  const { groups: billingGroups } = useChargingBillingGroups();
+
+  // Billing group membership map: user_id -> { group_id, group_name }
+  const { data: billingMemberships = [] } = useQuery({
+    queryKey: ["charging-billing-group-members-all", tenant?.id],
+    enabled: !!tenant?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charging_billing_group_members" as any)
+        .select("user_id, group_id")
+        .eq("tenant_id", tenant!.id);
+      if (error) throw error;
+      return (data ?? []) as Array<{ user_id: string; group_id: string }>;
+    },
+  });
+
   const getCpName = (id: string) => chargePoints.find((cp) => cp.id === id)?.name || "—";
+
 
   const filteredSessions = useMemo(() => {
     const q = sessionSearch.trim().toLowerCase();
