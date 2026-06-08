@@ -39,6 +39,34 @@ BEGIN
   END LOOP;
 END $mig$;
 
+-- Root-Cause Hetzner-Deploy 2026-06-08:
+-- pg_cron nutzt fuer cron.job.jobid eine Sequence. Auf Prod war diese Sequence
+-- hinter den bestehenden Zeilen zurueckgefallen; cron.schedule() bekam dadurch
+-- erneut jobid=17 und scheiterte auf cron.job_pkey, bevor der Jobname-Konflikt
+-- ueberhaupt greifen konnte. Darum die Sequence vor neuen cron.schedule()-Calls
+-- explizit an den echten Tabellenstand angleichen.
+DO $mig$
+DECLARE
+  seq_name text;
+  max_jobid bigint;
+BEGIN
+  SELECT pg_get_serial_sequence('cron.job', 'jobid') INTO seq_name;
+
+  IF seq_name IS NULL AND to_regclass('cron.jobid_seq') IS NOT NULL THEN
+    seq_name := 'cron.jobid_seq';
+  END IF;
+
+  IF seq_name IS NOT NULL THEN
+    SELECT COALESCE(MAX(jobid), 0) INTO max_jobid FROM cron.job;
+    EXECUTE format(
+      'SELECT setval(%L::regclass, %s, %L)',
+      seq_name,
+      GREATEST(max_jobid, 1),
+      max_jobid > 0
+    );
+  END IF;
+END $mig$;
+
 SELECT cron.schedule('ems-loxone-periodic-sync',     '*/2 * * * *', $$SELECT private.invoke_edge_function('loxone-periodic-sync');$$);
 SELECT cron.schedule('ems-gateway-periodic-sync',    '*/2 * * * *', $$SELECT private.invoke_edge_function('gateway-periodic-sync');$$);
 SELECT cron.schedule('ems-cheap-charging-scheduler', '*/2 * * * *', $$SELECT private.invoke_edge_function('cheap-charging-scheduler');$$);
