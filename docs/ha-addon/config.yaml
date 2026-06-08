@@ -44,7 +44,7 @@ options:
   device_name: "aicono-ems"
   cloud_url: null
   poll_interval_seconds: 30
-  flush_interval_seconds: 5
+  flush_interval_seconds: 60
   heartbeat_interval_seconds: 60
   automation_eval_seconds: 30
   entity_filter: "sensor.*_energy,sensor.*_power,sensor.*_consumption"
