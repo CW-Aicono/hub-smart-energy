@@ -362,9 +362,8 @@ const ChargingBilling = () => {
   const filteredInvoices = useMemo(() => {
     const q = invoiceSearch.trim().toLowerCase();
     return invoices.filter((inv: any) => {
-      // Period filter: use invoice_date (fallback created_at) or period_start
       const ref = new Date(inv.invoice_date || inv.period_start || inv.created_at);
-      if (ref < periodStart) return false;
+      if (periodRange && (ref < periodRange.start || ref > periodRange.end)) return false;
       if (!q) return true;
       const fields = [
         inv.invoice_number, inv.user_name, inv.user_email, inv.status,
@@ -375,7 +374,8 @@ const ChargingBilling = () => {
       ];
       return fields.some((f) => String(f || "").toLowerCase().includes(q));
     });
-  }, [invoices, periodStart, invoiceSearch]);
+  }, [invoices, periodRange, invoiceSearch]);
+
 
   const displayedInvoices = useMemo(() => {
     if (!invSortColumn) return filteredInvoices;
