@@ -399,9 +399,17 @@ const ChargingBilling = () => {
             {/* Sessions Tab */}
             <TabsContent value="sessions">
               <Card>
-                <CardHeader><CardTitle>{t("charging.sessions" as any)}</CardTitle></CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between gap-4">
+                  <CardTitle>{t("charging.sessions" as any)}</CardTitle>
+                  <Input
+                    placeholder="Suchen (Ladepunkt, Tag, Status, Datum…)"
+                    value={sessionSearch}
+                    onChange={(e) => setSessionSearch(e.target.value)}
+                    className="max-w-xs h-9"
+                  />
+                </CardHeader>
                 <CardContent>
-                  {sessionsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : filteredSessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
+                  {sessionsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : displayedSessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
                     <Table>
                       <TableHeader>
                         <TableRow>
