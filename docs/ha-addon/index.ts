@@ -153,7 +153,7 @@ function loadConfig(): AddonConfig {
     gateway_username: process.env.GATEWAY_USERNAME || "",
     gateway_password: process.env.GATEWAY_PASSWORD || "",
     poll_interval_seconds: Number(process.env.POLL_INTERVAL_SECONDS) || 30,
-    flush_interval_seconds: Number(process.env.FLUSH_INTERVAL_SECONDS) || 5,
+    flush_interval_seconds: Number(process.env.FLUSH_INTERVAL_SECONDS) || 60,
     heartbeat_interval_seconds: Number(process.env.HEARTBEAT_INTERVAL_SECONDS) || 60,
     entity_filter: process.env.ENTITY_FILTER || "sensor.*_energy,sensor.*_power",
     offline_buffer_max_mb: Number(process.env.OFFLINE_BUFFER_MAX_MB) || 100,
