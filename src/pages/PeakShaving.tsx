@@ -153,6 +153,7 @@ export default function PeakShaving() {
                             locations={locations}
                             storages={storages}
                           />
+                          <ReportButton configId={cfg.id} />
                           <Button variant="ghost" size="sm" onClick={() => { if (confirm("Wirklich löschen?")) remove.mutate(cfg.id); }}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
