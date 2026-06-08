@@ -165,6 +165,9 @@ export default function PeakShaving() {
               )}
             </CardContent>
           </Card>
+          {/* Event-Kalender */}
+          <CalendarSection configs={configs} locations={locations} />
+
 
           {/* Event-Log */}
           <Card>
