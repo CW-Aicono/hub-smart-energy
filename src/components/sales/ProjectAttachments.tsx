@@ -52,6 +52,7 @@ export function ProjectAttachments({ projectId }: { projectId: string }) {
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<{ url: string; name: string; isImage: boolean; isPdf: boolean } | null>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
