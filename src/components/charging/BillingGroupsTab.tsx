@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Edit, Trash2, Users, Building2, Mail, FileText, Send } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Building2, Mail, FileText, Send, Lock } from "lucide-react";
 import {
   useChargingBillingGroups,
   useChargingBillingGroupMembers,
@@ -17,6 +19,7 @@ import {
   ChargingBillingGroup,
 } from "@/hooks/useChargingBillingGroups";
 import { useChargingUsers } from "@/hooks/useChargingUsers";
+import { useTenant } from "@/hooks/useTenant";
 
 interface Props {
   isAdmin: boolean;
