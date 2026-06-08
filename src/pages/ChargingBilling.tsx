@@ -233,6 +233,86 @@ const ChargingBilling = () => {
     });
   }, [filteredSessions, sortColumn, sortDirection, chargePoints, resolveTag]);
 
+  // ---- Aggregation by billing group ----
+  // Map RFID tag (uppercase, no spaces) -> charging user id
+  const tagToUserId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of chargingUsers) {
+      const all = [
+        ...(u.tags ?? []).map((t) => t.tag),
+        u.rfid_tag,
+      ].filter(Boolean) as string[];
+      for (const raw of all) {
+        const k = raw.replace(/\s+/g, "").toUpperCase();
+        if (k) map.set(k, u.id);
+      }
+    }
+    return map;
+  }, [chargingUsers]);
+
+  const userIdToBillingGroup = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of billingMemberships) map.set(m.user_id, m.group_id);
+    return map;
+  }, [billingMemberships]);
+
+  const groupNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const g of billingGroups) map.set(g.id, g.name);
+    return map;
+  }, [billingGroups]);
+
+  const userNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of chargingUsers) map.set(u.id, u.name);
+    return map;
+  }, [chargingUsers]);
+
+  const NO_GROUP_KEY = "__no_group__";
+
+  const groupedSessionRows = useMemo(() => {
+    type Row = { key: string; group_name: string; user_ids: Set<string>; session_count: number; energy_kwh: number };
+    const rows = new Map<string, Row>();
+    for (const s of filteredSessions) {
+      const tagKey = (s.id_tag || "").replace(/\s+/g, "").toUpperCase();
+      const userId = tagToUserId.get(tagKey);
+      const groupId = userId ? userIdToBillingGroup.get(userId) : undefined;
+      const key = groupId ?? NO_GROUP_KEY;
+      const name = groupId ? (groupNameById.get(groupId) ?? "—") : "Ohne Abrechnungsgruppe";
+      let row = rows.get(key);
+      if (!row) {
+        row = { key, group_name: name, user_ids: new Set(), session_count: 0, energy_kwh: 0 };
+        rows.set(key, row);
+      }
+      row.session_count += 1;
+      row.energy_kwh += s.energy_kwh || 0;
+      if (userId) row.user_ids.add(userId);
+      else if (s.id_tag) row.user_ids.add(`tag:${s.id_tag}`);
+    }
+    // Search filter
+    const q = sessionSearch.trim().toLowerCase();
+    const list = Array.from(rows.values())
+      .map((r) => ({ ...r, user_count: r.user_ids.size }))
+      .filter((r) => !q || r.group_name.toLowerCase().includes(q));
+
+    // Sort
+    const dir = groupSortDirection === "asc" ? 1 : -1;
+    list.sort((a, b) => {
+      let cmp = 0;
+      switch (groupSortColumn) {
+        case "group_name": cmp = a.group_name.localeCompare(b.group_name); break;
+        case "user_count": cmp = a.user_count - b.user_count; break;
+        case "session_count": cmp = a.session_count - b.session_count; break;
+        case "energy":
+        default: cmp = a.energy_kwh - b.energy_kwh; break;
+      }
+      return cmp * dir;
+    });
+    return list;
+  }, [filteredSessions, tagToUserId, userIdToBillingGroup, groupNameById, sessionSearch, groupSortColumn, groupSortDirection]);
+
+
+
   const filteredInvoices = useMemo(() => {
     const q = invoiceSearch.trim().toLowerCase();
     return invoices.filter((inv: any) => {
