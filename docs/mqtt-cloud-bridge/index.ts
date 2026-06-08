@@ -72,9 +72,19 @@ try {
   log.error({ err }, "Failed to parse ROUTES_JSON");
 }
 
-// ── Forward readings to gateway-ingest ──────────────────────────────────────
-async function forward(tenantId: string, readings: Reading[]): Promise<void> {
-  if (readings.length === 0) return;
+// ── Forward readings to gateway-ingest (mit Coalescing-Buffer) ─────────────
+// Jeder MQTT-Frame wird zunächst in einen In-Memory-Puffer geschrieben.
+// Ein Timer flusht die Puffer alle COALESCE_INTERVAL_MS pro Tenant gebündelt
+// an die Cloud. Falls der Puffer COALESCE_MAX_BATCH überschreitet, wird
+// sofort geflusht. Bei Prozess-Shutdown wird ebenfalls geflusht.
+const coalesceIntervalMs = Math.max(1000, parseInt(COALESCE_INTERVAL_MS, 10) || 30000);
+const coalesceMaxBatch = Math.max(1, parseInt(COALESCE_MAX_BATCH, 10) || 1000);
+const readingBuffers = new Map<string, Reading[]>(); // tenantId → readings
+
+async function flushTenant(tenantId: string): Promise<void> {
+  const buf = readingBuffers.get(tenantId);
+  if (!buf || buf.length === 0) return;
+  const readings = buf.splice(0, buf.length); // drain
   const body = {
     source: "mqtt-cloud-bridge",
     tenant_id: tenantId,
@@ -96,11 +106,43 @@ async function forward(tenantId: string, readings: Reading[]): Promise<void> {
       },
       body: JSON.stringify(body),
     });
-    if (!res.ok) log.warn({ status: res.status, tenantId }, "gateway-ingest rejected");
+    if (!res.ok) {
+      log.warn({ status: res.status, tenantId, count: readings.length }, "gateway-ingest rejected — readings dropped");
+    } else {
+      log.debug({ tenantId, count: readings.length }, "Flushed readings batch");
+    }
   } catch (err) {
-    log.error({ err, tenantId }, "Failed to POST to gateway-ingest");
+    log.error({ err, tenantId, count: readings.length }, "Failed to POST to gateway-ingest");
   }
 }
+
+function enqueue(tenantId: string, readings: Reading[]): void {
+  if (readings.length === 0) return;
+  const buf = readingBuffers.get(tenantId) ?? [];
+  buf.push(...readings);
+  readingBuffers.set(tenantId, buf);
+  if (buf.length >= coalesceMaxBatch) {
+    void flushTenant(tenantId);
+  }
+}
+
+// Periodischer Flush für alle Tenants
+setInterval(() => {
+  for (const tenantId of readingBuffers.keys()) {
+    void flushTenant(tenantId);
+  }
+}, coalesceIntervalMs).unref();
+
+// Sauberer Shutdown: nochmal alles wegflushen
+for (const sig of ["SIGINT", "SIGTERM"] as const) {
+  process.on(sig, async () => {
+    log.info({ sig }, "Shutdown — flushing buffers");
+    await Promise.all([...readingBuffers.keys()].map(flushTenant));
+    process.exit(0);
+  });
+}
+
+log.info({ coalesceIntervalMs, coalesceMaxBatch }, "Coalescing buffer aktiv");
 
 // ── MQTT client ─────────────────────────────────────────────────────────────
 const client: MqttClient = mqtt.connect(MQTT_BROKER_URL, {
