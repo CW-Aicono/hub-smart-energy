@@ -167,6 +167,7 @@ const DashboardSidebar = () => {
       labelKey: "nav.trading" as TranslationKey,
       children: [
         { to: "/arbitrage", icon: TrendingUp, labelKey: "nav.arbitrageTrading" as TranslationKey },
+        { to: "/peak-shaving", icon: Activity, labelKey: "Peak-Shaving" as TranslationKey },
         { to: "/ppa", icon: FileSignature, labelKey: "nav.ppa" as TranslationKey },
         { to: "/tenant-electricity", icon: Home, labelKey: "nav.tenantElectricity" as TranslationKey },
         { to: "/energy-sharing", icon: Share2, labelKey: "nav.energySharing" as TranslationKey },
