@@ -35,7 +35,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 // Sortable table header (generic)
-function SortableHead<T extends string>({
+function SortableHead({
   column,
   label,
   sortColumn,
@@ -44,11 +44,11 @@ function SortableHead<T extends string>({
   onDir,
   className,
 }: {
-  column: T;
+  column: string;
   label: string;
-  sortColumn: T | null;
+  sortColumn: string | null;
   sortDirection: "asc" | "desc";
-  onSort: (c: T | null) => void;
+  onSort: (c: any) => void;
   onDir: (d: "asc" | "desc") => void;
   className?: string;
 }) {
