@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Edit, Trash2, Users, Building2, Mail, FileText, Send } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Building2, Mail, FileText, Send, Lock } from "lucide-react";
 import {
   useChargingBillingGroups,
   useChargingBillingGroupMembers,
@@ -17,6 +19,7 @@ import {
   ChargingBillingGroup,
 } from "@/hooks/useChargingBillingGroups";
 import { useChargingUsers } from "@/hooks/useChargingUsers";
+import { useTenant } from "@/hooks/useTenant";
 
 interface Props {
   isAdmin: boolean;
@@ -93,6 +96,7 @@ export default function BillingGroupsTab({ isAdmin, periodStart, periodEnd, peri
         ) : groups.length === 0 ? (
           <p className="text-muted-foreground">Noch keine Rechnungsgruppen vorhanden.</p>
         ) : (
+          <div className="overflow-x-auto -mx-6 px-6">
           <Table>
             <TableHeader>
               <TableRow>
@@ -197,6 +201,7 @@ export default function BillingGroupsTab({ isAdmin, periodStart, periodEnd, peri
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </CardContent>
 
@@ -280,9 +285,38 @@ function MembersDialog({
   onClose: () => void;
   users: any[];
 }) {
+  const { tenant } = useTenant();
   const { memberUserIds, setMembers } = useChargingBillingGroupMembers(group?.id ?? null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+
+  // Lade alle Gruppen-Mitgliedschaften im Tenant, damit wir Nutzer
+  // sperren können, die bereits in einer anderen Rechnungsgruppe sind.
+  const { data: allMemberships = [] } = useQuery({
+    queryKey: ["charging-billing-group-members-all", tenant?.id],
+    enabled: !!tenant?.id && !!group,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charging_billing_group_members" as any)
+        .select("user_id, group_id, charging_billing_groups(name)")
+        .eq("tenant_id", tenant!.id);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  // Map: user_id -> {group_id, group_name} der ANDEREN Gruppen
+  const otherGroupByUser = useMemo(() => {
+    const map = new Map<string, { group_id: string; group_name: string }>();
+    for (const m of allMemberships) {
+      if (!group || m.group_id === group.id) continue;
+      map.set(m.user_id, {
+        group_id: m.group_id,
+        group_name: m.charging_billing_groups?.name ?? "andere Gruppe",
+      });
+    }
+    return map;
+  }, [allMemberships, group?.id]);
 
   useEffect(() => {
     if (group) {
@@ -294,8 +328,8 @@ function MembersDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [group?.id, memberUserIds.join(",")]);
 
-
   const toggle = (id: string) => {
+    if (otherGroupByUser.has(id)) return; // gesperrt
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
@@ -320,38 +354,57 @@ function MembersDialog({
 
   return (
     <Dialog open={!!group} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-xl w-[calc(100vw-2rem)] sm:w-full">
         <DialogHeader>
-          <DialogTitle>Mitglieder verwalten — {group?.name}</DialogTitle>
+          <DialogTitle className="text-base sm:text-lg">
+            Mitglieder verwalten — {group?.name}
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Hinweis: Ein Nutzer kann immer nur in einer Rechnungsgruppe sein. Nutzer, die bereits einer anderen Gruppe zugeordnet sind, sind hier gesperrt.
+          </p>
           <Input
             placeholder="Nach Name, E-Mail oder RFID suchen…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <ScrollArea className="h-80 border rounded-md">
+          <ScrollArea className="h-72 sm:h-80 border rounded-md">
             <div className="p-2 space-y-1">
               {filtered.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">Keine Nutzer gefunden.</p>
               ) : (
-                filtered.map((u) => (
-                  <label
-                    key={u.id}
-                    className="flex items-center gap-3 p-2 rounded-md hover:bg-muted cursor-pointer"
-                  >
-                    <Checkbox
-                      checked={selected.has(u.id)}
-                      onCheckedChange={() => toggle(u.id)}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{u.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {u.email || u.rfid_tag || "—"}
-                      </p>
-                    </div>
-                  </label>
-                ))
+                filtered.map((u) => {
+                  const locked = otherGroupByUser.get(u.id);
+                  return (
+                    <label
+                      key={u.id}
+                      className={`flex items-center gap-3 p-2 rounded-md ${
+                        locked
+                          ? "opacity-60 cursor-not-allowed bg-muted/40"
+                          : "hover:bg-muted cursor-pointer"
+                      }`}
+                    >
+                      <Checkbox
+                        checked={selected.has(u.id)}
+                        onCheckedChange={() => toggle(u.id)}
+                        disabled={!!locked}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{u.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {u.email || u.rfid_tag || "—"}
+                        </p>
+                      </div>
+                      {locked && (
+                        <Badge variant="outline" className="shrink-0 gap-1 text-xs">
+                          <Lock className="h-3 w-3" />
+                          <span className="hidden sm:inline">in</span> {locked.group_name}
+                        </Badge>
+                      )}
+                    </label>
+                  );
+                })
               )}
             </div>
           </ScrollArea>
@@ -359,11 +412,11 @@ function MembersDialog({
             {selected.size} Nutzer ausgewählt
           </p>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
             Abbrechen
           </Button>
-          <Button onClick={handleSave} disabled={setMembers.isPending}>
+          <Button onClick={handleSave} disabled={setMembers.isPending} className="w-full sm:w-auto">
             {setMembers.isPending ? "Speichert…" : "Mitglieder speichern"}
           </Button>
         </DialogFooter>
