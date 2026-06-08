@@ -1,93 +1,164 @@
-# Root-Cause-Analyse: Disk-IO 75 %
+# OCPP-Firmware-Update für Ladepunkte
 
-Ich habe `pg_stat_statements`, `pg_stat_user_tables` und `cron.job` ausgewertet (Datenbank-Uptime: **120 Tage**). Damit lassen sich die tatsächlichen Schreib-Hotspots exakt benennen — nicht raten, messen.
+## 1. Recherche-Ergebnis (Kurzfassung)
 
-## Die 5 echten Verursacher (Summe der Disk-Writes / WAL über 120 Tage)
+**Machbarkeit: Ja, gut machbar mit OCPP 1.6J** über das optionale `FirmwareManagement`-Profil. Alle für uns relevanten Wallboxen (ABB Terra, KEBA P30, Alfen Eve, Webasto, Mennekes AMTRON, Wallbox Pulsar/Commander, ABL eMH/eM4, Compleo) unterstützen es.
 
+### OCPP 1.6J Mechanismus
 
-| #   | Verursacher                                                                                                                    | Calls         | WAL geschrieben | Dirty Blocks | Anteil    |
-| --- | ------------------------------------------------------------------------------------------------------------------------------ | ------------- | --------------- | ------------ | --------- |
-| 1   | `INSERT meter_power_readings` (Gateway-Ingest, einzeln)                                                                        | **5 000 679** | **59 GB**       | 13.5 M       | **~65 %** |
-| 2   | `INSERT ocpp_message_log` (jede OCPP-Frame einzeln)                                                                            | 1 000 991     | 6.5 GB          | 1.27 M       | ~7 %      |
-| 3   | `INSERT meter_period_totals` (Upsert-Sturm)                                                                                    | 615 285       | 4.7 GB          | 354 k        | ~5 %      |
-| 4   | `compact_power_readings_day()` (stündlich)                                                                                     | 92            | 4.4 GB          | 495 k        | ~5 %      |
-| 5   | `INSERT meter_power_readings_5min` (Upsert) + `gateway_sensor_snapshots` Upserts + `integration_errors` + cron.job_run_details | —             | ~7 GB           | ~750 k       | ~8 %      |
+- 1 Befehl Cloud → Wallbox: `UpdateFirmware` mit Feldern `location` (HTTPS-URL zur Firmware-Datei), `retrieveDate` (ISO-Zeitstempel, frühestens herunterladen), optional `retries`, `retryInterval`
+- `UpdateFirmware.conf` ist immer leer — **kein Reject möglich**, Fehler kommen rein asynchron
+- Status-Rückmeldungen Wallbox → Cloud via `FirmwareStatusNotification`: `Downloading → Downloaded → Installing → Installed` (Happy Path) bzw. `DownloadFailed` / `InstallationFailed`
+- Wallbox triggert nach Installation i.d.R. eigenständig Reboot → neue `BootNotification` mit neuer `firmwareVersion`
+- Bei Stillstand: `TriggerMessage(FirmwareStatusNotification)` zum Nachfragen
 
+### Wichtigste Stolperfallen
 
-Die Top 1 allein erklärt **65 %** der Schreiblast — jede einzelne Gateway-Messung läuft als **eigene Transaktion** durch PostgREST (`gateway-ingest`). Eine Transaktion erzeugt aber immer ein WAL-Flush + Full-Page-Write der Index-Seiten — bei 80-Byte-Payload landen real ~12 KB im WAL. Das ist der Hauptgrund, warum der Disk-IO-Budget so schnell hochläuft.
+- **Dateiformat** ist herstellerspezifisch (`.bin` / `.zip` / `.fwu` / Container) — Datei muss exakt passen, sonst `InstallationFailed`
+- **TLS**: Manche älteren CPs scheitern an Let's-Encrypt-Chain oder TLS 1.2 → ggf. CA-Bundle/Cert prüfen
+- **Lange Downloads** über Mobilfunk → `retrieveDate` in die Nacht legen, idealerweise FTPS mit Resume bei großen Dateien
+- **Auth in URL**: Basic Auth in URL landet in OCPP-Logs → besser **Signed URLs** mit kurzer Gültigkeit
+- **Reboot-Verhalten**: `Installed` kommt oft erst nach Reconnect → Backend braucht Timeouts + `TriggerMessage`-Fallback
+- **Laufende Ladesessions**: Spec empfiehlt zu warten — nicht alle Wallboxen tun das → Update-Fenster in Niedriglast-Zeiten planen
 
-Zusätzlich auffällig (kleiner Effekt, aber unsauber):
+### Eichrecht (kritisch!)
 
-- `charge_points` hat **6 Zeilen, aber 571 k Updates** (Heartbeat-Spam jede Sekunde)
-- `gateway_device_inventory` 103 Zeilen / 1.2 M Updates
-- `gateway_sensor_snapshots` 8 Zeilen / 250 k Updates
-- `pv_forecast_hourly` 3 k Zeilen / 96 k Updates
-- `spot_prices` 9 k Zeilen, aber 504 k Deletes + 504 k Inserts (Replace statt Upsert)
-- `cron.job_run_details` ist **611 MB** groß (1.59 M alte Einträge gelöscht) — bloatet die Cron-Logs erheblich.
+- **§ 40 MessEV**: FW-Update an eichrechtkonformen Messgeräten ist **genehmigungspflichtig** und braucht Konformitätsbescheinigung des Herstellers
+- **Meter-Eichrecht** (OCMF-Zähler signiert selbst, z. B. Eastron, EMH, Iskra): Zähler-FW i. d. R. **nicht** updatebar; Controller-FW unproblematisch, solange Messmodul unberührt
+- **Controller-Eichrecht** (z. B. Bender, Alfen, ABB): nur signierte, vorab genehmigte FW-Pakete des Herstellers verwenden; "Lock" entspricht Software-Siegel
+- OCMF-Records enthalten `FV` (Firmware Version) → Versionssprung in jedem Ladevorgang sichtbar (Audit-Spur)
+- **Konsequenz für uns**: Update-Funktion muss zwischen "Eichrecht-relevant" (gesperrt für Self-Service, nur freigegebene Hersteller-Firmware) und "unkritisch" (z. B. nur Kommunikations-FW) unterscheiden
 
-## Gegenmaßnahmen (in Reihenfolge der Wirkung)
+### Quellen
 
-### M1 — Gateway-Ingest auf Batch-Insert umstellen *(größter Hebel, allein ~50 % IO-Reduktion erwartet)*
+- OCPP 1.6 FW-Spec: [https://tzi.app/developers/ocpp/1.6/firmware-and-diagnostics-file-transfer](https://tzi.app/developers/ocpp/1.6/firmware-and-diagnostics-file-transfer)
+- OCPP 1.6 JSON-Schemas: [https://ocpp-spec.org/schemas/v1.6/](https://ocpp-spec.org/schemas/v1.6/)
+- OCA Test Plans 1.6: [https://openchargealliance.org/wp-content/uploads/2024/06/02.-Test-Procedure-Test-Plans_v1.2.1.pdf](https://openchargealliance.org/wp-content/uploads/2024/06/02.-Test-Procedure-Test-Plans_v1.2.1.pdf)
+- ABB Terra OCPP 1.6 Impl. Overview (FirmwareManagement) — siehe ABB Library
+- § 40 MessEV: [https://www.buzer.de/40_MessEV.htm](https://www.buzer.de/40_MessEV.htm)
+- Bender Eichrecht-Doku: [https://www.bender.de/docs/charge-controller/Eichrecht/](https://www.bender.de/docs/charge-controller/Eichrecht/)
 
-- `supabase/functions/gateway-ingest` akzeptiert heute pro Request 1 Reading. Wir erweitern das Schema so, dass der Client (Hub/Worker) **eine Liste** schicken kann (`readings: [...]`), und führen einen einzigen `insert([...])` aus.
-- Server-seitig zusätzlich ein kleines Coalescing-Fenster (alle Readings aus einem POST in **einer** Transaktion).
-- Hub/Worker-Side: lokal alle 30-60 s flushen statt jede Messung sofort senden (lokaler Buffer ist bereits vorhanden — wir nutzen ihn nur konsequenter).
-- Erwartet: 5 M Einzel-Inserts → ~80 k Batch-Inserts ⇒ WAL ca. 1/30.
-
-### M2 — `ocpp_message_log` drosseln *(7 % IO)*
-
-- Aktuell wird **jede** OCPP-Frame geloggt (Heartbeats, MeterValues, StatusNotifications). Wir behalten Logging für: `BootNotification`, `StartTransaction`, `StopTransaction`, `Authorize`, `*Error*`, sowie Statuswechsel. Heartbeats und reine MeterValues werden **nicht** mehr persistiert (sie sind ohnehin in `ocpp_meter_samples`/`charging_sessions` abgedeckt).
-- Zusätzlich: `cleanup_old_ocpp_logs()` täglich auf **7 Tage** statt 30 reduzieren (Retention-Setting in der Funktion).
-
-### M3 — Hochfrequente Mini-Tabellen entlasten
-
-- `charge_points.last_seen_at` und `gateway_device_inventory.last_seen_at` nicht mehr bei jedem Heartbeat in die Haupt-Tabelle schreiben, sondern eine **Heartbeat-Tabelle** (`charge_point_heartbeats`) mit `ON CONFLICT DO NOTHING` + Aggregat-Read. Alternativ: `last_seen_at` nur alle 60 s aktualisieren (Skip-Update wenn `now() - last_seen_at < 60s`).
-- `gateway_sensor_snapshots`: heute UPSERT bei jedem Polling — wir schreiben nur, wenn sich der Sensor-Hash ändert (Diff-Check vor UPDATE).
-- `pv_forecast_hourly`: pro Lokation 1×/h, schreibt aber per Zeile per Stunde → in einem einzigen `INSERT … ON CONFLICT DO UPDATE` mit Array bündeln.
-
-### M4 — `spot_prices` Upsert statt Replace
-
-- Heute: `DELETE FROM spot_prices WHERE …; INSERT …` (= 504 k del + 504 k ins). Umstellung auf `INSERT … ON CONFLICT (timestamp, market_area, price_type) DO UPDATE` ⇒ keine Deletes, keine Index-Re-Inserts.
-
-### M5 — `cron.job_run_details` Bloat
-
-- Retention von `cleanup_cron_job_history` von aktuell „älter als X Tage löschen" auf **24 h** verkürzen + tägliches `VACUUM (FULL, ANALYZE) cron.job_run_details` als pg_cron-Job hinzufügen, damit die 611 MB physisch zurückgegeben werden.
-- Minutentakt-Jobs (`automation-scheduler`, `dlm-scheduler`, `power-limit-scheduler`) bleiben bestehen, erzeugen aber dann nur noch 1440 Einträge/Tag statt akkumulierter Historie.
-
-### M6 — `compact_power_readings_day()` inkrementell
-
-- Heute verarbeitet die Funktion stündlich den gesamten letzten Tag (495 k Dirty Blocks/Run). Wir ändern sie auf **inkrementell** (nur die letzte volle Stunde) — der bisherige tägliche Voll-Compaction-Lauf bleibt nachts erhalten.
-
-## Was wir NICHT tun
-
-- **Kein Instanz-Upgrade** als ersten Schritt. Die Lovable-Cloud-Empfehlung im Screenshot ist Symptom-Behandlung; mit M1–M3 alleine fällt die IO-Last laut Messung um ~70 %.
-- Keine Spekulations-Refactorings außerhalb der gemessenen Hotspots.
-
-## Reihenfolge & geschätzter Aufwand
-
-1. **M1 Gateway-Ingest Batch** (zentral, höchster Hebel) — ~60 min Umsetzung, danach beobachten ob Disk-IO sichtbar fällt
-2. **M2 OCPP-Log Filter + Retention 7 Tage** — ~20 min
-3. **M5 Cron-Bloat VACUUM + 24 h Retention** — ~10 min
-4. **M4 spot_prices Upsert** — ~15 min
-5. **M3 Skip-Update Logik für last_seen_at / Sensor-Hash-Diff** — ~30 min
-6. **M6 inkrementelle Compaction** — ~20 min
-
-Nach M1+M2+M5 (= ~90 min Arbeit) erwarte ich messbar < 30 % Disk-IO-Budget. Danach prüfen wir live, ob M3/M4/M6 überhaupt noch nötig sind.
-
-## Verifikation nach jeder Maßnahme
-
-Nach Umsetzung von M1 warten wir 24 h und prüfen:
-
-```sql
-SELECT calls, wal_bytes, shared_blks_dirtied
-FROM extensions.pg_stat_statements
-WHERE query LIKE '%meter_power_readings%' ORDER BY wal_bytes DESC LIMIT 5;
-```
-
-Sowie den Disk-IO-Wert im Lovable-Cloud-Dashboard.
+→ Fazit: **Empfehlung umsetzen**, OCPP 1.6J-only (2.0.1 später optional als Erweiterung).
 
 ---
 
-**Bitte bestätige, dass ich mit M1 (Gateway-Ingest Batch) starten soll** — das ist der größte Hebel und in sich abgeschlossen. Danach gehen wir Maßnahme für Maßnahme weiter, jeweils mit Messung dazwischen.  
-  
-Bestätigung: Ja, wir setzen jetzt M! (**Gateway-Ingest Batch) um und prüfen danach wieder.**  
+## 2. Status quo im Projekt
+
+- Persistenter OCPP-Server unter `docs/ocpp-persistent-server/` läuft auf Hetzner, dispatcht Commands via DB-Poll (`charge_point_commands` o. ä., siehe `commandDispatcher.ts`)
+- `ocppHandler.ts` Zeile 263 nimmt `FirmwareStatusNotification` heute **stillschweigend an** und antwortet mit `{}` — keinerlei Persistenz
+- `commandDispatcher.ts` hat aktuell **keinen** `UpdateFirmware`-Case
+- Es existiert bereits eine Super-Admin-Seite `SuperAdminOcppControl.tsx` und ein Tenant-Bereich für Ladepunkte (`/charging/points/:id`)
+- Storage für FW-Files ist noch nicht angelegt
+
+---
+
+## 3. Umsetzungsplan
+
+Ich schlage einen **vierstufigen Aufbau** vor, in dem die ersten beiden Schritte das MVP bilden und 3 + 4 als zweite Iteration folgen können.
+
+### Schritt 1 — Datenmodell & Storage
+
+Neue Tabellen:
+
+- `cp_firmware_artifacts` — vom Super-Admin hochgeladene FW-Dateien
+  - `vendor`, `model`, `version`, `storage_path` (Bucket), `file_size`, `sha256`, `file_format` (`bin`/`zip`/`fwu`/…), `is_eichrecht_certified` (bool), `eichrecht_approval_ref` (Text/Link), `release_notes`, `uploaded_by`
+- `cp_firmware_jobs` — pro Wallbox ein Job
+  - `charge_point_id`, `artifact_id`, `status` (`queued`, `dispatched`, `downloading`, `downloaded`, `installing`, `installed`, `failed`, `cancelled`), `retrieve_date`, `retries`, `retry_interval`, `download_url` (signed, mit `url_expires_at`), `last_status_at`, `error_code`, `error_message`, `triggered_by` (user_id), `created_at`, `finished_at`
+- `cp_firmware_status_events` — vollständiges Protokoll aller `FirmwareStatusNotification` (Pflicht für §40 MessEV-Konformität: 6 Mon. nach Eichfrist aufheben)
+  - `job_id`, `charge_point_id`, `status`, `received_at`, `raw_payload`
+
+Storage:
+
+- Neuer **privater** Bucket `cp-firmware/` mit RLS (nur `super_admin` schreibt, nur Backend signed URLs erzeugt)
+- Multi-Tenancy: Artefakte sind **global** (super_admin-only), Jobs strikt tenant-scoped via `charge_point_id → tenant_id`
+
+RLS gemäß `mem://technical/architecture/multi-tenancy-core`, GRANTs zwingend (siehe Core-Regel).
+
+### Schritt 2 — Cloud → OCPP-Server: Command-Dispatch
+
+In `docs/ocpp-persistent-server/src/commandDispatcher.ts`:
+
+- Neuer Case `UpdateFirmware`:
+  ```ts
+  case "UpdateFirmware":
+    return [2, uniqueId, "UpdateFirmware", {
+      location: p.location as string,
+      retrieveDate: p.retrieveDate as string,
+      ...(p.retries !== undefined ? { retries: p.retries as number } : {}),
+      ...(p.retryInterval !== undefined ? { retryInterval: p.retryInterval as number } : {}),
+    }];
+  case "TriggerMessage":
+    return [2, uniqueId, "TriggerMessage", {
+      requestedMessage: p.requestedMessage as string, // "FirmwareStatusNotification"
+      ...(p.connectorId !== undefined ? { connectorId: p.connectorId as number } : {}),
+    }];
+  ```
+- Beim Verarbeiten von `cp_firmware_jobs` (neuer Edge-Function oder direkter Insert in `charge_point_commands` mit `command_type=UpdateFirmware`): Backend erzeugt **kurz vor Dispatch** eine Signed URL (5–15 Min Gültigkeit) via Supabase Storage `createSignedUrl`, schreibt sie in `payload.location` + setzt `job.download_url`/`url_expires_at`
+
+In `docs/ocpp-persistent-server/src/ocppHandler.ts` Zeile 263:
+
+- `FirmwareStatusNotification` echt persistieren:
+  - Insert in `cp_firmware_status_events`
+  - Aktuellen offenen Job für diese `charge_point_id` finden und `status`/`last_status_at` aktualisieren
+  - Bei `Installed`: Job-Abschluss + `charge_points.firmware_version` aktualisieren beim nächsten `BootNotification`
+  - Bei `DownloadFailed`/`InstallationFailed`: `status=failed`, `error_message` setzen
+
+### Schritt 3 — UI: Super-Admin (Firmware-Katalog)
+
+Neue Seite `SuperAdminOcppFirmware.tsx`:
+
+- Liste aller `cp_firmware_artifacts` mit Vendor/Model/Version-Filter
+- Upload-Dialog: Datei + Metadaten + **Pflicht-Checkbox** "Eichrecht-Freigabe vorhanden (Konformitätsbescheinigung verlinken)" mit Pflicht-URL/Text-Feld
+- SHA-256 wird beim Upload client-seitig berechnet und mitgespeichert
+- Bulk-Rollout-Dialog: Modell wählen → alle passenden Wallboxen anzeigen → Auswahl → `retrieveDate` (default: kommende Nacht 02:00 Europe/Berlin) → Bestätigung mit Eichrecht-Warnhinweis falls eichrechtrelevant
+
+### Schritt 4 — UI: Tenant (pro Ladepunkt)
+
+Auf `/charging/points/:id` neue Karte **„Firmware“**:
+
+- Aktuelle FW-Version (aus `BootNotification`)
+- Verfügbares Update (passender Artefakt für Vendor+Model mit höherer Version)
+- Button **„Update planen“** → Dialog mit Zeitpunkt-Auswahl + Eichrecht-Hinweis
+- Live-Statusverlauf des aktuellen Jobs (Realtime-Subscribe auf `cp_firmware_status_events`)
+- Job-Historie + Möglichkeit, einen `queued`/`dispatched`-Job zu **canceln**
+- Watchdog: Falls 10 Min nach erwartetem `Downloading` keine Notification → automatisch `TriggerMessage(FirmwareStatusNotification)` senden
+
+### Schritt 5 — Edge-Function & Watchdog (pg_cron)
+
+- Edge-Function `ocpp-firmware-control` mit Actions `enqueue_job`, `cancel_job`, `request_status`, `bulk_enqueue`, geschützt per `super_admin`/`admin`-Rolle (für Tenant nur eigene CPs)
+- `pg_cron`-Job alle 5 Min: für alle Jobs mit `status in (dispatched, downloading, installing)` und letzte Statusmeldung > 15 Min → `TriggerMessage` senden; nach 6 h ohne Fortschritt → `status=failed` mit `error_code=timeout`
+
+---
+
+## 4. Out of Scope (für später, separat zu beauftragen)
+
+- OCPP 2.0.1 `SignedUpdateFirmware` / `PublishFirmware` (Local-Controller-Mode)
+- Automatisches "Suche nach Update beim Hersteller"-Crawling
+- `GetDiagnostics`-Flow (eigene, kleinere Story)
+- Eichrechtkonforme Genehmigungs-Workflow-Engine (nur Hinweis-/Dokumentationsfeld vorgesehen)
+
+---
+
+## 5. Risiken & Nebenwirkungen
+
+
+| Risiko                                                       | Gegenmaßnahme                                                                                           |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Falsches FW-Format → Wallbox bricht ab                       | Pro Vendor+Model nur freigegebene `file_format` zulassen, im Upload-Dialog dropdown                     |
+| Wallbox lädt während aktivem Ladevorgang neu                 | Default `retrieveDate` nachts; zusätzlich Check „aktive Session?“ vor Dispatch                          |
+| Signed URL läuft ab, bevor CP downloadet                     | URL-Gültigkeit ≥ `retrieveDate + 6 h`; Re-Sign bei Bedarf                                               |
+| Eichrecht-Verletzung durch versehentlichen Upload            | Pflicht-Checkbox + sichtbarer Banner + Audit-Log via `auditLog.ts`                                      |
+| Großer FW-Download über Mobilfunk-Backhaul → OCPP-Disconnect | Akzeptiert (Wallbox läuft Download eigenständig zu Ende), Watchdog fragt Status via TriggerMessage nach |
+
+
+---
+
+## 6. Geschätzter Aufwand
+
+- Schritt 1+2 (Backend + OCPP-Server-Anbindung): ~½ Tag
+- Schritt 3 (Super-Admin-UI): ~½ Tag
+- Schritt 4 (Tenant-UI): ~½ Tag
+- Schritt 5 (Watchdog/Edge-Function): ~¼ Tag
+
+Soll ich loslegen — und falls ja, **alles auf einmal** oder erst **MVP (Schritte 1+2+4)** und Super-Admin-Katalog nachziehen?  
+Antwort: Umsetzung gerne in zwei Schritten, wir fangen mit MVP (Schritte 1+2+4) an.
