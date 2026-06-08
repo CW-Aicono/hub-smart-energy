@@ -3720,7 +3720,9 @@ export type Database = {
         Row: {
           capacity_kwh: number
           created_at: string
+          current_soc_pct: number | null
           efficiency_pct: number
+          gateway_device_id: string | null
           id: string
           location_id: string | null
           max_charge_kw: number
@@ -3733,7 +3735,9 @@ export type Database = {
         Insert: {
           capacity_kwh?: number
           created_at?: string
+          current_soc_pct?: number | null
           efficiency_pct?: number
+          gateway_device_id?: string | null
           id?: string
           location_id?: string | null
           max_charge_kw?: number
@@ -3746,7 +3750,9 @@ export type Database = {
         Update: {
           capacity_kwh?: number
           created_at?: string
+          current_soc_pct?: number | null
           efficiency_pct?: number
+          gateway_device_id?: string | null
           id?: string
           location_id?: string | null
           max_charge_kw?: number
@@ -3757,6 +3763,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "energy_storages_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "energy_storages_location_id_fkey"
             columns: ["location_id"]
@@ -6665,6 +6678,8 @@ export type Database = {
           network_tariff_eur_per_kw_year: number
           notes: string | null
           peak_limit_kw: number
+          report_enabled: boolean
+          report_recipients: string[]
           reserve_soc_pct: number
           storage_id: string
           tenant_id: string
@@ -6681,6 +6696,8 @@ export type Database = {
           network_tariff_eur_per_kw_year?: number
           notes?: string | null
           peak_limit_kw: number
+          report_enabled?: boolean
+          report_recipients?: string[]
           reserve_soc_pct?: number
           storage_id: string
           tenant_id: string
@@ -6697,6 +6714,8 @@ export type Database = {
           network_tariff_eur_per_kw_year?: number
           notes?: string | null
           peak_limit_kw?: number
+          report_enabled?: boolean
+          report_recipients?: string[]
           reserve_soc_pct?: number
           storage_id?: string
           tenant_id?: string
@@ -6719,6 +6738,169 @@ export type Database = {
           },
           {
             foreignKeyName: "peak_shaving_configs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      peak_shaving_dispatch_log: {
+        Row: {
+          action: string
+          calendar_id: string | null
+          config_id: string
+          created_at: string
+          error_message: string | null
+          event_id: string | null
+          gateway_command_id: string | null
+          id: string
+          metadata: Json
+          reason: string | null
+          storage_id: string
+          success: boolean | null
+          target_power_kw: number
+          tenant_id: string
+        }
+        Insert: {
+          action: string
+          calendar_id?: string | null
+          config_id: string
+          created_at?: string
+          error_message?: string | null
+          event_id?: string | null
+          gateway_command_id?: string | null
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          storage_id: string
+          success?: boolean | null
+          target_power_kw: number
+          tenant_id: string
+        }
+        Update: {
+          action?: string
+          calendar_id?: string | null
+          config_id?: string
+          created_at?: string
+          error_message?: string | null
+          event_id?: string | null
+          gateway_command_id?: string | null
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          storage_id?: string
+          success?: boolean | null
+          target_power_kw?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "peak_shaving_dispatch_log_calendar_id_fkey"
+            columns: ["calendar_id"]
+            isOneToOne: false
+            referencedRelation: "peak_shaving_event_calendar"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_dispatch_log_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "peak_shaving_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_dispatch_log_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "peak_shaving_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_dispatch_log_gateway_command_id_fkey"
+            columns: ["gateway_command_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_commands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_dispatch_log_storage_id_fkey"
+            columns: ["storage_id"]
+            isOneToOne: false
+            referencedRelation: "energy_storages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_dispatch_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      peak_shaving_event_calendar: {
+        Row: {
+          config_id: string
+          created_at: string
+          end_at: string
+          event_name: string
+          expected_peak_kw: number | null
+          id: string
+          notes: string | null
+          pre_charge_completed_at: string | null
+          pre_charge_lead_hours: number
+          pre_charge_started_at: string | null
+          pre_charge_target_soc_pct: number
+          start_at: string
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          config_id: string
+          created_at?: string
+          end_at: string
+          event_name: string
+          expected_peak_kw?: number | null
+          id?: string
+          notes?: string | null
+          pre_charge_completed_at?: string | null
+          pre_charge_lead_hours?: number
+          pre_charge_started_at?: string | null
+          pre_charge_target_soc_pct?: number
+          start_at: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          config_id?: string
+          created_at?: string
+          end_at?: string
+          event_name?: string
+          expected_peak_kw?: number | null
+          id?: string
+          notes?: string | null
+          pre_charge_completed_at?: string | null
+          pre_charge_lead_hours?: number
+          pre_charge_started_at?: string | null
+          pre_charge_target_soc_pct?: number
+          start_at?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "peak_shaving_event_calendar_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "peak_shaving_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_event_calendar_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"

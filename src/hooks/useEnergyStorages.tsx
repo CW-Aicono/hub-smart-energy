@@ -47,6 +47,7 @@ export function useEnergyStorages() {
     mutationFn: async ({ id, ...values }: { id: string } & Partial<{
       name: string; location_id: string; capacity_kwh: number;
       max_charge_kw: number; max_discharge_kw: number; efficiency_pct: number; status: string;
+      gateway_device_id: string | null; current_soc_pct: number | null;
     }>) => {
       const { error } = await supabase.from("energy_storages").update(values).eq("id", id);
       if (error) throw error;

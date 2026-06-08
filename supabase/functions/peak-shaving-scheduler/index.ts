@@ -1,13 +1,11 @@
-// Peak-Shaving Scheduler — kappt Lastspitzen durch Speicherentladung
+// Peak-Shaving Scheduler — Phase 2: jetzt mit echtem Hardware-Dispatch via gateway_commands
 //
-// Pro aktiver Konfiguration:
-//  1. Lese aktuelle Leistung vom Hauptzähler der Location
-//  2. Schwellwert + 15-Min-Prognose (Hybrid)
-//  3. Wenn nahe/über Limit -> Eingriff starten/aktualisieren (peak_shaving_events offen lassen)
-//  4. Wenn Leistung unter Hysterese -> Eingriff schließen, eur_saved berechnen
-//  5. Monats-Aggregat pflegen
-//
-// Phase 1: Logik + Tracking + Live-KPIs. Echte Speicherbefehle in Phase 2 (Hardware-Bus).
+// Erweiterungen vs. Phase 1:
+//  - Wenn dem Speicher ein gateway_device_id zugeordnet ist, wird der Lade-/Entladebefehl
+//    über public.gateway_commands an das EMS-Gateway/Modbus weitergereicht.
+//  - Jeder Dispatch wird in public.peak_shaving_dispatch_log dokumentiert.
+//  - Idempotenz: Wenn die letzte gesendete Soll-Leistung sich nicht ändert, kein neuer Befehl.
+//  - SoC-Reserve wird respektiert (Entladung stoppt, wenn current_soc_pct < reserve_soc_pct).
 //
 // Aufgerufen jede Minute via pg_cron.
 
@@ -40,15 +38,27 @@ interface ConfigRow {
   hysteresis_pct: number;
 }
 
+interface StorageRow {
+  id: string;
+  max_discharge_kw: number;
+  max_charge_kw: number;
+  capacity_kwh: number;
+  current_soc_pct: number | null;
+  gateway_device_id: string | null;
+}
+
 interface DispatchResult {
   config_id: string;
   status:
     | "no_main_meter"
     | "no_data"
+    | "no_storage"
     | "below_limit"
     | "engaged_started"
     | "engaged_updated"
     | "released"
+    | "throttled_by_soc"
+    | "dispatch_unchanged"
     | "error";
   reading_kw?: number;
   forecast_kw?: number;
@@ -79,7 +89,6 @@ async function fetchLatestMeterPowerKw(meterId: string): Promise<{ kw: number; a
   return null;
 }
 
-/** Aktuellen 15-Min-Mittel inkl. linearer Extrapolation auf VS-Ende. */
 async function forecast15MinAvg(meterId: string): Promise<number | null> {
   const now = new Date();
   const minuteOfQH = now.getUTCMinutes() % 15;
@@ -91,9 +100,7 @@ async function forecast15MinAvg(meterId: string): Promise<number | null> {
     .gte("bucket", qhStart.toISOString())
     .order("bucket", { ascending: true });
   if (!data || data.length === 0) return null;
-  const avg = data.reduce((s, r) => s + Number(r.power_avg), 0) / data.length;
-  // Hochrechnung: aktueller Durchschnitt = Erwartungswert für restliche Viertelstunde
-  return avg;
+  return data.reduce((s, r) => s + Number(r.power_avg), 0) / data.length;
 }
 
 async function getMainMeterId(locationId: string): Promise<string | null> {
@@ -102,7 +109,98 @@ async function getMainMeterId(locationId: string): Promise<string | null> {
   return data as unknown as string;
 }
 
-async function upsertMonthlySummary(cfg: ConfigRow, startedAt: Date, eurSaved: number, kwhDischarged: number, peakKw: number, baselineKw: number) {
+/**
+ * Dispatch Befehl an Hardware via gateway_commands.
+ * Returns gateway_command_id (oder null wenn kein Gateway hinterlegt).
+ */
+async function dispatchToGateway(
+  cfg: ConfigRow,
+  storage: StorageRow,
+  action: "discharge" | "charge" | "release",
+  targetPowerKw: number,
+  reason: string,
+  refs: { event_id?: string | null; calendar_id?: string | null },
+): Promise<{ command_id: string | null; skipped: string | null }> {
+  // Idempotenz: prüfe letzten Dispatch für diesen Speicher
+  const { data: last } = await admin
+    .from("peak_shaving_dispatch_log")
+    .select("action, target_power_kw, created_at")
+    .eq("config_id", cfg.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (last && last.action === action && Math.abs(Number(last.target_power_kw) - targetPowerKw) < 0.1) {
+    return { command_id: null, skipped: "unchanged" };
+  }
+
+  let commandId: string | null = null;
+
+  if (storage.gateway_device_id) {
+    const commandType =
+      action === "discharge" ? "storage_discharge"
+      : action === "charge" ? "storage_charge"
+      : "storage_release";
+
+    const { data: cmd, error } = await admin
+      .from("gateway_commands")
+      .insert({
+        tenant_id: cfg.tenant_id,
+        gateway_device_id: storage.gateway_device_id,
+        command_type: commandType,
+        payload: {
+          storage_id: storage.id,
+          target_power_kw: Number(targetPowerKw.toFixed(2)),
+          source: "peak_shaving",
+          config_id: cfg.id,
+        },
+        status: "pending",
+        expires_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+      })
+      .select("id")
+      .single();
+    if (error) {
+      await admin.from("peak_shaving_dispatch_log").insert({
+        config_id: cfg.id,
+        tenant_id: cfg.tenant_id,
+        storage_id: storage.id,
+        action,
+        target_power_kw: targetPowerKw,
+        reason,
+        success: false,
+        error_message: error.message,
+        event_id: refs.event_id ?? null,
+        calendar_id: refs.calendar_id ?? null,
+      });
+      return { command_id: null, skipped: "dispatch_error" };
+    }
+    commandId = cmd?.id ?? null;
+  }
+
+  await admin.from("peak_shaving_dispatch_log").insert({
+    config_id: cfg.id,
+    tenant_id: cfg.tenant_id,
+    storage_id: storage.id,
+    gateway_command_id: commandId,
+    action,
+    target_power_kw: Number(targetPowerKw.toFixed(2)),
+    reason,
+    success: true,
+    event_id: refs.event_id ?? null,
+    calendar_id: refs.calendar_id ?? null,
+    metadata: { gateway_dispatched: !!storage.gateway_device_id },
+  });
+
+  return { command_id: commandId, skipped: null };
+}
+
+async function upsertMonthlySummary(
+  cfg: ConfigRow,
+  startedAt: Date,
+  eurSaved: number,
+  kwhDischarged: number,
+  peakKw: number,
+  baselineKw: number,
+) {
   const year = startedAt.getUTCFullYear();
   const month = startedAt.getUTCMonth() + 1;
   const { data: existing } = await admin
@@ -145,20 +243,23 @@ async function processConfig(cfg: ConfigRow): Promise<DispatchResult> {
   const reading = await fetchLatestMeterPowerKw(meterId);
   if (!reading) return { config_id: cfg.id, status: "no_data" };
 
+  const { data: storageData } = await admin
+    .from("energy_storages")
+    .select("id, max_discharge_kw, max_charge_kw, capacity_kwh, current_soc_pct, gateway_device_id")
+    .eq("id", cfg.storage_id)
+    .maybeSingle();
+  if (!storageData) return { config_id: cfg.id, status: "no_storage" };
+  const storage = storageData as StorageRow;
+
   const limit = Number(cfg.peak_limit_kw);
   const hyst = limit * (Number(cfg.hysteresis_pct) / 100);
   const forecastKw = cfg.mode === "forecast" ? (await forecast15MinAvg(meterId)) ?? reading.kw : reading.kw;
   const effectiveKw = Math.max(reading.kw, forecastKw);
 
-  // Speicher-Daten (für Discharge-Schätzung)
-  const { data: storage } = await admin
-    .from("energy_storages")
-    .select("max_discharge_kw, capacity_kwh")
-    .eq("id", cfg.storage_id)
-    .maybeSingle();
-  const maxDischargeKw = Number(storage?.max_discharge_kw ?? 0);
+  // SoC-Reserve respektieren
+  const soc = storage.current_soc_pct == null ? null : Number(storage.current_soc_pct);
+  const reserveBlocked = soc !== null && soc <= Number(cfg.reserve_soc_pct);
 
-  // Offener Event?
   const { data: openEvent } = await admin
     .from("peak_shaving_events")
     .select("*")
@@ -172,28 +273,35 @@ async function processConfig(cfg: ConfigRow): Promise<DispatchResult> {
   const belowHysteresis = reading.kw < hyst;
 
   if (!openEvent && aboveLimit) {
-    // Neuen Eingriff starten
     const baselineKw = effectiveKw;
-    await admin.from("peak_shaving_events").insert({
-      config_id: cfg.id,
-      tenant_id: cfg.tenant_id,
-      started_at: new Date().toISOString(),
-      peak_kw_without_shaving: baselineKw,
-      peak_kw_actual: reading.kw,
-      kwh_discharged: 0,
-      eur_saved: 0,
-      trigger_reason: cfg.mode === "forecast" ? "forecast_above_limit" : "threshold_exceeded",
-      metadata: { limit_kw: limit, reading_kw: reading.kw, forecast_kw: forecastKw, max_discharge_kw: maxDischargeKw },
-    });
+    const { data: inserted } = await admin
+      .from("peak_shaving_events")
+      .insert({
+        config_id: cfg.id,
+        tenant_id: cfg.tenant_id,
+        started_at: new Date().toISOString(),
+        peak_kw_without_shaving: baselineKw,
+        peak_kw_actual: reading.kw,
+        kwh_discharged: 0,
+        eur_saved: 0,
+        trigger_reason: cfg.mode === "forecast" ? "forecast_above_limit" : "threshold_exceeded",
+        metadata: { limit_kw: limit, reading_kw: reading.kw, forecast_kw: forecastKw, max_discharge_kw: storage.max_discharge_kw, soc_pct: soc },
+      })
+      .select("id")
+      .single();
+
+    if (reserveBlocked) {
+      return { config_id: cfg.id, status: "throttled_by_soc", reading_kw: reading.kw, limit_kw: limit, detail: `SoC ${soc}% <= reserve ${cfg.reserve_soc_pct}%` };
+    }
+    const targetDischarge = Math.min(Number(storage.max_discharge_kw), Math.max(0, effectiveKw - limit));
+    await dispatchToGateway(cfg, storage, "discharge", targetDischarge, "peak_started", { event_id: inserted?.id });
     return { config_id: cfg.id, status: "engaged_started", reading_kw: reading.kw, forecast_kw: forecastKw, limit_kw: limit };
   }
 
   if (openEvent && !belowHysteresis) {
-    // Eingriff läuft, aktualisieren
     const newBaseline = Math.max(Number(openEvent.peak_kw_without_shaving ?? 0), effectiveKw);
     const newActual = Math.max(Number(openEvent.peak_kw_actual ?? 0), reading.kw);
-    // 1-Minuten-Inkrement der entladenen Energie (Annahme: Discharge = headroom-Bedarf, gedeckelt)
-    const dischargeKw = Math.min(maxDischargeKw, Math.max(0, effectiveKw - limit));
+    const dischargeKw = reserveBlocked ? 0 : Math.min(Number(storage.max_discharge_kw), Math.max(0, effectiveKw - limit));
     const incKwh = dischargeKw * (1 / 60);
     await admin
       .from("peak_shaving_events")
@@ -203,11 +311,14 @@ async function processConfig(cfg: ConfigRow): Promise<DispatchResult> {
         kwh_discharged: Number(openEvent.kwh_discharged) + incKwh,
       })
       .eq("id", openEvent.id);
-    return { config_id: cfg.id, status: "engaged_updated", reading_kw: reading.kw, forecast_kw: forecastKw, limit_kw: limit };
+
+    if (!reserveBlocked) {
+      await dispatchToGateway(cfg, storage, "discharge", dischargeKw, "peak_continued", { event_id: openEvent.id });
+    }
+    return { config_id: cfg.id, status: reserveBlocked ? "throttled_by_soc" : "engaged_updated", reading_kw: reading.kw, forecast_kw: forecastKw, limit_kw: limit };
   }
 
   if (openEvent && belowHysteresis) {
-    // Eingriff schließen + eur_saved berechnen
     const baseline = Number(openEvent.peak_kw_without_shaving ?? 0);
     const actual = Number(openEvent.peak_kw_actual ?? 0);
     const savedKw = Math.max(0, baseline - actual);
@@ -216,12 +327,10 @@ async function processConfig(cfg: ConfigRow): Promise<DispatchResult> {
     const endedAt = new Date();
     await admin
       .from("peak_shaving_events")
-      .update({
-        ended_at: endedAt.toISOString(),
-        eur_saved: eurSaved,
-      })
+      .update({ ended_at: endedAt.toISOString(), eur_saved: eurSaved })
       .eq("id", openEvent.id);
     await upsertMonthlySummary(cfg, new Date(openEvent.started_at), eurSaved, Number(openEvent.kwh_discharged), actual, baseline);
+    await dispatchToGateway(cfg, storage, "release", 0, "peak_ended", { event_id: openEvent.id });
     return { config_id: cfg.id, status: "released", reading_kw: reading.kw, limit_kw: limit, eur_saved: eurSaved };
   }
 

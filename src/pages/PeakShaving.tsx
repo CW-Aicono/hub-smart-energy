@@ -8,13 +8,19 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, Battery, Euro, Plus, Trash2, Zap, TrendingDown } from "lucide-react";
+import { Activity, Battery, Calendar, Download, Euro, Plus, Trash2, Zap, TrendingDown, Wifi, WifiOff } from "lucide-react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
-import { usePeakShavingConfigs, usePeakShavingEvents, usePeakShavingMonthly, type PeakShavingConfig } from "@/hooks/usePeakShaving";
+import {
+  usePeakShavingConfigs, usePeakShavingEvents, usePeakShavingMonthly,
+  usePeakShavingCalendar, usePeakShavingDispatches, downloadPeakShavingReport,
+  type PeakShavingConfig, type PeakShavingCalendarEvent,
+} from "@/hooks/usePeakShaving";
 import { useLocations } from "@/hooks/useLocations";
 import { useEnergyStorages } from "@/hooks/useEnergyStorages";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
+import { toast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 
 const fmtNum = (n: number, d = 0) => n.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtEur = (n: number) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
