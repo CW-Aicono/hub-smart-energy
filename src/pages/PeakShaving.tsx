@@ -374,3 +374,332 @@ function ConfigDialog({ trigger, initial, onSave, locations, storages }: ConfigD
     </Dialog>
   );
 }
+
+// =============== PDF-Report Button ===============
+function ReportButton({ configId }: { configId: string }) {
+  const [open, setOpen] = useState(false);
+  const now = new Date();
+  const [year, setYear] = useState(now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() === 0 ? 12 : now.getMonth()); // Vormonat als Default
+  const [loading, setLoading] = useState(false);
+
+  const handleDownload = async () => {
+    setLoading(true);
+    try {
+      await downloadPeakShavingReport(configId, year, month);
+      toast({ title: "Report heruntergeladen" });
+      setOpen(false);
+    } catch (e) {
+      toast({ title: "Fehler", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i);
+  const months = [
+    "Januar", "Februar", "März", "April", "Mai", "Juni",
+    "Juli", "August", "September", "Oktober", "November", "Dezember",
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" title="Monats-Report als PDF">
+          <Download className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>PDF-Report herunterladen</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-4 py-4">
+          <div>
+            <Label>Monat</Label>
+            <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {months.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Jahr</Label>
+            <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {years.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Abbrechen</Button>
+          <Button onClick={handleDownload} disabled={loading}>
+            <Download className="h-4 w-4 mr-2" />
+            {loading ? "Erstelle …" : "Herunterladen"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// =============== Event-Kalender ===============
+function CalendarSection({
+  configs,
+  locations,
+}: {
+  configs: PeakShavingConfig[];
+  locations: Array<{ id: string; name: string }>;
+}) {
+  const { items, isLoading, upsert, remove } = usePeakShavingCalendar();
+  const activeConfigs = configs.filter((c) => c.active);
+
+  const statusLabel: Record<PeakShavingCalendarEvent["status"], string> = {
+    planned: "Geplant",
+    pre_charging: "Lädt vor",
+    active: "Läuft",
+    completed: "Abgeschlossen",
+    cancelled: "Abgebrochen",
+  };
+  const statusVariant: Record<PeakShavingCalendarEvent["status"], "default" | "secondary" | "outline"> = {
+    planned: "outline",
+    pre_charging: "default",
+    active: "default",
+    completed: "secondary",
+    cancelled: "secondary",
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2"><Calendar className="h-5 w-5" />Event-Kalender</CardTitle>
+            <CardDescription>Geplante Großverbraucher-Events — Speicher wird automatisch vorgeladen</CardDescription>
+          </div>
+          <CalendarEventDialog
+            trigger={<Button size="sm"><Plus className="h-4 w-4 mr-2" />Event planen</Button>}
+            configs={activeConfigs}
+            locations={locations}
+            onSave={(v) => upsert.mutate(v)}
+          />
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-muted-foreground">Lade …</p>
+        ) : items.length === 0 ? (
+          <p className="text-muted-foreground text-center py-8">
+            Noch keine geplanten Events. Lege ein Event an (z. B. „Rammstein-Konzert"), damit der Speicher rechtzeitig vorgeladen wird.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Event</TableHead>
+                <TableHead>Start</TableHead>
+                <TableHead>Ende</TableHead>
+                <TableHead className="text-right">Erw. Peak (kW)</TableHead>
+                <TableHead className="text-right">Ziel-SoC</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((ev) => {
+                const cfg = configs.find((c) => c.id === ev.config_id);
+                const loc = locations.find((l) => l.id === cfg?.location_id);
+                return (
+                  <TableRow key={ev.id}>
+                    <TableCell>
+                      <div className="font-medium">{ev.event_name}</div>
+                      <div className="text-xs text-muted-foreground">{loc?.name ?? "—"}</div>
+                    </TableCell>
+                    <TableCell>{format(new Date(ev.start_at), "dd.MM.yyyy HH:mm", { locale: de })}</TableCell>
+                    <TableCell>{format(new Date(ev.end_at), "dd.MM.yyyy HH:mm", { locale: de })}</TableCell>
+                    <TableCell className="text-right">{ev.expected_peak_kw ? fmtNum(Number(ev.expected_peak_kw), 0) : "—"}</TableCell>
+                    <TableCell className="text-right">{fmtNum(Number(ev.pre_charge_target_soc_pct), 0)} %</TableCell>
+                    <TableCell><Badge variant={statusVariant[ev.status]}>{statusLabel[ev.status]}</Badge></TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex gap-1 justify-end">
+                        <CalendarEventDialog
+                          trigger={<Button variant="outline" size="sm">Bearbeiten</Button>}
+                          initial={ev}
+                          configs={activeConfigs}
+                          locations={locations}
+                          onSave={(v) => upsert.mutate({ ...v, id: ev.id })}
+                        />
+                        <Button variant="ghost" size="sm" onClick={() => { if (confirm("Event löschen?")) remove.mutate(ev.id); }}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function toLocalInput(iso?: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function CalendarEventDialog({
+  trigger,
+  initial,
+  configs,
+  locations,
+  onSave,
+}: {
+  trigger: React.ReactNode;
+  initial?: PeakShavingCalendarEvent;
+  configs: PeakShavingConfig[];
+  locations: Array<{ id: string; name: string }>;
+  onSave: (v: Partial<PeakShavingCalendarEvent>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<Partial<PeakShavingCalendarEvent>>(
+    initial ?? {
+      config_id: "",
+      event_name: "",
+      start_at: "",
+      end_at: "",
+      expected_peak_kw: null,
+      pre_charge_target_soc_pct: 95,
+      pre_charge_lead_hours: 4,
+      status: "planned",
+      notes: null,
+    },
+  );
+
+  const handleSave = () => {
+    if (!form.config_id || !form.event_name || !form.start_at || !form.end_at) {
+      toast({ title: "Bitte alle Pflichtfelder ausfüllen", variant: "destructive" });
+      return;
+    }
+    onSave({
+      ...form,
+      start_at: new Date(form.start_at).toISOString(),
+      end_at: new Date(form.end_at).toISOString(),
+    });
+    setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{initial ? "Event bearbeiten" : "Neues Event planen"}</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-4 py-4">
+          <div className="col-span-2">
+            <Label>Event-Name *</Label>
+            <Input
+              placeholder="z. B. Rammstein-Konzert"
+              value={form.event_name ?? ""}
+              onChange={(e) => setForm({ ...form, event_name: e.target.value })}
+            />
+          </div>
+          <div className="col-span-2">
+            <Label>Peak-Shaving-Konfiguration *</Label>
+            <Select value={form.config_id ?? ""} onValueChange={(v) => setForm({ ...form, config_id: v })}>
+              <SelectTrigger><SelectValue placeholder="Konfiguration wählen" /></SelectTrigger>
+              <SelectContent>
+                {configs.map((c) => {
+                  const loc = locations.find((l) => l.id === c.location_id);
+                  return (
+                    <SelectItem key={c.id} value={c.id}>
+                      {loc?.name ?? c.location_id.slice(0, 8)} · {fmtNum(Number(c.peak_limit_kw), 0)} kW
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Start *</Label>
+            <Input
+              type="datetime-local"
+              value={toLocalInput(form.start_at as string)}
+              onChange={(e) => setForm({ ...form, start_at: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Ende *</Label>
+            <Input
+              type="datetime-local"
+              value={toLocalInput(form.end_at as string)}
+              onChange={(e) => setForm({ ...form, end_at: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Erwartete Spitze (kW)</Label>
+            <Input
+              type="number"
+              placeholder="optional"
+              value={form.expected_peak_kw ?? ""}
+              onChange={(e) => setForm({ ...form, expected_peak_kw: e.target.value ? Number(e.target.value) : null })}
+            />
+          </div>
+          <div>
+            <Label>Ziel-SoC vor Event (%)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={form.pre_charge_target_soc_pct ?? 95}
+              onChange={(e) => setForm({ ...form, pre_charge_target_soc_pct: Number(e.target.value) })}
+            />
+          </div>
+          <div>
+            <Label>Vorlauf (Stunden)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={24}
+              value={form.pre_charge_lead_hours ?? 4}
+              onChange={(e) => setForm({ ...form, pre_charge_lead_hours: Number(e.target.value) })}
+            />
+          </div>
+          <div>
+            <Label>Status</Label>
+            <Select value={form.status ?? "planned"} onValueChange={(v) => setForm({ ...form, status: v as PeakShavingCalendarEvent["status"] })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="planned">Geplant</SelectItem>
+                <SelectItem value="pre_charging">Lädt vor</SelectItem>
+                <SelectItem value="active">Läuft</SelectItem>
+                <SelectItem value="completed">Abgeschlossen</SelectItem>
+                <SelectItem value="cancelled">Abgebrochen</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-2">
+            <Label>Notizen</Label>
+            <Textarea
+              rows={2}
+              placeholder="optional"
+              value={form.notes ?? ""}
+              onChange={(e) => setForm({ ...form, notes: e.target.value || null })}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Abbrechen</Button>
+          <Button onClick={handleSave}>Speichern</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
