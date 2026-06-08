@@ -12,6 +12,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { useChargingInvoiceSettings } from "@/hooks/useChargingInvoiceSettings";
 
 import RoamingTab from "@/components/charging/RoamingTab";
+import BillingGroupsTab from "@/components/charging/BillingGroupsTab";
 import ChargingInvoiceSettingsDialog from "@/components/charging/ChargingInvoiceSettingsDialog";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -238,6 +239,7 @@ const ChargingBilling = () => {
               <TabsTrigger value="sessions">{t("charging.tabSessions" as any)}</TabsTrigger>
               <TabsTrigger value="tariffs">{t("charging.tabTariffs" as any)}</TabsTrigger>
               <TabsTrigger value="invoices">{t("charging.tabInvoices" as any)}</TabsTrigger>
+              <TabsTrigger value="billing-groups">Rechnungsgruppen</TabsTrigger>
               <TabsTrigger value="roaming">{t("charging.tabRoaming" as any)}</TabsTrigger>
             </TabsList>
 
@@ -246,7 +248,7 @@ const ChargingBilling = () => {
               <Card>
                 <CardHeader><CardTitle>{t("charging.sessions" as any)}</CardTitle></CardHeader>
                 <CardContent>
-                  {sessionsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : sessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
+                  {sessionsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : filteredSessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -260,7 +262,7 @@ const ChargingBilling = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sessions.map((s) => (
+                        {filteredSessions.map((s) => (
                           <TableRow key={s.id}>
                             <TableCell className="font-medium">{getCpName(s.charge_point_id)}</TableCell>
                             <TableCell>{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
@@ -651,10 +653,16 @@ const ChargingBilling = () => {
 
 
 
+            {/* Billing Groups Tab */}
+            <TabsContent value="billing-groups">
+              <BillingGroupsTab isAdmin={isAdmin} />
+            </TabsContent>
+
             {/* Roaming Tab */}
             <TabsContent value="roaming">
               <RoamingTab />
             </TabsContent>
+
 
           </Tabs>
         </div>

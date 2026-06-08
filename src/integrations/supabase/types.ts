@@ -1072,6 +1072,103 @@ export type Database = {
           },
         ]
       }
+      charging_billing_group_members: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_billing_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "charging_billing_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_billing_group_members_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_billing_group_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "charging_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_billing_group_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "charging_users_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charging_billing_groups: {
+        Row: {
+          billing_address: string | null
+          billing_email: string | null
+          company_name: string | null
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          billing_address?: string | null
+          billing_email?: string | null
+          company_name?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          billing_address?: string | null
+          billing_email?: string | null
+          company_name?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_billing_groups_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charging_invoice_counter: {
         Row: {
           last_number: number
