@@ -34,26 +34,28 @@ import { generateChargingInvoicePdf, downloadBlob } from "@/lib/generateCharging
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
-// Sortable table header for charging sessions
-function SortableHead({
+// Sortable table header (generic)
+function SortableHead<T extends string>({
   column,
   label,
   sortColumn,
   sortDirection,
   onSort,
   onDir,
+  className,
 }: {
-  column: "charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag";
+  column: T;
   label: string;
-  sortColumn: string | null;
+  sortColumn: T | null;
   sortDirection: "asc" | "desc";
-  onSort: (c: "charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag" | null) => void;
+  onSort: (c: T | null) => void;
   onDir: (d: "asc" | "desc") => void;
+  className?: string;
 }) {
   const active = sortColumn === column;
   return (
     <TableHead
-      className="cursor-pointer select-none"
+      className={"cursor-pointer select-none " + (className || "")}
       onClick={() => {
         if (active) {
           onDir(sortDirection === "asc" ? "desc" : "asc");
@@ -74,6 +76,7 @@ function SortableHead({
     </TableHead>
   );
 }
+
 
 
 const ChargingBilling = () => {
