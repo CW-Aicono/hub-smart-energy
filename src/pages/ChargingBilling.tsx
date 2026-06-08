@@ -1,5 +1,11 @@
-import { useState, useMemo } from "react";
-import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, subMonths, endOfMonth } from "date-fns";
+import { useState, useMemo, useEffect } from "react";
+import {
+  startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear,
+  endOfDay, endOfWeek, endOfMonth, endOfQuarter, endOfYear,
+  addDays, addWeeks, addMonths, addQuarters, addYears,
+  subMonths,
+} from "date-fns";
+import { de } from "date-fns/locale";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -29,7 +35,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, TrendingUp, Percent, FileText, Send, Settings, Download, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, TrendingUp, Percent, FileText, Send, Settings, Download, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from "@/components/ui/pagination";
 import { EichrechtTab } from "@/components/charging/EichrechtTab";
 import { format } from "date-fns";
 import { fmtNum, fmtCurrency, fmtKwh } from "@/lib/formatCharging";
@@ -118,7 +126,12 @@ const ChargingBilling = () => {
       applySetDefault(tariff.id);
     }
   };
-  const [period, setPeriod] = useState<"day" | "week" | "month" | "quarter" | "year">("month");
+  const [period, setPeriod] = useState<"all" | "day" | "week" | "month" | "quarter" | "year">("month");
+  const [periodAnchor, setPeriodAnchor] = useState<Date>(new Date());
+  const [pageSize, setPageSize] = useState<25 | 50 | 100>(25);
+  const [sessionPage, setSessionPage] = useState(1);
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [groupPage, setGroupPage] = useState(1);
 
   // Invoice generation dialog
   const [generateOpen, setGenerateOpen] = useState(false);
@@ -134,16 +147,48 @@ const ChargingBilling = () => {
     return { start: format(start, "yyyy-MM-dd"), end: format(end, "yyyy-MM-dd"), label: format(start, "MMMM yyyy") };
   }, [genMonth]);
 
-  const periodStart = useMemo(() => {
-    const now = new Date();
+  const weekStartsOn = (tenant?.week_start_day ?? 1) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  const periodRange = useMemo(() => {
+    const a = periodAnchor;
     switch (period) {
-      case "day": return startOfDay(now);
-      case "week": return startOfWeek(now, { weekStartsOn: tenant?.week_start_day ?? 1 });
-      case "month": return startOfMonth(now);
-      case "quarter": return startOfQuarter(now);
-      case "year": return startOfYear(now);
+      case "all": return null;
+      case "day": return { start: startOfDay(a), end: endOfDay(a) };
+      case "week": return { start: startOfWeek(a, { weekStartsOn }), end: endOfWeek(a, { weekStartsOn }) };
+      case "month": return { start: startOfMonth(a), end: endOfMonth(a) };
+      case "quarter": return { start: startOfQuarter(a), end: endOfQuarter(a) };
+      case "year": return { start: startOfYear(a), end: endOfYear(a) };
     }
-  }, [period]);
+  }, [period, periodAnchor, weekStartsOn]);
+
+  const periodLabel = useMemo(() => {
+    if (!periodRange) return "Alle Zeiträume";
+    const a = periodAnchor;
+    switch (period) {
+      case "day": return format(a, "EEEE, dd.MM.yyyy", { locale: de });
+      case "week": return `KW ${format(periodRange.start, "II yyyy", { locale: de })} (${format(periodRange.start, "dd.MM.", { locale: de })}–${format(periodRange.end, "dd.MM.yyyy", { locale: de })})`;
+      case "month": return format(a, "MMMM yyyy", { locale: de });
+      case "quarter": return `Q${Math.floor(a.getMonth() / 3) + 1} ${a.getFullYear()}`;
+      case "year": return String(a.getFullYear());
+      default: return "";
+    }
+  }, [period, periodAnchor, periodRange]);
+
+  const shiftPeriod = (dir: -1 | 1) => {
+    setPeriodAnchor((a) => {
+      switch (period) {
+        case "day": return addDays(a, dir);
+        case "week": return addWeeks(a, dir);
+        case "month": return addMonths(a, dir);
+        case "quarter": return addQuarters(a, dir);
+        case "year": return addYears(a, dir);
+        default: return a;
+      }
+    });
+  };
+
+  // Reset anchor to "now" whenever the period type changes
+  useEffect(() => { setPeriodAnchor(new Date()); }, [period]);
+
 
   // Search state
   const [sessionSearch, setSessionSearch] = useState("");
@@ -188,7 +233,10 @@ const ChargingBilling = () => {
   const filteredSessions = useMemo(() => {
     const q = sessionSearch.trim().toLowerCase();
     return sessions.filter(s => {
-      if (new Date(s.start_time) < periodStart) return false;
+      if (periodRange) {
+        const d = new Date(s.start_time);
+        if (d < periodRange.start || d > periodRange.end) return false;
+      }
       if (!q) return true;
       const cp = getCpName(s.charge_point_id).toLowerCase();
       const tag = (resolveTag(s.id_tag) || s.id_tag || "").toLowerCase();
@@ -196,7 +244,8 @@ const ChargingBilling = () => {
       const start = format(new Date(s.start_time), "dd.MM.yyyy HH:mm");
       return cp.includes(q) || tag.includes(q) || status.includes(q) || start.includes(q);
     });
-  }, [sessions, periodStart, sessionSearch, chargePoints, resolveTag]);
+  }, [sessions, periodRange, sessionSearch, chargePoints, resolveTag]);
+
 
   const displayedSessions = useMemo(() => {
     if (!sortColumn) return filteredSessions;
@@ -313,9 +362,8 @@ const ChargingBilling = () => {
   const filteredInvoices = useMemo(() => {
     const q = invoiceSearch.trim().toLowerCase();
     return invoices.filter((inv: any) => {
-      // Period filter: use invoice_date (fallback created_at) or period_start
       const ref = new Date(inv.invoice_date || inv.period_start || inv.created_at);
-      if (ref < periodStart) return false;
+      if (periodRange && (ref < periodRange.start || ref > periodRange.end)) return false;
       if (!q) return true;
       const fields = [
         inv.invoice_number, inv.user_name, inv.user_email, inv.status,
@@ -326,7 +374,8 @@ const ChargingBilling = () => {
       ];
       return fields.some((f) => String(f || "").toLowerCase().includes(q));
     });
-  }, [invoices, periodStart, invoiceSearch]);
+  }, [invoices, periodRange, invoiceSearch]);
+
 
   const displayedInvoices = useMemo(() => {
     if (!invSortColumn) return filteredInvoices;
@@ -428,12 +477,91 @@ const ChargingBilling = () => {
   };
 
   const periodKeys = [
-    { key: "day" as const, labelKey: "charging.periodDay" },
-    { key: "week" as const, labelKey: "charging.periodWeek" },
-    { key: "month" as const, labelKey: "charging.periodMonth" },
-    { key: "quarter" as const, labelKey: "charging.periodQuarter" },
-    { key: "year" as const, labelKey: "charging.periodYear" },
+    { key: "all" as const, label: "Alle" },
+    { key: "day" as const, label: t("charging.periodDay" as any) },
+    { key: "week" as const, label: t("charging.periodWeek" as any) },
+    { key: "month" as const, label: t("charging.periodMonth" as any) },
+    { key: "quarter" as const, label: t("charging.periodQuarter" as any) },
+    { key: "year" as const, label: t("charging.periodYear" as any) },
   ];
+
+  // Paginate helper
+  const paginate = <T,>(arr: T[], page: number) => {
+    const total = Math.max(1, Math.ceil(arr.length / pageSize));
+    const p = Math.min(Math.max(1, page), total);
+    return { items: arr.slice((p - 1) * pageSize, p * pageSize), total, page: p };
+  };
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setSessionPage(1); }, [period, periodAnchor, sessionSearch, sessionView, pageSize]);
+  useEffect(() => { setInvoicePage(1); }, [period, periodAnchor, invoiceSearch, pageSize]);
+  useEffect(() => { setGroupPage(1); }, [period, periodAnchor, sessionSearch, pageSize]);
+
+  const PaginationBar = ({ page, total, onChange, count }: { page: number; total: number; onChange: (p: number) => void; count: number }) => {
+    if (count === 0) return null;
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Einträge pro Seite:</span>
+          <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v) as 25 | 50 | 100)}>
+            <SelectTrigger className="h-8 w-[80px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="25">25</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+          <span>· {fmtNum(count, 0)} Einträge gesamt</span>
+        </div>
+        {total > 1 && (
+          <Pagination className="mx-0 w-auto justify-end">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); if (page > 1) onChange(page - 1); }}
+                  className={page <= 1 ? "pointer-events-none opacity-50" : ""}
+                />
+              </PaginationItem>
+              {Array.from({ length: total }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === total || Math.abs(p - page) <= 1)
+                .flatMap((p, idx, arr) => {
+                  const nodes: JSX.Element[] = [];
+                  if (idx > 0 && arr[idx - 1] !== p - 1) {
+                    nodes.push(<PaginationItem key={`e-${p}`}><PaginationEllipsis /></PaginationItem>);
+                  }
+                  nodes.push(
+                    <PaginationItem key={p}>
+                      <PaginationLink
+                        href="#"
+                        isActive={p === page}
+                        onClick={(e) => { e.preventDefault(); onChange(p); }}
+                      >
+                        {p}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                  return nodes;
+                })}
+
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); if (page < total) onChange(page + 1); }}
+                  className={page >= total ? "pointer-events-none opacity-50" : ""}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        )}
+      </div>
+    );
+  };
+
+  const sessionsPaged = paginate(displayedSessions, sessionPage);
+  const invoicesPaged = paginate(displayedInvoices, invoicePage);
+  const groupsPaged = paginate(groupedSessionRows, groupPage);
+
 
   const tariffFormFields = (
     <div className="space-y-4">
@@ -469,10 +597,36 @@ const ChargingBilling = () => {
 
           {/* Period Filter + Stats */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+            <div className="flex flex-wrap items-center gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    title={period === "all" ? "Zeitraum nicht aktiv" : "Zeitraum wechseln"}
+                    disabled={period === "all"}
+                  >
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-3" align="start">
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => shiftPeriod(-1)}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="min-w-[180px] text-center text-sm font-medium">{periodLabel}</div>
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => shiftPeriod(1)}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setPeriodAnchor(new Date())}>
+                      Heute
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
               <div className="flex gap-1 bg-muted rounded-lg p-1">
-                {periodKeys.map(({ key, labelKey }) => (
+                {periodKeys.map(({ key, label }) => (
                   <Button
                     key={key}
                     variant={period === key ? "default" : "ghost"}
@@ -480,11 +634,15 @@ const ChargingBilling = () => {
                     className="h-7 text-xs px-3"
                     onClick={() => setPeriod(key)}
                   >
-                    {t(labelKey as any)}
+                    {label}
                   </Button>
                 ))}
               </div>
+              {period !== "all" && (
+                <span className="text-xs text-muted-foreground ml-1">{periodLabel}</span>
+              )}
             </div>
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Card><CardContent className="p-4 flex items-center gap-3"><Zap className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtKwh(totalEnergy, 1)}</p><p className="text-sm text-muted-foreground">{t("charging.total" as any)}</p></div></CardContent></Card>
               <Card><CardContent className="p-4 flex items-center gap-3"><Receipt className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtNum(completedSessions.length, 0)}</p><p className="text-sm text-muted-foreground">{t("charging.sessions" as any)}</p></div></CardContent></Card>
@@ -538,71 +696,78 @@ const ChargingBilling = () => {
                     <p className="text-muted-foreground">{t("charging.loading" as any)}</p>
                   ) : sessionView === "users" ? (
                     displayedSessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <SortableHead column="charge_point" label={t("charging.chargePoint" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                            <SortableHead column="start_time" label={t("charging.start" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                            <SortableHead column="stop_time" label={t("charging.end" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                            <SortableHead column="energy" label={t("charging.energy" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                            <SortableHead column="status" label={t("common.status" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                            <SortableHead column="id_tag" label={t("charging.idTag" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                            <TableHead className="w-20 text-right">Beleg</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {displayedSessions.map((s) => (
-                            <TableRow key={s.id}>
-                              <TableCell className="font-medium">{getCpName(s.charge_point_id)}</TableCell>
-                              <TableCell>{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
-                              <TableCell>{s.stop_time ? format(new Date(s.stop_time), "dd.MM.yyyy HH:mm") : "—"}</TableCell>
-                              <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
-                              <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? t("charging.statusActive" as any) : s.status === "completed" ? t("charging.statusCompleted" as any) : t("charging.statusError" as any)}</Badge></TableCell>
-                              <TableCell className="text-sm">{resolveTag(s.id_tag) || s.id_tag || "—"}</TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  title="Eichrechts-Beleg (OCMF) anzeigen"
-                                  onClick={() => setOcmfSessionId(s.id)}
-                                >
-                                  <ShieldCheck className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
+                      <>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <SortableHead column="charge_point" label={t("charging.chargePoint" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                              <SortableHead column="start_time" label={t("charging.start" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                              <SortableHead column="stop_time" label={t("charging.end" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                              <SortableHead column="energy" label={t("charging.energy" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                              <SortableHead column="status" label={t("common.status" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                              <SortableHead column="id_tag" label={t("charging.idTag" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                              <TableHead className="w-20 text-right">Beleg</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {sessionsPaged.items.map((s) => (
+                              <TableRow key={s.id}>
+                                <TableCell className="font-medium">{getCpName(s.charge_point_id)}</TableCell>
+                                <TableCell>{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
+                                <TableCell>{s.stop_time ? format(new Date(s.stop_time), "dd.MM.yyyy HH:mm") : "—"}</TableCell>
+                                <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
+                                <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? t("charging.statusActive" as any) : s.status === "completed" ? t("charging.statusCompleted" as any) : t("charging.statusError" as any)}</Badge></TableCell>
+                                <TableCell className="text-sm">{resolveTag(s.id_tag) || s.id_tag || "—"}</TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Eichrechts-Beleg (OCMF) anzeigen"
+                                    onClick={() => setOcmfSessionId(s.id)}
+                                  >
+                                    <ShieldCheck className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        <PaginationBar page={sessionsPaged.page} total={sessionsPaged.total} onChange={setSessionPage} count={displayedSessions.length} />
+                      </>
                     )
                   ) : (
                     groupedSessionRows.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <SortableHead column="group_name" label="Abrechnungsgruppe" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
-                            <SortableHead column="user_count" label="Nutzer" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
-                            <SortableHead column="session_count" label="Ladevorgänge" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
-                            <SortableHead column="energy" label="Energie" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {groupedSessionRows.map((row) => (
-                            <TableRow key={row.key}>
-                              <TableCell className="font-medium">
-                                {row.group_name}
-                                {row.key === NO_GROUP_KEY && (
-                                  <Badge variant="outline" className="ml-2 text-xs">keine Gruppe</Badge>
-                                )}
-                              </TableCell>
-                              <TableCell>{fmtNum(row.user_count, 0)}</TableCell>
-                              <TableCell>{fmtNum(row.session_count, 0)}</TableCell>
-                              <TableCell>{fmtKwh(row.energy_kwh, 1)}</TableCell>
+                      <>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <SortableHead column="group_name" label="Abrechnungsgruppe" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
+                              <SortableHead column="user_count" label="Nutzer" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
+                              <SortableHead column="session_count" label="Ladevorgänge" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
+                              <SortableHead column="energy" label="Energie" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {groupsPaged.items.map((row) => (
+                              <TableRow key={row.key}>
+                                <TableCell className="font-medium">
+                                  {row.group_name}
+                                  {row.key === NO_GROUP_KEY && (
+                                    <Badge variant="outline" className="ml-2 text-xs">keine Gruppe</Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell>{fmtNum(row.user_count, 0)}</TableCell>
+                                <TableCell>{fmtNum(row.session_count, 0)}</TableCell>
+                                <TableCell>{fmtKwh(row.energy_kwh, 1)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        <PaginationBar page={groupsPaged.page} total={groupsPaged.total} onChange={setGroupPage} count={groupedSessionRows.length} />
+                      </>
                     )
                   )}
+
                 </CardContent>
               </Card>
 
@@ -764,36 +929,39 @@ const ChargingBilling = () => {
                     className="max-w-md h-9"
                   />
                   {displayedInvoices.length === 0 ? <p className="text-muted-foreground">{t("charging.noInvoices" as any)}</p> : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <SortableHead column="invoice_number" label={t("charging.invoiceNo" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                          <SortableHead column="invoice_date" label="Rechnungsdatum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                          <SortableHead column="user_name" label="Kunde" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                          <SortableHead column="period" label="Zeitraum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                          <SortableHead column="total_amount" label={t("charging.totalAmount" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                          <SortableHead column="status" label={t("common.status" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {displayedInvoices.map((inv: any) => (
-                          <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedInvoice(inv)}>
-                            <TableCell className="font-mono">{inv.invoice_number || "—"}</TableCell>
-                            <TableCell>{inv.invoice_date ? format(new Date(inv.invoice_date), "dd.MM.yyyy") : format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
-                            <TableCell className="font-medium">{inv.user_name || "—"}</TableCell>
-                            <TableCell className="text-sm">
-                              {inv.period_start && inv.period_end
-                                ? `${format(new Date(inv.period_start), "dd.MM.")} – ${format(new Date(inv.period_end), "dd.MM.yyyy")}`
-                                : "—"}
-                            </TableCell>
-                            <TableCell className="font-medium">{fmtCurrency(inv.total_amount)}</TableCell>
-                            <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? t("charging.statusPaid" as any) : inv.status === "issued" ? t("charging.statusIssued" as any) : t("charging.statusDraft" as any)}</Badge></TableCell>
+                    <>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <SortableHead column="invoice_number" label={t("charging.invoiceNo" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                            <SortableHead column="invoice_date" label="Rechnungsdatum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                            <SortableHead column="user_name" label="Kunde" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                            <SortableHead column="period" label="Zeitraum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                            <SortableHead column="total_amount" label={t("charging.totalAmount" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                            <SortableHead column="status" label={t("common.status" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-
+                        </TableHeader>
+                        <TableBody>
+                          {invoicesPaged.items.map((inv: any) => (
+                            <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedInvoice(inv)}>
+                              <TableCell className="font-mono">{inv.invoice_number || "—"}</TableCell>
+                              <TableCell>{inv.invoice_date ? format(new Date(inv.invoice_date), "dd.MM.yyyy") : format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
+                              <TableCell className="font-medium">{inv.user_name || "—"}</TableCell>
+                              <TableCell className="text-sm">
+                                {inv.period_start && inv.period_end
+                                  ? `${format(new Date(inv.period_start), "dd.MM.")} – ${format(new Date(inv.period_end), "dd.MM.yyyy")}`
+                                  : "—"}
+                              </TableCell>
+                              <TableCell className="font-medium">{fmtCurrency(inv.total_amount)}</TableCell>
+                              <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? t("charging.statusPaid" as any) : inv.status === "issued" ? t("charging.statusIssued" as any) : t("charging.statusDraft" as any)}</Badge></TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      <PaginationBar page={invoicesPaged.page} total={invoicesPaged.total} onChange={setInvoicePage} count={displayedInvoices.length} />
+                    </>
                   )}
+
                 </CardContent>
               </Card>
 
