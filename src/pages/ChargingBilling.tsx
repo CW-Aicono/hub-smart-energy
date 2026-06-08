@@ -1,5 +1,11 @@
-import { useState, useMemo } from "react";
-import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, subMonths, endOfMonth } from "date-fns";
+import { useState, useMemo, useEffect } from "react";
+import {
+  startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear,
+  endOfDay, endOfWeek, endOfMonth, endOfQuarter, endOfYear,
+  addDays, addWeeks, addMonths, addQuarters, addYears,
+  subMonths,
+} from "date-fns";
+import { de } from "date-fns/locale";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
