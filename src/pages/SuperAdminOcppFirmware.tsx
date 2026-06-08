@@ -636,6 +636,8 @@ export default function SuperAdminOcppFirmware() {
           </Card>
         </TabsContent>
       </Tabs>
+        </div>
+      </main>
     </div>
   );
 }
