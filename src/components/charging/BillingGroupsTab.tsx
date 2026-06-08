@@ -96,6 +96,7 @@ export default function BillingGroupsTab({ isAdmin, periodStart, periodEnd, peri
         ) : groups.length === 0 ? (
           <p className="text-muted-foreground">Noch keine Rechnungsgruppen vorhanden.</p>
         ) : (
+          <div className="overflow-x-auto -mx-6 px-6">
           <Table>
             <TableHeader>
               <TableRow>
