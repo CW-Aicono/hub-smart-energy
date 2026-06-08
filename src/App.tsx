@@ -257,6 +257,8 @@ const App = () => (
                       <Route path="/tasks" element={<M><Tasks /></M>} />
                       <Route path="/network" element={<M><NetworkInfrastructure /></M>} />
                       <Route path="/arbitrage" element={<M><ArbitrageTrading /></M>} />
+                      <Route path="/peak-shaving" element={<M><PeakShaving /></M>} />
+                      <Route path="/demo/peak-shaving" element={<PeakShaving />} />
                       <Route path="/copilot" element={<M><Copilot /></M>} />
                       <Route path="/energy-report" element={<M><EnergyReport /></M>} />
                       <Route path="/energy-sharing" element={<M><EnergySharing /></M>} />
