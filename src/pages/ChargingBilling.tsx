@@ -34,7 +34,7 @@ import { generateChargingInvoicePdf, downloadBlob } from "@/lib/generateCharging
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
-// Sortable table header for charging sessions
+// Sortable table header (generic)
 function SortableHead({
   column,
   label,
@@ -42,18 +42,20 @@ function SortableHead({
   sortDirection,
   onSort,
   onDir,
+  className,
 }: {
-  column: "charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag";
+  column: string;
   label: string;
   sortColumn: string | null;
   sortDirection: "asc" | "desc";
-  onSort: (c: "charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag" | null) => void;
+  onSort: (c: any) => void;
   onDir: (d: "asc" | "desc") => void;
+  className?: string;
 }) {
   const active = sortColumn === column;
   return (
     <TableHead
-      className="cursor-pointer select-none"
+      className={"cursor-pointer select-none " + (className || "")}
       onClick={() => {
         if (active) {
           onDir(sortDirection === "asc" ? "desc" : "asc");
@@ -74,6 +76,7 @@ function SortableHead({
     </TableHead>
   );
 }
+
 
 
 const ChargingBilling = () => {
@@ -139,24 +142,32 @@ const ChargingBilling = () => {
     }
   }, [period]);
 
-  const filteredSessions = useMemo(() =>
-    sessions.filter(s => new Date(s.start_time) >= periodStart),
-    [sessions, periodStart]
-  );
+  // Search state
+  const [sessionSearch, setSessionSearch] = useState("");
+  const [invoiceSearch, setInvoiceSearch] = useState("");
 
+  // Session sorting state
+  const [sortColumn, setSortColumn] = useState<"charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag" | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
-  if (authLoading) return null;
-  if (!user) return <Navigate to="/auth" replace />;
-
-  const completedSessions = filteredSessions.filter((s) => s.status === "completed");
-  const totalEnergy = completedSessions.reduce((sum, s) => sum + s.energy_kwh, 0);
-  const activeTariff = tariffs.find((t) => t.is_active);
+  // Invoice sorting state
+  const [invSortColumn, setInvSortColumn] = useState<"invoice_number" | "invoice_date" | "user_name" | "period" | "total_amount" | "status" | null>("invoice_date");
+  const [invSortDirection, setInvSortDirection] = useState<"asc" | "desc">("desc");
 
   const getCpName = (id: string) => chargePoints.find((cp) => cp.id === id)?.name || "—";
 
-  // Session table sorting
-  const [sortColumn, setSortColumn] = useState<"charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag" | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const filteredSessions = useMemo(() => {
+    const q = sessionSearch.trim().toLowerCase();
+    return sessions.filter(s => {
+      if (new Date(s.start_time) < periodStart) return false;
+      if (!q) return true;
+      const cp = getCpName(s.charge_point_id).toLowerCase();
+      const tag = (resolveTag(s.id_tag) || s.id_tag || "").toLowerCase();
+      const status = (s.status || "").toLowerCase();
+      const start = format(new Date(s.start_time), "dd.MM.yyyy HH:mm");
+      return cp.includes(q) || tag.includes(q) || status.includes(q) || start.includes(q);
+    });
+  }, [sessions, periodStart, sessionSearch, chargePoints, resolveTag]);
 
   const displayedSessions = useMemo(() => {
     if (!sortColumn) return filteredSessions;
@@ -170,26 +181,88 @@ const ChargingBilling = () => {
         case "start_time":
           cmp = new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
           break;
-        case "stop_time":
+        case "stop_time": {
           const aStop = a.stop_time ? new Date(a.stop_time).getTime() : 0;
           const bStop = b.stop_time ? new Date(b.stop_time).getTime() : 0;
           cmp = aStop - bStop;
           break;
+        }
         case "energy":
           cmp = a.energy_kwh - b.energy_kwh;
           break;
         case "status":
           cmp = a.status.localeCompare(b.status);
           break;
-        case "id_tag":
+        case "id_tag": {
           const aTag = resolveTag(a.id_tag) || a.id_tag || "";
           const bTag = resolveTag(b.id_tag) || b.id_tag || "";
           cmp = aTag.localeCompare(bTag);
           break;
+        }
       }
       return cmp * dir;
     });
-  }, [filteredSessions, sortColumn, sortDirection, getCpName, resolveTag]);
+  }, [filteredSessions, sortColumn, sortDirection, chargePoints, resolveTag]);
+
+  const filteredInvoices = useMemo(() => {
+    const q = invoiceSearch.trim().toLowerCase();
+    return invoices.filter((inv: any) => {
+      // Period filter: use invoice_date (fallback created_at) or period_start
+      const ref = new Date(inv.invoice_date || inv.period_start || inv.created_at);
+      if (ref < periodStart) return false;
+      if (!q) return true;
+      const fields = [
+        inv.invoice_number, inv.user_name, inv.user_email, inv.status,
+        inv.period_start ? format(new Date(inv.period_start), "dd.MM.yyyy") : "",
+        inv.period_end ? format(new Date(inv.period_end), "dd.MM.yyyy") : "",
+        inv.invoice_date ? format(new Date(inv.invoice_date), "dd.MM.yyyy") : "",
+        String(inv.total_amount ?? ""),
+      ];
+      return fields.some((f) => String(f || "").toLowerCase().includes(q));
+    });
+  }, [invoices, periodStart, invoiceSearch]);
+
+  const displayedInvoices = useMemo(() => {
+    if (!invSortColumn) return filteredInvoices;
+    const dir = invSortDirection === "asc" ? 1 : -1;
+    return [...filteredInvoices].sort((a: any, b: any) => {
+      let cmp = 0;
+      switch (invSortColumn) {
+        case "invoice_number":
+          cmp = String(a.invoice_number || "").localeCompare(String(b.invoice_number || ""));
+          break;
+        case "invoice_date": {
+          const ad = new Date(a.invoice_date || a.created_at).getTime();
+          const bd = new Date(b.invoice_date || b.created_at).getTime();
+          cmp = ad - bd;
+          break;
+        }
+        case "user_name":
+          cmp = String(a.user_name || "").localeCompare(String(b.user_name || ""));
+          break;
+        case "period": {
+          const ap = a.period_start ? new Date(a.period_start).getTime() : 0;
+          const bp = b.period_start ? new Date(b.period_start).getTime() : 0;
+          cmp = ap - bp;
+          break;
+        }
+        case "total_amount":
+          cmp = Number(a.total_amount || 0) - Number(b.total_amount || 0);
+          break;
+        case "status":
+          cmp = String(a.status || "").localeCompare(String(b.status || ""));
+          break;
+      }
+      return cmp * dir;
+    });
+  }, [filteredInvoices, invSortColumn, invSortDirection]);
+
+  if (authLoading) return null;
+  if (!user) return <Navigate to="/auth" replace />;
+
+  const completedSessions = filteredSessions.filter((s) => s.status === "completed");
+  const totalEnergy = completedSessions.reduce((sum, s) => sum + s.energy_kwh, 0);
+  const activeTariff = tariffs.find((t) => t.is_active);
 
   const resetTariffForm = () => setTariffForm({ name: "", price_per_kwh: "0.35", base_fee: "0", idle_fee_per_minute: "0", idle_fee_grace_minutes: "60", tax_rate_percent: "19", currency: "EUR" });
 
@@ -326,9 +399,17 @@ const ChargingBilling = () => {
             {/* Sessions Tab */}
             <TabsContent value="sessions">
               <Card>
-                <CardHeader><CardTitle>{t("charging.sessions" as any)}</CardTitle></CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between gap-4">
+                  <CardTitle>{t("charging.sessions" as any)}</CardTitle>
+                  <Input
+                    placeholder="Suchen (Ladepunkt, Tag, Status, Datum…)"
+                    value={sessionSearch}
+                    onChange={(e) => setSessionSearch(e.target.value)}
+                    className="max-w-xs h-9"
+                  />
+                </CardHeader>
                 <CardContent>
-                  {sessionsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : filteredSessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
+                  {sessionsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : displayedSessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -517,21 +598,27 @@ const ChargingBilling = () => {
                     </div>
                   )}
                 </CardHeader>
-                <CardContent>
-                  {invoices.length === 0 ? <p className="text-muted-foreground">{t("charging.noInvoices" as any)}</p> : (
+                <CardContent className="space-y-3">
+                  <Input
+                    placeholder="Rechnungen durchsuchen (Nummer, Kunde, E-Mail, Status, Datum…)"
+                    value={invoiceSearch}
+                    onChange={(e) => setInvoiceSearch(e.target.value)}
+                    className="max-w-md h-9"
+                  />
+                  {displayedInvoices.length === 0 ? <p className="text-muted-foreground">{t("charging.noInvoices" as any)}</p> : (
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>{t("charging.invoiceNo" as any)}</TableHead>
-                          <TableHead>Rechnungsdatum</TableHead>
-                          <TableHead>Kunde</TableHead>
-                          <TableHead>Zeitraum</TableHead>
-                          <TableHead>{t("charging.totalAmount" as any)}</TableHead>
-                          <TableHead>{t("common.status" as any)}</TableHead>
+                          <SortableHead column="invoice_number" label={t("charging.invoiceNo" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                          <SortableHead column="invoice_date" label="Rechnungsdatum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                          <SortableHead column="user_name" label="Kunde" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                          <SortableHead column="period" label="Zeitraum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                          <SortableHead column="total_amount" label={t("charging.totalAmount" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                          <SortableHead column="status" label={t("common.status" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {invoices.map((inv) => (
+                        {displayedInvoices.map((inv: any) => (
                           <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedInvoice(inv)}>
                             <TableCell className="font-mono">{inv.invoice_number || "—"}</TableCell>
                             <TableCell>{inv.invoice_date ? format(new Date(inv.invoice_date), "dd.MM.yyyy") : format(new Date(inv.created_at), "dd.MM.yyyy")}</TableCell>
