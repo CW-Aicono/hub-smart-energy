@@ -9,23 +9,28 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Edit, Trash2, Users, Building2, Mail } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Building2, Mail, FileText, Send } from "lucide-react";
 import {
   useChargingBillingGroups,
   useChargingBillingGroupMembers,
+  useGenerateGroupInvoices,
   ChargingBillingGroup,
 } from "@/hooks/useChargingBillingGroups";
 import { useChargingUsers } from "@/hooks/useChargingUsers";
 
 interface Props {
   isAdmin: boolean;
+  periodStart?: string;
+  periodEnd?: string;
+  periodLabel?: string;
 }
 
 const emptyForm = { name: "", company_name: "", billing_email: "", billing_address: "", notes: "" };
 
-export default function BillingGroupsTab({ isAdmin }: Props) {
+export default function BillingGroupsTab({ isAdmin, periodStart, periodEnd, periodLabel }: Props) {
   const { groups, isLoading, createGroup, updateGroup, deleteGroup } = useChargingBillingGroups();
   const { users } = useChargingUsers();
+  const generateGroupInvoices = useGenerateGroupInvoices();
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editGroup, setEditGroup] = useState<ChargingBillingGroup | null>(null);
