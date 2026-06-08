@@ -267,6 +267,55 @@ export function ProjectAttachments({ projectId }: { projectId: string }) {
           </ul>
         )}
       </CardContent>
+
+      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
+        <DialogContent className="max-w-3xl w-[95vw] p-3 sm:p-6 max-h-[90vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="text-sm truncate pr-8">{preview?.name}</DialogTitle>
+          </DialogHeader>
+          {preview?.isImage && (
+            <img
+              src={preview.url}
+              alt={preview.name}
+              className="w-full h-auto rounded max-h-[75vh] object-contain bg-muted"
+            />
+          )}
+          {preview && !preview.isImage && preview.isPdf && (
+            <iframe
+              src={preview.url}
+              title={preview.name}
+              className="w-full h-[75vh] rounded border"
+            />
+          )}
+          {preview && !preview.isImage && !preview.isPdf && (
+            <div className="text-center py-6 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Diese Datei kann nicht in der App angezeigt werden.
+              </p>
+              <a
+                href={preview.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-sm underline"
+              >
+                <ExternalLink className="h-3 w-3" /> Herunterladen
+              </a>
+            </div>
+          )}
+          {preview && (
+            <div className="flex justify-end">
+              <a
+                href={preview.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" /> In neuem Tab öffnen
+              </a>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
