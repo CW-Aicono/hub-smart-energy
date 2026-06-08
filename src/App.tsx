@@ -87,6 +87,7 @@ const SuperAdminChargePointOnboarding = lazy(() => import("./pages/SuperAdminCha
 const ChargingApp = lazy(() => import("./pages/ChargingApp"));
 const ChargingAppAdmin = lazy(() => import("./pages/ChargingAppAdmin"));
 const ArbitrageTrading = lazy(() => import("./pages/ArbitrageTrading"));
+const PeakShaving = lazy(() => import("./pages/PeakShaving"));
 const Copilot = lazy(() => import("./pages/Copilot"));
 const TenantElectricity = lazy(() => import("./pages/TenantElectricity"));
 const EnergySharing = lazy(() => import("./pages/EnergySharing"));
@@ -256,6 +257,8 @@ const App = () => (
                       <Route path="/tasks" element={<M><Tasks /></M>} />
                       <Route path="/network" element={<M><NetworkInfrastructure /></M>} />
                       <Route path="/arbitrage" element={<M><ArbitrageTrading /></M>} />
+                      <Route path="/peak-shaving" element={<M><PeakShaving /></M>} />
+                      <Route path="/demo/peak-shaving" element={<PeakShaving />} />
                       <Route path="/copilot" element={<M><Copilot /></M>} />
                       <Route path="/energy-report" element={<M><EnergyReport /></M>} />
                       <Route path="/energy-sharing" element={<M><EnergySharing /></M>} />
