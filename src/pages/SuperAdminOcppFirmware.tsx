@@ -23,6 +23,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Upload, Trash2, ShieldCheck, ShieldAlert, Send, RefreshCw, FileText } from "lucide-react";
+import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 
 type Artifact = {
   id: string;
