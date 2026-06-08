@@ -46,7 +46,7 @@ type ChargePointRow = {
   vendor: string | null;
   model: string | null;
   firmware_version: string | null;
-  is_online: boolean | null;
+  ws_connected: boolean | null;
   tenant_id: string | null;
   tenants?: { name: string | null } | null;
 };
@@ -237,12 +237,12 @@ export default function SuperAdminOcppFirmware() {
       if (!rolloutArtifact) return [] as ChargePointRow[];
       const { data, error } = await supabase
         .from("charge_points")
-        .select("id, name, vendor, model, firmware_version, is_online, tenant_id, tenants(name)")
+        .select("id, name, vendor, model, firmware_version, ws_connected, tenant_id, tenants(name)")
         .ilike("vendor", rolloutArtifact.vendor)
         .ilike("model", rolloutArtifact.model)
         .order("name", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as ChargePointRow[];
+      return (data ?? []) as unknown as ChargePointRow[];
     },
     enabled: !!rolloutArtifact,
   });
