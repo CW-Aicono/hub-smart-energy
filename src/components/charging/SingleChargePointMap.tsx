@@ -46,8 +46,11 @@ interface SingleChargePointMapProps {
   onPositionChange: (lat: number, lng: number) => void;
   /** When true, marker is always draggable and no edit toggle is shown. */
   alwaysEditable?: boolean;
+  /** When true, marker is locked: no drag, no edit/locate buttons, no hint banner. */
+  readOnly?: boolean;
   className?: string;
 }
+
 
 /**
  * A single-marker map for a charge point that lets the user drag the marker
@@ -59,8 +62,10 @@ export default function SingleChargePointMap({
   longitude,
   onPositionChange,
   alwaysEditable = false,
+  readOnly = false,
   className,
 }: SingleChargePointMapProps) {
+
   const isTouchDevice =
     typeof window !== "undefined" &&
     ("ontouchstart" in window || navigator.maxTouchPoints > 0);
@@ -145,63 +150,71 @@ export default function SingleChargePointMap({
           }}
           position={center}
           icon={createIcon(PRIMARY)}
-          draggable={editMode}
-          eventHandlers={{
-            dragend: (e) => {
-              const m = e.target as LeafletMarker;
-              const pos = m.getLatLng();
-              onPositionChange(pos.lat, pos.lng);
-              toast.success("Position aktualisiert");
-            },
-          }}
+          draggable={!readOnly && editMode}
+          eventHandlers={
+            readOnly
+              ? {}
+              : {
+                  dragend: (e) => {
+                    const m = e.target as LeafletMarker;
+                    const pos = m.getLatLng();
+                    onPositionChange(pos.lat, pos.lng);
+                    toast.success("Position aktualisiert");
+                  },
+                }
+          }
         />
       </MapContainer>
 
-      {editMode && (
+      {!readOnly && editMode && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-primary text-primary-foreground px-4 py-2 rounded-full shadow-lg text-sm font-medium flex items-center gap-2">
           <Move className="h-4 w-4" />
           Marker an die exakte Position ziehen
         </div>
       )}
 
-      <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
-        {!alwaysEditable && (
+
+      {!readOnly && (
+        <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
+          {!alwaysEditable && (
+            <Button
+              size={editMode ? "default" : "icon"}
+              variant={editMode ? "default" : "secondary"}
+              className={cn(
+                "shadow-lg backdrop-blur-sm border",
+                editMode
+                  ? "rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+                  : "h-10 w-10 rounded-full bg-background/95",
+              )}
+              onClick={() => setEditMode((v) => !v)}
+            >
+              {editMode ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  Fertig
+                </>
+              ) : (
+                <Move className="h-5 w-5" />
+              )}
+            </Button>
+          )}
           <Button
-            size={editMode ? "default" : "icon"}
-            variant={editMode ? "default" : "secondary"}
-            className={cn(
-              "shadow-lg backdrop-blur-sm border",
-              editMode
-                ? "rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-                : "h-10 w-10 rounded-full bg-background/95",
-            )}
-            onClick={() => setEditMode((v) => !v)}
+            size="icon"
+            variant="secondary"
+            className="h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border"
+            onClick={handleLocate}
+            disabled={locating}
+            title="Mein Standort"
           >
-            {editMode ? (
-              <>
-                <Check className="h-4 w-4" />
-                Fertig
-              </>
+            {locating ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
-              <Move className="h-5 w-5" />
+              <LocateFixed className="h-5 w-5" />
             )}
           </Button>
-        )}
-        <Button
-          size="icon"
-          variant="secondary"
-          className="h-10 w-10 rounded-full shadow-lg bg-background/95 backdrop-blur-sm border"
-          onClick={handleLocate}
-          disabled={locating}
-          title="Mein Standort"
-        >
-          {locating ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <LocateFixed className="h-5 w-5" />
-          )}
-        </Button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
+

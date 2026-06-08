@@ -5,6 +5,7 @@ import {
   createChargingSession,
   getChargingSessionByTransaction,
   insertMeterSamples,
+  insertOcmfRecord,
   updateChargePoint,
   updateChargingSession,
   updateConnectorStatus,
@@ -185,30 +186,71 @@ export async function handleCall(
             measurand?: string;
             phase?: string;
             unit?: string;
+            format?: string;
+            signedMeterValue?: string;
           }>;
         }>) ?? [];
         const samples: MeterSampleInput[] = [];
+        const ocmfPayloads: Array<{ ts: string; raw: string; context: string; signed: string; readingWh: number | null; format: "OCMF" | "ALFEN" }> = [];
         for (const mv of meterValue) {
           const ts = mv.timestamp ?? new Date().toISOString();
           for (const sv of mv.sampledValue ?? []) {
             const numeric = Number(sv.value);
-            if (!Number.isFinite(numeric)) continue;
-            samples.push({
-              connector_id: connectorId,
-              measurand: sv.measurand ?? "Energy.Active.Import.Register",
-              phase: sv.phase ?? null,
-              unit: sv.unit ?? null,
-              value: numeric,
-              sampled_at: ts,
-              context: sv.context ?? null,
-              transaction_id: transactionId,
-            });
+            if (Number.isFinite(numeric)) {
+              samples.push({
+                connector_id: connectorId,
+                measurand: sv.measurand ?? "Energy.Active.Import.Register",
+                phase: sv.phase ?? null,
+                unit: sv.unit ?? null,
+                value: numeric,
+                sampled_at: ts,
+                context: sv.context ?? null,
+                transaction_id: transactionId,
+              });
+            }
+            // K1 Eichrecht: signedMeterValue (OCMF) erkennen
+            if (sv.signedMeterValue && sv.signedMeterValue.length > 0) {
+              const raw = String(sv.signedMeterValue);
+              const isOcmf = raw.startsWith("OCMF|") || /^[A-Za-z0-9+/=]+$/.test(raw);
+              ocmfPayloads.push({
+                ts,
+                raw,
+                context: sv.context ?? "Sample.Periodic",
+                signed: raw,
+                readingWh: Number.isFinite(numeric) ? numeric : null,
+                format: isOcmf ? "OCMF" : "ALFEN",
+              });
+            }
           }
         }
         if (samples.length > 0) {
           insertMeterSamples(chargePointPk, samples).catch((e) =>
             log.warn("insert meter samples failed", { chargePointId, error: (e as Error).message }),
           );
+        }
+        if (ocmfPayloads.length > 0 && transactionId != null) {
+          // Session-ID per Lookup
+          getChargingSessionByTransaction(chargePointPk, transactionId)
+            .then(async (sess) => {
+              if (!sess) return;
+              for (const p of ocmfPayloads) {
+                try {
+                  await insertOcmfRecord({
+                    sessionId: sess.id,
+                    chargePointId: chargePointPk,
+                    sampled_at: p.ts,
+                    context: p.context,
+                    meter_format: p.format,
+                    raw_payload: p.raw,
+                    signed_value: p.signed,
+                    reading_wh: p.readingWh,
+                  });
+                } catch (e) {
+                  log.warn("insert OCMF record failed", { chargePointId, error: (e as Error).message });
+                }
+              }
+            })
+            .catch((e) => log.warn("OCMF session lookup failed", { chargePointId, error: (e as Error).message }));
         }
         return callResult(messageId, {});
       }

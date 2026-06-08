@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { getT } from "@/i18n/getT";
+import { writeAuditLog } from "@/lib/auditLog";
 
 export const ALL_MODULES = [
   { code: "dashboard", label: "Dashboard", alwaysOn: true },
@@ -85,11 +86,20 @@ export function useTenantModules(tenantId: string | null) {
       }
 
       await upsertModule(moduleCode, enabled);
+      return { moduleCode, enabled };
     },
-    onSuccess: () => {
+    onSuccess: ({ moduleCode, enabled }) => {
       const t = getT();
       queryClient.invalidateQueries({ queryKey: ["tenant-modules", tenantId] });
       toast({ title: t("module.updated") });
+      writeAuditLog({
+        action: "module.toggle",
+        entity_type: "module",
+        entity_label: moduleCode,
+        tenant_id: tenantId ?? null,
+        before: { is_enabled: !enabled },
+        after: { is_enabled: enabled },
+      });
     },
     onError: (e: Error) => {
       const t = getT();

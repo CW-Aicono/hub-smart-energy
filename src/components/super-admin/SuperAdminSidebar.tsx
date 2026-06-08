@@ -8,7 +8,7 @@ import {
   LayoutDashboard, LogOut, Building2, BarChart3, Receipt, HeadsetIcon,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft, Users, ShieldCheck, Shield, Euro,
   Sun, Moon, Monitor, Globe, Palette, Check, Server, PlugZap, Settings, Activity,
-  Cpu, ListChecks, Briefcase, Plug,
+  Cpu, ListChecks, Briefcase, Plug, Map,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -146,6 +146,7 @@ export default function SuperAdminSidebar() {
       ],
     },
     { to: "/super-admin/gateways", icon: Cpu, label: "Gateway-Flotte" },
+    { to: "/super-admin/map", icon: Map, label: "Karte" },
     { to: "/super-admin/monitoring", icon: Activity, label: t("nav.monitoring") },
     { to: "/super-admin/support", icon: HeadsetIcon, label: t("nav.support") },
     { to: "/super-admin/settings", icon: Settings, label: t("nav.settings") },

@@ -29,6 +29,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { QueryErrorState } from "@/components/common/QueryErrorState";
 
 interface Project {
   id: string;
@@ -87,47 +88,61 @@ export default function SalesProjectDetail() {
   const [quoteSheet, setQuoteSheet] = useState(false);
   const [quotesReload, setQuotesReload] = useState(0);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     if (!id) return;
-    const [prRes, distRes] = await Promise.all([
-      supabase.from("sales_projects").select("id, kunde_name, kunde_typ, kontakt_name, adresse, status, notizen, converted_tenant_id").eq("id", id).maybeSingle(),
-      supabase.from("sales_distributions").select("id, name, typ, standort, notizen, foto_url, ki_analyse").eq("project_id", id).order("created_at", { ascending: true }),
-    ]);
-    setProject((prRes.data as unknown) as Project | null);
-    const dist = (distRes.data ?? []) as unknown as Distribution[];
-    setDistributions(dist);
+    setLoadError(null);
+    try {
+      const [prRes, distRes] = await Promise.all([
+        supabase.from("sales_projects").select("id, kunde_name, kunde_typ, kontakt_name, adresse, status, notizen, converted_tenant_id").eq("id", id).maybeSingle(),
+        supabase.from("sales_distributions").select("id, name, typ, standort, notizen, foto_url, ki_analyse").eq("project_id", id).order("created_at", { ascending: true }),
+      ]);
+      if (prRes.error) throw prRes.error;
+      if (distRes.error) throw distRes.error;
+      setProject((prRes.data as unknown) as Project | null);
+      const dist = (distRes.data ?? []) as unknown as Distribution[];
+      setDistributions(dist);
 
-    const distIds = dist.map((d) => d.id);
-    if (distIds.length > 0) {
-      const { data: mp } = await supabase
-        .from("sales_measurement_points")
-        .select("id, distribution_id, bezeichnung, energieart, phasen, strombereich_a, anwendungsfall, hinweise, montage, bestand, bestand_geraet")
-        .in("distribution_id", distIds)
-        .order("created_at", { ascending: true });
-      const ptList = (mp ?? []) as unknown as MeasurementPoint[];
-      setPoints(ptList);
+      const distIds = dist.map((d) => d.id);
+      if (distIds.length > 0) {
+        const { data: mp, error: mpErr } = await supabase
+          .from("sales_measurement_points")
+          .select("id, distribution_id, bezeichnung, energieart, phasen, strombereich_a, anwendungsfall, hinweise, montage, bestand, bestand_geraet")
+          .in("distribution_id", distIds)
+          .order("created_at", { ascending: true });
+        if (mpErr) throw mpErr;
+        const ptList = (mp ?? []) as unknown as MeasurementPoint[];
+        setPoints(ptList);
 
-      const ptIds = ptList.map((p) => p.id);
-      if (ptIds.length > 0) {
-        const { data: recs } = await supabase
-          .from("sales_recommended_devices")
-          .select("geraete_klasse, device_catalog:device_catalog_id(geraete_klasse)")
-          .in("measurement_point_id", ptIds)
-          .eq("ist_alternativ", false);
-        const counts: Record<string, number> = {};
-        for (const r of (recs ?? []) as any[]) {
-          const k = r.device_catalog?.geraete_klasse ?? r.geraete_klasse ?? "misc";
-          counts[k] = (counts[k] ?? 0) + 1;
+        const ptIds = ptList.map((p) => p.id);
+        if (ptIds.length > 0) {
+          const { data: recs, error: recsErr } = await supabase
+            .from("sales_recommended_devices")
+            .select("geraete_klasse, device_catalog:device_catalog_id(geraete_klasse)")
+            .in("measurement_point_id", ptIds)
+            .eq("ist_alternativ", false);
+          if (recsErr) throw recsErr;
+          const counts: Record<string, number> = {};
+          for (const r of (recs ?? []) as any[]) {
+            const k = r.device_catalog?.geraete_klasse ?? r.geraete_klasse ?? "misc";
+            counts[k] = (counts[k] ?? 0) + 1;
+          }
+          setClassCounts(counts);
+        } else {
+          setClassCounts({});
         }
-        setClassCounts(counts);
       } else {
+        setPoints([]);
         setClassCounts({});
       }
-    } else {
-      setPoints([]);
-      setClassCounts({});
+    } catch (e: any) {
+      const msg = e?.message ?? "Unbekannter Fehler";
+      setLoadError(msg);
+      toast.error("Projekt konnte nicht geladen werden", { description: msg });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [id]);
 
   useEffect(() => {
@@ -172,6 +187,18 @@ export default function SalesProjectDetail() {
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-48 w-full" />
         </div>
+      </SalesLayout>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <SalesLayout title="Fehler" showBack backTo="/sales">
+        <QueryErrorState
+          title="Projekt konnte nicht geladen werden"
+          message={loadError}
+          onRetry={() => { setLoading(true); load(); }}
+        />
       </SalesLayout>
     );
   }

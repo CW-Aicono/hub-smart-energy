@@ -25,6 +25,14 @@ import QRCode from "qrcode";
 
 const T = (t: (k: any) => string, key: string) => t(key as any);
 
+/** Deutsches Zahlenformat für Eurobeträge (2 Nachkommastellen) */
+const fmtEur = (n: number) =>
+  Number(n).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Deutsches Zahlenformat für kWh-Werte (1 Nachkommastelle) */
+const fmtKwh = (n: number) =>
+  Number(n).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
 const TenantElectricity = () => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("overview");
@@ -85,7 +93,7 @@ function OverviewTab() {
       </Card>
       <Card>
         <CardHeader className="pb-2"><CardDescription>{T(t, "te.revenue")}</CardDescription></CardHeader>
-        <CardContent><div className="text-2xl font-bold">{totalRevenue.toFixed(2)} €</div></CardContent>
+        <CardContent><div className="text-2xl font-bold">{fmtEur(totalRevenue)} €</div></CardContent>
       </Card>
     </div>
   );
@@ -452,9 +460,9 @@ function TariffsTab() {
             <TableRow key={tariff.id}>
               <TableCell className="font-medium"><button className="hover:underline text-left cursor-pointer text-primary" onClick={() => openEdit(tariff)}>{tariff.name}</button></TableCell>
               <TableCell>{tariff.locations?.name || "–"}</TableCell>
-              <TableCell>{Number(tariff.price_per_kwh_local).toFixed(2)}</TableCell>
-              <TableCell>{Number(tariff.price_per_kwh_grid).toFixed(2)}</TableCell>
-              <TableCell>{Number(tariff.base_fee_monthly).toFixed(2)} €</TableCell>
+              <TableCell>{fmtEur(tariff.price_per_kwh_local)}</TableCell>
+              <TableCell>{fmtEur(tariff.price_per_kwh_grid)}</TableCell>
+              <TableCell>{fmtEur(tariff.base_fee_monthly)} €</TableCell>
               <TableCell>{format(new Date(tariff.valid_from), "dd.MM.yyyy")}</TableCell>
               <TableCell>{tariff.valid_until ? format(new Date(tariff.valid_until), "dd.MM.yyyy") : T(t, "te.unlimited")}</TableCell>
               <TableCell><Button variant="ghost" size="icon" onClick={() => deleteTariff.mutate(tariff.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
@@ -524,10 +532,10 @@ function InvoicesTab() {
                 <Card className="p-3 bg-muted/50">
                   <p className="text-sm font-medium mb-1">{T(t, "te.preview").replace("{name}", activeTariff.name)}</p>
                   <div className="text-xs space-y-1">
-                    <p>{T(t, "te.localCalc")}: {form.local_kwh} kWh × {Number(activeTariff.price_per_kwh_local).toFixed(2)} € = {localAmount.toFixed(2)} €</p>
-                    <p>{T(t, "te.gridCalc")}: {form.grid_kwh} kWh × {Number(activeTariff.price_per_kwh_grid).toFixed(2)} € = {gridAmount.toFixed(2)} €</p>
-                    <p>{T(t, "te.baseFee")}: {baseFee.toFixed(2)} €</p>
-                    <p className="font-bold pt-1 border-t">{T(t, "te.total")}: {totalAmount.toFixed(2)} €</p>
+                    <p>{T(t, "te.localCalc")}: {fmtKwh(form.local_kwh)} kWh × {fmtEur(activeTariff.price_per_kwh_local)} € = {fmtEur(localAmount)} €</p>
+                    <p>{T(t, "te.gridCalc")}: {fmtKwh(form.grid_kwh)} kWh × {fmtEur(activeTariff.price_per_kwh_grid)} € = {fmtEur(gridAmount)} €</p>
+                    <p>{T(t, "te.baseFee")}: {fmtEur(baseFee)} €</p>
+                    <p className="font-bold pt-1 border-t">{T(t, "te.total")}: {fmtEur(totalAmount)} €</p>
                   </div>
                 </Card>
               )}
@@ -544,10 +552,10 @@ function InvoicesTab() {
             <TableRow key={inv.id}>
               <TableCell className="font-medium">{(inv as any).tenant_electricity_tenants?.name || "–"} {(inv as any).tenant_electricity_tenants?.unit_label ? `(${(inv as any).tenant_electricity_tenants.unit_label})` : ""}</TableCell>
               <TableCell>{format(new Date(inv.period_start), "dd.MM.")} – {format(new Date(inv.period_end), "dd.MM.yyyy")}</TableCell>
-              <TableCell>{Number(inv.local_kwh).toFixed(1)} kWh</TableCell>
-              <TableCell>{Number(inv.grid_kwh).toFixed(1)} kWh</TableCell>
-              <TableCell>{Number(inv.total_kwh).toFixed(1)} kWh</TableCell>
-              <TableCell className="font-medium">{Number(inv.total_amount).toFixed(2)} €</TableCell>
+              <TableCell>{fmtKwh(Number(inv.local_kwh))} kWh</TableCell>
+              <TableCell>{fmtKwh(Number(inv.grid_kwh))} kWh</TableCell>
+              <TableCell>{fmtKwh(Number(inv.total_kwh))} kWh</TableCell>
+              <TableCell className="font-medium">{fmtEur(Number(inv.total_amount))} €</TableCell>
               <TableCell>
                 <Badge
                   variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}

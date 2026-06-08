@@ -12,8 +12,11 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Briefcase, Loader2, Plus, Mail, Users, AlertCircle, CheckCircle2, Send } from "lucide-react";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
+import { AuditLogList } from "@/components/audit/AuditLogList";
+import { writeAuditLog } from "@/lib/auditLog";
 
 interface Partner {
   id: string;
@@ -305,29 +308,52 @@ export default function SuperAdminPartners() {
       d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "") || null;
     setEditSaving(true);
     try {
+      const beforeSnapshot = {
+        name: editPartner.name,
+        slug: editPartner.slug,
+        is_active: editPartner.is_active,
+        billing_mode: (editPartner as any).billing_mode,
+        white_label_enabled: (editPartner as any).white_label_enabled,
+      };
+      const afterPayload = {
+        name: editName.trim(),
+        slug: editSlug.trim(),
+        contact_email: editEmail.trim().toLowerCase() || null,
+        subdomain: editSubdomain.trim() || null,
+        is_active: editActive,
+        billing_mode: editBillingMode,
+        commission_pct: isNaN(pct) ? 20 : pct,
+        white_label_enabled: editWhiteLabel,
+        brand_display_name: editBrandDisplayName.trim() || null,
+        custom_domain: normalizeDomain(editCustomDomain),
+        primary_color: editPrimaryColor.trim() || null,
+        secondary_color: editSecondaryColor.trim() || null,
+        accent_color: editAccentColor.trim() || null,
+        support_email: editSupportEmail.trim().toLowerCase() || null,
+        logo_url: editLogoUrl,
+      };
       const { error } = await supabase
         .from("partners")
-        .update({
-          name: editName.trim(),
-          slug: editSlug.trim(),
-          contact_email: editEmail.trim().toLowerCase() || null,
-          subdomain: editSubdomain.trim() || null,
-          is_active: editActive,
-          billing_mode: editBillingMode,
-          commission_pct: isNaN(pct) ? 20 : pct,
-          white_label_enabled: editWhiteLabel,
-          brand_display_name: editBrandDisplayName.trim() || null,
-          custom_domain: normalizeDomain(editCustomDomain),
-          primary_color: editPrimaryColor.trim() || null,
-          secondary_color: editSecondaryColor.trim() || null,
-          accent_color: editAccentColor.trim() || null,
-          support_email: editSupportEmail.trim().toLowerCase() || null,
-          logo_url: editLogoUrl,
-        })
+        .update(afterPayload)
         .eq("id", editPartner.id);
       if (error) throw error;
       toast({ title: "Partner gespeichert" });
       qc.invalidateQueries({ queryKey: ["super-admin-partners"] });
+      writeAuditLog({
+        action: "partner.update",
+        entity_type: "partner",
+        entity_id: editPartner.id,
+        entity_label: editPartner.name,
+        partner_id: editPartner.id,
+        before: beforeSnapshot,
+        after: {
+          name: afterPayload.name,
+          slug: afterPayload.slug,
+          is_active: afterPayload.is_active,
+          billing_mode: afterPayload.billing_mode,
+          white_label_enabled: afterPayload.white_label_enabled,
+        },
+      });
       setEditOpen(false);
       setEditPartner(null);
     } catch (e) {
@@ -580,7 +606,15 @@ export default function SuperAdminPartners() {
               Stammdaten des Partners anpassen.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <Tabs defaultValue="basic" className="py-2">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="basic">Basis</TabsTrigger>
+              <TabsTrigger value="billing">Billing</TabsTrigger>
+              <TabsTrigger value="branding">Branding</TabsTrigger>
+              <TabsTrigger value="audit">Aktivität</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="basic" className="space-y-3 pt-3">
             <div className="space-y-1.5">
               <Label htmlFor="e-name">Firmenname *</Label>
               <Input id="e-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
@@ -648,8 +682,9 @@ export default function SuperAdminPartners() {
               />
               <Label htmlFor="e-active" className="cursor-pointer">Partner aktiv</Label>
             </div>
+            </TabsContent>
 
-            <div className="border-t pt-3 mt-2 space-y-2">
+            <TabsContent value="billing" className="space-y-2 pt-3">
               <Label>Abrechnungsmodell</Label>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -688,10 +723,9 @@ export default function SuperAdminPartners() {
                   />
                 </div>
               )}
-            </div>
+            </TabsContent>
 
-            {/* Stage 7: White-Label / Custom Domain */}
-            <div className="border-t pt-3 mt-2 space-y-3">
+            <TabsContent value="branding" className="space-y-3 pt-3">
               <div className="flex items-center justify-between">
                 <Label className="text-base">White-Label</Label>
                 <div className="flex items-center gap-2">
@@ -841,8 +875,15 @@ export default function SuperAdminPartners() {
                   disabled={!editWhiteLabel}
                 />
               </div>
-            </div>
-          </div>
+            </TabsContent>
+
+            <TabsContent value="audit" className="pt-3">
+              {editPartner && (
+                <AuditLogList partnerId={editPartner.id} title="Aktivität dieses Partners" />
+              )}
+            </TabsContent>
+          </Tabs>
+
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>Abbrechen</Button>

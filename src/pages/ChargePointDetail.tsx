@@ -33,6 +33,9 @@ import {
 } from "lucide-react";
 import { useOcppLiveData, useOcppCapabilities } from "@/hooks/useOcppLiveData";
 import { LiveDataPanel } from "@/components/charging/LiveDataPanel";
+import { UtilizationHeatmap } from "@/components/charging/UtilizationHeatmap";
+import { RoiCard } from "@/components/charging/RoiCard";
+import { useChargingTariffs } from "@/hooks/useChargingTariffs";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
 import { fmtKwh, fmtKw, fmtNum, normalizeConnectorStatus, isChargePointOnline } from "@/lib/formatCharging";
@@ -55,6 +58,10 @@ import SingleChargePointMap from "@/components/charging/SingleChargePointMap";
 import { AccessControlSettings, AccessSettings } from "@/components/charging/AccessControlSettings";
 import ChargePointSolarChargingConfig from "@/components/charging/ChargePointSolarChargingConfig";
 import ModbusInstancePanel from "@/components/charging/ModbusInstancePanel";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EichrechtTab } from "@/components/charging/EichrechtTab";
+import { ChargePointEichrechtForm } from "@/components/charging/ChargePointEichrechtForm";
+import { ShieldCheck } from "lucide-react";
 import { downloadSecureStorageObject } from "@/lib/secureStorage";
 
 const STATUS_KEYS: Record<string, { labelKey: string; color: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
@@ -78,6 +85,11 @@ const ChargePointDetail = () => {
   const { locations } = useLocations();
   const { createTask } = useTasks();
   const { sessions } = useChargingSessions(id);
+  const { tariffs } = useChargingTariffs();
+  const defaultSalePrice = useMemo(() => {
+    const t = (tariffs ?? []).find((x: any) => x.is_default) ?? (tariffs ?? [])[0];
+    return Number(t?.price_per_kwh ?? 0.5);
+  }, [tariffs]);
   const resolveTag = useIdTagResolver();
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
@@ -112,6 +124,7 @@ const ChargePointDetail = () => {
   const [uploading, setUploading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState("7");
+  const [ocmfSessionId, setOcmfSessionId] = useState<string | null>(null);
   const [remoteLoading, setRemoteLoading] = useState<string | null>(null);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [powerLimit, setPowerLimit] = useState<PowerLimitSchedule | null>(null);
@@ -674,7 +687,9 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
               <TabsTrigger value="details">{t("cpd.tabDetails" as any)}</TabsTrigger>
               <TabsTrigger value="energy">{t("cpd.tabEnergy" as any)}</TabsTrigger>
               <TabsTrigger value="access">{t("cpd.tabAccess" as any)}</TabsTrigger>
+              <TabsTrigger value="utilization" className="gap-1.5"><BarChart3 className="h-3.5 w-3.5" />Auslastung &amp; ROI</TabsTrigger>
               <TabsTrigger value="maintenance" className="gap-1.5"><Wrench className="h-3.5 w-3.5" />Wartung</TabsTrigger>
+              <TabsTrigger value="eichrecht" className="gap-1.5"><ShieldCheck className="h-3.5 w-3.5" />Eichrecht</TabsTrigger>
             </TabsList>
 
 
@@ -800,7 +815,31 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       </CardContent>
                     </Card>
                   )}
+
+                  {/* Standortkarte – read-only Anzeige (Bearbeiten erfolgt im Bearbeiten-Dialog) */}
+                  <Card>
+                    <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-primary" />
+                        Standort auf Karte
+                      </CardTitle>
+                      {cp.latitude && cp.longitude && (
+                        <span className="text-xs font-mono text-muted-foreground hidden sm:inline">
+                          {cp.latitude.toFixed(5)}, {cp.longitude.toFixed(5)}
+                        </span>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      <SingleChargePointMap
+                        latitude={cp.latitude}
+                        longitude={cp.longitude}
+                        onPositionChange={() => {}}
+                        readOnly
+                      />
+                    </CardContent>
+                  </Card>
                 </div>
+
 
                 {/* Right sidebar */}
                 <div className="space-y-6">
@@ -983,36 +1022,6 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   </Card>
                 </div>
               </div>
-
-              {/* Standortkarte – Drag&Drop des Markers aktualisiert die Koordinaten überall (Übersichtskarte, Lade-App, Detail) */}
-              <Card className="mt-6">
-                <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-primary" />
-                      Standort auf Karte
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Marker per Drag &amp; Drop auf die exakte Position ziehen. Die
-                      Änderung wird automatisch in der Übersichtskarte und der Lade-App übernommen.
-                    </p>
-                  </div>
-                  {cp.latitude && cp.longitude && (
-                    <span className="text-xs font-mono text-muted-foreground hidden sm:inline">
-                      {cp.latitude.toFixed(5)}, {cp.longitude.toFixed(5)}
-                    </span>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <SingleChargePointMap
-                    latitude={cp.latitude}
-                    longitude={cp.longitude}
-                    onPositionChange={(lat, lng) => {
-                      updateChargePoint.mutate({ id: cp.id, latitude: lat, longitude: lng } as any);
-                    }}
-                  />
-                </CardContent>
-              </Card>
             </TabsContent>
 
             {/* Sessions tab */}
@@ -1035,6 +1044,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           <TableHead>RFID</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Grund</TableHead>
+                          <TableHead>Beleg</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1073,6 +1083,11 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                               </TableCell>
                               <TableCell className="text-sm text-muted-foreground">
                                 {s.stop_reason ? (reasonMap[s.stop_reason] || s.stop_reason) : "—"}
+                              </TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="sm" onClick={() => setOcmfSessionId(s.id)}>
+                                  <ShieldCheck className="mr-1 h-3.5 w-3.5" /> OCMF
+                                </Button>
                               </TableCell>
                             </TableRow>
                           );
@@ -1699,6 +1714,15 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
               )}
             </TabsContent>
 
+            <TabsContent value="utilization" className="mt-6 space-y-6">
+              <UtilizationHeatmap sessions={sessions ?? []} />
+              <RoiCard
+                chargePointId={cp.id}
+                sessions={(sessions ?? []).map((s) => ({ start_time: s.start_time, energy_kwh: s.energy_kwh }))}
+                defaultSalePriceEurPerKwh={defaultSalePrice}
+              />
+            </TabsContent>
+
             <TabsContent value="maintenance" className="mt-6">
               <AutoRebootSettings
                 chargePoint={cp}
@@ -1706,10 +1730,27 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                 onSave={(patch) => updateChargePoint.mutate({ id: cp.id, ...patch } as any)}
               />
             </TabsContent>
+
+            <TabsContent value="eichrecht" className="mt-6 space-y-4">
+              <ChargePointEichrechtForm chargePointId={cp.id} />
+              <p className="text-xs text-muted-foreground">
+                Belege je Ladevorgang können Sie im Tab &quot;Ladevorgänge&quot; über die Schaltfläche &quot;OCMF&quot; herunterladen oder als
+                Endkunden-Link teilen.
+              </p>
+            </TabsContent>
           </Tabs>
 
         </div>
       </main>
+
+      <Dialog open={!!ocmfSessionId} onOpenChange={(o) => !o && setOcmfSessionId(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Eichrechtskonformer Beleg</DialogTitle>
+          </DialogHeader>
+          {ocmfSessionId && <EichrechtTab sessionId={ocmfSessionId} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

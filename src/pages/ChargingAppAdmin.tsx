@@ -12,13 +12,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Smartphone, Users, ExternalLink, Check, Ban, Archive, Loader2, Copy, Link, QrCode } from "lucide-react";
 import { format } from "date-fns";
 import QRCode from "qrcode";
+import { toast } from "sonner";
 import { useTranslation } from "@/hooks/useTranslation";
+import { QueryErrorState } from "@/components/common/QueryErrorState";
 
 const APP_URL = `${window.location.origin}/ev`;
 
 const ChargingAppAdmin = () => {
   const { tenant } = useTenant();
-  const { users, isLoading } = useChargingUsers();
+  const { users, isLoading, isError, error, refetch } = useChargingUsers();
   const { groups } = useChargingUserGroups();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -31,6 +33,12 @@ const ChargingAppAdmin = () => {
       QRCode.toCanvas(qrCanvasRef.current, APP_URL, { width: 180, margin: 2 });
     }
   }, []);
+
+  useEffect(() => {
+    if (isError && error) {
+      toast.error("Nutzer konnten nicht geladen werden", { description: (error as Error).message });
+    }
+  }, [isError, error]);
 
   // Only show users that have auth_user_id (= app users)
   const appUsers = users.filter((u) => u.auth_user_id);
@@ -155,6 +163,12 @@ const ChargingAppAdmin = () => {
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
+                  ) : isError ? (
+                    <QueryErrorState
+                      title="Nutzer konnten nicht geladen werden"
+                      message={(error as Error)?.message ?? "Unbekannter Fehler"}
+                      onRetry={() => refetch()}
+                    />
                   ) : filtered.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />

@@ -1,14 +1,24 @@
 // Ingest Hetzner node metrics (CPU/Memory/Disk/Load/Uptime)
 // Auth: header `x-node-token` must equal NODE_METRICS_TOKEN secret
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-node-token",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+// Constant-time string compare (avoids timing side-channels on token).
+function timingSafeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const ab = enc.encode(a);
+  const bb = enc.encode(b);
+  if (ab.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ab.length; i++) diff |= ab[i] ^ bb[i];
+  return diff === 0;
+}
+
+const MAX_INSERTS_PER_MIN = 20;
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   if (req.method !== "POST") {
@@ -19,8 +29,8 @@ Deno.serve(async (req) => {
   }
 
   const expected = Deno.env.get("NODE_METRICS_TOKEN");
-  const provided = req.headers.get("x-node-token");
-  if (!expected || provided !== expected) {
+  const provided = req.headers.get("x-node-token") ?? "";
+  if (!expected || !timingSafeEqual(provided, expected)) {
     return new Response(JSON.stringify({ error: "unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -61,6 +71,21 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  // Simples Rate-Limit: max. 20 Inserts pro Minute pro node_name
+  const oneMinAgo = new Date(Date.now() - 60_000).toISOString();
+  const { count: recentCount, error: countErr } = await supabase
+    .from("node_metrics")
+    .select("id", { count: "exact", head: true })
+    .eq("node_name", node_name)
+    .gte("recorded_at", oneMinAgo);
+
+  if (!countErr && (recentCount ?? 0) >= MAX_INSERTS_PER_MIN) {
+    return new Response(JSON.stringify({ error: "rate_limited" }), {
+      status: 429,
+      headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "60" },
+    });
+  }
 
   const { error } = await supabase.from("node_metrics").insert(row);
   if (error) {

@@ -208,6 +208,63 @@ export type Database = {
           },
         ]
       }
+      audit_logs: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          after: Json | null
+          before: Json | null
+          created_at: string
+          entity_id: string | null
+          entity_label: string | null
+          entity_type: string
+          id: string
+          ip_address: unknown
+          metadata: Json | null
+          partner_id: string | null
+          tenant_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_label?: string | null
+          entity_type: string
+          id?: string
+          ip_address?: unknown
+          metadata?: Json | null
+          partner_id?: string | null
+          tenant_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_label?: string | null
+          entity_type?: string
+          id?: string
+          ip_address?: unknown
+          metadata?: Json | null
+          partner_id?: string | null
+          tenant_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       automation_execution_log: {
         Row: {
           actions_executed: Json | null
@@ -605,6 +662,57 @@ export type Database = {
           },
         ]
       }
+      charge_point_economics: {
+        Row: {
+          capex_cents: number
+          charge_point_id: string
+          commissioned_on: string | null
+          created_at: string
+          electricity_cost_eur_per_kwh: number
+          notes: string | null
+          opex_monthly_cents: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          capex_cents?: number
+          charge_point_id: string
+          commissioned_on?: string | null
+          created_at?: string
+          electricity_cost_eur_per_kwh?: number
+          notes?: string | null
+          opex_monthly_cents?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          capex_cents?: number
+          charge_point_id?: string
+          commissioned_on?: string | null
+          created_at?: string
+          electricity_cost_eur_per_kwh?: number
+          notes?: string | null
+          opex_monthly_cents?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_economics_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: true
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_economics_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_point_group_allowed_user_groups: {
         Row: {
           created_at: string
@@ -731,6 +839,7 @@ export type Database = {
           connector_count: number
           connector_type: string
           created_at: string
+          eichrecht_enabled: boolean
           energy_settings: Json
           firmware_version: string | null
           group_id: string | null
@@ -741,6 +850,8 @@ export type Database = {
           location_id: string | null
           longitude: number | null
           max_power_kw: number
+          meter_format: string
+          meter_public_key: string | null
           model: string | null
           name: string
           ocpp_id: string | null
@@ -773,6 +884,7 @@ export type Database = {
           connector_count?: number
           connector_type?: string
           created_at?: string
+          eichrecht_enabled?: boolean
           energy_settings?: Json
           firmware_version?: string | null
           group_id?: string | null
@@ -783,6 +895,8 @@ export type Database = {
           location_id?: string | null
           longitude?: number | null
           max_power_kw?: number
+          meter_format?: string
+          meter_public_key?: string | null
           model?: string | null
           name: string
           ocpp_id?: string | null
@@ -815,6 +929,7 @@ export type Database = {
           connector_count?: number
           connector_type?: string
           created_at?: string
+          eichrecht_enabled?: boolean
           energy_settings?: Json
           firmware_version?: string | null
           group_id?: string | null
@@ -825,6 +940,8 @@ export type Database = {
           location_id?: string | null
           longitude?: number | null
           max_power_kw?: number
+          meter_format?: string
+          meter_public_key?: string | null
           model?: string | null
           name?: string
           ocpp_id?: string | null
@@ -1181,6 +1298,76 @@ export type Database = {
           },
         ]
       }
+      charging_session_meter_records: {
+        Row: {
+          charge_point_id: string | null
+          context: string
+          created_at: string
+          id: string
+          meter_format: string
+          public_key_fingerprint: string | null
+          raw_payload: string
+          reading_wh: number | null
+          sampled_at: string
+          session_id: string
+          signed_value: string | null
+          tenant_id: string
+          verification_status: string
+        }
+        Insert: {
+          charge_point_id?: string | null
+          context?: string
+          created_at?: string
+          id?: string
+          meter_format?: string
+          public_key_fingerprint?: string | null
+          raw_payload: string
+          reading_wh?: number | null
+          sampled_at: string
+          session_id: string
+          signed_value?: string | null
+          tenant_id: string
+          verification_status?: string
+        }
+        Update: {
+          charge_point_id?: string | null
+          context?: string
+          created_at?: string
+          id?: string
+          meter_format?: string
+          public_key_fingerprint?: string | null
+          raw_payload?: string
+          reading_wh?: number | null
+          sampled_at?: string
+          session_id?: string
+          signed_value?: string | null
+          tenant_id?: string
+          verification_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_session_meter_records_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_session_meter_records_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "charging_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_session_meter_records_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charging_sessions: {
         Row: {
           charge_point_id: string | null
@@ -1191,6 +1378,10 @@ export type Database = {
           id_tag: string | null
           meter_start: number | null
           meter_stop: number | null
+          ocmf_finalized_at: string | null
+          ocmf_payload: string | null
+          ocmf_public_key_fingerprint: string | null
+          ocmf_status: string | null
           start_time: string
           status: string
           stop_reason: string | null
@@ -1207,6 +1398,10 @@ export type Database = {
           id_tag?: string | null
           meter_start?: number | null
           meter_stop?: number | null
+          ocmf_finalized_at?: string | null
+          ocmf_payload?: string | null
+          ocmf_public_key_fingerprint?: string | null
+          ocmf_status?: string | null
           start_time?: string
           status?: string
           stop_reason?: string | null
@@ -1223,6 +1418,10 @@ export type Database = {
           id_tag?: string | null
           meter_start?: number | null
           meter_stop?: number | null
+          ocmf_finalized_at?: string | null
+          ocmf_payload?: string | null
+          ocmf_public_key_fingerprint?: string | null
+          ocmf_status?: string | null
           start_time?: string
           status?: string
           stop_reason?: string | null
@@ -2858,6 +3057,39 @@ export type Database = {
           },
         ]
       }
+      dlm_control_log: {
+        Row: {
+          applied_profiles: Json
+          available_kw: number | null
+          executed_at: string
+          id: number
+          location_id: string
+          measured_kw: number | null
+          reason: string | null
+          tenant_id: string
+        }
+        Insert: {
+          applied_profiles?: Json
+          available_kw?: number | null
+          executed_at?: string
+          id?: number
+          location_id: string
+          measured_kw?: number | null
+          reason?: string | null
+          tenant_id: string
+        }
+        Update: {
+          applied_profiles?: Json
+          available_kw?: number | null
+          executed_at?: string
+          id?: number
+          location_id?: string
+          measured_kw?: number | null
+          reason?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       email_send_audit: {
         Row: {
           created_at: string
@@ -4382,6 +4614,123 @@ export type Database = {
           },
         ]
       }
+      grid_curtailment_events: {
+        Row: {
+          applied_at: string | null
+          applied_result: Json | null
+          connection_id: string
+          created_at: string
+          curtailment_percent: number
+          id: string
+          payload: Json
+          received_at: string
+          source: string
+          tenant_id: string
+          valid_from: string
+          valid_until: string
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_result?: Json | null
+          connection_id: string
+          created_at?: string
+          curtailment_percent: number
+          id?: string
+          payload?: Json
+          received_at?: string
+          source?: string
+          tenant_id: string
+          valid_from: string
+          valid_until: string
+        }
+        Update: {
+          applied_at?: string | null
+          applied_result?: Json | null
+          connection_id?: string
+          created_at?: string
+          curtailment_percent?: number
+          id?: string
+          payload?: Json
+          received_at?: string
+          source?: string
+          tenant_id?: string
+          valid_from?: string
+          valid_until?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grid_curtailment_events_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "grid_operator_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grid_curtailment_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grid_operator_connections: {
+        Row: {
+          active: boolean
+          connection_id: string | null
+          created_at: string
+          dso_name: string
+          id: string
+          location_id: string
+          module: string
+          notes: string | null
+          tenant_id: string
+          updated_at: string
+          webhook_secret: string
+        }
+        Insert: {
+          active?: boolean
+          connection_id?: string | null
+          created_at?: string
+          dso_name: string
+          id?: string
+          location_id: string
+          module?: string
+          notes?: string | null
+          tenant_id: string
+          updated_at?: string
+          webhook_secret?: string
+        }
+        Update: {
+          active?: boolean
+          connection_id?: string | null
+          created_at?: string
+          dso_name?: string
+          id?: string
+          location_id?: string
+          module?: string
+          notes?: string | null
+          tenant_id?: string
+          updated_at?: string
+          webhook_secret?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grid_operator_connections_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grid_operator_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       infrastructure_metrics: {
         Row: {
           id: string
@@ -4779,6 +5128,69 @@ export type Database = {
             columns: ["scope_room_id"]
             isOneToOne: false
             referencedRelation: "floor_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      location_dlm_config: {
+        Row: {
+          control_interval_s: number
+          created_at: string
+          fallback_kw_per_cp: number
+          grid_limit_kw: number
+          id: string
+          is_active: boolean
+          location_id: string
+          min_charge_kw: number
+          priority_order: Json
+          reference_meter_id: string | null
+          safety_buffer_kw: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          control_interval_s?: number
+          created_at?: string
+          fallback_kw_per_cp?: number
+          grid_limit_kw: number
+          id?: string
+          is_active?: boolean
+          location_id: string
+          min_charge_kw?: number
+          priority_order?: Json
+          reference_meter_id?: string | null
+          safety_buffer_kw?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          control_interval_s?: number
+          created_at?: string
+          fallback_kw_per_cp?: number
+          grid_limit_kw?: number
+          id?: string
+          is_active?: boolean
+          location_id?: string
+          min_charge_kw?: number
+          priority_order?: Json
+          reference_meter_id?: string | null
+          safety_buffer_kw?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_dlm_config_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_dlm_config_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -5575,6 +5987,48 @@ export type Database = {
         }
         Relationships: []
       }
+      monitoring_alert_rules: {
+        Row: {
+          comparator: string
+          created_at: string
+          created_by: string | null
+          enabled: boolean
+          id: string
+          metric_category: string
+          metric_name: string
+          notify_email: string | null
+          severity: string
+          threshold: number
+          updated_at: string
+        }
+        Insert: {
+          comparator: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          id?: string
+          metric_category: string
+          metric_name: string
+          notify_email?: string | null
+          severity?: string
+          threshold: number
+          updated_at?: string
+        }
+        Update: {
+          comparator?: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          id?: string
+          metric_category?: string
+          metric_name?: string
+          notify_email?: string | null
+          severity?: string
+          threshold?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       mqtt_actuators: {
         Row: {
           actuator_uuid: string
@@ -6074,6 +6528,33 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+        }
+        Relationships: []
+      }
+      platform_metrics: {
+        Row: {
+          created_at: string
+          dimension: string | null
+          id: string
+          metric_key: string
+          metric_value: number
+          recorded_at: string
+        }
+        Insert: {
+          created_at?: string
+          dimension?: string | null
+          id?: string
+          metric_key: string
+          metric_value: number
+          recorded_at?: string
+        }
+        Update: {
+          created_at?: string
+          dimension?: string | null
+          id?: string
+          metric_key?: string
+          metric_value?: number
+          recorded_at?: string
         }
         Relationships: []
       }
@@ -8174,6 +8655,60 @@ export type Database = {
         }
         Relationships: []
       }
+      steuve_devices: {
+        Row: {
+          active: boolean
+          connection_id: string
+          created_at: string
+          device_ref_id: string
+          device_type: string
+          id: string
+          min_power_kw: number
+          priority: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          connection_id: string
+          created_at?: string
+          device_ref_id: string
+          device_type?: string
+          id?: string
+          min_power_kw?: number
+          priority?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          connection_id?: string
+          created_at?: string
+          device_ref_id?: string
+          device_type?: string
+          id?: string
+          min_power_kw?: number
+          priority?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "steuve_devices_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "grid_operator_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "steuve_devices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_sessions: {
         Row: {
           created_at: string
@@ -9681,10 +10216,12 @@ export type Database = {
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_cron_job_history: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
+      cleanup_old_audit_logs: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
       cleanup_old_node_metrics: { Args: never; Returns: number }
       cleanup_old_ocpp_logs: { Args: never; Returns: number }
       cleanup_pg_net_responses: { Args: never; Returns: number }
+      cleanup_stale_integration_errors: { Args: never; Returns: number }
       collect_db_metrics: { Args: never; Returns: Json }
       community_data_quality: {
         Args: { p_community_id: string }
