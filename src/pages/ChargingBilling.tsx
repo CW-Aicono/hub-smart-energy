@@ -12,6 +12,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { useChargingInvoiceSettings } from "@/hooks/useChargingInvoiceSettings";
 
 import RoamingTab from "@/components/charging/RoamingTab";
+import BillingGroupsTab from "@/components/charging/BillingGroupsTab";
 import ChargingInvoiceSettingsDialog from "@/components/charging/ChargingInvoiceSettingsDialog";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
