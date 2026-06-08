@@ -260,7 +260,7 @@ export default function SuperAdminOcppFirmware() {
     });
   };
   const selectAll = () => setSelectedCps(new Set((matchingCps ?? []).map((c) => c.id)));
-  const selectOnline = () => setSelectedCps(new Set((matchingCps ?? []).filter((c) => c.is_online).map((c) => c.id)));
+  const selectOnline = () => setSelectedCps(new Set((matchingCps ?? []).filter((c) => c.ws_connected).map((c) => c.id)));
   const clearAll = () => setSelectedCps(new Set());
 
   const handleRollout = async () => {
@@ -578,8 +578,8 @@ export default function SuperAdminOcppFirmware() {
                                 <TableCell>{cp.name ?? cp.id.slice(0, 8)}</TableCell>
                                 <TableCell className="text-xs">{cp.firmware_version ?? "—"}</TableCell>
                                 <TableCell>
-                                  <Badge variant={cp.is_online ? "default" : "outline"}>
-                                    {cp.is_online ? "online" : "offline"}
+                                  <Badge variant={cp.ws_connected ? "default" : "outline"}>
+                                    {cp.ws_connected ? "online" : "offline"}
                                   </Badge>
                                 </TableCell>
                                 <TableCell>
