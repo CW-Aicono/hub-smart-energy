@@ -240,27 +240,16 @@ function MembersDialog({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
 
-  // sync on open
-  const groupKey = group?.id ?? null;
-  if (group && selected.size === 0 && memberUserIds.length > 0 && !Array.from(selected).some(() => true)) {
-    // initialize only once per open
-  }
-  // safer init via effect
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  useState(() => {
-    return null;
-  });
-
-  // Reset selection whenever group or memberUserIds changes
-  // (intentional small effect via useMemo)
-  // We use a key-based approach:
-  if (group && (selected as any)._key !== groupKey + ":" + memberUserIds.join(",")) {
-    const next = new Set(memberUserIds);
-    (next as any)._key = groupKey + ":" + memberUserIds.join(",");
-    if ((selected as any)._key !== (next as any)._key) {
-      setTimeout(() => setSelected(next), 0);
+  useEffect(() => {
+    if (group) {
+      setSelected(new Set(memberUserIds));
+    } else {
+      setSelected(new Set());
+      setSearch("");
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group?.id, memberUserIds.join(",")]);
+
 
   const toggle = (id: string) => {
     const next = new Set(selected);
