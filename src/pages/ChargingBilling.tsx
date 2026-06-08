@@ -178,7 +178,7 @@ const ChargingBilling = () => {
         .select("user_id, group_id")
         .eq("tenant_id", tenant!.id);
       if (error) throw error;
-      return (data ?? []) as Array<{ user_id: string; group_id: string }>;
+      return ((data ?? []) as unknown) as Array<{ user_id: string; group_id: string }>;
     },
   });
 
