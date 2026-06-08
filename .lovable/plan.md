@@ -1,51 +1,90 @@
 
-# Super-Admin: Firmware-Katalog & Rollout
+# Peak-Shaving-Modul
 
-## Ziel
-Plattform-Administrator kann zentral Firmware-Pakete für Wallbox-Modelle pflegen und an Ladepunkte ausrollen — als Ergänzung zur bereits gelieferten MVP-Lösung (Schritte 1+2+4).
+Eigenständiges, im Super-Admin separat buchbares Modul, das Batteriespeicher gezielt zur Kappung von Leistungsspitzen einsetzt und die eingesparten Netzentgelte live ausweist. Generisch nutzbar (Industrie, Gewerbe, Arenen, Events). Phase 1 = Schwellwert-Logik, Phase 2 = Event-Kalender on top.
 
-## Neue Seite: `SuperAdminOcppFirmware.tsx` (Route `/super-admin/ocpp/firmware`)
+## Wirtschaftlicher Hintergrund (für Verkauf & UI-Texte)
 
-Drei Bereiche in einem Tab-Layout:
+RLM-Kunden (Großverbraucher ab 100.000 kWh/Jahr) zahlen Netzentgelt zweigeteilt:
+- **Arbeitspreis** (ct/kWh)
+- **Leistungspreis** (€/kW/Jahr) auf die **höchste 15-Minuten-Viertelstundenleistung** des Abrechnungszeitraums
 
-### Tab 1 — Firmware-Katalog
-- Tabelle aller Einträge aus `cp_firmware_artifacts`
-- Spalten: Hersteller, Modell, Version, Format, Größe, Eichrecht-Zertifikat (Badge), hochgeladen von, hochgeladen am
-- Filter (Suchfeld) für Hersteller + Modell
-- Aktionen pro Zeile: Release-Notes ansehen, löschen (mit Bestätigung — löscht Eintrag UND Datei aus Bucket)
+Eine einzige gekappte 300-kW-Spitze bei 150 €/kW/Jahr = **45.000 €/Jahr Einsparung**.
 
-### Tab 2 — Upload
-Dialog mit Formular:
-- Pflicht: Hersteller, Modell, Version (frei eingebbar; Datalist-Vorschläge aus bestehenden `charge_points` mit Vendor/Model)
-- Pflicht: Datei-Upload (max. 100 MB), Format-Dropdown (`bin` / `zip` / `fwu` / `tar` / `other`)
-- SHA-256 wird client-seitig per `crypto.subtle.digest` berechnet und gespeichert
-- Optional: Release-Notes (Textarea)
-- Pflicht-Checkbox **„Eichrecht-Freigabe vorhanden"** — falls aktiviert: Pflicht-Textfeld für Referenz (z. B. Konformitätsbescheinigungs-Nummer / Link)
-- Upload-Ablauf:
-  1. Datei nach `cp-firmware/{vendor}/{model}/{version}-{timestamp}.{ext}` via `supabase.storage`
-  2. Eintrag in `cp_firmware_artifacts` anlegen
-  3. Bei Fehler: Datei zurückrollen
+## Phase 1 — Generisches Peak-Shaving (Modul-Kern)
 
-### Tab 3 — Bulk-Rollout
-- Artefakt auswählen (Dropdown)
-- Liste aller passenden Ladepunkte (Vendor + Model match, ohne Tenant-Filter, mit Tenant-Name) mit Checkboxen, Spalten: Tenant, Ladepunkt-Name, aktuelle Firmware-Version, Status (online/offline)
-- „Alle auswählen / online auswählen"
-- `retrieveDate`-Picker (Default: kommende Nacht 02:00 Europe/Berlin)
-- Eichrecht-Bestätigungs-Checkbox (Pflicht falls Artefakt eichrechtzertifiziert)
-- Button **„Rollout starten"** → ruft bestehende Edge-Function `ocpp-firmware-control` mit Action `enqueue_job` pro Ladepunkt parallel (Promise.all) auf
-- Fortschrittsanzeige + Zusammenfassung (Erfolg / Fehler je CP)
+### 1. Neues Modul registrieren
+- Eintrag in `module_prices` (Key: `peak_shaving`, Name: "Peak-Shaving & Netzentgelt-Optimierung")
+- Super-Admin aktiviert pro Tenant via `tenant_modules` (bestehende Logik, kein neuer Code)
+- `ModuleGuard` schützt alle neuen Routen/Widgets
 
-## Anbindung
-- Route in `src/App.tsx` ergänzen (lazy import, `<SA>`-Wrapper wie bestehende Super-Admin-Routen)
-- Eintrag in `src/components/super-admin/SuperAdminSidebar.tsx` im OCPP-Submenü (z. B. unter „OCPP Control"): „Firmware-Katalog" mit Icon `Upload`
+### 2. Datenbank
+Neue Tabellen:
 
-## Keine neuen Backend-Tabellen
-Nutzt vollständig die in MVP angelegten Tabellen + den `cp-firmware`-Bucket + die Edge-Function `ocpp-firmware-control`. RLS-Policies erlauben super_admin bereits Insert/Update/Delete auf Artefakte und Bucket-Uploads.
+| Tabelle | Zweck |
+|---|---|
+| `peak_shaving_configs` | Konfiguration pro Standort: `location_id`, `storage_id`, `peak_limit_kw`, `reserve_soc_pct`, `mode` (`threshold` \| `forecast` \| `event`), `network_tariff_eur_per_kw_year`, `billing_cycle` (`monthly` \| `yearly`), `active` |
+| `peak_shaving_events` | Jeder Eingriff: `config_id`, `started_at`, `ended_at`, `peak_kw_without_shaving` (extrapoliert), `peak_kw_actual`, `kwh_discharged`, `eur_saved` |
+| `peak_shaving_monthly_summary` | Aggregat: `config_id`, `year`, `month`, `max_peak_kw`, `baseline_peak_kw`, `total_kwh_discharged`, `total_eur_saved` |
+| `peak_shaving_event_calendar` (Phase 2) | `config_id`, `event_name`, `start_at`, `end_at`, `expected_peak_kw`, `pre_charge_target_soc` |
 
-## Out of Scope (separat)
-- Auto-Detect des passenden Formats anhand Dateiendung
-- Vendor/Model-Normalisierung über alle Wallboxen (z. B. „ABB" vs. „ABB EV Infrastructure")
-- Watchdog/pg_cron (Schritt 5 aus Original-Plan)
+Plus RLS (`tenant_id` + Modul-Aktivierung), GRANTs, Realtime auf `peak_shaving_events` für Live-Dashboard.
 
-## Aufwand
-~½ Tag.
+### 3. Edge Function `peak-shaving-scheduler`
+- Per `pg_cron` alle 60 s
+- Pro aktivem `peak_shaving_configs`:
+  1. Lese letzten Hauptzähler-Wert aus `meter_power_readings_5min` (Reuse `get_location_main_meter` RPC)
+  2. **Hybrid-Logik:**
+     - **Schwellwert-Teil:** Wenn aktuelle Leistung > `peak_limit_kw` → Entladung mit `min(max_discharge_kw, current_kw − peak_limit_kw)` triggern
+     - **15-Min-Prognose-Teil:** Laufende Viertelstunde tracken, linear extrapolieren; wenn prognostizierter VS-Mittelwert > Limit → frühzeitig anwerfen (RLM-konform)
+  3. Speicher-Kommando schreiben (analog `dlm-scheduler` → `pending_ocpp_commands` bzw. neue Tabelle `pending_storage_commands` — abhängig vom Speicher-Typ; in Phase 1 nur Speicher mit lokaler Steuerung via EMS-Gateway / Modbus)
+  4. `peak_shaving_events` schreiben/aktualisieren
+  5. Bei Ende der Spitze: `peak_kw_without_shaving` einfrieren = Maximum der extrapolierten Werte, Einsparung berechnen:
+     `eur_saved = (peak_kw_without_shaving − peak_kw_actual) × network_tariff_eur_per_kw_year / 12`
+- Hysterese: Freigabe erst bei < 85 % der Schwelle, plus SoC-Reserve respektieren
+
+### 4. UI — Tenant-Seite `/peak-shaving`
+- **Konfigurations-Card:** Standort, Speicher zuordnen, Peak-Limit (kW), Netzentgelt (€/kW/Jahr), SoC-Reserve, Modus (Schwellwert / Schwellwert+Prognose)
+- **Live-Dashboard-Widgets:**
+  - "Aktuelle Leistung vs. Peak-Limit" (Echtzeit-Linie + roter Schwellwert)
+  - "Speicher-Status" (SoC, aktuell entladene Leistung)
+  - "Aktiver Eingriff" (Sekundenzähler, sofort eingespart)
+- **KPI-Kacheln:** Monats-Maximum, Baseline-Maximum, kWh entladen, € gespart (Monat / YTD / Jahresprognose)
+- **Verlaufschart:** Top-10-Spitzen des Monats (mit / ohne Peak-Shaving)
+- **Event-Log-Tabelle:** Letzte Eingriffe, sortier-/filterbar, CSV-Export
+
+### 5. Super-Admin
+- Eintrag in Modul-Liste, Preis (z. B. 49 €/Monat als Vorschlag, anpassbar)
+- Übersicht "Peak-Shaving-Performance" über alle Tenants (€ gespart aggregiert) — gutes Vertriebsargument
+
+## Phase 2 — Erweiterungen (separat, nach Abnahme Phase 1)
+
+- **Event-Kalender** (`peak_shaving_event_calendar`): Vor Event-Beginn lädt Speicher gezielt auf, Modus `event` aktivierbar
+- **Branchen-Presets:** "Arena/Konzert", "Industrie 1-Schicht", "Logistik 24/7" mit Default-Limits
+- **PDF-Report:** Monatlicher Auto-Report "Eingesparte Netzentgelte" in bestehende `report_schedules`-Logik einklinken
+- **Multi-Storage:** Lastverteilung über mehrere Speicher pro Standort
+
+## Technischer Abschnitt
+
+```text
+                      ┌──────────────────────┐
+   meter_power_       │ peak-shaving-        │   pending_storage_
+   readings_5min ───► │ scheduler (1 min)    │ ──► commands → Gateway/Modbus
+                      │ - Schwellwert        │
+   peak_shaving_      │ - 15-Min-Prognose    │   peak_shaving_events
+   configs       ───► │ - Hysterese          │ ──► (Realtime)
+                      │ - SoC-Reserve        │
+   energy_storages ──►│                      │   peak_shaving_monthly_
+                      └──────────────────────┘   summary (täglich rollup)
+```
+
+- Reuse: `dlm-scheduler`-Architektur (Limit-Check + Stack-Level), `arbitrage_strategies` (Speicher-Adressierung), `get_location_main_meter` RPC, `ModuleGuard`, `useTenantQuery`, deutsche Zahlenformate, AICONO-Farben.
+- Neue Edge Function nur für Peak-Shaving; bewusst getrennt von `dlm-scheduler`, weil andere Logik (entladen statt drosseln) und andere Zielgeräte (Speicher statt Wallbox).
+- Speicher-Ansteuerung in Phase 1 nur für Speicher, die bereits über das AICONO-EMS-Gateway / Modbus erreichbar sind (vorhandene `energy_storages`-Einträge mit konfiguriertem `location_id`).
+
+## Was bewusst NICHT in Phase 1 ist
+
+- Spot-Markt-Arbitrage (existiert separat in `arbitrage_strategies`, kein Mehraufwand verbauen)
+- Event-Kalender → Phase 2
+- PDF-Report → Phase 2
+- VPP / Marktteilnahme → eigenes späteres Modul
