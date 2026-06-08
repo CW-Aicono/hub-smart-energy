@@ -61,8 +61,10 @@ import ModbusInstancePanel from "@/components/charging/ModbusInstancePanel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EichrechtTab } from "@/components/charging/EichrechtTab";
 import { ChargePointEichrechtForm } from "@/components/charging/ChargePointEichrechtForm";
+import { ChargePointFirmwareCard } from "@/components/charging/ChargePointFirmwareCard";
 import { ShieldCheck } from "lucide-react";
 import { downloadSecureStorageObject } from "@/lib/secureStorage";
+
 
 const STATUS_KEYS: Record<string, { labelKey: string; color: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
   available: { labelKey: "cpd.available", color: "hsl(var(--primary))", variant: "default", icon: Zap },
@@ -1723,13 +1725,20 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
               />
             </TabsContent>
 
-            <TabsContent value="maintenance" className="mt-6">
+            <TabsContent value="maintenance" className="mt-6 space-y-6">
               <AutoRebootSettings
                 chargePoint={cp}
                 isAdmin={!!isAdmin}
                 onSave={(patch) => updateChargePoint.mutate({ id: cp.id, ...patch } as any)}
               />
+              <ChargePointFirmwareCard
+                chargePointId={cp.id}
+                vendor={cp.vendor ?? null}
+                model={cp.model ?? null}
+                currentFirmwareVersion={(cp as any).firmware_version ?? null}
+              />
             </TabsContent>
+
 
             <TabsContent value="eichrecht" className="mt-6 space-y-4">
               <ChargePointEichrechtForm chargePointId={cp.id} />

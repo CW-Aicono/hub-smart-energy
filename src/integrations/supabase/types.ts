@@ -2651,6 +2651,191 @@ export type Database = {
           },
         ]
       }
+      cp_firmware_artifacts: {
+        Row: {
+          created_at: string
+          eichrecht_approval_ref: string | null
+          file_format: string
+          file_size: number | null
+          id: string
+          is_eichrecht_certified: boolean
+          model: string
+          release_notes: string | null
+          sha256: string | null
+          storage_path: string
+          updated_at: string
+          uploaded_by: string | null
+          vendor: string
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          eichrecht_approval_ref?: string | null
+          file_format?: string
+          file_size?: number | null
+          id?: string
+          is_eichrecht_certified?: boolean
+          model: string
+          release_notes?: string | null
+          sha256?: string | null
+          storage_path: string
+          updated_at?: string
+          uploaded_by?: string | null
+          vendor: string
+          version: string
+        }
+        Update: {
+          created_at?: string
+          eichrecht_approval_ref?: string | null
+          file_format?: string
+          file_size?: number | null
+          id?: string
+          is_eichrecht_certified?: boolean
+          model?: string
+          release_notes?: string | null
+          sha256?: string | null
+          storage_path?: string
+          updated_at?: string
+          uploaded_by?: string | null
+          vendor?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      cp_firmware_jobs: {
+        Row: {
+          artifact_id: string | null
+          charge_point_id: string
+          created_at: string
+          download_url: string | null
+          error_code: string | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          last_status_at: string | null
+          retries: number | null
+          retrieve_date: string
+          retry_interval: number | null
+          status: string
+          tenant_id: string
+          triggered_by: string | null
+          updated_at: string
+          url_expires_at: string | null
+        }
+        Insert: {
+          artifact_id?: string | null
+          charge_point_id: string
+          created_at?: string
+          download_url?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          last_status_at?: string | null
+          retries?: number | null
+          retrieve_date: string
+          retry_interval?: number | null
+          status?: string
+          tenant_id: string
+          triggered_by?: string | null
+          updated_at?: string
+          url_expires_at?: string | null
+        }
+        Update: {
+          artifact_id?: string | null
+          charge_point_id?: string
+          created_at?: string
+          download_url?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          last_status_at?: string | null
+          retries?: number | null
+          retrieve_date?: string
+          retry_interval?: number | null
+          status?: string
+          tenant_id?: string
+          triggered_by?: string | null
+          updated_at?: string
+          url_expires_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cp_firmware_jobs_artifact_id_fkey"
+            columns: ["artifact_id"]
+            isOneToOne: false
+            referencedRelation: "cp_firmware_artifacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cp_firmware_jobs_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cp_firmware_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cp_firmware_status_events: {
+        Row: {
+          charge_point_id: string
+          id: string
+          job_id: string | null
+          raw_payload: Json | null
+          received_at: string
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          charge_point_id: string
+          id?: string
+          job_id?: string | null
+          raw_payload?: Json | null
+          received_at?: string
+          status: string
+          tenant_id: string
+        }
+        Update: {
+          charge_point_id?: string
+          id?: string
+          job_id?: string | null
+          raw_payload?: Json | null
+          received_at?: string
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cp_firmware_status_events_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cp_firmware_status_events_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "cp_firmware_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cp_firmware_status_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_role_permissions: {
         Row: {
           created_at: string
