@@ -32,6 +32,11 @@ const {
   RECONNECT_DELAY_MS = "5000",
   TOPIC_FILTER = "aicono/#",
   ENABLE_DISCOVERY = "true",
+  // Coalescing window: alle MQTT-Readings pro Tenant innerhalb dieses Fensters
+  // werden zu EINEM gateway-ingest-POST gebündelt → drastisch weniger
+  // DB-Transaktionen / WAL-Schreiblast in der Cloud.
+  COALESCE_INTERVAL_MS = "30000",
+  COALESCE_MAX_BATCH = "1000",
 } = process.env;
 
 if (!GATEWAY_INGEST_URL || !GATEWAY_API_KEY) {
