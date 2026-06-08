@@ -525,11 +525,12 @@ const ChargingBilling = () => {
               </PaginationItem>
               {Array.from({ length: total }, (_, i) => i + 1)
                 .filter((p) => p === 1 || p === total || Math.abs(p - page) <= 1)
-                .map((p, idx, arr) => (
-                  <>
-                    {idx > 0 && arr[idx - 1] !== p - 1 && (
-                      <PaginationItem key={`e-${p}`}><PaginationEllipsis /></PaginationItem>
-                    )}
+                .flatMap((p, idx, arr) => {
+                  const nodes: JSX.Element[] = [];
+                  if (idx > 0 && arr[idx - 1] !== p - 1) {
+                    nodes.push(<PaginationItem key={`e-${p}`}><PaginationEllipsis /></PaginationItem>);
+                  }
+                  nodes.push(
                     <PaginationItem key={p}>
                       <PaginationLink
                         href="#"
@@ -539,8 +540,10 @@ const ChargingBilling = () => {
                         {p}
                       </PaginationLink>
                     </PaginationItem>
-                  </>
-                ))}
+                  );
+                  return nodes;
+                })}
+
               <PaginationItem>
                 <PaginationNext
                   href="#"
