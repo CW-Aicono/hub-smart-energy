@@ -203,7 +203,7 @@ function applyRemoteConfig(incoming: Record<string, unknown> | null | undefined,
   if (incoming.poll_interval_seconds !== undefined)
     config.poll_interval_seconds = clampInt(incoming.poll_interval_seconds, 5, 3600, before.poll);
   if (incoming.flush_interval_seconds !== undefined)
-    config.flush_interval_seconds = clampInt(incoming.flush_interval_seconds, 1, 600, before.flush);
+    config.flush_interval_seconds = clampInt(incoming.flush_interval_seconds, 15, 600, before.flush);
   if (incoming.heartbeat_interval_seconds !== undefined)
     config.heartbeat_interval_seconds = clampInt(incoming.heartbeat_interval_seconds, 10, 600, before.heartbeat);
   if (incoming.automation_eval_seconds !== undefined)
