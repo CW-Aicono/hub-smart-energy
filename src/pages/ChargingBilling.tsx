@@ -594,10 +594,36 @@ const ChargingBilling = () => {
 
           {/* Period Filter + Stats */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+            <div className="flex flex-wrap items-center gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    title={period === "all" ? "Zeitraum nicht aktiv" : "Zeitraum wechseln"}
+                    disabled={period === "all"}
+                  >
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-3" align="start">
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => shiftPeriod(-1)}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="min-w-[180px] text-center text-sm font-medium">{periodLabel}</div>
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => shiftPeriod(1)}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setPeriodAnchor(new Date())}>
+                      Heute
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
               <div className="flex gap-1 bg-muted rounded-lg p-1">
-                {periodKeys.map(({ key, labelKey }) => (
+                {periodKeys.map(({ key, label }) => (
                   <Button
                     key={key}
                     variant={period === key ? "default" : "ghost"}
@@ -605,11 +631,15 @@ const ChargingBilling = () => {
                     className="h-7 text-xs px-3"
                     onClick={() => setPeriod(key)}
                   >
-                    {t(labelKey as any)}
+                    {label}
                   </Button>
                 ))}
               </div>
+              {period !== "all" && (
+                <span className="text-xs text-muted-foreground ml-1">{periodLabel}</span>
+              )}
             </div>
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Card><CardContent className="p-4 flex items-center gap-3"><Zap className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtKwh(totalEnergy, 1)}</p><p className="text-sm text-muted-foreground">{t("charging.total" as any)}</p></div></CardContent></Card>
               <Card><CardContent className="p-4 flex items-center gap-3"><Receipt className="h-5 w-5 text-muted-foreground" /><div><p className="text-2xl font-bold">{fmtNum(completedSessions.length, 0)}</p><p className="text-sm text-muted-foreground">{t("charging.sessions" as any)}</p></div></CardContent></Card>
