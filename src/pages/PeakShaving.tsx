@@ -336,6 +336,35 @@ function ConfigDialog({ trigger, initial, onSave, locations, storages }: ConfigD
             </div>
             <Switch checked={form.active ?? true} onCheckedChange={(v) => setForm({ ...form, active: v })} />
           </div>
+          <div className="col-span-2 border rounded-lg p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-base">Monatlicher PDF-Report</Label>
+                <p className="text-xs text-muted-foreground">Automatischer Versand am 1. des Folgemonats</p>
+              </div>
+              <Switch
+                checked={form.report_enabled ?? false}
+                onCheckedChange={(v) => setForm({ ...form, report_enabled: v })}
+              />
+            </div>
+            <div>
+              <Label>Empfänger (E-Mails, kommagetrennt)</Label>
+              <Textarea
+                rows={2}
+                placeholder="finance@arena.de, betrieb@arena.de"
+                value={(form.report_recipients ?? []).join(", ")}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    report_recipients: e.target.value
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  })
+                }
+              />
+            </div>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Abbrechen</Button>
