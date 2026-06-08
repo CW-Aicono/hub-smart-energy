@@ -26,13 +26,55 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, TrendingUp, Percent, FileText, Send, Settings, Download, ShieldCheck } from "lucide-react";
+import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, TrendingUp, Percent, FileText, Send, Settings, Download, ShieldCheck, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { EichrechtTab } from "@/components/charging/EichrechtTab";
 import { format } from "date-fns";
 import { fmtNum, fmtCurrency, fmtKwh } from "@/lib/formatCharging";
 import { generateChargingInvoicePdf, downloadBlob } from "@/lib/generateChargingInvoicePdf";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+
+// Sortable table header for charging sessions
+function SortableHead({
+  column,
+  label,
+  sortColumn,
+  sortDirection,
+  onSort,
+  onDir,
+}: {
+  column: "charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag";
+  label: string;
+  sortColumn: string | null;
+  sortDirection: "asc" | "desc";
+  onSort: (c: "charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag" | null) => void;
+  onDir: (d: "asc" | "desc") => void;
+}) {
+  const active = sortColumn === column;
+  return (
+    <TableHead
+      className="cursor-pointer select-none"
+      onClick={() => {
+        if (active) {
+          onDir(sortDirection === "asc" ? "desc" : "asc");
+        } else {
+          onSort(column);
+          onDir("asc");
+        }
+      }}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (
+          sortDirection === "asc" ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
+        ) : (
+          <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
+        )}
+      </span>
+    </TableHead>
+  );
+}
+
 
 const ChargingBilling = () => {
   const { user, loading: authLoading } = useAuth();
@@ -102,6 +144,7 @@ const ChargingBilling = () => {
     [sessions, periodStart]
   );
 
+
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
 
@@ -110,6 +153,43 @@ const ChargingBilling = () => {
   const activeTariff = tariffs.find((t) => t.is_active);
 
   const getCpName = (id: string) => chargePoints.find((cp) => cp.id === id)?.name || "—";
+
+  // Session table sorting
+  const [sortColumn, setSortColumn] = useState<"charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag" | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  const displayedSessions = useMemo(() => {
+    if (!sortColumn) return filteredSessions;
+    const dir = sortDirection === "asc" ? 1 : -1;
+    return [...filteredSessions].sort((a, b) => {
+      let cmp = 0;
+      switch (sortColumn) {
+        case "charge_point":
+          cmp = getCpName(a.charge_point_id).localeCompare(getCpName(b.charge_point_id));
+          break;
+        case "start_time":
+          cmp = new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
+          break;
+        case "stop_time":
+          const aStop = a.stop_time ? new Date(a.stop_time).getTime() : 0;
+          const bStop = b.stop_time ? new Date(b.stop_time).getTime() : 0;
+          cmp = aStop - bStop;
+          break;
+        case "energy":
+          cmp = a.energy_kwh - b.energy_kwh;
+          break;
+        case "status":
+          cmp = a.status.localeCompare(b.status);
+          break;
+        case "id_tag":
+          const aTag = resolveTag(a.id_tag) || a.id_tag || "";
+          const bTag = resolveTag(b.id_tag) || b.id_tag || "";
+          cmp = aTag.localeCompare(bTag);
+          break;
+      }
+      return cmp * dir;
+    });
+  }, [filteredSessions, sortColumn, sortDirection, getCpName, resolveTag]);
 
   const resetTariffForm = () => setTariffForm({ name: "", price_per_kwh: "0.35", base_fee: "0", idle_fee_per_minute: "0", idle_fee_grace_minutes: "60", tax_rate_percent: "19", currency: "EUR" });
 
@@ -252,17 +332,17 @@ const ChargingBilling = () => {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>{t("charging.chargePoint" as any)}</TableHead>
-                          <TableHead>{t("charging.start" as any)}</TableHead>
-                          <TableHead>{t("charging.end" as any)}</TableHead>
-                          <TableHead>{t("charging.energy" as any)}</TableHead>
-                          <TableHead>{t("common.status" as any)}</TableHead>
-                          <TableHead>{t("charging.idTag" as any)}</TableHead>
+                          <SortableHead column="charge_point" label={t("charging.chargePoint" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                          <SortableHead column="start_time" label={t("charging.start" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                          <SortableHead column="stop_time" label={t("charging.end" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                          <SortableHead column="energy" label={t("charging.energy" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                          <SortableHead column="status" label={t("common.status" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                          <SortableHead column="id_tag" label={t("charging.idTag" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
                           <TableHead className="w-20 text-right">Beleg</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredSessions.map((s) => (
+                        {displayedSessions.map((s) => (
                           <TableRow key={s.id}>
                             <TableCell className="font-medium">{getCpName(s.charge_point_id)}</TableCell>
                             <TableCell>{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
