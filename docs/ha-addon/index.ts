@@ -1291,7 +1291,7 @@ async function pushExecutionLogs(): Promise<void> {
 
 /* ── Flush Buffer to Cloud ───────────────────────────────────────────────────── */
 
-const FLUSH_BATCH_SIZE = 200;
+const FLUSH_BATCH_SIZE = 1000;
 
 async function flushBuffer(): Promise<void> {
   // Always attempt flush – cloud status is determined by heartbeat/sync
