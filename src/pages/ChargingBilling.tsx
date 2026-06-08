@@ -233,7 +233,10 @@ const ChargingBilling = () => {
   const filteredSessions = useMemo(() => {
     const q = sessionSearch.trim().toLowerCase();
     return sessions.filter(s => {
-      if (new Date(s.start_time) < periodStart) return false;
+      if (periodRange) {
+        const d = new Date(s.start_time);
+        if (d < periodRange.start || d > periodRange.end) return false;
+      }
       if (!q) return true;
       const cp = getCpName(s.charge_point_id).toLowerCase();
       const tag = (resolveTag(s.id_tag) || s.id_tag || "").toLowerCase();
@@ -241,7 +244,8 @@ const ChargingBilling = () => {
       const start = format(new Date(s.start_time), "dd.MM.yyyy HH:mm");
       return cp.includes(q) || tag.includes(q) || status.includes(q) || start.includes(q);
     });
-  }, [sessions, periodStart, sessionSearch, chargePoints, resolveTag]);
+  }, [sessions, periodRange, sessionSearch, chargePoints, resolveTag]);
+
 
   const displayedSessions = useMemo(() => {
     if (!sortColumn) return filteredSessions;
