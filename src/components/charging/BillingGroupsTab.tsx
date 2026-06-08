@@ -132,7 +132,46 @@ export default function BillingGroupsTab({ isAdmin, periodStart, periodEnd, peri
                   </TableCell>
                   {isAdmin && (
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
+                      <div className="flex justify-end gap-1 flex-wrap">
+                        {periodStart && periodEnd && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={generateGroupInvoices.isPending || !g.member_count}
+                              title={`Sammelrechnung für ${periodLabel ?? "Zeitraum"} als Entwurf erzeugen`}
+                              onClick={() =>
+                                generateGroupInvoices.mutate({
+                                  group_id: g.id,
+                                  period_start: periodStart,
+                                  period_end: periodEnd,
+                                  mode: "generate",
+                                })
+                              }
+                            >
+                              <FileText className="h-4 w-4 mr-1" />
+                              Sammelrechnung
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={generateGroupInvoices.isPending || !g.member_count || !g.billing_email}
+                              title={g.billing_email ? `Sammelrechnung an ${g.billing_email} senden` : "Keine Rechnungs-E-Mail hinterlegt"}
+                              onClick={() => {
+                                if (!confirm(`Sammelrechnung für „${g.name}" (${periodLabel ?? ""}) an ${g.billing_email} senden?`)) return;
+                                generateGroupInvoices.mutate({
+                                  group_id: g.id,
+                                  period_start: periodStart,
+                                  period_end: periodEnd,
+                                  mode: "both",
+                                });
+                              }}
+                            >
+                              <Send className="h-4 w-4 mr-1" />
+                              Senden
+                            </Button>
+                          </>
+                        )}
                         <Button variant="ghost" size="sm" onClick={() => setMembersGroup(g)}>
                           <Users className="h-4 w-4 mr-1" />
                           Mitglieder
