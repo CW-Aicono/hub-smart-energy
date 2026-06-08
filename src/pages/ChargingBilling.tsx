@@ -505,55 +505,108 @@ const ChargingBilling = () => {
             {/* Sessions Tab */}
             <TabsContent value="sessions">
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between gap-4">
+                <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
                   <CardTitle>{t("charging.sessions" as any)}</CardTitle>
-                  <Input
-                    placeholder="Suchen (Ladepunkt, Tag, Status, Datum…)"
-                    value={sessionSearch}
-                    onChange={(e) => setSessionSearch(e.target.value)}
-                    className="max-w-xs h-9"
-                  />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex gap-1 bg-muted rounded-lg p-1">
+                      <Button
+                        variant={sessionView === "users" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-7 text-xs px-3"
+                        onClick={() => setSessionView("users")}
+                      >
+                        Nach Nutzern
+                      </Button>
+                      <Button
+                        variant={sessionView === "groups" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-7 text-xs px-3"
+                        onClick={() => setSessionView("groups")}
+                      >
+                        Nach Abrechnungsgruppen
+                      </Button>
+                    </div>
+                    <Input
+                      placeholder={sessionView === "users" ? "Suchen (Ladepunkt, Tag, Status, Datum…)" : "Gruppe suchen…"}
+                      value={sessionSearch}
+                      onChange={(e) => setSessionSearch(e.target.value)}
+                      className="max-w-xs h-9"
+                    />
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  {sessionsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : displayedSessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <SortableHead column="charge_point" label={t("charging.chargePoint" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                          <SortableHead column="start_time" label={t("charging.start" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                          <SortableHead column="stop_time" label={t("charging.end" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                          <SortableHead column="energy" label={t("charging.energy" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                          <SortableHead column="status" label={t("common.status" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                          <SortableHead column="id_tag" label={t("charging.idTag" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                          <TableHead className="w-20 text-right">Beleg</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {displayedSessions.map((s) => (
-                          <TableRow key={s.id}>
-                            <TableCell className="font-medium">{getCpName(s.charge_point_id)}</TableCell>
-                            <TableCell>{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
-                            <TableCell>{s.stop_time ? format(new Date(s.stop_time), "dd.MM.yyyy HH:mm") : "—"}</TableCell>
-                            <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
-                            <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? t("charging.statusActive" as any) : s.status === "completed" ? t("charging.statusCompleted" as any) : t("charging.statusError" as any)}</Badge></TableCell>
-                            <TableCell className="text-sm">{resolveTag(s.id_tag) || s.id_tag || "—"}</TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Eichrechts-Beleg (OCMF) anzeigen"
-                                onClick={() => setOcmfSessionId(s.id)}
-                              >
-                                <ShieldCheck className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
+                  {sessionsLoading ? (
+                    <p className="text-muted-foreground">{t("charging.loading" as any)}</p>
+                  ) : sessionView === "users" ? (
+                    displayedSessions.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <SortableHead column="charge_point" label={t("charging.chargePoint" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                            <SortableHead column="start_time" label={t("charging.start" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                            <SortableHead column="stop_time" label={t("charging.end" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                            <SortableHead column="energy" label={t("charging.energy" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                            <SortableHead column="status" label={t("common.status" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                            <SortableHead column="id_tag" label={t("charging.idTag" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                            <TableHead className="w-20 text-right">Beleg</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {displayedSessions.map((s) => (
+                            <TableRow key={s.id}>
+                              <TableCell className="font-medium">{getCpName(s.charge_point_id)}</TableCell>
+                              <TableCell>{format(new Date(s.start_time), "dd.MM.yyyy HH:mm")}</TableCell>
+                              <TableCell>{s.stop_time ? format(new Date(s.stop_time), "dd.MM.yyyy HH:mm") : "—"}</TableCell>
+                              <TableCell>{fmtKwh(s.energy_kwh)}</TableCell>
+                              <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? t("charging.statusActive" as any) : s.status === "completed" ? t("charging.statusCompleted" as any) : t("charging.statusError" as any)}</Badge></TableCell>
+                              <TableCell className="text-sm">{resolveTag(s.id_tag) || s.id_tag || "—"}</TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  title="Eichrechts-Beleg (OCMF) anzeigen"
+                                  onClick={() => setOcmfSessionId(s.id)}
+                                >
+                                  <ShieldCheck className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )
+                  ) : (
+                    groupedSessionRows.length === 0 ? <p className="text-muted-foreground">{t("charging.noSessions" as any)}</p> : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <SortableHead column="group_name" label="Abrechnungsgruppe" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
+                            <SortableHead column="user_count" label="Nutzer" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
+                            <SortableHead column="session_count" label="Ladevorgänge" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
+                            <SortableHead column="energy" label="Energie" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {groupedSessionRows.map((row) => (
+                            <TableRow key={row.key}>
+                              <TableCell className="font-medium">
+                                {row.group_name}
+                                {row.key === NO_GROUP_KEY && (
+                                  <Badge variant="outline" className="ml-2 text-xs">keine Gruppe</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>{fmtNum(row.user_count, 0)}</TableCell>
+                              <TableCell>{fmtNum(row.session_count, 0)}</TableCell>
+                              <TableCell>{fmtKwh(row.energy_kwh, 1)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )
                   )}
                 </CardContent>
               </Card>
+
 
               <Dialog open={!!ocmfSessionId} onOpenChange={(o) => !o && setOcmfSessionId(null)}>
                 <DialogContent className="max-w-2xl">
