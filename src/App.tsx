@@ -87,6 +87,7 @@ const SuperAdminChargePointOnboarding = lazy(() => import("./pages/SuperAdminCha
 const ChargingApp = lazy(() => import("./pages/ChargingApp"));
 const ChargingAppAdmin = lazy(() => import("./pages/ChargingAppAdmin"));
 const ArbitrageTrading = lazy(() => import("./pages/ArbitrageTrading"));
+const PeakShaving = lazy(() => import("./pages/PeakShaving"));
 const Copilot = lazy(() => import("./pages/Copilot"));
 const TenantElectricity = lazy(() => import("./pages/TenantElectricity"));
 const EnergySharing = lazy(() => import("./pages/EnergySharing"));
