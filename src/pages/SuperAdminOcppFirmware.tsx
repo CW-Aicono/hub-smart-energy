@@ -304,7 +304,10 @@ export default function SuperAdminOcppFirmware() {
   };
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 space-y-6">
+    <div className="flex min-h-screen" style={{ backgroundColor: `hsl(var(--sa-background))`, color: `hsl(var(--sa-foreground))` }}>
+      <SuperAdminSidebar />
+      <main className="flex-1 overflow-auto">
+        <div className="container mx-auto p-4 sm:p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold">OCPP Firmware-Katalog</h1>
