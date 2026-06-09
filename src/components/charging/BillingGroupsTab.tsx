@@ -22,17 +22,13 @@ import { useTenant } from "@/hooks/useTenant";
 
 interface Props {
   isAdmin: boolean;
-  periodStart?: string;
-  periodEnd?: string;
-  periodLabel?: string;
 }
 
 const emptyForm = { name: "", company_name: "", billing_email: "", billing_address: "", notes: "" };
 
-export default function BillingGroupsTab({ isAdmin, periodStart, periodEnd, periodLabel }: Props) {
+export default function BillingGroupsTab({ isAdmin }: Props) {
   const { groups, isLoading, createGroup, updateGroup, deleteGroup } = useChargingBillingGroups();
   const { users } = useChargingUsers();
-  const generateGroupInvoices = useGenerateGroupInvoices();
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editGroup, setEditGroup] = useState<ChargingBillingGroup | null>(null);
