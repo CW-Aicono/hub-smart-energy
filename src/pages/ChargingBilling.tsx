@@ -102,7 +102,7 @@ const ChargingBilling = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   const { chargePoints } = useChargePoints();
   const { settings: invoiceSettings } = useChargingInvoiceSettings();
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  
 
   const [tariffOpen, setTariffOpen] = useState(false);
   const [editTariff, setEditTariff] = useState<ChargingTariff | null>(null);
