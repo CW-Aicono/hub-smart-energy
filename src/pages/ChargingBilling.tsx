@@ -468,12 +468,16 @@ const ChargingBilling = () => {
   const handleGenerate = () => {
     if (!tenant?.id) return;
     generateInvoices.mutate({ tenant_id: tenant.id, period_start: genPeriod.start, period_end: genPeriod.end });
+    // Sammelrechnungen für alle Rechnungsgruppen automatisch mit erzeugen
+    generateGroupInvoices.mutate({ period_start: genPeriod.start, period_end: genPeriod.end, mode: "generate" });
     setGenerateOpen(false);
   };
 
   const handleSendAll = () => {
     if (!tenant?.id) return;
     sendInvoices.mutate({ tenant_id: tenant.id, period_start: genPeriod.start, period_end: genPeriod.end });
+    // Sammelrechnungen pro Gruppe ebenfalls erzeugen + versenden
+    generateGroupInvoices.mutate({ period_start: genPeriod.start, period_end: genPeriod.end, mode: "both" });
   };
 
   const periodKeys = [
