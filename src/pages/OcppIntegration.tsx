@@ -107,12 +107,12 @@ export function OcppIntegrationContent() {
   };
 
   return (
-    <AppLayout>
-      <div className="space-y-4 max-w-6xl mx-auto">
+    <div className="space-y-4 max-w-6xl mx-auto">
         <div>
           <h1 className="text-xl font-bold tracking-tight">{t("ocppIntegration.title" as any)}</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{t("ocppIntegration.subtitle" as any)}</p>
         </div>
+
 
         {/* OCPP Server URL (wss:// + ws://) */}
         <Card className="border-primary/20 bg-primary/5">
