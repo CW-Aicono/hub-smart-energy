@@ -17,7 +17,7 @@ import { useChargePoints } from "@/hooks/useChargePoints";
 import { useTenant } from "@/hooks/useTenant";
 import { useChargingInvoiceSettings } from "@/hooks/useChargingInvoiceSettings";
 import { useChargingUsers } from "@/hooks/useChargingUsers";
-import { useChargingBillingGroups } from "@/hooks/useChargingBillingGroups";
+import { useChargingBillingGroups, useGenerateGroupInvoices } from "@/hooks/useChargingBillingGroups";
 import { useQuery } from "@tanstack/react-query";
 
 import BillingGroupsTab from "@/components/charging/BillingGroupsTab";
