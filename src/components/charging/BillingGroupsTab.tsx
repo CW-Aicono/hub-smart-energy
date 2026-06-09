@@ -11,11 +11,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Edit, Trash2, Users, Building2, Mail, FileText, Send, Lock } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Building2, Mail, Lock } from "lucide-react";
 import {
   useChargingBillingGroups,
   useChargingBillingGroupMembers,
-  useGenerateGroupInvoices,
   ChargingBillingGroup,
 } from "@/hooks/useChargingBillingGroups";
 import { useChargingUsers } from "@/hooks/useChargingUsers";
