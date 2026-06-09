@@ -657,8 +657,8 @@ const ChargingBilling = () => {
               <TabsTrigger value="tariffs">{t("charging.tabTariffs" as any)}</TabsTrigger>
               <TabsTrigger value="invoices">{t("charging.tabInvoices" as any)}</TabsTrigger>
               <TabsTrigger value="billing-groups">Rechnungsgruppen</TabsTrigger>
-              <TabsTrigger value="roaming">{t("charging.tabRoaming" as any)}</TabsTrigger>
             </TabsList>
+
 
             {/* Sessions Tab */}
             <TabsContent value="sessions">
