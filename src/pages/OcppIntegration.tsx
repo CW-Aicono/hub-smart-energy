@@ -28,10 +28,11 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   hard: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
 };
 
-const OcppIntegration = () => {
+export function OcppIntegrationContent() {
   const { t } = useTranslation();
   const { guides, isLoading: guidesLoading, vendors: guideVendors } = useOcppGuides();
   const { chargerModels, isLoading: modelsLoading } = useChargerModels();
+
 
   const [selectedVendor, setSelectedVendor] = useState<string>("all");
   const [selectedModel, setSelectedModel] = useState<string>("all");
