@@ -905,7 +905,7 @@ const ChargingBilling = () => {
                             </div>
                             <div className="p-3 bg-muted rounded-lg text-sm">
                               <p>Zeitraum: <strong>{genPeriod.start}</strong> bis <strong>{genPeriod.end}</strong></p>
-                              <p className="text-muted-foreground mt-1">Es werden Sammelrechnungen pro Nutzer für alle abgeschlossenen Ladevorgänge in diesem Zeitraum erstellt.</p>
+                              <p className="text-muted-foreground mt-1">Es werden Einzelrechnungen pro Nutzer sowie Sammelrechnungen für alle Rechnungsgruppen mit Mitgliedern im Zeitraum erstellt.</p>
                             </div>
                           </div>
                           <DialogFooter>
