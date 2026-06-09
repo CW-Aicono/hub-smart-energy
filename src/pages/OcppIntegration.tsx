@@ -204,7 +204,7 @@ export function OcppIntegrationContent() {
 
         {/* Results */}
         {isLoading ? (
-          <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2.5 min-w-0 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
               <Skeleton key={i} className="h-24 rounded-lg" />
             ))}
@@ -217,16 +217,16 @@ export function OcppIntegrationContent() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2.5 min-w-0 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredItems.map((item) => (
               <Card
                 key={item.id}
-                className={`cursor-pointer transition-all hover:shadow-md ${expandedGuide === item.id ? "ring-2 ring-primary" : ""}`}
+                className={`min-w-0 overflow-hidden cursor-pointer transition-all hover:shadow-md ${expandedGuide === item.id ? "ring-2 ring-primary" : ""}`}
                 onClick={() => setExpandedGuide(expandedGuide === item.id ? null : item.id)}
               >
                 <CardHeader className="p-3 pb-1.5">
                   <div className="flex items-start justify-between gap-1.5">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-[11px] text-muted-foreground font-medium">{item.vendor}</p>
                       <CardTitle className="text-sm mt-0.5 truncate">{item.model}</CardTitle>
                     </div>
@@ -238,7 +238,7 @@ export function OcppIntegrationContent() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="p-3 pt-0">
+                <CardContent className="p-3 pt-0 min-w-0 overflow-hidden">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                       OCPP {item.protocol || "1.6"}
@@ -257,10 +257,10 @@ export function OcppIntegrationContent() {
 
                   {/* Expanded guide content */}
                   {expandedGuide === item.id && item.guide && (
-                    <div className="mt-3 pt-3 border-t" onClick={(e) => e.stopPropagation()}>
-                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <div className="mt-3 pt-3 border-t min-w-0 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                      <div className="prose prose-sm dark:prose-invert max-w-none overflow-hidden break-words">
                         <div
-                          className="text-xs leading-relaxed whitespace-pre-wrap"
+                          className="text-xs leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
                           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.guide.content_md) }}
                         />
                       </div>
@@ -268,11 +268,11 @@ export function OcppIntegrationContent() {
                   )}
 
                   {expandedGuide === item.id && !item.guide && (
-                    <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
+                    <div className="mt-3 pt-3 border-t min-w-0 overflow-hidden text-xs text-muted-foreground break-words [overflow-wrap:anywhere]">
                       <p>{t("ocppIntegration.noGuideAvailable" as any)}</p>
-                      <div className="mt-2 p-2 bg-muted rounded-md">
+                      <div className="mt-2 p-2 bg-muted rounded-md min-w-0 overflow-hidden">
                         <p className="font-medium text-foreground mb-1 text-xs">{t("ocppIntegration.generalSteps" as any)}</p>
-                        <ol className="list-decimal list-inside space-y-0.5 text-[11px]">
+                        <ol className="list-decimal list-inside space-y-0.5 text-[11px] break-words [overflow-wrap:anywhere]">
                           <li>{t("ocppIntegration.step1" as any)}</li>
                           <li>{t("ocppIntegration.step2" as any)}</li>
                           <li>{t("ocppIntegration.step3" as any)}</li>
