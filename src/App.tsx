@@ -70,6 +70,7 @@ const MobileApp = lazy(() => import("./pages/MobileApp"));
 const GettingStarted = lazy(() => import("./pages/GettingStarted"));
 const ChargingPoints = lazy(() => import("./pages/ChargingPoints"));
 const OcppIntegration = lazy(() => import("./pages/OcppIntegration"));
+const ChargingSettings = lazy(() => import("./pages/ChargingSettings"));
 const ChargePointDetail = lazy(() => import("./pages/ChargePointDetail"));
 const ChargingBilling = lazy(() => import("./pages/ChargingBilling"));
 const ChargingUsersPage = lazy(() => import("./pages/ChargingUsersPage"));
