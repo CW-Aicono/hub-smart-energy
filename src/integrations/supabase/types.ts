@@ -1112,14 +1112,14 @@ export type Database = {
           {
             foreignKeyName: "charging_billing_group_members_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "charging_users"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "charging_billing_group_members_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "charging_users_public"
             referencedColumns: ["id"]
           },

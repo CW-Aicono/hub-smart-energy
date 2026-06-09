@@ -1,0 +1,1 @@
+ALTER TABLE public.charging_billing_group_members ADD CONSTRAINT charging_billing_group_members_user_id_unique UNIQUE (user_id);
