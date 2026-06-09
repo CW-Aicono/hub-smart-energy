@@ -181,6 +181,7 @@ const App = () => (
                       <Route path="/demo/charging/users" element={<ChargingUsersPage />} />
                       <Route path="/demo/charging/app" element={<ChargingAppAdmin />} />
                       <Route path="/demo/charging/ocpp-integration" element={<OcppIntegration />} />
+                      <Route path="/demo/charging/settings" element={<ChargingSettings />} />
                       
                       <Route path="/demo/automation" element={<Automation />} />
                       <Route path="/demo/arbitrage" element={<ArbitrageTrading />} />
