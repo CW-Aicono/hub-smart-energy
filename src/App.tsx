@@ -254,6 +254,7 @@ const App = () => (
                       <Route path="/charging/users" element={<M><ChargingUsersPage /></M>} />
                       <Route path="/charging/app" element={<M><ChargingAppAdmin /></M>} />
                       <Route path="/charging/ocpp-integration" element={<M><OcppIntegration /></M>} />
+                      <Route path="/charging/settings" element={<M><ChargingSettings /></M>} />
                       
                       <Route path="/automation" element={<M><Automation /></M>} />
                       <Route path="/tasks" element={<M><Tasks /></M>} />
