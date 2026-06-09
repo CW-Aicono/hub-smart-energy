@@ -55,6 +55,7 @@ export function MobileHeader() {
         { to: "/live-values", icon: Activity, labelKey: "nav.liveValues" as TranslationKey },
         { to: "/meters", icon: Gauge, labelKey: "nav.meters" as TranslationKey },
         { to: "/energy-data", icon: Download, labelKey: "nav.exports" as TranslationKey },
+        { to: "/energy-report", icon: FileText, labelKey: "nav.energyReport" as TranslationKey },
       ]
     },
     {
@@ -64,14 +65,42 @@ export function MobileHeader() {
         { to: "/charging/users", icon: Users, labelKey: "nav.chargingUsers" as TranslationKey },
         { to: "/charging/billing", icon: Receipt, labelKey: "nav.chargingBilling" as TranslationKey },
         { to: "/charging/app", icon: Smartphone, labelKey: "nav.chargingApp" as TranslationKey },
+        { to: "/charging/settings", icon: Settings, labelKey: "nav.chargingSettings" as TranslationKey },
       ]
     },
     { to: "/automation", icon: Cpu, labelKey: "nav.multiLocationAutomation" as TranslationKey },
-    { to: "/arbitrage", icon: TrendingUp, labelKey: "nav.arbitrageTrading" as TranslationKey },
+    {
+      to: "/trading", icon: TrendingUp, labelKey: "nav.trading" as TranslationKey,
+      children: [
+        { to: "/arbitrage", icon: TrendingUp, labelKey: "nav.arbitrageTrading" as TranslationKey },
+        { to: "/peak-shaving", icon: Activity, labelKey: "Peak-Shaving" as TranslationKey },
+        { to: "/ppa", icon: FileSignature, labelKey: "nav.ppa" as TranslationKey },
+        { to: "/tenant-electricity", icon: Home, labelKey: "nav.tenantElectricity" as TranslationKey },
+        { to: "/energy-sharing", icon: Share2, labelKey: "nav.energySharing" as TranslationKey },
+      ],
+    },
     { to: "/copilot", icon: Sparkles, labelKey: "nav.copilot" as TranslationKey },
-    { to: "/tenant-electricity", icon: Home, labelKey: "nav.tenantElectricity" as TranslationKey },
     { to: "/network", icon: Network, labelKey: "nav.networkInfrastructure" as TranslationKey },
     { to: "/tasks", icon: ListChecks, labelKey: "nav.tasks" as TranslationKey },
+    ...(isAdmin ? [
+      {
+        to: "/admin", icon: Shield, labelKey: "nav.userManagement" as TranslationKey,
+        children: [
+          { to: "/admin", icon: Users, labelKey: "nav.users" as TranslationKey },
+          { to: "/roles", icon: Key, labelKey: "nav.rolesAndPermissions" as TranslationKey },
+        ]
+      },
+      {
+        to: "/settings", icon: Settings, labelKey: "nav.settings" as TranslationKey,
+        children: [
+          { to: "/settings/branding", icon: Palette, labelKey: "nav.branding" as TranslationKey },
+          { to: "/settings/email-templates", icon: Mail, labelKey: "nav.emailTemplates" as TranslationKey },
+          { to: "/integrations", icon: Plug, labelKey: "nav.integrations" as TranslationKey },
+        ]
+      },
+    ] : []),
+    { to: "/help", icon: HelpCircle, labelKey: "nav.helpAndSupport" as TranslationKey },
+  ];
     ...(isAdmin ? [
       {
         to: "/admin", icon: Shield, labelKey: "nav.userManagement" as TranslationKey,
