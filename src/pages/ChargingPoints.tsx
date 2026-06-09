@@ -555,14 +555,55 @@ const ChargingPoints = () => {
             <Card>
               <CollapsibleTrigger asChild>
                 <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
                     <CardTitle>
                       {statusFilter ? `${t("charging.chargePointsFiltered" as any)} ${t(statusConfig[statusFilter]?.labelKey as any)}` : t("charging.allChargePoints" as any)}
                     </CardTitle>
-                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {isAdmin && (
+                        <div
+                          className="flex items-center gap-2 flex-wrap"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button variant="outline" size="sm" onClick={() => setPublicLinkOpen(true)}>
+                            <Globe className="h-4 w-4 sm:mr-2" />
+                            <span className="hidden sm:inline">Öffentlicher Link</span>
+                          </Button>
+                          <ModbusWallboxWizard
+                            triggerLabel="Modbus-Wallbox"
+                            onCreated={() => queryClient.invalidateQueries({ queryKey: ["charge-points"] })}
+                          />
+                          <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) setDuplicateSource(null); }}>
+                            <DialogTrigger asChild>
+                              <Button size="sm" onClick={() => { setDuplicateSource(null); resetForm(); }}>
+                                <Plus className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">{t("charging.addChargePoint" as any)}</span>
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle>
+                                  {duplicateSource ? `Ladepunkt duplizieren` : t("charging.newChargePoint" as any)}
+                                </DialogTitle>
+                                {duplicateSource && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Dupliziert von: <span className="font-medium">{duplicateSource.name}</span> — Name und OCPP-ID neu vergeben.
+                                  </p>
+                                )}
+                              </DialogHeader>
+                              {formFields}
+                              <Button onClick={handleAdd} disabled={!form.name}>{t("common.create" as any)}</Button>
+                            </DialogContent>
+                          </Dialog>
+                          <PublicStatusLinkDialog open={publicLinkOpen} onOpenChange={setPublicLinkOpen} />
+                        </div>
+                      )}
+                      <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
+                    </div>
                   </div>
                 </CardHeader>
               </CollapsibleTrigger>
+
               <CollapsibleContent>
                 <CardContent>
                   {isLoading ? (
