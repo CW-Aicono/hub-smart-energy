@@ -101,25 +101,6 @@ export function MobileHeader() {
     ] : []),
     { to: "/help", icon: HelpCircle, labelKey: "nav.helpAndSupport" as TranslationKey },
   ];
-    ...(isAdmin ? [
-      {
-        to: "/admin", icon: Shield, labelKey: "nav.userManagement" as TranslationKey,
-        children: [
-          { to: "/admin", icon: Users, labelKey: "nav.users" as TranslationKey },
-          { to: "/roles", icon: Key, labelKey: "nav.rolesAndPermissions" as TranslationKey },
-        ]
-      },
-      {
-        to: "/settings", icon: Settings, labelKey: "nav.settings" as TranslationKey,
-        children: [
-          { to: "/settings/branding", icon: Palette, labelKey: "nav.branding" as TranslationKey },
-          { to: "/settings/email-templates", icon: Mail, labelKey: "nav.emailTemplates" as TranslationKey },
-          { to: "/integrations", icon: Plug, labelKey: "nav.integrations" as TranslationKey },
-        ]
-      },
-    ] : []),
-    { to: "/help", icon: HelpCircle, labelKey: "nav.helpAndSupport" as TranslationKey },
-  ];
 
   const filteredNavItems = useMemo(() => {
     return navItems
