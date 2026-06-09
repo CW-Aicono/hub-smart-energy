@@ -287,8 +287,14 @@ export function OcppIntegrationContent() {
           </div>
         )}
       </div>
-    </AppLayout>
   );
-};
+}
+
+const OcppIntegration = () => (
+  <AppLayout>
+    <OcppIntegrationContent />
+  </AppLayout>
+);
 
 export default OcppIntegration;
+
