@@ -17,7 +17,7 @@ import { useChargePoints } from "@/hooks/useChargePoints";
 import { useTenant } from "@/hooks/useTenant";
 import { useChargingInvoiceSettings } from "@/hooks/useChargingInvoiceSettings";
 import { useChargingUsers } from "@/hooks/useChargingUsers";
-import { useChargingBillingGroups } from "@/hooks/useChargingBillingGroups";
+import { useChargingBillingGroups, useGenerateGroupInvoices } from "@/hooks/useChargingBillingGroups";
 import { useQuery } from "@tanstack/react-query";
 
 import BillingGroupsTab from "@/components/charging/BillingGroupsTab";
@@ -211,6 +211,7 @@ const ChargingBilling = () => {
   // Charging users (to resolve session id_tag -> user_id)
   const { users: chargingUsers } = useChargingUsers();
   const { groups: billingGroups } = useChargingBillingGroups();
+  const generateGroupInvoices = useGenerateGroupInvoices();
 
   // Billing group membership map: user_id -> { group_id, group_name }
   const { data: billingMemberships = [] } = useQuery({
@@ -467,12 +468,16 @@ const ChargingBilling = () => {
   const handleGenerate = () => {
     if (!tenant?.id) return;
     generateInvoices.mutate({ tenant_id: tenant.id, period_start: genPeriod.start, period_end: genPeriod.end });
+    // Sammelrechnungen für alle Rechnungsgruppen automatisch mit erzeugen
+    generateGroupInvoices.mutate({ period_start: genPeriod.start, period_end: genPeriod.end, mode: "generate" });
     setGenerateOpen(false);
   };
 
   const handleSendAll = () => {
     if (!tenant?.id) return;
     sendInvoices.mutate({ tenant_id: tenant.id, period_start: genPeriod.start, period_end: genPeriod.end });
+    // Sammelrechnungen pro Gruppe ebenfalls erzeugen + versenden
+    generateGroupInvoices.mutate({ period_start: genPeriod.start, period_end: genPeriod.end, mode: "both" });
   };
 
   const periodKeys = [
@@ -900,7 +905,7 @@ const ChargingBilling = () => {
                             </div>
                             <div className="p-3 bg-muted rounded-lg text-sm">
                               <p>Zeitraum: <strong>{genPeriod.start}</strong> bis <strong>{genPeriod.end}</strong></p>
-                              <p className="text-muted-foreground mt-1">Es werden Sammelrechnungen pro Nutzer für alle abgeschlossenen Ladevorgänge in diesem Zeitraum erstellt.</p>
+                              <p className="text-muted-foreground mt-1">Es werden Einzelrechnungen pro Nutzer sowie Sammelrechnungen für alle Rechnungsgruppen mit Mitgliedern im Zeitraum erstellt.</p>
                             </div>
                           </div>
                           <DialogFooter>
@@ -1145,7 +1150,7 @@ const ChargingBilling = () => {
 
             {/* Billing Groups Tab */}
             <TabsContent value="billing-groups">
-              <BillingGroupsTab isAdmin={isAdmin} periodStart={genPeriod.start} periodEnd={genPeriod.end} periodLabel={genPeriod.label} />
+              <BillingGroupsTab isAdmin={isAdmin} />
             </TabsContent>
 
 

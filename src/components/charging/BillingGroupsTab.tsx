@@ -11,11 +11,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Edit, Trash2, Users, Building2, Mail, FileText, Send, Lock } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Building2, Mail, Lock } from "lucide-react";
 import {
   useChargingBillingGroups,
   useChargingBillingGroupMembers,
-  useGenerateGroupInvoices,
   ChargingBillingGroup,
 } from "@/hooks/useChargingBillingGroups";
 import { useChargingUsers } from "@/hooks/useChargingUsers";
@@ -23,17 +22,13 @@ import { useTenant } from "@/hooks/useTenant";
 
 interface Props {
   isAdmin: boolean;
-  periodStart?: string;
-  periodEnd?: string;
-  periodLabel?: string;
 }
 
 const emptyForm = { name: "", company_name: "", billing_email: "", billing_address: "", notes: "" };
 
-export default function BillingGroupsTab({ isAdmin, periodStart, periodEnd, periodLabel }: Props) {
+export default function BillingGroupsTab({ isAdmin }: Props) {
   const { groups, isLoading, createGroup, updateGroup, deleteGroup } = useChargingBillingGroups();
   const { users } = useChargingUsers();
-  const generateGroupInvoices = useGenerateGroupInvoices();
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editGroup, setEditGroup] = useState<ChargingBillingGroup | null>(null);
@@ -136,63 +131,27 @@ export default function BillingGroupsTab({ isAdmin, periodStart, periodEnd, peri
                   </TableCell>
                   {isAdmin && (
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-1 flex-wrap">
-                        {periodStart && periodEnd && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={generateGroupInvoices.isPending || !g.member_count}
-                              title={`Sammelrechnung für ${periodLabel ?? "Zeitraum"} als Entwurf erzeugen`}
-                              onClick={() =>
-                                generateGroupInvoices.mutate({
-                                  group_id: g.id,
-                                  period_start: periodStart,
-                                  period_end: periodEnd,
-                                  mode: "generate",
-                                })
-                              }
-                            >
-                              <FileText className="h-4 w-4 mr-1" />
-                              Sammelrechnung
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={generateGroupInvoices.isPending || !g.member_count || !g.billing_email}
-                              title={g.billing_email ? `Sammelrechnung an ${g.billing_email} senden` : "Keine Rechnungs-E-Mail hinterlegt"}
-                              onClick={() => {
-                                if (!confirm(`Sammelrechnung für „${g.name}" (${periodLabel ?? ""}) an ${g.billing_email} senden?`)) return;
-                                generateGroupInvoices.mutate({
-                                  group_id: g.id,
-                                  period_start: periodStart,
-                                  period_end: periodEnd,
-                                  mode: "both",
-                                });
-                              }}
-                            >
-                              <Send className="h-4 w-4 mr-1" />
-                              Senden
-                            </Button>
-                          </>
-                        )}
+                      <div className="flex items-center justify-end gap-1 flex-nowrap">
                         <Button variant="ghost" size="sm" onClick={() => setMembersGroup(g)}>
                           <Users className="h-4 w-4 mr-1" />
-                          Mitglieder
+                          <span className="hidden sm:inline">Mitglieder</span>
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(g)}>
-                          <Edit className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(g)}>
+                          <Edit className="h-4 w-4 mr-1" />
+                          <span className="hidden sm:inline">Bearbeiten</span>
                         </Button>
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="sm"
                           onClick={() => {
                             if (confirm(`Rechnungsgruppe „${g.name}" wirklich löschen?`)) {
                               deleteGroup.mutate(g.id);
                             }
                           }}
+                          className="text-destructive hover:text-destructive"
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          <span className="hidden sm:inline">Löschen</span>
                         </Button>
                       </div>
                     </TableCell>
