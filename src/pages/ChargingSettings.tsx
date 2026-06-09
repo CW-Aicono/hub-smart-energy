@@ -8,8 +8,8 @@ import RoamingTab from "@/components/charging/RoamingTab";
 const ChargingSettings = () => {
   return (
     <AppLayout>
-      <div className="p-4 md:p-8 space-y-6">
-        <div>
+      <div className="p-4 md:p-8 space-y-6 max-w-full overflow-x-hidden">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold tracking-tight">Einstellungen</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
             OCPP-Integration, Rechnungsdesign und Roaming für Ihre Ladeinfrastruktur
