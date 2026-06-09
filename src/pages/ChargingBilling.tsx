@@ -211,6 +211,7 @@ const ChargingBilling = () => {
   // Charging users (to resolve session id_tag -> user_id)
   const { users: chargingUsers } = useChargingUsers();
   const { groups: billingGroups } = useChargingBillingGroups();
+  const generateGroupInvoices = useGenerateGroupInvoices();
 
   // Billing group membership map: user_id -> { group_id, group_name }
   const { data: billingMemberships = [] } = useQuery({
