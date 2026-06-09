@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useChargingInvoiceSettings } from "@/hooks/useChargingInvoiceSettings";
 import { Upload, X } from "lucide-react";
+import ChargingInvoicePreview from "./ChargingInvoicePreview";
 
 export default function ChargingInvoiceSettingsForm() {
   const { settings, upsertSettings, uploadLogo } = useChargingInvoiceSettings();
