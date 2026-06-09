@@ -292,9 +292,12 @@ export function OcppIntegrationContent() {
 
 const OcppIntegration = () => (
   <AppLayout>
-    <OcppIntegrationContent />
+    <div className="p-4 md:p-8">
+      <OcppIntegrationContent />
+    </div>
   </AppLayout>
 );
+
 
 export default OcppIntegration;
 
