@@ -1,90 +1,86 @@
+## Befund (Antwort auf deine Fragen)
 
-# Peak-Shaving-Modul
+**Die täglichen 6,4-KB-Einträge sind KEINE Datensicherung deines Mandanten.**
+Sie sind ein Nebenprodukt aus `gateway-ingest` (Funktion `handleGatewayBackup`): Wenn ein HA-Add-on seinen lokalen Zustand hochlädt, wird ein Eintrag mit `backup_type = 'gateway'` und fest verdrahtetem `tables_count = 0, rows_count = 0` angelegt. Es werden also weder Mandantendaten noch Messwerte gesichert – nur ein kleiner Statusdump des Gateways.
 
-Eigenständiges, im Super-Admin separat buchbares Modul, das Batteriespeicher gezielt zur Kappung von Leistungsspitzen einsetzt und die eingesparten Netzentgelte live ausweist. Generisch nutzbar (Industrie, Gewerbe, Arenen, Events). Phase 1 = Schwellwert-Logik, Phase 2 = Event-Kalender on top.
+**Die Sicherung vom 27.02.2026 (243 KB, 30 Tabellen, 594 Zeilen) ist ein echter manueller Snapshot** (Button „Snapshot erstellen"). Sie wurde von `tenant-backup` erzeugt und enthält laut Konfiguration auch die Messdaten-Tabellen (`meter_period_totals`, `meter_readings`, `energy_readings`). Damals war das Datenvolumen klein. Heute steht der Stand bei: `meter_period_totals` 5.343 Zeilen / 1,8 MB, `energy_readings` 0, `meter_readings` 10, `charging_sessions` 43. Eine neue Sicherung wäre also deutlich größer – wird aber aktuell nirgends automatisch ausgelöst.
 
-## Wirtschaftlicher Hintergrund (für Verkauf & UI-Texte)
+**Es gibt heute keine Wiederherstellungs-Funktion.** Snapshots können nur als JSON heruntergeladen, aber nicht zurück in die Datenbank eingespielt werden. Storage-Dateien (Grundrisse, Logos, Zählerfotos) werden nur als Dateinamen-Liste mitgesichert, nicht als Inhalt.
 
-RLM-Kunden (Großverbraucher ab 100.000 kWh/Jahr) zahlen Netzentgelt zweigeteilt:
-- **Arbeitspreis** (ct/kWh)
-- **Leistungspreis** (€/kW/Jahr) auf die **höchste 15-Minuten-Viertelstundenleistung** des Abrechnungszeitraums
+---
 
-Eine einzige gekappte 300-kW-Spitze bei 150 €/kW/Jahr = **45.000 €/Jahr Einsparung**.
+## Ziel
 
-## Phase 1 — Generisches Peak-Shaving (Modul-Kern)
+1. Tägliche, vollständige Cloud-Sicherung pro Mandant, die wirklich alle Konfigurations-, Stamm- und Messdaten enthält.
+2. Sichtbare, korrekte Anzeige in „Vorhandene Sicherungen" (Tabellen-/Zeilenanzahl, echte Größe).
+3. Storage-Inhalte (nicht nur Dateinamen) mitsichern.
+4. Restore-Funktion mit Vorschau und Schutz vor versehentlichem Überschreiben.
 
-### 1. Neues Modul registrieren
-- Eintrag in `module_prices` (Key: `peak_shaving`, Name: "Peak-Shaving & Netzentgelt-Optimierung")
-- Super-Admin aktiviert pro Tenant via `tenant_modules` (bestehende Logik, kein neuer Code)
-- `ModuleGuard` schützt alle neuen Routen/Widgets
+---
 
-### 2. Datenbank
-Neue Tabellen:
+## Plan
 
-| Tabelle | Zweck |
-|---|---|
-| `peak_shaving_configs` | Konfiguration pro Standort: `location_id`, `storage_id`, `peak_limit_kw`, `reserve_soc_pct`, `mode` (`threshold` \| `forecast` \| `event`), `network_tariff_eur_per_kw_year`, `billing_cycle` (`monthly` \| `yearly`), `active` |
-| `peak_shaving_events` | Jeder Eingriff: `config_id`, `started_at`, `ended_at`, `peak_kw_without_shaving` (extrapoliert), `peak_kw_actual`, `kwh_discharged`, `eur_saved` |
-| `peak_shaving_monthly_summary` | Aggregat: `config_id`, `year`, `month`, `max_peak_kw`, `baseline_peak_kw`, `total_kwh_discharged`, `total_eur_saved` |
-| `peak_shaving_event_calendar` (Phase 2) | `config_id`, `event_name`, `start_at`, `end_at`, `expected_peak_kw`, `pre_charge_target_soc` |
+### 1. Aufräumen der Anzeige
 
-Plus RLS (`tenant_id` + Modul-Aktivierung), GRANTs, Realtime auf `peak_shaving_events` für Live-Dashboard.
+- Die 6,4-KB-„gateway"-Einträge nicht mehr unter „Vorhandene Sicherungen" listen. Stattdessen Filter auf `backup_type IN ('manual','scheduled')`. Optional eigener Tab „Gateway-Statusdumps" für Support.
+- `handleGatewayBackup` umbenennen / Eintrag in eine andere Tabelle (`gateway_state_dumps`) verschieben, damit `backup_snapshots` nur noch echte Mandantensicherungen enthält.
 
-### 3. Edge Function `peak-shaving-scheduler`
-- Per `pg_cron` alle 60 s
-- Pro aktivem `peak_shaving_configs`:
-  1. Lese letzten Hauptzähler-Wert aus `meter_power_readings_5min` (Reuse `get_location_main_meter` RPC)
-  2. **Hybrid-Logik:**
-     - **Schwellwert-Teil:** Wenn aktuelle Leistung > `peak_limit_kw` → Entladung mit `min(max_discharge_kw, current_kw − peak_limit_kw)` triggern
-     - **15-Min-Prognose-Teil:** Laufende Viertelstunde tracken, linear extrapolieren; wenn prognostizierter VS-Mittelwert > Limit → frühzeitig anwerfen (RLM-konform)
-  3. Speicher-Kommando schreiben (analog `dlm-scheduler` → `pending_ocpp_commands` bzw. neue Tabelle `pending_storage_commands` — abhängig vom Speicher-Typ; in Phase 1 nur Speicher mit lokaler Steuerung via EMS-Gateway / Modbus)
-  4. `peak_shaving_events` schreiben/aktualisieren
-  5. Bei Ende der Spitze: `peak_kw_without_shaving` einfrieren = Maximum der extrapolierten Werte, Einsparung berechnen:
-     `eur_saved = (peak_kw_without_shaving − peak_kw_actual) × network_tariff_eur_per_kw_year / 12`
-- Hysterese: Freigabe erst bei < 85 % der Schwelle, plus SoC-Reserve respektieren
+### 2. Tägliche Mandanten-Sicherung (echt)
 
-### 4. UI — Tenant-Seite `/peak-shaving`
-- **Konfigurations-Card:** Standort, Speicher zuordnen, Peak-Limit (kW), Netzentgelt (€/kW/Jahr), SoC-Reserve, Modus (Schwellwert / Schwellwert+Prognose)
-- **Live-Dashboard-Widgets:**
-  - "Aktuelle Leistung vs. Peak-Limit" (Echtzeit-Linie + roter Schwellwert)
-  - "Speicher-Status" (SoC, aktuell entladene Leistung)
-  - "Aktiver Eingriff" (Sekundenzähler, sofort eingespart)
-- **KPI-Kacheln:** Monats-Maximum, Baseline-Maximum, kWh entladen, € gespart (Monat / YTD / Jahresprognose)
-- **Verlaufschart:** Top-10-Spitzen des Monats (mit / ohne Peak-Shaving)
-- **Event-Log-Tabelle:** Letzte Eingriffe, sortier-/filterbar, CSV-Export
+- Neue Edge-Funktion `tenant-backup-scheduled` (Wiederverwendung der Logik aus `tenant-backup`), aufgerufen per `pg_cron` einmal täglich (z. B. 02:30 Europe/Berlin) für jeden aktiven Mandanten.
+- `backup_type = 'scheduled'`, Aufbewahrung 30 Tage (wie heute), zusätzlich „letzte 4 Wochensicherungen" und „letzte 6 Monatssicherungen" behalten (rollende Großvater-Vater-Sohn-Logik).
+- Messdaten werden in Chunks (pro Tabelle, 50k Zeilen) geladen und ggf. als gzip-komprimierte JSON-Bytes in Storage abgelegt, statt komplett in das `data`-jsonb-Feld – sonst sprengt es bei größeren Mandanten die Zeilengröße.
 
-### 5. Super-Admin
-- Eintrag in Modul-Liste, Preis (z. B. 49 €/Monat als Vorschlag, anpassbar)
-- Übersicht "Peak-Shaving-Performance" über alle Tenants (€ gespart aggregiert) — gutes Vertriebsargument
+### 3. Storage-Inhalte mitsichern
 
-## Phase 2 — Erweiterungen (separat, nach Abnahme Phase 1)
+- Pro Snapshot ein Ordner in Bucket `tenant-backups/<tenant_id>/<snapshot_id>/`:
+  - `db.json.gz` – alle Tabellendaten
+  - `storage/<bucket>/<datei>` – Kopien der Dateien aus `meter-photos`, `tenant-assets`, `floor-plans`, `floor-3d-models`
+  - `manifest.json` – Versions-, Tabellen-, Datei-, Hash-Info
+- `backup_snapshots.size_bytes` = Summe aus DB + Storage.
 
-- **Event-Kalender** (`peak_shaving_event_calendar`): Vor Event-Beginn lädt Speicher gezielt auf, Modus `event` aktivierbar
-- **Branchen-Presets:** "Arena/Konzert", "Industrie 1-Schicht", "Logistik 24/7" mit Default-Limits
-- **PDF-Report:** Monatlicher Auto-Report "Eingesparte Netzentgelte" in bestehende `report_schedules`-Logik einklinken
-- **Multi-Storage:** Lastverteilung über mehrere Speicher pro Standort
+### 4. Restore-Funktion
 
-## Technischer Abschnitt
+- Neue Edge-Funktion `tenant-restore` (nur Rolle `admin`/`super_admin` desselben Mandanten).
+- Ablauf in 3 Schritten im UI:
+  1. **Snapshot wählen** (Liste oder JSON-Upload).
+  2. **Vorschau**: Liste „X Tabellen, Y Zeilen, Z Dateien werden eingespielt; A Tabellen werden überschrieben". Auswahl pro Bereich (Konfiguration / Stammdaten / Messdaten / Storage).
+  3. **Bestätigung** mit Eingabe des Mandantennamens (wie bei „Mandant löschen").
+- Modi: `merge` (Upsert nach Primärschlüssel, keine Löschung) oder `replace` (vorher Tabelleninhalte des Mandanten löschen). Default: `merge`.
+- Schreibt vor dem Restore automatisch einen „Sicherheits-Snapshot" (`backup_type = 'pre-restore'`), damit der Restore selbst rückgängig gemacht werden kann.
+- Restore läuft serverseitig in der richtigen FK-Reihenfolge (Eltern vor Kindern), mit Transaktion pro Tabelle und Fortschritts-Log in einer neuen Tabelle `backup_restore_jobs`.
 
-```text
-                      ┌──────────────────────┐
-   meter_power_       │ peak-shaving-        │   pending_storage_
-   readings_5min ───► │ scheduler (1 min)    │ ──► commands → Gateway/Modbus
-                      │ - Schwellwert        │
-   peak_shaving_      │ - 15-Min-Prognose    │   peak_shaving_events
-   configs       ───► │ - Hysterese          │ ──► (Realtime)
-                      │ - SoC-Reserve        │
-   energy_storages ──►│                      │   peak_shaving_monthly_
-                      └──────────────────────┘   summary (täglich rollup)
-```
+### 5. UI-Erweiterungen (`BackupSettings.tsx`)
 
-- Reuse: `dlm-scheduler`-Architektur (Limit-Check + Stack-Level), `arbitrage_strategies` (Speicher-Adressierung), `get_location_main_meter` RPC, `ModuleGuard`, `useTenantQuery`, deutsche Zahlenformate, AICONO-Farben.
-- Neue Edge Function nur für Peak-Shaving; bewusst getrennt von `dlm-scheduler`, weil andere Logik (entladen statt drosseln) und andere Zielgeräte (Speicher statt Wallbox).
-- Speicher-Ansteuerung in Phase 1 nur für Speicher, die bereits über das AICONO-EMS-Gateway / Modbus erreichbar sind (vorhandene `energy_storages`-Einträge mit konfiguriertem `location_id`).
+- Pro Snapshot-Zeile: Buttons **Herunterladen**, **Wiederherstellen**, **Löschen**, **Details** (Tabellenliste + Zeilenzahlen).
+- Banner mit Status der letzten geplanten Sicherung („Letzte automatische Sicherung: 09.06.2026 02:30, 1,9 MB, 31 Tabellen ✅").
+- Hinweistext aktualisieren: erklärt klar, dass Messdaten enthalten sind und dass Restore verfügbar ist.
 
-## Was bewusst NICHT in Phase 1 ist
+### 6. Technisches / Sicherheit
 
-- Spot-Markt-Arbitrage (existiert separat in `arbitrage_strategies`, kein Mehraufwand verbauen)
-- Event-Kalender → Phase 2
-- PDF-Report → Phase 2
-- VPP / Marktteilnahme → eigenes späteres Modul
+- Neuer Bucket `tenant-backups` (privat, RLS: nur `service_role`, Zugriff ausschließlich über Edge-Funktion mit signierten URLs).
+- Neue Tabellen:
+  - `backup_restore_jobs` (status, started_at, finished_at, mode, tables_done, error)
+  - `gateway_state_dumps` (für die bisherigen 6-KB-Einträge)
+- RLS: `backup_snapshots` bleibt mandanten-scoped, neue Tabellen analog.
+- Größenbegrenzung: bei > 100 MB Warnung im UI, Empfehlung „Messdaten älter als 12 Monate archivieren".
+
+### 7. Reihenfolge der Umsetzung (Vorschlag)
+
+1. Schritt 1 (Anzeige bereinigen) – sehr klein, sofortige Klarheit.
+2. Schritt 2 + 3 (echte tägliche Sicherung inkl. Storage).
+3. Schritt 4 + 5 (Restore + UI).
+4. Schritt 6 (Aufräumarbeiten, Begrenzungen).
+
+### Offene Fragen, bevor ich umsetze
+
+- **Aufbewahrung**: 30 Tage + 4 Wochen + 6 Monate ok, oder andere Vorgabe?
+- **Restore-Default**: `merge` (nichts wird gelöscht) – einverstanden?
+- **Messdaten** wirklich in jede tägliche Sicherung, oder nur 1× wöchentlich (spart Speicher bei vielen Mandanten)?
+- **Gateway-Statusdumps**: separater Tab behalten oder ganz aus dem UI entfernen?  
+  
+Antworten:  
+- Aufbewahrung: so wie von dir vorgeschlagen  
+- Restore-Default: merge  
+- Messdaten: 1 x wöchentlich ist ausreichend  
+- Statusdumps: separater Tab
