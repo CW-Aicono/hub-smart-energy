@@ -1149,15 +1149,10 @@ const ChargingBilling = () => {
               <BillingGroupsTab isAdmin={isAdmin} periodStart={genPeriod.start} periodEnd={genPeriod.end} periodLabel={genPeriod.label} />
             </TabsContent>
 
-            {/* Roaming Tab */}
-            <TabsContent value="roaming">
-              <RoamingTab />
-            </TabsContent>
-
 
           </Tabs>
         </div>
-        <ChargingInvoiceSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+
       </main>
     </div>
   );
