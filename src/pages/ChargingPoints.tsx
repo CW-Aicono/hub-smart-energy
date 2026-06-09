@@ -506,35 +506,8 @@ const ChargingPoints = () => {
               <h1 className="text-2xl font-bold text-foreground">{t("charging.chargePoints" as any)}</h1>
               <p className="text-muted-foreground">{t("charging.chargePointsDesc" as any)}</p>
             </div>
-            {isAdmin && (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" onClick={() => setPublicLinkOpen(true)}>
-                  <Globe className="h-4 w-4 mr-2" />Öffentlicher Link
-                </Button>
-                <ModbusWallboxWizard onCreated={() => queryClient.invalidateQueries({ queryKey: ["charge-points"] })} />
-                <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) setDuplicateSource(null); }}>
-                  <DialogTrigger asChild>
-                    <Button onClick={() => { setDuplicateSource(null); resetForm(); }}><Plus className="h-4 w-4 mr-2" />{t("charging.addChargePoint" as any)}</Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>
-                        {duplicateSource ? `Ladepunkt duplizieren` : t("charging.newChargePoint" as any)}
-                      </DialogTitle>
-                      {duplicateSource && (
-                        <p className="text-xs text-muted-foreground">
-                          Dupliziert von: <span className="font-medium">{duplicateSource.name}</span> — Name und OCPP-ID neu vergeben.
-                        </p>
-                      )}
-                    </DialogHeader>
-                    {formFields}
-                    <Button onClick={handleAdd} disabled={!form.name}>{t("common.create" as any)}</Button>
-                  </DialogContent>
-                </Dialog>
-                <PublicStatusLinkDialog open={publicLinkOpen} onOpenChange={setPublicLinkOpen} />
-              </div>
-            )}
           </div>
+
 
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
