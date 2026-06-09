@@ -2729,6 +2729,12 @@ export const translations = {
     es: "Integración OCPP",
     nl: "OCPP Integratie",
   },
+  "nav.chargingSettings": {
+    de: "Einstellungen",
+    en: "Settings",
+    es: "Ajustes",
+    nl: "Instellingen",
+  },
   "nav.solarCharging": {
     de: "PV-Überschussladen",
     en: "Solar Surplus Charging",

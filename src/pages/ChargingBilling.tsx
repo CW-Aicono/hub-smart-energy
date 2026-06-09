@@ -20,9 +20,8 @@ import { useChargingUsers } from "@/hooks/useChargingUsers";
 import { useChargingBillingGroups } from "@/hooks/useChargingBillingGroups";
 import { useQuery } from "@tanstack/react-query";
 
-import RoamingTab from "@/components/charging/RoamingTab";
 import BillingGroupsTab from "@/components/charging/BillingGroupsTab";
-import ChargingInvoiceSettingsDialog from "@/components/charging/ChargingInvoiceSettingsDialog";
+
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -103,7 +102,7 @@ const ChargingBilling = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   const { chargePoints } = useChargePoints();
   const { settings: invoiceSettings } = useChargingInvoiceSettings();
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  
 
   const [tariffOpen, setTariffOpen] = useState(false);
   const [editTariff, setEditTariff] = useState<ChargingTariff | null>(null);
@@ -657,8 +656,8 @@ const ChargingBilling = () => {
               <TabsTrigger value="tariffs">{t("charging.tabTariffs" as any)}</TabsTrigger>
               <TabsTrigger value="invoices">{t("charging.tabInvoices" as any)}</TabsTrigger>
               <TabsTrigger value="billing-groups">Rechnungsgruppen</TabsTrigger>
-              <TabsTrigger value="roaming">{t("charging.tabRoaming" as any)}</TabsTrigger>
             </TabsList>
+
 
             {/* Sessions Tab */}
             <TabsContent value="sessions">
@@ -887,9 +886,7 @@ const ChargingBilling = () => {
                   <CardTitle>{t("charging.invoices" as any)}</CardTitle>
                   {isAdmin && (
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}>
-                        <Settings className="h-4 w-4 mr-2" />Rechnungsdesign
-                      </Button>
+
                       <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
                         <DialogTrigger asChild>
                           <Button size="sm"><FileText className="h-4 w-4 mr-2" />Rechnungen erstellen</Button>
@@ -1151,15 +1148,10 @@ const ChargingBilling = () => {
               <BillingGroupsTab isAdmin={isAdmin} periodStart={genPeriod.start} periodEnd={genPeriod.end} periodLabel={genPeriod.label} />
             </TabsContent>
 
-            {/* Roaming Tab */}
-            <TabsContent value="roaming">
-              <RoamingTab />
-            </TabsContent>
-
 
           </Tabs>
         </div>
-        <ChargingInvoiceSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+
       </main>
     </div>
   );

@@ -28,10 +28,11 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   hard: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
 };
 
-const OcppIntegration = () => {
+export function OcppIntegrationContent() {
   const { t } = useTranslation();
   const { guides, isLoading: guidesLoading, vendors: guideVendors } = useOcppGuides();
   const { chargerModels, isLoading: modelsLoading } = useChargerModels();
+
 
   const [selectedVendor, setSelectedVendor] = useState<string>("all");
   const [selectedModel, setSelectedModel] = useState<string>("all");
@@ -106,12 +107,12 @@ const OcppIntegration = () => {
   };
 
   return (
-    <AppLayout>
-      <div className="space-y-4 max-w-6xl mx-auto">
+    <div className="space-y-4 max-w-6xl mx-auto">
         <div>
           <h1 className="text-xl font-bold tracking-tight">{t("ocppIntegration.title" as any)}</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{t("ocppIntegration.subtitle" as any)}</p>
         </div>
+
 
         {/* OCPP Server URL (wss:// + ws://) */}
         <Card className="border-primary/20 bg-primary/5">
@@ -286,8 +287,14 @@ const OcppIntegration = () => {
           </div>
         )}
       </div>
-    </AppLayout>
   );
-};
+}
+
+const OcppIntegration = () => (
+  <AppLayout>
+    <OcppIntegrationContent />
+  </AppLayout>
+);
 
 export default OcppIntegration;
+
