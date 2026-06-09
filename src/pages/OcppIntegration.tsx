@@ -107,7 +107,7 @@ export function OcppIntegrationContent() {
   };
 
   return (
-    <div className="space-y-4 max-w-6xl mx-auto">
+    <div className="space-y-4">
         <div>
           <h1 className="text-xl font-bold tracking-tight">{t("ocppIntegration.title" as any)}</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{t("ocppIntegration.subtitle" as any)}</p>
@@ -292,9 +292,12 @@ export function OcppIntegrationContent() {
 
 const OcppIntegration = () => (
   <AppLayout>
-    <OcppIntegrationContent />
+    <div className="p-4 md:p-8">
+      <OcppIntegrationContent />
+    </div>
   </AppLayout>
 );
+
 
 export default OcppIntegration;
 
