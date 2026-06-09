@@ -131,63 +131,27 @@ export default function BillingGroupsTab({ isAdmin }: Props) {
                   </TableCell>
                   {isAdmin && (
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-1 flex-wrap">
-                        {periodStart && periodEnd && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={generateGroupInvoices.isPending || !g.member_count}
-                              title={`Sammelrechnung für ${periodLabel ?? "Zeitraum"} als Entwurf erzeugen`}
-                              onClick={() =>
-                                generateGroupInvoices.mutate({
-                                  group_id: g.id,
-                                  period_start: periodStart,
-                                  period_end: periodEnd,
-                                  mode: "generate",
-                                })
-                              }
-                            >
-                              <FileText className="h-4 w-4 mr-1" />
-                              Sammelrechnung
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={generateGroupInvoices.isPending || !g.member_count || !g.billing_email}
-                              title={g.billing_email ? `Sammelrechnung an ${g.billing_email} senden` : "Keine Rechnungs-E-Mail hinterlegt"}
-                              onClick={() => {
-                                if (!confirm(`Sammelrechnung für „${g.name}" (${periodLabel ?? ""}) an ${g.billing_email} senden?`)) return;
-                                generateGroupInvoices.mutate({
-                                  group_id: g.id,
-                                  period_start: periodStart,
-                                  period_end: periodEnd,
-                                  mode: "both",
-                                });
-                              }}
-                            >
-                              <Send className="h-4 w-4 mr-1" />
-                              Senden
-                            </Button>
-                          </>
-                        )}
+                      <div className="flex items-center justify-end gap-1 flex-nowrap">
                         <Button variant="ghost" size="sm" onClick={() => setMembersGroup(g)}>
                           <Users className="h-4 w-4 mr-1" />
-                          Mitglieder
+                          <span className="hidden sm:inline">Mitglieder</span>
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(g)}>
-                          <Edit className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(g)}>
+                          <Edit className="h-4 w-4 mr-1" />
+                          <span className="hidden sm:inline">Bearbeiten</span>
                         </Button>
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="sm"
                           onClick={() => {
                             if (confirm(`Rechnungsgruppe „${g.name}" wirklich löschen?`)) {
                               deleteGroup.mutate(g.id);
                             }
                           }}
+                          className="text-destructive hover:text-destructive"
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          <span className="hidden sm:inline">Löschen</span>
                         </Button>
                       </div>
                     </TableCell>
