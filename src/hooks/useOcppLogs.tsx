@@ -45,6 +45,13 @@ export function useOcppLogs(
   const idsSet = useMemo(() => new Set(ids), [idsKey]);
 
   const fetchLogs = useCallback(async () => {
+    if (ids.length === 0) {
+      setLogs([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (supabase.from as any)(OCPP_TABLE)
       .select("*")
@@ -61,14 +68,19 @@ export function useOcppLogs(
     }
 
     const { data, error } = await query;
-    if (!error && data) {
-      setLogs(data as unknown as OcppLogEntry[]);
+    if (error) {
+      console.error("OCPP logs could not be loaded", error);
+      setLogs([]);
+    } else {
+      setLogs((data ?? []) as unknown as OcppLogEntry[]);
     }
     setLoading(false);
-  }, [idsKey, activeType]);
+  }, [ids, activeType]);
 
   useEffect(() => {
     fetchLogs();
+
+    if (ids.length === 0) return;
 
     const channel = supabase
       .channel(`ocpp-logs-${idsKey || "all"}-${activeType || "all"}`)
