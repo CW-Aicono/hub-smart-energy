@@ -52,27 +52,31 @@ export function useOcppLogs(
     }
 
     setLoading(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (supabase.from as any)(OCPP_TABLE)
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(200);
+    const requests = ids.map((id) => {
+      // Mehrere kleine EQ-Abfragen sind hier absichtlich schneller/stabiler als IN(...):
+      // Die RLS-Regeln für ocpp_message_log prüfen UUID und OCPP-ID; mit IN lief die
+      // Historienabfrage bei großen Logmengen in ein Datenbank-Timeout.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let query = (supabase.from as any)(OCPP_TABLE)
+        .select("*")
+        .eq("charge_point_id", id)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (activeType) query = query.eq("message_type", activeType);
+      return query;
+    });
 
-    if (ids.length === 1) {
-      query = query.eq("charge_point_id", ids[0]);
-    } else if (ids.length > 1) {
-      query = query.in("charge_point_id", ids);
-    }
-    if (activeType) {
-      query = query.eq("message_type", activeType);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      console.error("OCPP logs could not be loaded", error);
+    const results = await Promise.all(requests);
+    const firstError = results.find((result) => result.error)?.error;
+    if (firstError) {
+      console.error("OCPP logs could not be loaded", firstError);
       setLogs([]);
     } else {
-      setLogs((data ?? []) as unknown as OcppLogEntry[]);
+      const merged = results
+        .flatMap((result) => (result.data ?? []) as unknown as OcppLogEntry[])
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 200);
+      setLogs(merged);
     }
     setLoading(false);
   }, [ids, activeType]);
