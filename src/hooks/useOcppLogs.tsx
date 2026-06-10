@@ -45,30 +45,46 @@ export function useOcppLogs(
   const idsSet = useMemo(() => new Set(ids), [idsKey]);
 
   const fetchLogs = useCallback(async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query = (supabase.from as any)(OCPP_TABLE)
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(200);
-
-    if (ids.length === 1) {
-      query = query.eq("charge_point_id", ids[0]);
-    } else if (ids.length > 1) {
-      query = query.in("charge_point_id", ids);
-    }
-    if (activeType) {
-      query = query.eq("message_type", activeType);
+    if (ids.length === 0) {
+      setLogs([]);
+      setLoading(false);
+      return;
     }
 
-    const { data, error } = await query;
-    if (!error && data) {
-      setLogs(data as unknown as OcppLogEntry[]);
+    setLoading(true);
+    const requests = ids.map((id) => {
+      // Mehrere kleine EQ-Abfragen sind hier absichtlich schneller/stabiler als IN(...):
+      // Die RLS-Regeln für ocpp_message_log prüfen UUID und OCPP-ID; mit IN lief die
+      // Historienabfrage bei großen Logmengen in ein Datenbank-Timeout.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let query = (supabase.from as any)(OCPP_TABLE)
+        .select("*")
+        .eq("charge_point_id", id)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (activeType) query = query.eq("message_type", activeType);
+      return query;
+    });
+
+    const results = await Promise.all(requests);
+    const firstError = results.find((result) => result.error)?.error;
+    if (firstError) {
+      console.error("OCPP logs could not be loaded", firstError);
+      setLogs([]);
+    } else {
+      const merged = results
+        .flatMap((result) => (result.data ?? []) as unknown as OcppLogEntry[])
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 200);
+      setLogs(merged);
     }
     setLoading(false);
-  }, [idsKey, activeType]);
+  }, [ids, activeType]);
 
   useEffect(() => {
     fetchLogs();
+
+    if (ids.length === 0) return;
 
     const channel = supabase
       .channel(`ocpp-logs-${idsKey || "all"}-${activeType || "all"}`)
