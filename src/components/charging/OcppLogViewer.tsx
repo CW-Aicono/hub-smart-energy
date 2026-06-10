@@ -20,8 +20,19 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
   const [filterText, setFilterText] = useState("");
   const [directionFilter, setDirectionFilter] = useState<"all" | "incoming" | "outgoing" | "error">("all");
   const [messageTypeFilter, setMessageTypeFilter] = useState<string>("all");
-  const { logs, loading, paused, setPaused, refetch } = useOcppLogs(chargePointId, messageTypeFilter);
   const { chargePoints } = useChargePoints();
+  // Manche Frames (z. B. ausgehende Reset-Befehle + nachfolgende BootNotification)
+  // werden vom OCPP-Server mit der OCPP-ID statt der UUID geloggt. Daher beide
+  // IDs abfragen, damit nichts im Log fehlt.
+  const logIds = React.useMemo(() => {
+    if (!chargePointId) return undefined;
+    const cp = chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId);
+    const list = [chargePointId];
+    if (cp?.id && !list.includes(cp.id)) list.push(cp.id);
+    if (cp?.ocpp_id && !list.includes(cp.ocpp_id)) list.push(cp.ocpp_id);
+    return list;
+  }, [chargePointId, chargePoints]);
+  const { logs, loading, paused, setPaused, refetch } = useOcppLogs(logIds, messageTypeFilter);
 
   // Standard OCPP 1.6 message types + types found in current logs
   const STANDARD_OCPP_TYPES = [
