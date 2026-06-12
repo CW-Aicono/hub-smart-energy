@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trash2, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
-type Colors = {
+export type Colors = {
   background: string;
   card: string;
   foreground: string;
@@ -18,7 +18,7 @@ type Colors = {
   border: string;
 };
 
-interface Theme {
+export interface Theme {
   id: string;
   tenant_id: string | null;
   name: string;
@@ -37,11 +37,11 @@ const COLOR_KEYS: Array<{ key: keyof Colors; label: string }> = [
   { key: "border", label: "Rahmen" },
 ];
 
-const EMPTY_LIGHT: Colors = {
+export const EMPTY_LIGHT: Colors = {
   background: "220 20% 98%", card: "0 0% 100%", foreground: "220 25% 12%",
   muted: "220 15% 45%", accent: "199 89% 48%", success: "152 55% 42%", border: "220 15% 90%",
 };
-const EMPTY_DARK: Colors = {
+export const EMPTY_DARK: Colors = {
   background: "222 25% 8%", card: "222 22% 12%", foreground: "220 15% 95%",
   muted: "220 10% 65%", accent: "199 89% 55%", success: "152 55% 50%", border: "222 18% 18%",
 };
