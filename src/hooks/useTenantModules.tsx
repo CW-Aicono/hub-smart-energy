@@ -29,6 +29,7 @@ export const ALL_MODULES = [
   { code: "ppa_offsite", label: "PPA Off-site (Power Purchase Agreements)" },
   { code: "remote_support", label: "Remote-Support (Flatrate)" },
   { code: "support_billing", label: "Support (mit Berechnung)" },
+  { code: "c_level_dashboard", label: "C-Level Dashboard (board.aicono.org)" },
 ] as const;
 
 export function useTenantModules(tenantId: string | null) {

@@ -419,6 +419,138 @@ export type Database = {
           },
         ]
       }
+      board_templates: {
+        Row: {
+          code: string
+          created_at: string
+          default_layout: Json
+          description: string | null
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          default_layout: Json
+          description?: string | null
+          id?: string
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          default_layout?: Json
+          description?: string | null
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      board_themes: {
+        Row: {
+          colors_dark: Json
+          colors_light: Json
+          created_at: string
+          id: string
+          is_system: boolean
+          name: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          colors_dark: Json
+          colors_light: Json
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          name: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          colors_dark?: Json
+          colors_light?: Json
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          name?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_themes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      board_user_layouts: {
+        Row: {
+          created_at: string
+          id: string
+          template_code: string
+          tenant_id: string
+          theme_id: string | null
+          theme_mode: string
+          tiles: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          template_code?: string
+          tenant_id: string
+          theme_id?: string | null
+          theme_mode?: string
+          tiles?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          template_code?: string
+          tenant_id?: string
+          theme_id?: string | null
+          theme_mode?: string
+          tiles?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_user_layouts_template_code_fkey"
+            columns: ["template_code"]
+            isOneToOne: false
+            referencedRelation: "board_templates"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "board_user_layouts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_user_layouts_theme_id_fkey"
+            columns: ["theme_id"]
+            isOneToOne: false
+            referencedRelation: "board_themes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brighthub_settings: {
         Row: {
           api_key: string
