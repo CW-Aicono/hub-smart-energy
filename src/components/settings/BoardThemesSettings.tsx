@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trash2, Plus, Sparkles } from "lucide-react";
+import { Trash2, Plus, Sparkles, Copy, ExternalLink } from "lucide-react";
+import QRCode from "qrcode";
 import { toast } from "sonner";
 
 export type Colors = {
@@ -184,6 +185,24 @@ export function BoardThemesSettings() {
 
   useEffect(() => { load(); }, [tenant?.id]);
 
+  const boardUrl = (() => {
+    if (typeof window === "undefined") return "";
+    const host = window.location.hostname;
+    const parts = host.split(".");
+    // strip leading subdomain like "ems-pro", "staging", "id-preview--…" → use board.<root>
+    if (parts.length >= 2 && !host.startsWith("board.") && !host.includes("localhost") && !host.includes("lovable.app")) {
+      const root = parts.slice(-2).join(".");
+      return `https://board.${root}`;
+    }
+    return `${window.location.origin}/board`;
+  })();
+
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  useEffect(() => {
+    if (!boardUrl) return;
+    QRCode.toDataURL(boardUrl, { width: 220, margin: 1 }).then(setQrDataUrl).catch(() => {});
+  }, [boardUrl]);
+
   const systemThemes = themes.filter((t) => t.is_system);
   const tenantThemes = themes.filter((t) => !t.is_system && t.tenant_id === tenant?.id);
 
@@ -241,6 +260,50 @@ export function BoardThemesSettings() {
             viele <strong>eigene Themes</strong> für deinen Tenant anlegen — jeweils mit Farben für
             Hell- und Dunkelmodus.
           </p>
+
+          <div className="mt-4 flex flex-col sm:flex-row gap-4 items-start rounded-xl border bg-card p-4">
+            {qrDataUrl && (
+              <img
+                src={qrDataUrl}
+                alt="QR-Code zum C-Level Dashboard"
+                className="h-32 w-32 rounded-md border bg-white p-1"
+              />
+            )}
+            <div className="flex-1 min-w-0 space-y-2">
+              <div className="text-sm font-medium text-foreground">
+                Dashboard auf dem Mobilgerät öffnen
+              </div>
+              <p className="text-xs">
+                QR-Code mit der Kamera scannen oder den Link direkt aufrufen:
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <code className="font-mono text-xs bg-muted px-2 py-1 rounded break-all">
+                  {boardUrl}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-7"
+                  onClick={() => {
+                    navigator.clipboard.writeText(boardUrl);
+                    toast.success("Link kopiert");
+                  }}
+                >
+                  <Copy className="h-3.5 w-3.5" /> Kopieren
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-7"
+                  asChild
+                >
+                  <a href={boardUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink className="h-3.5 w-3.5" /> Öffnen
+                  </a>
+                </Button>
+              </div>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2 pt-2">
             <Button size="sm" onClick={() => create()} className="gap-2">
               <Plus className="h-4 w-4" /> Leeres Theme anlegen
