@@ -2,6 +2,8 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useTenant } from "@/hooks/useTenant";
+import { useTenantModules } from "@/hooks/useTenantModules";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { BrandingSettings } from "@/components/settings/BrandingSettings";
 import { BackupSettings } from "@/components/settings/BackupSettings";
@@ -9,13 +11,18 @@ import { WeekStartSetting } from "@/components/settings/WeekStartSetting";
 import { ManualMetersSetting } from "@/components/settings/ManualMetersSetting";
 import { TenantInfoSettings } from "@/components/settings/TenantInfoSettings";
 import { WidgetDesigner } from "@/components/settings/WidgetDesigner";
+import { BoardThemesSettings } from "@/components/settings/BoardThemesSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Palette, HardDrive, Building2, LayoutGrid } from "lucide-react";
+import { Palette, HardDrive, Building2, LayoutGrid, LayoutDashboard } from "lucide-react";
 
 const Settings = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const { tenant } = useTenant();
+  const { isModuleEnabled } = useTenantModules(tenant?.id ?? null);
+  const cLevelEnabled = isModuleEnabled("c_level_dashboard");
   const { t } = useTranslation();
+
 
   if (authLoading || roleLoading) {
     return (
@@ -57,6 +64,12 @@ const Settings = () => {
                 <LayoutGrid className="h-4 w-4" />
                 Widget-Designer
               </TabsTrigger>
+              {cLevelEnabled && (
+                <TabsTrigger value="board-themes" className="gap-2">
+                  <LayoutDashboard className="h-4 w-4" />
+                  C-Level Dashboard
+                </TabsTrigger>
+              )}
             </TabsList>
             <TabsContent value="tenant-info">
               <TenantInfoSettings />
@@ -72,6 +85,11 @@ const Settings = () => {
             <TabsContent value="widget-designer">
               <WidgetDesigner />
             </TabsContent>
+            {cLevelEnabled && (
+              <TabsContent value="board-themes">
+                <BoardThemesSettings />
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       </main>

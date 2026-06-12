@@ -8,7 +8,7 @@ import {
   LayoutDashboard, LogOut, Building2, BarChart3, Receipt, HeadsetIcon,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft, Users, ShieldCheck, Shield, Euro,
   Sun, Moon, Monitor, Globe, Palette, Check, Server, PlugZap, Settings, Activity,
-  Cpu, ListChecks, Briefcase, Plug, Map, Upload,
+  Cpu, ListChecks, Briefcase, Plug, Map, Upload, LayoutDashboard as BoardIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -124,6 +124,7 @@ export default function SuperAdminSidebar() {
         { to: "/super-admin/roles", icon: ShieldCheck, label: t("nav.roles_permissions") },
       ],
     },
+    { to: "/super-admin/board", icon: BoardIcon, label: "C-Level Dashboard" },
     {
       to: "/super-admin/ocpp",
       icon: Server,

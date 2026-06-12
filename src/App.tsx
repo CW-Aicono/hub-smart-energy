@@ -27,6 +27,7 @@ import RecoveryGuard from "@/components/RecoveryGuard";
 import MustChangePasswordGuard from "@/components/MustChangePasswordGuard";
 import TenantStatusGuard from "@/components/TenantStatusGuard";
 import SalesHostGuard from "@/components/SalesHostGuard";
+import BoardHostGuard from "@/components/BoardHostGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
 import SuperAdminImpersonationBar from "./components/SuperAdminImpersonationBar";
@@ -66,6 +67,7 @@ const SuperAdminModulePricing = lazy(() => import("./pages/SuperAdminModulePrici
 const SuperAdminBundles = lazy(() => import("./pages/SuperAdminBundles"));
 const SuperAdminUsers = lazy(() => import("./pages/SuperAdminUsers"));
 const SuperAdminRoles = lazy(() => import("./pages/SuperAdminRoles"));
+const SuperAdminBoard = lazy(() => import("./pages/SuperAdminBoard"));
 const MobileApp = lazy(() => import("./pages/MobileApp"));
 const GettingStarted = lazy(() => import("./pages/GettingStarted"));
 const ChargingPoints = lazy(() => import("./pages/ChargingPoints"));
@@ -120,6 +122,7 @@ const EnergyReport = lazy(() => import("./pages/EnergyReport"));
 const LegalPageView = lazy(() => import("./pages/LegalPageView"));
 const PublicSalesQuote = lazy(() => import("./pages/PublicSalesQuote"));
 const PublicChargeStatus = lazy(() => import("./pages/PublicChargeStatus"));
+const BoardHome = lazy(() => import("./pages/board/BoardHome"));
 
 
 const queryClient = new QueryClient({
@@ -163,6 +166,7 @@ const App = () => (
                   <RecoveryGuard />
                   <MustChangePasswordGuard />
                   <SalesHostGuard />
+                  <BoardHostGuard />
                   <UpdateBanner />
                   <SupportSessionBanner />
                   <SuperAdminImpersonationBar />
@@ -225,6 +229,7 @@ const App = () => (
                       <Route path="/super-admin/statistics" element={<SA><SuperAdminStatistics /></SA>} />
                       <Route path="/super-admin/users" element={<SA><SuperAdminUsers /></SA>} />
                       <Route path="/super-admin/roles" element={<SA><SuperAdminRoles /></SA>} />
+                      <Route path="/super-admin/board" element={<SA><SuperAdminBoard /></SA>} />
                       <Route path="/super-admin/billing" element={<SA><SuperAdminBilling /></SA>} />
                       <Route path="/super-admin/licenses" element={<SA><SuperAdminLicenses /></SA>} />
                       <Route path="/super-admin/module-pricing" element={<SA><SuperAdminModulePricing /></SA>} />
@@ -302,7 +307,11 @@ const App = () => (
                       <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
                       <Route path="/partner/sales/catalog" element={<PartnerLayout><PartnerSalesCatalog /></PartnerLayout>} />
                       <Route path="/partner/sales/rules" element={<PartnerLayout><PartnerSalesRules /></PartnerLayout>} />
+                      {/* Stufe 3: C-Level Dashboard (board.aicono.org → /board) */}
+                      <Route path="/board" element={<BoardHome />} />
+
                       {/* Sales Scout: gemeinsam genutzt unter /sales (Partner-Member sehen ihre eigene Org via RLS) */}
+
 
                       <Route path="*" element={<NotFound />} />
                     </Routes>
