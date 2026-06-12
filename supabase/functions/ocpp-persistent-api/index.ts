@@ -211,7 +211,7 @@ async function handle(action: string, body: Record<string, unknown>) {
       // 1) Legacy rfid_tag column on charging_users
       let { data: user, error } = await admin
         .from("charging_users")
-        .select("id, status")
+        .select("id, status, group_id")
         .eq("tenant_id", tenantId)
         .ilike("rfid_tag", normalizedIdTag)
         .maybeSingle();
@@ -220,7 +220,7 @@ async function handle(action: string, body: Record<string, unknown>) {
       if (!user && !error) {
         const { data: tagRow, error: tagErr } = await admin
           .from("charging_user_rfid_tags")
-          .select("user:charging_users!inner(id, status)")
+          .select("user:charging_users!inner(id, status, group_id)")
           .eq("tenant_id", tenantId)
           .ilike("tag", normalizedIdTag)
           .maybeSingle();
@@ -231,7 +231,7 @@ async function handle(action: string, body: Record<string, unknown>) {
       if (!user && !error) {
         const result = await admin
           .from("charging_users")
-          .select("id, status")
+          .select("id, status, group_id")
           .eq("tenant_id", tenantId)
           .ilike("app_tag", normalizedIdTag)
           .maybeSingle();
@@ -240,7 +240,19 @@ async function handle(action: string, body: Record<string, unknown>) {
       }
 
       if (error) return fail(500, error.message);
-      return ok({ status: user && user.status === "active" ? "Accepted" : "Invalid" });
+      if (!user || user.status !== "active") return ok({ status: "Invalid" });
+
+      // Group block check: reject if user is in a non-active group
+      if (user.group_id) {
+        const { data: grp } = await admin
+          .from("charging_user_groups")
+          .select("status")
+          .eq("id", user.group_id)
+          .maybeSingle();
+        if (grp && grp.status !== "active") return ok({ status: "Invalid" });
+      }
+
+      return ok({ status: "Accepted" });
     }
 
 
