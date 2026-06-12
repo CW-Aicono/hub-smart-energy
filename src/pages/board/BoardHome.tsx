@@ -21,7 +21,7 @@ import BentoGrid from "@/components/board/BentoGrid";
 export default function BoardHome() {
   const { user, loading: authLoading } = useAuth();
   const { tenant, loading: tenantLoading } = useTenant();
-  const { isModuleActive, loading: modulesLoading } = useTenantModules();
+  const { isModuleEnabled, isLoading: modulesLoading } = useTenantModules(tenant?.id ?? null);
   const { themes, loading: themesLoading } = useBoardThemes();
   const { templates, loading: templatesLoading } = useBoardTemplates();
   const { layout, loading: layoutLoading, upsert } = useBoardUserLayout();
