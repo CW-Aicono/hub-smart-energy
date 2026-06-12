@@ -78,7 +78,7 @@ export default function BoardHome() {
     return <div className="min-h-screen flex items-center justify-center animate-fade-in">{boardT("loading", lang)}</div>;
   }
 
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) return <Navigate to="/auth?redirect=/board" replace />;
   if (!tenant) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6 text-center animate-fade-in">
