@@ -67,7 +67,7 @@ const Settings = () => {
               {cLevelEnabled && (
                 <TabsTrigger value="board-themes" className="gap-2">
                   <LayoutDashboard className="h-4 w-4" />
-                  C-Level Themes
+                  C-Level Dashboard
                 </TabsTrigger>
               )}
             </TabsList>
