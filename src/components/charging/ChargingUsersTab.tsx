@@ -48,6 +48,8 @@ const ChargingUsersTab = () => {
 
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "blocked" | "archived">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [groupStatusFilter, setGroupStatusFilter] = useState<"all" | "active" | "blocked" | "archived">("all");
+  const [groupSearchQuery, setGroupSearchQuery] = useState("");
   const [ioOpen, setIoOpen] = useState(false);
   const [ioType, setIoType] = useState<ExportType>("users");
   const openIo = (t: ExportType) => { setIoType(t); setIoOpen(true); };
