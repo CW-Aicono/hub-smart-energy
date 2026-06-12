@@ -2,6 +2,8 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useTenant } from "@/hooks/useTenant";
+import { useTenantModules } from "@/hooks/useTenantModules";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { BrandingSettings } from "@/components/settings/BrandingSettings";
 import { BackupSettings } from "@/components/settings/BackupSettings";
@@ -16,7 +18,11 @@ import { Palette, HardDrive, Building2, LayoutGrid, LayoutDashboard } from "luci
 const Settings = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const { tenant } = useTenant();
+  const { isModuleEnabled } = useTenantModules(tenant?.id ?? null);
+  const cLevelEnabled = isModuleEnabled("c_level_dashboard");
   const { t } = useTranslation();
+
 
   if (authLoading || roleLoading) {
     return (
