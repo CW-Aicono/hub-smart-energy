@@ -1,86 +1,169 @@
-# Warum Auto-Reboot auf Hetzner nicht läuft
+# C-Level Dashboard — neues Modul (überarbeitet)
 
-## Ursache (kein Code-Bug)
+Ein eigenes, schlankes Management-Cockpit für C-Level. Eigene PWA unter `board.aicono.org`, vom Super-Admin pro Tenant freischaltbar, Zugang über frei konfigurierbare Rollen, Templates (CEO/CFO/CTO/ESG), individuell anpassbar, mit drei mitgelieferten Themes und freier Theme-Erstellung durch den Tenant-Admin.
 
-Die Funktion `Automatischer Tages-Reboot` besteht aus **drei** Bausteinen, die alle vorhanden sein müssen:
+---
 
-1. **Edge Function** `charge-point-auto-reboot` (liest Wallboxen, schreibt Reset in `pending_ocpp_commands`, setzt `auto_reboot_last_run_at`)
-2. **pg_cron-Job**, der die Edge Function **stündlich** aufruft
-3. **OCPP-Server** (Hetzner Live `cp.aicono.org`), der den Reset-Befehl an die verbundene Wallbox sendet
+## 1. Was die Nutzer bekommen
 
-Auf der **Lovable-Cloud-Datenbank** sind alle drei Teile vorhanden — der Cron-Job `charge-point-auto-reboot-hourly` (Plan: `5 * * * *`) ist aktiv, die Wallbox „Ost 1" wird seit dem 04.06.2026 jeden Tag um 03:05 Berlin sauber resettet (in `pending_ocpp_commands` alle 9 Einträge `status=completed`, `Accepted`).
+**Eine eigene App** unter `board.aicono.org` — installierbar auf Smartphone und Tablet wie eine native App. Login mit den bekannten EMS-Zugangsdaten. Wer keine Berechtigung „C-Level-Dashboard öffnen" hat, kommt nicht rein.
 
-Die Hetzner-Wallbox aus Screenshot 2 hängt aber an einer **separaten, selbst-gehosteten Supabase auf Hetzner** (eigene `supabase-docker`-Instanz). Auf dieser zweiten Datenbank fehlt mindestens eines:
+**Sofort nach dem Login** sehen die Nutzer:
+- Persönliche Begrüßung
+- Eine große Headline-Kachel (z. B. „Heute 1.243 € verbraucht — 12 % weniger als gestern")
+- 6–12 große, lesbare Kacheln im Bento-Grid (eine groß, der Rest drumherum)
+- Zeitbereichs-Umschalter oben: **Heute / Woche / Monat / Jahr**
+- Tab-Bar unten (Mobil) bzw. Seitenleiste (Tablet): **Übersicht · Standorte · ESG · Einstellungen**
 
-- die Edge Function `charge-point-auto-reboot` ist nicht deployed, **oder**
-- der pg_cron-Job, der sie stündlich aufruft, ist nicht angelegt, **oder**
-- die `pg_cron`/`pg_net`-Extensions sind nicht aktiviert, **oder**
-- der Cron-Job ruft eine falsche URL/Service-Role-Key auf.
+**Templates** beim ersten Start, jederzeit umschaltbar:
+- **CEO**: Gesamtkosten, CO₂, Top/Flop-Standort, kritische Alerts, Forecast Monatsende
+- **CFO**: Kosten heute/Monat/YTD, € pro Standort, Einsparung vs. Vorjahr, Ladeumsatz, Trading-P&L, offene Rechnungen
+- **CTO/COO**: Verfügbarkeit Gateways, Autarkie, PV-Performance, offene Tasks, Ladepunkt-Stabilität
+- **ESG**: CO₂-Bilanz, Eigenverbrauchsquote, PV-Ertrag, vermiedene Tonnen, ESG-Score
 
-Symptom passt exakt: `auto_reboot_last_run_at` bleibt `null` (deshalb fehlt die Zeile „Letzter Auto-Reboot" in Screenshot 2), obwohl der Schalter an und die Uhrzeit gesetzt ist.
+**Individualisierung** über Stift-Icon: Kacheln ein/aus, neu anordnen (Drag & Drop), Größe wechseln (S/M/L). Speicherung pro User.
 
-Der OCPP-Server (Live, `cp.aicono.org`) ist **nicht** das Problem — er würde einen Reset sofort senden, sobald er einen Eintrag in `pending_ocpp_commands` für eine verbundene Wallbox sieht.
+---
 
-## Was zu tun ist
+## 2. Design
 
-Auf der Hetzner-Supabase fehlt das Auto-Reboot-Setup. Ich bereite eine **Schritt-für-Schritt-Anleitung für Laien** (deutsch, click-by-click) vor, mit der das Setup auf der Hetzner-Supabase nachgeholt wird. Geliefert wird ein Markdown-Dokument unter `docs/ocpp-persistent-server/AUTO_REBOOT_HETZNER_SETUP.md`.
+**Grundprinzip: elegant, modern, reduziert.** Wenig Farben, viel Whitespace, große Typografie, sanfte Schatten, klare Hierarchie. Animationen dezent (framer-motion, kurze Fade/Slide-Transitions).
 
-Inhalt der Anleitung:
+**Drei mitgelieferte System-Themes** (jeweils Light & Dark-Variante):
+1. **Executive** — neutrales Graphit + einzelner Akzent in AICONO-Blau
+2. **Editorial** — Off-White / Anthrazit, ein warmer Akzent (Bernstein)
+3. **Boardroom** — tiefes Dunkelgrau + dezenter Gold-Akzent, ESG-Grün als Sekundär
 
-1. **Vorprüfung** in Supabase Studio (Hetzner):
-   - Tabelle `charge_points` öffnen, prüfen dass die Spalten `auto_reboot_enabled`, `auto_reboot_time`, `auto_reboot_type`, `auto_reboot_skip_if_charging`, `auto_reboot_last_run_at` existieren. Falls nicht: exakter `ALTER TABLE`-Block zum Einfügen (Copy-Paste-fertig).
-   - Tabelle `pending_ocpp_commands` muss existieren (existiert in jedem aktiven Hetzner-OCPP-Setup, nur Sichtprüfung).
+**Theme-Modus**: Umschalter in den App-Einstellungen mit drei Optionen: **Hell · Dunkel · System** (folgt OS-Einstellung). Pro User gespeichert.
 
-2. **Extensions aktivieren** (genau ein SQL-Snippet, im SQL-Editor einfügen):
-   ```sql
-   create extension if not exists pg_cron;
-   create extension if not exists pg_net;
-   ```
+**Eigene Themes** kann der Tenant-Admin im EMS unter „Einstellungen → C-Level Dashboard" anlegen (Name + 4 Farben: Hintergrund, Karte, Akzent, Erfolg — jeweils für Light & Dark).
 
-3. **Edge Function deployen**:
-   - Die Datei `supabase/functions/charge-point-auto-reboot/index.ts` (Code identisch zu Lovable) in der Hetzner-Funktionsverwaltung anlegen. Exakter Pfad, exakter Dateiinhalt als Copy-Paste-Block.
-   - Hinweis: Funktion benötigt die Standard-Env-Variablen `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`. Diese sind in selbst-gehosteten Setups bereits gesetzt — Sichtprüfung beschrieben.
+---
 
-4. **Cron-Job anlegen** (exakter SQL-Block, mit Platzhaltern, die der User durch seine Hetzner-Supabase-URL und seinen Service-Role-Key ersetzt — beides wird Schritt für Schritt erklärt, wo es zu finden ist):
-   ```sql
-   select cron.schedule(
-     'charge-point-auto-reboot-hourly',
-     '5 * * * *',
-     $$ select net.http_post(
-       url:='https://<HETZNER-SUPABASE-DOMAIN>/functions/v1/charge-point-auto-reboot',
-       headers:=jsonb_build_object(
-         'Content-Type','application/json',
-         'apikey','<SERVICE_ROLE_KEY>',
-         'Authorization','Bearer <SERVICE_ROLE_KEY>'
-       ),
-       body:='{}'::jsonb
-     ); $$
-   );
-   ```
+## 3. Platzierung & Zugang
 
-5. **Sofort-Testlauf** ohne auf die nächste volle Stunde + 5 Min zu warten:
-   - SQL-Befehl, der die Funktion einmalig manuell aufruft (`select net.http_post(...)` direkt).
-   - Erwartetes Ergebnis: `auto_reboot_last_run_at` wird gesetzt (wenn aktuelle Uhrzeit ≥ konfigurierter Reboot-Zeit), oder Edge-Function-Log zeigt `skippedTimeNotReached: 1` (wenn vor der Uhrzeit).
+- **Eigene Subdomain**: `board.aicono.org`, PWA-installierbar (eigenes Manifest, eigene Icons)
+- **Im normalen EMS**: dezenter Link „C-Level-Dashboard öffnen" im User-Menü, sichtbar nur wenn Modul aktiv und Berechtigung vorhanden
+- **Im Super-Admin-Menü**: neuer Punkt **„C-Level Dashboard" direkt unter „Benutzerverwaltung"** — dort sieht der Super-Admin pro Tenant ob das Modul aktiv ist, kann es ein-/ausschalten und globale System-Themes pflegen
+- **Im Tenant-Admin-Menü** unter „Einstellungen": neuer Bereich „C-Level Dashboard" für Theme-Verwaltung und Übersicht der berechtigten User
 
-6. **Verifikation**:
-   - In `pending_ocpp_commands` nach `command='Reset'` für die ocpp_id der Wallbox suchen.
-   - Status muss innerhalb 2 Sekunden auf `completed` springen, wenn die Wallbox am Live-OCPP-Server hängt.
-   - In der Wallbox-Detailseite Frontend neu laden → „Letzter Auto-Reboot" muss erscheinen.
+---
 
-7. **Troubleshooting-Abschnitt** mit den 4 häufigsten Fehlern und exakter Behebung:
-   - `auto_reboot_last_run_at` bleibt `null` → Cron-Job läuft nicht (SELECT auf `cron.job_run_details` zum Prüfen).
-   - Reset bleibt auf `status=pending` → Wallbox ist nicht mit `cp.aicono.org` verbunden (Prüfung `ws_connected`).
-   - Edge Function gibt 401 → Service-Role-Key im Cron-Job falsch.
-   - `relation "cron.job" does not exist` → Extension nicht aktiviert.
+## 4. Berechtigungssystem (per Rolle, nicht hart)
 
-## Technische Details (für die IT-Hand)
+Statt einer festen Rolle `c_level`:
+- Neue **Permission** `board.access` wird ins bestehende Permissions-System eingeführt
+- Der Tenant-Admin kann unter „Rollen & Berechtigungen" beliebige eigene Rollen anlegen (z. B. „Geschäftsführung", „Beirat", „Finanzleitung") und dort die Berechtigung `board.access` aktivieren
+- Jede Person mit einer Rolle, die `board.access` enthält, kann sich auf `board.aicono.org` einloggen
+- Modul `c_level_dashboard` muss vom Super-Admin für den Tenant aktiv sein, sonst greift die Berechtigung nicht
+- Vorteil: voll flexibel, passt sich an Kundenstruktur an, nutzt das vorhandene Rollensystem
 
-- Edge-Function-Code muss 1:1 aus `supabase/functions/charge-point-auto-reboot/index.ts` übernommen werden — keine Änderungen nötig, da `SUPABASE_URL` etc. aus den Env-Variablen kommen.
-- Der Cron-Job nutzt `pg_net` (HTTP aus der DB). In selbst-gehosteten Supabase-Stacks ist `pg_net` enthalten, aber nicht immer aktiv.
-- Multi-Tenancy-Filter ist nicht erforderlich, da die Function über alle `charge_points` mit `auto_reboot_enabled=true` iteriert — gleiches Verhalten wie auf Lovable.
-- Keine Code-Änderungen am Cloud-Projekt nötig. Nur ein neues Dokument in `docs/`.
+---
 
-## Was ich NICHT mache
+## 5. Kachel-Katalog (alle optional)
 
-- Keine Änderung am Frontend, am OCPP-Server, an der Edge Function oder am Cron-Job in der Lovable-Cloud-DB (dort läuft alles).
-- Keine automatische Bereitstellung der Hetzner-Supabase — das passiert manuell durch den Admin, da ich keinen Zugriff auf die selbst-gehostete Instanz habe.
+**Energie & Kosten**
+- Kosten heute / Woche / Monat / YTD mit Vorjahresvergleich
+- Verbrauch (kWh) mit Mini-Verlaufschart
+- Forecast Monatsende
+- Einsparung vs. Vorjahr (€ und %)
+
+**Nachhaltigkeit / ESG**
+- CO₂-Emissionen heute / Monat / YTD
+- Eigenverbrauchsquote
+- Autarkiegrad
+- PV-Ertrag + vermiedene CO₂-Tonnen
+
+**Portfolio / Standorte**
+- Top 3 / Flop 3 Standorte (kWh/m² oder €/m²)
+- Standort-Heatmap (Ampel pro Standort)
+- Offene kritische Alerts (Zahl + Liste)
+- Standort-Karte (optional)
+
+**Ladeinfrastruktur** (nur bei aktivem EV-Modul)
+- Umsatz heute / Monat
+- Auslastung
+- Sessions
+- Top-Standort
+
+**Trading** (nur bei aktivem Arbitrage- oder Peak-Shaving-Modul) — NEU
+- Arbitrage-P&L heute / Monat / YTD
+- Anzahl Trades + Erfolgsquote
+- Peak-Shaving Einsparung (€ und kW vermiedene Spitze)
+- Aktueller Spot-Preis vs. Tagesdurchschnitt
+
+**Aufgabenverwaltung** — NEU
+- Offene Aufgaben gesamt (mit Trend)
+- Überfällige Aufgaben (rot, mit Klick zur Liste)
+- Aufgaben nach Priorität (klein/mittel/hoch/kritisch)
+- Top 3 offene High-Priority-Tasks (als Liste)
+
+Jede Kachel: großer Zahlenwert + Label + Trendpfeil + Vergleichswert. Tap → kompakte Detailansicht innerhalb der PWA (kein Sprung in komplexe EMS-Seiten).
+
+---
+
+## 6. Technische Details
+
+**Frontend**
+- Neuer Layout-Wrapper `BoardLayout.tsx` analog `SharingLayout.tsx` / `PartnerLayout.tsx`
+- Routes unter `/board/*` mit `BoardHostGuard` für `board.aicono.org`
+- Hook `useBoardLayout()` lädt User-Layout aus `board_user_layouts`
+- Bento-Grid via CSS Grid + `react-grid-layout` im Anpassen-Modus
+- Theme-Provider: Light/Dark/System via `prefers-color-scheme` + User-Override
+- PWA-Manifest `public/manifest-board.json` analog zu bestehenden PWAs
+- i18n: neue Keys `board.*` in DE/EN/ES/NL
+
+**Backend (Lovable Cloud)**
+- Neue Tabellen:
+  - `board_themes` (tenant_id nullable, name, colors_light jsonb, colors_dark jsonb, is_system) — 3 System-Themes als Seed mit `tenant_id IS NULL`
+  - `board_templates` (code, name, default_layout jsonb) — CEO/CFO/CTO/ESG Seed
+  - `board_user_layouts` (user_id, tenant_id, template_code, tiles jsonb, theme_id, theme_mode: 'light'|'dark'|'system')
+- Neue **Permission** `board.access` in `permissions` (Seed)
+- Modul `c_level_dashboard` in `ALL_MODULES` + Super-Admin-Toggle
+- RLS: strict per `tenant_id` + `auth.uid()`; System-Themes für `authenticated` lesbar; `service_role` ALL
+- Im `ROUTE_MODULE_MAP` neue Einträge für `/board/*`
+
+**Super-Admin-Bereich**
+- Neuer Menüpunkt **„C-Level Dashboard"** in `SuperAdminSidebar` direkt unter „Benutzerverwaltung"
+- Neue Seite `SuperAdminBoard.tsx`: Liste aller Tenants mit Status (Modul an/aus), globale System-Themes verwalten, Statistik (wie viele User pro Tenant haben Zugriff)
+
+**Daten-Aggregation**
+- KPIs aus bestehenden Tabellen: `meter_period_totals`, `pv_actual_hourly`, `charging_sessions`, `arbitrage_trades`, `peak_shaving_monthly_summary`, `tasks`, `alert_rules`
+- Caching pro Kachel: `staleTime: 5min`, `refetchOnWindowFocus: false`
+- Teure Aggregationen (Standort-Ranking, Trading-Summen) über Edge Function `board-kpis` mit 1h-Snapshot in `board_kpi_snapshots`
+- Alle Zahlen via `toLocaleString("de-DE")`
+
+**Hetzner-Relevanz**
+- Migrationen (Tabellen, Permission, Modul-Seed) — vom Hetzner-Programmierer nachzuziehen
+- Edge Function `board-kpis` ist **nicht** OCPP-relevant → fällt nicht unter die Hetzner-Manual-Sync-Regel, wird aber in der Phasen-Übergabe explizit erwähnt
+
+---
+
+## 7. Umsetzung in Phasen
+
+**Phase 1 — Fundament**: DB-Migration (3 Tabellen, Permission `board.access`, Modul `c_level_dashboard`, Seed der 3 System-Themes + 4 Templates), Host-Guard, Login-Flow auf `board.aicono.org`
+
+**Phase 2 — Layout & Templates**: BoardLayout, Bento-Grid mit statischen Kacheln, Template-Auswahl, Theme-Picker mit Light/Dark/System
+
+**Phase 3 — Kachel-Katalog**: Alle KPI-Kacheln mit echten Daten (inkl. Trading + Tasks)
+
+**Phase 4 — Anpassen-Modus**: Drag & Drop, Kacheln ein/aus, Größenwechsel, Speichern pro User
+
+**Phase 5 — Tenant-Admin Theme-Verwaltung**: neuer Tab unter Einstellungen, eigene Themes mit Light/Dark anlegen
+
+**Phase 6 — Super-Admin „C-Level Dashboard"-Menüpunkt**: Übersicht aller Tenants, Modul-Toggle, System-Theme-Pflege
+
+**Phase 7 — Polish**: framer-motion-Übergänge, Pull-to-Refresh, Offline-Fallback der letzten KPIs, i18n-Vollständigkeit, Tests
+
+---
+
+## 8. Was bewusst NICHT drin ist
+
+- Keine tiefen Drill-Down-Reports — dafür gibt es das EMS
+- Keine Bearbeitung von Daten (read-only Cockpit)
+- Keine Push-Notifications in Phase 1
+- Keine native iOS/Android-App — PWA reicht
+
+---
+
+Wenn der Plan passt, starte ich mit **Phase 1**: DB-Migration für Modul, Permission, drei Tabellen + Seed der 3 System-Themes und 4 Templates.
