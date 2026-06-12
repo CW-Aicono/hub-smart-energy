@@ -64,10 +64,12 @@ const Settings = () => {
                 <LayoutGrid className="h-4 w-4" />
                 Widget-Designer
               </TabsTrigger>
-              <TabsTrigger value="board-themes" className="gap-2">
-                <LayoutDashboard className="h-4 w-4" />
-                C-Level Themes
-              </TabsTrigger>
+              {cLevelEnabled && (
+                <TabsTrigger value="board-themes" className="gap-2">
+                  <LayoutDashboard className="h-4 w-4" />
+                  C-Level Themes
+                </TabsTrigger>
+              )}
             </TabsList>
             <TabsContent value="tenant-info">
               <TenantInfoSettings />
@@ -83,9 +85,11 @@ const Settings = () => {
             <TabsContent value="widget-designer">
               <WidgetDesigner />
             </TabsContent>
-            <TabsContent value="board-themes">
-              <BoardThemesSettings />
-            </TabsContent>
+            {cLevelEnabled && (
+              <TabsContent value="board-themes">
+                <BoardThemesSettings />
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       </main>
