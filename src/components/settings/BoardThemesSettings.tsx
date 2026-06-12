@@ -185,6 +185,24 @@ export function BoardThemesSettings() {
 
   useEffect(() => { load(); }, [tenant?.id]);
 
+  const boardUrl = (() => {
+    if (typeof window === "undefined") return "";
+    const host = window.location.hostname;
+    const parts = host.split(".");
+    // strip leading subdomain like "ems-pro", "staging", "id-preview--…" → use board.<root>
+    if (parts.length >= 2 && !host.startsWith("board.") && !host.includes("localhost") && !host.includes("lovable.app")) {
+      const root = parts.slice(-2).join(".");
+      return `https://board.${root}`;
+    }
+    return `${window.location.origin}/board`;
+  })();
+
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  useEffect(() => {
+    if (!boardUrl) return;
+    QRCode.toDataURL(boardUrl, { width: 220, margin: 1 }).then(setQrDataUrl).catch(() => {});
+  }, [boardUrl]);
+
   const systemThemes = themes.filter((t) => t.is_system);
   const tenantThemes = themes.filter((t) => !t.is_system && t.tenant_id === tenant?.id);
 
