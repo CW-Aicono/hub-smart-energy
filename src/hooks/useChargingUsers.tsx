@@ -11,6 +11,7 @@ export interface ChargingUserGroup {
   description: string | null;
   is_app_user: boolean;
   tariff_id: string | null;
+  status: "active" | "blocked" | "archived";
   created_at: string;
   updated_at: string;
 }
