@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { WifiOff } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/useTenant";
 import { useTenantModules } from "@/hooks/useTenantModules";
+import { useUserPreferences } from "@/hooks/useUserPreferences";
 import {
   useBoardThemes,
   useBoardTemplates,
@@ -11,7 +14,9 @@ import {
 import BoardThemeScope from "@/components/board/BoardThemeScope";
 import BoardHeader from "@/components/board/BoardHeader";
 import BentoGrid from "@/components/board/BentoGrid";
+import PullToRefresh from "@/components/board/PullToRefresh";
 import { useBoardKpis } from "@/hooks/useBoardKpis";
+import { boardT, type BoardLang } from "@/i18n/boardStrings";
 
 /**
  * Phase-2-Einstieg für das C-Level-Dashboard.
