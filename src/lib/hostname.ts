@@ -40,3 +40,24 @@ export function isSalesHost(): boolean {
   }
   return false;
 }
+
+/**
+ * C-Level Dashboard PWA: board.aicono.org → /board
+ * Optional: ?board=1 als Dev-Override (z. B. Lovable Preview).
+ */
+export function isBoardHost(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname.toLowerCase();
+  if (host.startsWith("board.")) return true;
+  try {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("board") === "1") {
+      sessionStorage.setItem("aicono_board_preview", "1");
+      return true;
+    }
+    if (sessionStorage.getItem("aicono_board_preview") === "1") return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}

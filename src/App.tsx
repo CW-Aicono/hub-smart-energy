@@ -27,6 +27,7 @@ import RecoveryGuard from "@/components/RecoveryGuard";
 import MustChangePasswordGuard from "@/components/MustChangePasswordGuard";
 import TenantStatusGuard from "@/components/TenantStatusGuard";
 import SalesHostGuard from "@/components/SalesHostGuard";
+import BoardHostGuard from "@/components/BoardHostGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
 import SuperAdminImpersonationBar from "./components/SuperAdminImpersonationBar";
@@ -120,6 +121,7 @@ const EnergyReport = lazy(() => import("./pages/EnergyReport"));
 const LegalPageView = lazy(() => import("./pages/LegalPageView"));
 const PublicSalesQuote = lazy(() => import("./pages/PublicSalesQuote"));
 const PublicChargeStatus = lazy(() => import("./pages/PublicChargeStatus"));
+const BoardHome = lazy(() => import("./pages/board/BoardHome"));
 
 
 const queryClient = new QueryClient({
@@ -163,6 +165,7 @@ const App = () => (
                   <RecoveryGuard />
                   <MustChangePasswordGuard />
                   <SalesHostGuard />
+                  <BoardHostGuard />
                   <UpdateBanner />
                   <SupportSessionBanner />
                   <SuperAdminImpersonationBar />
@@ -302,7 +305,11 @@ const App = () => (
                       <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
                       <Route path="/partner/sales/catalog" element={<PartnerLayout><PartnerSalesCatalog /></PartnerLayout>} />
                       <Route path="/partner/sales/rules" element={<PartnerLayout><PartnerSalesRules /></PartnerLayout>} />
+                      {/* Stufe 3: C-Level Dashboard (board.aicono.org → /board) */}
+                      <Route path="/board" element={<BoardHome />} />
+
                       {/* Sales Scout: gemeinsam genutzt unter /sales (Partner-Member sehen ihre eigene Org via RLS) */}
+
 
                       <Route path="*" element={<NotFound />} />
                     </Routes>
