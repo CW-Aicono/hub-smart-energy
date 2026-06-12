@@ -30,7 +30,7 @@ const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetch
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CollapsibleTrigger asChild>
             <button className="flex items-center gap-2 text-left group">
               {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
@@ -42,6 +42,7 @@ const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetch
           </CollapsibleTrigger>
           {isAdmin && <AddFloorDialog locationId={locationId} onSuccess={refetchFloors} />}
         </CardHeader>
+
         <CollapsibleContent><CardContent><FloorList floors={floors} loading={floorsLoading} locationId={locationId} onRefresh={refetchFloors} /></CardContent></CollapsibleContent>
       </Card>
     </Collapsible>
