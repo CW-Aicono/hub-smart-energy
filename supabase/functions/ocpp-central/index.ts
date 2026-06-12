@@ -473,6 +473,27 @@ async function validateIdTag(
     userId = user.id;
   }
 
+  // Group status check: if user belongs to a blocked/archived group, reject
+  // Re-fetch group_id for both branches via charging_users.
+  if (userId) {
+    const { data: u2 } = await supabase
+      .from("charging_users")
+      .select("group_id")
+      .eq("id", userId)
+      .maybeSingle();
+    if (u2?.group_id) {
+      const { data: grp } = await supabase
+        .from("charging_user_groups")
+        .select("status")
+        .eq("id", u2.group_id)
+        .maybeSingle();
+      if (grp && grp.status !== "active") {
+        await logAccessAttempt(supabase, cp.tenant_id, cp.id, chargePointId, idTag, "Blocked", `User group status: ${grp.status}`);
+        return "Blocked";
+      }
+    }
+  }
+
 
   // User group restriction check
   if (accessSettings.user_group_restriction) {
