@@ -145,7 +145,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
     <>
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CollapsibleTrigger asChild>
               <button className="flex items-center gap-2 text-left group">
                 {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
@@ -161,11 +161,12 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                 </div>
               </button>
             </CollapsibleTrigger>
-            <Button size="sm" onClick={openAddDialog}>
+            <Button size="sm" onClick={openAddDialog} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-1" />
               {T("ep.addPrice")}
             </Button>
           </CardHeader>
+
           <CollapsibleContent>
             <CardContent>
               {loading ? (
