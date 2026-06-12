@@ -42,6 +42,26 @@ export default function BoardHome() {
     });
   }, [layout, layoutLoading, templates, templatesLoading, themes, themesLoading, user?.id, tenant?.id, upsert]);
 
+  // PWA-Manifest für board.aicono.org setzen
+  useEffect(() => {
+    let link = document.querySelector("link[rel='manifest']") as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "manifest";
+      document.head.appendChild(link);
+    }
+    const previous = link.href;
+    link.href = "/manifest-board.json";
+    const meta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    const previousTitle = meta?.getAttribute("content");
+    if (meta) meta.setAttribute("content", "AICONO Board");
+    document.title = "AICONO C-Level Board";
+    return () => {
+      if (link && previous) link.href = previous;
+      if (meta && previousTitle != null) meta.setAttribute("content", previousTitle);
+    };
+  }, []);
+
   if (authLoading || tenantLoading) {
     return <div className="min-h-screen flex items-center justify-center">Lädt …</div>;
   }
