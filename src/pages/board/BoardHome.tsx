@@ -11,6 +11,7 @@ import {
 import BoardThemeScope from "@/components/board/BoardThemeScope";
 import BoardHeader from "@/components/board/BoardHeader";
 import BentoGrid from "@/components/board/BentoGrid";
+import { useBoardKpis } from "@/hooks/useBoardKpis";
 
 /**
  * Phase-2-Einstieg für das C-Level-Dashboard.
