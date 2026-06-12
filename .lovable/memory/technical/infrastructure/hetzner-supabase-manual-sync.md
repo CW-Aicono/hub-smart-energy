@@ -1,26 +1,30 @@
 ---
 name: hetzner-supabase-manual-sync
-description: Hetzner-Supabase (separate self-hosted Instanz für OCPP-Stack cp.aicono.org) wird NICHT automatisch von Lovable/GitHub synchronisiert. Bei jeder Migration/Edge Function/Cron, die OCPP betrifft, MUSS dem User explizit gesagt werden, dass ein manueller Nachzug auf Hetzner nötig ist.
+description: Auf der separaten Hetzner-Supabase (OCPP/Wallbox-Stack hinter cp.aicono.org) werden NUR neue Edge Functions, pg_cron-Jobs und Postgres-Trigger/-Funktionen NICHT automatisch synchronisiert. DB-Migrationen und Frontend laufen über bestehende Pipelines des Hetzner-Programmierers und müssen NICHT extra gemeldet werden.
 type: preference
 ---
 
 ## Regel
 
-Bei jeder Änderung, die auf der Lovable-Cloud-Supabase landet und auch auf der separaten **Hetzner-Supabase** (OCPP/Wallbox-Stack hinter `cp.aicono.org`) gebraucht wird, im Antworttext **explizit hinweisen**: „⚠️ Manueller Nachzug auf Hetzner-Supabase nötig".
+Beim Hetzner-Programmierer einen Hinweis nur dann ausgeben, wenn auf der Hetzner-Supabase **eine der folgenden drei Sachen neu/geändert** ist:
 
-## Wann gilt das
+1. **Neue oder geänderte Supabase Edge Function** im Charging-/OCPP-Bereich
+   (z. B. `charge-point-auto-reboot`, `ocmf-finalize`, `dlm-scheduler`, `peak-shaving-*`, `ocpp-firmware-control`, `send-charging-group-invoices`).
+2. **Neuer oder geänderter pg_cron-Job**.
+3. **Neue oder geänderte Postgres-Funktion oder Trigger**, die nicht über eine normale Migration entstehen (z. B. `pg_net`-Aufrufe, Security-Definer-Funktionen, die in der Hetzner-Migration fehlen könnten).
 
-- Neue/geänderte **DB-Migration** (`supabase/migrations/...`) die Tabellen betrifft, die der OCPP-Server liest/schreibt: `charge_points`, `charge_point_connectors`, `charge_point_groups`, `charge_point_economics`, `charging_sessions`, `charging_tariffs`, `charging_users`, `charging_user_rfid_tags`, `charging_user_groups`, `charging_invoices`, `charging_billing_groups*`, `charging_session_meter_records`, `pending_ocpp_commands`, `ocpp_meter_samples`, `ocpp_message_log`, `roaming_*`, `cp_firmware_*`, `peak_shaving_*`, `location_dlm_config`, `dlm_control_log`, `grid_operator_connections`, `grid_curtailment_events`.
-- Neue/geänderte **Edge Function** im Charging-Bereich: `charge-point-auto-reboot`, `ocpp-central`, `ocpp-persistent-api`, `ocpp-firmware-control`, `ocmf-*`, `public-ocmf-download`, `public-charge-status`, `dlm-*`, `peak-shaving-*`, `send-charging-invoices`, `send-charging-group-invoices`, `solar-charging-scheduler`, `cheap-charging-scheduler`, `wallbox-template-control`.
-- Neue/geänderte **pg_cron-Jobs**, Postgres-Funktionen oder Trigger, die o.g. Tabellen anfassen.
+## Was NICHT mehr gemeldet wird
 
-## Wann gilt das NICHT
-
-- Reine Frontend-Änderungen.
-- Tenant-Dashboard, Gateways (Loxone/Shelly/Schneider/Siemens), PV-Forecast, Energy-Sharing, Tasks, Reports, Branding, Sales etc. — alles, was nicht zum OCPP-Stack gehört.
+- Reine **DB-Migrationen** (neue Tabellen, neue Spalten, neue RLS-Policies, neue Storage-Buckets). Die spielt der Hetzner-Programmierer ohnehin ein. Wenn sie fehlen, fällt das im Frontend sofort auf.
+- Reine **Frontend-Änderungen** (UI, Hooks, Komponenten).
+- Alles außerhalb des OCPP-/Charging-Stacks.
 
 ## Format des Hinweises
 
-Kurz am Ende der Antwort, z. B.:
+Kurz am Ende der Antwort, in Klartext:
 
-> ⚠️ **Hetzner-Supabase**: Diese Migration/Edge Function ist auf Lovable-Cloud aktiv, muss aber von eurem Hetzner-Programmierer auf der selbst-gehosteten Supabase nachgezogen werden (Tabelle X / Edge Function Y / Cron Z). Anleitung siehe `docs/ocpp-persistent-server/`.
+> ⚠️ **Hetzner-Supabase**: Diese neue Edge Function / dieser Cron-Job ist auf Lovable-Cloud aktiv, muss aber von eurem Hetzner-Programmierer auf der selbst-gehosteten Supabase einmalig deployed/registriert werden. Anleitung siehe `docs/ocpp-persistent-server/`.
+
+## Begründung
+
+Frühere Hinweise (Mai/Juni 2026) waren zu breit und haben Tabellen/Spalten gemeldet, die längst auf Hetzner liefen. Das war falsch und hat den Kunden verunsichert. Edge Functions + Cron sind die einzigen Artefakte, die wirklich **pro Supabase-Instanz** manuell deployed werden müssen.
