@@ -55,7 +55,7 @@ export default function BoardHome() {
     );
   }
 
-  if (!modulesLoading && !isModuleActive("c_level_dashboard")) {
+  if (!modulesLoading && !isModuleEnabled("c_level_dashboard")) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-6 text-center">
         <h1 className="text-xl font-semibold">C-Level Dashboard nicht aktiviert</h1>
