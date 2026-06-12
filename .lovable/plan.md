@@ -1,86 +1,86 @@
-## Befund (Antwort auf deine Fragen)
+# Warum Auto-Reboot auf Hetzner nicht läuft
 
-**Die täglichen 6,4-KB-Einträge sind KEINE Datensicherung deines Mandanten.**
-Sie sind ein Nebenprodukt aus `gateway-ingest` (Funktion `handleGatewayBackup`): Wenn ein HA-Add-on seinen lokalen Zustand hochlädt, wird ein Eintrag mit `backup_type = 'gateway'` und fest verdrahtetem `tables_count = 0, rows_count = 0` angelegt. Es werden also weder Mandantendaten noch Messwerte gesichert – nur ein kleiner Statusdump des Gateways.
+## Ursache (kein Code-Bug)
 
-**Die Sicherung vom 27.02.2026 (243 KB, 30 Tabellen, 594 Zeilen) ist ein echter manueller Snapshot** (Button „Snapshot erstellen"). Sie wurde von `tenant-backup` erzeugt und enthält laut Konfiguration auch die Messdaten-Tabellen (`meter_period_totals`, `meter_readings`, `energy_readings`). Damals war das Datenvolumen klein. Heute steht der Stand bei: `meter_period_totals` 5.343 Zeilen / 1,8 MB, `energy_readings` 0, `meter_readings` 10, `charging_sessions` 43. Eine neue Sicherung wäre also deutlich größer – wird aber aktuell nirgends automatisch ausgelöst.
+Die Funktion `Automatischer Tages-Reboot` besteht aus **drei** Bausteinen, die alle vorhanden sein müssen:
 
-**Es gibt heute keine Wiederherstellungs-Funktion.** Snapshots können nur als JSON heruntergeladen, aber nicht zurück in die Datenbank eingespielt werden. Storage-Dateien (Grundrisse, Logos, Zählerfotos) werden nur als Dateinamen-Liste mitgesichert, nicht als Inhalt.
+1. **Edge Function** `charge-point-auto-reboot` (liest Wallboxen, schreibt Reset in `pending_ocpp_commands`, setzt `auto_reboot_last_run_at`)
+2. **pg_cron-Job**, der die Edge Function **stündlich** aufruft
+3. **OCPP-Server** (Hetzner Live `cp.aicono.org`), der den Reset-Befehl an die verbundene Wallbox sendet
 
----
+Auf der **Lovable-Cloud-Datenbank** sind alle drei Teile vorhanden — der Cron-Job `charge-point-auto-reboot-hourly` (Plan: `5 * * * *`) ist aktiv, die Wallbox „Ost 1" wird seit dem 04.06.2026 jeden Tag um 03:05 Berlin sauber resettet (in `pending_ocpp_commands` alle 9 Einträge `status=completed`, `Accepted`).
 
-## Ziel
+Die Hetzner-Wallbox aus Screenshot 2 hängt aber an einer **separaten, selbst-gehosteten Supabase auf Hetzner** (eigene `supabase-docker`-Instanz). Auf dieser zweiten Datenbank fehlt mindestens eines:
 
-1. Tägliche, vollständige Cloud-Sicherung pro Mandant, die wirklich alle Konfigurations-, Stamm- und Messdaten enthält.
-2. Sichtbare, korrekte Anzeige in „Vorhandene Sicherungen" (Tabellen-/Zeilenanzahl, echte Größe).
-3. Storage-Inhalte (nicht nur Dateinamen) mitsichern.
-4. Restore-Funktion mit Vorschau und Schutz vor versehentlichem Überschreiben.
+- die Edge Function `charge-point-auto-reboot` ist nicht deployed, **oder**
+- der pg_cron-Job, der sie stündlich aufruft, ist nicht angelegt, **oder**
+- die `pg_cron`/`pg_net`-Extensions sind nicht aktiviert, **oder**
+- der Cron-Job ruft eine falsche URL/Service-Role-Key auf.
 
----
+Symptom passt exakt: `auto_reboot_last_run_at` bleibt `null` (deshalb fehlt die Zeile „Letzter Auto-Reboot" in Screenshot 2), obwohl der Schalter an und die Uhrzeit gesetzt ist.
 
-## Plan
+Der OCPP-Server (Live, `cp.aicono.org`) ist **nicht** das Problem — er würde einen Reset sofort senden, sobald er einen Eintrag in `pending_ocpp_commands` für eine verbundene Wallbox sieht.
 
-### 1. Aufräumen der Anzeige
+## Was zu tun ist
 
-- Die 6,4-KB-„gateway"-Einträge nicht mehr unter „Vorhandene Sicherungen" listen. Stattdessen Filter auf `backup_type IN ('manual','scheduled')`. Optional eigener Tab „Gateway-Statusdumps" für Support.
-- `handleGatewayBackup` umbenennen / Eintrag in eine andere Tabelle (`gateway_state_dumps`) verschieben, damit `backup_snapshots` nur noch echte Mandantensicherungen enthält.
+Auf der Hetzner-Supabase fehlt das Auto-Reboot-Setup. Ich bereite eine **Schritt-für-Schritt-Anleitung für Laien** (deutsch, click-by-click) vor, mit der das Setup auf der Hetzner-Supabase nachgeholt wird. Geliefert wird ein Markdown-Dokument unter `docs/ocpp-persistent-server/AUTO_REBOOT_HETZNER_SETUP.md`.
 
-### 2. Tägliche Mandanten-Sicherung (echt)
+Inhalt der Anleitung:
 
-- Neue Edge-Funktion `tenant-backup-scheduled` (Wiederverwendung der Logik aus `tenant-backup`), aufgerufen per `pg_cron` einmal täglich (z. B. 02:30 Europe/Berlin) für jeden aktiven Mandanten.
-- `backup_type = 'scheduled'`, Aufbewahrung 30 Tage (wie heute), zusätzlich „letzte 4 Wochensicherungen" und „letzte 6 Monatssicherungen" behalten (rollende Großvater-Vater-Sohn-Logik).
-- Messdaten werden in Chunks (pro Tabelle, 50k Zeilen) geladen und ggf. als gzip-komprimierte JSON-Bytes in Storage abgelegt, statt komplett in das `data`-jsonb-Feld – sonst sprengt es bei größeren Mandanten die Zeilengröße.
+1. **Vorprüfung** in Supabase Studio (Hetzner):
+   - Tabelle `charge_points` öffnen, prüfen dass die Spalten `auto_reboot_enabled`, `auto_reboot_time`, `auto_reboot_type`, `auto_reboot_skip_if_charging`, `auto_reboot_last_run_at` existieren. Falls nicht: exakter `ALTER TABLE`-Block zum Einfügen (Copy-Paste-fertig).
+   - Tabelle `pending_ocpp_commands` muss existieren (existiert in jedem aktiven Hetzner-OCPP-Setup, nur Sichtprüfung).
 
-### 3. Storage-Inhalte mitsichern
+2. **Extensions aktivieren** (genau ein SQL-Snippet, im SQL-Editor einfügen):
+   ```sql
+   create extension if not exists pg_cron;
+   create extension if not exists pg_net;
+   ```
 
-- Pro Snapshot ein Ordner in Bucket `tenant-backups/<tenant_id>/<snapshot_id>/`:
-  - `db.json.gz` – alle Tabellendaten
-  - `storage/<bucket>/<datei>` – Kopien der Dateien aus `meter-photos`, `tenant-assets`, `floor-plans`, `floor-3d-models`
-  - `manifest.json` – Versions-, Tabellen-, Datei-, Hash-Info
-- `backup_snapshots.size_bytes` = Summe aus DB + Storage.
+3. **Edge Function deployen**:
+   - Die Datei `supabase/functions/charge-point-auto-reboot/index.ts` (Code identisch zu Lovable) in der Hetzner-Funktionsverwaltung anlegen. Exakter Pfad, exakter Dateiinhalt als Copy-Paste-Block.
+   - Hinweis: Funktion benötigt die Standard-Env-Variablen `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`. Diese sind in selbst-gehosteten Setups bereits gesetzt — Sichtprüfung beschrieben.
 
-### 4. Restore-Funktion
+4. **Cron-Job anlegen** (exakter SQL-Block, mit Platzhaltern, die der User durch seine Hetzner-Supabase-URL und seinen Service-Role-Key ersetzt — beides wird Schritt für Schritt erklärt, wo es zu finden ist):
+   ```sql
+   select cron.schedule(
+     'charge-point-auto-reboot-hourly',
+     '5 * * * *',
+     $$ select net.http_post(
+       url:='https://<HETZNER-SUPABASE-DOMAIN>/functions/v1/charge-point-auto-reboot',
+       headers:=jsonb_build_object(
+         'Content-Type','application/json',
+         'apikey','<SERVICE_ROLE_KEY>',
+         'Authorization','Bearer <SERVICE_ROLE_KEY>'
+       ),
+       body:='{}'::jsonb
+     ); $$
+   );
+   ```
 
-- Neue Edge-Funktion `tenant-restore` (nur Rolle `admin`/`super_admin` desselben Mandanten).
-- Ablauf in 3 Schritten im UI:
-  1. **Snapshot wählen** (Liste oder JSON-Upload).
-  2. **Vorschau**: Liste „X Tabellen, Y Zeilen, Z Dateien werden eingespielt; A Tabellen werden überschrieben". Auswahl pro Bereich (Konfiguration / Stammdaten / Messdaten / Storage).
-  3. **Bestätigung** mit Eingabe des Mandantennamens (wie bei „Mandant löschen").
-- Modi: `merge` (Upsert nach Primärschlüssel, keine Löschung) oder `replace` (vorher Tabelleninhalte des Mandanten löschen). Default: `merge`.
-- Schreibt vor dem Restore automatisch einen „Sicherheits-Snapshot" (`backup_type = 'pre-restore'`), damit der Restore selbst rückgängig gemacht werden kann.
-- Restore läuft serverseitig in der richtigen FK-Reihenfolge (Eltern vor Kindern), mit Transaktion pro Tabelle und Fortschritts-Log in einer neuen Tabelle `backup_restore_jobs`.
+5. **Sofort-Testlauf** ohne auf die nächste volle Stunde + 5 Min zu warten:
+   - SQL-Befehl, der die Funktion einmalig manuell aufruft (`select net.http_post(...)` direkt).
+   - Erwartetes Ergebnis: `auto_reboot_last_run_at` wird gesetzt (wenn aktuelle Uhrzeit ≥ konfigurierter Reboot-Zeit), oder Edge-Function-Log zeigt `skippedTimeNotReached: 1` (wenn vor der Uhrzeit).
 
-### 5. UI-Erweiterungen (`BackupSettings.tsx`)
+6. **Verifikation**:
+   - In `pending_ocpp_commands` nach `command='Reset'` für die ocpp_id der Wallbox suchen.
+   - Status muss innerhalb 2 Sekunden auf `completed` springen, wenn die Wallbox am Live-OCPP-Server hängt.
+   - In der Wallbox-Detailseite Frontend neu laden → „Letzter Auto-Reboot" muss erscheinen.
 
-- Pro Snapshot-Zeile: Buttons **Herunterladen**, **Wiederherstellen**, **Löschen**, **Details** (Tabellenliste + Zeilenzahlen).
-- Banner mit Status der letzten geplanten Sicherung („Letzte automatische Sicherung: 09.06.2026 02:30, 1,9 MB, 31 Tabellen ✅").
-- Hinweistext aktualisieren: erklärt klar, dass Messdaten enthalten sind und dass Restore verfügbar ist.
+7. **Troubleshooting-Abschnitt** mit den 4 häufigsten Fehlern und exakter Behebung:
+   - `auto_reboot_last_run_at` bleibt `null` → Cron-Job läuft nicht (SELECT auf `cron.job_run_details` zum Prüfen).
+   - Reset bleibt auf `status=pending` → Wallbox ist nicht mit `cp.aicono.org` verbunden (Prüfung `ws_connected`).
+   - Edge Function gibt 401 → Service-Role-Key im Cron-Job falsch.
+   - `relation "cron.job" does not exist` → Extension nicht aktiviert.
 
-### 6. Technisches / Sicherheit
+## Technische Details (für die IT-Hand)
 
-- Neuer Bucket `tenant-backups` (privat, RLS: nur `service_role`, Zugriff ausschließlich über Edge-Funktion mit signierten URLs).
-- Neue Tabellen:
-  - `backup_restore_jobs` (status, started_at, finished_at, mode, tables_done, error)
-  - `gateway_state_dumps` (für die bisherigen 6-KB-Einträge)
-- RLS: `backup_snapshots` bleibt mandanten-scoped, neue Tabellen analog.
-- Größenbegrenzung: bei > 100 MB Warnung im UI, Empfehlung „Messdaten älter als 12 Monate archivieren".
+- Edge-Function-Code muss 1:1 aus `supabase/functions/charge-point-auto-reboot/index.ts` übernommen werden — keine Änderungen nötig, da `SUPABASE_URL` etc. aus den Env-Variablen kommen.
+- Der Cron-Job nutzt `pg_net` (HTTP aus der DB). In selbst-gehosteten Supabase-Stacks ist `pg_net` enthalten, aber nicht immer aktiv.
+- Multi-Tenancy-Filter ist nicht erforderlich, da die Function über alle `charge_points` mit `auto_reboot_enabled=true` iteriert — gleiches Verhalten wie auf Lovable.
+- Keine Code-Änderungen am Cloud-Projekt nötig. Nur ein neues Dokument in `docs/`.
 
-### 7. Reihenfolge der Umsetzung (Vorschlag)
+## Was ich NICHT mache
 
-1. Schritt 1 (Anzeige bereinigen) – sehr klein, sofortige Klarheit.
-2. Schritt 2 + 3 (echte tägliche Sicherung inkl. Storage).
-3. Schritt 4 + 5 (Restore + UI).
-4. Schritt 6 (Aufräumarbeiten, Begrenzungen).
-
-### Offene Fragen, bevor ich umsetze
-
-- **Aufbewahrung**: 30 Tage + 4 Wochen + 6 Monate ok, oder andere Vorgabe?
-- **Restore-Default**: `merge` (nichts wird gelöscht) – einverstanden?
-- **Messdaten** wirklich in jede tägliche Sicherung, oder nur 1× wöchentlich (spart Speicher bei vielen Mandanten)?
-- **Gateway-Statusdumps**: separater Tab behalten oder ganz aus dem UI entfernen?  
-  
-Antworten:  
-- Aufbewahrung: so wie von dir vorgeschlagen  
-- Restore-Default: merge  
-- Messdaten: 1 x wöchentlich ist ausreichend  
-- Statusdumps: separater Tab
+- Keine Änderung am Frontend, am OCPP-Server, an der Edge Function oder am Cron-Job in der Lovable-Cloud-DB (dort läuft alles).
+- Keine automatische Bereitstellung der Hetzner-Supabase — das passiert manuell durch den Admin, da ich keinen Zugriff auf die selbst-gehostete Instanz habe.
