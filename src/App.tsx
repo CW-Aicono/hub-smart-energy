@@ -305,7 +305,11 @@ const App = () => (
                       <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
                       <Route path="/partner/sales/catalog" element={<PartnerLayout><PartnerSalesCatalog /></PartnerLayout>} />
                       <Route path="/partner/sales/rules" element={<PartnerLayout><PartnerSalesRules /></PartnerLayout>} />
+                      {/* Stufe 3: C-Level Dashboard (board.aicono.org → /board) */}
+                      <Route path="/board" element={<BoardHome />} />
+
                       {/* Sales Scout: gemeinsam genutzt unter /sales (Partner-Member sehen ihre eigene Org via RLS) */}
+
 
                       <Route path="*" element={<NotFound />} />
                     </Routes>
