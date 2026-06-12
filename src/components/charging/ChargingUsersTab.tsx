@@ -25,7 +25,7 @@ import type { ExportType } from "@/lib/chargingImportExport";
 interface TagDraft { tag: string; label: string }
 const emptyUserForm = { name: "", email: "", phone: "", group_id: "", tariff_id: "", notes: "", tags: [] as TagDraft[] };
 
-const emptyGroupForm = { name: "", description: "", is_app_user: false, tariff_id: "" };
+const emptyGroupForm = { name: "", description: "", is_app_user: false, tariff_id: "", status: "active" as "active" | "blocked" | "archived" };
 
 const ChargingUsersTab = () => {
   const { tenant } = useTenant();
