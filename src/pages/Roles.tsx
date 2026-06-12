@@ -3,6 +3,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCustomRoles } from "@/hooks/useCustomRoles";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useTenant } from "@/hooks/useTenant";
+import { useTenantModules } from "@/hooks/useTenantModules";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { CreateRoleDialog } from "@/components/roles/CreateRoleDialog";
 import { RoleCard } from "@/components/roles/RoleCard";
@@ -12,6 +14,9 @@ import { Shield, Lock } from "lucide-react";
 const Roles = () => {
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
+  const { tenant } = useTenant();
+  const { isModuleEnabled } = useTenantModules(tenant?.id ?? null);
+  const cLevelEnabled = isModuleEnabled("c_level_dashboard");
   const { 
     roles, 
     permissions: allPermissions, 
@@ -25,13 +30,20 @@ const Roles = () => {
   const { t } = useTranslation();
 
   // Filter out super_admin permissions (not needed in tenant context)
-  const permissions = allPermissions.filter(p => !p.code.startsWith("sa_") && p.category !== "super_admin");
+  // and hide C-Level ("board") permissions if module is not enabled for this tenant.
+  const isHiddenCategory = (cat: string) =>
+    cat === "super_admin" || (!cLevelEnabled && cat === "board");
+  const isHiddenPermission = (p: { code: string; category: string }) =>
+    p.code.startsWith("sa_") || (!cLevelEnabled && p.category === "board");
+
+  const permissions = allPermissions.filter((p) => !isHiddenPermission(p));
   const permissionsByCategory = Object.fromEntries(
     Object.entries(allPermissionsByCategory)
-      .filter(([cat]) => cat !== "super_admin")
-      .map(([cat, perms]) => [cat, perms.filter(p => !p.code.startsWith("sa_"))])
+      .filter(([cat]) => !isHiddenCategory(cat))
+      .map(([cat, perms]) => [cat, perms.filter((p) => !isHiddenPermission(p))])
       .filter(([, perms]) => (perms as any[]).length > 0)
   );
+
 
   if (authLoading || roleLoading || rolesLoading) {
     return (
