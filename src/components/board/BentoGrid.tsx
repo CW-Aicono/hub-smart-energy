@@ -75,7 +75,7 @@ export default function BentoGrid({ tiles, kpis, loading, editMode, onChange, la
               move(dragIdx, idx);
               setDragIdx(null);
             }}
-            className={`relative ${SIZE_CLASSES[tile.size]} rounded-2xl border border-[hsl(var(--board-border))] bg-[hsl(var(--board-card))] p-5 shadow-sm flex flex-col gap-3 min-h-[140px] ${editMode ? "ring-1 ring-dashed ring-[hsl(var(--board-accent))]/40 cursor-grab" : ""}`}
+            className={`relative animate-fade-in ${SIZE_CLASSES[tile.size]} rounded-2xl border border-[hsl(var(--board-border))] bg-[hsl(var(--board-card))] p-5 shadow-sm flex flex-col gap-3 min-h-[140px] transition-shadow hover:shadow-md ${editMode ? "ring-1 ring-dashed ring-[hsl(var(--board-accent))]/40 cursor-grab" : ""}`}
           >
             {editMode && (
               <div className="absolute top-2 right-2 flex items-center gap-1">
