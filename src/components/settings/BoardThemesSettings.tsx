@@ -72,7 +72,7 @@ function ColorField({
   );
 }
 
-function ThemeEditor({
+export function ThemeEditor({
   theme, onSave, onDelete,
 }: { theme: Theme; onSave: (t: Theme) => Promise<void>; onDelete?: () => Promise<void> }) {
   const [draft, setDraft] = useState<Theme>(theme);
