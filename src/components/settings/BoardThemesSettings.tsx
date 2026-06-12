@@ -185,17 +185,9 @@ export function BoardThemesSettings() {
 
   useEffect(() => { load(); }, [tenant?.id]);
 
-  const boardUrl = (() => {
-    if (typeof window === "undefined") return "";
-    const host = window.location.hostname;
-    const parts = host.split(".");
-    // strip leading subdomain like "ems-pro", "staging", "id-preview--…" → use board.<root>
-    if (parts.length >= 2 && !host.startsWith("board.") && !host.includes("localhost") && !host.includes("lovable.app")) {
-      const root = parts.slice(-2).join(".");
-      return `https://board.${root}`;
-    }
-    return `${window.location.origin}/board`;
-  })();
+  // Fest auf die Live-URL — der QR-Code ist für Endkunden gedacht und darf
+  // nicht auf Lovable-Preview-Hosts oder Test-Subdomains zeigen.
+  const boardUrl = "https://board.aicono.org";
 
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   useEffect(() => {
