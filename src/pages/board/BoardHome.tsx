@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/useTenant";
@@ -102,6 +102,7 @@ export default function BoardHome() {
     : activeTemplate?.default_layout.tiles ?? [];
 
   const activeTheme = themes.find((t) => t.id === layout?.theme_id) ?? themes[0] ?? null;
+  const [editMode, setEditMode] = useState(false);
 
   return (
     <BoardThemeScope theme={activeTheme} mode={layout?.theme_mode ?? "system"}>
@@ -109,6 +110,13 @@ export default function BoardHome() {
         themes={themes}
         templates={templates}
         layout={layout}
+        editMode={editMode}
+        tileIds={tiles.map((t) => t.id)}
+        onToggleEdit={() => setEditMode((v) => !v)}
+        onAddTile={(id) => upsert({ tiles: [...tiles, { id, size: "S" }] })}
+        onResetTemplate={() =>
+          upsert({ tiles: activeTemplate?.default_layout.tiles ?? [] })
+        }
         onChangeTemplate={(code) => {
           const t = templates.find((x) => x.code === code);
           upsert({
@@ -120,10 +128,19 @@ export default function BoardHome() {
         onChangeMode={(mode) => upsert({ theme_mode: mode })}
       />
       <main className="mx-auto max-w-7xl px-4 py-6">
-        <BentoGrid tiles={tiles} kpis={kpiData?.kpis ?? null} loading={kpisLoading} />
-        <p className="mt-8 text-center text-xs text-[hsl(var(--board-muted))]">
-          Phase 2: Layout & Themes aktiv · KPI-Daten folgen in Phase 3
-        </p>
+        <BentoGrid
+          tiles={tiles}
+          kpis={kpiData?.kpis ?? null}
+          loading={kpisLoading}
+          editMode={editMode}
+          onChange={(next) => upsert({ tiles: next })}
+        />
+        {editMode && (
+          <p className="mt-6 text-center text-xs text-[hsl(var(--board-muted))]">
+            Anpassen-Modus: Kacheln per Drag &amp; Drop verschieben, Größe (S/M/L) per Klick auf
+            das Symbol oben rechts ändern, mit ✕ entfernen.
+          </p>
+        )}
       </main>
     </BoardThemeScope>
   );

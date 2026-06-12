@@ -1,4 +1,4 @@
-import { Sun, Moon, Monitor, Palette, LayoutTemplate, LogOut } from "lucide-react";
+import { Sun, Moon, Monitor, Palette, LayoutTemplate, LogOut, Pencil, Check, RotateCcw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import type { BoardTheme, BoardTemplate, BoardUserLayout } from "@/hooks/useBoard";
+import AddTileMenu from "./AddTileMenu";
 
 interface Props {
   themes: BoardTheme[];
@@ -19,6 +20,11 @@ interface Props {
   onChangeTheme: (themeId: string | null) => void;
   onChangeMode: (mode: "light" | "dark" | "system") => void;
   onChangeTemplate: (code: string) => void;
+  editMode: boolean;
+  onToggleEdit: () => void;
+  onAddTile: (id: string) => void;
+  onResetTemplate: () => void;
+  tileIds: string[];
 }
 
 export default function BoardHeader({
@@ -28,6 +34,11 @@ export default function BoardHeader({
   onChangeTheme,
   onChangeMode,
   onChangeTemplate,
+  editMode,
+  onToggleEdit,
+  onAddTile,
+  onResetTemplate,
+  tileIds,
 }: Props) {
   const { signOut } = useAuth();
   const navigate = useNavigate();
@@ -126,6 +137,32 @@ export default function BoardHeader({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {editMode && (
+          <>
+            <AddTileMenu existing={tileIds} onAdd={onAddTile} />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2"
+              onClick={onResetTemplate}
+              title="Layout auf Template zurücksetzen"
+            >
+              <RotateCcw className="h-4 w-4" />
+              <span className="hidden sm:inline">Reset</span>
+            </Button>
+          </>
+        )}
+
+        <Button
+          variant={editMode ? "default" : "ghost"}
+          size="sm"
+          className="gap-2"
+          onClick={onToggleEdit}
+        >
+          {editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+          <span className="hidden sm:inline">{editMode ? "Fertig" : "Anpassen"}</span>
+        </Button>
 
         <Button
           variant="ghost"
