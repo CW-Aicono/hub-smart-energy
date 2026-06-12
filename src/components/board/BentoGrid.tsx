@@ -53,9 +53,18 @@ export default function BentoGrid({ tiles, kpis, loading }: Props) {
               </span>
               {Icon && <Icon className="h-4 w-4 text-[hsl(var(--board-accent))]" />}
             </div>
-            <div className="flex-1 flex items-end">
+            <div className="flex-1 flex flex-col justify-end gap-2">
               {loading && !kpis ? (
                 <Loader2 className="h-5 w-5 animate-spin text-[hsl(var(--board-muted))]" />
+              ) : resolved?.list && resolved.list.length > 0 ? (
+                <ul className="space-y-1">
+                  {resolved.list.map((item, i) => (
+                    <li key={i} className="flex items-baseline justify-between text-sm">
+                      <span className="truncate pr-2 text-[hsl(var(--board-foreground))]">{item.label}</span>
+                      <span className={`tabular-nums font-medium ${TONE_CLASSES[tone]}`}>{item.value}</span>
+                    </li>
+                  ))}
+                </ul>
               ) : (
                 <div className={`text-3xl font-semibold tracking-tight tabular-nums ${TONE_CLASSES[tone]}`}>
                   {resolved?.value ?? "—"}
