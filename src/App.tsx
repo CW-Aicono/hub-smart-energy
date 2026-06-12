@@ -67,6 +67,7 @@ const SuperAdminModulePricing = lazy(() => import("./pages/SuperAdminModulePrici
 const SuperAdminBundles = lazy(() => import("./pages/SuperAdminBundles"));
 const SuperAdminUsers = lazy(() => import("./pages/SuperAdminUsers"));
 const SuperAdminRoles = lazy(() => import("./pages/SuperAdminRoles"));
+const SuperAdminBoard = lazy(() => import("./pages/SuperAdminBoard"));
 const MobileApp = lazy(() => import("./pages/MobileApp"));
 const GettingStarted = lazy(() => import("./pages/GettingStarted"));
 const ChargingPoints = lazy(() => import("./pages/ChargingPoints"));
@@ -228,6 +229,7 @@ const App = () => (
                       <Route path="/super-admin/statistics" element={<SA><SuperAdminStatistics /></SA>} />
                       <Route path="/super-admin/users" element={<SA><SuperAdminUsers /></SA>} />
                       <Route path="/super-admin/roles" element={<SA><SuperAdminRoles /></SA>} />
+                      <Route path="/super-admin/board" element={<SA><SuperAdminBoard /></SA>} />
                       <Route path="/super-admin/billing" element={<SA><SuperAdminBilling /></SA>} />
                       <Route path="/super-admin/licenses" element={<SA><SuperAdminLicenses /></SA>} />
                       <Route path="/super-admin/module-pricing" element={<SA><SuperAdminModulePricing /></SA>} />
