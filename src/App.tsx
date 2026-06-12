@@ -27,6 +27,7 @@ import RecoveryGuard from "@/components/RecoveryGuard";
 import MustChangePasswordGuard from "@/components/MustChangePasswordGuard";
 import TenantStatusGuard from "@/components/TenantStatusGuard";
 import SalesHostGuard from "@/components/SalesHostGuard";
+import BoardHostGuard from "@/components/BoardHostGuard";
 import UpdateBanner from "./components/UpdateBanner";
 import SupportSessionBanner from "./components/SupportSessionBanner";
 import SuperAdminImpersonationBar from "./components/SuperAdminImpersonationBar";
