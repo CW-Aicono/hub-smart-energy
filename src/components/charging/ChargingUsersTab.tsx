@@ -161,8 +161,11 @@ const ChargingUsersTab = () => {
 
   // --- Group CRUD ---
   const openAddGroup = () => { setGroupForm(emptyGroupForm); setEditingGroup(null); setGroupDialogOpen(true); };
-  const openEditGroup = (g: { id: string; name: string; description: string | null; is_app_user: boolean; tariff_id: string | null }) => {
-    setGroupForm({ name: g.name, description: g.description || "", is_app_user: g.is_app_user, tariff_id: g.tariff_id || "" }); setEditingGroup(g); setGroupDialogOpen(true);
+  const openEditGroup = (g: { id: string; name: string; description: string | null; is_app_user: boolean; tariff_id: string | null; status?: string }) => {
+    const status = (g.status === "blocked" || g.status === "archived" || g.status === "active") ? g.status : "active";
+    setGroupForm({ name: g.name, description: g.description || "", is_app_user: g.is_app_user, tariff_id: g.tariff_id || "", status });
+    setEditingGroup({ ...g, status });
+    setGroupDialogOpen(true);
   };
   const handleSaveGroup = () => {
     if (!tenant?.id) return;
@@ -171,10 +174,14 @@ const ChargingUsersTab = () => {
       description: groupForm.description || undefined,
       is_app_user: groupForm.is_app_user,
       tariff_id: groupForm.tariff_id || null,
+      status: groupForm.status,
     };
     if (editingGroup) { updateGroup.mutate({ id: editingGroup.id, ...payload } as any); }
     else { addGroup.mutate({ tenant_id: tenant.id, ...payload } as any); }
     setGroupDialogOpen(false);
+  };
+  const handleSetGroupStatus = (id: string, status: "active" | "blocked" | "archived") => {
+    updateGroup.mutate({ id, status } as any);
   };
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
