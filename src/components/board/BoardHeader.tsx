@@ -1,4 +1,4 @@
-import { Sun, Moon, Monitor, Palette, LayoutTemplate, LogOut } from "lucide-react";
+import { Sun, Moon, Monitor, Palette, LayoutTemplate, LogOut, Pencil, Check, RotateCcw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   DropdownMenu,
@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import type { BoardTheme, BoardTemplate, BoardUserLayout } from "@/hooks/useBoard";
+import AddTileMenu from "./AddTileMenu";
 
 interface Props {
   themes: BoardTheme[];
@@ -19,6 +20,11 @@ interface Props {
   onChangeTheme: (themeId: string | null) => void;
   onChangeMode: (mode: "light" | "dark" | "system") => void;
   onChangeTemplate: (code: string) => void;
+  editMode: boolean;
+  onToggleEdit: () => void;
+  onAddTile: (id: string) => void;
+  onResetTemplate: () => void;
+  tileIds: string[];
 }
 
 export default function BoardHeader({
