@@ -32,7 +32,7 @@ export function LocationIntegrationsList({ locationId }: LocationIntegrationsLis
 
   return (
     <Card id="location-integrations" className="scroll-mt-20">
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle className="flex items-center gap-2">
             <Plug className="h-5 w-5" />

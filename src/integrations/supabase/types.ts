@@ -1619,6 +1619,7 @@ export type Database = {
           id: string
           is_app_user: boolean
           name: string
+          status: string
           tariff_id: string | null
           tenant_id: string
           updated_at: string
@@ -1629,6 +1630,7 @@ export type Database = {
           id?: string
           is_app_user?: boolean
           name: string
+          status?: string
           tariff_id?: string | null
           tenant_id: string
           updated_at?: string
@@ -1639,6 +1641,7 @@ export type Database = {
           id?: string
           is_app_user?: boolean
           name?: string
+          status?: string
           tariff_id?: string | null
           tenant_id?: string
           updated_at?: string

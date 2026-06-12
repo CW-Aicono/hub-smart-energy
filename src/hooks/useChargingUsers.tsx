@@ -11,6 +11,7 @@ export interface ChargingUserGroup {
   description: string | null;
   is_app_user: boolean;
   tariff_id: string | null;
+  status: "active" | "blocked" | "archived";
   created_at: string;
   updated_at: string;
 }
@@ -65,7 +66,7 @@ export function useChargingUserGroups() {
   });
 
   const addGroup = useMutation({
-    mutationFn: async (g: { tenant_id: string; name: string; description?: string; tariff_id?: string | null; is_app_user?: boolean }) => {
+    mutationFn: async (g: { tenant_id: string; name: string; description?: string; tariff_id?: string | null; is_app_user?: boolean; status?: string }) => {
       const { error } = await supabase.from("charging_user_groups").insert(g);
       if (error) throw error;
     },
@@ -74,7 +75,7 @@ export function useChargingUserGroups() {
   });
 
   const updateGroup = useMutation({
-    mutationFn: async ({ id, ...rest }: { id: string; name?: string; description?: string; tariff_id?: string | null; is_app_user?: boolean }) => {
+    mutationFn: async ({ id, ...rest }: { id: string; name?: string; description?: string; tariff_id?: string | null; is_app_user?: boolean; status?: string }) => {
       const { error } = await supabase.from("charging_user_groups").update(rest).eq("id", id);
       if (error) throw error;
     },
