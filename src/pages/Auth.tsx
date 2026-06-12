@@ -44,7 +44,13 @@ const Auth = () => {
     );
   }
 
-  if (user) return <Navigate to="/" replace />;
+  if (user) {
+    const params = new URLSearchParams(window.location.search);
+    const redirect = params.get("redirect");
+    // Nur interne Pfade zulassen (Schutz vor Open-Redirect).
+    const safe = redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "/";
+    return <Navigate to={safe} replace />;
+  }
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
