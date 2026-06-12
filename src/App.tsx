@@ -164,6 +164,7 @@ const App = () => (
                   <RecoveryGuard />
                   <MustChangePasswordGuard />
                   <SalesHostGuard />
+                  <BoardHostGuard />
                   <UpdateBanner />
                   <SupportSessionBanner />
                   <SuperAdminImpersonationBar />
