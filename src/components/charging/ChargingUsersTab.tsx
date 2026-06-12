@@ -41,7 +41,7 @@ const ChargingUsersTab = () => {
   const [userForm, setUserForm] = useState(emptyUserForm);
 
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
-  const [editingGroup, setEditingGroup] = useState<{ id: string; name: string; description: string | null; is_app_user: boolean; tariff_id: string | null } | null>(null);
+  const [editingGroup, setEditingGroup] = useState<{ id: string; name: string; description: string | null; is_app_user: boolean; tariff_id: string | null; status: string } | null>(null);
   const [groupForm, setGroupForm] = useState(emptyGroupForm);
 
   const [deleteTarget, setDeleteTarget] = useState<{ type: "user" | "group"; id: string; name: string } | null>(null);
