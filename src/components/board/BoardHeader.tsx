@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import type { BoardTheme, BoardTemplate, BoardUserLayout } from "@/hooks/useBoard";
 import AddTileMenu from "./AddTileMenu";
+import { boardT, type BoardLang } from "@/i18n/boardStrings";
 
 interface Props {
   themes: BoardTheme[];
@@ -25,6 +26,7 @@ interface Props {
   onAddTile: (id: string) => void;
   onResetTemplate: () => void;
   tileIds: string[];
+  lang?: BoardLang;
 }
 
 export default function BoardHeader({
@@ -39,9 +41,11 @@ export default function BoardHeader({
   onAddTile,
   onResetTemplate,
   tileIds,
+  lang = "de",
 }: Props) {
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  const tt = (k: Parameters<typeof boardT>[0]) => boardT(k, lang);
 
   const currentTemplate = templates.find((t) => t.code === layout?.template_code);
   const currentTheme = themes.find((t) => t.id === layout?.theme_id) ?? themes[0];
@@ -66,11 +70,11 @@ export default function BoardHeader({
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="gap-2">
               <LayoutTemplate className="h-4 w-4" />
-              <span className="hidden sm:inline">Template</span>
+              <span className="hidden sm:inline">{tt("template")}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
-            <DropdownMenuLabel>Vorlage wählen</DropdownMenuLabel>
+            <DropdownMenuLabel>{tt("pickTemplate")}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {templates.map((t) => (
               <DropdownMenuItem
@@ -97,11 +101,11 @@ export default function BoardHeader({
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="gap-2">
               <Palette className="h-4 w-4" />
-              <span className="hidden sm:inline">{currentTheme?.name ?? "Theme"}</span>
+              <span className="hidden sm:inline">{currentTheme?.name ?? tt("theme")}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Farbschema</DropdownMenuLabel>
+            <DropdownMenuLabel>{tt("colorScheme")}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {themes.map((t) => (
               <DropdownMenuItem key={t.id} onClick={() => onChangeTheme(t.id)}>
@@ -127,13 +131,13 @@ export default function BoardHeader({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => onChangeMode("light")}>
-              <Sun className="mr-2 h-4 w-4" /> Hell
+              <Sun className="mr-2 h-4 w-4" /> {tt("light")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onChangeMode("dark")}>
-              <Moon className="mr-2 h-4 w-4" /> Dunkel
+              <Moon className="mr-2 h-4 w-4" /> {tt("dark")}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onChangeMode("system")}>
-              <Monitor className="mr-2 h-4 w-4" /> System
+              <Monitor className="mr-2 h-4 w-4" /> {tt("system")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -146,10 +150,10 @@ export default function BoardHeader({
               size="sm"
               className="gap-2"
               onClick={onResetTemplate}
-              title="Layout auf Template zurücksetzen"
+              title={tt("resetTitle")}
             >
               <RotateCcw className="h-4 w-4" />
-              <span className="hidden sm:inline">Reset</span>
+              <span className="hidden sm:inline">{tt("reset")}</span>
             </Button>
           </>
         )}
@@ -161,13 +165,13 @@ export default function BoardHeader({
           onClick={onToggleEdit}
         >
           {editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-          <span className="hidden sm:inline">{editMode ? "Fertig" : "Anpassen"}</span>
+          <span className="hidden sm:inline">{editMode ? tt("done") : tt("customize")}</span>
         </Button>
 
         <Button
           variant="ghost"
           size="icon"
-          aria-label="Abmelden"
+          aria-label={tt("signOut")}
           onClick={async () => {
             await signOut();
             navigate("/auth");

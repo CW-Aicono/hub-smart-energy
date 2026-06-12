@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { WifiOff } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/useTenant";
 import { useTenantModules } from "@/hooks/useTenantModules";
+import { useUserPreferences } from "@/hooks/useUserPreferences";
 import {
   useBoardThemes,
   useBoardTemplates,
@@ -11,7 +14,9 @@ import {
 import BoardThemeScope from "@/components/board/BoardThemeScope";
 import BoardHeader from "@/components/board/BoardHeader";
 import BentoGrid from "@/components/board/BentoGrid";
+import PullToRefresh from "@/components/board/PullToRefresh";
 import { useBoardKpis } from "@/hooks/useBoardKpis";
+import { boardT, type BoardLang } from "@/i18n/boardStrings";
 
 /**
  * Phase-2-Einstieg für das C-Level-Dashboard.
@@ -64,32 +69,31 @@ export default function BoardHome() {
     };
   }, []);
 
+  const { preferences } = useUserPreferences();
+  const lang: BoardLang = ((preferences?.language as BoardLang) ?? "de");
+  const qc = useQueryClient();
+  const [editMode, setEditMode] = useState(false);
+
   if (authLoading || tenantLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Lädt …</div>;
+    return <div className="min-h-screen flex items-center justify-center animate-fade-in">{boardT("loading", lang)}</div>;
   }
 
   if (!user) return <Navigate to="/auth" replace />;
   if (!tenant) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 text-center">
-        Kein Tenant-Zugriff für diesen Account.
+      <div className="min-h-screen flex items-center justify-center p-6 text-center animate-fade-in">
+        {boardT("noTenant", lang)}
       </div>
     );
   }
 
   if (!modulesLoading && !isModuleEnabled("c_level_dashboard")) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-6 text-center">
-        <h1 className="text-xl font-semibold">C-Level Dashboard nicht aktiviert</h1>
-        <p className="text-muted-foreground max-w-md">
-          Dieses Modul ist für deinen Tenant noch nicht freigeschaltet.
-          Bitte wende dich an deinen AICONO-Ansprechpartner.
-        </p>
-        <button
-          className="text-sm underline"
-          onClick={() => navigate("/")}
-        >
-          Zurück zur Hauptanwendung
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-6 text-center animate-fade-in">
+        <h1 className="text-xl font-semibold">{boardT("notActivated", lang)}</h1>
+        <p className="text-muted-foreground max-w-md">{boardT("notActivatedHint", lang)}</p>
+        <button className="text-sm underline" onClick={() => navigate("/")}>
+          {boardT("backToMain", lang)}
         </button>
       </div>
     );
@@ -102,7 +106,7 @@ export default function BoardHome() {
     : activeTemplate?.default_layout.tiles ?? [];
 
   const activeTheme = themes.find((t) => t.id === layout?.theme_id) ?? themes[0] ?? null;
-  const [editMode, setEditMode] = useState(false);
+  const isCached = kpiData?.fromCache === true;
 
   return (
     <BoardThemeScope theme={activeTheme} mode={layout?.theme_mode ?? "system"}>
@@ -110,6 +114,7 @@ export default function BoardHome() {
         themes={themes}
         templates={templates}
         layout={layout}
+        lang={lang}
         editMode={editMode}
         tileIds={tiles.map((t) => t.id)}
         onToggleEdit={() => setEditMode((v) => !v)}
@@ -127,21 +132,36 @@ export default function BoardHome() {
         onChangeTheme={(themeId) => upsert({ theme_id: themeId })}
         onChangeMode={(mode) => upsert({ theme_mode: mode })}
       />
-      <main className="mx-auto max-w-7xl px-4 py-6">
-        <BentoGrid
-          tiles={tiles}
-          kpis={kpiData?.kpis ?? null}
-          loading={kpisLoading}
-          editMode={editMode}
-          onChange={(next) => upsert({ tiles: next })}
-        />
-        {editMode && (
-          <p className="mt-6 text-center text-xs text-[hsl(var(--board-muted))]">
-            Anpassen-Modus: Kacheln per Drag &amp; Drop verschieben, Größe (S/M/L) per Klick auf
-            das Symbol oben rechts ändern, mit ✕ entfernen.
-          </p>
-        )}
-      </main>
+      <PullToRefresh
+        onRefresh={() => qc.invalidateQueries({ queryKey: ["board-kpis", tenant.id] })}
+        labels={{
+          pull: boardT("pullMore", lang),
+          release: boardT("pullToRefresh", lang),
+          refreshing: boardT("refreshing", lang),
+        }}
+      >
+        <main className="mx-auto max-w-7xl px-4 py-6 animate-fade-in">
+          {isCached && (
+            <div className="mb-3 flex items-center justify-center gap-2 text-xs text-[hsl(var(--board-muted))]">
+              <WifiOff className="h-3.5 w-3.5" />
+              {boardT("offlineCached", lang)}
+            </div>
+          )}
+          <BentoGrid
+            tiles={tiles}
+            kpis={kpiData?.kpis ?? null}
+            loading={kpisLoading}
+            editMode={editMode}
+            onChange={(next) => upsert({ tiles: next })}
+            lang={lang}
+          />
+          {editMode && (
+            <p className="mt-6 text-center text-xs text-[hsl(var(--board-muted))]">
+              {boardT("customizeHint", lang)}
+            </p>
+          )}
+        </main>
+      </PullToRefresh>
     </BoardThemeScope>
   );
 }
