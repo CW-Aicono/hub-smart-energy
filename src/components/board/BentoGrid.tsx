@@ -2,6 +2,7 @@ import { TILE_CATALOG } from "./tileCatalog";
 import type { BoardKpis } from "@/hooks/useBoardKpis";
 import { Loader2, X, Maximize2, GripVertical } from "lucide-react";
 import { useState } from "react";
+import { boardT, type BoardLang } from "@/i18n/boardStrings";
 
 interface Tile {
   id: string;
@@ -29,15 +30,16 @@ interface Props {
   loading?: boolean;
   editMode?: boolean;
   onChange?: (tiles: Tile[]) => void;
+  lang?: BoardLang;
 }
 
-export default function BentoGrid({ tiles, kpis, loading, editMode, onChange }: Props) {
+export default function BentoGrid({ tiles, kpis, loading, editMode, onChange, lang = "de" }: Props) {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
 
   if (!tiles.length) {
     return (
       <div className="rounded-2xl border border-[hsl(var(--board-border))] p-8 text-center text-[hsl(var(--board-muted))]">
-        Keine Kacheln ausgewählt. Wähle ein Template oder ergänze Kacheln im Anpassen-Modus.
+        {boardT("emptyTiles", lang)}
       </div>
     );
   }
@@ -63,6 +65,7 @@ export default function BentoGrid({ tiles, kpis, loading, editMode, onChange }: 
         return (
           <div
             key={`${tile.id}-${idx}`}
+            style={{ animationDelay: `${Math.min(idx * 40, 400)}ms`, animationFillMode: "both" }}
             draggable={editMode}
             onDragStart={() => setDragIdx(idx)}
             onDragOver={(e) => editMode && e.preventDefault()}
