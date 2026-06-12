@@ -121,6 +121,7 @@ const EnergyReport = lazy(() => import("./pages/EnergyReport"));
 const LegalPageView = lazy(() => import("./pages/LegalPageView"));
 const PublicSalesQuote = lazy(() => import("./pages/PublicSalesQuote"));
 const PublicChargeStatus = lazy(() => import("./pages/PublicChargeStatus"));
+const BoardHome = lazy(() => import("./pages/board/BoardHome"));
 
 
 const queryClient = new QueryClient({
