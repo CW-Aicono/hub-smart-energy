@@ -23,6 +23,7 @@ export default function BoardHome() {
   const { user, loading: authLoading } = useAuth();
   const { tenant, loading: tenantLoading } = useTenant();
   const { isModuleEnabled, isLoading: modulesLoading } = useTenantModules(tenant?.id ?? null);
+  const { data: kpiData, isLoading: kpisLoading } = useBoardKpis(tenant?.id ?? null);
   const { themes, loading: themesLoading } = useBoardThemes();
   const { templates, loading: templatesLoading } = useBoardTemplates();
   const { layout, loading: layoutLoading, upsert } = useBoardUserLayout();
