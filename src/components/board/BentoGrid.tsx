@@ -1,4 +1,6 @@
 import { TILE_CATALOG } from "./tileCatalog";
+import type { BoardKpis } from "@/hooks/useBoardKpis";
+import { Loader2 } from "lucide-react";
 
 interface Tile {
   id: string;
@@ -11,14 +13,20 @@ const SIZE_CLASSES: Record<Tile["size"], string> = {
   L: "col-span-2 sm:col-span-6 lg:col-span-6",
 };
 
+const TONE_CLASSES: Record<NonNullable<ReturnType<NonNullable<typeof TILE_CATALOG[string]["resolve"]>>["tone"]>, string> = {
+  default: "text-[hsl(var(--board-foreground))]",
+  positive: "text-[hsl(var(--board-success))]",
+  warning: "text-[hsl(var(--board-accent))]",
+  danger: "text-red-500",
+};
+
 interface Props {
   tiles: Tile[];
+  kpis: BoardKpis | null;
+  loading?: boolean;
 }
 
-/**
- * Bento-Grid mit Platzhalter-Kacheln. Echte KPI-Daten kommen in Phase 3.
- */
-export default function BentoGrid({ tiles }: Props) {
+export default function BentoGrid({ tiles, kpis, loading }: Props) {
   if (!tiles.length) {
     return (
       <div className="rounded-2xl border border-[hsl(var(--board-border))] p-8 text-center text-[hsl(var(--board-muted))]">
@@ -32,6 +40,8 @@ export default function BentoGrid({ tiles }: Props) {
       {tiles.map((tile, idx) => {
         const meta = TILE_CATALOG[tile.id];
         const Icon = meta?.icon;
+        const resolved = meta?.resolve && kpis ? meta.resolve(kpis) : null;
+        const tone = resolved?.tone ?? "default";
         return (
           <div
             key={`${tile.id}-${idx}`}
@@ -44,11 +54,17 @@ export default function BentoGrid({ tiles }: Props) {
               {Icon && <Icon className="h-4 w-4 text-[hsl(var(--board-accent))]" />}
             </div>
             <div className="flex-1 flex items-end">
-              <div className="text-3xl font-semibold tracking-tight tabular-nums">—</div>
+              {loading && !kpis ? (
+                <Loader2 className="h-5 w-5 animate-spin text-[hsl(var(--board-muted))]" />
+              ) : (
+                <div className={`text-3xl font-semibold tracking-tight tabular-nums ${TONE_CLASSES[tone]}`}>
+                  {resolved?.value ?? "—"}
+                </div>
+              )}
             </div>
-            <div className="text-[11px] text-[hsl(var(--board-muted))]">
-              Daten folgen in Phase 3
-            </div>
+            {resolved?.hint && (
+              <div className="text-[11px] text-[hsl(var(--board-muted))]">{resolved.hint}</div>
+            )}
           </div>
         );
       })}
