@@ -316,21 +316,43 @@ const ChargingUsersTab = () => {
 
         <TabsContent value="user-groups">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle>{t("cu.groupsTitle" as any)}</CardTitle>
-              {isAdmin && (
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => openIo("groups")}>
-                    <FileSpreadsheet className="h-4 w-4 mr-2" />Import / Export
-                  </Button>
-                  <Button size="sm" onClick={openAddGroup}><Plus className="h-4 w-4 mr-2" />{t("cu.addGroup" as any)}</Button>
-                </div>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  value={groupSearchQuery}
+                  onChange={(e) => setGroupSearchQuery(e.target.value)}
+                  placeholder={t("cu.searchPlaceholder" as any)}
+                  className="w-64"
+                />
+                <Select value={groupStatusFilter} onValueChange={(v) => setGroupStatusFilter(v as any)}>
+                  <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("cu.statusAll" as any)}</SelectItem>
+                    <SelectItem value="active">{t("cu.statusActive" as any)}</SelectItem>
+                    <SelectItem value="blocked">{t("cu.statusBlocked" as any)}</SelectItem>
+                    <SelectItem value="archived">{t("cu.statusArchived" as any)}</SelectItem>
+                  </SelectContent>
+                </Select>
+                {isAdmin && (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => openIo("groups")}>
+                      <FileSpreadsheet className="h-4 w-4 mr-2" />Import / Export
+                    </Button>
+                    <Button size="sm" onClick={openAddGroup}><Plus className="h-4 w-4 mr-2" />{t("cu.addGroup" as any)}</Button>
+                  </>
+                )}
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Hinweis: Der in einer Nutzergruppe hinterlegte Ladetarif gilt für alle Mitglieder.
+                Ist für einen einzelnen Nutzer ein individueller Tarif gesetzt, überschreibt dieser den Gruppentarif.
+                Gesperrte Gruppen verweigern den Ladevorgang für alle Mitglieder.
+              </p>
               {groupsLoading ? (
                 <p className="text-muted-foreground">{t("common.loading")}</p>
-              ) : groups.length === 0 ? (
+              ) : filteredGroups.length === 0 ? (
                 <p className="text-muted-foreground">{t("cu.noGroups" as any)}</p>
               ) : (
                 <Table>
@@ -341,13 +363,15 @@ const ChargingUsersTab = () => {
                       <TableHead>Tarif</TableHead>
                       <TableHead>{t("cu.appUser" as any)}</TableHead>
                       <TableHead>{t("cu.members" as any)}</TableHead>
+                      <TableHead>{t("common.status" as any)}</TableHead>
                       <TableHead>{t("common.created" as any)}</TableHead>
-                      {isAdmin && <TableHead className="w-24">{t("cu.actions" as any)}</TableHead>}
+                      {isAdmin && <TableHead className="w-16" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {groups.map((g) => {
+                    {filteredGroups.map((g) => {
                       const memberCount = users.filter((u) => u.group_id === g.id).length;
+                      const status = (g.status ?? "active") as string;
                       return (
                         <TableRow key={g.id}>
                           <TableCell className="font-medium">{g.name}</TableCell>
@@ -357,13 +381,22 @@ const ChargingUsersTab = () => {
                             {g.is_app_user ? (<Badge variant="default" className="gap-1"><Smartphone className="h-3 w-3" />{t("cu.appUser" as any)}</Badge>) : (<span className="text-muted-foreground">—</span>)}
                           </TableCell>
                           <TableCell>{memberCount}</TableCell>
+                          <TableCell>{statusBadge(status)}</TableCell>
                           <TableCell>{format(new Date(g.created_at), "dd.MM.yyyy")}</TableCell>
                           {isAdmin && (
                             <TableCell>
-                              <div className="flex gap-1">
-                                <Button variant="ghost" size="icon" onClick={() => openEditGroup(g)}><Edit className="h-4 w-4" /></Button>
-                                <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ type: "group", id: g.id, name: g.name })}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                              </div>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => openEditGroup(g)}><Edit className="h-4 w-4 mr-2" />{t("common.edit")}</DropdownMenuItem>
+                                  {status !== "blocked" && (<DropdownMenuItem onClick={() => handleSetGroupStatus(g.id, "blocked")}><Ban className="h-4 w-4 mr-2" />{t("cu.block" as any)}</DropdownMenuItem>)}
+                                  {status === "blocked" && (<DropdownMenuItem onClick={() => handleSetGroupStatus(g.id, "active")}><Check className="h-4 w-4 mr-2" />{t("cu.unblock" as any)}</DropdownMenuItem>)}
+                                  {status !== "archived" && (<DropdownMenuItem onClick={() => handleSetGroupStatus(g.id, "archived")}><Archive className="h-4 w-4 mr-2" />{t("cu.archive" as any)}</DropdownMenuItem>)}
+                                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget({ type: "group", id: g.id, name: g.name })}><Trash2 className="h-4 w-4 mr-2" />{t("common.delete")}</DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                           )}
                         </TableRow>
