@@ -9,8 +9,9 @@ import { WeekStartSetting } from "@/components/settings/WeekStartSetting";
 import { ManualMetersSetting } from "@/components/settings/ManualMetersSetting";
 import { TenantInfoSettings } from "@/components/settings/TenantInfoSettings";
 import { WidgetDesigner } from "@/components/settings/WidgetDesigner";
+import { BoardThemesSettings } from "@/components/settings/BoardThemesSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Palette, HardDrive, Building2, LayoutGrid } from "lucide-react";
+import { Palette, HardDrive, Building2, LayoutGrid, LayoutDashboard } from "lucide-react";
 
 const Settings = () => {
   const { user, loading: authLoading } = useAuth();
@@ -57,6 +58,10 @@ const Settings = () => {
                 <LayoutGrid className="h-4 w-4" />
                 Widget-Designer
               </TabsTrigger>
+              <TabsTrigger value="board-themes" className="gap-2">
+                <LayoutDashboard className="h-4 w-4" />
+                C-Level Themes
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="tenant-info">
               <TenantInfoSettings />
@@ -71,6 +76,9 @@ const Settings = () => {
             </TabsContent>
             <TabsContent value="widget-designer">
               <WidgetDesigner />
+            </TabsContent>
+            <TabsContent value="board-themes">
+              <BoardThemesSettings />
             </TabsContent>
           </Tabs>
         </div>
