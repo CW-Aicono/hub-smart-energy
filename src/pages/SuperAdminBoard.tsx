@@ -89,7 +89,7 @@ export default function SuperAdminBoard() {
     }
   };
 
-  const saveTheme = async (t: Theme) => {
+  const saveTheme = async (t: Theme): Promise<void> => {
     const { error } = await supabase
       .from("board_themes")
       .update({
@@ -98,20 +98,20 @@ export default function SuperAdminBoard() {
         colors_dark: t.colors_dark as never,
       })
       .eq("id", t.id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("System-Theme gespeichert");
     loadThemes();
   };
 
-  const deleteTheme = async (id: string) => {
+  const deleteTheme = async (id: string): Promise<void> => {
     if (!confirm("System-Theme wirklich löschen? Es steht dann keinem Tenant mehr zur Verfügung.")) return;
     const { error } = await supabase.from("board_themes").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Theme gelöscht");
     loadThemes();
   };
 
-  const createTheme = async (base?: Theme) => {
+  const createTheme = async (base?: Theme): Promise<void> => {
     const { error } = await supabase.from("board_themes").insert({
       tenant_id: null,
       is_system: true,
@@ -119,7 +119,7 @@ export default function SuperAdminBoard() {
       colors_light: (base?.colors_light ?? EMPTY_LIGHT) as never,
       colors_dark: (base?.colors_dark ?? EMPTY_DARK) as never,
     });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("System-Theme angelegt");
     loadThemes();
   };
