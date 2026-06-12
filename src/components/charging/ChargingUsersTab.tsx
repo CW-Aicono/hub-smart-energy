@@ -69,6 +69,13 @@ const ChargingUsersTab = () => {
     });
 
 
+  const filteredGroups = (groupStatusFilter === "all" ? groups : groups.filter((g) => (g.status ?? "active") === groupStatusFilter))
+    .filter((g) => {
+      if (!groupSearchQuery.trim()) return true;
+      const q = groupSearchQuery.toLowerCase().trim();
+      return g.name?.toLowerCase().includes(q) || (g.description?.toLowerCase().includes(q) ?? false);
+    });
+
   const getGroupName = (gid: string | null) => groups.find((g) => g.id === gid)?.name || "—";
   const getTariffName = (tid: string | null) => tariffs.find((t) => t.id === tid)?.name || null;
   const defaultTariff = tariffs.find((t) => t.is_default && t.is_active);
