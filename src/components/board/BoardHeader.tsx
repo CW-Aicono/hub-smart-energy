@@ -34,6 +34,11 @@ export default function BoardHeader({
   onChangeTheme,
   onChangeMode,
   onChangeTemplate,
+  editMode,
+  onToggleEdit,
+  onAddTile,
+  onResetTemplate,
+  tileIds,
 }: Props) {
   const { signOut } = useAuth();
   const navigate = useNavigate();
@@ -132,6 +137,32 @@ export default function BoardHeader({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {editMode && (
+          <>
+            <AddTileMenu existing={tileIds} onAdd={onAddTile} />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2"
+              onClick={onResetTemplate}
+              title="Layout auf Template zurücksetzen"
+            >
+              <RotateCcw className="h-4 w-4" />
+              <span className="hidden sm:inline">Reset</span>
+            </Button>
+          </>
+        )}
+
+        <Button
+          variant={editMode ? "default" : "ghost"}
+          size="sm"
+          className="gap-2"
+          onClick={onToggleEdit}
+        >
+          {editMode ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+          <span className="hidden sm:inline">{editMode ? "Fertig" : "Anpassen"}</span>
+        </Button>
 
         <Button
           variant="ghost"
