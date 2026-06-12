@@ -260,6 +260,50 @@ export function BoardThemesSettings() {
             viele <strong>eigene Themes</strong> für deinen Tenant anlegen — jeweils mit Farben für
             Hell- und Dunkelmodus.
           </p>
+
+          <div className="mt-4 flex flex-col sm:flex-row gap-4 items-start rounded-xl border bg-card p-4">
+            {qrDataUrl && (
+              <img
+                src={qrDataUrl}
+                alt="QR-Code zum C-Level Dashboard"
+                className="h-32 w-32 rounded-md border bg-white p-1"
+              />
+            )}
+            <div className="flex-1 min-w-0 space-y-2">
+              <div className="text-sm font-medium text-foreground">
+                Dashboard auf dem Mobilgerät öffnen
+              </div>
+              <p className="text-xs">
+                QR-Code mit der Kamera scannen oder den Link direkt aufrufen:
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <code className="font-mono text-xs bg-muted px-2 py-1 rounded break-all">
+                  {boardUrl}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-7"
+                  onClick={() => {
+                    navigator.clipboard.writeText(boardUrl);
+                    toast.success("Link kopiert");
+                  }}
+                >
+                  <Copy className="h-3.5 w-3.5" /> Kopieren
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-7"
+                  asChild
+                >
+                  <a href={boardUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink className="h-3.5 w-3.5" /> Öffnen
+                  </a>
+                </Button>
+              </div>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2 pt-2">
             <Button size="sm" onClick={() => create()} className="gap-2">
               <Plus className="h-4 w-4" /> Leeres Theme anlegen
