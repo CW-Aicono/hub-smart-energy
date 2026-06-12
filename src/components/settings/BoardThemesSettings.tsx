@@ -187,7 +187,7 @@ export function BoardThemesSettings() {
 
   // Fest auf die Live-URL — der QR-Code ist für Endkunden gedacht und darf
   // nicht auf Lovable-Preview-Hosts oder Test-Subdomains zeigen.
-  const boardUrl = "https://board.aicono.org";
+  const boardUrl = "https://ems.aicono.org/board";
 
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   useEffect(() => {
