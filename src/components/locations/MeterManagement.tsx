@@ -406,15 +406,16 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
     <Card>
       <CardHeader>
         <CollapsibleTrigger asChild>
-          <button className="flex items-center gap-2 w-full text-left group">
-            {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+          <button className="flex items-start gap-2 w-full text-left group">
+            {isOpen ? <ChevronDown className="h-4 w-4 mt-1.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 mt-1.5 shrink-0 text-muted-foreground" />}
             <CardTitle className="flex items-center gap-2">
-              <Gauge className="h-5 w-5" />
+              <Gauge className="h-5 w-5 shrink-0" />
               {t("locSec.metersTitle" as any)}
               <HelpTooltip text={t("tooltip.meterManagement" as any)} />
             </CardTitle>
           </button>
         </CollapsibleTrigger>
+
         <CardDescription className="ml-6">
           {t("locSec.metersDesc" as any)}
         </CardDescription>
