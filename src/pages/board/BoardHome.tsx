@@ -120,7 +120,7 @@ export default function BoardHome() {
         onChangeMode={(mode) => upsert({ theme_mode: mode })}
       />
       <main className="mx-auto max-w-7xl px-4 py-6">
-        <BentoGrid tiles={tiles} />
+        <BentoGrid tiles={tiles} kpis={kpiData?.kpis ?? null} loading={kpisLoading} />
         <p className="mt-8 text-center text-xs text-[hsl(var(--board-muted))]">
           Phase 2: Layout & Themes aktiv · KPI-Daten folgen in Phase 3
         </p>
