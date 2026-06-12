@@ -11,6 +11,7 @@ import {
 import BoardThemeScope from "@/components/board/BoardThemeScope";
 import BoardHeader from "@/components/board/BoardHeader";
 import BentoGrid from "@/components/board/BentoGrid";
+import { useBoardKpis } from "@/hooks/useBoardKpis";
 
 /**
  * Phase-2-Einstieg für das C-Level-Dashboard.
@@ -22,6 +23,7 @@ export default function BoardHome() {
   const { user, loading: authLoading } = useAuth();
   const { tenant, loading: tenantLoading } = useTenant();
   const { isModuleEnabled, isLoading: modulesLoading } = useTenantModules(tenant?.id ?? null);
+  const { data: kpiData, isLoading: kpisLoading } = useBoardKpis(tenant?.id ?? null);
   const { themes, loading: themesLoading } = useBoardThemes();
   const { templates, loading: templatesLoading } = useBoardTemplates();
   const { layout, loading: layoutLoading, upsert } = useBoardUserLayout();
@@ -118,7 +120,7 @@ export default function BoardHome() {
         onChangeMode={(mode) => upsert({ theme_mode: mode })}
       />
       <main className="mx-auto max-w-7xl px-4 py-6">
-        <BentoGrid tiles={tiles} />
+        <BentoGrid tiles={tiles} kpis={kpiData?.kpis ?? null} loading={kpisLoading} />
         <p className="mt-8 text-center text-xs text-[hsl(var(--board-muted))]">
           Phase 2: Layout & Themes aktiv · KPI-Daten folgen in Phase 3
         </p>
