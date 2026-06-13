@@ -445,6 +445,12 @@ async function handleExecuteCommand(req: Request, body: any): Promise<Response> 
   if (!locationIntegrationId || !entityId) {
     return jsonResponse(req, { success: false, error: "locationIntegrationId and entity_id (or controlUuid) are required" }, 400);
   }
+  if (!isUuid(locationIntegrationId)) {
+    return jsonResponse(req, { success: false, error: "locationIntegrationId must be a valid UUID" }, 400);
+  }
+
+  const authError = await authorizeHttpCaller(req, locationIntegrationId);
+  if (authError) return authError;
 
   const sb = svc();
 
