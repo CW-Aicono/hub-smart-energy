@@ -266,7 +266,7 @@ const ChargePointDetail = () => {
   useEffect(() => {
     if (!cp?.ocpp_id || capsLoading || probeTriggeredRef.current) return;
     if (ocppCapabilities) return;
-    const online = isChargePointOnline((cp as any).ws_connected, cp.last_heartbeat);
+    const online = isChargePointOnline((cp as any).ws_connected, cp.last_heartbeat, undefined, (cp as any).last_ws_pong_at);
     if (!online) return;
     const vendor = String((cp as any).vendor ?? "").trim().toLowerCase();
     const model = String((cp as any).model ?? "").trim().toLowerCase();
