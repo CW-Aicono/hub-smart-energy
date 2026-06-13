@@ -218,6 +218,10 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
     return jsonResponse(req, { success: false, error: "locationIntegrationId must be a valid UUID" }, 400);
   }
 
+  const authError = await authorizeHttpCaller(req, locationIntegrationId);
+  if (authError) return authError;
+
+
   const sb = svc();
 
   // ── Cache-first short-circuit ──
