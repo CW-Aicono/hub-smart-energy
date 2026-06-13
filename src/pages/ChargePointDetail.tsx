@@ -359,7 +359,7 @@ const ChargePointDetail = () => {
   if (!cp) return null;
 
   // Status-Lookup case-insensitiv (DB liefert "Available" mit Großbuchstabe direkt von OCPP)
-  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat);
+  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat, undefined, (cp as any).last_ws_pong_at);
   const normalizedStatus = normalizeConnectorStatus(cp.status, cpOnline);
   const cfg = STATUS_KEYS[normalizedStatus] || STATUS_KEYS.offline;
   const StatusIcon = cfg.icon;
@@ -369,7 +369,7 @@ const ChargePointDetail = () => {
   if (cp.status === "offline") {
     warnings.push({
       message: "Verbindung zur Ladestation getrennt",
-      detail: cp.last_heartbeat ? `Letzter Heartbeat: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm")}` : "Kein Heartbeat empfangen",
+      detail: cp.last_heartbeat ? `Letzte OCPP-Nachricht: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm")}` : "Keine OCPP-Nachricht empfangen",
       time: cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy") : "—",
     });
   }
