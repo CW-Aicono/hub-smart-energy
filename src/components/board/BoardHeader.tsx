@@ -1,20 +1,21 @@
-import { Sun, Moon, Monitor, Palette, LayoutTemplate, LogOut, Pencil, Check, RotateCcw } from "lucide-react";
+import { useState } from "react";
+import { Sun, Moon, Monitor, LogOut, Pencil, Check, RotateCcw, Settings, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/useTenant";
-import { Zap } from "lucide-react";
 import type { BoardTheme, BoardTemplate, BoardUserLayout } from "@/hooks/useBoard";
 import AddTileMenu from "./AddTileMenu";
 import { boardT, type BoardLang } from "@/i18n/boardStrings";
+import { cn } from "@/lib/utils";
 
 interface Props {
   themes: BoardTheme[];
@@ -48,12 +49,10 @@ export default function BoardHeader({
   const { signOut } = useAuth();
   const { tenant } = useTenant();
   const navigate = useNavigate();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const tt = (k: Parameters<typeof boardT>[0]) => boardT(k, lang);
 
-  const currentTheme = themes.find((t) => t.id === layout?.theme_id) ?? themes[0];
-
-  const ModeIcon =
-    layout?.theme_mode === "dark" ? Moon : layout?.theme_mode === "light" ? Sun : Monitor;
+  const mode = layout?.theme_mode ?? "system";
 
   return (
     <header className="sticky top-0 z-30 border-b border-[hsl(var(--board-border))] bg-[hsl(var(--board-background))]/85 backdrop-blur">
@@ -75,83 +74,113 @@ export default function BoardHeader({
           </div>
         </div>
 
-
-        {/* Template-Auswahl */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="gap-2">
-              <LayoutTemplate className="h-4 w-4" />
-              <span className="hidden sm:inline">{tt("template")}</span>
+        {/* Einstellungen (Vorlage + Theme + Hell/Dunkel) */}
+        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label={tt("settings")} title={tt("settings")}>
+              <Settings className="h-4 w-4" />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64">
-            <DropdownMenuLabel>{tt("pickTemplate")}</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {templates.map((t) => (
-              <DropdownMenuItem
-                key={t.code}
-                onClick={() => onChangeTemplate(t.code)}
-                className="flex flex-col items-start gap-0.5 py-2"
-              >
-                <span className="font-medium">
-                  {t.name}
-                  {layout?.template_code === t.code && " ✓"}
-                </span>
-                {t.description && (
-                  <span className="text-xs text-muted-foreground line-clamp-2">
-                    {t.description}
-                  </span>
-                )}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{tt("settings")}</DialogTitle>
+            </DialogHeader>
 
-        {/* Theme-Auswahl */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="gap-2">
-              <Palette className="h-4 w-4" />
-              <span className="hidden sm:inline">{currentTheme?.name ?? tt("theme")}</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>{tt("colorScheme")}</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {themes.map((t) => (
-              <DropdownMenuItem key={t.id} onClick={() => onChangeTheme(t.id)}>
-                <span className="flex items-center gap-2">
-                  <span
-                    className="h-3 w-3 rounded-full border"
-                    style={{ background: `hsl(${t.colors_light.accent})` }}
-                  />
-                  {t.name}
-                  {layout?.theme_id === t.id && " ✓"}
-                </span>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <div className="space-y-6 pt-2">
+              {/* Vorlage */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">{tt("pickTemplate")}</Label>
+                <div className="grid grid-cols-1 gap-2">
+                  {templates.map((t) => {
+                    const active = layout?.template_code === t.code;
+                    return (
+                      <button
+                        key={t.code}
+                        onClick={() => onChangeTemplate(t.code)}
+                        className={cn(
+                          "flex flex-col items-start gap-0.5 rounded-lg border p-3 text-left transition-colors",
+                          active
+                            ? "border-[hsl(var(--board-accent))] bg-[hsl(var(--board-accent))]/10"
+                            : "border-[hsl(var(--board-border))] hover:bg-[hsl(var(--board-surface))]"
+                        )}
+                      >
+                        <span className="text-sm font-medium">
+                          {t.name}
+                          {active && " ✓"}
+                        </span>
+                        {t.description && (
+                          <span className="text-xs text-muted-foreground line-clamp-2">
+                            {t.description}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-        {/* Light / Dark / System */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Hell/Dunkel">
-              <ModeIcon className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onChangeMode("light")}>
-              <Sun className="mr-2 h-4 w-4" /> {tt("light")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onChangeMode("dark")}>
-              <Moon className="mr-2 h-4 w-4" /> {tt("dark")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onChangeMode("system")}>
-              <Monitor className="mr-2 h-4 w-4" /> {tt("system")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              {/* Farbschema */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">{tt("colorScheme")}</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {themes.map((t) => {
+                    const active = layout?.theme_id === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => onChangeTheme(t.id)}
+                        className={cn(
+                          "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+                          active
+                            ? "border-[hsl(var(--board-accent))] bg-[hsl(var(--board-accent))]/10"
+                            : "border-[hsl(var(--board-border))] hover:bg-[hsl(var(--board-surface))]"
+                        )}
+                      >
+                        <span
+                          className="h-4 w-4 rounded-full border"
+                          style={{ background: `hsl(${t.colors_light.accent})` }}
+                        />
+                        <span className="truncate">{t.name}</span>
+                        {active && <span className="ml-auto">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Hell / Dunkel / System */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">{tt("appearance")}</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      { id: "light", icon: Sun, label: tt("light") },
+                      { id: "dark", icon: Moon, label: tt("dark") },
+                      { id: "system", icon: Monitor, label: tt("system") },
+                    ] as const
+                  ).map(({ id, icon: Icon, label }) => {
+                    const active = mode === id;
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => onChangeMode(id)}
+                        className={cn(
+                          "flex flex-col items-center gap-1 rounded-lg border px-3 py-2 text-xs transition-colors",
+                          active
+                            ? "border-[hsl(var(--board-accent))] bg-[hsl(var(--board-accent))]/10"
+                            : "border-[hsl(var(--board-border))] hover:bg-[hsl(var(--board-surface))]"
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {editMode && (
           <>
