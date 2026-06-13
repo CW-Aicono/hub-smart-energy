@@ -1,49 +1,102 @@
-## Ziel
+## Was wirklich kaputt ist
 
-C-Level Dashboard live über `https://ems.aicono.org/board` bereitstellen — analog zu `/sales` und `/partner`. **Keine** eigene Subdomain `board.aicono.org`.
-
-## Warum
-
-- `sales.aicono.org` und `partner.aicono.org` sind aktuell **nicht aktiv** — die Live-Nutzung läuft über die Pfade `ems.aicono.org/sales` und `/partner`.
-- Eine eigene Subdomain bringt damit keinen Mehrwert, kostet aber: DNS-Eintrag, Caddyfile-Block, Let's-Encrypt-Zertifikat, zusätzlicher Deploy-Workflow-Fix (`supabase-docker` wird über `CI_PATHS` aus `main` überschrieben).
-- `/board` ist bereits als Route in der App vorhanden (`BoardHome.tsx`, `manifest-board.json`). Es muss nichts neu gebaut werden.
-
-## Was zu tun ist
-
-### 1. QR-Code-URL umstellen
-
-**Datei:** `src/components/settings/BoardThemesSettings.tsx` (Zeile ~174)
+Der Hook `src/hooks/useChargePointDailyUptime.tsx` lädt die 5‑Minuten‑Snapshots so:
 
 ```ts
-const boardUrl = "https://ems.aicono.org/board";
+.select("recorded_at, is_online")
+.eq("charge_point_id", ...)
+.gte("recorded_at", since)
+.order("recorded_at", { ascending: true })
+.limit(20000)
 ```
 
-(statt aktuell `https://board.aicono.org`)
+Bei 7 Tagen × 288 Snapshots/Tag = **2 016 Zeilen** pro Ladepunkt — eigentlich kein Problem. Aber: **PostgREST (die Daten‑API von Supabase) deckelt die Antwort standardmäßig bei 1 000 Zeilen.** Der `.limit(20000)`‑Wunsch im Client wird ignoriert, wenn der Server eine niedrigere Obergrenze hat. Sowohl Lovable‑Cloud als auch eure Hetzner‑Instanz haben diese Deckelung aktiv.
 
-### 2. Caddyfile-Block für `board.aicono.org` wieder entfernen
+Konsequenz: die ersten 1 000 Zeilen kommen zurück, das sind **aufsteigend** sortiert ungefähr die ältesten ~3,5 Tage. Die jüngsten Tage (Do/Fr/Sa) fehlen komplett → in `buckets` bleibt `total = 0` → der Chart malt für sie den grauen „Keine Daten"‑Balken.
 
-**Datei:** `supabase-docker/proxy/caddy/Caddyfile` (Zeilen ~28–32)
+Verifiziert in der Cloud‑DB:
 
-Den Block `board.aicono.org { … }` ersatzlos löschen. Spart unnötigen Konfig-Ballast und vermeidet einen toten Caddy-Eintrag.
 
-### 3. `BoardHostGuard` & `isBoardHost()` — bleiben bestehen
+| Tag       | Snapshots | online |
+| --------- | --------- | ------ |
+| 07.06. So | 288       | 288    |
+| 08.06. Mo | 288       | 288    |
+| 09.06. Di | 288       | 288    |
+| 10.06. Mi | 288       | 288    |
+| 11.06. Do | 288       | 288    |
+| 12.06. Fr | 288       | 288    |
+| 13.06. Sa | 133       | 133    |
 
-Die beiden Helfer (`src/components/BoardHostGuard.tsx`, `src/lib/hostname.ts`) bleiben **unverändert drin**. Sie schaden nicht (`isBoardHost()` liefert auf `ems.aicono.org` einfach `false`) und halten die Option offen, später doch eine Subdomain zu aktivieren — ohne neuen Code.
 
-### 4. Was du **nicht** tun musst
+Bricht man die Antwort nach ~1 000 Zeilen ab, ist genau ab Mi/Do Schluss — exakt dein Screenshot.
 
-- Keine Cloudflare-DNS-Änderung.
-- Keine Hetzner-Anpassung.
-- Kein Eingriff in `.github/workflows/deploy-prod.yml`.
+Dass der „Betriebszeit"‑Wert mit 86,73 % trotzdem korrekt erscheint, passt ins Bild: die Stabilitäts‑Berechnung benutzt `count: "exact", head: true` — eine reine Zähl‑Abfrage, die nie Zeilen zieht und deshalb nicht in den 1 000‑Zeilen‑Deckel läuft.
 
-## Ergebnis nach Deploy
+## Warum gleich mehrere UI‑Stellen betroffen sind
 
-- `https://ems.aicono.org/board` öffnet das C-Level Dashboard (funktioniert sofort, da Pfad bereits geroutet ist).
-- QR-Code in *Einstellungen → C-Level Dashboard* zeigt überall die korrekte Live-URL.
-- `board.aicono.org` wird nicht weiterverfolgt.
+Die Karte „Statistiken" auf der Ladepunkt‑Detailseite ist die **einzige** UI‑Stelle, die diesen Hook benutzt — die Tenant‑Übersicht (`ChargingOverviewStats.tsx`) rechnet wie von dir richtig erkannt aus dem aktuellen Live‑Status und ist von dem Datendeckel nicht betroffen. Der „mehrfach gleiche Fehler" ist also derselbe Aufruf, nicht mehrere unabhängige Stellen.
 
-## Frage zur Bestätigung
+## Vorgeschlagene Lösung
 
-Soll ich die DNS-Eintragung `board` bei Cloudflare auch **wieder entfernen** lassen (Empfehlung: ja, sonst zeigt ein Eintrag ins Leere)? Das machst du selbst in Cloudflare — ich kann dir die exakten Klick-Schritte mitliefern, wenn du möchtest.  
+Server‑seitige Aggregation per Datenbankfunktion — analog zur bereits existierenden `public.get_charge_point_uptime_pct`. Damit fließen pro Tag nur **eine** Zeile (Tag, total, online) zurück. Kein Zeilen‑Deckel‑Risiko, weniger Bandbreite, schneller.
+
+### Änderung 1 — neue SQL‑Funktion (Migration)
+
+```sql
+CREATE OR REPLACE FUNCTION public.get_charge_point_daily_uptime(
+  p_charge_point_id uuid,
+  p_days integer DEFAULT 7
+)
+RETURNS TABLE (day date, total bigint, online bigint)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  WITH days AS (
+    SELECT generate_series(
+      (CURRENT_DATE AT TIME ZONE 'Europe/Berlin') - (p_days - 1),
+      (CURRENT_DATE AT TIME ZONE 'Europe/Berlin'),
+      interval '1 day'
+    )::date AS day
+  )
+  SELECT
+    d.day,
+    COUNT(s.id)::bigint                                 AS total,
+    COUNT(s.id) FILTER (WHERE s.is_online)::bigint      AS online
+  FROM days d
+  LEFT JOIN public.charge_point_uptime_snapshots s
+    ON s.charge_point_id = p_charge_point_id
+   AND (s.recorded_at AT TIME ZONE 'Europe/Berlin')::date = d.day
+  GROUP BY d.day
+  ORDER BY d.day;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_charge_point_daily_uptime(uuid, integer)
+  TO authenticated, service_role;
+```
+
+- `SECURITY DEFINER` + impliziter `charge_point_id`‑Filter wie bei der bestehenden 30‑Tage‑Funktion — kein RLS‑Bypass für fremde Ladepunkte, weil der Aufrufer die ID kennen muss.
+- Falls zusätzliche Absicherung gewünscht: vorab in der Funktion prüfen, ob `auth.uid()` Zugriff auf den Tenant des Ladepunkts hat (per `has_role` oder `get_user_tenant_id`). Sag Bescheid, dann baue ich diesen Check in der Migration mit ein.
+
+### Änderung 2 — Hook umstellen
+
+`src/hooks/useChargePointDailyUptime.tsx` ruft statt `.from(...).select(...)` jetzt `supabase.rpc("get_charge_point_daily_uptime", { p_charge_point_id, p_days: days })` auf und mappt das schon fertig aggregierte Ergebnis 1:1 in `DailyUptime[]`. Keine andere Komponente muss angefasst werden.
+
+## Auswirkungen auf den Live‑Betrieb (Hetzner und Cloud)
+
+- **Keine Verhaltensänderung für Kunden.** Es werden weder Tabellen, RLS noch Cron‑Jobs angefasst. Die Wallboxen laden, der OCPP‑Server, die Abrechnung und alle anderen Charts laufen unverändert weiter.
+- **Was sich ändert, ist ausschließlich** der Datenpfad für die Wochen‑/Monats‑/Quartals‑Statistik einer einzelnen Ladepunkt‑Detailseite.
+- **Reihenfolge des Rollouts:** zuerst Migration auf Cloud anwenden (geht automatisch über deine Lovable‑Pipeline). Anschließend dieselbe SQL‑Datei in der Hetzner‑Supabase‑Instanz nachziehen — ich liefere dir dafür auf Wunsch eine anfänger‑sichere Schritt‑für‑Schritt‑Anleitung mit fertigem Copy‑Paste‑Block.
+- **Rollback** ist trivial: `DROP FUNCTION public.get_charge_point_daily_uptime(uuid, integer);` und den Hook auf die alte Version zurücksetzen.
+
+## Was ich als nächstes tun würde
+
+1. Migration anlegen (eine SQL‑Datei, eine Funktion, ein GRANT).
+2. Hook `useChargePointDailyUptime.tsx` auf den RPC‑Aufruf umstellen.
+3. Verifizieren: in der Cloud‑Preview den Detail‑Chart für `4016aacc‑…` öffnen, alle 7 Balken müssen farbig sein.
+4. Wenn ok → Anleitung für die Hetzner‑Migration nachliefern.
+
+## Frage an dich
+
+Soll ich die Migration zusätzlich um eine harte Tenant‑Prüfung in der Funktion (`has_role(super_admin) OR cp.tenant_id = get_user_tenant_id()`) ergänzen? Aktuell genügt das Wissen der UUID, was im UI ohnehin der Fall ist, aber der Extra‑Riegel kostet nichts.  
   
-Antwort: den DNS Eintrag entferne ich selber, brauche keine Anleitung dazu.
+Antwort: Ja, bitte gleich die harte Tenant-Prüfung mit einbauen.
