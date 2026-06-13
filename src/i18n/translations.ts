@@ -3985,7 +3985,7 @@ export const translations = {
   "charging.name": { de: "Name", en: "Name", es: "Nombre", nl: "Naam" },
   "charging.location": { de: "Standort", en: "Location", es: "Ubicación", nl: "Locatie" },
   "charging.power": { de: "Leistung", en: "Power", es: "Potencia", nl: "Vermogen" },
-  "charging.lastHeartbeat": { de: "Letzter Heartbeat", en: "Last heartbeat", es: "Último heartbeat", nl: "Laatste heartbeat" },
+  "charging.lastHeartbeat": { de: "Letzte OCPP-Nachricht", en: "Last OCPP message", es: "Último mensaje OCPP", nl: "Laatste OCPP-bericht" },
   "charging.connectors": { de: "Anschlüsse", en: "Connectors", es: "Conectores", nl: "Aansluitingen" },
   "charging.maxPower": { de: "Max. Leistung (kW)", en: "Max. power (kW)", es: "Potencia máx. (kW)", nl: "Max. vermogen (kW)" },
   "charging.connectorTypes": { de: "Steckertypen", en: "Connector types", es: "Tipos de conector", nl: "Stekkertypen" },
