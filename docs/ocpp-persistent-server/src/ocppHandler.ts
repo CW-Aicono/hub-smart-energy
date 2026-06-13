@@ -38,6 +38,18 @@ export async function handleCall(
   const [, messageId, action, payload] = call;
   const { chargePointId, chargePointPk, tenantId } = session;
 
+  // Zentrales "touch": Jedes eingehende OCPP-Frame (Heartbeat, MeterValues,
+  // StatusNotification, StartTransaction, …) gilt als Lebenszeichen der
+  // Wallbox. Wir aktualisieren `last_heartbeat` deshalb hier *einmal* zentral,
+  // damit das UI ("vor X Minuten") auch dann frisch bleibt, wenn die Wallbox
+  // wegen interval=86400 keine echten Heartbeat-Frames sendet, solange
+  // andere OCPP-Frames fließen. Fire-and-forget: ein fehlgeschlagener
+  // Touch darf die eigentliche Antwort an die Wallbox nicht blockieren.
+  updateChargePoint(chargePointPk, {
+    last_heartbeat: new Date().toISOString(),
+    ws_connected: true,
+  }).catch((e) => log.warn("heartbeat touch failed", { chargePointId, action, error: (e as Error).message }));
+
   try {
     switch (action) {
       case "BootNotification": {
