@@ -11093,6 +11093,14 @@ export type Database = {
         Returns: Database["public"]["Enums"]["app_role"]
       }
       get_auth_user_email: { Args: never; Returns: string }
+      get_charge_point_daily_uptime: {
+        Args: { p_charge_point_id: string; p_days?: number }
+        Returns: {
+          day: string
+          online: number
+          total: number
+        }[]
+      }
       get_charge_point_uptime_pct: {
         Args: { p_charge_point_id: string; p_days?: number }
         Returns: number
