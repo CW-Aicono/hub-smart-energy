@@ -82,20 +82,17 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
   // false blieb. Jetzt: bis zu 3 Versuche mit exponential backoff.
   void markConnectedWithRetry(chargePointPk, sessionId, chargePointId);
 
-  const pingTimer = startPing(ws, sessionId, chargePointId);
-  // Pong vom Charger zählt als Lebenszeichen — sonst würde der Idle-Sweeper
-  // OCPP-stille, aber TCP-lebende Sessions (z. B. wallbe mit 24h-Heartbeat,
-  // Compleo mit langen Idle-Phasen) nach 2 Minuten abräumen.
-  // Außerdem schreiben wir hier `last_ws_pong_at` in die DB: Das ist das
-  // *echte* „Wallbox lebt"-Signal für das UI, unabhängig davon ob OCPP-
-  // Frames (Heartbeat, MeterValues, StatusNotification) fließen.
-  // Fire-and-forget — ein fehlgeschlagener Update darf den Pong nicht stören.
+  const pingTimer = startPing(ws, sessionId, chargePointId, chargePointPk);
+  // Echter Pong vom Charger ist das direkteste Lebenszeichen — wenn er kommt,
+  // überschreibt er den serverseitigen Liveness-Tick aus startPing().
+  // Viele Wallboxen (Compleo u. a.) antworten allerdings nicht zuverlässig
+  // auf WS-Pings; deshalb ist der Tick die eigentliche Liveness-Quelle.
   ws.on("pong", () => {
     session.lastIncomingAt = Date.now();
-    log.debug("pong", { sessionId, chargePointId });
+    log.info("pong from charger", { sessionId, chargePointId });
     updateChargePoint(chargePointPk, {
       last_ws_pong_at: new Date().toISOString(),
-    }).catch((e) => log.debug("ws pong touch failed", { chargePointId, error: (e as Error).message }));
+    }).catch((e) => log.warn("ws pong touch failed", { chargePointId, error: (e as Error).message }));
   });
 
   ws.on("message", async (raw) => {
