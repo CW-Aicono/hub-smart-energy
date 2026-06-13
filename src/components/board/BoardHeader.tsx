@@ -46,10 +46,10 @@ export default function BoardHeader({
   lang = "de",
 }: Props) {
   const { signOut } = useAuth();
+  const { tenant } = useTenant();
   const navigate = useNavigate();
   const tt = (k: Parameters<typeof boardT>[0]) => boardT(k, lang);
 
-  const currentTemplate = templates.find((t) => t.code === layout?.template_code);
   const currentTheme = themes.find((t) => t.id === layout?.theme_id) ?? themes[0];
 
   const ModeIcon =
@@ -58,14 +58,23 @@ export default function BoardHeader({
   return (
     <header className="sticky top-0 z-30 border-b border-[hsl(var(--board-border))] bg-[hsl(var(--board-background))]/85 backdrop-blur">
       <div className="mx-auto max-w-7xl flex items-center gap-3 px-4 py-3">
-        <div className="flex-1 min-w-0">
-          <div className="text-xs uppercase tracking-[0.2em] text-[hsl(var(--board-muted))]">
-            AICONO C-Level
-          </div>
+        <div className="flex-1 min-w-0 flex items-center gap-3">
+          {tenant?.logo_url ? (
+            <img
+              src={tenant.logo_url}
+              alt={`${tenant.name} Logo`}
+              className="h-9 w-9 rounded-lg object-contain bg-[hsl(var(--board-surface))]"
+            />
+          ) : (
+            <div className="h-9 w-9 rounded-lg bg-[hsl(var(--board-accent))]/15 flex items-center justify-center">
+              <Zap className="h-5 w-5 text-[hsl(var(--board-accent))]" />
+            </div>
+          )}
           <div className="text-lg font-semibold truncate">
-            {currentTemplate?.name ?? "Board"}
+            {tenant?.name ?? "Board"}
           </div>
         </div>
+
 
         {/* Template-Auswahl */}
         <DropdownMenu>
