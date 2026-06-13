@@ -19,25 +19,26 @@ const connectorStatusConfig: Record<string, { label: string; color: string; icon
   offline: { label: "Offline", color: "bg-muted-foreground", icon: ZapOff },
 };
 
-// Connector data is considered stale if last contact is older than 5 minutes.
-const STALE_THRESHOLD_MS = 5 * 60 * 1000;
+/**
+ * Liefert das menschen-lesbare Alter eines Zeitstempels — oder null.
+ * Nicht mehr als "stale" markieren: viele Wallboxen (Compleo, Wallbe)
+ * senden Heartbeats/StatusNotifications nur sehr selten, wenn kein
+ * Fahrzeug angeschlossen ist. Die Verbindungs-Liveness wird statt-
+ * dessen über `last_ws_pong_at` separat angezeigt.
+ */
+function formatAge(ts: string | null | undefined): string | null {
+  if (!ts) return null;
+  return formatDistanceToNow(new Date(ts), { addSuffix: true, locale: de });
+}
 
 /**
- * Liveness der Wallbox: nutzt den jüngsten Zeitstempel aus
- *   (a) StatusNotification (last_status_at)  und
- *   (b) Heartbeat der gesamten Wallbox (lastHeartbeat).
- * StatusNotifications kommen nur bei Status-Wechseln, daher ist der Heartbeat
- * der bessere "ist online"-Indikator, sobald keine Wechsel mehr passieren.
+ * Frische des WebSocket-Pongs. Der OCPP-Server pingt alle 30 s — wenn
+ * der letzte Pong < 2 Min alt ist, ist die Wallbox technisch erreichbar.
  */
-function getStaleness(lastStatusAt: string | null, lastHeartbeat?: string | null): { isStale: boolean; ageMs: number | null; label: string } {
-  const candidates = [lastStatusAt, lastHeartbeat]
-    .filter(Boolean)
-    .map((ts) => new Date(ts as string).getTime());
-  if (candidates.length === 0) return { isStale: true, ageMs: null, label: "noch keine Daten" };
-  const newest = Math.max(...candidates);
-  const ageMs = Date.now() - newest;
-  const label = formatDistanceToNow(new Date(newest), { addSuffix: true, locale: de });
-  return { isStale: ageMs > STALE_THRESHOLD_MS, ageMs, label };
+function isPongFresh(lastWsPongAt: string | null | undefined): boolean {
+  if (!lastWsPongAt) return false;
+  const age = Date.now() - new Date(lastWsPongAt).getTime();
+  return Number.isFinite(age) && age >= 0 && age < 2 * 60 * 1000;
 }
 
 interface Props {
@@ -47,11 +48,13 @@ interface Props {
   selectable?: boolean;
   wsConnected?: boolean;
   lastHeartbeat?: string | null;
+  /** Zeitstempel des letzten WebSocket-Pongs — echtes Liveness-Signal. */
+  lastWsPongAt?: string | null;
   editable?: boolean;
   onReorder?: (reordered: ChargePointConnector[]) => void;
 }
 
-export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectConnector, selectable = false, wsConnected = true, lastHeartbeat = null, editable = false, onReorder }: Props) {
+export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectConnector, selectable = false, wsConnected = true, lastHeartbeat = null, lastWsPongAt = null, editable = false, onReorder }: Props) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
