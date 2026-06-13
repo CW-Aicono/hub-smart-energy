@@ -977,6 +977,7 @@ export type Database = {
           group_id: string | null
           id: string
           last_heartbeat: string | null
+          last_ws_pong_at: string | null
           latitude: number | null
           linked_meter_id: string | null
           location_id: string | null
@@ -1022,6 +1023,7 @@ export type Database = {
           group_id?: string | null
           id?: string
           last_heartbeat?: string | null
+          last_ws_pong_at?: string | null
           latitude?: number | null
           linked_meter_id?: string | null
           location_id?: string | null
@@ -1067,6 +1069,7 @@ export type Database = {
           group_id?: string | null
           id?: string
           last_heartbeat?: string | null
+          last_ws_pong_at?: string | null
           latitude?: number | null
           linked_meter_id?: string | null
           location_id?: string | null
