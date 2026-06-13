@@ -169,6 +169,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     const branding = await getTenantBranding(body.tenantId);
 
+    const resend = new Resend(RESEND_API_KEY);
+
     const emailResponse = await resend.emails.send({
       from: resendFrom(branding.name),
       to: [body.contactEmail],
