@@ -84,11 +84,18 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
 
   const pingTimer = startPing(ws, sessionId, chargePointId);
   // Pong vom Charger zählt als Lebenszeichen — sonst würde der Idle-Sweeper
-  // OCPP-stille, aber TCP-lebende Sessions (z. B. wallbe mit 24h-Heartbeat)
-  // nach 2 Minuten abräumen.
+  // OCPP-stille, aber TCP-lebende Sessions (z. B. wallbe mit 24h-Heartbeat,
+  // Compleo mit langen Idle-Phasen) nach 2 Minuten abräumen.
+  // Außerdem schreiben wir hier `last_ws_pong_at` in die DB: Das ist das
+  // *echte* „Wallbox lebt"-Signal für das UI, unabhängig davon ob OCPP-
+  // Frames (Heartbeat, MeterValues, StatusNotification) fließen.
+  // Fire-and-forget — ein fehlgeschlagener Update darf den Pong nicht stören.
   ws.on("pong", () => {
     session.lastIncomingAt = Date.now();
     log.debug("pong", { sessionId, chargePointId });
+    updateChargePoint(chargePointPk, {
+      last_ws_pong_at: new Date().toISOString(),
+    }).catch((e) => log.debug("ws pong touch failed", { chargePointId, error: (e as Error).message }));
   });
 
   ws.on("message", async (raw) => {

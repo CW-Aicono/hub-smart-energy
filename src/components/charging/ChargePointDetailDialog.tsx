@@ -174,7 +174,7 @@ export default function ChargePointDetailDialog({
 
   if (!cp) return null;
 
-  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat);
+  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat, undefined, (cp as any).last_ws_pong_at);
   const cfg = statusConfig[normalizeConnectorStatus(cp.status, cpOnline)] || statusConfig.offline;
   const StatusIcon = cfg.icon;
   const cpSessions = sessions
@@ -381,7 +381,7 @@ export default function ChargePointDetailDialog({
                   <div><span className="text-muted-foreground">Anschlüsse:</span> {cp.connector_count}</div>
                   <div><span className="text-muted-foreground">Max. Leistung:</span> {fmtKw(cp.max_power_kw)}</div>
                   <div><span className="text-muted-foreground">Firmware:</span> {cp.firmware_version || "—"}</div>
-                  <div><span className="text-muted-foreground">Letzter Heartbeat:</span> {cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm") : "—"}</div>
+                  <div><span className="text-muted-foreground">Letzte OCPP-Nachricht:</span> {cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm") : "—"}</div>
                   <div><span className="text-muted-foreground">WS-Verbindung:</span> {cp.ws_connected ? (
                     <span className="text-emerald-600 dark:text-emerald-400 font-medium">Online{cp.ws_connected_since ? ` seit ${format(new Date(cp.ws_connected_since), "dd.MM. HH:mm")}` : ""}</span>
                   ) : (

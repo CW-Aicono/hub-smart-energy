@@ -56,20 +56,28 @@ export function isOccupiedChargingStatus(raw: string | null | undefined): boolea
  * Decides whether a charge point is "online" for UI purposes.
  *
  * Priority:
- *   1. Fresh heartbeat (< 3 min) → online, even if `ws_connected` is null/false
- *      (older OCPP-server builds e.g. on Hetzner may never have written
- *      `ws_connected=true`, but they keep updating `last_heartbeat`).
- *   2. Explicit `ws_connected === true` → online.
- *   3. Otherwise offline.
- *
- * Fixes the case where the CP-level badge showed "Verfügbar" but each
- * connector card showed "Offline" due to inconsistent fallback logic.
+ *   1. Fresh WebSocket pong (`last_ws_pong_at` < 2 min) → online.
+ *      Das ist das echte Liveness-Signal: Der OCPP-Server pingt die Wallbox
+ *      alle 30 s; sobald die Wallbox mit Pong antwortet, schreiben wir den
+ *      Zeitstempel in die DB. Dieses Feld kommt auch dann, wenn Compleo &
+ *      Co. wegen `HeartbeatInterval=86400` stundenlang keine OCPP-Frames
+ *      senden.
+ *   2. Fallback Fresh `last_heartbeat` (< 3 min) → online (für ältere
+ *      OCPP-Server-Builds ohne `last_ws_pong_at`).
+ *   3. Explicit `ws_connected === true` → online.
+ *   4. Otherwise offline.
  */
 export function isChargePointOnline(
   wsConnected: boolean | null | undefined,
   lastHeartbeat: string | null | undefined,
   freshMs: number = 3 * 60 * 1000,
+  lastWsPongAt?: string | null | undefined,
 ): boolean {
+  if (lastWsPongAt) {
+    const age = Date.now() - new Date(lastWsPongAt).getTime();
+    // Pong-Intervall ist 30 s → 2 Min Toleranz reicht für eine verpasste Runde.
+    if (Number.isFinite(age) && age >= 0 && age < 2 * 60 * 1000) return true;
+  }
   if (lastHeartbeat) {
     const age = Date.now() - new Date(lastHeartbeat).getTime();
     if (Number.isFinite(age) && age >= 0 && age < freshMs) return true;
