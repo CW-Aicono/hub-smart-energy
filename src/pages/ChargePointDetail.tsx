@@ -1017,9 +1017,15 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         )}
                         <Separator />
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Letzter Heartbeat:</span>
+                          <span className="text-muted-foreground">Letzte OCPP-Nachricht:</span>
                           <span className="font-medium">{cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yy HH:mm") : "—"}</span>
                         </div>
+                        {(cp as any).last_ws_pong_at && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Letzter Verbindungs-Ping:</span>
+                            <span className="font-medium">{format(new Date((cp as any).last_ws_pong_at), "dd.MM.yy HH:mm:ss")}</span>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
