@@ -27,6 +27,8 @@ const STRINGS = {
     nl: "Geen tenant-toegang voor dit account.",
   },
   template: { de: "Vorlage", en: "Template", es: "Plantilla", nl: "Sjabloon" },
+  settings: { de: "Einstellungen", en: "Settings", es: "Ajustes", nl: "Instellingen" },
+  appearance: { de: "Erscheinungsbild", en: "Appearance", es: "Apariencia", nl: "Weergave" },
   theme: { de: "Theme", en: "Theme", es: "Tema", nl: "Thema" },
   pickTemplate: { de: "Vorlage wählen", en: "Choose template", es: "Elegir plantilla", nl: "Sjabloon kiezen" },
   colorScheme: { de: "Farbschema", en: "Color scheme", es: "Esquema de colores", nl: "Kleurenschema" },
