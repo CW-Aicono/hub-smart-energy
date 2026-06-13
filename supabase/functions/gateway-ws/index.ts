@@ -124,6 +124,75 @@ async function mirrorGatewayInventoryState(params: {
   }
 }
 
+/**
+ * Verify the HTTP caller's Supabase user JWT and confirm they belong to the
+ * tenant that owns `locationIntegrationId`. Super-admins bypass the tenant
+ * check. Returns null on success, or a Response (401/403) on failure.
+ *
+ * WebSocket connections from gateways do NOT go through this path — they are
+ * authenticated separately via bcrypt(mac+password) in the upgrade handler.
+ */
+async function authorizeHttpCaller(
+  req: Request,
+  locationIntegrationId: string,
+): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization") || "";
+  if (!authHeader.toLowerCase().startsWith("bearer ")) {
+    return jsonResponse(req, { success: false, error: "Unauthorized" }, 401);
+  }
+
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const userClient = createClient(SUPABASE_URL, anonKey, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: userData, error: userErr } = await userClient.auth.getUser();
+  const user = userData?.user;
+  if (userErr || !user) {
+    return jsonResponse(req, { success: false, error: "Unauthorized" }, 401);
+  }
+
+  const sb = svc();
+
+  // Super-admin bypass: full access regardless of tenant.
+  const { data: roles } = await sb
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id);
+  if (roles?.some((r: any) => r.role === "super_admin")) {
+    return null;
+  }
+
+  // Resolve the tenant that owns the requested location_integration.
+  const { data: liRow, error: liErr } = await sb
+    .from("location_integrations")
+    .select("location:locations!inner(tenant_id)")
+    .eq("id", locationIntegrationId)
+    .maybeSingle();
+  if (liErr) {
+    console.error("[gateway-ws] authorizeHttpCaller li lookup failed", liErr);
+    return jsonResponse(req, { success: false, error: "Authorization check failed" }, 500);
+  }
+  const ownerTenantId = (liRow as any)?.location?.tenant_id ?? null;
+  if (!ownerTenantId) {
+    return jsonResponse(req, { success: false, error: "Forbidden" }, 403);
+  }
+
+  // Caller's tenant from profiles.
+  const { data: profile } = await sb
+    .from("profiles")
+    .select("tenant_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const callerTenantId = (profile as any)?.tenant_id ?? null;
+
+  if (!callerTenantId || callerTenantId !== ownerTenantId) {
+    return jsonResponse(req, { success: false, error: "Forbidden" }, 403);
+  }
+  return null;
+}
+
 async function handleHttpAction(req: Request): Promise<Response | null> {
   if (req.method !== "POST") return null;
 
