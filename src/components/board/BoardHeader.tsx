@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenant } from "@/hooks/useTenant";
+import { Zap } from "lucide-react";
 import type { BoardTheme, BoardTemplate, BoardUserLayout } from "@/hooks/useBoard";
 import AddTileMenu from "./AddTileMenu";
 import { boardT, type BoardLang } from "@/i18n/boardStrings";
