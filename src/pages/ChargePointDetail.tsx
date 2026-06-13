@@ -245,8 +245,8 @@ const ChargePointDetail = () => {
         if (data && data.length > 0) return;
         const statusLabel = currStatus === "faulted" ? "Störung (Faulted)" : "Verbindung getrennt (Offline)";
         const detail = cp.last_heartbeat
-          ? `Letzter Heartbeat: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm", { locale: de })}`
-          : "Kein Heartbeat empfangen";
+          ? `Letzte OCPP-Nachricht: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm", { locale: de })}`
+          : "Keine OCPP-Nachricht empfangen";
         createTask.mutate({
           title: `Störung an Ladesäule: ${cp.name}`,
           description: `Status: ${statusLabel}\n${detail}\nOCPP-ID: ${cp.ocpp_id}${cp.address ? `\nStandort: ${cp.address}` : ""}`,
