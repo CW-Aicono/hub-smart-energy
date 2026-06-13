@@ -50,16 +50,67 @@ export const EMPTY_DARK: Colors = {
 /** HSL "H S% L%" → CSS color */
 const hsl = (v: string) => `hsl(${v})`;
 
+/** "H S% L%" → "#rrggbb" für das native Color-Picker-Input */
+function hslStringToHex(v: string): string {
+  const m = v.trim().match(/^(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)%\s+(-?\d+(?:\.\d+)?)%$/);
+  if (!m) return "#000000";
+  const h = ((parseFloat(m[1]) % 360) + 360) % 360;
+  const s = Math.max(0, Math.min(100, parseFloat(m[2]))) / 100;
+  const l = Math.max(0, Math.min(100, parseFloat(m[3]))) / 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m2 = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const to = (n: number) => Math.round((n + m2) * 255).toString(16).padStart(2, "0");
+  return `#${to(r)}${to(g)}${to(b)}`;
+}
+
+/** "#rrggbb" → "H S% L%" */
+function hexToHslString(hex: string): string {
+  const m = hex.trim().match(/^#?([0-9a-fA-F]{6})$/);
+  if (!m) return "0 0% 0%";
+  const n = parseInt(m[1], 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0, s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+}
+
 function ColorField({
   value, onChange, label,
 }: { value: string; onChange: (v: string) => void; label: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span
-        className="h-7 w-7 shrink-0 rounded-md border"
-        style={{ background: hsl(value) }}
-        aria-hidden
-      />
+      <label
+        className="relative h-7 w-7 shrink-0 rounded-md border cursor-pointer overflow-hidden"
+        title="Farbe auswählen"
+      >
+        <span className="block h-full w-full" style={{ background: hsl(value) }} aria-hidden />
+        <input
+          type="color"
+          value={hslStringToHex(value)}
+          onChange={(e) => onChange(hexToHslString(e.target.value))}
+          className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
+          aria-label={`${label} – Farbe wählen`}
+        />
+      </label>
       <div className="flex-1 min-w-0">
         <Label className="text-[11px] text-muted-foreground">{label}</Label>
         <Input
