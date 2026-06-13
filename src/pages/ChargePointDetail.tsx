@@ -245,8 +245,8 @@ const ChargePointDetail = () => {
         if (data && data.length > 0) return;
         const statusLabel = currStatus === "faulted" ? "Störung (Faulted)" : "Verbindung getrennt (Offline)";
         const detail = cp.last_heartbeat
-          ? `Letzter Heartbeat: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm", { locale: de })}`
-          : "Kein Heartbeat empfangen";
+          ? `Letzte OCPP-Nachricht: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm", { locale: de })}`
+          : "Keine OCPP-Nachricht empfangen";
         createTask.mutate({
           title: `Störung an Ladesäule: ${cp.name}`,
           description: `Status: ${statusLabel}\n${detail}\nOCPP-ID: ${cp.ocpp_id}${cp.address ? `\nStandort: ${cp.address}` : ""}`,
@@ -266,7 +266,7 @@ const ChargePointDetail = () => {
   useEffect(() => {
     if (!cp?.ocpp_id || capsLoading || probeTriggeredRef.current) return;
     if (ocppCapabilities) return;
-    const online = isChargePointOnline((cp as any).ws_connected, cp.last_heartbeat);
+    const online = isChargePointOnline((cp as any).ws_connected, cp.last_heartbeat, undefined, (cp as any).last_ws_pong_at);
     if (!online) return;
     const vendor = String((cp as any).vendor ?? "").trim().toLowerCase();
     const model = String((cp as any).model ?? "").trim().toLowerCase();
@@ -359,7 +359,7 @@ const ChargePointDetail = () => {
   if (!cp) return null;
 
   // Status-Lookup case-insensitiv (DB liefert "Available" mit Großbuchstabe direkt von OCPP)
-  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat);
+  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat, undefined, (cp as any).last_ws_pong_at);
   const normalizedStatus = normalizeConnectorStatus(cp.status, cpOnline);
   const cfg = STATUS_KEYS[normalizedStatus] || STATUS_KEYS.offline;
   const StatusIcon = cfg.icon;
@@ -369,7 +369,7 @@ const ChargePointDetail = () => {
   if (cp.status === "offline") {
     warnings.push({
       message: "Verbindung zur Ladestation getrennt",
-      detail: cp.last_heartbeat ? `Letzter Heartbeat: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm")}` : "Kein Heartbeat empfangen",
+      detail: cp.last_heartbeat ? `Letzte OCPP-Nachricht: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm")}` : "Keine OCPP-Nachricht empfangen",
       time: cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy") : "—",
     });
   }
@@ -862,6 +862,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           selectable={isAdmin}
                           wsConnected={cpOnline}
                           lastHeartbeat={cp?.last_heartbeat ?? null}
+                          lastWsPongAt={(cp as any)?.last_ws_pong_at ?? null}
                           editable={isAdmin}
                           onReorder={isAdmin ? reorderConnectors : undefined}
                         />
@@ -1016,9 +1017,15 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         )}
                         <Separator />
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Letzter Heartbeat:</span>
+                          <span className="text-muted-foreground">Letzte OCPP-Nachricht:</span>
                           <span className="font-medium">{cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yy HH:mm") : "—"}</span>
                         </div>
+                        {(cp as any).last_ws_pong_at && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Letzter Verbindungs-Ping:</span>
+                            <span className="font-medium">{format(new Date((cp as any).last_ws_pong_at), "dd.MM.yy HH:mm:ss")}</span>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
