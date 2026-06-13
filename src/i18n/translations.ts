@@ -5164,7 +5164,7 @@ export const translations = {
   "cpd.firmware": { de: "Firmware:", en: "Firmware:", es: "Firmware:", nl: "Firmware:" },
   "cpd.location": { de: "Standort:", en: "Location:", es: "Ubicación:", nl: "Locatie:" },
   "cpd.coordinates": { de: "Koordinaten:", en: "Coordinates:", es: "Coordenadas:", nl: "Coördinaten:" },
-  "cpd.lastHeartbeat": { de: "Letzter Heartbeat:", en: "Last Heartbeat:", es: "Último heartbeat:", nl: "Laatste heartbeat:" },
+  "cpd.lastHeartbeat": { de: "Letzte OCPP-Nachricht:", en: "Last OCPP message:", es: "Último mensaje OCPP:", nl: "Laatste OCPP-bericht:" },
   "cpd.warnings": { de: "Warnung", en: "Warning", es: "Advertencia", nl: "Waarschuwing" },
   "cpd.warningsPlural": { de: "Warnungen", en: "Warnings", es: "Advertencias", nl: "Waarschuwingen" },
   "cpd.available": { de: "Verfügbar", en: "Available", es: "Disponible", nl: "Beschikbaar" },
