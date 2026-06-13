@@ -862,6 +862,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           selectable={isAdmin}
                           wsConnected={cpOnline}
                           lastHeartbeat={cp?.last_heartbeat ?? null}
+                          lastWsPongAt={(cp as any)?.last_ws_pong_at ?? null}
                           editable={isAdmin}
                           onReorder={isAdmin ? reorderConnectors : undefined}
                         />
