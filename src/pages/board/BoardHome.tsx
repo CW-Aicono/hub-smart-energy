@@ -111,6 +111,7 @@ export default function BoardHome() {
 
   return (
     <BoardThemeScope theme={activeTheme} mode={layout?.theme_mode ?? "system"}>
+      <WelcomeGreeting />
       <BoardHeader
         themes={themes}
         templates={templates}
