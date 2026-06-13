@@ -149,6 +149,7 @@ async function handle(action: string, body: Record<string, unknown>) {
         "last_heartbeat",
         "ws_connected",
         "ws_connected_since",
+        "last_ws_pong_at",
         "status",
         "supports_charging_profile",
         "supports_change_configuration",
