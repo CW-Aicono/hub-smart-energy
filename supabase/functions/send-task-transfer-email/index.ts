@@ -152,17 +152,19 @@ const handler = async (req: Request): Promise<Response> => {
 
     const isSuperAdmin = userRoles?.some((r) => r.role === "super_admin");
 
+    // --- Request-Body parsen ---
+    const body: TaskTransferRequest = await req.json();
+
+    if (!body.contactEmail || !body.taskTitle) {
+      throw new Error("Missing required fields: contactEmail and taskTitle");
+    }
+
+    // --- Tenant-Zugehörigkeit validieren (inkl. Super-Admin-Bypass) ---
     if (!isSuperAdmin && profile?.tenant_id !== body.tenantId) {
       return new Response(
         JSON.stringify({ success: false, error: "Forbidden" }),
         { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
-    }
-
-    const body: TaskTransferRequest = await req.json();
-
-    if (!body.contactEmail || !body.taskTitle) {
-      throw new Error("Missing required fields: contactEmail and taskTitle");
     }
 
     const branding = await getTenantBranding(body.tenantId);
