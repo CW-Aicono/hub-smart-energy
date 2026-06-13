@@ -126,7 +126,16 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
           const isSelected = selectedConnectorId === c.connector_id;
           const isEditing = editingId === c.id;
           const canDrag = editable && onReorder && connectors.length > 1;
-          const stale = getStaleness(c.last_status_at, lastHeartbeat);
+          const pongFresh = isPongFresh(lastWsPongAt);
+          const pongAge = formatAge(lastWsPongAt);
+          const lastActivityTs = (() => {
+            const candidates = [c.last_status_at, lastHeartbeat]
+              .filter(Boolean)
+              .map((ts) => new Date(ts as string).getTime());
+            if (candidates.length === 0) return null;
+            return new Date(Math.max(...candidates)).toISOString();
+          })();
+          const lastActivityLabel = formatAge(lastActivityTs);
 
           return (
             <div
@@ -194,32 +203,36 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
                 <TooltipTrigger asChild>
                   <div
                     className={`mt-1 flex items-center justify-center gap-1 text-[10px] ${
-                      stale.isStale ? "text-amber-600 dark:text-amber-500 font-medium" : "text-muted-foreground"
+                      pongFresh ? "text-emerald-600 dark:text-emerald-500" : "text-muted-foreground"
                     }`}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <Clock className="h-2.5 w-2.5" />
-                    <span>{stale.label}</span>
+                    <span>
+                      {pongFresh
+                        ? `Verbindung aktiv · Ping ${pongAge}`
+                        : lastActivityLabel
+                          ? `Letzte OCPP-Nachricht ${lastActivityLabel}`
+                          : "noch keine Daten"}
+                    </span>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">
-                  {c.last_status_at || lastHeartbeat ? (
-                    <>
-                      {c.last_status_at && (
-                        <>Letzte Statusmeldung:<br />{new Date(c.last_status_at).toLocaleString("de-DE")}<br /></>
-                      )}
-                      {lastHeartbeat && (
-                        <>Letzter Heartbeat:<br />{new Date(lastHeartbeat).toLocaleString("de-DE")}</>
-                      )}
-                      {stale.isStale && (
-                        <div className="mt-1 text-amber-500">
-                          ⚠ Daten älter als 5 Minuten – Wallbox meldet sich nicht zuverlässig.
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    "Noch keine Statusmeldung von der Wallbox empfangen."
+                <TooltipContent side="bottom" className="text-xs max-w-[260px]">
+                  {lastWsPongAt && (
+                    <>Letzter WebSocket-Pong:<br />{new Date(lastWsPongAt).toLocaleString("de-DE")}<br /></>
                   )}
+                  {c.last_status_at && (
+                    <>Letzte Statusmeldung:<br />{new Date(c.last_status_at).toLocaleString("de-DE")}<br /></>
+                  )}
+                  {lastHeartbeat && (
+                    <>Letzte OCPP-Nachricht:<br />{new Date(lastHeartbeat).toLocaleString("de-DE")}<br /></>
+                  )}
+                  {!lastWsPongAt && !c.last_status_at && !lastHeartbeat && (
+                    <>Noch keine Daten von der Wallbox empfangen.</>
+                  )}
+                  <div className="mt-2 text-muted-foreground">
+                    Hinweis: Manche Wallboxen (z. B. Compleo) senden OCPP-Nachrichten nur, wenn ein Fahrzeug angeschlossen ist. Die Verbindung wird im Hintergrund alle 30 s per Ping geprüft.
+                  </div>
                 </TooltipContent>
               </Tooltip>
             </div>
