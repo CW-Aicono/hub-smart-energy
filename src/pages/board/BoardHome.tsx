@@ -15,6 +15,7 @@ import BoardThemeScope from "@/components/board/BoardThemeScope";
 import BoardHeader from "@/components/board/BoardHeader";
 import BentoGrid from "@/components/board/BentoGrid";
 import PullToRefresh from "@/components/board/PullToRefresh";
+import WelcomeGreeting from "@/components/board/WelcomeGreeting";
 import { useBoardKpis } from "@/hooks/useBoardKpis";
 import { boardT, type BoardLang } from "@/i18n/boardStrings";
 
@@ -110,6 +111,7 @@ export default function BoardHome() {
 
   return (
     <BoardThemeScope theme={activeTheme} mode={layout?.theme_mode ?? "system"}>
+      <WelcomeGreeting />
       <BoardHeader
         themes={themes}
         templates={templates}
