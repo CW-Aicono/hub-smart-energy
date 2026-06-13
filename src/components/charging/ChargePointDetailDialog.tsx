@@ -174,7 +174,7 @@ export default function ChargePointDetailDialog({
 
   if (!cp) return null;
 
-  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat);
+  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat, undefined, (cp as any).last_ws_pong_at);
   const cfg = statusConfig[normalizeConnectorStatus(cp.status, cpOnline)] || statusConfig.offline;
   const StatusIcon = cfg.icon;
   const cpSessions = sessions
