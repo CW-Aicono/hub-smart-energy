@@ -128,10 +128,10 @@ export default function BoardEnergyBand() {
         {/* Fluss-Linien als animierter SVG-Streifen */}
         <svg className="mt-3 block w-full" viewBox="0 0 600 24" preserveAspectRatio="none" height="24">
           {/* PV → Haus */}
-          <FlowLine x1={100} x2={300} active={flowPvToHouse} color="hsl(var(--board-success))" reverse={false} />
+          <FlowLine x1={100} x2={300} active={flowPvToHouse} color="hsl(var(--board-success))" />
           {/* Netz → Haus (Bezug) oder Haus → Netz (Einspeisung) */}
-          <FlowLine x1={500} x2={300} active={flowGridToHouse} color="hsl(var(--board-accent))" reverse={false} />
-          <FlowLine x1={300} x2={500} active={flowPvToGrid} color="hsl(var(--board-success))" reverse={false} />
+          <FlowLine x1={500} x2={300} active={flowGridToHouse} color="hsl(var(--board-accent))" />
+          <FlowLine x1={300} x2={500} active={flowPvToGrid} color="hsl(var(--board-success))" />
         </svg>
       </div>
     </div>
