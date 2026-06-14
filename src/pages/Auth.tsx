@@ -12,6 +12,7 @@ import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import aiconoLogo from "@/assets/aicono-logo.png";
 import { usePartnerHostBranding } from "@/hooks/usePartnerHostBranding";
+import { isBoardHost } from "@/lib/hostname";
 
 type AuthView = "login" | "forgotPassword";
 
@@ -48,7 +49,8 @@ const Auth = () => {
     const params = new URLSearchParams(window.location.search);
     const redirect = params.get("redirect");
     // Nur interne Pfade zulassen (Schutz vor Open-Redirect).
-    const safe = redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "/";
+    const fallback = isBoardHost() ? "/board" : "/";
+    const safe = redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : fallback;
     return <Navigate to={safe} replace />;
   }
 
