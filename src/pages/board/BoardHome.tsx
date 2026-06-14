@@ -15,7 +15,9 @@ import BoardThemeScope from "@/components/board/BoardThemeScope";
 import BoardHeader from "@/components/board/BoardHeader";
 import BentoGrid from "@/components/board/BentoGrid";
 import PullToRefresh from "@/components/board/PullToRefresh";
-import WelcomeGreeting from "@/components/board/WelcomeGreeting";
+import AnimatedWelcome from "@/components/board/AnimatedWelcome";
+import BoardEnergyBand from "@/components/board/BoardEnergyBand";
+import TileDetailDrawer from "@/components/board/TileDetailDrawer";
 import { useBoardKpis } from "@/hooks/useBoardKpis";
 import { boardT, type BoardLang } from "@/i18n/boardStrings";
 
