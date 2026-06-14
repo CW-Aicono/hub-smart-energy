@@ -1,51 +1,34 @@
 ## Problem
 
-`last_ws_pong_at` bleibt NULL, obwohl Ost 1 auf Test mit `ws_connected=true` läuft und Heartbeat aktuell ist. Zwei Ursachen denkbar:
+Beim Abmelden aus dem C-Level Board wird der Logout-Button in `src/components/board/BoardHeader.tsx` (Zeile 217) auf `/auth` ohne `redirect`-Parameter geleitet. `src/pages/Auth.tsx` (Zeile 47–53) nutzt deshalb den Default `/` → Index → Tenant-Dashboard. Das Board wird beim erneuten Login nicht mehr geöffnet — weder im Browser noch in der installierten PWA.
 
-1. **Compleo (und einige andere Wallbox-Stacks) antworten nicht auf WS-Pings** — das ist firmware-abhängig und nicht reparierbar von unserer Seite.
-2. Etwaige DB-Fehler im Pong-Handler werden mit `log.debug` geschluckt — wir sehen nichts.
+## Lösung (klein und gezielt, nur Frontend)
 
-Pong als Liveness-Quelle ist damit unzuverlässig — genau für die Geräte (Compleo), für die wir die Anzeige eigentlich gebaut haben.
+Zwei Stellen anpassen, damit der Board-Kontext beim Re-Login erhalten bleibt:
 
-## Lösung: serverseitiger Liveness-Tick statt Charger-Pong
+### 1. `src/components/board/BoardHeader.tsx`
+Logout-Handler so ändern, dass nach `signOut()` mit `redirect=/board` zur Auth-Seite navigiert wird:
+```ts
+navigate("/auth?redirect=/board");
+```
 
-Statt darauf zu warten, dass der Charger pongt, schreiben wir `last_ws_pong_at` **selbst**, sobald wir wissen, dass der WebSocket noch offen ist. Der OCPP-Server pingt ohnehin alle 30 s — wenn der Socket beim nächsten Ping noch `OPEN` ist und im Intervall davor kein TCP-Reset / `close` kam, ist die Verbindung technisch live.
+### 2. `src/pages/Auth.tsx` (Fallback für Board-Host / installierte PWA)
+Der bestehende Code liest `?redirect=` aus der URL. Zusätzlich als Sicherheitsnetz: Wenn kein `redirect`-Parameter vorhanden ist **und** die App auf der Board-Subdomain läuft (`isBoardHost()` aus `src/lib/hostname.ts`), als Default `/board` statt `/` verwenden. So landet auch ein User, der direkt `/auth` aufruft (z. B. wenn die PWA „kalt" startet), wieder im Board.
 
-### Änderung 1: `docs/ocpp-persistent-server/src/keepAlive.ts`
+```ts
+import { isBoardHost } from "@/lib/hostname";
+...
+const fallback = isBoardHost() ? "/board" : "/";
+const safe = redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : fallback;
+```
 
-`startPing` bekommt den `chargePointPk` und schreibt direkt vor jedem `ws.ping()`, wenn `ws.readyState === OPEN`, `last_ws_pong_at = now()` per `updateChargePoint(...)` (fire-and-forget, aber Fehler als `log.warn` statt `log.debug`, damit wir sie diesmal sehen). Das gibt im UI alle 30 s ein frisches Liveness-Signal — komplett unabhängig davon, ob der Charger pongt.
+`BoardHostGuard` greift zwar bereits auf `board.aicono.org` und schickt Nicht-Board-Pfade auf `/board` — der Auth-Fallback ist aber wichtig für die Custom-Domain-PWA und vermeidet das kurze „Flackern" über das Tenant-Dashboard.
 
-Zusätzlich bleibt der bestehende `ws.on("pong")`-Handler erhalten (für Charger, die pongen, ist es ein noch direkteres Signal). Er bleibt fire-and-forget, aber Fehler loggen wir ebenfalls als `log.warn`.
+## Nicht im Scope
+- Keine Änderungen an Auth-Logik, Sessions, Backend, RLS oder anderen Subdomains (Partner/Sales bleiben unverändert).
+- Kein Refactor von `useAuth`.
 
-### Änderung 2: Diagnostik
-
-`log.debug("pong", ...)` → `log.info` (einmalig pro Session reicht, damit wir bei künftigem Debug einfach sehen können, ob ein Charger pongt). Anschließend wieder zurück auf debug, sobald die Sache stabil ist.
-
-## UI-Konsequenzen
-
-Keine. `last_ws_pong_at` bleibt das Feld, das `ConnectorStatusGrid` und `isChargePointOnline()` bereits konsumieren. Bedeutung ändert sich semantisch leicht von „Charger hat gepongt" zu „WebSocket war vor X s noch offen" — was für die Anzeige „Verbindung aktiv" genau richtig ist.
-
-## Roll-out
-
-1. Code-Änderung in `keepAlive.ts` + `index.ts`.
-2. Veröffentlichen in Lovable.
-3. **Auf Hetzner einmaliger Putty-Befehl** (Test + Live neu bauen):
-   ```bash
-   cd /opt/aicono/aicono-ems/docs/ocpp-persistent-server && \
-   git pull && docker compose up -d --build ocpp ocpp-live
-   ```
-4. Validierung nach 1 Minute: in Lovable
-   ```sql
-   SELECT name, ws_connected, last_ws_pong_at, now()-last_ws_pong_at AS pong_age
-   FROM charge_points WHERE ws_connected = true;
-   ```
-   `pong_age` muss < 1 Minute sein.
-5. Hard-Reload im Browser → Connector-Kacheln zeigen „Verbindung aktiv · Ping vor < 30 Sekunden" in Grün.
-
-## Was wir bewusst nicht tun
-
-- Wir prüfen den Live-Hetzner-Supabase nicht von hier aus — falls die Spalte `last_ws_pong_at` dort fehlt, würde Schritt 3 mit einem PostgREST-Schemafehler crashen. Deshalb wird im selben Putty-Block vor dem Rebuild verifiziert/migriert (eigener kleiner SQL-Snippet liefere ich mit, wenn du den Plan annimmst).
-
-## Zur Pong-Sichtbarkeit im OCPP-Log
-
-WebSocket-Ping/Pong sind **Control-Frames auf Protokoll-Ebene unter OCPP** — sie sind keine OCPP-Nachrichten und tauchen im `ocpp_message_log` deshalb korrekterweise **nicht** auf. Das ist by-design und wird sich nicht ändern. Sichtbar sind sie nur in den OCPP-Server-Logs (`docker logs ocpp-server-live | grep -i pong`).
+## Verifikation
+1. Im Board einloggen → Logout-Button klicken → URL ist `/auth?redirect=/board` → erneut einloggen → landet auf `/board`. ✅
+2. Gleicher Test in der installierten Board-PWA (Home-Screen-Icon). ✅
+3. Normaler Tenant-Login (über `/auth`) führt weiterhin ins Tenant-Dashboard. ✅
