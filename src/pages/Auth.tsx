@@ -12,6 +12,7 @@ import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import aiconoLogo from "@/assets/aicono-logo.png";
 import { usePartnerHostBranding } from "@/hooks/usePartnerHostBranding";
+import { isBoardHost } from "@/lib/hostname";
 
 type AuthView = "login" | "forgotPassword";
 
