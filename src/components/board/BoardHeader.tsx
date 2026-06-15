@@ -214,7 +214,7 @@ export default function BoardHeader({
           aria-label={tt("signOut")}
           onClick={async () => {
             await signOut();
-            navigate("/auth");
+            navigate("/auth?redirect=/board");
           }}
         >
           <LogOut className="h-4 w-4" />

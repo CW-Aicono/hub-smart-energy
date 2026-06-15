@@ -37,6 +37,7 @@ serve(async (req: Request) => {
     const email = String(body.email ?? "").trim().toLowerCase();
     const name = body.name ? String(body.name).trim() : null;
     const role = body.role === "partner_admin" ? "partner_admin" : "partner_user";
+    const perms = body.permissions ?? {};
     const redirectTo =
       body.redirectTo ?? "https://hub-smart-energy.lovable.app/set-password";
 
@@ -65,7 +66,19 @@ serve(async (req: Request) => {
     const { error: memErr } = await supabase
       .from("partner_members")
       .upsert(
-        { partner_id: membership.partner_id, user_id: userId, partner_role: role },
+        {
+          partner_id: membership.partner_id,
+          user_id: userId,
+          partner_role: role,
+          can_manage_sales_catalog: !!perms.can_manage_sales_catalog,
+          can_create_tenant:        !!perms.can_create_tenant,
+          can_view_billing:         !!perms.can_view_billing,
+          can_use_sales_scout:      perms.can_use_sales_scout !== false,
+          can_manage_members:       !!perms.can_manage_members,
+          can_manage_branding:      !!perms.can_manage_branding,
+          can_view_reporting:       !!perms.can_view_reporting,
+          can_manage_tenants:       !!perms.can_manage_tenants,
+        },
         { onConflict: "partner_id,user_id" },
       );
     if (memErr) throw new Error(`Partner-Zuordnung fehlgeschlagen: ${memErr.message}`);

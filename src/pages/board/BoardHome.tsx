@@ -15,7 +15,9 @@ import BoardThemeScope from "@/components/board/BoardThemeScope";
 import BoardHeader from "@/components/board/BoardHeader";
 import BentoGrid from "@/components/board/BentoGrid";
 import PullToRefresh from "@/components/board/PullToRefresh";
-import WelcomeGreeting from "@/components/board/WelcomeGreeting";
+import AnimatedWelcome from "@/components/board/AnimatedWelcome";
+import BoardEnergyBand from "@/components/board/BoardEnergyBand";
+import TileDetailDrawer from "@/components/board/TileDetailDrawer";
 import { useBoardKpis } from "@/hooks/useBoardKpis";
 import { boardT, type BoardLang } from "@/i18n/boardStrings";
 
@@ -74,6 +76,7 @@ export default function BoardHome() {
   const lang: BoardLang = ((preferences?.language as BoardLang) ?? "de");
   const qc = useQueryClient();
   const [editMode, setEditMode] = useState(false);
+  const [activeTileId, setActiveTileId] = useState<string | null>(null);
 
   if (authLoading || tenantLoading) {
     return <div className="min-h-screen flex items-center justify-center animate-fade-in">{boardT("loading", lang)}</div>;
@@ -111,7 +114,6 @@ export default function BoardHome() {
 
   return (
     <BoardThemeScope theme={activeTheme} mode={layout?.theme_mode ?? "system"}>
-      <WelcomeGreeting />
       <BoardHeader
         themes={themes}
         templates={templates}
@@ -142,6 +144,7 @@ export default function BoardHome() {
           refreshing: boardT("refreshing", lang),
         }}
       >
+        <AnimatedWelcome />
         <main className="mx-auto max-w-7xl px-4 py-6 animate-fade-in">
           {isCached && (
             <div className="mb-3 flex items-center justify-center gap-2 text-xs text-[hsl(var(--board-muted))]">
@@ -155,6 +158,7 @@ export default function BoardHome() {
             loading={kpisLoading}
             editMode={editMode}
             onChange={(next) => upsert({ tiles: next })}
+            onTileClick={(id) => setActiveTileId(id)}
             lang={lang}
           />
           {editMode && (
@@ -163,7 +167,13 @@ export default function BoardHome() {
             </p>
           )}
         </main>
+        <BoardEnergyBand />
       </PullToRefresh>
+      <TileDetailDrawer
+        tileId={activeTileId}
+        kpis={kpiData?.kpis ?? null}
+        onClose={() => setActiveTileId(null)}
+      />
     </BoardThemeScope>
   );
 }
