@@ -9,6 +9,10 @@ export interface PartnerPermissions {
   createTenant: boolean;
   viewBilling: boolean;
   useSalesScout: boolean;
+  manageMembers: boolean;
+  manageBranding: boolean;
+  viewReporting: boolean;
+  manageTenants: boolean;
 }
 
 interface PartnerAccessState {
@@ -27,6 +31,10 @@ const NO_PERMS: PartnerPermissions = {
   createTenant: false,
   viewBilling: false,
   useSalesScout: false,
+  manageMembers: false,
+  manageBranding: false,
+  viewReporting: false,
+  manageTenants: false,
 };
 
 const ALL_PERMS: PartnerPermissions = {
@@ -34,6 +42,10 @@ const ALL_PERMS: PartnerPermissions = {
   createTenant: true,
   viewBilling: true,
   useSalesScout: true,
+  manageMembers: true,
+  manageBranding: true,
+  viewReporting: true,
+  manageTenants: true,
 };
 
 const INITIAL: PartnerAccessState = {
@@ -63,7 +75,7 @@ export function usePartnerAccess(): PartnerAccessState {
       const { data, error } = await supabase
         .from("partner_members")
         .select(
-          "partner_role, partner_id, can_manage_sales_catalog, can_create_tenant, can_view_billing, can_use_sales_scout, partners:partner_id(name, logo_url, is_active)",
+          "partner_role, partner_id, can_manage_sales_catalog, can_create_tenant, can_view_billing, can_use_sales_scout, can_manage_members, can_manage_branding, can_view_reporting, can_manage_tenants, partners:partner_id(name, logo_url, is_active)",
         )
         .eq("user_id", user.id)
         .maybeSingle();
@@ -78,22 +90,27 @@ export function usePartnerAccess(): PartnerAccessState {
         return;
       }
 
-      const role = (data as any).partner_role as PartnerRole;
+      const row = data as any;
+      const role = row.partner_role as PartnerRole;
       const isAdmin = role === "partner_admin";
       const permissions: PartnerPermissions = isAdmin
         ? ALL_PERMS
         : {
-            manageSalesCatalog: !!(data as any).can_manage_sales_catalog,
-            createTenant: !!(data as any).can_create_tenant,
-            viewBilling: !!(data as any).can_view_billing,
-            useSalesScout: (data as any).can_use_sales_scout !== false,
+            manageSalesCatalog: !!row.can_manage_sales_catalog,
+            createTenant: !!row.can_create_tenant,
+            viewBilling: !!row.can_view_billing,
+            useSalesScout: row.can_use_sales_scout !== false,
+            manageMembers: !!row.can_manage_members,
+            manageBranding: !!row.can_manage_branding,
+            viewReporting: !!row.can_view_reporting,
+            manageTenants: !!row.can_manage_tenants,
           };
 
       setState({
         loading: false,
         isPartnerMember: true,
         isPartnerAdmin: isAdmin,
-        partnerId: (data as any).partner_id,
+        partnerId: row.partner_id,
         partnerName: partner.name,
         partnerLogoUrl: partner.logo_url,
         role,

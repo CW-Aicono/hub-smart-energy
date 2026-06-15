@@ -6754,9 +6754,13 @@ export type Database = {
       partner_members: {
         Row: {
           can_create_tenant: boolean
+          can_manage_branding: boolean
+          can_manage_members: boolean
           can_manage_sales_catalog: boolean
+          can_manage_tenants: boolean
           can_use_sales_scout: boolean
           can_view_billing: boolean
+          can_view_reporting: boolean
           created_at: string
           id: string
           partner_id: string
@@ -6766,9 +6770,13 @@ export type Database = {
         }
         Insert: {
           can_create_tenant?: boolean
+          can_manage_branding?: boolean
+          can_manage_members?: boolean
           can_manage_sales_catalog?: boolean
+          can_manage_tenants?: boolean
           can_use_sales_scout?: boolean
           can_view_billing?: boolean
+          can_view_reporting?: boolean
           created_at?: string
           id?: string
           partner_id: string
@@ -6778,9 +6786,13 @@ export type Database = {
         }
         Update: {
           can_create_tenant?: boolean
+          can_manage_branding?: boolean
+          can_manage_members?: boolean
           can_manage_sales_catalog?: boolean
+          can_manage_tenants?: boolean
           can_use_sales_scout?: boolean
           can_view_billing?: boolean
+          can_view_reporting?: boolean
           created_at?: string
           id?: string
           partner_id?: string
