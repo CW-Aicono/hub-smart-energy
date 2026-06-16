@@ -123,6 +123,7 @@ const LegalPageView = lazy(() => import("./pages/LegalPageView"));
 const PublicSalesQuote = lazy(() => import("./pages/PublicSalesQuote"));
 const PublicChargeStatus = lazy(() => import("./pages/PublicChargeStatus"));
 const BoardHome = lazy(() => import("./pages/board/BoardHome"));
+const BoardTileDetail = lazy(() => import("./pages/board/BoardTileDetail"));
 
 
 const queryClient = new QueryClient({
@@ -309,6 +310,7 @@ const App = () => (
                       <Route path="/partner/sales/rules" element={<PartnerLayout><PartnerSalesRules /></PartnerLayout>} />
                       {/* Stufe 3: C-Level Dashboard (board.aicono.org → /board) */}
                       <Route path="/board" element={<BoardHome />} />
+                      <Route path="/board/tile/:tileId" element={<BoardTileDetail />} />
 
                       {/* Sales Scout: gemeinsam genutzt unter /sales (Partner-Member sehen ihre eigene Org via RLS) */}
 

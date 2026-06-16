@@ -15,29 +15,9 @@ interface DetailBlock {
   value: string;
 }
 
-/** Mapping: Kachel-ID → Tenant-Zielroute */
-const TILE_LINKS: Record<string, { label: string; route: string }> = {
-  cost_today: { label: "Energiedaten öffnen", route: "/energy-data" },
-  cost_month: { label: "Energiedaten öffnen", route: "/energy-data" },
-  cost_ytd: { label: "Energiedaten öffnen", route: "/energy-data" },
-  savings_vs_last_year: { label: "Energiebericht öffnen", route: "/energy-report" },
-  forecast_eom: { label: "Energiebericht öffnen", route: "/energy-report" },
-  co2_month: { label: "Energiebericht öffnen", route: "/energy-report" },
-  co2_ytd: { label: "Energiebericht öffnen", route: "/energy-report" },
-  co2_avoided_tons: { label: "Energiebericht öffnen", route: "/energy-report" },
-  self_consumption_ratio: { label: "Energiebericht öffnen", route: "/energy-report" },
-  self_sufficiency: { label: "Energiebericht öffnen", route: "/energy-report" },
-  pv_yield_month: { label: "Energiebericht öffnen", route: "/energy-report" },
-  top_locations: { label: "Standorte öffnen", route: "/locations" },
-  alerts_open: { label: "Aufgaben öffnen", route: "/tasks" },
-  gateway_availability: { label: "Integrationen öffnen", route: "/integrations" },
-  cp_stability: { label: "Ladepunkte öffnen", route: "/charging/points" },
-  charging_revenue_month: { label: "Ladepunkte öffnen", route: "/charging/points" },
-  trading_pnl_month: { label: "Arbitrage-Trading öffnen", route: "/arbitrage" },
-  invoices_open: { label: "Energiedaten öffnen", route: "/energy-data" },
-  tasks_open: { label: "Aufgaben öffnen", route: "/tasks" },
-  tasks_overdue: { label: "Aufgaben öffnen", route: "/tasks" },
-};
+/** Alle Board-Kacheln führen auf eine eigene Detail-Seite innerhalb /board/*.
+ *  Der User der C-Level-PWA verlässt das Board damit nie. */
+
 
 
 const fmt = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
@@ -114,7 +94,6 @@ function buildContext(tileId: string, k: BoardKpis): DetailBlock[] {
 export default function TileDetailDrawer({ tileId, kpis, onClose }: Props) {
   const navigate = useNavigate();
   const meta = tileId ? TILE_CATALOG[tileId] : null;
-  const link = tileId ? TILE_LINKS[tileId] : null;
   const open = !!tileId;
 
   useEffect(() => {
@@ -199,21 +178,20 @@ export default function TileDetailDrawer({ tileId, kpis, onClose }: Props) {
           )}
         </div>
 
-        {link && (
-          <footer className="p-5 border-t border-[hsl(var(--board-border))]">
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                navigate(link.route);
-              }}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[hsl(var(--board-accent))] text-[hsl(var(--board-background))] py-3 text-sm font-medium hover:opacity-90 transition-opacity"
-            >
-              {link.label}
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </footer>
-        )}
+        <footer className="p-5 border-t border-[hsl(var(--board-border))]">
+          <button
+            type="button"
+            onClick={() => {
+              const id = tileId;
+              onClose();
+              if (id) navigate(`/board/tile/${id}`);
+            }}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[hsl(var(--board-accent))] text-[hsl(var(--board-background))] py-3 text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            Detail-Seite öffnen
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </footer>
       </aside>
     </div>
   );
