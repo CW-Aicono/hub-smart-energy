@@ -24,11 +24,13 @@ function classify(m: MeterRow): "pv" | "grid" | null {
   return null;
 }
 
-function fmtKw(w: number): string {
-  const abs = Math.abs(w);
-  if (abs >= 1000) return `${(w / 1000).toLocaleString("de-DE", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} kW`;
-  return `${Math.round(w).toLocaleString("de-DE")} W`;
+/** Eingabe ist kW (meter_power_readings.power_value wird in kW gespeichert). */
+function fmtKw(kw: number): string {
+  const abs = Math.abs(kw);
+  if (abs >= 1) return `${kw.toLocaleString("de-DE", { maximumFractionDigits: 2, minimumFractionDigits: 2 })} kW`;
+  return `${Math.round(kw * 1000).toLocaleString("de-DE")} W`;
 }
+
 
 /**
  * Schmales Live-Band am unteren Rand des Boards.
