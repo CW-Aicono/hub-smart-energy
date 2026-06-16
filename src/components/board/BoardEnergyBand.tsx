@@ -8,50 +8,52 @@ interface MeterRow {
   id: string;
   energy_type: string | null;
   is_main_meter: boolean | null;
-}
-
-function classify(m: MeterRow): "pv" | "grid" | "house" | null {
-  const t = (m.energy_type ?? "").toLowerCase();
-  if (!t.includes("electric") && !t.includes("strom") && !t.includes("pv") && !t.includes("solar")) {
-    return null;
-  }
-  if (t.includes("pv") || t.includes("solar")) return "pv";
-  if (m.is_main_meter) return "grid";
-  return "house";
-}
-
-function fmtKw(w: number): string {
-  const abs = Math.abs(w);
-  if (abs >= 1000) return `${(w / 1000).toLocaleString("de-DE", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} kW`;
-  return `${Math.round(w).toLocaleString("de-DE")} W`;
+  meter_function: string | null;
 }
 
 /**
- * Schmales Live-Band am unteren Rand des Boards:
- * zeigt aggregierte Echtzeit-Leistung PV → Haus ← Netz mit animierten Flüssen.
- *
- * Quelle: meter_power_readings via Supabase Realtime (siehe useRealtimePower).
- * Klassifikation:
- *  - PV: energy_type enthält "pv" oder "solar"
- *  - Netz (grid): is_main_meter = true (Bezug positiv, Einspeisung negativ)
- *  - Haus (house): übrige Strom-Zähler
+ * Klassifikation für das Live-Band:
+ *  - PV: meter_function='generation' (egal welcher energy_type)
+ *  - Netz (grid): is_main_meter=true UND energy_type='strom' (Bezug positiv, Einspeisung negativ)
+ *  - sonst: ignoriert (Verbrauch wird aus Energiebilanz berechnet, nicht aus Summe der Submeter)
+ */
+function classify(m: MeterRow): "pv" | "grid" | null {
+  const t = (m.energy_type ?? "").toLowerCase();
+  if (m.meter_function === "generation") return "pv";
+  if (m.is_main_meter && (t === "strom" || t.includes("electric"))) return "grid";
+  return null;
+}
+
+/** Eingabe ist kW (meter_power_readings.power_value wird in kW gespeichert). */
+function fmtKw(kw: number): string {
+  const abs = Math.abs(kw);
+  if (abs >= 1) return `${kw.toLocaleString("de-DE", { maximumFractionDigits: 2, minimumFractionDigits: 2 })} kW`;
+  return `${Math.round(kw * 1000).toLocaleString("de-DE")} W`;
+}
+
+
+/**
+ * Schmales Live-Band am unteren Rand des Boards.
+ * Quelle: meter_power_readings — Initialwert per Query (letzte 10 Min), danach Realtime.
  */
 export default function BoardEnergyBand() {
   const { tenant } = useTenant();
   const [meters, setMeters] = useState<MeterRow[]>([]);
+  const [seed, setSeed] = useState<Record<string, number>>({});
 
+  // 1) Relevante Zähler laden
   useEffect(() => {
     if (!tenant?.id) return;
     supabase
       .from("meters")
-      .select("id, energy_type, is_main_meter")
+      .select("id, energy_type, is_main_meter, meter_function")
       .eq("tenant_id", tenant.id)
       .eq("is_archived", false)
       .then(({ data }) => setMeters((data ?? []) as MeterRow[]));
   }, [tenant?.id]);
 
   const groups = useMemo(() => {
-    const g: Record<"pv" | "grid" | "house", string[]> = { pv: [], grid: [], house: [] };
+    const g: Record<"pv" | "grid", string[]> = { pv: [], grid: [] };
     for (const m of meters) {
       const c = classify(m);
       if (c) g[c].push(m.id);
@@ -59,28 +61,65 @@ export default function BoardEnergyBand() {
     return g;
   }, [meters]);
 
-  const meterIds = useMemo(
-    () => [...groups.pv, ...groups.grid, ...groups.house],
-    [groups],
-  );
+  const meterIds = useMemo(() => [...groups.pv, ...groups.grid], [groups]);
+  const meterKey = meterIds.slice().sort().join(",");
+
+  // 2) Initialwerte seeden (letzte 10 Minuten), dann alle 60s nachziehen,
+  //    damit das Band auch ohne frische Realtime-INSERTs sichtbar bleibt.
+  useEffect(() => {
+    if (meterIds.length === 0) {
+      setSeed({});
+      return;
+    }
+    let cancelled = false;
+
+    const fetchSeed = async () => {
+      const since = new Date(Date.now() - 10 * 60_000).toISOString();
+      const { data } = await supabase
+        .from("meter_power_readings")
+        .select("meter_id, power_value, recorded_at")
+        .in("meter_id", meterIds)
+        .gte("recorded_at", since)
+        .order("recorded_at", { ascending: false })
+        .limit(2000);
+      if (cancelled) return;
+      const latest: Record<string, number> = {};
+      for (const row of data ?? []) {
+        if (latest[row.meter_id] === undefined) {
+          latest[row.meter_id] = Number(row.power_value);
+        }
+      }
+      setSeed(latest);
+    };
+
+    fetchSeed();
+    const id = window.setInterval(fetchSeed, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [meterKey]);
+
+  // 3) Realtime overlay
   const { latestByMeter } = useRealtimePower(meterIds);
 
   const sumGroup = (ids: string[]) =>
-    ids.reduce((acc, id) => acc + (latestByMeter[id] ?? 0), 0);
+    ids.reduce((acc, id) => acc + (latestByMeter[id] ?? seed[id] ?? 0), 0);
+
+  const hasValue = (ids: string[]) =>
+    ids.some((id) => latestByMeter[id] !== undefined || seed[id] !== undefined);
 
   const pvPower = Math.max(0, sumGroup(groups.pv));
   const gridPowerRaw = sumGroup(groups.grid); // + Bezug, − Einspeisung
   const gridImport = Math.max(0, gridPowerRaw);
   const gridExport = Math.max(0, -gridPowerRaw);
-  const housePower = Math.max(0, sumGroup(groups.house)) || Math.max(0, pvPower + gridImport - gridExport);
+  // Hausverbrauch aus Energiebilanz (verlässlicher als Summe aller Submeter)
+  const housePower = Math.max(0, pvPower + gridImport - gridExport);
 
-  // Keine Daten? Komponente unsichtbar lassen, statt einen leeren Balken zu zeigen.
-  const hasAnyData =
-    meterIds.some((id) => latestByMeter[id] !== undefined) &&
-    pvPower + gridImport + gridExport + housePower > 0;
+  const hasAnyData = hasValue(groups.pv) || hasValue(groups.grid);
   if (!hasAnyData) return null;
 
-  const flowPvToHouse = pvPower > 0;
+  const flowPvToHouse = pvPower > 0 && housePower > 0;
   const flowGridToHouse = gridImport > 0;
   const flowPvToGrid = gridExport > 0;
 
@@ -98,7 +137,6 @@ export default function BoardEnergyBand() {
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-3 items-center">
-          {/* PV */}
           <Node
             icon={<Sun className="h-5 w-5" />}
             label="PV"
@@ -106,7 +144,6 @@ export default function BoardEnergyBand() {
             tone="positive"
             active={pvPower > 0}
           />
-          {/* Haus (zentral) */}
           <Node
             icon={<Home className="h-5 w-5" />}
             label="Verbrauch"
@@ -115,7 +152,6 @@ export default function BoardEnergyBand() {
             active={housePower > 0}
             highlight
           />
-          {/* Netz */}
           <Node
             icon={<Zap className="h-5 w-5" />}
             label={gridExport > 0 ? "Einspeisung" : "Bezug Netz"}
@@ -125,11 +161,8 @@ export default function BoardEnergyBand() {
           />
         </div>
 
-        {/* Fluss-Linien als animierter SVG-Streifen */}
         <svg className="mt-3 block w-full" viewBox="0 0 600 24" preserveAspectRatio="none" height="24">
-          {/* PV → Haus */}
           <FlowLine x1={100} x2={300} active={flowPvToHouse} color="hsl(var(--board-success))" />
-          {/* Netz → Haus (Bezug) oder Haus → Netz (Einspeisung) */}
           <FlowLine x1={500} x2={300} active={flowGridToHouse} color="hsl(var(--board-accent))" />
           <FlowLine x1={300} x2={500} active={flowPvToGrid} color="hsl(var(--board-success))" />
         </svg>
@@ -194,7 +227,7 @@ function FlowLine({
           strokeWidth={2.5}
           strokeDasharray="6 8"
           strokeLinecap="round"
-          style={{ animation: `flow-dash ${x2 > x1 ? "1.2s" : "1.2s"} linear infinite` }}
+          style={{ animation: `flow-dash 1.2s linear infinite` }}
         />
       )}
       <style>{`
