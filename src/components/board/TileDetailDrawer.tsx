@@ -17,27 +17,28 @@ interface DetailBlock {
 
 /** Mapping: Kachel-ID → Tenant-Zielroute */
 const TILE_LINKS: Record<string, { label: string; route: string }> = {
-  cost_today: { label: "Kosten-Übersicht öffnen", route: "/cost-revenue" },
-  cost_month: { label: "Kosten-Übersicht öffnen", route: "/cost-revenue" },
-  cost_ytd: { label: "Kosten-Übersicht öffnen", route: "/cost-revenue" },
-  savings_vs_last_year: { label: "Analyse öffnen", route: "/analysis" },
-  forecast_eom: { label: "Prognose öffnen", route: "/analysis" },
-  co2_month: { label: "CO₂-Bilanz öffnen", route: "/co2-balance" },
-  co2_ytd: { label: "CO₂-Bilanz öffnen", route: "/co2-balance" },
-  co2_avoided_tons: { label: "CO₂-Bilanz öffnen", route: "/co2-balance" },
-  self_consumption_ratio: { label: "PV-Auswertung öffnen", route: "/analysis" },
-  self_sufficiency: { label: "PV-Auswertung öffnen", route: "/analysis" },
-  pv_yield_month: { label: "PV-Auswertung öffnen", route: "/analysis" },
+  cost_today: { label: "Energiedaten öffnen", route: "/energy-data" },
+  cost_month: { label: "Energiedaten öffnen", route: "/energy-data" },
+  cost_ytd: { label: "Energiedaten öffnen", route: "/energy-data" },
+  savings_vs_last_year: { label: "Energiebericht öffnen", route: "/energy-report" },
+  forecast_eom: { label: "Energiebericht öffnen", route: "/energy-report" },
+  co2_month: { label: "Energiebericht öffnen", route: "/energy-report" },
+  co2_ytd: { label: "Energiebericht öffnen", route: "/energy-report" },
+  co2_avoided_tons: { label: "Energiebericht öffnen", route: "/energy-report" },
+  self_consumption_ratio: { label: "Energiebericht öffnen", route: "/energy-report" },
+  self_sufficiency: { label: "Energiebericht öffnen", route: "/energy-report" },
+  pv_yield_month: { label: "Energiebericht öffnen", route: "/energy-report" },
   top_locations: { label: "Standorte öffnen", route: "/locations" },
   alerts_open: { label: "Aufgaben öffnen", route: "/tasks" },
-  gateway_availability: { label: "Gateways öffnen", route: "/integrations" },
-  cp_stability: { label: "Ladepunkte öffnen", route: "/charging" },
-  charging_revenue_month: { label: "Ladevorgänge öffnen", route: "/charging" },
-  trading_pnl_month: { label: "Trading öffnen", route: "/dynamic-pricing" },
-  invoices_open: { label: "Rechnungen öffnen", route: "/invoices" },
+  gateway_availability: { label: "Integrationen öffnen", route: "/integrations" },
+  cp_stability: { label: "Ladepunkte öffnen", route: "/charging/points" },
+  charging_revenue_month: { label: "Ladepunkte öffnen", route: "/charging/points" },
+  trading_pnl_month: { label: "Arbitrage-Trading öffnen", route: "/arbitrage" },
+  invoices_open: { label: "Energiedaten öffnen", route: "/energy-data" },
   tasks_open: { label: "Aufgaben öffnen", route: "/tasks" },
   tasks_overdue: { label: "Aufgaben öffnen", route: "/tasks" },
 };
+
 
 const fmt = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
 const fmt1 = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
