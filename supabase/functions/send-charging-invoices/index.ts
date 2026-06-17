@@ -747,6 +747,12 @@ serve(async (req) => {
                   html: emailHtmlFinal,
                 });
                 tenantResult.emails_sent++;
+                if (invoiceData?.id) {
+                  await supabase.from("charging_invoices").update({
+                    email_sent_at: new Date().toISOString(),
+                    email_send_count: (invoiceData.email_send_count ?? 0) + 1,
+                  }).eq("id", invoiceData.id);
+                }
               } catch (emailErr: any) {
                 tenantResult.errors.push(`Email to ${user.email} failed: ${emailErr.message}`);
               }
