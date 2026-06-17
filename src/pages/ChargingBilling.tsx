@@ -915,7 +915,7 @@ const ChargingBilling = () => {
                               <Input type="month" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
                             </div>
                             <div className="p-3 bg-muted rounded-lg text-sm">
-                              <p>Zeitraum: <strong>{genPeriod.start}</strong> bis <strong>{genPeriod.end}</strong></p>
+                              <p>Zeitraum: <strong>{format(new Date(genPeriod.start), "dd.MM.yyyy", { locale: de })}</strong> bis <strong>{format(new Date(genPeriod.end), "dd.MM.yyyy", { locale: de })}</strong></p>
                               <p className="text-muted-foreground mt-1">Es werden Einzelrechnungen pro Nutzer sowie Sammelrechnungen für alle Rechnungsgruppen mit Mitgliedern im Zeitraum erstellt.</p>
                             </div>
                           </div>
