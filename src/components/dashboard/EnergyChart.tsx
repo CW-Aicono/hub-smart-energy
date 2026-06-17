@@ -138,7 +138,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const visibleEnergyKeys = useMemo(() => ENERGY_KEYS.filter(k => allowedTypes.has(k)), [allowedTypes]);
 
   // DB-based daily totals for non-day periods
-  const [dailyTotals, setDailyTotals] = useState<Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>>([]);
+  const [dailyTotals, setDailyTotals] = useState<Array<{ meter_id: string; day: string; bezug: number; einspeisung: number; source: string }>>([]);
   const [dailyTotalsLoading, setDailyTotalsLoading] = useState(false);
 
   // Map "all" to "year" for this chart
