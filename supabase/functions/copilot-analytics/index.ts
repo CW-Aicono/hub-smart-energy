@@ -276,6 +276,7 @@ WICHTIG:
 - Für Stromverbrauch pro Zähler nutze "prepared_summaries.electricity_consumption_by_meter".
 - Für Wallbox-/Ladepunkt-Auslastung nutze "prepared_summaries.charging_by_charge_point".
 - Für Lastspitzen nutze "prepared_summaries.peak_power_by_day".
+- Prüfe IMMER "prepared_summaries.data_coverage": Wenn für einen Zähler/Standort coverage_pct < 80 oder avg_coverage < 0.8 ist, weise im "insight_markdown" explizit darauf hin ("Datenbasis lückenhaft: nur X von Y Tagen verfügbar") und reduziere die KPI-Aussagekraft entsprechend.
 - Wenn die Daten nicht ausreichen, schreibe das ehrlich in "insight_markdown" und gib ein leeres KPI-/Chart-Array zurück.
 - Zahlen IMMER im deutschen Format denken (Punkt = Tausender, Komma = Dezimal) – die Formatierung übernimmt das Frontend.
 - Chart-Daten so liefern, dass sie 1:1 in Recharts gerendert werden können.`;
