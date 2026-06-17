@@ -62,22 +62,24 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
   const safeMeterIds = meterIds.length ? meterIds : ["00000000-0000-0000-0000-000000000000"];
   const meterById = new Map(meters.map((m: any) => [m.id, m]));
 
+  // Read from pre-aggregated daily totals (fast: 1 row per meter per day)
   const { data: dailyTotalsData, error: dailyTotalsError } = await db
-    .from("meter_period_totals")
-    .select("meter_id, period_start, total_value, energy_type, source")
+    .from("meter_daily_totals_mv")
+    .select("meter_id, bucket_start, consumption_kwh, export_kwh, energy_type, coverage_ratio, source")
     .eq("tenant_id", tenantId)
-    .eq("period_type", "day")
     .in("meter_id", safeMeterIds)
-    .gte("period_start", periodStart)
-    .lte("period_start", periodEnd)
-    .limit(10000);
+    .gte("bucket_start", periodStart)
+    .lte("bucket_start", periodEnd)
+    .limit(20000);
   if (dailyTotalsError) throw { status: 500, message: "Tageswerte konnten nicht gelesen werden", detail: dailyTotalsError.message };
 
   const daily_meter_totals = (dailyTotalsData ?? []).map((r: any) => {
     const meter = meterById.get(r.meter_id) as any;
     const location = meter ? locationById.get(meter.location_id) as any : null;
+    const bezug = Number(r.consumption_kwh || 0);
+    const einspeisung = Number(r.export_kwh || 0);
     return {
-      day: r.period_start,
+      day: r.bucket_start,
       meter_id: r.meter_id,
       meter_name: meter?.name ?? "Unbekannter Zähler",
       location_id: meter?.location_id ?? null,
@@ -85,10 +87,14 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
       energy_type: r.energy_type ?? meter?.energy_type ?? "unbekannt",
       meter_function: meter?.meter_function ?? "unbekannt",
       is_main_meter: Boolean(meter?.is_main_meter),
-      total_kwh: Number(r.total_value || 0),
-      source: r.source ?? "meter_period_totals",
+      total_kwh: bezug - einspeisung,
+      bezug_kwh: bezug,
+      einspeisung_kwh: einspeisung,
+      coverage_ratio: Number(r.coverage_ratio ?? 1),
+      source: r.source ?? "meter_daily_totals_mv",
     };
   });
+
 
   const { data: peakRowsData, error: peakRowsError } = await db
     .from("meter_power_readings_5min")
