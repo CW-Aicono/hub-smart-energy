@@ -729,8 +729,11 @@ const LiveValues = () => {
                         {(source === "live" || source === "virtual") && meterReading != null && (
                           <div className="text-sm text-muted-foreground">
                             <span className="font-medium">
-                              {Number(meterReading).toLocaleString(dateLocale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}{" "}
-                              {meter.energy_type === "wasser" || meter.energy_type === "gas" ? "m³" : meterReadingUnit}
+                              {meter.energy_type === "wasser" || meter.energy_type === "gas"
+                                ? `${Number(meterReading).toLocaleString(dateLocale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} m³`
+                                : source === "virtual"
+                                  ? formatEnergy(Number(meterReading) * 1000)
+                                  : formatEnergy(Number(meterReading) * (((meter as any).source_unit_energy || "kWh") === "Wh" ? 1 : 1000))}
                             </span>
                             <span className="ml-1 font-normal">{t("liveValues.meterReading" as any)}</span>
                           </div>
