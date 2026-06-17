@@ -1016,8 +1016,10 @@ const ChargingBilling = () => {
                     const idleFeePerMin = inv.tariff_idle_fee_per_minute ?? 0;
                     const idleGrace = inv.tariff_idle_fee_grace_minutes ?? 60;
                     const tagLabelMap = new Map<string, string | null>();
+                    const tagUserMap = new Map<string, string | null>();
                     for (const t of (inv.user_tags || [])) {
                       tagLabelMap.set(t.tag.toUpperCase(), t.label);
+                      tagUserMap.set(t.tag.toUpperCase(), (t as any).user_name ?? null);
                     }
                     // Group sessions by tag
                     const grouped = new Map<string, typeof inv.sessions>();
