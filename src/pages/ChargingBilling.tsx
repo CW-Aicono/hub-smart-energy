@@ -1016,8 +1016,10 @@ const ChargingBilling = () => {
                     const idleFeePerMin = inv.tariff_idle_fee_per_minute ?? 0;
                     const idleGrace = inv.tariff_idle_fee_grace_minutes ?? 60;
                     const tagLabelMap = new Map<string, string | null>();
+                    const tagUserMap = new Map<string, string | null>();
                     for (const t of (inv.user_tags || [])) {
                       tagLabelMap.set(t.tag.toUpperCase(), t.label);
+                      tagUserMap.set(t.tag.toUpperCase(), (t as any).user_name ?? null);
                     }
                     // Group sessions by tag
                     const grouped = new Map<string, typeof inv.sessions>();
@@ -1071,12 +1073,14 @@ const ChargingBilling = () => {
                         <div className="space-y-4">
                           {Array.from(grouped.entries()).map(([tagKey, sess]) => {
                             const label = tagLabelMap.get(tagKey);
+                            const tagUser = tagUserMap.get(tagKey);
                             return (
                               <div key={tagKey} className="border rounded-lg overflow-hidden">
                                 <div className="bg-muted/50 px-3 py-2 text-xs flex items-center justify-between">
                                   <span>
                                     <span className="font-mono font-semibold">{tagKey}</span>
                                     {label && <span className="text-muted-foreground ml-2">· {label}</span>}
+                                    {tagUser && <span className="text-muted-foreground ml-2">· {tagUser}</span>}
                                   </span>
                                   <span className="text-muted-foreground">{sess!.length} Vorgang/Vorgänge</span>
                                 </div>
