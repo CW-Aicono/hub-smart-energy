@@ -1430,6 +1430,8 @@ export type Database = {
           billing_group_id: string | null
           created_at: string
           currency: string
+          email_send_count: number
+          email_sent_at: string | null
           id: string
           idle_fee_amount: number
           invoice_date: string
@@ -1453,6 +1455,8 @@ export type Database = {
           billing_group_id?: string | null
           created_at?: string
           currency?: string
+          email_send_count?: number
+          email_sent_at?: string | null
           id?: string
           idle_fee_amount?: number
           invoice_date?: string
@@ -1476,6 +1480,8 @@ export type Database = {
           billing_group_id?: string | null
           created_at?: string
           currency?: string
+          email_send_count?: number
+          email_sent_at?: string | null
           id?: string
           idle_fee_amount?: number
           invoice_date?: string
