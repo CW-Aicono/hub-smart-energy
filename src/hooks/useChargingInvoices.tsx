@@ -113,6 +113,26 @@ export function useChargingInvoices() {
       const groupById = new Map<string, any>();
       for (const g of (groupsRes.data ?? [])) groupById.set((g as any).id, g);
 
+      // Collect all id_tags used across sessions, resolve to label + user name
+      const allTags = Array.from(new Set(
+        Array.from(sessionsByInvoice.values()).flat().map(s => s.id_tag).filter(Boolean) as string[]
+      ));
+      const tagInfoByUpper = new Map<string, { label: string | null; user_name: string | null }>();
+      if (allTags.length > 0) {
+        const { data: tagRows } = await supabase
+          .from("charging_user_rfid_tags")
+          .select("tag, label, charging_users(name)")
+          .eq("tenant_id", tenant!.id)
+          .in("tag", allTags);
+        for (const t of (tagRows ?? [])) {
+          const key = String((t as any).tag).toUpperCase();
+          tagInfoByUpper.set(key, {
+            label: (t as any).label ?? null,
+            user_name: (t as any).charging_users?.name ?? null,
+          });
+        }
+      }
+
       return invs.map(inv => {
         const u = inv.user_id ? userById.get(inv.user_id) : null;
         const g = inv.billing_group_id ? groupById.get(inv.billing_group_id) : null;
@@ -120,12 +140,31 @@ export function useChargingInvoices() {
         const sessions = (sessionsByInvoice.get(inv.id) ?? []).sort(
           (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
         );
+        // Build tag list from sessions for this invoice (covers billing-group invoices too)
+        const tagsForInv = new Map<string, ChargingInvoiceTag>();
+        for (const s of sessions) {
+          if (!s.id_tag) continue;
+          const key = s.id_tag.toUpperCase();
+          if (tagsForInv.has(key)) continue;
+          const info = tagInfoByUpper.get(key);
+          tagsForInv.set(key, {
+            tag: s.id_tag,
+            label: info?.label ?? null,
+            user_name: info?.user_name ?? null,
+          });
+        }
+        // Fallback: if user-owned invoice with no sessions matched, still include user's tags
+        if (tagsForInv.size === 0 && inv.user_id) {
+          for (const t of (tagsByUser.get(inv.user_id) ?? [])) {
+            tagsForInv.set(t.tag.toUpperCase(), { ...t, user_name: u?.name ?? null });
+          }
+        }
         return {
           ...inv,
           user_name: u?.name ?? g?.name,
           user_email: u?.email,
           billing_group_name: g?.name,
-          user_tags: inv.user_id ? (tagsByUser.get(inv.user_id) ?? []) : [],
+          user_tags: Array.from(tagsForInv.values()),
           sessions,
           tariff_price_per_kwh: tariff?.price_per_kwh,
           tariff_idle_fee_per_minute: tariff?.idle_fee_per_minute,
