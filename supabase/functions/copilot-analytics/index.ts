@@ -42,61 +42,50 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
   // Standorte (mit optionalem Filter)
   let locQuery = db.from("locations").select("id, name, building_type, area_m2, address_city").eq("tenant_id", tenantId);
   if (locationId) locQuery = locQuery.eq("id", locationId);
-  const { data: locations = [] } = await locQuery;
+  const { data: locationsData } = await locQuery;
+  const locations = locationsData ?? [];
 
   const locationIds = locations.map((l: any) => l.id);
 
   // Tages-Aggregate pro Standort/Meter (Stromverbrauch, PV, Einspeisung)
   let dailyAgg: any[] = [];
   if (locationIds.length > 0) {
-    const { data } = await db.rpc("get_meter_daily_totals_for_locations" as any, {
-      p_location_ids: locationIds,
-      p_start: periodStart,
-      p_end: periodEnd,
-    }).select?.() ?? { data: null };
-
-    // Fallback wenn RPC nicht existiert: 5min Aggregat lesen
-    if (!data) {
-      const { data: readings = [] } = await db
-        .from("meter_power_readings_5min")
-        .select("meter_id, ts_5min, power_kw, energy_kwh")
-        .gte("ts_5min", periodStart)
-        .lte("ts_5min", periodEnd + "T23:59:59")
-        .limit(20000);
-      // Aggregiere pro Tag/Meter
-      const map = new Map<string, { meter_id: string; day: string; energy_kwh: number; peak_kw: number }>();
-      for (const r of readings) {
-        const day = (r.ts_5min as string).slice(0, 10);
-        const key = `${r.meter_id}|${day}`;
-        const cur = map.get(key) ?? { meter_id: r.meter_id, day, energy_kwh: 0, peak_kw: 0 };
-        cur.energy_kwh += Number(r.energy_kwh || 0);
-        cur.peak_kw = Math.max(cur.peak_kw, Number(r.power_kw || 0));
-        map.set(key, cur);
-      }
-      dailyAgg = Array.from(map.values());
-    } else {
-      dailyAgg = data;
+    const { data: readingsData } = await db
+      .from("meter_power_readings_5min")
+      .select("meter_id, ts_5min, power_kw, energy_kwh")
+      .gte("ts_5min", periodStart)
+      .lte("ts_5min", periodEnd + "T23:59:59")
+      .limit(20000);
+    const readings = readingsData ?? [];
+    const map = new Map<string, { meter_id: string; day: string; energy_kwh: number; peak_kw: number }>();
+    for (const r of readings) {
+      const day = (r.ts_5min as string).slice(0, 10);
+      const key = `${r.meter_id}|${day}`;
+      const cur = map.get(key) ?? { meter_id: r.meter_id, day, energy_kwh: 0, peak_kw: 0 };
+      cur.energy_kwh += Number(r.energy_kwh || 0);
+      cur.peak_kw = Math.max(cur.peak_kw, Number(r.power_kw || 0));
+      map.set(key, cur);
     }
+    dailyAgg = Array.from(map.values());
   }
 
-  // Meter-Liste für Kontext
-  const { data: meters = [] } = await db
+  const safeLocIds = locationIds.length ? locationIds : ["00000000-0000-0000-0000-000000000000"];
+
+  const { data: metersData } = await db
     .from("meters")
     .select("id, name, location_id, meter_type, direction, energy_type")
     .eq("tenant_id", tenantId)
-    .in("location_id", locationIds.length ? locationIds : ["00000000-0000-0000-0000-000000000000"]);
+    .in("location_id", safeLocIds);
 
-  // PV-Ist
-  const { data: pvActual = [] } = await db
+  const { data: pvActualData } = await db
     .from("pv_actual_hourly")
     .select("location_id, ts_hour, energy_kwh")
-    .in("location_id", locationIds.length ? locationIds : ["00000000-0000-0000-0000-000000000000"])
+    .in("location_id", safeLocIds)
     .gte("ts_hour", periodStart)
     .lte("ts_hour", periodEnd + "T23:59:59")
     .limit(10000);
 
-  // Wallbox-Sessions
-  const { data: chargingSessions = [] } = await db
+  const { data: chargingSessionsData } = await db
     .from("charging_sessions")
     .select("id, charge_point_id, energy_kwh, started_at, stopped_at, status")
     .eq("tenant_id", tenantId)
@@ -107,10 +96,10 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
   return {
     period: { start: periodStart, end: periodEnd },
     locations,
-    meters,
+    meters: metersData ?? [],
     daily_meter_totals: dailyAgg.slice(0, 5000),
-    pv_actual_hourly: pvActual.slice(0, 5000),
-    charging_sessions: chargingSessions,
+    pv_actual_hourly: (pvActualData ?? []).slice(0, 5000),
+    charging_sessions: chargingSessionsData ?? [],
   };
 }
 
