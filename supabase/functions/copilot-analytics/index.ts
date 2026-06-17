@@ -51,7 +51,7 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
 
   const { data: metersData, error: metersError } = await db
     .from("meters")
-    .select("id, name, location_id, meter_type, meter_function, is_main_meter, direction, energy_type")
+    .select("id, name, location_id, meter_function, is_main_meter, energy_type")
     .eq("tenant_id", tenantId)
     .in("location_id", safeLocIds);
   if (metersError) throw { status: 500, message: "Zählerdaten konnten nicht gelesen werden", detail: metersError.message };
@@ -123,11 +123,12 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
     };
   });
 
-  const { data: chargePointsData, error: chargePointsError } = await db
+  let chargePointsQuery = db
     .from("charge_points")
     .select("id, name, location_id, max_power_kw, status")
-    .eq("tenant_id", tenantId)
-    .in("location_id", safeLocIds);
+    .eq("tenant_id", tenantId);
+  if (locationId) chargePointsQuery = chargePointsQuery.eq("location_id", locationId);
+  const { data: chargePointsData, error: chargePointsError } = await chargePointsQuery;
   if (chargePointsError) throw { status: 500, message: "Ladepunkte konnten nicht gelesen werden", detail: chargePointsError.message };
   const chargePoints = chargePointsData ?? [];
   const chargePointIds = chargePoints.map((cp: any) => cp.id);
