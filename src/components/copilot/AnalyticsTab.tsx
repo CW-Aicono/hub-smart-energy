@@ -116,8 +116,8 @@ function ChartRenderer({ chart }: { chart: AnalyticsResult["chart"] }) {
       <ChartCmp data={flatData}>
         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
         <XAxis dataKey="x" label={{ value: chart.x_label, position: "insideBottom", offset: -5 }} tick={{ fontSize: 11 }} />
-        <YAxis label={{ value: chart.y_label, angle: -90, position: "insideLeft" }} tickFormatter={(v) => v.toLocaleString("de-DE")} tick={{ fontSize: 11 }} />
-        <Tooltip formatter={(v: any) => v.toLocaleString("de-DE", { maximumFractionDigits: 2 })} />
+        <YAxis label={{ value: chart.unit ? `${chart.y_label} (${chart.unit})` : chart.y_label, angle: -90, position: "insideLeft" }} tickFormatter={(v) => v.toLocaleString("de-DE")} tick={{ fontSize: 11 }} />
+        <Tooltip formatter={(v: any) => `${typeof v === "number" ? v.toLocaleString("de-DE", { maximumFractionDigits: 2 }) : v}${chart.unit ? ` ${chart.unit}` : ""}`} />
         <Legend />
         {seriesNames.map((n, i) =>
           chart.type === "line"
