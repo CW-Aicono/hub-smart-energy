@@ -1,63 +1,133 @@
 ## Ziel
 
-Klarer 2-Stufen-Workflow für Ladestrom-Rechnungen:
-**Erstellen → als Ausgestellt markieren → Per E-Mail versenden**, mit Bestätigungs-Popups, Einzelversand und Wiederholungsversand.
+Im EMS-Copilot als **erstes Tab** (vor Einsparpotentiale / Investitionsberater) ein neues Tab **"Analytics"** einfügen. Der User stellt in natürlicher Sprache Fragen zu seinen Energie- und Anlagendaten (z. B. *"Welcher Standort hat im Q1 die höchste Grundlast?"*), die KI baut daraus eine strukturierte Analyse (Kennzahl + Chart + Kurz‑Insight), die gespeichert, wieder geöffnet, angeheftet und in den Bord-Dashboard übernommen werden kann.
 
----
+## Konzept (UX-Vorschlag)
 
-## Änderungen im Detail
+Ein zweispaltiges Layout, gleicher Stil wie die bestehenden Copilot-Tabs:
 
-### 1. Datenbank (Migration)
-Neue Spalten in `public.charging_invoices`:
-- `email_sent_at timestamptz` – Zeitpunkt des letzten erfolgreichen Versands (NULL = noch nie versendet)
-- `email_send_count integer NOT NULL DEFAULT 0` – Anzahl der Versendungen (für „nochmals versendet")
+```text
++-------------------------------------------------------------+
+| [Analytics] [Einsparpotentiale] [Investitionsberater]       |
++----------------------+--------------------------------------+
+| Linke Spalte         | Rechte Spalte                        |
+|----------------------|--------------------------------------|
+| Frage stellen        | Ergebnis-Karte (Titel, KPI, Chart,   |
+| (großes Textfeld +   | Insight-Text, Quellen-Badge)         |
+|  Schnellauswahl von  |                                      |
+|  ~8 Vorschlägen)     | [Speichern] [Pin Dashboard] [Teilen] |
+|                      | [Als Bericht exportieren PDF]        |
+| Standort / Zeitraum  |                                      |
+| (optional)           | --- Verlauf / gespeicherte Analysen  |
+|                      | Liste mit Such- + Filter,            |
+|                      | Pin / Umbenennen / Löschen           |
++----------------------+--------------------------------------+
+```
 
-### 2. Edge Function `send-charging-invoices`
-- Neuer Modus `mode: "send-selected"` mit Parameter `invoice_ids: string[]`. Verschickt **genau diese** Rechnungen, unabhängig von Zeitraum, und nur wenn `status = 'issued'`. Setzt nach Erfolg `email_sent_at = now()` und erhöht `email_send_count`.
-- Bestehender Modus `send` / `both` wird so erweitert, dass standardmäßig **nur noch nicht versendete** Rechnungen (`email_sent_at IS NULL`) und nur ausgestellte (`status = 'issued'`) verschickt werden. Setzt ebenfalls die neuen Felder.
-- Modus `generate` gibt die IDs der neu erstellten Rechnungen im Response zurück (`created_invoice_ids: string[]`), damit das UI das Popup direkt mit den richtigen Rechnungen füllen kann.
+### Smart-Prompt-Vorschläge (One-Click)
 
-### 3. Hook `useChargingInvoices`
-- `generateInvoices` gibt die neuen `created_invoice_ids` zurück (kein Toast-Count ändern).
-- Neue Mutation `finalizeInvoices(invoiceIds: string[])` – setzt mehrere Rechnungen auf `status = 'issued'`.
-- Neue Mutation `sendSelectedInvoices(invoiceIds: string[])` – ruft Edge Function mit `mode: "send-selected"` auf.
-- Bestehende `sendInvoices` bleibt für Sammelversand erhalten (nur ungesendete + ausgestellte).
+Acht kuratierte Fragen, zugeschnitten auf Tenant-Daten:
 
-### 4. UI – `ChargingBilling.tsx`
+- "Top 3 Standorte mit höchstem Stromverbrauch im letzten Monat"
+- "Wo ist die Grundlast in den letzten 90 Tagen gestiegen?"
+- "PV-Eigenverbrauchsquote pro Standort, letzte 30 Tage"
+- "Wallbox-Auslastung pro Ladepunkt im laufenden Monat"
+- "CO₂-Bilanz Jahresvergleich (YoY)"
+- "Welche Zähler haben Datenlücken > 24 h?"
+- "Spitzenlast-Tage im aktuellen Monat (Top 5)"
+- "Ungewöhnliche Verbrauchstage (Anomalien) – letzte 30 Tage"
 
-**Neuer Dialog A: „Erstellte Rechnungen" (öffnet nach „Rechnungen erstellen")**
-- Liste aller in diesem Lauf erzeugten Rechnungen (Checkbox + Rechnungsnr., Nutzer, Betrag, Status-Badge).
-- Checkbox „Alle auswählen" oben.
-- Button **„Ausgewählte als ausgestellt markieren"** → ruft `finalizeInvoices` für selektierte Entwürfe auf.
-- Button **„Schließen"**.
+Die Liste ist später per Datenbank-Tabelle erweiterbar (Phase 2, optional, nicht Teil dieses Plans).
 
-**Neuer Dialog B: „Per E-Mail senden" (öffnet nach Klick auf den bestehenden Button)**
-- Zeigt zwei Gruppen für den aktuellen Zeitraum:
-  1. **Bereit zum Versand** (`status = 'issued'` AND `email_sent_at IS NULL`) – vorausgewählt.
-  2. **Noch im Entwurf** (`status = 'draft'`) – mit Checkboxen + Inline-Button **„Auswahl ausstellen"** / **„Alle ausstellen"**, der `finalizeInvoices` ausführt; danach wandern sie automatisch in Gruppe 1.
-- Zusätzlich Info-Zeile: „X bereits versendete Rechnungen werden übersprungen" (mit Toggle „Trotzdem erneut senden").
-- Footer-Button **„Jetzt versenden"** → `sendSelectedInvoices` mit allen aktuell ausgewählten IDs. Bei Klick wird sichergestellt, dass keine Entwürfe in der Auswahl sind (sonst Hinweis).
+### Ergebnis-Karte
 
-**Erweiterung Rechnungstabelle**
-- Neue Spalte „Versendet" mit Datum/Anzahl (oder „—").
-- Neue Aktion pro Zeile: **Mail-Icon „Einzeln versenden"**
-  - Bei `status = 'draft'`: Bestätigungsdialog „Erst als ausgestellt markieren und versenden?" → führt finalize + sendSelectedInvoices nacheinander aus.
-  - Bei `status = 'issued'` ohne `email_sent_at`: direkt `sendSelectedInvoices([id])`.
-  - Bei bereits versendeter Rechnung: Bestätigung „Rechnung wurde am … bereits versendet. Erneut senden?" → `sendSelectedInvoices([id])`.
+Pro Analyse zeigt die Karte einheitlich:
 
-### 5. Edge Function für Sammelrechnungen (Gruppen)
-Spiegelung der gleichen Logik in `send-charging-group-invoices` (analoge Spalten/Modi), damit Verhalten konsistent ist.
+- **Titel** (von KI aus Frage abgeleitet)
+- **KPI-Block** (1–3 Zahlen, deutsche Formatierung)
+- **Chart** (Recharts, Typ je nach Analyse: Bar / Line / Pie / Table)
+- **Insight-Text** (3–5 Sätze, was auffällt + Handlungsempfehlung)
+- **Quellen-Badge** (welche Tabellen/Zeiträume genutzt wurden — Transparenz)
+- **AI-Disclaimer** (vorhandene `AiDisclaimer`-Komponente wiederverwenden)
+- **Aktionen:** Speichern, Pin im Dashboard, In Zwischenablage kopieren (Markdown), PDF-Export
 
----
+### Speicherung & Abruf
 
-## Verhalten Sammelversand (Button „Per E-Mail senden")
-- Versendet **immer nur** Rechnungen mit `status = 'issued'` UND `email_sent_at IS NULL`.
-- Entwürfe werden im Popup angezeigt, aber nicht automatisch ausgestellt – der User entscheidet aktiv.
-- Bereits versendete werden ausgeblendet (Re-Versand nur über Einzelaktion oder Toggle).
+- Jede ausgeführte Analyse landet zunächst im **Verlauf** (auto-gespeichert).
+- Per Stern/Pin als **"Gespeicherte Analyse"** markieren → erscheint oben in der Liste.
+- Suche + Filter (Standort, Zeitraum, Tag).
+- Klick auf Eintrag → Karte rechts wird erneut gerendert (ohne neuen KI-Call → keine Credits, kein Re-Run).
+- Optional **"Aktualisieren"**-Button → nutzt gleiche Frage + Parameter, ruft KI erneut auf.
 
----
+### Pin im Dashboard (Mehrwert)
 
-## Nicht im Scope
-- Massenaktion „Mehrere Rechnungen erneut senden" über Tabelle (nur Einzelversand).
-- Anpassungen am PDF-/HTML-Layout.
-- Änderungen an `tenant_electricity_invoices` (separates Modul).
+Eine gespeicherte Analytics-Karte kann als **Custom-Widget** ans Tenant-Dashboard angeheftet werden (nutzt vorhandene `custom_widget_definitions`-Tabelle). Damit wird der EMS-Copilot vom Einmal-Tool zur dauerhaften Insight-Quelle.
+
+## Technische Umsetzung
+
+### 1. Datenbank (eine Migration)
+
+Neue Tabelle `public.copilot_analytics_queries`:
+
+- `tenant_id` (FK tenants), `user_id` (FK auth.users)
+- `title` (text), `prompt` (text)
+- `location_id` (nullable), `period_start` / `period_end` (nullable)
+- `result_json` (jsonb: KPIs, Chart-Daten, Insight, Quellen)
+- `is_pinned` (bool), `pinned_to_dashboard` (bool)
+- `model_used` (text), `tokens_used` (int, nullable)
+- Standard `created_at` / `updated_at`
+
+RLS: nur Mitglieder des Tenants lesen/schreiben (Muster wie `copilot_analyses`). Grants gemäß Projektregel (`authenticated`, `service_role`).
+
+### 2. Edge Function `copilot-analytics`
+
+- Input: `{ tenant_id, prompt, location_id?, period_start?, period_end? }`
+- Holt **strukturierten Daten-Kontext** für den Tenant (max. ~50 KB JSON):
+  - Standortliste, Zähler-Aggregate (Verbrauch / Einspeisung / PV), Wallbox-Sessions, Anomalien aus `meter_power_readings_5min` & `pv_actual_hourly`
+  - Zeitraum-bezogen aggregiert (Tag / Monat) — **keine Rohdaten** an die KI
+- Ruft `google/gemini-3-flash-preview` mit `Output.object` Schema:
+  ```json
+  {
+    "title": "string",
+    "kpis": [{ "label": "string", "value": "number", "unit": "string" }],
+    "chart": { "type": "bar|line|pie|table",
+               "x_label": "string", "y_label": "string",
+               "series": [{ "name": "string", "data": [{"x":"...","y":0}] }] },
+    "insight_markdown": "string",
+    "sources": ["string"]
+  }
+  ```
+- Speichert das Ergebnis in `copilot_analytics_queries` und gibt es zurück.
+- Fehler-Handling: 429 (Rate-Limit) und 402 (Credits) sauber an UI durchreichen.
+
+### 3. Frontend
+
+- `src/pages/Copilot.tsx`: `TabsList` von 2 auf 3 Spalten, neuer `TabsTrigger value="analytics"` als **erstes** Tab, `topTab` Default auf `"analytics"`.
+- Neue Komponente `src/components/copilot/AnalyticsTab.tsx` mit:
+  - Prompt-Eingabe + Schnellauswahl-Buttons
+  - Standort/Zeitraum-Selector (optional)
+  - Ergebnis-Karte mit Recharts-Renderer (`AnalyticsResultCard.tsx`)
+  - Verlauf/Gespeichert-Liste (`AnalyticsHistoryList.tsx`)
+- Neuer Hook `src/hooks/useCopilotAnalytics.ts` (Query + Mutation, invoke der Edge Function, React-Query Cache mit `tenant_id`-Key).
+- Deutsche Zahlenformatierung in allen KPIs/Achsen (`toLocaleString("de-DE")`).
+- Wiederverwendung: `AiDisclaimer`, vorhandene Card/Tabs/Badge-Tokens.
+
+### 4. Pin im Dashboard (klein gehalten)
+
+Beim Klick auf "Pin Dashboard" wird ein Eintrag in `custom_widget_definitions` mit Verweis auf die Analytics-Query erzeugt. Das eigentliche Widget rendert die gespeicherte `result_json` (keine erneuten KI-Calls).
+
+## Out of Scope (bewusst weggelassen, um Credits zu sparen)
+
+- Mehrsprachigkeit (nur DE wie der Rest des Copilots)
+- Bearbeitbarer Chart-Editor (Chart-Typ kommt aus KI-Output)
+- Cron-basiertes automatisches Re-Run
+- Vergleichs-Modus (Side-by-Side zweier gespeicherter Analysen)
+
+Diese Punkte können bei Bedarf in einer Folge-Anfrage ergänzt werden.
+
+## Erwartetes Ergebnis nach Implementierung
+
+1. Im EMS-Copilot gibt es links das neue Tab **"Analytics"**.
+2. User tippt Frage (oder klickt Vorschlag), erhält in ~3–8 Sekunden eine strukturierte Analyse-Karte.
+3. Karte ist gespeichert, erscheint im Verlauf, kann gepinnt, exportiert oder ans Dashboard geheftet werden.
+4. Alle Daten bleiben strikt tenant-isoliert (RLS).
