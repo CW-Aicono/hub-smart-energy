@@ -1543,8 +1543,12 @@ const ChargingApp = () => {
   const [initialConnectorId, setInitialConnectorId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Ensure charging_users entry exists for app user (no group assignment – done manually later)
+  // Module-scoped guard: avoid duplicate inserts across rapid auth events in the same tab
   const ensureChargingUser = useCallback(async (authId: string, email: string, displayName?: string) => {
+    // Skip support / internal accounts
+    if (!email || email.endsWith("@aicono.internal")) return;
+    if (ensuredAuthIds.has(authId)) return;
+    ensuredAuthIds.add(authId);
     try {
       const { data: existing } = await supabase
         .from("charging_users")
@@ -1562,7 +1566,7 @@ const ChargingApp = () => {
 
       if (!anyGroup) return; // No groups configured at all
 
-      await supabase.from("charging_users").insert({
+      const { error: insertErr } = await supabase.from("charging_users").insert({
         tenant_id: anyGroup.tenant_id,
         auth_user_id: authId,
         name: displayName || email.split("@")[0],
@@ -1570,10 +1574,15 @@ const ChargingApp = () => {
         group_id: null, // No group – admin assigns manually
         status: "active",
       });
+      // Ignore unique-violation (23505) — another concurrent insert already created the row
+      if (insertErr && (insertErr as any).code !== "23505") {
+        console.error("Failed to create charging user entry:", insertErr);
+      }
     } catch (err) {
       console.error("Failed to create charging user entry:", err);
     }
   }, []);
+
 
   // Auth listener
   useEffect(() => {
