@@ -11459,6 +11459,18 @@ export type Database = {
         Args: { p_day?: string }
         Returns: number
       }
+      diagnose_meter_daily_values: {
+        Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
+        Returns: {
+          archived_kwh: number
+          archived_source: string
+          day: string
+          five_min_kwh: number
+          live_kwh: number
+          meter_id: string
+          status: string
+        }[]
+      }
       ensure_at_least_one_admin: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
