@@ -183,6 +183,138 @@ function ResultCard({ query, onRerun }: { query: AnalyticsQuery; onRerun: () => 
   );
 }
 
+function PromptPresetEditor({
+  preset,
+  trigger,
+}: { preset?: PromptPreset; trigger: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState(preset?.label ?? "");
+  const [prompt, setPrompt] = useState(preset?.prompt ?? "");
+  const upsert = useUpsertPromptPreset();
+
+  const reset = () => {
+    setLabel(preset?.label ?? "");
+    setPrompt(preset?.prompt ?? "");
+  };
+
+  const save = async () => {
+    if (!label.trim() || !prompt.trim()) {
+      toast.error("Bezeichnung und Prompt sind erforderlich");
+      return;
+    }
+    await upsert.mutateAsync({
+      id: preset?.id,
+      label: label.trim(),
+      prompt: prompt.trim(),
+      sort_order: preset?.sort_order,
+    });
+    setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v) reset(); }}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{preset ? "Vorschlag bearbeiten" : "Neuer Vorschlag"}</DialogTitle>
+          <DialogDescription className="text-xs">
+            Vorschläge sind für alle Nutzer dieses Mandanten sichtbar.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Bezeichnung (Button-Text)</Label>
+            <Input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} placeholder="z.B. Top-Lastspitzen" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Prompt</Label>
+            <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={5} maxLength={1000} placeholder="Welche 5 Tage hatten die höchsten Lastspitzen..." />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Abbrechen</Button>
+          <Button onClick={save} disabled={upsert.isPending}>
+            {upsert.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Speichern"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PromptPresetsCard({
+  disabled,
+  onPick,
+}: { disabled: boolean; onPick: (prompt: string) => void }) {
+  const { data: presets = [], isLoading } = useCopilotPromptPresets();
+  const del = useDeletePromptPreset();
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <CardTitle className="text-sm">Vorschläge</CardTitle>
+            <CardDescription className="text-xs">
+              Klicken übernimmt die Frage – Standort/Zeitraum prüfen und dann „Analyse starten"
+            </CardDescription>
+          </div>
+          <PromptPresetEditor
+            trigger={
+              <Button variant="outline" size="sm" className="shrink-0">
+                <Plus className="h-3.5 w-3.5 mr-1" /> Neu
+              </Button>
+            }
+          />
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="py-4 text-center"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></div>
+        ) : presets.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-2">Noch keine Vorschläge. Lege einen neuen an.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {presets.map((p) => (
+              <li key={p.id} className="flex items-center gap-1 group">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-auto py-1.5 flex-1 justify-start min-w-0"
+                  disabled={disabled}
+                  onClick={() => onPick(p.prompt)}
+                  title={p.prompt}
+                >
+                  <span className="truncate">{p.label}</span>
+                </Button>
+                <PromptPresetEditor
+                  preset={p}
+                  trigger={
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" title="Bearbeiten">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  }
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 shrink-0"
+                  title="Löschen"
+                  onClick={() => {
+                    if (confirm(`Vorschlag „${p.label}" löschen?`)) del.mutate(p.id);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function AnalyticsTab() {
   const { locations = [] } = useLocations();
   const { data: list = [], isLoading } = useCopilotAnalyticsList();
