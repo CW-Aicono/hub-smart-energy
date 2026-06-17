@@ -952,6 +952,8 @@ const ChargingBilling = () => {
                             <SortableHead column="period" label="Zeitraum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
                             <SortableHead column="total_amount" label={t("charging.totalAmount" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
                             <SortableHead column="status" label={t("common.status" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                            <TableHead>Versendet</TableHead>
+                            {isAdmin && <TableHead className="w-12"></TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -967,8 +969,31 @@ const ChargingBilling = () => {
                               </TableCell>
                               <TableCell className="font-medium">{fmtCurrency(inv.total_amount)}</TableCell>
                               <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? t("charging.statusPaid" as any) : inv.status === "issued" ? t("charging.statusIssued" as any) : t("charging.statusDraft" as any)}</Badge></TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {inv.email_sent_at
+                                  ? <span title={`${inv.email_send_count}x versendet`}>{format(new Date(inv.email_sent_at), "dd.MM.yyyy HH:mm")}{(inv.email_send_count ?? 0) > 1 && <span className="ml-1 text-xs">({inv.email_send_count}x)</span>}</span>
+                                  : "—"}
+                              </TableCell>
+                              {isAdmin && (
+                                <TableCell onClick={(e) => e.stopPropagation()}>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    title={inv.email_sent_at ? "Erneut versenden" : inv.status === "draft" ? "Ausstellen und versenden" : "Per E-Mail versenden"}
+                                    onClick={() => {
+                                      if (inv.status === "draft") setDraftSendConfirm(inv);
+                                      else if (inv.email_sent_at) setResendConfirm(inv);
+                                      else sendSelectedInvoices.mutate({ invoice_ids: [inv.id] });
+                                    }}
+                                    disabled={sendSelectedInvoices.isPending}
+                                  >
+                                    <Mail className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              )}
                             </TableRow>
                           ))}
+
                         </TableBody>
                       </Table>
                       <PaginationBar page={invoicesPaged.page} total={invoicesPaged.total} onChange={setInvoicePage} count={displayedInvoices.length} />
