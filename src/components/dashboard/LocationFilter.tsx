@@ -95,8 +95,10 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
       <SelectContent className="w-[250px] bg-popover z-50">
         <SelectItem value={ALL_LOCATIONS_VALUE}>
           <span className="flex items-center gap-2">
-            {hasAnyErrors ? (
+            {hasAnyOffline ? (
               <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+            ) : hasAnyDataError ? (
+              <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-500" />
             ) : (
               <MapPin className="h-4 w-4 shrink-0" />
             )}
@@ -107,8 +109,10 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
         {sortedLocations.map((location) => (
           <SelectItem key={location.id} value={location.id}>
             <span className="flex items-center gap-2 w-full">
-              {errorLocationIds.has(location.id) ? (
+              {offlineLocationIds.has(location.id) ? (
                 <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+              ) : dataErrorLocationIds.has(location.id) ? (
+                <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-500" />
               ) : (
                 <Building2 className="h-4 w-4 shrink-0" />
               )}
