@@ -11471,6 +11471,7 @@ export type Database = {
           day: string
           einspeisung: number
           meter_id: string
+          source: string
         }[]
       }
       get_meter_daily_totals_with_fallback: {
