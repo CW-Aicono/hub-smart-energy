@@ -38,6 +38,8 @@ import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from "@/components/ui/pagination";
 import { EichrechtTab } from "@/components/charging/EichrechtTab";
+import { CreatedInvoicesDialog, SendInvoicesDialog } from "@/components/charging/ChargingInvoiceBulkDialogs";
+import { Mail } from "lucide-react";
 import { format } from "date-fns";
 import { fmtNum, fmtCurrency, fmtKwh } from "@/lib/formatCharging";
 import { generateChargingInvoicePdf, downloadBlob } from "@/lib/generateChargingInvoicePdf";
