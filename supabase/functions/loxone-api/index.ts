@@ -1056,6 +1056,30 @@ serve(async (req) => {
               });
             }
 
+            // Persist TODAY's running total (Rd/Rdc/Rdd) so dashboards & RPCs
+            // can rely on the authoritative Loxone counter instead of a
+            // 5-min power-aggregation estimate. Stored as source='loxone_live'
+            // on today's date (Europe/Berlin). Overwritten at midnight when
+            // 'loxone' source archives totalDayLast for the completed day.
+            if (stateData?.totalDay != null && stateData.totalDay >= 0) {
+              const berlinFmtT = new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Europe/Berlin",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              });
+              const todayStr = berlinFmtT.format(now); // YYYY-MM-DD in Berlin
+              monthUpserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                period_type: "day",
+                period_start: todayStr,
+                total_value: stateData.totalDay,
+                energy_type: meter.energy_type,
+                source: "loxone_live",
+              });
+            }
+
             // Store instantaneous power reading for time-series (with spike filter)
             if (stateData?.value != null) {
               const powerVal = typeof stateData.value === "number" ? stateData.value : parseFloat(String(stateData.value));
