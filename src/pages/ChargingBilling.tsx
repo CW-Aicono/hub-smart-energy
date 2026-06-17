@@ -1180,7 +1180,70 @@ const ChargingBilling = () => {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+
+              {/* NEW: Created invoices popup (after generation) */}
+              <CreatedInvoicesDialog
+                open={createdDialogOpen}
+                onOpenChange={setCreatedDialogOpen}
+                invoices={invoices.filter(i => createdInvoiceIds.includes(i.id))}
+                isFinalizing={finalizeInvoices.isPending}
+                onFinalize={async (ids) => { await finalizeInvoices.mutateAsync(ids); }}
+              />
+
+              {/* NEW: Bulk-send dialog */}
+              <SendInvoicesDialog
+                open={sendDialogOpen}
+                onOpenChange={setSendDialogOpen}
+                invoices={invoices.filter(i => i.period_start === genPeriod.start && i.period_end === genPeriod.end)}
+                isFinalizing={finalizeInvoices.isPending}
+                isSending={sendSelectedInvoices.isPending}
+                onFinalize={async (ids) => { await finalizeInvoices.mutateAsync(ids); }}
+                onSend={async (ids) => { await sendSelectedInvoices.mutateAsync({ invoice_ids: ids }); }}
+              />
+
+              {/* Confirm: resend already-sent invoice */}
+              <AlertDialog open={!!resendConfirm} onOpenChange={(o) => !o && setResendConfirm(null)}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Rechnung erneut versenden?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Diese Rechnung wurde bereits am {resendConfirm?.email_sent_at ? format(new Date(resendConfirm.email_sent_at), "dd.MM.yyyy HH:mm") : "—"} versendet. Möchten Sie sie erneut an {resendConfirm?.user_email} senden?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => { if (resendConfirm) sendSelectedInvoices.mutate({ invoice_ids: [resendConfirm.id] }); setResendConfirm(null); }}>
+                      Erneut senden
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              {/* Confirm: finalize draft and send */}
+              <AlertDialog open={!!draftSendConfirm} onOpenChange={(o) => !o && setDraftSendConfirm(null)}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Rechnung ausstellen und versenden?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Diese Rechnung ist noch ein Entwurf. Soll sie jetzt als „Ausgestellt" markiert und anschließend an {draftSendConfirm?.user_email} versendet werden?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                    <AlertDialogAction onClick={async () => {
+                      if (!draftSendConfirm) return;
+                      const inv = draftSendConfirm;
+                      setDraftSendConfirm(null);
+                      await finalizeInvoices.mutateAsync([inv.id]);
+                      await sendSelectedInvoices.mutateAsync({ invoice_ids: [inv.id] });
+                    }}>
+                      Ausstellen und senden
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </TabsContent>
+
 
 
 
