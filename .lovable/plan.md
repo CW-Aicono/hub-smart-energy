@@ -1,165 +1,74 @@
-Ich habe bereits **lesend** geprüft: Die Datenbank enthält für AICONO Zentrale ab Mitte Februar 2026 sehr wohl Werte. Wenn die Jahresgrafik Januar–Mai als 0 zeigt, ist das **kein Datenmangel**, sondern ein Anzeige-/Berechnungsproblem.
+## Ziel
 
-## Bereits verifizierte Fakten
+Charts sollen je nach gewähltem Zeitraum die jeweils gröbste passende Aggregationsstufe lesen, damit niemals mehr als ~30–90 Zeilen pro Zähler aus der DB geholt werden müssen. Die 5-Min-Rohdaten werden nur noch in der Tagesansicht direkt angefasst.
 
-Für den Mandanten mit AICONO Zentrale/Rathaus sind echte Daten vorhanden:
-
-```text
-AICONO Zentrale – Strom, Tages-Summen 2026
-Feb:  8.462,96 kWh
-Mär: 44.159,49 kWh
-Apr: 31.260,68 kWh
-Mai: 29.575,08 kWh
-Jun: 16.112,66 kWh
-
-AICONO Zentrale – 5-Minuten-Rohdaten vorhanden ab:
-16.02.2026 ca. 08:00/10:30 bis 16.06.2026 23:55
-
-Januar 2026:
-0 kWh ist plausibel, weil dort noch keine Messwerte vorhanden sind.
-Februar bis Mai 2026:
-0 kWh ist nicht plausibel.
-```
-
-Rathaus hat ebenfalls Werte, aber die Größenordnung wirkt für ein Rathaus auffällig niedrig und muss separat geprüft werden:
+## Architektur: 3 Aggregationsstufen
 
 ```text
-Rathaus – Strom, Tages-Summen 2026
-Feb: 54,22 kWh
-Mär: 254,14 kWh
-Apr: 45,30 kWh
-Mai: 94,81 kWh
-Jun: 68,07 kWh
+meter_power_readings_5min  (Rohdaten, nur Tagesansicht)
+        │  (nightly job + on-demand)
+        ▼
+meter_daily_totals_mv      (1 Zeile/Tag/Zähler  → Wochen-/30-Tage-Ansicht)
+        │  (nightly job)
+        ▼
+meter_weekly_totals        (1 Zeile/ISO-Woche/Zähler → Quartals-/Halbjahres-Ansicht)
+        │
+        ▼
+meter_monthly_totals       (1 Zeile/Monat/Zähler → Jahres-/Mehrjahres-Ansicht)
 ```
 
-## Wahrscheinliche Ursache
+Alle drei Tabellen speichern `consumption_kwh` und `export_kwh` getrennt (bidirektionale Zähler), plus `samples_count` / `coverage_ratio` für Datenqualitäts-Hinweise im Copilot.
 
-Die Daten selbst sind nicht komplett leer. Das Problem liegt sehr wahrscheinlich darin, dass **Dashboard, Copilot Analytics und gespeicherte Analysen nicht konsequent dieselbe verlässliche Datenquelle verwenden**.
+## Auswahl-Regel (Frontend + RPC)
 
-Aktuell existieren mehrere Wege:
 
-1. 5-Minuten-Leistungswerte werden zu kWh integriert.
-2. Tageswerte werden aus `meter_period_totals` gelesen.
-3. Für aktuelle Zeiträume werden Live-Gateway-Werte verwendet.
-4. Der EMS-Copilot liest nochmals eigene Summen.
+| Zeitraum gewählt               | Quelle                                        |
+| ------------------------------ | --------------------------------------------- |
+| Heute / 1 Tag                  | `meter_power_readings_5min` (5-Min Auflösung) |
+| 2–31 Tage (Woche/Monat)        | `meter_daily_totals_mv`                       |
+| 32–180 Tage (Quartal/Halbjahr) | `meter_weekly_totals`                         |
+| >180 Tage (Jahr, Mehrjahr)     | `meter_monthly_totals`                        |
 
-Dadurch können Jahres-/Monatsansichten und KI-Analysen voneinander abweichen.
 
-## Umsetzungsplan
+Eine zentrale Hilfsfunktion `pickAggregationLevel(from, to)` in `src/lib/aggregation.ts` entscheidet einmalig — sowohl Dashboard (`EnergyChart.tsx`) als auch `copilot-analytics` nutzen dieselbe Logik.
 
-### 1. Eine gemeinsame „Wahrheitsquelle“ für Verbrauchswerte festlegen
+## Befüllung
 
-Ich werde eine zentrale Berechnungslogik verwenden für:
+- **meter_daily_totals_mv**: existiert bereits als Plan; wird als echte Tabelle (nicht MV) angelegt, damit Upserts möglich sind. Nightly Cron um 00:15 für gestern + on-demand Trigger nach `meter_period_totals`-Insert.
+- **meter_weekly_totals** / **meter_monthly_totals**: Nightly Cron um 00:30 aggregiert aus `meter_daily_totals_mv` (sehr schnell, da nur ~30 Tage/Zähler).
+- **Backfill-Migration** läuft einmalig über vollständige Historie (einmaliger Aufwand, danach inkrementell).
 
-- Dashboard-Jahresgrafik
-- Dashboard-Monats-/Wochenansicht
-- EMS-Copilot Analytics
-- gespeicherte Analytics-Ergebnisse
+## RPC-Anpassungen
 
-Regel:
+- Neue RPC `get_meter_totals_auto(meter_ids, from, to)` wählt intern die richtige Stufe und gibt ein einheitliches Format `{ bucket_start, consumption_kwh, export_kwh, coverage_ratio }` zurück.
+- Die alten Funktionen `get_meter_period_sums_with_fallback` / `get_meter_daily_totals_split_with_fallback` bleiben bestehen, rufen aber intern die neue Logik auf — keine Breaking Changes für anderen Code.
 
-```text
-Für abgeschlossene Tage:
-verwende gespeicherte Tageswerte aus meter_period_totals.
+## Copilot-Integration
 
-Wenn ein Tageswert fehlt:
-berechne ihn aus 5-Minuten-Leistungswerten.
+`copilot-analytics` nutzt ausschließlich die neuen Aggregat-Tabellen für Jahres-/Monats-Fragen. `coverage_ratio < 0.8` löst einen Hinweis im AI-Prompt aus („Datenbasis lückenhaft").
 
-Für den aktuellen Tag:
-berechne aus 5-Minuten-Werten plus vorhandenen Live-Werten nur dann, wenn nötig.
-```
+## Erwartete Performance
 
-Damit werden Januar–Mai nicht mehr fälschlich leer angezeigt, wenn Tageswerte vorhanden sind.
+- Jahresansicht für 9 Zähler: heute ~35 s → künftig ~12 Zeilen × 9 = 108 Rows, <100 ms.
+- Speicherzuwachs: ~20 KB/Zähler/Jahr (vernachlässigbar).
 
-### 2. Dashboard-Grafik korrigieren
+## Schritte
 
-Ich werde die Jahresansicht der Energieverbrauch-Grafik so korrigieren, dass sie die validierten Tageswerte sauber zu Monaten aufsummiert.
+1. Migration: Tabellen `meter_daily_totals_mv`, `meter_weekly_totals`, `meter_monthly_totals` (inkl. GRANT, RLS, Indizes auf `(meter_id, bucket_start)`).
+2. Migration: Aggregations-Funktionen + neue RPC `get_meter_totals_auto`.
+3. Insert-Tool: Einmaliger Backfill aus `meter_period_totals` + `meter_power_readings_5min`.
+4. Insert-Tool: Zwei `pg_cron`-Jobs (00:15 daily, 00:30 weekly/monthly).
+5. Frontend: `src/lib/aggregation.ts` + Umstellung von `EnergyChart.tsx` auf neue RPC.
+6. Edge Function: `copilot-analytics` auf neue RPC umstellen + Coverage-Hinweis in den System-Prompt.
+7. Validierungs-SQL: Vergleich Summen `daily` vs `weekly` vs `monthly` vs `meter_period_totals` → Report in der Antwort.
 
-Erwartetes Ergebnis für AICONO Zentrale:
+## Offene Frage
 
-```text
-Jan 2026: 0 kWh
-Feb 2026: ca. 8.463 kWh Strom
-Mär 2026: ca. 44.159 kWh Strom
-Apr 2026: ca. 31.261 kWh Strom
-Mai 2026: ca. 29.575 kWh Strom
-Jun 2026: ca. 16.113 kWh Strom, soweit bisher vorhanden
-```
-
-### 3. EMS-Copilot Analytics korrigieren
-
-Die Copilot-Analyse soll nicht mehr aus einer abweichenden Rohdatenlogik arbeiten.
-
-Ich werde die Edge Function `copilot-analytics` so anpassen, dass sie dieselben validierten Summen nutzt wie das Dashboard.
-
-Zusätzlich bekommt der KI-Kontext eine einfache Qualitätsinfo:
-
-```text
-Datenabdeckung pro Standort / Energieart / Zeitraum
-- Anzahl erwarteter Tage
-- Anzahl vorhandener Tageswerte
-- Anzahl per 5-Minuten-Fallback berechneter Tage
-- Hinweis, wenn Werte unvollständig oder auffällig sind
-```
-
-So kann die KI keine scheinbar sicheren Analysen erzeugen, wenn die Datengrundlage fraglich ist.
-
-### 4. Interne Plausibilitätsprüfung für alle Liegenschaften
-
-Ich werde eine interne Validierung ergänzen bzw. ausführen, die pro Liegenschaft und Monat vergleicht:
-
-```text
-A) Summe gespeicherter Tageswerte
-B) Summe aus 5-Minuten-Leistungswerten
-C) gespeicherte Monatswerte, falls vorhanden
-D) Abweichung in Prozent
-E) Datenabdeckung in Tagen / 5-Minuten-Samples
-```
-
-Auffälligkeiten werden markiert, z. B.:
-
-- Tageswerte fehlen, obwohl 5-Minuten-Werte vorhanden sind.
-- Tageswerte und 5-Minuten-Summen weichen stark voneinander ab.
-- Ein Hauptzähler hat Energieart `none` und wird dadurch für Verbrauchsanalysen unbrauchbar.
-- Ein Standort hat Hauptzähler, aber keine echten Messwerte.
-
-### 5. Rathaus gesondert prüfen
-
-Beim Rathaus ist nicht nur die Anzeige falsch, sondern eventuell auch die Zählerzuordnung oder Einheit.
-
-Ich werde prüfen:
-
-- Ist der richtige Strom-Hauptzähler als `is_main_meter = true` markiert?
-- Ist `energy_type = strom` korrekt?
-- Ist die Einheit korrekt?
-- Sind die Werte kW, W, Wh oder kWh?
-- Wird eventuell nur ein Unterzähler statt des Gebäude-Gesamtverbrauchs analysiert?
-
-Ohne diese Prüfung wäre eine Kundenanalyse tatsächlich nicht belastbar.
-
-### 6. Sicherheitsregel für Kundenanalyse
-
-Wenn die Datenabdeckung oder Plausibilität schlecht ist, soll der Copilot nicht mehr selbstbewusst falsche Ergebnisse liefern.
-
-Stattdessen soll er klar sagen:
-
-```text
-Für diesen Zeitraum liegen Messwerte vor, aber die Datenqualität ist auffällig.
-Bitte prüfen Sie zuerst die Zählerzuordnung / Einheit / Datenabdeckung.
-```
-
-## Erfolgskontrolle nach Umsetzung
-
-Nach der Korrektur prüfe ich konkret:
-
-1. AICONO Zentrale Jahresgrafik 2026 zeigt Februar bis Juni Werte.
-2. Rathaus zeigt nicht mehr 0,05 kWh, wenn validierte Tageswerte vorhanden sind.
-3. „Alle Liegenschaften“ entspricht ungefähr der Summe der Einzelstandorte.
-4. EMS-Copilot nennt dieselben Größenordnungen wie das Dashboard.
-5. Gespeicherte Analysen bleiben abrufbar und zeigen das korrekte Ergebnis.
-
-## Wichtig
-
-Ich werde **keine Messdaten verändern oder löschen**. Zuerst wird nur die Berechnungs-/Anzeige-Logik korrigiert und die Plausibilität sichtbar gemacht. Datenkorrekturen an echten Messwerten würden erst danach gezielt erfolgen, wenn eindeutig feststeht, welcher Zähler oder welche Einheit falsch ist.  
+Soll ich `meter_weekly_totals` mit **ISO-Wochen** (Mo–So) oder **gleitenden 7-Tages-Fenstern** befüllen? Empfehlung: ISO-Wochen, weil sie mit der vorhandenen UI-Wochenauswahl konsistent sind.  
   
-Wichtiger Hinweis zur Liegenschaft Rathaus: Das ist nur eine Testumgebung, kein echtes Rathaus. Insofern sind die Werte korrekt, der Loxone Miniserver sendet Daten eines kleinen Hauses. Bitte also ignorieren, dass hier sehr leine Werte kommen.
+Antwort: ISO-Wochen.  
+   
+  
+  
+  
+  

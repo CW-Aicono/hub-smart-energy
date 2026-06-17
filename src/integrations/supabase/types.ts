@@ -5941,6 +5941,123 @@ export type Database = {
         }
         Relationships: []
       }
+      meter_daily_totals_mv: {
+        Row: {
+          bucket_start: string
+          consumption_kwh: number
+          coverage_ratio: number
+          created_at: string
+          energy_type: string
+          export_kwh: number
+          id: string
+          meter_id: string
+          samples_count: number
+          source: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          bucket_start: string
+          consumption_kwh?: number
+          coverage_ratio?: number
+          created_at?: string
+          energy_type: string
+          export_kwh?: number
+          id?: string
+          meter_id: string
+          samples_count?: number
+          source?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          bucket_start?: string
+          consumption_kwh?: number
+          coverage_ratio?: number
+          created_at?: string
+          energy_type?: string
+          export_kwh?: number
+          id?: string
+          meter_id?: string
+          samples_count?: number
+          source?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_daily_totals_mv_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_daily_totals_mv_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_monthly_totals: {
+        Row: {
+          bucket_start: string
+          consumption_kwh: number
+          coverage_ratio: number
+          created_at: string
+          days_count: number
+          energy_type: string
+          export_kwh: number
+          id: string
+          meter_id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          bucket_start: string
+          consumption_kwh?: number
+          coverage_ratio?: number
+          created_at?: string
+          days_count?: number
+          energy_type: string
+          export_kwh?: number
+          id?: string
+          meter_id: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          bucket_start?: string
+          consumption_kwh?: number
+          coverage_ratio?: number
+          created_at?: string
+          days_count?: number
+          energy_type?: string
+          export_kwh?: number
+          id?: string
+          meter_id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_monthly_totals_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_monthly_totals_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_period_totals: {
         Row: {
           created_at: string | null
@@ -6182,6 +6299,69 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "meter_scanners_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_weekly_totals: {
+        Row: {
+          bucket_start: string
+          consumption_kwh: number
+          coverage_ratio: number
+          created_at: string
+          days_count: number
+          energy_type: string
+          export_kwh: number
+          id: string
+          iso_week: number
+          iso_year: number
+          meter_id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          bucket_start: string
+          consumption_kwh?: number
+          coverage_ratio?: number
+          created_at?: string
+          days_count?: number
+          energy_type: string
+          export_kwh?: number
+          id?: string
+          iso_week: number
+          iso_year: number
+          meter_id: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          bucket_start?: string
+          consumption_kwh?: number
+          coverage_ratio?: number
+          created_at?: string
+          days_count?: number
+          energy_type?: string
+          export_kwh?: number
+          id?: string
+          iso_week?: number
+          iso_year?: number
+          meter_id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_weekly_totals_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_weekly_totals_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -11232,6 +11412,17 @@ export type Database = {
           total_value: number
         }[]
       }
+      get_meter_totals_auto: {
+        Args: { p_from: string; p_meter_ids: string[]; p_to: string }
+        Returns: {
+          bucket_start: string
+          consumption_kwh: number
+          coverage_ratio: number
+          export_kwh: number
+          granularity: string
+          meter_id: string
+        }[]
+      }
       get_partner_branding_for_tenant: {
         Args: { _tenant_id: string }
         Returns: Json
@@ -11376,6 +11567,33 @@ export type Database = {
       partner_reporting_overview: {
         Args: { _partner_id: string }
         Returns: Json
+      }
+      refresh_meter_daily_totals: {
+        Args: {
+          p_from: string
+          p_meter_ids?: string[]
+          p_tenant_id?: string
+          p_to: string
+        }
+        Returns: number
+      }
+      refresh_meter_monthly_totals: {
+        Args: {
+          p_from: string
+          p_meter_ids?: string[]
+          p_tenant_id?: string
+          p_to: string
+        }
+        Returns: number
+      }
+      refresh_meter_weekly_totals: {
+        Args: {
+          p_from: string
+          p_meter_ids?: string[]
+          p_tenant_id?: string
+          p_to: string
+        }
+        Returns: number
       }
       release_gateway_refresh_lock: {
         Args: { p_integration_id: string; p_owner: string }
