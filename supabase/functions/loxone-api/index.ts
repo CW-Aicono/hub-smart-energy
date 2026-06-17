@@ -295,15 +295,16 @@ async function fetchAllStates(
 }
 
 // Update sync status in database
+// IO-Optimierung: rpc schreibt nur wenn sich Status ändert oder last_sync_at > 60s alt ist
 async function updateSyncStatus(
   supabase: any,
   locationIntegrationId: string,
   status: "success" | "error" | "syncing"
 ) {
-  await supabase
-    .from("location_integrations")
-    .update({ sync_status: status, last_sync_at: new Date().toISOString() })
-    .eq("id", locationIntegrationId);
+  await supabase.rpc("touch_location_integration_sync", {
+    _id: locationIntegrationId,
+    _status: status,
+  });
   console.log(`Updated sync_status to: ${status}`);
 }
 
