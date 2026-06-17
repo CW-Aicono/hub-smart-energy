@@ -35,6 +35,8 @@ export interface ChargingInvoice {
   period_start: string | null;
   period_end: string | null;
   issued_at: string | null;
+  email_sent_at: string | null;
+  email_send_count: number;
   created_at: string;
   // Joined data
   user_name?: string;
