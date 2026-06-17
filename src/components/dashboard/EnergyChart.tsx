@@ -563,7 +563,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const bucket = weekMap.get(wk)!;
         const dbBucket = dbDailyMap.get(dateStr);
         if (dbBucket) {
-          for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+          for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, (dbBucket as any)[key]);
           addSplitFields(bucket, dbBucket);
         }
         if (dateStr === todayStr && !dbBucket) {
