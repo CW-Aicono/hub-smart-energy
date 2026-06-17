@@ -6112,6 +6112,54 @@ export type Database = {
           },
         ]
       }
+      meter_period_totals_loxone_repair_backup_20260617: {
+        Row: {
+          backup_action: string
+          backup_at: string
+          backup_id: string
+          created_at: string | null
+          energy_type: string | null
+          id: string | null
+          meter_id: string | null
+          period_start: string | null
+          period_type: string | null
+          source: string | null
+          tenant_id: string | null
+          total_value: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          backup_action: string
+          backup_at?: string
+          backup_id?: string
+          created_at?: string | null
+          energy_type?: string | null
+          id?: string | null
+          meter_id?: string | null
+          period_start?: string | null
+          period_type?: string | null
+          source?: string | null
+          tenant_id?: string | null
+          total_value?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          backup_action?: string
+          backup_at?: string
+          backup_id?: string
+          created_at?: string | null
+          energy_type?: string | null
+          id?: string | null
+          meter_id?: string | null
+          period_start?: string | null
+          period_type?: string | null
+          source?: string | null
+          tenant_id?: string | null
+          total_value?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       meter_power_readings: {
         Row: {
           created_at: string | null
