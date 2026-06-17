@@ -1,77 +1,63 @@
 ## Ziel
 
-Partner-Admins sollen in ihrem Partner-Portal (`/partner/members`) die volle Mitgliederverwaltung erhalten: Rollen + granulare Rechte zuweisen, Mitglieder bearbeiten und löschen. Der letzte verbleibende Partner-Admin darf nicht entfernt oder herabgestuft werden.
+Klarer 2-Stufen-Workflow für Ladestrom-Rechnungen:
+**Erstellen → als Ausgestellt markieren → Per E-Mail versenden**, mit Bestätigungs-Popups, Einzelversand und Wiederholungsversand.
 
-## Berechtigungsmodell
+---
 
-Heute existieren bereits 4 Boolean-Flags auf `partner_members`:
-`can_manage_sales_catalog`, `can_create_tenant`, `can_view_billing`, `can_use_sales_scout`.
+## Änderungen im Detail
 
-Ich erweitere das um sinnvolle, im Partner-Portal tatsächlich nutzbare Rechte:
+### 1. Datenbank (Migration)
+Neue Spalten in `public.charging_invoices`:
+- `email_sent_at timestamptz` – Zeitpunkt des letzten erfolgreichen Versands (NULL = noch nie versendet)
+- `email_send_count integer NOT NULL DEFAULT 0` – Anzahl der Versendungen (für „nochmals versendet")
 
+### 2. Edge Function `send-charging-invoices`
+- Neuer Modus `mode: "send-selected"` mit Parameter `invoice_ids: string[]`. Verschickt **genau diese** Rechnungen, unabhängig von Zeitraum, und nur wenn `status = 'issued'`. Setzt nach Erfolg `email_sent_at = now()` und erhöht `email_send_count`.
+- Bestehender Modus `send` / `both` wird so erweitert, dass standardmäßig **nur noch nicht versendete** Rechnungen (`email_sent_at IS NULL`) und nur ausgestellte (`status = 'issued'`) verschickt werden. Setzt ebenfalls die neuen Felder.
+- Modus `generate` gibt die IDs der neu erstellten Rechnungen im Response zurück (`created_invoice_ids: string[]`), damit das UI das Popup direkt mit den richtigen Rechnungen füllen kann.
 
-| Recht (Spalte)             | Bedeutung                                                        |
-| -------------------------- | ---------------------------------------------------------------- |
-| `can_manage_members`       | Mitglieder einladen/bearbeiten/löschen (sonst nur Partner-Admin) |
-| `can_manage_branding`      | Branding / Whitelabel ändern                                     |
-| `can_view_reporting`       | Reporting-Seite öffnen                                           |
-| `can_manage_tenants`       | Eigene Tenants verwalten (mehr als nur sehen)                    |
-| `can_manage_sales_catalog` | (bestehend) Geräte-Katalog & Auswahlregeln                       |
-| `can_create_tenant`        | (bestehend) Neue Tenants anlegen                                 |
-| `can_view_billing`         | (bestehend) Abrechnung sehen                                     |
-| `can_use_sales_scout`      | (bestehend) Sales Scout nutzen                                   |
+### 3. Hook `useChargingInvoices`
+- `generateInvoices` gibt die neuen `created_invoice_ids` zurück (kein Toast-Count ändern).
+- Neue Mutation `finalizeInvoices(invoiceIds: string[])` – setzt mehrere Rechnungen auf `status = 'issued'`.
+- Neue Mutation `sendSelectedInvoices(invoiceIds: string[])` – ruft Edge Function mit `mode: "send-selected"` auf.
+- Bestehende `sendInvoices` bleibt für Sammelversand erhalten (nur ungesendete + ausgestellte).
 
+### 4. UI – `ChargingBilling.tsx`
 
-Partner-Admins haben implizit alle Rechte (wie heute über `partner_member_can`).
+**Neuer Dialog A: „Erstellte Rechnungen" (öffnet nach „Rechnungen erstellen")**
+- Liste aller in diesem Lauf erzeugten Rechnungen (Checkbox + Rechnungsnr., Nutzer, Betrag, Status-Badge).
+- Checkbox „Alle auswählen" oben.
+- Button **„Ausgewählte als ausgestellt markieren"** → ruft `finalizeInvoices` für selektierte Entwürfe auf.
+- Button **„Schließen"**.
 
-## Schutz „letzter Admin"
+**Neuer Dialog B: „Per E-Mail senden" (öffnet nach Klick auf den bestehenden Button)**
+- Zeigt zwei Gruppen für den aktuellen Zeitraum:
+  1. **Bereit zum Versand** (`status = 'issued'` AND `email_sent_at IS NULL`) – vorausgewählt.
+  2. **Noch im Entwurf** (`status = 'draft'`) – mit Checkboxen + Inline-Button **„Auswahl ausstellen"** / **„Alle ausstellen"**, der `finalizeInvoices` ausführt; danach wandern sie automatisch in Gruppe 1.
+- Zusätzlich Info-Zeile: „X bereits versendete Rechnungen werden übersprungen" (mit Toggle „Trotzdem erneut senden").
+- Footer-Button **„Jetzt versenden"** → `sendSelectedInvoices` mit allen aktuell ausgewählten IDs. Bei Klick wird sichergestellt, dass keine Entwürfe in der Auswahl sind (sonst Hinweis).
 
-Ein Datenbank-Trigger `prevent_last_partner_admin_removal()` auf `partner_members` blockiert:
+**Erweiterung Rechnungstabelle**
+- Neue Spalte „Versendet" mit Datum/Anzahl (oder „—").
+- Neue Aktion pro Zeile: **Mail-Icon „Einzeln versenden"**
+  - Bei `status = 'draft'`: Bestätigungsdialog „Erst als ausgestellt markieren und versenden?" → führt finalize + sendSelectedInvoices nacheinander aus.
+  - Bei `status = 'issued'` ohne `email_sent_at`: direkt `sendSelectedInvoices([id])`.
+  - Bei bereits versendeter Rechnung: Bestätigung „Rechnung wurde am … bereits versendet. Erneut senden?" → `sendSelectedInvoices([id])`.
 
-- `DELETE` eines `partner_admin`, wenn er der einzige aktive Admin des Partners ist
-- `UPDATE` von `partner_role` weg von `partner_admin`, wenn dadurch kein Admin übrig bliebe
+### 5. Edge Function für Sammelrechnungen (Gruppen)
+Spiegelung der gleichen Logik in `send-charging-group-invoices` (analoge Spalten/Modi), damit Verhalten konsistent ist.
 
-Fehlermeldung: „Der letzte Partner-Admin kann nicht entfernt oder herabgestuft werden."
+---
 
-Das UI prüft dieselbe Bedingung clientseitig und deaktiviert Lösch-/Demote-Buttons mit erklärendem Tooltip — die DB bleibt die finale Sicherung.
+## Verhalten Sammelversand (Button „Per E-Mail senden")
+- Versendet **immer nur** Rechnungen mit `status = 'issued'` UND `email_sent_at IS NULL`.
+- Entwürfe werden im Popup angezeigt, aber nicht automatisch ausgestellt – der User entscheidet aktiv.
+- Bereits versendete werden ausgeblendet (Re-Versand nur über Einzelaktion oder Toggle).
 
-## UI-Änderungen `src/pages/partner/PartnerMembers.tsx`
-
-1. **Neuer „Bearbeiten"-Dialog** je Zeile mit:
-  - Rolle (Partner-Admin / Partner-User)
-  - Checkbox-Liste für alle 8 Rechte (nur sichtbar/aktiv für `partner_user`; bei `partner_admin` ausgegraut mit Hinweis „alle Rechte")
-  - Speichern → `update` auf `partner_members`
-2. **Einladungs-Dialog** erweitern um dieselbe Rechte-Auswahl beim ersten Anlegen.
-3. **Löschen-Button** deaktiviert für letzten Admin (mit Tooltip).
-4. **Rollen-Spalte** zeigt zusätzlich Anzahl gesetzter Rechte als kleinen Badge bei `partner_user`.
-
-Alle Buttons sind nur sichtbar/aktiv, wenn aktueller User `isPartnerAdmin` ODER `permissions.manageMembers` (neues Recht) ist.
-
-## Hook & Helper
-
-- `src/hooks/usePartnerAccess.tsx`: `permissions` um `manageMembers`, `manageBranding`, `viewReporting`, `manageTenants` erweitern.
-- `public.partner_member_can()` SQL-Funktion: neue Permission-Keys (`manage_members`, `manage_branding`, `view_reporting`, `manage_tenants`) ergänzen.
-- `src/components/partner/PartnerSidebar.tsx`: bestehende `show`-Flags um die neuen Permissions ergänzen, wo passend (Branding, Reporting).
-
-## Edge Function `partner-invite-member`
-
-Body um optionales `permissions: { ... }` Objekt erweitern und beim `INSERT` in `partner_members` mitschreiben.
-
-## Migration (Schritt-für-Schritt)
-
-```sql
-ALTER TABLE public.partner_members
-  ADD COLUMN can_manage_members  boolean NOT NULL DEFAULT false,
-  ADD COLUMN can_manage_branding boolean NOT NULL DEFAULT false,
-  ADD COLUMN can_view_reporting  boolean NOT NULL DEFAULT false,
-  ADD COLUMN can_manage_tenants  boolean NOT NULL DEFAULT false;
-
--- partner_member_can() um neue Keys erweitern
--- Trigger prevent_last_partner_admin_removal() (BEFORE DELETE OR UPDATE)
-```
+---
 
 ## Nicht im Scope
-
-- Keine Änderung an Super-Admin-Sicht (`SuperAdminPartners`).
-- Keine Tenant-User-Rollen — nur Partner-Portal.
-- Keine Auth-Account-Löschung (nur Membership entfernen, wie bisher).
+- Massenaktion „Mehrere Rechnungen erneut senden" über Tabelle (nur Einzelversand).
+- Anpassungen am PDF-/HTML-Layout.
+- Änderungen an `tenant_electricity_invoices` (separates Modul).
