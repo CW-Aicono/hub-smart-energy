@@ -125,10 +125,13 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
     .limit(50000);
   if (peakRowsError) throw { status: 500, message: "Leistungswerte konnten nicht gelesen werden", detail: peakRowsError.message };
 
-  // Main-meter consumption meters for Strom
+  // Main-meter consumption meters for Strom (incl. bidirectional main meters with PV feed-in)
   const mainStromMeterIds = new Set(
-    meters.filter((m: any) => m.is_main_meter && m.energy_type === "strom" && (m.meter_function === "consumption" || !m.meter_function))
-      .map((m: any) => m.id)
+    meters.filter((m: any) =>
+      m.is_main_meter &&
+      m.energy_type === "strom" &&
+      (m.meter_function === "consumption" || m.meter_function === "bidirectional" || !m.meter_function)
+    ).map((m: any) => m.id)
   );
 
   // Daily power peaks — ONLY for main consumption meters
