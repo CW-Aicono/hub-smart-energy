@@ -70,8 +70,9 @@ export function useChargingInvoices() {
       const userIds = Array.from(new Set(invs.map(i => i.user_id).filter(Boolean) as string[]));
       const invoiceIds = invs.map(i => i.id);
       const tariffIds = Array.from(new Set(invs.map(i => i.tariff_id).filter(Boolean) as string[]));
+      const groupIds = Array.from(new Set(invs.map(i => i.billing_group_id).filter(Boolean) as string[]));
 
-      const [usersRes, tagsRes, linksRes, tariffsRes] = await Promise.all([
+      const [usersRes, tagsRes, linksRes, tariffsRes, groupsRes] = await Promise.all([
         userIds.length
           ? supabase.from("charging_users").select("id, name, email").in("id", userIds)
           : Promise.resolve({ data: [] } as any),
@@ -84,6 +85,9 @@ export function useChargingInvoices() {
           .in("invoice_id", invoiceIds),
         tariffIds.length
           ? supabase.from("charging_tariffs").select("id, price_per_kwh, idle_fee_per_minute, idle_fee_grace_minutes").in("id", tariffIds)
+          : Promise.resolve({ data: [] } as any),
+        groupIds.length
+          ? supabase.from("charging_billing_groups").select("id, name").in("id", groupIds)
           : Promise.resolve({ data: [] } as any),
       ]);
 
@@ -105,17 +109,21 @@ export function useChargingInvoices() {
       }
       const tariffById = new Map<string, any>();
       for (const t of (tariffsRes.data ?? [])) tariffById.set((t as any).id, t);
+      const groupById = new Map<string, any>();
+      for (const g of (groupsRes.data ?? [])) groupById.set((g as any).id, g);
 
       return invs.map(inv => {
         const u = inv.user_id ? userById.get(inv.user_id) : null;
+        const g = inv.billing_group_id ? groupById.get(inv.billing_group_id) : null;
         const tariff = inv.tariff_id ? tariffById.get(inv.tariff_id) : null;
         const sessions = (sessionsByInvoice.get(inv.id) ?? []).sort(
           (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
         );
         return {
           ...inv,
-          user_name: u?.name,
+          user_name: u?.name ?? g?.name,
           user_email: u?.email,
+          billing_group_name: g?.name,
           user_tags: inv.user_id ? (tagsByUser.get(inv.user_id) ?? []) : [],
           sessions,
           tariff_price_per_kwh: tariff?.price_per_kwh,
