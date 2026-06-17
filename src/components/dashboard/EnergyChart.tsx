@@ -534,7 +534,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const bucket: any = { label: format(d, "d."), ...emptyBucket() };
         const dbBucket = dbDailyMap.get(dateStr);
         if (dbBucket) {
-          for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+          for (const key of ENERGY_KEYS) {
+            addToEnergyBucket(bucket, key, (dbBucket as any)[key]);
+            if ((dbBucket as any)[`__gap_${key}`]) bucket[`__gap_${key}`] = true;
+          }
           addSplitFields(bucket, dbBucket);
         }
         manualFiltered.forEach((r) => {
@@ -542,6 +545,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         });
         if (dateStr === todayStr && !dbBucket) {
           addLiveTodayToBucket(bucket);
+          for (const key of ENERGY_KEYS) bucket[`__gap_${key}`] = true;
         }
         return bucket;
       });
