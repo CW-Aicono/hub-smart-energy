@@ -30,6 +30,9 @@ async function ocmfDownloadToken(sessionId: string, secret: string): Promise<str
   return Array.from(new Uint8Array(sig))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+
 
 function getLastMonth(): { from: string; to: string; label: string } {
   const now = new Date();
