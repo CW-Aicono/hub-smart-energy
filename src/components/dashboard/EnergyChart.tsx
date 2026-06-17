@@ -306,9 +306,25 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     };
 
     // Helper: build a map of date -> energy bucket from DB daily totals
-    // Also tracks bezug/einspeisung split for bidirectional meters
-    const buildDailyBucketsFromDB = (): Map<string, EnergyBucket & Record<string, number>> => {
-      const map = new Map<string, EnergyBucket & Record<string, number>>();
+    // Also tracks bezug/einspeisung split for bidirectional meters and
+    // marks the day as a "gap" if NO verified daily total (source='archived')
+    // exists for that day across all queried meters – i.e. the value would
+    // otherwise be silently substituted from the 5-min fallback.
+    const buildDailyBucketsFromDB = (): Map<string, EnergyBucket & Record<string, number | boolean>> => {
+      const map = new Map<string, EnergyBucket & Record<string, number | boolean>>();
+      // First pass: track per (date, energy_type) whether at least one
+      // 'archived' (verified Loxone daily total) row exists.
+      const hasArchived = new Map<string, Set<string>>(); // dateStr -> Set<energy_type>
+      for (const row of dailyTotals) {
+        const info = meterMap[row.meter_id];
+        if (!info) continue;
+        const dayStr = typeof row.day === "string" ? row.day.split("T")[0] : format(new Date(row.day), "yyyy-MM-dd");
+        if (row.source === "archived") {
+          if (!hasArchived.has(dayStr)) hasArchived.set(dayStr, new Set());
+          hasArchived.get(dayStr)!.add(info.energy_type);
+        }
+      }
+
       for (const row of dailyTotals) {
         const info = meterMap[row.meter_id];
         if (!info) continue;
@@ -319,12 +335,17 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const converted = convertGas(row.meter_id, netValue);
         addToEnergyBucket(bucket, info.energy_type, converted);
 
+        // Mark gap flag per energy_type if no archived value exists for this day+type
+        const isGap = !(hasArchived.get(dayStr)?.has(info.energy_type));
+        (bucket as any)[`__gap_${info.energy_type}`] = isGap;
+        (bucket as any)[`__source_${info.energy_type}`] = row.source;
+
         // For non-day bar charts: use pre-split bezug/einspeisung
         if (period !== "day") {
           const bezugKey = `${info.energy_type}_bezug`;
           const einspeisungKey = `${info.energy_type}_einspeisung`;
-          bucket[bezugKey] = (bucket[bezugKey] ?? 0) + convertGas(row.meter_id, row.bezug);
-          bucket[einspeisungKey] = (bucket[einspeisungKey] ?? 0) + convertGas(row.meter_id, row.einspeisung);
+          bucket[bezugKey] = ((bucket[bezugKey] as number) ?? 0) + convertGas(row.meter_id, row.bezug);
+          bucket[einspeisungKey] = ((bucket[einspeisungKey] as number) ?? 0) + convertGas(row.meter_id, row.einspeisung);
         }
       }
       return map;
