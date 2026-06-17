@@ -585,7 +585,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     const dbDailyMap = buildDailyBucketsFromDB();
     for (const [dateStr, dbBucket] of dbDailyMap.entries()) {
       const monthIdx = new Date(dateStr).getMonth();
-      for (const key of ENERGY_KEYS) addToEnergyBucket(buckets[monthIdx], key, dbBucket[key]);
+      for (const key of ENERGY_KEYS) addToEnergyBucket(buckets[monthIdx], key, (dbBucket as any)[key]);
       addSplitFields(buckets[monthIdx], dbBucket);
     }
     if (!dbDailyMap.has(todayStr)) {
