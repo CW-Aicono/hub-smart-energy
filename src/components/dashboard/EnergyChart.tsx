@@ -738,20 +738,55 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                 </LineChart>
               ) : (
                 <BarChart data={filteredChartData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+                  <defs>
+                    {ENERGY_KEYS.map((key) => (
+                      <pattern
+                        key={`pat-${key}`}
+                        id={`gap-pattern-${key}`}
+                        patternUnits="userSpaceOnUse"
+                        width="6"
+                        height="6"
+                        patternTransform="rotate(45)"
+                      >
+                        <rect width="6" height="6" fill={ENERGY_CHART_COLORS[key]} fillOpacity="0.18" />
+                        <line x1="0" y1="0" x2="0" y2="6" stroke={ENERGY_CHART_COLORS[key]} strokeWidth="2" />
+                      </pattern>
+                    ))}
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                   <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} />
                   <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(value: number, name: string, item: any) => {
+                      const [labelText, _] = tooltipFormatter(value, name);
+                      const payload = item?.payload ?? {};
+                      const energyKey = ENERGY_KEYS.find(k => T(`energy.${k}`) === name || name.startsWith(T(`energy.${k}`)));
+                      const isGap = energyKey ? payload[`__gap_${energyKey}`] === true : false;
+                      const suffix = isGap ? " ⚠ Tageswert fehlt (nur 5-Min-Schätzung)" : "";
+                      return [labelText + suffix, name];
+                    }}
+                  />
                   {visibleEnergyKeys.map((key) => {
                     if (bidirectionalTypes.has(key)) {
                       return (
                         <React.Fragment key={key}>
-                          <Bar dataKey={`${key}_bezug`} name={`${T(`energy.${key}`)} Bezug`} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />
+                          <Bar dataKey={`${key}_bezug`} name={`${T(`energy.${key}`)} Bezug`} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)}>
+                            {filteredChartData.map((entry: any, i: number) => (
+                              <Cell key={`c-bz-${key}-${i}`} fill={entry[`__gap_${key}`] ? `url(#gap-pattern-${key})` : ENERGY_CHART_COLORS[key]} />
+                            ))}
+                          </Bar>
                           <Bar dataKey={`${key}_einspeisung`} name={`${T(`energy.${key}`)} Einspeisung`} fill="#10b981" radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />
                         </React.Fragment>
                       );
                     }
-                    return <Bar key={key} dataKey={key} name={T(`energy.${key}`)} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />;
+                    return (
+                      <Bar key={key} dataKey={key} name={T(`energy.${key}`)} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)}>
+                        {filteredChartData.map((entry: any, i: number) => (
+                          <Cell key={`c-${key}-${i}`} fill={entry[`__gap_${key}`] ? `url(#gap-pattern-${key})` : ENERGY_CHART_COLORS[key]} />
+                        ))}
+                      </Bar>
+                    );
                   })}
                 </BarChart>
               )}
