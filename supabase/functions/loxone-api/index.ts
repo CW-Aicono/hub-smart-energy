@@ -944,9 +944,18 @@ serve(async (req) => {
 
         if (linkedMeters && linkedMeters.length > 0) {
           const now = new Date();
-          // Previous month's first day for monthly archiving
-          const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          const periodStart = prevMonthDate.toISOString().split("T")[0];
+          // Previous month's first day for monthly archiving (Europe/Berlin TZ).
+          // FIX (Step 3): Avoid local→UTC off-by-one near month boundaries by computing
+          // the calendar date in Berlin TZ before subtracting a month.
+          const berlinFmtM = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Europe/Berlin",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
+          const [ny, nm] = berlinFmtM.format(now).split("-").map(Number);
+          const prevMonth = new Date(Date.UTC(ny, nm - 2, 1));
+          const periodStart = prevMonth.toISOString().split("T")[0];
 
           const monthUpserts: Array<{
             tenant_id: string;
@@ -1019,9 +1028,23 @@ serve(async (req) => {
             }
 
             // Archive yesterday's daily total (Rldc/Rldd/Rld)
+            // FIX (Step 3): Date must be computed in Europe/Berlin TZ.
+            // Previous code used `new Date(Y, M, D-1)` (local midnight) + toISOString(),
+            // which shifts to UTC and produced an off-by-one (or -two) day label.
+            // Loxone's "TotalDayLast" represents the completed previous calendar day in
+            // Berlin local time — we now compute that date deterministically.
             if (stateData?.totalDayLast != null && stateData.totalDayLast > 0) {
-              const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-              const yesterdayStr = yesterday.toISOString().split("T")[0];
+              const berlinFmt = new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Europe/Berlin",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              });
+              const todayBerlin = berlinFmt.format(now); // "YYYY-MM-DD"
+              const [by, bm, bd] = todayBerlin.split("-").map(Number);
+              const yest = new Date(Date.UTC(by, bm - 1, bd));
+              yest.setUTCDate(yest.getUTCDate() - 1);
+              const yesterdayStr = yest.toISOString().split("T")[0];
               monthUpserts.push({
                 tenant_id: meter.tenant_id,
                 meter_id: meter.id,
