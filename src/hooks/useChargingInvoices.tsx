@@ -192,12 +192,20 @@ export function useChargingInvoices() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["charging-invoices"] });
       const sent = data?.sent ?? 0;
-      const skipped = (data?.results ?? []).filter((r: any) => !r.ok).length;
+      const failed = (data?.results ?? []).filter((r: any) => !r.ok);
+      const reasons = failed
+        .map((r: any) => r.error || r.skipped)
+        .filter(Boolean) as string[];
+      const uniqueReasons = Array.from(new Set(reasons));
       toast({
         title: `${sent} Rechnung(en) versendet`,
-        description: skipped > 0 ? `${skipped} übersprungen` : undefined,
+        description: failed.length > 0
+          ? `${failed.length} nicht versendet${uniqueReasons.length ? `: ${uniqueReasons.join("; ")}` : ""}`
+          : undefined,
+        variant: sent === 0 && failed.length > 0 ? "destructive" : "default",
       });
     },
+
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
