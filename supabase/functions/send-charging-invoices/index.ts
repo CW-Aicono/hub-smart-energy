@@ -608,6 +608,7 @@ serve(async (req) => {
               }
 
               tenantResult.invoices_created++;
+              if (newInvoice?.id) tenantResult.created_invoice_ids.push(newInvoice.id);
             }
 
             // Send email
