@@ -611,11 +611,11 @@ serve(async (req) => {
               if (newInvoice?.id) tenantResult.created_invoice_ids.push(newInvoice.id);
             }
 
-            // Send email
+            // Send email — NEW gating: only issued + not yet sent
             if ((mode === "send" || mode === "both") && user.email && resend) {
-              // Re-fetch the invoice if mode=send
+              // Re-fetch the invoice (always — we need status + email_sent_at to gate)
               let invoiceData: any;
-              if (mode === "send") {
+              {
                 const { data } = await supabase
                   .from("charging_invoices")
                   .select("*")
@@ -623,9 +623,14 @@ serve(async (req) => {
                   .eq("user_id", userId)
                   .eq("period_start", period.from)
                   .eq("period_end", period.to)
-                  .single();
+                  .maybeSingle();
                 invoiceData = data;
               }
+              // Skip drafts and already-sent invoices in the bulk path
+              if (!invoiceData || invoiceData.status !== "issued" || invoiceData.email_sent_at) {
+                continue;
+              }
+
 
               const group = user.group_id ? groupById.get(user.group_id) : null;
               const tariff = resolveTariff(user, group, allTariffs || []);
