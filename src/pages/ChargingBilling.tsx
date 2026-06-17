@@ -1080,8 +1080,11 @@ const ChargingBilling = () => {
                                   <span>
                                     <span className="font-mono font-semibold">{tagKey}</span>
                                     {label && <span className="text-muted-foreground ml-2">· {label}</span>}
-                                    {tagUser && <span className="text-muted-foreground ml-2">· {tagUser}</span>}
+                                    {tagUser && tagUser.trim().toLowerCase() !== (label ?? "").trim().toLowerCase() && (
+                                      <span className="text-muted-foreground ml-2">· {tagUser}</span>
+                                    )}
                                   </span>
+
                                   <span className="text-muted-foreground">{sess!.length} Vorgang/Vorgänge</span>
                                 </div>
                                 <Table>

@@ -113,15 +113,15 @@ export function useChargingInvoices() {
       const groupById = new Map<string, any>();
       for (const g of (groupsRes.data ?? [])) groupById.set((g as any).id, g);
 
-      // Collect all id_tags used across sessions, resolve to label + user name
+      // Collect all id_tags used across sessions, resolve to label + user name + user_id
       const allTags = Array.from(new Set(
         Array.from(sessionsByInvoice.values()).flat().map(s => s.id_tag).filter(Boolean) as string[]
       ));
-      const tagInfoByUpper = new Map<string, { label: string | null; user_name: string | null }>();
+      const tagInfoByUpper = new Map<string, { label: string | null; user_name: string | null; user_id: string | null }>();
       if (allTags.length > 0) {
         const { data: tagRows } = await supabase
           .from("charging_user_rfid_tags")
-          .select("tag, label, charging_users(name)")
+          .select("tag, label, user_id, charging_users(name)")
           .eq("tenant_id", tenant!.id)
           .in("tag", allTags);
         for (const t of (tagRows ?? [])) {
@@ -129,13 +129,31 @@ export function useChargingInvoices() {
           tagInfoByUpper.set(key, {
             label: (t as any).label ?? null,
             user_name: (t as any).charging_users?.name ?? null,
+            user_id: (t as any).user_id ?? null,
           });
+        }
+      }
+
+      // Build user → billing group map (for fallback when invoice has neither user_id nor billing_group_id)
+      const groupByUserId = new Map<string, { id: string; name: string }>();
+      const tagUserIds = Array.from(new Set(
+        Array.from(tagInfoByUpper.values()).map(i => i.user_id).filter(Boolean) as string[]
+      ));
+      if (tagUserIds.length > 0) {
+        const { data: memberRows } = await supabase
+          .from("charging_billing_group_members" as any)
+          .select("user_id, group_id, charging_billing_groups(id, name)")
+          .eq("tenant_id", tenant!.id)
+          .in("user_id", tagUserIds);
+        for (const m of (memberRows ?? [])) {
+          const grp = (m as any).charging_billing_groups;
+          if (grp) groupByUserId.set((m as any).user_id, { id: grp.id, name: grp.name });
         }
       }
 
       return invs.map(inv => {
         const u = inv.user_id ? userById.get(inv.user_id) : null;
-        const g = inv.billing_group_id ? groupById.get(inv.billing_group_id) : null;
+        let g = inv.billing_group_id ? groupById.get(inv.billing_group_id) : null;
         const tariff = inv.tariff_id ? tariffById.get(inv.tariff_id) : null;
         const sessions = (sessionsByInvoice.get(inv.id) ?? []).sort(
           (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
@@ -159,6 +177,19 @@ export function useChargingInvoices() {
             tagsForInv.set(t.tag.toUpperCase(), { ...t, user_name: u?.name ?? null });
           }
         }
+        // Fallback: derive billing group from session tags → users → group membership
+        if (!u && !g) {
+          const groupCandidates = new Map<string, { id: string; name: string }>();
+          for (const s of sessions) {
+            if (!s.id_tag) continue;
+            const info = tagInfoByUpper.get(s.id_tag.toUpperCase());
+            const grp = info?.user_id ? groupByUserId.get(info.user_id) : null;
+            if (grp) groupCandidates.set(grp.id, grp);
+          }
+          if (groupCandidates.size === 1) {
+            g = Array.from(groupCandidates.values())[0];
+          }
+        }
         return {
           ...inv,
           user_name: u?.name ?? g?.name,
@@ -171,6 +202,7 @@ export function useChargingInvoices() {
           tariff_idle_fee_grace_minutes: tariff?.idle_fee_grace_minutes,
         };
       });
+
     },
   });
 
