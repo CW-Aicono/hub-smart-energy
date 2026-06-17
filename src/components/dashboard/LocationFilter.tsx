@@ -21,7 +21,31 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
   const T = (key: string) => t(key as any);
   const { locationsFullEnabled } = useModuleGuard();
   const { errorLocationIds } = useIntegrationErrors();
-  const hasAnyErrors = errorLocationIds.size > 0;
+  const locationIds = useMemo(() => locations.map((l) => l.id), [locations]);
+  const { locationStatuses } = useLocationStatus(locationIds);
+
+  // Offline (red): integration is technically offline.
+  // Data error (yellow): integration is online but reports missing/invalid data.
+  const offlineLocationIds = useMemo(() => {
+    const set = new Set<string>();
+    locationStatuses.forEach((status, id) => {
+      if (status.totalIntegrations > 0 && (!status.isOnline || status.hasSyncError)) {
+        set.add(id);
+      }
+    });
+    return set;
+  }, [locationStatuses]);
+
+  const dataErrorLocationIds = useMemo(() => {
+    const set = new Set<string>();
+    errorLocationIds.forEach((id) => {
+      if (!offlineLocationIds.has(id)) set.add(id);
+    });
+    return set;
+  }, [errorLocationIds, offlineLocationIds]);
+
+  const hasAnyOffline = offlineLocationIds.size > 0;
+  const hasAnyDataError = dataErrorLocationIds.size > 0;
 
   const mainLocation = locations.find((loc) => loc.is_main_location) || locations[0];
 
