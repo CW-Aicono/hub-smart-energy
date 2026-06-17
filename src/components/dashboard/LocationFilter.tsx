@@ -4,8 +4,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { useIntegrationErrors } from "@/hooks/useIntegrationErrors";
+import { useLocationStatus } from "@/hooks/useLocationStatus";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 interface LocationFilterProps {
   selectedLocationId: string | null;
