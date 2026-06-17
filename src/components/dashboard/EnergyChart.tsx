@@ -319,7 +319,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const info = meterMap[row.meter_id];
         if (!info) continue;
         const dayStr = typeof row.day === "string" ? row.day.split("T")[0] : format(new Date(row.day), "yyyy-MM-dd");
-        if (row.source === "archived") {
+        // Verified sources: archived Loxone day totals, live Loxone totalDay for today,
+        // CSV-verified repairs, manual readings, MSCONS imports. Only the 5-min
+        // estimate ('today_running') counts as a gap.
+        if (row.source !== "today_running") {
           if (!hasArchived.has(dayStr)) hasArchived.set(dayStr, new Set());
           hasArchived.get(dayStr)!.add(info.energy_type);
         }
