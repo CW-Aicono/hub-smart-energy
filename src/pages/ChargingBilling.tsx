@@ -100,7 +100,12 @@ const ChargingBilling = () => {
   const [ocmfSessionId, setOcmfSessionId] = useState<string | null>(null);
   const resolveTag = useIdTagResolver();
   const { tariffs, isLoading: tariffsLoading, addTariff, updateTariff, deleteTariff } = useChargingTariffs();
-  const { invoices, generateInvoices, sendInvoices, finalizeInvoice, markAsPaid } = useChargingInvoices();
+  const { invoices, generateInvoices, sendInvoices, sendSelectedInvoices, finalizeInvoice, finalizeInvoices, markAsPaid } = useChargingInvoices();
+  const [createdDialogOpen, setCreatedDialogOpen] = useState(false);
+  const [createdInvoiceIds, setCreatedInvoiceIds] = useState<string[]>([]);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [resendConfirm, setResendConfirm] = useState<any | null>(null);
+  const [draftSendConfirm, setDraftSendConfirm] = useState<any | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   const { chargePoints } = useChargePoints();
   const { settings: invoiceSettings } = useChargingInvoiceSettings();
