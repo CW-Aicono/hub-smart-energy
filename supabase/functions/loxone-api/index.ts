@@ -944,9 +944,18 @@ serve(async (req) => {
 
         if (linkedMeters && linkedMeters.length > 0) {
           const now = new Date();
-          // Previous month's first day for monthly archiving
-          const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          const periodStart = prevMonthDate.toISOString().split("T")[0];
+          // Previous month's first day for monthly archiving (Europe/Berlin TZ).
+          // FIX (Step 3): Avoid local→UTC off-by-one near month boundaries by computing
+          // the calendar date in Berlin TZ before subtracting a month.
+          const berlinFmtM = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Europe/Berlin",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
+          const [ny, nm] = berlinFmtM.format(now).split("-").map(Number);
+          const prevMonth = new Date(Date.UTC(ny, nm - 2, 1));
+          const periodStart = prevMonth.toISOString().split("T")[0];
 
           const monthUpserts: Array<{
             tenant_id: string;
