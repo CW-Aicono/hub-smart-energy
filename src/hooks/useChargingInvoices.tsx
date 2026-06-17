@@ -177,24 +177,13 @@ export function useChargingInvoices() {
             tagsForInv.set(t.tag.toUpperCase(), { ...t, user_name: u?.name ?? null });
           }
         }
-        // Fallback: derive billing group from session tags → users → group membership
-        if (!u && !g) {
-          const groupCandidates = new Map<string, { id: string; name: string }>();
-          for (const s of sessions) {
-            if (!s.id_tag) continue;
-            const info = tagInfoByUpper.get(s.id_tag.toUpperCase());
-            const grp = info?.user_id ? groupByUserId.get(info.user_id) : null;
-            if (grp) groupCandidates.set(grp.id, grp);
-          }
-          if (groupCandidates.size === 1) {
-            g = Array.from(groupCandidates.values())[0];
-          }
-        }
+        // Orphan invoice: no user, no billing group → do NOT guess from session tags
+        const isOrphan = !inv.user_id && !inv.billing_group_id;
         return {
           ...inv,
-          user_name: u?.name ?? g?.name,
+          user_name: isOrphan ? "— (verwaiste Rechnung) —" : (u?.name ?? g?.name),
           user_email: u?.email,
-          billing_group_name: g?.name,
+          billing_group_name: isOrphan ? undefined : g?.name,
           user_tags: Array.from(tagsForInv.values()),
           sessions,
           tariff_price_per_kwh: tariff?.price_per_kwh,

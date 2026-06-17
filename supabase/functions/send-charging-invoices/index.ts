@@ -511,6 +511,16 @@ serve(async (req) => {
         const groupById = new Map<string, any>();
         for (const g of (chargingGroups || [])) groupById.set(g.id, g);
 
+        // Mitglieder von Rechnungsgruppen ermitteln – diese werden über
+        // send-charging-group-invoices als Sammelrechnung abgerechnet und dürfen
+        // hier NICHT zusätzlich eine Einzelrechnung erhalten.
+        const { data: billingGroupMembers } = await supabase
+          .from("charging_billing_group_members")
+          .select("user_id")
+          .eq("tenant_id", tenantId);
+        const billingGroupUserIds = new Set<string>(
+          (billingGroupMembers ?? []).map((m: any) => m.user_id).filter(Boolean)
+        );
 
         // Group sessions by charging user
         const userSessions = new Map<string, { user: any; sessions: any[] }>();
@@ -519,6 +529,8 @@ serve(async (req) => {
           if (!idTag) continue;
           const chargingUser = userByRfid.get(idTag.toUpperCase()) || userByAppTag.get(idTag);
           if (!chargingUser) continue;
+          // Mitglieder einer Rechnungsgruppe überspringen (Sammelrechnung)
+          if (billingGroupUserIds.has(chargingUser.id)) continue;
 
           if (!userSessions.has(chargingUser.id)) {
             userSessions.set(chargingUser.id, { user: chargingUser, sessions: [] });
