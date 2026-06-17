@@ -427,7 +427,7 @@ serve(async (req) => {
 
 
     for (const tenantId of tenantIds) {
-      const tenantResult = { tenant_id: tenantId, invoices_created: 0, emails_sent: 0, errors: [] as string[] };
+      const tenantResult = { tenant_id: tenantId, invoices_created: 0, created_invoice_ids: [] as string[], emails_sent: 0, errors: [] as string[] };
 
       try {
         // Get tenant info
