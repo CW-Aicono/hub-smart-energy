@@ -40,9 +40,10 @@ async function resolveAuth(req: Request) {
 // ─── Datenkontext für die KI sammeln ──────────────────────────────────────
 async function gatherContext(db: any, tenantId: string, locationId: string | null, periodStart: string, periodEnd: string) {
   // Standorte (mit optionalem Filter)
-  let locQuery = db.from("locations").select("id, name, building_type, area_m2, address_city").eq("tenant_id", tenantId);
+  let locQuery = db.from("locations").select("id, name, usage_type, net_floor_area, gross_floor_area, city").eq("tenant_id", tenantId);
   if (locationId) locQuery = locQuery.eq("id", locationId);
-  const { data: locationsData } = await locQuery;
+  const { data: locationsData, error: locationsError } = await locQuery;
+  if (locationsError) throw { status: 500, message: "Standorte konnten nicht gelesen werden", detail: locationsError.message };
   const locations = locationsData ?? [];
 
   const locationIds = locations.map((l: any) => l.id);
