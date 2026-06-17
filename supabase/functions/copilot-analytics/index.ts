@@ -247,6 +247,11 @@ Du erhältst aggregierte Mess- und Anlagendaten eines Mandanten und beantwortest
 
 WICHTIG:
 - Verwende ausschließlich die übergebenen Daten. Erfinde nichts.
+- Nutze zuerst "prepared_summaries". Diese Werte sind bereits korrekt voraggregiert und sollen bevorzugt für Charts/KPIs verwendet werden.
+- Für Stromverbrauch pro Standort nutze "prepared_summaries.electricity_consumption_by_location".
+- Für Stromverbrauch pro Zähler nutze "prepared_summaries.electricity_consumption_by_meter".
+- Für Wallbox-/Ladepunkt-Auslastung nutze "prepared_summaries.charging_by_charge_point".
+- Für Lastspitzen nutze "prepared_summaries.peak_power_by_day".
 - Wenn die Daten nicht ausreichen, schreibe das ehrlich in "insight_markdown" und gib ein leeres KPI-/Chart-Array zurück.
 - Zahlen IMMER im deutschen Format denken (Punkt = Tausender, Komma = Dezimal) – die Formatierung übernimmt das Frontend.
 - Chart-Daten so liefern, dass sie 1:1 in Recharts gerendert werden können.`;
