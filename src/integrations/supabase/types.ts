@@ -2823,6 +2823,60 @@ export type Database = {
           },
         ]
       }
+      copilot_analytics_queries: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          is_pinned: boolean
+          location_id: string | null
+          model_used: string | null
+          period_end: string | null
+          period_start: string | null
+          prompt: string
+          result_json: Json | null
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          is_pinned?: boolean
+          location_id?: string | null
+          model_used?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          prompt: string
+          result_json?: Json | null
+          status?: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          is_pinned?: boolean
+          location_id?: string | null
+          model_used?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          prompt?: string
+          result_json?: Json | null
+          status?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       copilot_projects: {
         Row: {
           analysis_id: string | null
