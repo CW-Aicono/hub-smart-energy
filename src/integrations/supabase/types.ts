@@ -11748,6 +11748,10 @@ export type Database = {
         Returns: Json
       }
       snapshot_charge_point_uptime: { Args: never; Returns: number }
+      touch_location_integration_sync: {
+        Args: { _id: string; _min_interval_seconds?: number; _status: string }
+        Returns: undefined
+      }
       try_acquire_gateway_refresh_lock: {
         Args: {
           p_integration_id: string
