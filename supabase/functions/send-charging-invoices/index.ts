@@ -360,7 +360,9 @@ serve(async (req) => {
     // Parse request body
     let tenantFilter: string | null = null;
     let periodOverride: { from: string; to: string; label: string } | null = null;
-    let mode: "generate" | "send" | "both" = "both";
+    let mode: "generate" | "send" | "both" | "send-selected" = "both";
+    let invoiceIdsToSend: string[] = [];
+    let allowDraftSend = false;
 
     try {
       const body = await req.json();
@@ -374,7 +376,33 @@ serve(async (req) => {
         periodOverride = { from, to, label };
       }
       if (body.mode) mode = body.mode;
+      if (Array.isArray(body.invoice_ids)) invoiceIdsToSend = body.invoice_ids.filter((x: any) => typeof x === "string");
+      if (body.allow_draft === true) allowDraftSend = true;
     } catch { /* no body = cron run */ }
+
+    // ============ NEW: send-selected mode (per-invoice) ============
+    if (mode === "send-selected") {
+      if (!resend) {
+        return new Response(JSON.stringify({ error: "RESEND_API_KEY nicht konfiguriert" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (invoiceIdsToSend.length === 0) {
+        return new Response(JSON.stringify({ error: "invoice_ids fehlen" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const sendResults: { invoice_id: string; ok: boolean; error?: string; skipped?: string }[] = [];
+      let sentCount = 0;
+      for (const id of invoiceIdsToSend) {
+        const r = await sendInvoiceById(supabase, resend, id, { allowDraft: allowDraftSend });
+        if (r.ok) sentCount++;
+        sendResults.push({ invoice_id: id, ...r });
+      }
+      return new Response(JSON.stringify({ success: true, sent: sentCount, results: sendResults }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const period = periodOverride || getLastMonth();
 
@@ -395,7 +423,8 @@ serve(async (req) => {
       });
     }
 
-    const results: { tenant_id: string; invoices_created: number; emails_sent: number; errors: string[] }[] = [];
+    const results: { tenant_id: string; invoices_created: number; created_invoice_ids: string[]; emails_sent: number; errors: string[] }[] = [];
+
 
     for (const tenantId of tenantIds) {
       const tenantResult = { tenant_id: tenantId, invoices_created: 0, emails_sent: 0, errors: [] as string[] };
