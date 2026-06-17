@@ -67,7 +67,7 @@ const Copilot = () => {
   const [budgetLimit, setBudgetLimit] = useState("");
   const [result, setResult] = useState<CopilotAnalysisResult | null>(null);
   const [savingsResult, setSavingsResult] = useState<SavingsPotentialResult | null>(null);
-  const [topTab, setTopTab] = useState("savings");
+  const [topTab, setTopTab] = useState("analytics");
   const [investorTab, setInvestorTab] = useState("analysis");
   const [savingsPeriod, setSavingsPeriod] = useState("30");
   const [savingsTab, setSavingsTab] = useState("analysis");
