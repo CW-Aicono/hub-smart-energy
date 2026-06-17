@@ -198,6 +198,7 @@ export function AnalyticsTab() {
   const [periodStart, setPeriodStart] = useState(defaultStart);
   const [periodEnd, setPeriodEnd] = useState(today);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("result");
   const [search, setSearch] = useState("");
 
   const activeQuery = useMemo(
@@ -224,6 +225,7 @@ export function AnalyticsTab() {
       period_end: periodEnd,
     });
     setActiveId(res.id);
+    setActiveTab("result");
     if (overridePrompt) setPrompt(overridePrompt);
   };
 
@@ -320,7 +322,7 @@ export function AnalyticsTab() {
 
       {/* Rechte Spalte: Ergebnis + Verlauf */}
       <div className="lg:col-span-8">
-        <Tabs defaultValue="result">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="result" className="gap-1.5">
               <BarChart3 className="h-4 w-4" />
@@ -370,7 +372,10 @@ export function AnalyticsTab() {
                           <div className={`flex items-center gap-2 p-2 rounded-md border hover:bg-muted/40 ${activeId === q.id ? "border-primary bg-primary/5" : ""}`}>
                             <button
                               className="flex-1 text-left min-w-0"
-                              onClick={() => setActiveId(q.id)}
+                              onClick={() => {
+                                setActiveId(q.id);
+                                setActiveTab("result");
+                              }}
                             >
                               <div className="text-sm font-medium truncate flex items-center gap-1.5">
                                 {q.is_pinned && <Star className="h-3 w-3 fill-primary text-primary shrink-0" />}
