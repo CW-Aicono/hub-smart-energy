@@ -224,6 +224,127 @@ function buildInvoiceHTML(
 </html>`;
 }
 
+/**
+ * Re-send (or first-send) a single, already-issued invoice by ID.
+ * Updates email_sent_at + email_send_count on success.
+ */
+async function sendInvoiceById(
+  supabase: any,
+  resend: any,
+  invoiceId: string,
+  opts: { allowDraft?: boolean } = {},
+): Promise<{ ok: boolean; error?: string; skipped?: string }> {
+  const { data: invoice, error: invErr } = await supabase
+    .from("charging_invoices").select("*").eq("id", invoiceId).maybeSingle();
+  if (invErr) return { ok: false, error: invErr.message };
+  if (!invoice) return { ok: false, error: "Rechnung nicht gefunden" };
+  if (!opts.allowDraft && invoice.status !== "issued") {
+    return { ok: false, skipped: "Nur ausgestellte Rechnungen können versendet werden." };
+  }
+
+  const { data: tenant } = await supabase
+    .from("tenants").select("name, logo_url, branding").eq("id", invoice.tenant_id).maybeSingle();
+  const tenantName = tenant?.name || "";
+  const logoUrl = tenant?.logo_url || null;
+  const branding = (tenant?.branding as Record<string, string>) || {};
+  const primaryColor = branding.primaryColor || "#1e293b";
+  const accentColor = branding.accentColor || "#334155";
+
+  const { data: user } = await supabase
+    .from("charging_users").select("*").eq("id", invoice.user_id).maybeSingle();
+  if (!user?.email) return { ok: false, error: "Empfänger hat keine E-Mail-Adresse" };
+
+  const { data: links } = await supabase
+    .from("charging_invoice_sessions").select("charging_sessions(*)").eq("invoice_id", invoiceId);
+  const sessions = (links ?? []).map((l: any) => l.charging_sessions).filter(Boolean)
+    .sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+
+  let tariff: any = null;
+  if (invoice.tariff_id) {
+    const { data } = await supabase.from("charging_tariffs").select("*").eq("id", invoice.tariff_id).maybeSingle();
+    tariff = data;
+  }
+  const pricePerKwh = tariff?.price_per_kwh ?? 0;
+  const baseFee = tariff?.base_fee ?? 0;
+  const idleFeePerMinute = tariff?.idle_fee_per_minute ?? 0;
+  const idleFeeGraceMinutes = tariff?.idle_fee_grace_minutes ?? 60;
+  const taxRatePercent = invoice.tax_rate_percent ?? tariff?.tax_rate_percent ?? 19;
+  const currency = invoice.currency ?? "EUR";
+  const tariffName = tariff?.name ?? "Standard";
+
+  const { data: tagsData } = await supabase
+    .from("charging_user_rfid_tags").select("tag, label").eq("user_id", invoice.user_id);
+  const userTagsForInvoice: { tag: string; label: string | null }[] = (tagsData ?? []).map((t: any) => ({ tag: t.tag, label: t.label ?? null }));
+  if (user.rfid_tag && !userTagsForInvoice.some(x => x.tag.toUpperCase() === user.rfid_tag.toUpperCase())) {
+    userTagsForInvoice.push({ tag: user.rfid_tag, label: user.rfid_label ?? null });
+  }
+
+  const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+  const pFrom = invoice.period_start || invoice.invoice_date;
+  const pTo = invoice.period_end || invoice.invoice_date;
+  const dd = new Date(pFrom);
+  const period = { from: pFrom, to: pTo, label: `${monthNames[dd.getMonth()]} ${dd.getFullYear()}` };
+
+  const htmlContent = buildInvoiceHTML(
+    invoice.invoice_number ?? "—", user.name, user.email, userTagsForInvoice, sessions,
+    tariffName, pricePerKwh, baseFee, idleFeePerMinute, idleFeeGraceMinutes, currency,
+    invoice.net_amount ?? 0, invoice.tax_amount ?? 0, invoice.total_amount ?? 0, taxRatePercent,
+    invoice.total_energy_kwh ?? 0, invoice.idle_fee_amount ?? 0, period, tenantName, logoUrl,
+    primaryColor, accentColor, invoice.invoice_date ?? new Date().toISOString().split("T")[0],
+  );
+
+  let downloadUrl = "";
+  try {
+    const storagePath = `${invoice.tenant_id}/${(invoice.invoice_number ?? invoiceId).replace(/[^a-zA-Z0-9-]/g, "_")}.html`;
+    const htmlBlob = new Blob([htmlContent], { type: "text/html" });
+    await supabase.storage.from("charging-invoices").upload(storagePath, htmlBlob, { contentType: "text/html", upsert: true });
+    const { data: signedData } = await supabase.storage.from("charging-invoices").createSignedUrl(storagePath, 60 * 60 * 24 * 30);
+    if (signedData?.signedUrl) downloadUrl = signedData.signedUrl;
+    await supabase.from("charging_invoices").update({ pdf_storage_path: storagePath }).eq("id", invoiceId);
+  } catch { /* non-fatal */ }
+
+  const downloadSection = downloadUrl
+    ? `<div style="text-align:center;margin:24px 0"><a href="${downloadUrl}" target="_blank" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,${primaryColor},${accentColor});color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600">📥 Rechnung herunterladen</a><div style="font-size:11px;color:#94a3b8;margin-top:8px">Der Download-Link ist 30 Tage gültig.</div></div>`
+    : "";
+  let emailHtml = htmlContent.replace("<!-- Footer -->", `${downloadSection}\n  <!-- Footer -->`);
+
+  try {
+    const ocmfSecret = Deno.env.get("OCMF_DOWNLOAD_SECRET") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const sessionsWithOcmf = sessions.filter((s: any) => s.ocmf_payload);
+    if (sessionsWithOcmf.length > 0 && ocmfSecret && supabaseUrl) {
+      const items: string[] = [];
+      for (const s of sessionsWithOcmf) {
+        const tok = await ocmfDownloadToken(s.id, ocmfSecret);
+        const url = `${supabaseUrl}/functions/v1/public-ocmf-download?session=${encodeURIComponent(s.id)}&token=${tok}`;
+        const dateLabel = s.start_time ? new Date(s.start_time).toLocaleDateString("de-DE") : "";
+        const tx = s.transaction_id ?? s.id.substring(0, 8);
+        items.push(`<li style="margin:4px 0"><a href="${url}" style="color:${primaryColor};text-decoration:underline">Transaktion ${tx} (${dateLabel})</a></li>`);
+      }
+      const eichrechtSection = `<div style="margin:24px 0;padding:16px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc"><div style="font-size:14px;font-weight:600;margin-bottom:8px;color:#0f172a">🛡️ Eichrechtskonforme Transparenz-Belege (OCMF)</div><div style="font-size:12px;color:#475569;margin-bottom:8px">Für jede Ladesitzung können Sie hier den signierten Messbeleg herunterladen und mit der Transparenzsoftware der S.A.F.E. e. V. prüfen:</div><ul style="font-size:12px;color:#1e293b;padding-left:18px;margin:0">${items.join("")}</ul></div>`;
+      emailHtml = emailHtml.replace("<!-- Footer -->", `${eichrechtSection}\n  <!-- Footer -->`);
+    }
+  } catch { /* non-fatal */ }
+
+  try {
+    await resend.emails.send({
+      from: resendFrom(tenantName || "Ladeinfrastruktur"),
+      to: [user.email],
+      subject: `Laderechnung ${invoice.invoice_number ?? ""} – ${period.label}`,
+      html: emailHtml,
+    });
+  } catch (e: any) {
+    return { ok: false, error: e.message };
+  }
+
+  await supabase.from("charging_invoices").update({
+    email_sent_at: new Date().toISOString(),
+    email_send_count: (invoice.email_send_count ?? 0) + 1,
+  }).eq("id", invoiceId);
+
+  return { ok: true };
+}
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
