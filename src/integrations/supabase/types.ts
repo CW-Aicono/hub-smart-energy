@@ -11252,6 +11252,26 @@ export type Database = {
           },
         ]
       }
+      meter_data_quality_v: {
+        Row: {
+          day: string | null
+          delta_kwh: number | null
+          delta_pct: number | null
+          five_min_bezug_kwh: number | null
+          five_min_coverage_ratio: number | null
+          five_min_einspeisung_kwh: number | null
+          five_min_kwh: number | null
+          five_min_last_bucket: string | null
+          five_min_sample_count: number | null
+          loxone_kwh: number | null
+          loxone_source: string | null
+          loxone_updated_at: string | null
+          meter_id: string | null
+          status: string | null
+          tenant_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       aggregate_pv_actual_hourly: {
@@ -11363,6 +11383,21 @@ export type Database = {
       get_location_main_meter: {
         Args: { p_location_id: string }
         Returns: string
+      }
+      get_meter_daily_status: {
+        Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
+        Returns: {
+          day: string
+          delta_kwh: number
+          delta_pct: number
+          five_min_coverage_ratio: number
+          five_min_kwh: number
+          five_min_last_bucket: string
+          loxone_kwh: number
+          loxone_source: string
+          meter_id: string
+          status: string
+        }[]
       }
       get_meter_daily_totals: {
         Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }

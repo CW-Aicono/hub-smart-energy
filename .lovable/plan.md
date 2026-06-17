@@ -1,74 +1,89 @@
-## Ziel
+## Umsetzungsplan: Loxone-Tagessummen zuverlässig & sichtbar
 
-Charts sollen je nach gewähltem Zeitraum die jeweils gröbste passende Aggregationsstufe lesen, damit niemals mehr als ~30–90 Zeilen pro Zähler aus der DB geholt werden müssen. Die 5-Min-Rohdaten werden nur noch in der Tagesansicht direkt angefasst.
+Ziel: Loxone bleibt Goldstandard. Schreibpfad korrigieren, Altdaten geradeziehen, Abweichungen automatisch sichtbar, fehlende Tage ehrlich als Lücke darstellen.
 
-## Architektur: 3 Aggregationsstufen
+---
 
-```text
-meter_power_readings_5min  (Rohdaten, nur Tagesansicht)
-        │  (nightly job + on-demand)
-        ▼
-meter_daily_totals_mv      (1 Zeile/Tag/Zähler  → Wochen-/30-Tage-Ansicht)
-        │  (nightly job)
-        ▼
-meter_weekly_totals        (1 Zeile/ISO-Woche/Zähler → Quartals-/Halbjahres-Ansicht)
-        │
-        ▼
-meter_monthly_totals       (1 Zeile/Monat/Zähler → Jahres-/Mehrjahres-Ansicht)
-```
+### 1) Off-by-one im Loxone-Daily-Writer fixen
 
-Alle drei Tabellen speichern `consumption_kwh` und `export_kwh` getrennt (bidirektionale Zähler), plus `samples_count` / `coverage_ratio` für Datenqualitäts-Hinweise im Copilot.
+Betroffen ist `supabase/functions/loxone-api/index.ts`, Block „Archive yesterday's daily total" (Zeilen 1021–1034) im periodischen Live-Sync. Dort wird `stateData.totalDayLast` unter `yesterdayStr = today−1 (Berlin)` geschrieben. Loxones „Rldc/Rldd/Rld" enthält aber den Wert des **vorletzten** abgeschlossenen Tages, sobald nach Mitternacht erneut umgeschaltet wird → CSV-Vergleich Mai 2026 zeigt konsistent Verschiebung um +1 Tag.
 
-## Auswahl-Regel (Frontend + RPC)
+Änderungen:
+- Datumsableitung auf **Europe/Berlin** umstellen (statt `new Date()`-Lokal des Edge-Containers): Helper `berlinDateMinusDays(n)` einführen.
+- Schreiben unter `period_start = today_berlin − 2` **nur**, wenn der Sync vor Loxones „Day-Rollover-Settle" (typ. erste Minuten nach 00:00 Berlin) läuft; sonst `today_berlin − 1`. Sicherer Weg: immer den Tag verwenden, der zur Loxone-Quelle korrespondiert (siehe unten Validierung).
+- Quelle vereinheitlichen: zusätzlich aus dem **Backfill-Pfad** (Stats-XML, Zeilen 1688–1710) die Tagessumme rechnen und bei Differenz > 1 % die XML-Variante als „truth" speichern (XML hat fixe lokale Zeitstempel, kein Mitternachts-Race).
+- `source` getrennt halten: `source='loxone_live'` für den Live-Pfad, `source='loxone_xml'` für den XML-Backfill. Konflikt-Strategie im Upsert: `loxone_xml` überschreibt `loxone_live` (XML ist autoritativ).
+- Zusätzlich: täglicher Cron `loxone-daily-totals-backfill` ruft `backfillStatistics` mit `fromDate = today_berlin − 1` und `totalsOnly=true` auf (bereits so vorhanden) — Datumsableitung dort ebenfalls auf `Europe/Berlin` umstellen und gegen das Loxone-XML validieren.
 
+Verifikation: Nach Deploy für die Test-Liegenschaft den 14.06. prüfen — Wert muss ≈ 322 kWh sein (statt 1.421 kWh) und Mai-Summe ≈ 29.500 kWh.
 
-| Zeitraum gewählt               | Quelle                                        |
-| ------------------------------ | --------------------------------------------- |
-| Heute / 1 Tag                  | `meter_power_readings_5min` (5-Min Auflösung) |
-| 2–31 Tage (Woche/Monat)        | `meter_daily_totals_mv`                       |
-| 32–180 Tage (Quartal/Halbjahr) | `meter_weekly_totals`                         |
-| >180 Tage (Jahr, Mehrjahr)     | `meter_monthly_totals`                        |
+---
 
+### 2) Backfill `meter_period_totals` (Loxone-Altdaten korrigieren)
 
-Eine zentrale Hilfsfunktion `pickAggregationLevel(from, to)` in `src/lib/aggregation.ts` entscheidet einmalig — sowohl Dashboard (`EnergyChart.tsx`) als auch `copilot-analytics` nutzen dieselbe Logik.
+Neue Edge-Function `loxone-period-totals-repair`:
+- Iteriert alle Loxone-Integrationen, alle Meter mit `source IN ('loxone','loxone_backfill','loxone_live')`.
+- Für jedes betroffene `(meter_id, period_start)` lädt sie die zugehörige Loxone-Stats-XML neu (Pfad aus 1450ff.) und schreibt die korrekte Tagessumme unter dem korrekten `period_start` (XML-Zeitstempel = Berlin-lokale Zeit, ohne UTC-Verschiebung).
+- Dedup-Logik: bei identischem `(meter_id, period_type, period_start, total_value)` und unterschiedlichem `source` bleibt nur der XML-Datensatz. Bei Duplikaten ohne XML-Quelle (z. B. 21./22.05. mit jeweils 927,16): der jüngere Datensatz wird gelöscht.
+- Dry-Run-Modus per Query-Param `?dryRun=1` → liefert JSON mit allen geplanten Korrekturen, ohne zu schreiben. Erst nach Sichtprüfung produktiv ausführen.
+- Idempotent, kann beliebig oft laufen.
 
-## Befüllung
+Anschließend einmalig `refresh materialized view meter_daily_totals_mv` und Folge-MVs (`meter_weekly_totals`, `meter_monthly_totals`) auslösen.
 
-- **meter_daily_totals_mv**: existiert bereits als Plan; wird als echte Tabelle (nicht MV) angelegt, damit Upserts möglich sind. Nightly Cron um 00:15 für gestern + on-demand Trigger nach `meter_period_totals`-Insert.
-- **meter_weekly_totals** / **meter_monthly_totals**: Nightly Cron um 00:30 aggregiert aus `meter_daily_totals_mv` (sehr schnell, da nur ~30 Tage/Zähler).
-- **Backfill-Migration** läuft einmalig über vollständige Historie (einmaliger Aufwand, danach inkrementell).
+---
 
-## RPC-Anpassungen
+### 3) Reconcile-View Loxone vs. 5-min
 
-- Neue RPC `get_meter_totals_auto(meter_ids, from, to)` wählt intern die richtige Stufe und gibt ein einheitliches Format `{ bucket_start, consumption_kwh, export_kwh, coverage_ratio }` zurück.
-- Die alten Funktionen `get_meter_period_sums_with_fallback` / `get_meter_daily_totals_split_with_fallback` bleiben bestehen, rufen aber intern die neue Logik auf — keine Breaking Changes für anderen Code.
+Neue Migration: View `meter_data_quality_v`.
 
-## Copilot-Integration
+Spalten je `(tenant_id, meter_id, day)`:
+- `loxone_kwh` (aus `meter_period_totals` mit Loxone-Source)
+- `five_min_kwh` (Integration aus `meter_power_readings_5min`, `bucket AT TIME ZONE 'Europe/Berlin'`, kWh = Σ power_avg × 5/60)
+- `five_min_sample_count`, `five_min_coverage_ratio` (Anteil belegter 5-min-Slots an 288)
+- `delta_kwh`, `delta_pct`
+- `status` als Enum-Text:
+  - `ok` → |delta_pct| ≤ 5 und Coverage ≥ 0,95
+  - `tolerance` → 5 < |delta_pct| ≤ 15
+  - `mismatch` → |delta_pct| > 15
+  - `missing_loxone` → Loxone fehlt, 5-min vorhanden
+  - `missing_5min` → 5-min < 0,5 Coverage, Loxone vorhanden
+  - `gap` → beide fehlen
 
-`copilot-analytics` nutzt ausschließlich die neuen Aggregat-Tabellen für Jahres-/Monats-Fragen. `coverage_ratio < 0.8` löst einen Hinweis im AI-Prompt aus („Datenbasis lückenhaft").
+Zusätzlich Edge-Function `meter-data-quality-scan` (Cron: täglich 03:00 UTC), die die letzten 35 Tage aus dem View liest und für jedes `mismatch`/`gap` einen Eintrag in der bestehenden `monitoring_alert_rules`/`integration_errors`-Logik ablegt (sichtbar im Super-Admin-Bereich).
 
-## Erwartete Performance
+Erst-Iteration zeigt nur Logging — kein Auto-Repair, um Nebenwirkungen zu vermeiden.
 
-- Jahresansicht für 9 Zähler: heute ~35 s → künftig ~12 Zeilen × 9 = 108 Rows, <100 ms.
-- Speicherzuwachs: ~20 KB/Zähler/Jahr (vernachlässigbar).
+---
 
-## Schritte
+### 4) UI: Tage mit fehlendem Loxone-Wert als Lücke
 
-1. Migration: Tabellen `meter_daily_totals_mv`, `meter_weekly_totals`, `meter_monthly_totals` (inkl. GRANT, RLS, Indizes auf `(meter_id, bucket_start)`).
-2. Migration: Aggregations-Funktionen + neue RPC `get_meter_totals_auto`.
-3. Insert-Tool: Einmaliger Backfill aus `meter_period_totals` + `meter_power_readings_5min`.
-4. Insert-Tool: Zwei `pg_cron`-Jobs (00:15 daily, 00:30 weekly/monthly).
-5. Frontend: `src/lib/aggregation.ts` + Umstellung von `EnergyChart.tsx` auf neue RPC.
-6. Edge Function: `copilot-analytics` auf neue RPC umstellen + Coverage-Hinweis in den System-Prompt.
-7. Validierungs-SQL: Vergleich Summen `daily` vs `weekly` vs `monthly` vs `meter_period_totals` → Report in der Antwort.
+Frontend-Änderungen in `src/components/report/ConsumptionTrendChart.tsx` und den Dashboard-Widgets, die `meter_period_totals` / `meter_daily_totals_mv` darstellen (`CustomWidget.tsx`, `useMonthlyConsumptionByType.tsx`, `usePeriodSumsWithFallback.ts`).
 
-## Offene Frage
+- Hook `usePeriodSumsWithFallback` liest zusätzlich `status` aus `meter_data_quality_v` mit (per RPC `get_meter_daily_status(meter_id, from, to)`).
+- Pro Tag wird ein `quality`-Flag ergänzt: `ok | partial | missing`.
+- Chart-Rendering:
+  - `missing` (Loxone fehlt, kein autoritativer Wert) → Balken als **gestreiftes Muster** (SVG-`<pattern>` mit diagonalen Linien in `hsl(var(--muted-foreground))`), Höhe 0 oder Platzhalter-Hülle.
+  - `partial` (5-min < 0,95 Coverage am laufenden Tag) → gestreifter Balken in voller Höhe der bisherigen Tagessumme.
+  - Tooltip: „Tagessumme unvollständig – X % der 24 h erfasst (Stand HH:MM Berlin). Wert kann nachträglich korrigiert werden."
+  - Aggregations-Funktionen (Wochen/Monatssummen) markieren das Aggregat als „unvollständig", sobald ≥ 1 Tag `missing`/`partial` enthält, und zeigen einen Info-Hinweis statt einer stillen 5-min-Schätzung.
+- Kein automatischer 5-min-Fallback im Tageschart. 5-min bleibt ausschließlich Validierungs-Quelle.
 
-Soll ich `meter_weekly_totals` mit **ISO-Wochen** (Mo–So) oder **gleitenden 7-Tages-Fenstern** befüllen? Empfehlung: ISO-Wochen, weil sie mit der vorhandenen UI-Wochenauswahl konsistent sind.  
-  
-Antwort: ISO-Wochen.  
-   
-  
-  
-  
-  
+---
+
+### Technische Details
+
+Reihenfolge der Umsetzung (jeder Schritt einzeln deploy- und testbar):
+1. Migration `meter_data_quality_v` + RPC `get_meter_daily_status` anlegen (read-only, keine Auswirkung auf Schreibpfad).
+2. Edge-Function `loxone-period-totals-repair` mit `?dryRun=1`. Ergebnis prüfen → produktiv laufen lassen → MVs refreshen.
+3. Edge-Function `loxone-api` (Live-Pfad) und `loxone-daily-totals-backfill` (Cron) auf Berlin-TZ + XML-Validierung umstellen.
+4. Cron `meter-data-quality-scan` aktivieren.
+5. Frontend-Anpassung der Charts/Widgets inkl. Tooltip-Texte (DE/EN/ES/NL).
+
+Tests:
+- `packages/automation-core`-Stil: neue Unit-Tests für `berlinDateMinusDays` und die XML-Tag-Zuordnung.
+- Vitest für die UI-Streifen-Logik (Snapshot mit `quality='missing'`).
+- Manuelle Regression: Mai-2026-CSV gegen DB nach Repair → Δ < 0,5 %.
+
+Annahmen, die noch zu bestätigen sind (sonst halte ich an, bevor ich umsetze):
+- Loxone-Stats-XML ist für alle Test-Miniserver erreichbar (Pfad `/stats/UUID_1.YYYYMM.xml`).
+- Es gibt keine Tenants, die bewusst nur den Live-Wert ohne XML nutzen (z. B. wenn die Stats-Aufzeichnung im Miniserver deaktiviert ist). Falls doch, behält dieser Tenant `loxone_live` als Fallback und das UI markiert die Tage als `tolerance` statt `ok`.
