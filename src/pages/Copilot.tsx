@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sparkles, TrendingUp, Landmark, FolderKanban, History, Loader2, Sun, Battery, Flame, Zap, Shield, ArrowRight, Search, Leaf, Clock, BarChart3, AlertTriangle, Lightbulb, Info } from "lucide-react";
 import { useDemoMode } from "@/contexts/DemoMode";
+import { AnalyticsTab } from "@/components/copilot/AnalyticsTab";
 
 const TECH_ICONS: Record<string, typeof Sun> = {
   pv: Sun, battery: Battery, heat_pump: Flame, load_management: Zap, ev_charging: Zap, insulation: Shield,
