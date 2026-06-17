@@ -228,6 +228,10 @@ function ChargingAppAuth({ onAuth }: { onAuth: () => void }) {
 // ---- Map Tab ----
 const LazyMap = lazy(() => import("@/components/charging/ChargePointsMap"));
 
+// Module-scoped guard: avoid duplicate charging_users inserts across rapid auth events
+const ensuredAuthIds = new Set<string>();
+
+
 function MapTab({ chargePoints, onStartCharge, initialCpId, initialConnectorId, onInitialCpHandled }: { chargePoints: AppChargePoint[]; onStartCharge: (cpId: string, connectorId?: number) => void; initialCpId?: string | null; initialConnectorId?: number | null; onInitialCpHandled?: () => void }) {
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [locating, setLocating] = useState(false);
