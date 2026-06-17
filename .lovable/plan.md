@@ -1,63 +1,97 @@
 ## Ziel
 
-Klarer 2-Stufen-Workflow für Ladestrom-Rechnungen:
-**Erstellen → als Ausgestellt markieren → Per E-Mail versenden**, mit Bestätigungs-Popups, Einzelversand und Wiederholungsversand.
+Wir ersetzen die bisherige fehleranfällige Tageswert-Ermittlung durch ein klares Quellenmodell:
 
----
+1. **Für abgeschlossene Tage** wird der echte Loxone-Tageszähler verwendet.
+2. **Für heute** wird der laufende Loxone-Tageszähler verwendet, nicht die 5-Minuten-Schätzung.
+3. **5-Minuten-Leistungswerte** bleiben nur für den Tagesverlauf in kW, nicht als Wahrheit für Tages-kWh.
+4. Jede Anzeige zeigt eindeutig, ob der Wert aus Loxone, Live-Loxone oder einer Fallback-Schätzung kommt.
 
-## Änderungen im Detail
+## Warum der bisherige Ansatz nicht reicht
 
-### 1. Datenbank (Migration)
-Neue Spalten in `public.charging_invoices`:
-- `email_sent_at timestamptz` – Zeitpunkt des letzten erfolgreichen Versands (NULL = noch nie versendet)
-- `email_send_count integer NOT NULL DEFAULT 0` – Anzahl der Versendungen (für „nochmals versendet")
+Die aktuellen Daten zeigen tatsächlich weiterhin falsche Zuordnungen:
 
-### 2. Edge Function `send-charging-invoices`
-- Neuer Modus `mode: "send-selected"` mit Parameter `invoice_ids: string[]`. Verschickt **genau diese** Rechnungen, unabhängig von Zeitraum, und nur wenn `status = 'issued'`. Setzt nach Erfolg `email_sent_at = now()` und erhöht `email_send_count`.
-- Bestehender Modus `send` / `both` wird so erweitert, dass standardmäßig **nur noch nicht versendete** Rechnungen (`email_sent_at IS NULL`) und nur ausgestellte (`status = 'issued'`) verschickt werden. Setzt ebenfalls die neuen Felder.
-- Modus `generate` gibt die IDs der neu erstellten Rechnungen im Response zurück (`created_invoice_ids: string[]`), damit das UI das Popup direkt mit den richtigen Rechnungen füllen kann.
+- `15.06.2026` und `16.06.2026` sind in der Datenbank weiterhin identisch.
+- `17.06.2026` kommt aktuell als Fallback aus 5-Minuten-Leistungsdaten und liegt deshalb bei ca. `34,739 kWh`, während Loxone laut CSV bereits `1.150,25 kWh` meldet.
+- Der Sonntag-Peak ist weiterhin ein starker Hinweis, dass die gespeicherten Tageswerte mindestens teilweise auf den falschen Kalendertag geschrieben wurden.
 
-### 3. Hook `useChargingInvoices`
-- `generateInvoices` gibt die neuen `created_invoice_ids` zurück (kein Toast-Count ändern).
-- Neue Mutation `finalizeInvoices(invoiceIds: string[])` – setzt mehrere Rechnungen auf `status = 'issued'`.
-- Neue Mutation `sendSelectedInvoices(invoiceIds: string[])` – ruft Edge Function mit `mode: "send-selected"` auf.
-- Bestehende `sendInvoices` bleibt für Sammelversand erhalten (nur ungesendete + ausgestellte).
+Wichtig: Ich werde nicht weiter an einzelnen Symptomen löschen oder verschieben, bevor die neue Logik sauber definiert und überprüfbar ist.
 
-### 4. UI – `ChargingBilling.tsx`
+## Umsetzungsschritte nach Freigabe
 
-**Neuer Dialog A: „Erstellte Rechnungen" (öffnet nach „Rechnungen erstellen")**
-- Liste aller in diesem Lauf erzeugten Rechnungen (Checkbox + Rechnungsnr., Nutzer, Betrag, Status-Badge).
-- Checkbox „Alle auswählen" oben.
-- Button **„Ausgewählte als ausgestellt markieren"** → ruft `finalizeInvoices` für selektierte Entwürfe auf.
-- Button **„Schließen"**.
+### 1. Live-Writer umbauen: abgeschlossene Tageswerte aus Loxone direkt speichern
 
-**Neuer Dialog B: „Per E-Mail senden" (öffnet nach Klick auf den bestehenden Button)**
-- Zeigt zwei Gruppen für den aktuellen Zeitraum:
-  1. **Bereit zum Versand** (`status = 'issued'` AND `email_sent_at IS NULL`) – vorausgewählt.
-  2. **Noch im Entwurf** (`status = 'draft'`) – mit Checkboxen + Inline-Button **„Auswahl ausstellen"** / **„Alle ausstellen"**, der `finalizeInvoices` ausführt; danach wandern sie automatisch in Gruppe 1.
-- Zusätzlich Info-Zeile: „X bereits versendete Rechnungen werden übersprungen" (mit Toggle „Trotzdem erneut senden").
-- Footer-Button **„Jetzt versenden"** → `sendSelectedInvoices` mit allen aktuell ausgewählten IDs. Bei Klick wird sichergestellt, dass keine Entwürfe in der Auswahl sind (sonst Hinweis).
+In `loxone-api/index.ts` wird der Writer geändert:
 
-**Erweiterung Rechnungstabelle**
-- Neue Spalte „Versendet" mit Datum/Anzahl (oder „—").
-- Neue Aktion pro Zeile: **Mail-Icon „Einzeln versenden"**
-  - Bei `status = 'draft'`: Bestätigungsdialog „Erst als ausgestellt markieren und versenden?" → führt finalize + sendSelectedInvoices nacheinander aus.
-  - Bei `status = 'issued'` ohne `email_sent_at`: direkt `sendSelectedInvoices([id])`.
-  - Bei bereits versendeter Rechnung: Bestätigung „Rechnung wurde am … bereits versendet. Erneut senden?" → `sendSelectedInvoices([id])`.
+- `totalDayLast` bleibt die Quelle für den letzten abgeschlossenen Tag.
+- Die Datumszuordnung wird nicht mehr anhand unklarer Server-Zeit-Tricks repariert, sondern strikt nach Loxone-/Berlin-Kalendertag bestimmt.
+- Zusätzlich wird der aktuell laufende Tageswert `totalDay` erfasst und als eigener Live-Wert behandelt.
 
-### 5. Edge Function für Sammelrechnungen (Gruppen)
-Spiegelung der gleichen Logik in `send-charging-group-invoices` (analoge Spalten/Modi), damit Verhalten konsistent ist.
+### 2. Heute-Wert im Dashboard korrigieren
 
----
+Die Datenbankfunktion `get_meter_daily_totals_split_with_fallback` wird angepasst:
 
-## Verhalten Sammelversand (Button „Per E-Mail senden")
-- Versendet **immer nur** Rechnungen mit `status = 'issued'` UND `email_sent_at IS NULL`.
-- Entwürfe werden im Popup angezeigt, aber nicht automatisch ausgestellt – der User entscheidet aktiv.
-- Bereits versendete werden ausgeblendet (Re-Versand nur über Einzelaktion oder Toggle).
+- Für historische Tage: bevorzugt archivierte Loxone-Tageswerte.
+- Für den heutigen Tag: bevorzugt gespeicherte beziehungsweise live verfügbare Loxone-`totalDay`-Werte.
+- Nur wenn Loxone keinen Tageswert liefert: Fallback aus 5-Minuten-Leistungswerten.
 
----
+Damit soll heute nicht mehr `31,46 kWh` / `34,739 kWh` angezeigt werden, sondern der echte Loxone-Live-Tagesstand im Bereich der CSV-Angabe.
 
-## Nicht im Scope
-- Massenaktion „Mehrere Rechnungen erneut senden" über Tabelle (nur Einzelversand).
-- Anpassungen am PDF-/HTML-Layout.
-- Änderungen an `tenant_electricity_invoices` (separates Modul).
+### 3. Neue Prüfansicht / Diagnose-RPC für Tageswerte
+
+Ich erstelle eine kleine Diagnosefunktion, die pro Tag nebeneinander ausgibt:
+
+- gespeicherter Archivwert,
+- heutiger Live-Loxone-Wert,
+- 5-Minuten-Fallback,
+- Quelle,
+- Abweichung zur von dir gelieferten CSV-Stichprobe für Juni 2026,
+- Verdacht: `ok`, `one_day_offset`, `duplicate`, `fallback_only`, `missing`.
+
+Das ist wichtig, damit wir nicht mehr raten müssen.
+
+### 4. Datenreparatur nur nach Diagnose-Ergebnis
+
+Erst nach der Diagnose werden Daten geändert:
+
+- Keine pauschale Verschiebung aller Tage ohne Beleg.
+- Keine Löschung unbekannter Abweichungen.
+- Repariert werden nur Datensätze, die anhand der CSV-Stichprobe und/oder Loxone-Live-Werte eindeutig zuordenbar sind.
+- Vorher wird eine Backup-Tabelle angelegt.
+
+### 5. Dashboard-Anzeige transparenter machen
+
+Im Diagramm wird unterschieden:
+
+- **Loxone geprüft**: normaler Balken.
+- **Heute live aus Loxone**: normaler Balken/Label „laufend“.
+- **Fallback aus 5-Minuten-Leistung**: gestreift mit Warnhinweis.
+- **Fehlend/unklar**: klar markiert, nicht stillschweigend als echter Tageswert dargestellt.
+
+## Technische Details
+
+Betroffene Stellen:
+
+- `supabase/functions/loxone-api/index.ts`
+- Datenbankfunktion `get_meter_daily_totals_split_with_fallback`
+- Datenbankfunktion `refresh_meter_daily_totals`
+- Tabelle `meter_period_totals`
+- Tabelle `meter_daily_totals_mv`
+- `src/components/dashboard/EnergyChart.tsx`
+
+Geplante Sicherheitsmaßnahmen:
+
+- Vor jeder Datenänderung Backup der betroffenen Zeilen.
+- Datenänderungen nur für `source IN ('loxone', 'loxone_backfill')` und nur für automatische Hauptzähler.
+- Keine Änderung an manuellen Zählern.
+- Keine Änderung an unbekannten/irrelevanten Loxone-Werten wie CO₂, Temperatur, Witterung, Balkonkraftwerk usw.
+
+## Erwartetes Ergebnis
+
+Nach Umsetzung und Reparaturbericht sollen wir sehen:
+
+- `15.06.2026` ungefähr `1.421,61 kWh`
+- `16.06.2026` ungefähr `1.353,51 kWh`
+- `17.06.2026` heute laufend ungefähr `1.150,25 kWh` statt ca. `31–35 kWh`
+- Sonntage nicht mehr um einen Tag verschoben
+- keine stillen Fallback-Werte ohne Kennzeichnung

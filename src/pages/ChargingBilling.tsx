@@ -1012,9 +1012,14 @@ const ChargingBilling = () => {
                   {selectedInvoice && (() => {
                     const inv = selectedInvoice;
                     const taxRate = inv.tax_rate_percent || 19;
-                    const pricePerKwh = inv.tariff_price_per_kwh ?? 0;
+                    let pricePerKwh = inv.tariff_price_per_kwh ?? 0;
                     const idleFeePerMin = inv.tariff_idle_fee_per_minute ?? 0;
                     const idleGrace = inv.tariff_idle_fee_grace_minutes ?? 60;
+                    // Fallback (z.B. Sammelrechnungen ohne einzelnen Tarif):
+                    // effektiven €/kWh-Preis aus Netto-Summe und Gesamtenergie ableiten.
+                    if (pricePerKwh === 0 && (inv.net_amount ?? 0) > 0 && (inv.total_energy_kwh ?? 0) > 0) {
+                      pricePerKwh = inv.net_amount / inv.total_energy_kwh;
+                    }
                     const tagLabelMap = new Map<string, string | null>();
                     const tagUserMap = new Map<string, string | null>();
                     for (const t of (inv.user_tags || [])) {
