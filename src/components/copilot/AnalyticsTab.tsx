@@ -8,6 +8,12 @@ import {
   useRunCopilotAnalytics,
   useTogglePinAnalytics,
 } from "@/hooks/useCopilotAnalytics";
+import {
+  PromptPreset,
+  useCopilotPromptPresets,
+  useDeletePromptPreset,
+  useUpsertPromptPreset,
+} from "@/hooks/useCopilotPromptPresets";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,24 +25,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart, Pie, PieChart, Cell,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
   BarChart3, Loader2, Sparkles, Star, Trash2, History, Copy, RefreshCw, Search,
+  Pencil, Plus,
 } from "lucide-react";
 import { toast } from "sonner";
-
-const SUGGESTED_PROMPTS: { label: string; prompt: string }[] = [
-  { label: "Top-Stromverbraucher (Standorte)", prompt: "Welche 3 Standorte haben im ausgewählten Zeitraum den höchsten Stromverbrauch in kWh? Vergleiche sie in einem Balkendiagramm." },
-  { label: "Grundlast-Entwicklung", prompt: "Wie hat sich die Grundlast (nächtlicher Minimalverbrauch) im ausgewählten Zeitraum entwickelt? Zeige den Verlauf pro Tag." },
-  { label: "PV-Eigenverbrauchsquote", prompt: "Berechne die PV-Eigenverbrauchsquote pro Standort im ausgewählten Zeitraum und vergleiche sie." },
-  { label: "Wallbox-Auslastung", prompt: "Wie war die Wallbox-Auslastung (kWh und Anzahl Sessions) pro Ladepunkt im ausgewählten Zeitraum?" },
-  { label: "Spitzenlast-Tage", prompt: "Welche 5 Tage hatten die höchsten Lastspitzen im ausgewählten Zeitraum? Liste sie mit Datum und Spitzenwert in kW." },
-  { label: "Verbrauchsanomalien", prompt: "Identifiziere Tage mit ungewöhnlich hohem oder niedrigem Stromverbrauch im ausgewählten Zeitraum." },
-  { label: "PV-Ertrag pro Standort", prompt: "Wie hoch war der PV-Ertrag pro Standort im ausgewählten Zeitraum in kWh?" },
-  { label: "Verbrauch pro Wochentag", prompt: "Wie verteilt sich der Stromverbrauch über die Wochentage (Mo–So) im ausgewählten Zeitraum?" },
-];
 
 const CHART_COLORS = [
   "hsl(var(--primary))",
