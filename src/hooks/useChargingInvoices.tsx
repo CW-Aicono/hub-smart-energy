@@ -14,6 +14,7 @@ export interface ChargingInvoiceSession {
 export interface ChargingInvoiceTag {
   tag: string;
   label: string | null;
+  user_name?: string | null;
 }
 
 export interface ChargingInvoice {
