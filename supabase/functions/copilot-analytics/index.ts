@@ -42,7 +42,8 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
   // Standorte (mit optionalem Filter)
   let locQuery = db.from("locations").select("id, name, building_type, area_m2, address_city").eq("tenant_id", tenantId);
   if (locationId) locQuery = locQuery.eq("id", locationId);
-  const { data: locations = [] } = await locQuery;
+  const { data: locationsData } = await locQuery;
+  const locations = locationsData ?? [];
 
   const locationIds = locations.map((l: any) => l.id);
 
