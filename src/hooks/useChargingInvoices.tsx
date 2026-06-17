@@ -35,6 +35,8 @@ export interface ChargingInvoice {
   period_start: string | null;
   period_end: string | null;
   issued_at: string | null;
+  email_sent_at: string | null;
+  email_send_count: number;
   created_at: string;
   // Joined data
   user_name?: string;
@@ -146,7 +148,8 @@ export function useChargingInvoices() {
         },
       });
       if (error) throw error;
-      return data;
+      const createdIds: string[] = (data?.results ?? []).flatMap((r: any) => r?.created_invoice_ids ?? []);
+      return { ...data, created_invoice_ids: createdIds };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["charging-invoices"] });
@@ -177,6 +180,27 @@ export function useChargingInvoices() {
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
+  /** Send a specific set of invoices by ID. Skips drafts unless allowDraft=true. */
+  const sendSelectedInvoices = useMutation({
+    mutationFn: async (params: { invoice_ids: string[]; allow_draft?: boolean }) => {
+      const { data, error } = await supabase.functions.invoke("send-charging-invoices", {
+        body: { mode: "send-selected", invoice_ids: params.invoice_ids, allow_draft: !!params.allow_draft },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["charging-invoices"] });
+      const sent = data?.sent ?? 0;
+      const skipped = (data?.results ?? []).filter((r: any) => !r.ok).length;
+      toast({
+        title: `${sent} Rechnung(en) versendet`,
+        description: skipped > 0 ? `${skipped} übersprungen` : undefined,
+      });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
   const finalizeInvoice = useMutation({
     mutationFn: async (invoiceId: string) => {
       const { error } = await supabase
@@ -188,6 +212,25 @@ export function useChargingInvoices() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["charging-invoices"] });
       toast({ title: "Rechnung ausgestellt" });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  /** Mark multiple invoices as issued at once (only those currently in draft). */
+  const finalizeInvoices = useMutation({
+    mutationFn: async (invoiceIds: string[]) => {
+      if (invoiceIds.length === 0) return { count: 0 };
+      const { error, count } = await supabase
+        .from("charging_invoices")
+        .update({ status: "issued", issued_at: new Date().toISOString() }, { count: "exact" })
+        .in("id", invoiceIds)
+        .eq("status", "draft");
+      if (error) throw error;
+      return { count: count ?? 0 };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["charging-invoices"] });
+      toast({ title: `${data.count} Rechnung(en) ausgestellt` });
     },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
@@ -207,5 +250,5 @@ export function useChargingInvoices() {
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
-  return { invoices, isLoading, createInvoice, generateInvoices, sendInvoices, finalizeInvoice, markAsPaid };
+  return { invoices, isLoading, createInvoice, generateInvoices, sendInvoices, sendSelectedInvoices, finalizeInvoice, finalizeInvoices, markAsPaid };
 }

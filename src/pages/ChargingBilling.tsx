@@ -38,6 +38,8 @@ import { Plus, Receipt, Euro, Zap, Clock, Trash2, Edit, Users, Globe, Calendar, 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from "@/components/ui/pagination";
 import { EichrechtTab } from "@/components/charging/EichrechtTab";
+import { CreatedInvoicesDialog, SendInvoicesDialog } from "@/components/charging/ChargingInvoiceBulkDialogs";
+import { Mail } from "lucide-react";
 import { format } from "date-fns";
 import { fmtNum, fmtCurrency, fmtKwh } from "@/lib/formatCharging";
 import { generateChargingInvoicePdf, downloadBlob } from "@/lib/generateChargingInvoicePdf";
@@ -98,7 +100,12 @@ const ChargingBilling = () => {
   const [ocmfSessionId, setOcmfSessionId] = useState<string | null>(null);
   const resolveTag = useIdTagResolver();
   const { tariffs, isLoading: tariffsLoading, addTariff, updateTariff, deleteTariff } = useChargingTariffs();
-  const { invoices, generateInvoices, sendInvoices, finalizeInvoice, markAsPaid } = useChargingInvoices();
+  const { invoices, generateInvoices, sendInvoices, sendSelectedInvoices, finalizeInvoice, finalizeInvoices, markAsPaid } = useChargingInvoices();
+  const [createdDialogOpen, setCreatedDialogOpen] = useState(false);
+  const [createdInvoiceIds, setCreatedInvoiceIds] = useState<string[]>([]);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [resendConfirm, setResendConfirm] = useState<any | null>(null);
+  const [draftSendConfirm, setDraftSendConfirm] = useState<any | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   const { chargePoints } = useChargePoints();
   const { settings: invoiceSettings } = useChargingInvoiceSettings();
@@ -465,20 +472,24 @@ const ChargingBilling = () => {
     setEditTariff(t);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!tenant?.id) return;
-    generateInvoices.mutate({ tenant_id: tenant.id, period_start: genPeriod.start, period_end: genPeriod.end });
-    // Sammelrechnungen für alle Rechnungsgruppen automatisch mit erzeugen
-    generateGroupInvoices.mutate({ period_start: genPeriod.start, period_end: genPeriod.end, mode: "generate" });
     setGenerateOpen(false);
+    // Sammelrechnungen für alle Rechnungsgruppen automatisch mit erzeugen (Gruppenmodul, im Hintergrund)
+    generateGroupInvoices.mutate({ period_start: genPeriod.start, period_end: genPeriod.end, mode: "generate" });
+    try {
+      const res = await generateInvoices.mutateAsync({ tenant_id: tenant.id, period_start: genPeriod.start, period_end: genPeriod.end });
+      const ids: string[] = res?.created_invoice_ids ?? [];
+      setCreatedInvoiceIds(ids);
+      setCreatedDialogOpen(true);
+    } catch { /* toast handled in hook */ }
   };
 
   const handleSendAll = () => {
     if (!tenant?.id) return;
-    sendInvoices.mutate({ tenant_id: tenant.id, period_start: genPeriod.start, period_end: genPeriod.end });
-    // Sammelrechnungen pro Gruppe ebenfalls erzeugen + versenden
-    generateGroupInvoices.mutate({ period_start: genPeriod.start, period_end: genPeriod.end, mode: "both" });
+    setSendDialogOpen(true);
   };
+
 
   const periodKeys = [
     { key: "all" as const, label: "Alle" },
@@ -941,6 +952,8 @@ const ChargingBilling = () => {
                             <SortableHead column="period" label="Zeitraum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
                             <SortableHead column="total_amount" label={t("charging.totalAmount" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
                             <SortableHead column="status" label={t("common.status" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                            <TableHead>Versendet</TableHead>
+                            {isAdmin && <TableHead className="w-12"></TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -956,8 +969,31 @@ const ChargingBilling = () => {
                               </TableCell>
                               <TableCell className="font-medium">{fmtCurrency(inv.total_amount)}</TableCell>
                               <TableCell><Badge variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}>{inv.status === "paid" ? t("charging.statusPaid" as any) : inv.status === "issued" ? t("charging.statusIssued" as any) : t("charging.statusDraft" as any)}</Badge></TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {inv.email_sent_at
+                                  ? <span title={`${inv.email_send_count}x versendet`}>{format(new Date(inv.email_sent_at), "dd.MM.yyyy HH:mm")}{(inv.email_send_count ?? 0) > 1 && <span className="ml-1 text-xs">({inv.email_send_count}x)</span>}</span>
+                                  : "—"}
+                              </TableCell>
+                              {isAdmin && (
+                                <TableCell onClick={(e) => e.stopPropagation()}>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    title={inv.email_sent_at ? "Erneut versenden" : inv.status === "draft" ? "Ausstellen und versenden" : "Per E-Mail versenden"}
+                                    onClick={() => {
+                                      if (inv.status === "draft") setDraftSendConfirm(inv);
+                                      else if (inv.email_sent_at) setResendConfirm(inv);
+                                      else sendSelectedInvoices.mutate({ invoice_ids: [inv.id] });
+                                    }}
+                                    disabled={sendSelectedInvoices.isPending}
+                                  >
+                                    <Mail className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
+                              )}
                             </TableRow>
                           ))}
+
                         </TableBody>
                       </Table>
                       <PaginationBar page={invoicesPaged.page} total={invoicesPaged.total} onChange={setInvoicePage} count={displayedInvoices.length} />
@@ -1144,7 +1180,70 @@ const ChargingBilling = () => {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+
+              {/* NEW: Created invoices popup (after generation) */}
+              <CreatedInvoicesDialog
+                open={createdDialogOpen}
+                onOpenChange={setCreatedDialogOpen}
+                invoices={invoices.filter(i => createdInvoiceIds.includes(i.id))}
+                isFinalizing={finalizeInvoices.isPending}
+                onFinalize={async (ids) => { await finalizeInvoices.mutateAsync(ids); }}
+              />
+
+              {/* NEW: Bulk-send dialog */}
+              <SendInvoicesDialog
+                open={sendDialogOpen}
+                onOpenChange={setSendDialogOpen}
+                invoices={invoices.filter(i => i.period_start === genPeriod.start && i.period_end === genPeriod.end)}
+                isFinalizing={finalizeInvoices.isPending}
+                isSending={sendSelectedInvoices.isPending}
+                onFinalize={async (ids) => { await finalizeInvoices.mutateAsync(ids); }}
+                onSend={async (ids) => { await sendSelectedInvoices.mutateAsync({ invoice_ids: ids }); }}
+              />
+
+              {/* Confirm: resend already-sent invoice */}
+              <AlertDialog open={!!resendConfirm} onOpenChange={(o) => !o && setResendConfirm(null)}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Rechnung erneut versenden?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Diese Rechnung wurde bereits am {resendConfirm?.email_sent_at ? format(new Date(resendConfirm.email_sent_at), "dd.MM.yyyy HH:mm") : "—"} versendet. Möchten Sie sie erneut an {resendConfirm?.user_email} senden?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => { if (resendConfirm) sendSelectedInvoices.mutate({ invoice_ids: [resendConfirm.id] }); setResendConfirm(null); }}>
+                      Erneut senden
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              {/* Confirm: finalize draft and send */}
+              <AlertDialog open={!!draftSendConfirm} onOpenChange={(o) => !o && setDraftSendConfirm(null)}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Rechnung ausstellen und versenden?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Diese Rechnung ist noch ein Entwurf. Soll sie jetzt als „Ausgestellt" markiert und anschließend an {draftSendConfirm?.user_email} versendet werden?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                    <AlertDialogAction onClick={async () => {
+                      if (!draftSendConfirm) return;
+                      const inv = draftSendConfirm;
+                      setDraftSendConfirm(null);
+                      await finalizeInvoices.mutateAsync([inv.id]);
+                      await sendSelectedInvoices.mutateAsync({ invoice_ids: [inv.id] });
+                    }}>
+                      Ausstellen und senden
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </TabsContent>
+
 
 
 
