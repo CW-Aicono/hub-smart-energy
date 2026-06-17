@@ -16,7 +16,8 @@ const REGION_URLS: Record<string, string> = {
 };
 
 async function updateSyncStatus(supabase: any, id: string, status: string) {
-  await supabase.from("location_integrations").update({ sync_status: status, last_sync_at: new Date().toISOString() }).eq("id", id);
+  // IO-Optimierung: Nur schreiben wenn sich Status ändert oder last_sync_at > 60s alt ist
+  await supabase.rpc("touch_location_integration_sync", { _id: id, _status: status });
 }
 
 async function getAccessToken(config: TuyaConfig): Promise<{ token: string; baseUrl: string }> {

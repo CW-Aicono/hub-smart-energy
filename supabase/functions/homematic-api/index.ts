@@ -12,7 +12,8 @@ const HMIP_CLOUD_URL = "https://lookup.homematic.com:48335";
 const HMIP_API_URL = "https://ps1.homematic.com:6969";
 
 async function updateSyncStatus(supabase: any, id: string, status: string) {
-  await supabase.from("location_integrations").update({ sync_status: status, last_sync_at: new Date().toISOString() }).eq("id", id);
+  // IO-Optimierung: Nur schreiben wenn sich Status ändert oder last_sync_at > 60s alt ist
+  await supabase.rpc("touch_location_integration_sync", { _id: id, _status: status });
 }
 
 async function hmipRequest(path: string, config: HomematicConfig, body?: any): Promise<any> {
