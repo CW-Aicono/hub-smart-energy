@@ -165,8 +165,54 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
     };
   });
 
+  const electricityByLocation = new Map<string, { location_id: string | null; location_name: string; total_kwh: number; meter_count: Set<string> }>();
+  const electricityByMeter = new Map<string, { meter_id: string; meter_name: string; location_name: string; total_kwh: number }>();
+  for (const row of daily_meter_totals) {
+    if (row.energy_type !== "strom" || row.meter_function === "generation") continue;
+    const locationKey = row.location_id ?? "unknown";
+    const loc = electricityByLocation.get(locationKey) ?? { location_id: row.location_id, location_name: row.location_name, total_kwh: 0, meter_count: new Set<string>() };
+    loc.total_kwh += row.total_kwh;
+    loc.meter_count.add(row.meter_id);
+    electricityByLocation.set(locationKey, loc);
+
+    const meter = electricityByMeter.get(row.meter_id) ?? { meter_id: row.meter_id, meter_name: row.meter_name, location_name: row.location_name, total_kwh: 0 };
+    meter.total_kwh += row.total_kwh;
+    electricityByMeter.set(row.meter_id, meter);
+  }
+
+  const chargingByChargePoint = chargePoints.map((cp: any) => {
+    const sessions = charging_sessions.filter((s: any) => s.charge_point_id === cp.id);
+    const location = locationById.get(cp.location_id) as any;
+    return {
+      charge_point_id: cp.id,
+      charge_point_name: cp.name ?? "Unbekannter Ladepunkt",
+      location_id: cp.location_id ?? null,
+      location_name: location?.name ?? "Ohne Standort",
+      sessions: sessions.length,
+      energy_kwh: sessions.reduce((sum: number, s: any) => sum + Number(s.energy_kwh || 0), 0),
+    };
+  });
+
+  const prepared_summaries = {
+    electricity_consumption_by_location: Array.from(electricityByLocation.values())
+      .map((x) => ({ ...x, meter_count: x.meter_count.size, total_kwh: Number(x.total_kwh.toFixed(3)) }))
+      .sort((a, b) => b.total_kwh - a.total_kwh),
+    electricity_consumption_by_meter: Array.from(electricityByMeter.values())
+      .map((x) => ({ ...x, total_kwh: Number(x.total_kwh.toFixed(3)) }))
+      .sort((a, b) => b.total_kwh - a.total_kwh)
+      .slice(0, 50),
+    charging_by_charge_point: chargingByChargePoint
+      .map((x) => ({ ...x, energy_kwh: Number(x.energy_kwh.toFixed(3)) }))
+      .sort((a, b) => b.sessions - a.sessions || b.energy_kwh - a.energy_kwh),
+    peak_power_by_day: daily_power_peaks
+      .slice()
+      .sort((a, b) => b.peak_kw - a.peak_kw)
+      .slice(0, 50),
+  };
+
   return {
     period: { start: periodStart, end: periodEnd },
+    prepared_summaries,
     locations,
     meters,
     charge_points: chargePoints,
