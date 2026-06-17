@@ -21,6 +21,7 @@ export interface ChargingInvoice {
   tenant_id: string;
   session_id: string | null;
   user_id: string | null;
+  billing_group_id: string | null;
   tariff_id: string | null;
   total_energy_kwh: number;
   total_amount: number;
@@ -41,6 +42,7 @@ export interface ChargingInvoice {
   // Joined data
   user_name?: string;
   user_email?: string;
+  billing_group_name?: string;
   user_tags?: ChargingInvoiceTag[];
   sessions?: ChargingInvoiceSession[];
   tariff_price_per_kwh?: number;
