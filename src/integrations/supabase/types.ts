@@ -6001,6 +6001,54 @@ export type Database = {
           },
         ]
       }
+      meter_daily_totals_mv_repair_backup_20260617: {
+        Row: {
+          backed_up_at: string | null
+          bucket_start: string | null
+          consumption_kwh: number | null
+          coverage_ratio: number | null
+          created_at: string | null
+          energy_type: string | null
+          export_kwh: number | null
+          id: string | null
+          meter_id: string | null
+          samples_count: number | null
+          source: string | null
+          tenant_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          bucket_start?: string | null
+          consumption_kwh?: number | null
+          coverage_ratio?: number | null
+          created_at?: string | null
+          energy_type?: string | null
+          export_kwh?: number | null
+          id?: string | null
+          meter_id?: string | null
+          samples_count?: number | null
+          source?: string | null
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          bucket_start?: string | null
+          consumption_kwh?: number | null
+          coverage_ratio?: number | null
+          created_at?: string | null
+          energy_type?: string | null
+          export_kwh?: number | null
+          id?: string | null
+          meter_id?: string | null
+          samples_count?: number | null
+          source?: string | null
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       meter_monthly_totals: {
         Row: {
           bucket_start: string
