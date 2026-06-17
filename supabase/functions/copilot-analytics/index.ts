@@ -114,17 +114,6 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
     };
   });
 
-  // 5-min power readings (used for peaks AND base load)
-  const { data: peakRowsData, error: peakRowsError } = await db
-    .from("meter_power_readings_5min")
-    .select("meter_id, bucket, power_avg, power_max, resolution_minutes, energy_type, source")
-    .eq("tenant_id", tenantId)
-    .in("meter_id", safeMeterIds)
-    .gte("bucket", periodStart)
-    .lte("bucket", periodEnd + "T23:59:59")
-    .limit(50000);
-  if (peakRowsError) throw { status: 500, message: "Leistungswerte konnten nicht gelesen werden", detail: peakRowsError.message };
-
   // Main-meter consumption meters for Strom (incl. bidirectional main meters with PV feed-in)
   const mainStromMeterIds = new Set(
     meters.filter((m: any) =>
@@ -133,8 +122,23 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
       (m.meter_function === "consumption" || m.meter_function === "bidirectional" || !m.meter_function)
     ).map((m: any) => m.id)
   );
+  const mainStromMeterIdsArr = Array.from(mainStromMeterIds) as string[];
+  const safeMainMeterIds = mainStromMeterIdsArr.length ? mainStromMeterIdsArr : ["00000000-0000-0000-0000-000000000000"];
 
-  // Daily power peaks — ONLY for main consumption meters
+  // 5-min power readings — ONLY for main meters (peaks + base load), avoids 50k cutoff
+  const { data: peakRowsData, error: peakRowsError } = await db
+    .from("meter_power_readings_5min")
+    .select("meter_id, bucket, power_avg, power_max, resolution_minutes, energy_type, source")
+    .eq("tenant_id", tenantId)
+    .in("meter_id", safeMainMeterIds)
+    .gte("bucket", periodStart)
+    .lte("bucket", periodEnd + "T23:59:59")
+    .order("bucket", { ascending: true })
+    .limit(50000);
+  if (peakRowsError) throw { status: 500, message: "Leistungswerte konnten nicht gelesen werden", detail: peakRowsError.message };
+
+  // Daily power peaks — main consumption meters
+
   const peakMap = new Map<string, { meter_id: string; day: string; peak_kw: number; avg_kw_sum: number; samples: number }>();
   // Base load — min power_avg in Berlin local hours [0,5) per main meter per Berlin day
   const baseLoadMap = new Map<string, { meter_id: string; day: string; min_kw: number; samples: number }>();
