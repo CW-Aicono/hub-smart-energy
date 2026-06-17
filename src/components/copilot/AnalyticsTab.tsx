@@ -47,7 +47,8 @@ const CHART_COLORS = [
   "hsl(262 83% 58%)",
 ];
 
-function fmt(n: number, unit: string) {
+function fmt(n: number | string, unit: string) {
+  if (typeof n === "string") return unit ? `${n} ${unit}`.trim() : n;
   const opts = unit === "€" || unit === "EUR" ? { maximumFractionDigits: 2 } : { maximumFractionDigits: 1 };
   return `${n.toLocaleString("de-DE", opts)} ${unit}`.trim();
 }
