@@ -46,36 +46,93 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
   const locations = locationsData ?? [];
 
   const locationIds = locations.map((l: any) => l.id);
-
-  // Tages-Aggregate pro Standort/Meter (Stromverbrauch, PV, Einspeisung)
-  let dailyAgg: any[] = [];
-  if (locationIds.length > 0) {
-    const { data: readingsData } = await db
-      .from("meter_power_readings_5min")
-      .select("meter_id, ts_5min, power_kw, energy_kwh")
-      .gte("ts_5min", periodStart)
-      .lte("ts_5min", periodEnd + "T23:59:59")
-      .limit(20000);
-    const readings = readingsData ?? [];
-    const map = new Map<string, { meter_id: string; day: string; energy_kwh: number; peak_kw: number }>();
-    for (const r of readings) {
-      const day = (r.ts_5min as string).slice(0, 10);
-      const key = `${r.meter_id}|${day}`;
-      const cur = map.get(key) ?? { meter_id: r.meter_id, day, energy_kwh: 0, peak_kw: 0 };
-      cur.energy_kwh += Number(r.energy_kwh || 0);
-      cur.peak_kw = Math.max(cur.peak_kw, Number(r.power_kw || 0));
-      map.set(key, cur);
-    }
-    dailyAgg = Array.from(map.values());
-  }
-
+  const locationById = new Map(locations.map((l: any) => [l.id, l]));
   const safeLocIds = locationIds.length ? locationIds : ["00000000-0000-0000-0000-000000000000"];
 
-  const { data: metersData } = await db
+  const { data: metersData, error: metersError } = await db
     .from("meters")
-    .select("id, name, location_id, meter_type, direction, energy_type")
+    .select("id, name, location_id, meter_type, meter_function, is_main_meter, direction, energy_type")
     .eq("tenant_id", tenantId)
     .in("location_id", safeLocIds);
+  if (metersError) throw { status: 500, message: "Zählerdaten konnten nicht gelesen werden", detail: metersError.message };
+
+  const meters = metersData ?? [];
+  const meterIds = meters.map((m: any) => m.id);
+  const safeMeterIds = meterIds.length ? meterIds : ["00000000-0000-0000-0000-000000000000"];
+  const meterById = new Map(meters.map((m: any) => [m.id, m]));
+
+  const { data: dailyTotalsData, error: dailyTotalsError } = await db
+    .from("meter_period_totals")
+    .select("meter_id, period_start, total_value, energy_type, source")
+    .eq("tenant_id", tenantId)
+    .eq("period_type", "day")
+    .in("meter_id", safeMeterIds)
+    .gte("period_start", periodStart)
+    .lte("period_start", periodEnd)
+    .limit(10000);
+  if (dailyTotalsError) throw { status: 500, message: "Tageswerte konnten nicht gelesen werden", detail: dailyTotalsError.message };
+
+  const daily_meter_totals = (dailyTotalsData ?? []).map((r: any) => {
+    const meter = meterById.get(r.meter_id) as any;
+    const location = meter ? locationById.get(meter.location_id) as any : null;
+    return {
+      day: r.period_start,
+      meter_id: r.meter_id,
+      meter_name: meter?.name ?? "Unbekannter Zähler",
+      location_id: meter?.location_id ?? null,
+      location_name: location?.name ?? "Ohne Standort",
+      energy_type: r.energy_type ?? meter?.energy_type ?? "unbekannt",
+      meter_function: meter?.meter_function ?? "unbekannt",
+      is_main_meter: Boolean(meter?.is_main_meter),
+      total_kwh: Number(r.total_value || 0),
+      source: r.source ?? "meter_period_totals",
+    };
+  });
+
+  const { data: peakRowsData, error: peakRowsError } = await db
+    .from("meter_power_readings_5min")
+    .select("meter_id, bucket, power_avg, power_max, resolution_minutes, energy_type, source")
+    .eq("tenant_id", tenantId)
+    .in("meter_id", safeMeterIds)
+    .gte("bucket", periodStart)
+    .lte("bucket", periodEnd + "T23:59:59")
+    .limit(20000);
+  if (peakRowsError) throw { status: 500, message: "Leistungswerte konnten nicht gelesen werden", detail: peakRowsError.message };
+
+  const peakMap = new Map<string, { meter_id: string; day: string; peak_kw: number; avg_kw_sum: number; samples: number }>();
+  for (const r of peakRowsData ?? []) {
+    const day = (r.bucket as string).slice(0, 10);
+    const key = `${r.meter_id}|${day}`;
+    const cur = peakMap.get(key) ?? { meter_id: r.meter_id, day, peak_kw: 0, avg_kw_sum: 0, samples: 0 };
+    cur.peak_kw = Math.max(cur.peak_kw, Number(r.power_max || r.power_avg || 0));
+    cur.avg_kw_sum += Number(r.power_avg || 0);
+    cur.samples += 1;
+    peakMap.set(key, cur);
+  }
+  const daily_power_peaks = Array.from(peakMap.values()).map((r) => {
+    const meter = meterById.get(r.meter_id) as any;
+    const location = meter ? locationById.get(meter.location_id) as any : null;
+    return {
+      day: r.day,
+      meter_id: r.meter_id,
+      meter_name: meter?.name ?? "Unbekannter Zähler",
+      location_id: meter?.location_id ?? null,
+      location_name: location?.name ?? "Ohne Standort",
+      peak_kw: r.peak_kw,
+      avg_kw: r.samples > 0 ? r.avg_kw_sum / r.samples : 0,
+    };
+  });
+
+  const { data: chargePointsData, error: chargePointsError } = await db
+    .from("charge_points")
+    .select("id, name, location_id, max_power_kw, status")
+    .eq("tenant_id", tenantId)
+    .in("location_id", safeLocIds);
+  if (chargePointsError) throw { status: 500, message: "Ladepunkte konnten nicht gelesen werden", detail: chargePointsError.message };
+  const chargePoints = chargePointsData ?? [];
+  const chargePointIds = chargePoints.map((cp: any) => cp.id);
+  const safeChargePointIds = chargePointIds.length ? chargePointIds : ["00000000-0000-0000-0000-000000000000"];
+  const chargePointById = new Map(chargePoints.map((cp: any) => [cp.id, cp]));
 
   const { data: pvActualData } = await db
     .from("pv_actual_hourly")
@@ -85,21 +142,46 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
     .lte("ts_hour", periodEnd + "T23:59:59")
     .limit(10000);
 
-  const { data: chargingSessionsData } = await db
+  const { data: chargingSessionsData, error: chargingSessionsError } = await db
     .from("charging_sessions")
-    .select("id, charge_point_id, energy_kwh, started_at, stopped_at, status")
+    .select("id, charge_point_id, connector_id, energy_kwh, start_time, stop_time, status")
     .eq("tenant_id", tenantId)
-    .gte("started_at", periodStart)
-    .lte("started_at", periodEnd + "T23:59:59")
+    .in("charge_point_id", safeChargePointIds)
+    .gte("start_time", periodStart)
+    .lte("start_time", periodEnd + "T23:59:59")
     .limit(2000);
+  if (chargingSessionsError) throw { status: 500, message: "Ladevorgänge konnten nicht gelesen werden", detail: chargingSessionsError.message };
+
+  const charging_sessions = (chargingSessionsData ?? []).map((s: any) => {
+    const cp = chargePointById.get(s.charge_point_id) as any;
+    const location = cp ? locationById.get(cp.location_id) as any : null;
+    return {
+      ...s,
+      charge_point_name: cp?.name ?? "Unbekannter Ladepunkt",
+      location_id: cp?.location_id ?? null,
+      location_name: location?.name ?? "Ohne Standort",
+      energy_kwh: Number(s.energy_kwh || 0),
+    };
+  });
 
   return {
     period: { start: periodStart, end: periodEnd },
     locations,
-    meters: metersData ?? [],
-    daily_meter_totals: dailyAgg.slice(0, 5000),
+    meters,
+    charge_points: chargePoints,
+    daily_meter_totals: daily_meter_totals.slice(0, 5000),
+    daily_power_peaks: daily_power_peaks.slice(0, 5000),
     pv_actual_hourly: (pvActualData ?? []).slice(0, 5000),
-    charging_sessions: chargingSessionsData ?? [],
+    charging_sessions,
+    data_counts: {
+      locations: locations.length,
+      meters: meters.length,
+      daily_meter_totals: daily_meter_totals.length,
+      daily_power_peaks: daily_power_peaks.length,
+      pv_actual_hourly: (pvActualData ?? []).length,
+      charge_points: chargePoints.length,
+      charging_sessions: charging_sessions.length,
+    },
   };
 }
 
