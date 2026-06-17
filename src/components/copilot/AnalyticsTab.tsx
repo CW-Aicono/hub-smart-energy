@@ -299,7 +299,7 @@ export function AnalyticsTab() {
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">Vorschläge</CardTitle>
-            <CardDescription className="text-xs">Klicken zum direkt starten</CardDescription>
+            <CardDescription className="text-xs">Klicken übernimmt die Frage – Standort/Zeitraum prüfen und dann „Analyse starten"</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             {SUGGESTED_PROMPTS.map((s, i) => (
@@ -309,10 +309,7 @@ export function AnalyticsTab() {
                 size="sm"
                 className="text-xs h-auto py-1.5"
                 disabled={runAnalytics.isPending}
-                onClick={() => {
-                  setPrompt(s.prompt);
-                  void handleRun(s.prompt);
-                }}
+                onClick={() => setPrompt(s.prompt)}
               >
                 {s.label}
               </Button>
