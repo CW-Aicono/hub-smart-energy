@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Cpu, RefreshCw, RocketIcon, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react";
+import { Cpu, RefreshCw, RocketIcon, CheckCircle2, XCircle, Clock, Loader2, ChevronRight, ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
