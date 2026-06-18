@@ -254,6 +254,8 @@ function MembersDialog({
   const { data: allMemberships = [] } = useQuery({
     queryKey: ["charging-billing-group-members-all", tenant?.id],
     enabled: !!tenant?.id && !!group,
+    staleTime: 0,
+    refetchOnMount: "always",
     queryFn: async () => {
       const { data, error } = await supabase
         .from("charging_billing_group_members" as any)

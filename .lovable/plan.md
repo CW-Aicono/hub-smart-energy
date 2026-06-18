@@ -1,50 +1,46 @@
-# Disk-IO Tiefenfix (Loxone-Sync)
+## 4 Bugfixes (Live Hetzner)
 
-Ziel: Die drei identifizierten Hauptverursacher des Disk-IO-Verbrauchs eliminieren, ohne Funktionalität zu verändern. Die 56 nicht zugeordneten Loxone-Geräte werden **nicht** angefasst — sie schreiben ohnehin keine Power-Daten in die DB.
+### Bug 1 — Logo-Upload "Bucket not found"
+**Ursache**: Storage-Bucket `charging-invoice-logos` fehlt auf Hetzner-Supabase. Auf Lovable-Cloud existiert er, weil die Migration dort gelaufen ist.
 
-## Was geändert wird
+**Fix**: Code prüfen, welcher Bucket-Name verwendet wird (z. B. `charging-invoice-logos`). Sicherstellen, dass eine Migration den Bucket idempotent anlegt (`INSERT ... ON CONFLICT DO NOTHING` in `storage.buckets`) plus Storage-RLS-Policies. So legt jede frische Supabase-Instanz (auch Hetzner) den Bucket beim nächsten Migrations-Lauf automatisch an.
 
-### 1. `location_integrations` Status-Storm stoppen
-**Datei:** `supabase/functions/loxone-periodic-sync/index.ts`
+### Bug 2 — Nutzer kann nicht in andere Gruppe verschoben werden
+**Ursache** (Code, `BillingGroupsTab.tsx` + `useChargingBillingGroups.tsx`):
+- Die Sperr-Logik im Dialog liest aus React-Query-Cache `charging-billing-group-members-all`.
+- `setMembers.onSuccess` invalidiert nur `charging-billing-group-members` (für die gerade bearbeitete Gruppe) und `charging-billing-groups`, **nicht** `charging-billing-group-members-all`.
+- Beim Entfernen aus Gruppe A bleibt der Eintrag im "all"-Cache. Beim Öffnen von Gruppe B ist der User dann fälschlich "in anderer Gruppe".
+- Beim erneuten Hinzufügen in Gruppe A wird er nicht gesperrt, weil `m.group_id === group.id` ausgefiltert wird.
 
-- Alle direkten `UPDATE location_integrations SET last_sync_at = ...` entfernen.
-- Stattdessen ausschließlich die bestehende RPC `touch_location_integration_sync` verwenden (die bereits Throttling/Status-Logik enthält).
-- Erwartung: 2,37 Mio. Updates auf 11 Zeilen → drastische Reduktion.
+**Fix**: In `setMembers.onSuccess` zusätzlich invalidieren:
+```ts
+qc.invalidateQueries({ queryKey: ["charging-billing-group-members-all"] });
+```
+Und (defensiv) `staleTime: 0` für die `-all`-Query, damit beim Öffnen jedes Dialogs frisch geladen wird.
 
-### 2. `meter_period_totals` nur bei tatsächlicher Wertänderung schreiben
-**Datei:** `supabase/functions/loxone-api/index.ts`
+### Bug 3 — "Could not find the table 'public.charging_invoice_settings' in the schema cache"
+**Ursache**: Tabelle existiert auf Hetzner-Supabase noch nicht (Migration nicht eingespielt) **oder** PostgREST-Schema-Cache ist veraltet. Lovable-Cloud kennt die Tabelle, Hetzner nicht.
 
-- Vor jedem Upsert in `meter_period_totals` den aktuellen Wert für (`meter_id`, `period_type`, `period_start`) lesen.
-- Upsert nur ausführen, wenn `total_value` sich geändert hat oder `source`/`type` abweichen.
-- Erwartung: 9,77 Mio. Updates auf 5.676 Zeilen → drastische Reduktion (Werte ändern sich pro Tag/Woche meist gar nicht mehr nach Tagesende).
+**Fix**:
+- Prüfen, ob die Migration für `charging_invoice_settings` (inkl. GRANTs + RLS) im Repo unter `supabase/migrations/` vorhanden ist. Wenn nein: anlegen. Wenn ja: nichts im Code zu tun — der Hetzner-Programmierer muss die Migration einspielen und PostgREST neu starten (`NOTIFY pgrst, 'reload schema'`).
 
-### 3. `integration_errors` Dedup reparieren
-**Datei:** `supabase/functions/loxone-periodic-sync/index.ts`
+### Bug 4 — Abmelden aus Rechnungsdesigner zeigt erst "Benutzer", dann erst Login
+**Ursache** (`useAuth.tsx` + `DashboardSidebar.tsx`):
+- `signOut()` ruft `supabase.auth.signOut()` und setzt `user=null`.
+- Es gibt aber **keine explizite Navigation** nach `/login`. Bis die Route-Guards (AppLayout/TenantStatusGuard) reagieren, rendert die Sidebar weiter mit altem React-Query-Cache → `isAdmin` wird zu `false` → Label springt auf "Benutzer".
+- Erst der zweite Klick triggert eine Route-Änderung, die den Guard zur Redirect-Entscheidung zwingt.
 
-- Bestehende Lookup-Logik bei Fehler-Erzeugung erweitern: Match auf `location_integration_id + error_type + sensor_name + ignored=false` statt nur `sensor_name`.
-- `sensor_name IS NULL` korrekt mit `.is("sensor_name", null)` behandeln (statt `.eq(..., null)`, was nie matcht und Duplikate erzeugt).
-- Erwartung: Keine 95–97 neuen Duplikat-Fehler/Stunde mehr für identische Probleme.
+**Fix**:
+- In `signOut()` nach `supabase.auth.signOut()` zusätzlich:
+  1. `queryClient.clear()` (oder gezielt `invalidateQueries` für `user-roles`, `tenant`, etc.) damit kein stale Admin/Role-State angezeigt wird.
+  2. `window.location.href = "/login"` (Hard-Navigation), damit alle Provider/State frisch starten.
+  Hard-Reload ist hier sauberer als `navigate()`, weil sonst React-Query / Tenant-Context den alten User noch kurz weiter halten.
 
-## Was bewusst NICHT geändert wird
+## Reihenfolge
+1. Bug 2 (reiner Frontend-Fix, sofort wirksam)
+2. Bug 4 (reiner Frontend-Fix, sofort wirksam)
+3. Bug 1 (Migration für Storage-Bucket — wirkt nach Migrations-Run auf Hetzner)
+4. Bug 3 (Migration prüfen/anlegen — wirkt nach Migrations-Run auf Hetzner)
 
-- Loxone `/all`-Abfrage am Miniserver bleibt (Cron holt alle Controls). Begründung: betrifft nur HTTP-Last, nicht Disk-IO. Optimierung wäre separater Punkt — laut Nutzer aktuell nicht nötig.
-- Keine spekulativen Index-Anlagen. Indizes nur, falls nach dem Fix `EXPLAIN ANALYZE` auf konkreten Slow Queries einen Bedarf zeigt.
-- Keine Schema-Änderungen.
-
-## Validierung nach dem Fix
-
-Direkt nach Deploy und dann nach 1h / 8h jeweils prüfen:
-
-1. `supabase--db_health` → Disk-IO-Budget, WAL, rolled-back transactions
-2. `supabase--slow_queries` → kein `meter_period_totals`/`location_integrations` mehr in Top 10
-3. SQL-Check: `n_tup_upd` auf `location_integrations` und `meter_period_totals` (Delta zur Baseline = nahe 0 bei unveränderten Werten)
-4. SQL-Check: `COUNT(*)` neuer `integration_errors` letzte Stunde — sollte deutlich unter 95 liegen
-5. Funktional: Eine Liegenschaft mit Loxone-Gateway öffnen, Live-Werte und Tages-Chart kurz prüfen — keine Regression sichtbar.
-
-## Rollback-Strategie
-
-Alle Änderungen sind reine Edge-Function-Änderungen ohne Schema-Migration. Bei Problemen: vorherige Versionen der beiden Edge Functions wiederherstellen, sofort wirksam.
-
-## Aufwand
-
-3 Edge-Function-Änderungen, kein Migration-Approval nötig. Validierung nach Deploy dauert wegen Wartezeiten (1h, 8h) verteilt über den Tag.
+## Hinweis Hetzner
+Nach Implementierung muss der Hetzner-Programmierer die neuen Migrationen einspielen (Bug 1 + ggf. Bug 3). Bug 2 + 4 sind reine Frontend-Fixes und greifen sofort nach Deploy.
