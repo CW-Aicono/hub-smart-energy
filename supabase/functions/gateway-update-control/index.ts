@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
   if (action === "fleet_list") {
     const { data, error } = await sb
       .from("gateway_devices")
-      .select("id, tenant_id, device_name, device_type, status, addon_version, latest_available_version, ha_version, last_heartbeat_at, auto_update_enabled, update_channel, last_update_check_at, last_update_attempt_at, last_update_error, location_id")
+      .select("id, tenant_id, device_name, device_type, status, addon_version, latest_available_version, ha_version, last_heartbeat_at, auto_update_enabled, update_channel, last_update_check_at, last_update_attempt_at, last_update_error, location_id, local_ip, mac_address, ws_connected_since, last_ws_ping_at, offline_buffer_count, local_time, created_at, updated_at")
       .order("last_heartbeat_at", { ascending: false, nullsFirst: false });
     if (error) return json({ error: error.message }, 500);
     return json({ success: true, devices: data ?? [] });
