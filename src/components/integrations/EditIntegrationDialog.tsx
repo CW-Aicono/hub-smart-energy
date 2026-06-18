@@ -84,7 +84,7 @@ export function EditIntegrationDialog({
       }
     }
     if (isLoxone) {
-      const clamped = Math.min(15, Math.max(1, Math.floor(Number(pollIntervalMin) || 5)));
+      const clamped = Math.min(60, Math.max(1, Math.floor(Number(pollIntervalMin) || 15)));
       newConfig.poll_interval_minutes = clamped;
     }
 
