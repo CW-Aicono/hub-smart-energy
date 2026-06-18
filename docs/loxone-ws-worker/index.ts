@@ -22,7 +22,7 @@
  *   - Keine Produktiv-Tenants — nur Test-Standorte mit Feature-Flag
  *
  * Umgebungsvariablen:
- *   SUPABASE_URL        z. B. https://xnveugycurplszevdxtw.supabase.co
+ *   SUPABASE_URL        z. B. https://ihre-projekt-id.supabase.co
  *   GATEWAY_API_KEY     Bearer Token (gleicher Wert wie bei gateway-ingest)
  *   FLUSH_INTERVAL_MS   Wie oft Werte gepusht werden (Standard: 1000)
  *   RELOAD_INTERVAL_MS  Wie oft die Meter-Liste neu geladen wird (Standard: 300000)
