@@ -108,6 +108,27 @@ export function EditIntegrationDialog({
     }
   };
 
+  const handleEnableWs = async () => {
+    if (!locationIntegration) return;
+    setEnablingWs(true);
+    const { error } = await onUpdate(locationIntegration.id, {
+      loxone_remote_connect_ws_enabled: true,
+    });
+    setEnablingWs(false);
+    if (error) {
+      toast({
+        title: t("common.error" as any),
+        description: "Fehler beim Aktivieren von Remote Connect WebSocket.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Remote Connect WebSocket aktiviert",
+        description: "Die BETA-Funktion ist jetzt für diesen Standort freigeschaltet.",
+      });
+    }
+  };
+
   const hasConfigFields = (gatewayDef?.configFields.length ?? 0) > 0;
 
   return (
