@@ -137,7 +137,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
 
   // For non-Loxone gateways, show all sensors; for Loxone filter to meter types
   const meterSensors = integrationType === "loxone_miniserver"
-    ? sensors.filter((s) => METER_CONTROL_TYPES.has(s.controlType || ""))
+    ? sensors.filter((s) => ASSIGNABLE_CONTROL_TYPES.has(s.controlType || ""))
     : sensors;
 
   // Lookup: location_id -> name
