@@ -383,6 +383,23 @@ async function main() {
   await reloadMeters();
   setInterval(reloadMeters, RELOAD_INTERVAL_MS);
   setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
+
+  // Session-Heartbeat alle 15s: hält die aktive Session "live" und liefert
+  // events_received an die UI, damit die Miniserver-Kachel WS-Traffic anzeigt.
+  setInterval(async () => {
+    for (const state of connections.values()) {
+      if (!state.sessionId || !state.authenticated) continue;
+      try {
+        await ingestPost("ws-session-heartbeat", {
+          session_id: state.sessionId,
+          events_received: state.eventsReceived,
+          reconnect_count: state.reconnectCount,
+        });
+      } catch (err) {
+        log("debug", `[Heartbeat] ${state.serialNumber}: ${(err as Error).message}`);
+      }
+    }
+  }, 15000);
 }
 
 main().catch((err) => {
