@@ -276,14 +276,18 @@ serve(async (req) => {
               const controlType = sensor.controlType || sensor.type || "";
 
               // Check if an unresolved error already exists for this sensor
-              // Check if an unresolved OR ignored error already exists for this sensor
+              // Check if an unresolved OR ignored error already exists for this sensor.
+              // IO-Optimierung: Match jetzt zusätzlich auf error_type, damit Duplikate
+              // verschiedener Fehlerarten pro Sensor sicher vermieden werden.
               const { data: existing } = await supabase
                 .from("integration_errors")
                 .select("id")
                 .eq("location_integration_id", integrationId)
+                .eq("error_type", "data")
                 .eq("sensor_name", sensorName)
                 .or("is_resolved.eq.false,is_ignored.eq.true")
                 .maybeSingle();
+
 
               if (!existing) {
                 const { data: errRow } = await supabase.from("integration_errors").insert({
