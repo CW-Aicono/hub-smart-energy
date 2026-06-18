@@ -441,10 +441,14 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           const end = points[p + 1];
           const gap = end.idx - start.idx;
           if (gap > 1 && gap <= 12) {
+            // Treat sub-15-min gaps (≤ 3 slots) as the normal polling cadence:
+            // interpolated points count as "real" so the solid line stays connected.
+            // Larger gaps remain dashed to signal actual data outages.
+            const treatAsReal = gap <= 3;
             for (let g = 1; g < gap; g++) {
               const t = g / gap;
               setEnergyValue(buckets[start.idx + g], key, start.val + (end.val - start.val) * t);
-              // gap-interpolated: do NOT add to realIndices
+              if (treatAsReal) realIndices[key]?.add(start.idx + g);
             }
           }
         }
