@@ -62,17 +62,6 @@ interface SensorsDialogProps {
   locationId?: string;
 }
 
-const ASSIGNABLE_CONTROL_TYPES = new Set([
-  // Zähler
-  "Meter", "EFM", "EnergyManager2", "Fronius",
-  // Sensoren
-  "InfoOnlyAnalog", "InfoOnlyDigital", "TextState",
-  // Aktoren
-  "Switch", "Pushbutton", "TimedSwitch", "Dimmer",
-  "LightControllerV2", "Jalousie",
-  // Gateway-spezifisch
-  "access_point", "switch", "gateway",
-]);
 
 function getSensorIcon(sensor: Sensor) {
   const cls = "h-4 w-4";
@@ -135,10 +124,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   // Push-based gateways without getSensors support – they receive data, not poll it.
   const isPushGateway = edgeFunctionName === "gateway-ingest";
 
-  // For non-Loxone gateways, show all sensors; for Loxone filter to meter types
-  const meterSensors = integrationType === "loxone_miniserver"
-    ? sensors.filter((s) => ASSIGNABLE_CONTROL_TYPES.has(s.controlType || ""))
-    : sensors;
+  const meterSensors = sensors;
 
   // Lookup: location_id -> name
   const locationNameById = useMemo(() => {
