@@ -36,6 +36,7 @@ interface FleetDevice {
   last_update_attempt_at: string | null;
   last_update_error: string | null;
   location_id: string | null;
+  location_name: string | null;
   local_ip: string | null;
   mac_address: string | null;
   ws_connected_since: string | null;
@@ -206,17 +207,6 @@ const SuperAdminGatewayFleet = () => {
     },
   });
 
-  const { data: locationNameMap = {} } = useQuery({
-    queryKey: ["sa-gateway-fleet-location-names"],
-    enabled: !!isSuperAdmin,
-    queryFn: async () => {
-      const { data, error } = await supabase.from("locations").select("id, name");
-      if (error) throw error;
-      const map: Record<string, string> = {};
-      (data ?? []).forEach((l: { id: string; name: string }) => { map[l.id] = l.name; });
-      return map;
-    },
-  });
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const toggleExpand = (id: string) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
@@ -339,8 +329,8 @@ const SuperAdminGatewayFleet = () => {
                         <TableHead>Status</TableHead>
                         <TableHead>Version</TableHead>
                         <TableHead>Channel</TableHead>
-                        <TableHead>Auto-Update</TableHead>
                         <TableHead>Letzter Heartbeat</TableHead>
+                        <TableHead>Auto-Update</TableHead>
                         <TableHead className="text-right">Aktion</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -350,7 +340,7 @@ const SuperAdminGatewayFleet = () => {
                       )}
                       {fleet.map((d) => {
                         const isOpen = !!expanded[d.id];
-                        const locationName = (d.location_id && locationNameMap[d.location_id]) || "—";
+                        const locationName = d.location_name || "—";
                         return (
                           <Fragment key={d.id}>
                           <TableRow key={d.id}>
@@ -381,13 +371,13 @@ const SuperAdminGatewayFleet = () => {
                                 </SelectContent>
                               </Select>
                             </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{formatTime(d.last_heartbeat_at)}</TableCell>
                             <TableCell>
                               <Switch
                                 checked={d.auto_update_enabled}
                                 onCheckedChange={(v) => setAutoMutation.mutate({ deviceId: d.id, enabled: v })}
                               />
                             </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{formatTime(d.last_heartbeat_at)}</TableCell>
                             <TableCell className="text-right">
                               <Button
                                 size="sm" variant="outline"
