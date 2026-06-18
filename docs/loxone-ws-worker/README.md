@@ -22,7 +22,7 @@ Dieses Programm (der „Worker“) sitzt auf Ihrem Hetzner-Server und hält eine
 |-----|-------|-------|
 | Zugang zu Ihrem Hetzner-Server | Bekommen Sie von Ihrem IT-Administrator oder Hetzner-Login | Dort wird das Programm installiert |
 | Docker | Ist meist schon auf dem Hetzner-Server installiert | Damit läuft das Programm in einer geschlossenen Box |
-| Den `GATEWAY_API_KEY` | AICONO-Backend → Einstellungen → Integrationen → Gateway-Geräte | Damit sich das Programm bei AICONO anmelden kann |
+| Den `GATEWAY_API_KEY` | AICONO-Backend → Einstellungen → Integrationen → Reiter **API** | Damit sich das Programm bei AICONO anmelden kann |
 | Mindestens ein Loxone-Standort mit Seriennummer, Benutzername und Passwort | In Ihrer Loxone-Konfiguration hinterlegt | Damit verbindet sich das Programm mit dem Miniserver |
 
 > **Sie brauchen keine Programmierkenntnisse.** Sie kopieren nur Textblöcke und fügen sie ein.
@@ -609,7 +609,7 @@ docker build -t loxone-ws-worker .
 Bevor Sie den folgenden Befehl eingeben, müssen Sie **zwei Platzhalter ersetzen**:
 
 1. `[HIER_SUPABASE_URL]` → Ihre Supabase-URL. Diese bekommen Sie von Ihrem Administrator. Sie sieht aus wie `https://abcdefg12345.supabase.co`.
-2. `[HIER_API_KEY]` → Ihr `GATEWAY_API_KEY`. Diesen finden Sie im AICONO-Backend unter **Einstellungen → Integrationen → Gateway-Geräte**.
+2. `[HIER_API_KEY]` → Ihr `GATEWAY_API_KEY`. Diesen finden Sie im AICONO-Backend unter **Einstellungen → Integrationen → Reiter API**. Dort steht ein Feld mit der Beschriftung **API-Key** – kopieren Sie den Wert daraus.
 
 Ersetzen Sie die Platzhalter im folgenden Befehl und fügen Sie ihn ein:
 
