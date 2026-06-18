@@ -7,6 +7,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const MODEL = "google/gemini-2.5-pro";
+
 function jsonOk(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -37,9 +39,26 @@ async function resolveAuth(req: Request) {
   return { userId, tenantId: profile.tenant_id, db };
 }
 
+// ─── Helper: Convert UTC timestamp to Europe/Berlin {date, hour, weekday} ──
+const BERLIN_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/Berlin",
+  year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit",
+  hour12: false, weekday: "short",
+});
+const WEEKDAY_DE: Record<string, { name: string; idx: number }> = {
+  Mon: { name: "Mo", idx: 1 }, Tue: { name: "Di", idx: 2 }, Wed: { name: "Mi", idx: 3 },
+  Thu: { name: "Do", idx: 4 }, Fri: { name: "Fr", idx: 5 }, Sat: { name: "Sa", idx: 6 }, Sun: { name: "So", idx: 7 },
+};
+function toBerlin(iso: string) {
+  const parts = BERLIN_FORMATTER.formatToParts(new Date(iso));
+  const m: Record<string, string> = {};
+  for (const p of parts) if (p.type !== "literal") m[p.type] = p.value;
+  return { date: `${m.year}-${m.month}-${m.day}`, hour: Number(m.hour), weekday: m.weekday };
+}
+
 // ─── Datenkontext für die KI sammeln ──────────────────────────────────────
 async function gatherContext(db: any, tenantId: string, locationId: string | null, periodStart: string, periodEnd: string) {
-  // Standorte (mit optionalem Filter)
   let locQuery = db.from("locations").select("id, name, usage_type, net_floor_area, gross_floor_area, city").eq("tenant_id", tenantId);
   if (locationId) locQuery = locQuery.eq("id", locationId);
   const { data: locationsData, error: locationsError } = await locQuery;
@@ -62,7 +81,7 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
   const safeMeterIds = meterIds.length ? meterIds : ["00000000-0000-0000-0000-000000000000"];
   const meterById = new Map(meters.map((m: any) => [m.id, m]));
 
-  // Read from pre-aggregated daily totals (fast: 1 row per meter per day)
+  // Pre-aggregated daily totals
   const { data: dailyTotalsData, error: dailyTotalsError } = await db
     .from("meter_daily_totals_mv")
     .select("meter_id, bucket_start, consumption_kwh, export_kwh, energy_type, coverage_ratio, source")
@@ -95,27 +114,58 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
     };
   });
 
+  // Main-meter consumption meters for Strom (incl. bidirectional main meters with PV feed-in)
+  const mainStromMeterIds = new Set(
+    meters.filter((m: any) =>
+      m.is_main_meter &&
+      m.energy_type === "strom" &&
+      (m.meter_function === "consumption" || m.meter_function === "bidirectional" || !m.meter_function)
+    ).map((m: any) => m.id)
+  );
+  const mainStromMeterIdsArr = Array.from(mainStromMeterIds) as string[];
+  const safeMainMeterIds = mainStromMeterIdsArr.length ? mainStromMeterIdsArr : ["00000000-0000-0000-0000-000000000000"];
 
+  // 5-min power readings — ONLY for main meters (peaks + base load), avoids 50k cutoff
   const { data: peakRowsData, error: peakRowsError } = await db
     .from("meter_power_readings_5min")
     .select("meter_id, bucket, power_avg, power_max, resolution_minutes, energy_type, source")
     .eq("tenant_id", tenantId)
-    .in("meter_id", safeMeterIds)
+    .in("meter_id", safeMainMeterIds)
     .gte("bucket", periodStart)
     .lte("bucket", periodEnd + "T23:59:59")
-    .limit(20000);
+    .order("bucket", { ascending: true })
+    .limit(50000);
   if (peakRowsError) throw { status: 500, message: "Leistungswerte konnten nicht gelesen werden", detail: peakRowsError.message };
 
+  // Daily power peaks — main consumption meters
+
   const peakMap = new Map<string, { meter_id: string; day: string; peak_kw: number; avg_kw_sum: number; samples: number }>();
+  // Base load — min power_avg in Berlin local hours [0,5) per main meter per Berlin day
+  const baseLoadMap = new Map<string, { meter_id: string; day: string; min_kw: number; samples: number }>();
+
   for (const r of peakRowsData ?? []) {
-    const day = (r.bucket as string).slice(0, 10);
+    if (!mainStromMeterIds.has(r.meter_id)) continue;
+    const berlin = toBerlin(r.bucket as string);
+    const day = berlin.date;
     const key = `${r.meter_id}|${day}`;
-    const cur = peakMap.get(key) ?? { meter_id: r.meter_id, day, peak_kw: 0, avg_kw_sum: 0, samples: 0 };
-    cur.peak_kw = Math.max(cur.peak_kw, Number(r.power_max || r.power_avg || 0));
-    cur.avg_kw_sum += Number(r.power_avg || 0);
-    cur.samples += 1;
-    peakMap.set(key, cur);
+    const pk = peakMap.get(key) ?? { meter_id: r.meter_id, day, peak_kw: 0, avg_kw_sum: 0, samples: 0 };
+    pk.peak_kw = Math.max(pk.peak_kw, Number(r.power_max || r.power_avg || 0));
+    pk.avg_kw_sum += Number(r.power_avg || 0);
+    pk.samples += 1;
+    peakMap.set(key, pk);
+
+    if (berlin.hour < 5) {
+      const bl = baseLoadMap.get(key);
+      const pAvg = Number(r.power_avg || 0);
+      if (!bl) {
+        baseLoadMap.set(key, { meter_id: r.meter_id, day, min_kw: pAvg, samples: 1 });
+      } else {
+        bl.min_kw = Math.min(bl.min_kw, pAvg);
+        bl.samples += 1;
+      }
+    }
   }
+
   const daily_power_peaks = Array.from(peakMap.values()).map((r) => {
     const meter = meterById.get(r.meter_id) as any;
     const location = meter ? locationById.get(meter.location_id) as any : null;
@@ -125,11 +175,49 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
       meter_name: meter?.name ?? "Unbekannter Zähler",
       location_id: meter?.location_id ?? null,
       location_name: location?.name ?? "Ohne Standort",
-      peak_kw: r.peak_kw,
-      avg_kw: r.samples > 0 ? r.avg_kw_sum / r.samples : 0,
+      peak_kw: Number(r.peak_kw.toFixed(3)),
+      avg_kw: Number((r.samples > 0 ? r.avg_kw_sum / r.samples : 0).toFixed(3)),
     };
   });
 
+  const daily_base_load_kw = Array.from(baseLoadMap.values())
+    .filter((r) => r.samples >= 6) // at least 30min of night data
+    .map((r) => {
+      const meter = meterById.get(r.meter_id) as any;
+      const location = meter ? locationById.get(meter.location_id) as any : null;
+      return {
+        day: r.day,
+        meter_id: r.meter_id,
+        meter_name: meter?.name ?? "Unbekannter Zähler",
+        location_id: meter?.location_id ?? null,
+        location_name: location?.name ?? "Ohne Standort",
+        base_load_kw: Number(r.min_kw.toFixed(3)),
+      };
+    })
+    .sort((a, b) => a.day.localeCompare(b.day));
+
+  // Weekday consumption — main strom meters only, average kWh per weekday
+  const weekdayMap = new Map<number, { weekday: string; sum: number; days: number }>();
+  for (const row of daily_meter_totals) {
+    if (row.energy_type !== "strom" || !row.is_main_meter || row.meter_function === "generation") continue;
+    const berlin = toBerlin(row.day);
+    const wd = WEEKDAY_DE[berlin.weekday];
+    if (!wd) continue;
+    const cur = weekdayMap.get(wd.idx) ?? { weekday: wd.name, sum: 0, days: 0 };
+    cur.sum += row.bezug_kwh;
+    cur.days += 1;
+    weekdayMap.set(wd.idx, cur);
+  }
+  const weekday_consumption_kwh = Array.from(weekdayMap.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([, v]) => ({
+      weekday: v.weekday,
+      total_kwh: Number(v.sum.toFixed(2)),
+      avg_kwh_per_day: Number((v.days > 0 ? v.sum / v.days : 0).toFixed(2)),
+      days_counted: v.days,
+    }));
+
+  // Charge points + sessions
   let chargePointsQuery = db
     .from("charge_points")
     .select("id, name, location_id, max_power_kw, status")
@@ -157,33 +245,40 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
     .in("charge_point_id", safeChargePointIds)
     .gte("start_time", periodStart)
     .lte("start_time", periodEnd + "T23:59:59")
-    .limit(2000);
+    .limit(5000);
   if (chargingSessionsError) throw { status: 500, message: "Ladevorgänge konnten nicht gelesen werden", detail: chargingSessionsError.message };
 
-  const charging_sessions = (chargingSessionsData ?? []).map((s: any) => {
-    const cp = chargePointById.get(s.charge_point_id) as any;
-    const location = cp ? locationById.get(cp.location_id) as any : null;
-    return {
-      ...s,
-      charge_point_name: cp?.name ?? "Unbekannter Ladepunkt",
-      location_id: cp?.location_id ?? null,
-      location_name: location?.name ?? "Ohne Standort",
-      energy_kwh: Number(s.energy_kwh || 0),
-    };
-  });
+  // Plausibility filter: only sessions with ≥ 0.1 kWh AND completed/finishing
+  const charging_sessions = (chargingSessionsData ?? [])
+    .filter((s: any) =>
+      Number(s.energy_kwh || 0) >= 0.1 &&
+      ["Completed", "Finishing", "completed", "finishing"].includes(s.status ?? "")
+    )
+    .map((s: any) => {
+      const cp = chargePointById.get(s.charge_point_id) as any;
+      const location = cp ? locationById.get(cp.location_id) as any : null;
+      return {
+        ...s,
+        charge_point_name: cp?.name ?? "Unbekannter Ladepunkt",
+        location_id: cp?.location_id ?? null,
+        location_name: location?.name ?? "Ohne Standort",
+        energy_kwh: Number(s.energy_kwh || 0),
+      };
+    });
 
+  // Electricity aggregation — main meters only (consumption)
   const electricityByLocation = new Map<string, { location_id: string | null; location_name: string; total_kwh: number; meter_count: Set<string> }>();
   const electricityByMeter = new Map<string, { meter_id: string; meter_name: string; location_name: string; total_kwh: number }>();
   for (const row of daily_meter_totals) {
-    if (row.energy_type !== "strom" || row.meter_function === "generation") continue;
+    if (row.energy_type !== "strom" || !row.is_main_meter || row.meter_function === "generation") continue;
     const locationKey = row.location_id ?? "unknown";
     const loc = electricityByLocation.get(locationKey) ?? { location_id: row.location_id, location_name: row.location_name, total_kwh: 0, meter_count: new Set<string>() };
-    loc.total_kwh += row.total_kwh;
+    loc.total_kwh += row.bezug_kwh;
     loc.meter_count.add(row.meter_id);
     electricityByLocation.set(locationKey, loc);
 
     const meter = electricityByMeter.get(row.meter_id) ?? { meter_id: row.meter_id, meter_name: row.meter_name, location_name: row.location_name, total_kwh: 0 };
-    meter.total_kwh += row.total_kwh;
+    meter.total_kwh += row.bezug_kwh;
     electricityByMeter.set(row.meter_id, meter);
   }
 
@@ -200,7 +295,7 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
     };
   });
 
-  // Coverage report: how much of the requested period is actually covered by data
+  // Coverage report
   const expectedDays = Math.max(1, Math.round((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / 86400000) + 1);
   const coverageByMeter = new Map<string, { meter_id: string; meter_name: string; location_name: string; days_with_data: number; avg_coverage: number; expected_days: number }>();
   for (const row of daily_meter_totals) {
@@ -214,6 +309,15 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
     avg_coverage: x.days_with_data > 0 ? Number((x.avg_coverage / x.days_with_data).toFixed(2)) : 0,
     coverage_pct: Number(((x.days_with_data / x.expected_days) * 100).toFixed(0)),
   })).sort((a, b) => a.coverage_pct - b.coverage_pct);
+
+  // Overall coverage on main strom meters → drives hard-stop
+  const mainCoverage = data_coverage.filter((c) => mainStromMeterIds.has(c.meter_id));
+  const avgMainCoverage = mainCoverage.length
+    ? mainCoverage.reduce((s, c) => s + c.avg_coverage, 0) / mainCoverage.length
+    : (data_coverage.reduce((s, c) => s + c.avg_coverage, 0) / Math.max(1, data_coverage.length));
+  const avgMainDayPct = mainCoverage.length
+    ? mainCoverage.reduce((s, c) => s + c.coverage_pct, 0) / mainCoverage.length
+    : 0;
 
   const prepared_summaries = {
     electricity_consumption_by_location: Array.from(electricityByLocation.values())
@@ -230,28 +334,44 @@ async function gatherContext(db: any, tenantId: string, locationId: string | nul
       .slice()
       .sort((a, b) => b.peak_kw - a.peak_kw)
       .slice(0, 50),
+    daily_base_load_kw,
+    weekday_consumption_kwh,
     data_coverage,
+    overall_main_meter_coverage: {
+      avg_coverage_ratio: Number(avgMainCoverage.toFixed(2)),
+      avg_days_pct: Number(avgMainDayPct.toFixed(0)),
+      main_meters_count: mainStromMeterIds.size,
+    },
   };
 
-
   return {
-    period: { start: periodStart, end: periodEnd },
-    prepared_summaries,
-    locations,
-    meters,
-    charge_points: chargePoints,
-    daily_meter_totals: daily_meter_totals.slice(0, 5000),
-    daily_power_peaks: daily_power_peaks.slice(0, 5000),
-    pv_actual_hourly: (pvActualData ?? []).slice(0, 5000),
-    charging_sessions,
-    data_counts: {
-      locations: locations.length,
-      meters: meters.length,
-      daily_meter_totals: daily_meter_totals.length,
-      daily_power_peaks: daily_power_peaks.length,
-      pv_actual_hourly: (pvActualData ?? []).length,
-      charge_points: chargePoints.length,
-      charging_sessions: charging_sessions.length,
+    context: {
+      period: { start: periodStart, end: periodEnd },
+      prepared_summaries,
+      locations,
+      meters,
+      charge_points: chargePoints,
+      daily_meter_totals: daily_meter_totals.slice(0, 5000),
+      daily_power_peaks: daily_power_peaks.slice(0, 5000),
+      pv_actual_hourly: (pvActualData ?? []).slice(0, 5000),
+      charging_sessions,
+      data_counts: {
+        locations: locations.length,
+        meters: meters.length,
+        main_strom_meters: mainStromMeterIds.size,
+        daily_meter_totals: daily_meter_totals.length,
+        daily_power_peaks: daily_power_peaks.length,
+        daily_base_load_kw: daily_base_load_kw.length,
+        weekday_consumption_kwh: weekday_consumption_kwh.length,
+        pv_actual_hourly: (pvActualData ?? []).length,
+        charge_points: chargePoints.length,
+        charging_sessions: charging_sessions.length,
+      },
+    },
+    coverage: {
+      avgCoverage: avgMainCoverage,
+      avgDaysPct: avgMainDayPct,
+      mainMetersCount: mainStromMeterIds.size,
     },
   };
 }
@@ -262,24 +382,31 @@ async function callAI(prompt: string, context: any) {
   if (!LOVABLE_API_KEY) throw { status: 500, message: "KI nicht konfiguriert" };
 
   const systemPrompt = `Du bist der Analytics-Assistent eines deutschen Energie-Management-Systems (AICONO EMS).
-Du erhältst aggregierte Mess- und Anlagendaten eines Mandanten und beantwortest die Frage des Nutzers mit einer strukturierten Analyse:
-- Knapper, sprechender Titel auf Deutsch
-- 1–3 aussagekräftige KPIs (deutsche Einheiten, z.B. kWh, MWh, %, €, kg CO₂)
-- Genau EIN passender Chart (bar / line / pie / table)
-- 3–5 Sätze "insight_markdown" mit klarer Handlungsempfehlung
-- Liste der verwendeten Datenquellen
+Du erhältst aggregierte Mess- und Anlagendaten eines Mandanten und beantwortest die Frage des Nutzers mit einer strukturierten Analyse.
 
-WICHTIG:
-- Verwende ausschließlich die übergebenen Daten. Erfinde nichts.
-- Nutze zuerst "prepared_summaries". Diese Werte sind bereits korrekt voraggregiert und sollen bevorzugt für Charts/KPIs verwendet werden.
-- Für Stromverbrauch pro Standort nutze "prepared_summaries.electricity_consumption_by_location".
-- Für Stromverbrauch pro Zähler nutze "prepared_summaries.electricity_consumption_by_meter".
-- Für Wallbox-/Ladepunkt-Auslastung nutze "prepared_summaries.charging_by_charge_point".
-- Für Lastspitzen nutze "prepared_summaries.peak_power_by_day".
-- Prüfe IMMER "prepared_summaries.data_coverage": Wenn für einen Zähler/Standort coverage_pct < 80 oder avg_coverage < 0.8 ist, weise im "insight_markdown" explizit darauf hin ("Datenbasis lückenhaft: nur X von Y Tagen verfügbar") und reduziere die KPI-Aussagekraft entsprechend.
-- Wenn die Daten nicht ausreichen, schreibe das ehrlich in "insight_markdown" und gib ein leeres KPI-/Chart-Array zurück.
-- Zahlen IMMER im deutschen Format denken (Punkt = Tausender, Komma = Dezimal) – die Formatierung übernimmt das Frontend.
-- Chart-Daten so liefern, dass sie 1:1 in Recharts gerendert werden können.`;
+AUSGABE-PFLICHT:
+- Knapper, sprechender Titel auf Deutsch
+- 1–3 KPIs. "value" ist eine Zahl ODER ein String (z.B. Datum "16.06.2026"). Numerische KPIs IMMER in der angegebenen "unit" (siehe Einheiten-Regeln).
+- Genau EIN passender Chart (bar / line / pie / table) mit Pflichtfeld "unit" je Serie.
+- 3–5 Sätze "insight_markdown" mit klarer Handlungsempfehlung.
+- Liste der verwendeten Datenquellen (Schlüssel aus prepared_summaries).
+
+EINHEITEN-REGELN (verbindlich):
+- Energie IMMER in kWh, nie MWh. KPI und Chart müssen die gleiche Einheit haben.
+- Leistung IMMER in kW.
+- Datums-KPIs ausschließlich als String "TT.MM.JJJJ".
+
+DATEN-PRIORITÄT (NIEMALS abweichen):
+- Strom-Verbrauch pro Standort/Zähler → ausschließlich prepared_summaries.electricity_consumption_by_location bzw. _by_meter (bereits auf Hauptzähler/Strom/Bezug gefiltert).
+- Lastspitzen → ausschließlich prepared_summaries.peak_power_by_day (nur Hauptzähler-Strom-Bezug, bereits gefiltert).
+- Grundlast → ausschließlich prepared_summaries.daily_base_load_kw (nächtliches Minimum 00–05 Uhr Europe/Berlin). NIEMALS peak_power_by_day als Grundlast verwenden.
+- Wochentag-Verbrauch → ausschließlich prepared_summaries.weekday_consumption_kwh (avg_kwh_per_day verwenden, Sortierung Mo→So).
+- Wallbox/Ladepunkte → ausschließlich prepared_summaries.charging_by_charge_point (Sessions sind bereits auf ≥ 0,1 kWh gefiltert).
+
+DATEN-QUALITÄT:
+- Prüfe prepared_summaries.data_coverage. Wenn coverage_pct < 80 oder avg_coverage < 0.8 für die verwendeten Zähler: Hinweis in insight_markdown ("Datenbasis lückenhaft: nur X von Y Tagen verfügbar") und KPI-Aussagekraft entsprechend einordnen.
+- Erfinde keine Werte. Wenn Daten fehlen: ehrlich in insight_markdown sagen, KPI-/Chart-Arrays leer lassen.
+- Zahlen liefert die KI als reine Zahlen (Punkt als Dezimalseparator); die deutsche Formatierung übernimmt das Frontend.`;
 
   const tools = [{
     type: "function",
@@ -296,7 +423,7 @@ WICHTIG:
               type: "object",
               properties: {
                 label: { type: "string" },
-                value: { type: "number" },
+                value: { type: ["number", "string"] },
                 unit: { type: "string" },
               },
               required: ["label", "value", "unit"],
@@ -308,12 +435,14 @@ WICHTIG:
               type: { type: "string", enum: ["bar", "line", "pie", "table"] },
               x_label: { type: "string" },
               y_label: { type: "string" },
+              unit: { type: "string" },
               series: {
                 type: "array",
                 items: {
                   type: "object",
                   properties: {
                     name: { type: "string" },
+                    unit: { type: "string" },
                     data: {
                       type: "array",
                       items: {
@@ -326,11 +455,11 @@ WICHTIG:
                       },
                     },
                   },
-                  required: ["name", "data"],
+                  required: ["name", "data", "unit"],
                 },
               },
             },
-            required: ["type", "x_label", "y_label", "series"],
+            required: ["type", "x_label", "y_label", "unit", "series"],
           },
           insight_markdown: { type: "string" },
           sources: { type: "array", items: { type: "string" } },
@@ -347,10 +476,10 @@ WICHTIG:
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: MODEL,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Frage: ${prompt}\n\nDaten-Kontext (JSON):\n${JSON.stringify(context).slice(0, 120000)}` },
+        { role: "user", content: `Frage: ${prompt}\n\nDaten-Kontext (JSON):\n${JSON.stringify(context).slice(0, 180000)}` },
       ],
       tools,
       tool_choice: { type: "function", function: { name: "deliver_analytics" } },
@@ -386,8 +515,25 @@ serve(async (req) => {
     const defaultStart = new Date(today.getTime() - 30 * 86400000).toISOString().slice(0, 10);
     const periodStart = (body.period_start || defaultStart) as string;
 
-    const context = await gatherContext(db, tenantId, locationId, periodStart, periodEnd);
-    const result = await callAI(prompt, context);
+    const { context, coverage } = await gatherContext(db, tenantId, locationId, periodStart, periodEnd);
+
+    let result: any;
+
+    // ─── Hard-Stop: bei katastrophal dünner Datenbasis keine KI-Analyse ──
+    if (coverage.mainMetersCount === 0 || coverage.avgCoverage < 0.3) {
+      result = {
+        title: "Datenbasis zu dünn für belastbare Analyse",
+        kpis: [],
+        chart: { type: "table", x_label: "Hinweis", y_label: "", unit: "", series: [] },
+        insight_markdown:
+          coverage.mainMetersCount === 0
+            ? "Für den gewählten Zeitraum/Standort sind keine Hauptzähler-Strom-Daten vorhanden. Eine KI-Analyse ist nicht sinnvoll. Bitte Zähler-Konfiguration prüfen oder einen anderen Zeitraum/Standort wählen."
+            : `Nur ${Math.round(coverage.avgCoverage * 100)}% der erwarteten Messwerte vorhanden (durchschnittliche Abdeckung der Hauptzähler). Eine KI-Analyse würde stark verzerrte Ergebnisse liefern und wurde deshalb übersprungen. Bitte Gateway/Zähler prüfen oder einen Zeitraum mit besserer Abdeckung wählen.`,
+        sources: ["prepared_summaries.overall_main_meter_coverage"],
+      };
+    } else {
+      result = await callAI(prompt, context);
+    }
 
     const { data: inserted, error: insertError } = await db
       .from("copilot_analytics_queries")
@@ -400,7 +546,7 @@ serve(async (req) => {
         period_start: periodStart,
         period_end: periodEnd,
         result_json: result,
-        model_used: "google/gemini-2.5-flash",
+        model_used: MODEL,
         status: "completed",
       })
       .select()

@@ -150,6 +150,7 @@ export function useChargingBillingGroupMembers(groupId: string | null) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["charging-billing-group-members", groupId] });
+      qc.invalidateQueries({ queryKey: ["charging-billing-group-members-all"] });
       qc.invalidateQueries({ queryKey: ["charging-billing-groups"] });
       toast({ title: "Mitglieder aktualisiert" });
     },

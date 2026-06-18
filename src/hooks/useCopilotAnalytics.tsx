@@ -4,15 +4,16 @@ import { toast } from "sonner";
 
 export interface AnalyticsKpi {
   label: string;
-  value: number;
+  value: number | string;
   unit: string;
 }
 export interface AnalyticsChartPoint { x: string; y: number }
-export interface AnalyticsChartSeries { name: string; data: AnalyticsChartPoint[] }
+export interface AnalyticsChartSeries { name: string; unit?: string; data: AnalyticsChartPoint[] }
 export interface AnalyticsChart {
   type: "bar" | "line" | "pie" | "table";
   x_label: string;
   y_label: string;
+  unit?: string;
   series: AnalyticsChartSeries[];
 }
 export interface AnalyticsResult {

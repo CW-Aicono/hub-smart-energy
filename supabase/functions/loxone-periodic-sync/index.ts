@@ -114,14 +114,14 @@ serve(async (req) => {
 
       console.log(`Syncing integration: ${integrationId}`);
 
-      // Variante B: Anker für Intervall-Drosselung = START des Syncs (nicht ENDE).
-      // Verhindert Drift: Sync-Dauer (10–30 s) wird sonst auf das Poll-Intervall addiert
-      // und führt zu ~6-min-Takt statt sauberen 5 min.
-      const syncStartIso = new Date().toISOString();
-      await supabase
-        .from("location_integrations")
-        .update({ last_sync_at: syncStartIso })
-        .eq("id", integrationId);
+      // IO-Optimierung: Wir nutzen ausschließlich die throttled RPC
+      // `touch_location_integration_sync` (Default 60s Throttle, schreibt sofort
+      // bei Statuswechsel). Die früheren direkten UPDATEs (start + reset) sind
+      // entfernt — Quelle der vorherigen ~2,37 Mio. Updates auf 11 Zeilen.
+      await supabase.rpc("touch_location_integration_sync", {
+        _id: integrationId,
+        _status: "syncing",
+      });
 
       try {
         const response = await fetch(
@@ -144,11 +144,9 @@ serve(async (req) => {
           console.error(`[loxone-periodic-sync] HTTP ${response.status} for integration ${integrationId}: ${data?.error || response.statusText}`);
         }
 
-        // Variante B: Anker auf START zurücksetzen (loxone-api hat ihn am ENDE überschrieben).
-        await supabase
-          .from("location_integrations")
-          .update({ last_sync_at: syncStartIso })
-          .eq("id", integrationId);
+        // (kein zweites Direkt-Update mehr — loxone-api ruft am Ende die
+        // throttled RPC mit Status "success" auf, das genügt.)
+
 
 
         if (data.success) {
@@ -278,14 +276,18 @@ serve(async (req) => {
               const controlType = sensor.controlType || sensor.type || "";
 
               // Check if an unresolved error already exists for this sensor
-              // Check if an unresolved OR ignored error already exists for this sensor
+              // Check if an unresolved OR ignored error already exists for this sensor.
+              // IO-Optimierung: Match jetzt zusätzlich auf error_type, damit Duplikate
+              // verschiedener Fehlerarten pro Sensor sicher vermieden werden.
               const { data: existing } = await supabase
                 .from("integration_errors")
                 .select("id")
                 .eq("location_integration_id", integrationId)
+                .eq("error_type", "data")
                 .eq("sensor_name", sensorName)
                 .or("is_resolved.eq.false,is_ignored.eq.true")
                 .maybeSingle();
+
 
               if (!existing) {
                 const { data: errRow } = await supabase.from("integration_errors").insert({

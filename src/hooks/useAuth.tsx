@@ -98,7 +98,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     if (isDemo) return;
     clearRecovery();
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("[useAuth] signOut error", e);
+    }
+    // Hard-Navigation: stellt sicher, dass alle Provider/React-Query-Caches
+    // (insb. user-roles, tenant) komplett zurückgesetzt werden und die
+    // Sidebar nicht kurzzeitig "Benutzer" statt "Administrator" zeigt.
+    window.location.href = "/login";
   };
 
   return (
