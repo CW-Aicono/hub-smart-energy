@@ -5,6 +5,7 @@ import { useSATranslation } from "@/hooks/useSATranslation";
 import { useInfraMetrics } from "@/hooks/useInfraMetrics";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import GatewayWorkerStatusCard from "@/components/super-admin/GatewayWorkerStatusCard";
+import LoxoneMiniserverMonitorCard from "@/components/super-admin/LoxoneMiniserverMonitorCard";
 import HetznerNodesCard from "@/components/super-admin/HetznerNodesCard";
 import LoxonePollingOverviewCard from "@/components/super-admin/LoxonePollingOverviewCard";
 import AlertRulesCard from "@/components/super-admin/AlertRulesCard";
