@@ -1117,15 +1117,46 @@ serve(async (req) => {
           }
 
           if (monthUpserts.length > 0) {
-            const { error: upsertError } = await supabase
+            // IO-Optimierung: vor dem Upsert vorhandene Zeilen lesen und nur
+            // schreiben, wenn sich total_value oder source tatsächlich geändert
+            // hat. Quelle der vorherigen ~9,77 Mio. UPDATES auf 5.676 Zeilen.
+            const meterIds = Array.from(new Set(monthUpserts.map((u: any) => u.meter_id)));
+            const periodStarts = Array.from(new Set(monthUpserts.map((u: any) => u.period_start)));
+            const { data: existingRows } = await supabase
               .from("meter_period_totals")
-              .upsert(monthUpserts, { onConflict: "meter_id,period_type,period_start" });
-            if (upsertError) {
-              console.error("Error upserting period totals:", upsertError);
+              .select("meter_id, period_type, period_start, total_value, source")
+              .in("meter_id", meterIds)
+              .in("period_start", periodStarts);
+
+            const existingMap = new Map<string, { total_value: number; source: string | null }>();
+            for (const r of (existingRows || [])) {
+              const key = `${r.meter_id}|${r.period_type}|${r.period_start}`;
+              existingMap.set(key, { total_value: Number(r.total_value), source: r.source });
+            }
+
+            const toUpsert = monthUpserts.filter((u: any) => {
+              const key = `${u.meter_id}|${u.period_type}|${u.period_start}`;
+              const existing = existingMap.get(key);
+              if (!existing) return true;
+              const valChanged = Number(existing.total_value) !== Number(u.total_value);
+              const srcChanged = (existing.source ?? null) !== (u.source ?? null);
+              return valChanged || srcChanged;
+            });
+
+            if (toUpsert.length > 0) {
+              const { error: upsertError } = await supabase
+                .from("meter_period_totals")
+                .upsert(toUpsert, { onConflict: "meter_id,period_type,period_start" });
+              if (upsertError) {
+                console.error("Error upserting period totals:", upsertError);
+              } else {
+                console.log(`Upserted ${toUpsert.length}/${monthUpserts.length} period totals for ${periodStart} (skipped ${monthUpserts.length - toUpsert.length} unchanged)`);
+              }
             } else {
-              console.log(`Upserted ${monthUpserts.length} monthly period totals for ${periodStart}`);
+              console.log(`Skipped all ${monthUpserts.length} period totals for ${periodStart} (no value changes)`);
             }
           }
+
 
           if (powerInserts.length > 0) {
             // WORKER_ACTIVE feature flag: when the Hetzner gateway-worker is the

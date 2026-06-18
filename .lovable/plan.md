@@ -1,97 +1,50 @@
-## Ziel
+# Disk-IO Tiefenfix (Loxone-Sync)
 
-Wir ersetzen die bisherige fehleranfällige Tageswert-Ermittlung durch ein klares Quellenmodell:
+Ziel: Die drei identifizierten Hauptverursacher des Disk-IO-Verbrauchs eliminieren, ohne Funktionalität zu verändern. Die 56 nicht zugeordneten Loxone-Geräte werden **nicht** angefasst — sie schreiben ohnehin keine Power-Daten in die DB.
 
-1. **Für abgeschlossene Tage** wird der echte Loxone-Tageszähler verwendet.
-2. **Für heute** wird der laufende Loxone-Tageszähler verwendet, nicht die 5-Minuten-Schätzung.
-3. **5-Minuten-Leistungswerte** bleiben nur für den Tagesverlauf in kW, nicht als Wahrheit für Tages-kWh.
-4. Jede Anzeige zeigt eindeutig, ob der Wert aus Loxone, Live-Loxone oder einer Fallback-Schätzung kommt.
+## Was geändert wird
 
-## Warum der bisherige Ansatz nicht reicht
+### 1. `location_integrations` Status-Storm stoppen
+**Datei:** `supabase/functions/loxone-periodic-sync/index.ts`
 
-Die aktuellen Daten zeigen tatsächlich weiterhin falsche Zuordnungen:
+- Alle direkten `UPDATE location_integrations SET last_sync_at = ...` entfernen.
+- Stattdessen ausschließlich die bestehende RPC `touch_location_integration_sync` verwenden (die bereits Throttling/Status-Logik enthält).
+- Erwartung: 2,37 Mio. Updates auf 11 Zeilen → drastische Reduktion.
 
-- `15.06.2026` und `16.06.2026` sind in der Datenbank weiterhin identisch.
-- `17.06.2026` kommt aktuell als Fallback aus 5-Minuten-Leistungsdaten und liegt deshalb bei ca. `34,739 kWh`, während Loxone laut CSV bereits `1.150,25 kWh` meldet.
-- Der Sonntag-Peak ist weiterhin ein starker Hinweis, dass die gespeicherten Tageswerte mindestens teilweise auf den falschen Kalendertag geschrieben wurden.
+### 2. `meter_period_totals` nur bei tatsächlicher Wertänderung schreiben
+**Datei:** `supabase/functions/loxone-api/index.ts`
 
-Wichtig: Ich werde nicht weiter an einzelnen Symptomen löschen oder verschieben, bevor die neue Logik sauber definiert und überprüfbar ist.
+- Vor jedem Upsert in `meter_period_totals` den aktuellen Wert für (`meter_id`, `period_type`, `period_start`) lesen.
+- Upsert nur ausführen, wenn `total_value` sich geändert hat oder `source`/`type` abweichen.
+- Erwartung: 9,77 Mio. Updates auf 5.676 Zeilen → drastische Reduktion (Werte ändern sich pro Tag/Woche meist gar nicht mehr nach Tagesende).
 
-## Umsetzungsschritte nach Freigabe
+### 3. `integration_errors` Dedup reparieren
+**Datei:** `supabase/functions/loxone-periodic-sync/index.ts`
 
-### 1. Live-Writer umbauen: abgeschlossene Tageswerte aus Loxone direkt speichern
+- Bestehende Lookup-Logik bei Fehler-Erzeugung erweitern: Match auf `location_integration_id + error_type + sensor_name + ignored=false` statt nur `sensor_name`.
+- `sensor_name IS NULL` korrekt mit `.is("sensor_name", null)` behandeln (statt `.eq(..., null)`, was nie matcht und Duplikate erzeugt).
+- Erwartung: Keine 95–97 neuen Duplikat-Fehler/Stunde mehr für identische Probleme.
 
-In `loxone-api/index.ts` wird der Writer geändert:
+## Was bewusst NICHT geändert wird
 
-- `totalDayLast` bleibt die Quelle für den letzten abgeschlossenen Tag.
-- Die Datumszuordnung wird nicht mehr anhand unklarer Server-Zeit-Tricks repariert, sondern strikt nach Loxone-/Berlin-Kalendertag bestimmt.
-- Zusätzlich wird der aktuell laufende Tageswert `totalDay` erfasst und als eigener Live-Wert behandelt.
+- Loxone `/all`-Abfrage am Miniserver bleibt (Cron holt alle Controls). Begründung: betrifft nur HTTP-Last, nicht Disk-IO. Optimierung wäre separater Punkt — laut Nutzer aktuell nicht nötig.
+- Keine spekulativen Index-Anlagen. Indizes nur, falls nach dem Fix `EXPLAIN ANALYZE` auf konkreten Slow Queries einen Bedarf zeigt.
+- Keine Schema-Änderungen.
 
-### 2. Heute-Wert im Dashboard korrigieren
+## Validierung nach dem Fix
 
-Die Datenbankfunktion `get_meter_daily_totals_split_with_fallback` wird angepasst:
+Direkt nach Deploy und dann nach 1h / 8h jeweils prüfen:
 
-- Für historische Tage: bevorzugt archivierte Loxone-Tageswerte.
-- Für den heutigen Tag: bevorzugt gespeicherte beziehungsweise live verfügbare Loxone-`totalDay`-Werte.
-- Nur wenn Loxone keinen Tageswert liefert: Fallback aus 5-Minuten-Leistungswerten.
+1. `supabase--db_health` → Disk-IO-Budget, WAL, rolled-back transactions
+2. `supabase--slow_queries` → kein `meter_period_totals`/`location_integrations` mehr in Top 10
+3. SQL-Check: `n_tup_upd` auf `location_integrations` und `meter_period_totals` (Delta zur Baseline = nahe 0 bei unveränderten Werten)
+4. SQL-Check: `COUNT(*)` neuer `integration_errors` letzte Stunde — sollte deutlich unter 95 liegen
+5. Funktional: Eine Liegenschaft mit Loxone-Gateway öffnen, Live-Werte und Tages-Chart kurz prüfen — keine Regression sichtbar.
 
-Damit soll heute nicht mehr `31,46 kWh` / `34,739 kWh` angezeigt werden, sondern der echte Loxone-Live-Tagesstand im Bereich der CSV-Angabe.
+## Rollback-Strategie
 
-### 3. Neue Prüfansicht / Diagnose-RPC für Tageswerte
+Alle Änderungen sind reine Edge-Function-Änderungen ohne Schema-Migration. Bei Problemen: vorherige Versionen der beiden Edge Functions wiederherstellen, sofort wirksam.
 
-Ich erstelle eine kleine Diagnosefunktion, die pro Tag nebeneinander ausgibt:
+## Aufwand
 
-- gespeicherter Archivwert,
-- heutiger Live-Loxone-Wert,
-- 5-Minuten-Fallback,
-- Quelle,
-- Abweichung zur von dir gelieferten CSV-Stichprobe für Juni 2026,
-- Verdacht: `ok`, `one_day_offset`, `duplicate`, `fallback_only`, `missing`.
-
-Das ist wichtig, damit wir nicht mehr raten müssen.
-
-### 4. Datenreparatur nur nach Diagnose-Ergebnis
-
-Erst nach der Diagnose werden Daten geändert:
-
-- Keine pauschale Verschiebung aller Tage ohne Beleg.
-- Keine Löschung unbekannter Abweichungen.
-- Repariert werden nur Datensätze, die anhand der CSV-Stichprobe und/oder Loxone-Live-Werte eindeutig zuordenbar sind.
-- Vorher wird eine Backup-Tabelle angelegt.
-
-### 5. Dashboard-Anzeige transparenter machen
-
-Im Diagramm wird unterschieden:
-
-- **Loxone geprüft**: normaler Balken.
-- **Heute live aus Loxone**: normaler Balken/Label „laufend“.
-- **Fallback aus 5-Minuten-Leistung**: gestreift mit Warnhinweis.
-- **Fehlend/unklar**: klar markiert, nicht stillschweigend als echter Tageswert dargestellt.
-
-## Technische Details
-
-Betroffene Stellen:
-
-- `supabase/functions/loxone-api/index.ts`
-- Datenbankfunktion `get_meter_daily_totals_split_with_fallback`
-- Datenbankfunktion `refresh_meter_daily_totals`
-- Tabelle `meter_period_totals`
-- Tabelle `meter_daily_totals_mv`
-- `src/components/dashboard/EnergyChart.tsx`
-
-Geplante Sicherheitsmaßnahmen:
-
-- Vor jeder Datenänderung Backup der betroffenen Zeilen.
-- Datenänderungen nur für `source IN ('loxone', 'loxone_backfill')` und nur für automatische Hauptzähler.
-- Keine Änderung an manuellen Zählern.
-- Keine Änderung an unbekannten/irrelevanten Loxone-Werten wie CO₂, Temperatur, Witterung, Balkonkraftwerk usw.
-
-## Erwartetes Ergebnis
-
-Nach Umsetzung und Reparaturbericht sollen wir sehen:
-
-- `15.06.2026` ungefähr `1.421,61 kWh`
-- `16.06.2026` ungefähr `1.353,51 kWh`
-- `17.06.2026` heute laufend ungefähr `1.150,25 kWh` statt ca. `31–35 kWh`
-- Sonntage nicht mehr um einen Tag verschoben
-- keine stillen Fallback-Werte ohne Kennzeichnung
+3 Edge-Function-Änderungen, kein Migration-Approval nötig. Validierung nach Deploy dauert wegen Wartezeiten (1h, 8h) verteilt über den Tag.
