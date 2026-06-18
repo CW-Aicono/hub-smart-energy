@@ -62,7 +62,17 @@ interface SensorsDialogProps {
   locationId?: string;
 }
 
-const METER_CONTROL_TYPES = new Set(["Meter", "EFM", "EnergyManager2", "Fronius", "access_point", "switch", "gateway"]);
+const ASSIGNABLE_CONTROL_TYPES = new Set([
+  // Zähler
+  "Meter", "EFM", "EnergyManager2", "Fronius",
+  // Sensoren
+  "InfoOnlyAnalog", "InfoOnlyDigital", "TextState",
+  // Aktoren
+  "Switch", "Pushbutton", "TimedSwitch", "Dimmer",
+  "LightControllerV2", "Jalousie",
+  // Gateway-spezifisch
+  "access_point", "switch", "gateway",
+]);
 
 function getSensorIcon(sensor: Sensor) {
   const cls = "h-4 w-4";
@@ -127,7 +137,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
 
   // For non-Loxone gateways, show all sensors; for Loxone filter to meter types
   const meterSensors = integrationType === "loxone_miniserver"
-    ? sensors.filter((s) => METER_CONTROL_TYPES.has(s.controlType || ""))
+    ? sensors.filter((s) => ASSIGNABLE_CONTROL_TYPES.has(s.controlType || ""))
     : sensors;
 
   // Lookup: location_id -> name
