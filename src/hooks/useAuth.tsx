@@ -106,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Hard-Navigation: stellt sicher, dass alle Provider/React-Query-Caches
     // (insb. user-roles, tenant) komplett zurückgesetzt werden und die
     // Sidebar nicht kurzzeitig "Benutzer" statt "Administrator" zeigt.
-    window.location.href = "/login";
+    window.location.href = "/auth";
   };
 
   return (
