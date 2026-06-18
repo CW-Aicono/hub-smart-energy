@@ -58,19 +58,40 @@ async function fetchData(): Promise<MiniserverRow[]> {
   const integrationIds = Array.from(new Set(rows.map((r) => r.location_integration_id)));
   if (integrationIds.length === 0) return [];
 
-  // 2. Resolve location + tenant names
+  // 2. Resolve location_integration -> location_id
   const { data: integrations, error: iErr } = await supabase
     .from("location_integrations")
-    .select("id, locations!inner(name, tenants!inner(name))")
+    .select("id, location_id")
     .in("id", integrationIds);
   if (iErr) throw iErr;
 
+  const locationIds = Array.from(new Set((integrations ?? []).map((i: any) => i.location_id).filter(Boolean)));
+
+  // 3. Resolve locations -> name + tenant_id
+  const { data: locations, error: lErr } = locationIds.length
+    ? await supabase.from("locations").select("id, name, tenant_id").in("id", locationIds)
+    : { data: [] as any[], error: null };
+  if (lErr) throw lErr;
+
+  const tenantIds = Array.from(new Set((locations ?? []).map((l: any) => l.tenant_id).filter(Boolean)));
+
+  // 4. Resolve tenants -> name
+  const { data: tenants, error: tErr } = tenantIds.length
+    ? await supabase.from("tenants").select("id, name").in("id", tenantIds)
+    : { data: [] as any[], error: null };
+  if (tErr) throw tErr;
+
+  const locById = new Map((locations ?? []).map((l: any) => [l.id, l]));
+  const tenantById = new Map((tenants ?? []).map((t: any) => [t.id, t]));
+
   const infoMap = new Map<string, IntegrationInfo>();
   (integrations ?? []).forEach((it: any) => {
+    const loc = locById.get(it.location_id);
+    const tenant = loc ? tenantById.get(loc.tenant_id) : null;
     infoMap.set(it.id, {
       id: it.id,
-      tenant_name: it.locations?.tenants?.name ?? "—",
-      location_name: it.locations?.name ?? "—",
+      tenant_name: tenant?.name ?? "—",
+      location_name: loc?.name ?? "—",
     });
   });
 
