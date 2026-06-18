@@ -35,8 +35,8 @@ export function LoxoneWsStatus({ locationIntegrationId, enabled }: LoxoneWsStatu
       return data as WsSession | null;
     },
     enabled,
-    refetchInterval: 10_000,
-    staleTime: 5_000,
+    refetchInterval: 20_000,
+    staleTime: 10_000,
   });
 
   if (!enabled) return null;
