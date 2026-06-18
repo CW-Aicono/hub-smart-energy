@@ -10,9 +10,10 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
-import { Loader2, Settings } from "lucide-react";
+import { Loader2, Settings, Wifi } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
 import { AiconoGatewayCredentials } from "./gateway/AiconoGatewayCredentials";
@@ -33,6 +34,7 @@ export function EditIntegrationDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [baseConfig, setBaseConfig] = useState<Record<string, any>>({});
   const [pollIntervalMin, setPollIntervalMin] = useState<number>(5);
+  const [enablingWs, setEnablingWs] = useState(false);
   const { toast } = useToast();
   const { t } = useTranslation();
 
@@ -103,6 +105,27 @@ export function EditIntegrationDialog({
         description: t("editIntegration.updatedDesc" as any),
       });
       onOpenChange(false);
+    }
+  };
+
+  const handleEnableWs = async () => {
+    if (!locationIntegration) return;
+    setEnablingWs(true);
+    const { error } = await onUpdate(locationIntegration.id, {
+      loxone_remote_connect_ws_enabled: true,
+    });
+    setEnablingWs(false);
+    if (error) {
+      toast({
+        title: t("common.error" as any),
+        description: "Fehler beim Aktivieren von Remote Connect WebSocket.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Remote Connect WebSocket aktiviert",
+        description: "Die BETA-Funktion ist jetzt für diesen Standort freigeschaltet.",
+      });
     }
   };
 
@@ -177,6 +200,35 @@ export function EditIntegrationDialog({
                   </div>
                 )}
 
+                {isLoxone && (
+                  <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Wifi className="h-4 w-4 text-amber-500" />
+                        <span className="font-medium">Remote Connect WebSocket</span>
+                        <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-600">BETA</Badge>
+                      </div>
+                      {locationIntegration?.loxone_remote_connect_ws_enabled ? (
+                        <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-500/30 text-xs">Aktiviert</Badge>
+                      ) : (
+                        <Button type="button" size="sm" onClick={handleEnableWs} disabled={enablingWs}>
+                          {enablingWs ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Aktiviere…
+                            </>
+                          ) : (
+                            "Aktivieren"
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Ermöglicht Echtzeit-Daten über Loxone Remote Connect WebSocket.
+                      Nur für Test-Standorte vorgesehen. Bitte nicht auf Produktiv-Systemen aktivieren.
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex gap-2 justify-end pt-4">
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
