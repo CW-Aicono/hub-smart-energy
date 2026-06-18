@@ -16,6 +16,7 @@ import { SensorsDialog } from "./SensorsDialog";
 import { DeviceCard } from "./gateway/DeviceCard";
 import { useUserRole } from "@/hooks/useUserRole";
 import { MiniserverStatus } from "./MiniserverStatus";
+import { LoxoneWsStatus } from "./LoxoneWsStatus";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
 import { getGatewayDefinition, getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { invokeWithRetry } from "@/lib/invokeWithRetry";
@@ -175,6 +176,13 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
                   locationIntegrationId={locationIntegration.id}
                   integrationType={integration?.type}
                   lastSyncAt={locationIntegration.last_sync_at}
+                />
+                <LoxoneWsStatus
+                  locationIntegrationId={locationIntegration.id}
+                  enabled={
+                    (integration?.type === "loxone" || integration?.type === "loxone_miniserver") &&
+                    !!locationIntegration.loxone_remote_connect_ws_enabled
+                  }
                 />
                 {integration?.description && <p className="text-xs text-muted-foreground">{integration.description}</p>}
                 {integration?.type === "loxone_miniserver" && isConfigured && (

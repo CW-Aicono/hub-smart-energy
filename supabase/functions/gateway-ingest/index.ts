@@ -1211,6 +1211,37 @@ async function handleWsSessionEnd(req: Request): Promise<Response> {
   return json({ success: true });
 }
 
+/**
+ * POST ?action=ws-session-heartbeat
+ * Body: { session_id, events_received?, reconnect_count? }
+ * Hält die aktive WS-Session "live" (updated_at) und aktualisiert den Event-Zähler.
+ */
+async function handleWsSessionHeartbeat(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: { session_id?: string; events_received?: number; reconnect_count?: number };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+  if (!body.session_id) return json({ error: "session_id required" }, 400);
+
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from("loxone_ws_session_log")
+    .update({
+      updated_at: new Date().toISOString(),
+      events_received: body.events_received ?? 0,
+      reconnect_count: body.reconnect_count ?? 0,
+    })
+    .eq("id", body.session_id)
+    .is("ended_at", null);
+
+  if (error) {
+    console.error("[gateway-ingest] ws-session-heartbeat error:", error.message);
+    return json({ error: "Database error" }, 500);
+  }
+  return json({ success: true });
+}
+
 /* ── Gateway backup handler ──────────────────────────────────────────────────── */
 
 async function handleGatewayBackup(req: Request): Promise<Response> {
@@ -1700,6 +1731,7 @@ Deno.serve(async (req) => {
   if (req.method === "POST") {
     if (action === "ws-session-start") return handleWsSessionStart(req);
     if (action === "ws-session-end") return handleWsSessionEnd(req);
+    if (action === "ws-session-heartbeat") return handleWsSessionHeartbeat(req);
     if (action === "compact-day") return handleCompactDay(req);
     if (action === "schneider-push") return handleSchneiderPush(req);
     if (action === "heartbeat") return handleHeartbeat(req);
