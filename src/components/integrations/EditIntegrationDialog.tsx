@@ -198,6 +198,8 @@ export function EditIntegrationDialog({
                       Wie oft AICONO neue Sensorwerte vom Miniserver abruft. Erlaubt: 1–60 Minuten. Niedriger = aktuellere Werte (höhere Schreiblast), höher = weniger Datenbank-Last. Empfehlung: 15 Minuten.
                     </p>
                   </div>
+                )}
+
                 {isLoxone && (
                   <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
                     <div className="flex items-center justify-between">
