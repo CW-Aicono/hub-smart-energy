@@ -198,8 +198,35 @@ export function EditIntegrationDialog({
                       Wie oft AICONO neue Sensorwerte vom Miniserver abruft. Erlaubt: 1–60 Minuten. Niedriger = aktuellere Werte (höhere Schreiblast), höher = weniger Datenbank-Last. Empfehlung: 15 Minuten.
                     </p>
                   </div>
+                {isLoxone && (
+                  <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Wifi className="h-4 w-4 text-amber-500" />
+                        <span className="font-medium">Remote Connect WebSocket</span>
+                        <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-600">BETA</Badge>
+                      </div>
+                      {locationIntegration?.loxone_remote_connect_ws_enabled ? (
+                        <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-500/30 text-xs">Aktiviert</Badge>
+                      ) : (
+                        <Button type="button" size="sm" onClick={handleEnableWs} disabled={enablingWs}>
+                          {enablingWs ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Aktiviere…
+                            </>
+                          ) : (
+                            "Aktivieren"
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Ermöglicht Echtzeit-Daten über Loxone Remote Connect WebSocket.
+                      Nur für Test-Standorte vorgesehen. Bitte nicht auf Produktiv-Systemen aktivieren.
+                    </p>
+                  </div>
                 )}
-
 
                 <div className="flex gap-2 justify-end pt-4">
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
