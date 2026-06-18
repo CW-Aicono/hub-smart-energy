@@ -1,96 +1,687 @@
-# Loxone WS Worker – Anleitung (Feldtest Remote Connect)
+# Loxone WebSocket Worker – Schritt-für-Schritt für Anfänger
 
-## Was macht dieser Worker?
-
-Dieser Mini-Dienst läuft auf eurem Hetzner-Server (ein Docker-Container) und baut
-**eine dauerhafte WebSocket-Verbindung** zu jedem Loxone-Miniserver auf, der im
-Backend für den Feldtest freigeschaltet wurde (Feature-Flag
-`loxone_remote_connect_ws_enabled = TRUE`).
-
-Verbunden wird über **Loxone Remote Connect** (`dns.loxonecloud.com/<Seriennummer>`)
-— es ist also **kein** AICONO-EMS-Gateway vor Ort nötig.
-
-**Wichtig:** Der Worker ersetzt nichts. Das stündliche Edge-Function-Polling läuft
-parallel weiter als Sicherheitsnetz. Wenn der Test erfolgreich ist, können wir es
-in Phase 2 reduzieren.
+> **Ziel:** Ein kleines Programm auf Ihrem Hetzner-Server installieren, das automatisch eine dauerhafte Verbindung zu Ihrem Loxone-Miniserver aufbaut.  
+> **Zeitaufwand:** ca. 20–30 Minuten (meiste Zeit wartet man, dass der Computer fertig wird).  
+> **Vorkenntnisse:** Keine. Sie müssen nur genau das tun, was hier steht.
 
 ---
 
-## Voraussetzungen
+## Was macht das überhaupt? (ganz einfach erklärt)
 
-- Hetzner-Server mit Docker (gleicher Host, auf dem auch der alte
-  `gateway-worker` lief — er ist hier ersetzt)
-- Den Wert von `GATEWAY_API_KEY` (gleicher Bearer-Token wie bei `gateway-ingest`)
-- Mindestens ein Standort im Backend, bei dem die Loxone-Integration
-  `loxone_remote_connect_ws_enabled = TRUE` gesetzt hat
-- Bei jedem Test-Standort müssen in der Integration **Seriennummer, Benutzername
-  und Passwort** des Miniservers korrekt hinterlegt sein
+Ihr Loxone-Miniserver hat dauernd neue Werte (Temperatur, Stromverbrauch, Schalter-Status). Normalerweise fragt AICONO diese Werte nur alle 15 Minuten ab. Das ist manchmal zu langsam.
+
+Dieses Programm (der „Worker“) sitzt auf Ihrem Hetzner-Server und hält eine **dauerhafte Verbindung** zu Ihrem Miniserver offen. Sobald sich ein Wert ändert, kommt er sofort bei AICONO an – in Echtzeit.
+
+> **Wichtig:** Der Worker ersetzt nichts. Das alte Abfragen läuft weiter als Sicherheitsnetz. Er ist nur ein **Zusatz** für den Feldtest.
 
 ---
 
-## Schritt-für-Schritt: Erstinstallation
+## Was brauchen Sie vorher?
 
-### 1. Dateien auf den Hetzner-Server kopieren
+| Was | Woher | Wofür |
+|-----|-------|-------|
+| Zugang zu Ihrem Hetzner-Server | Bekommen Sie von Ihrem IT-Administrator oder Hetzner-Login | Dort wird das Programm installiert |
+| Docker | Ist meist schon auf dem Hetzner-Server installiert | Damit läuft das Programm in einer geschlossenen Box |
+| Den `GATEWAY_API_KEY` | AICONO-Backend → Einstellungen → Integrationen → Gateway-Geräte | Damit sich das Programm bei AICONO anmelden kann |
+| Mindestens ein Loxone-Standort mit Seriennummer, Benutzername und Passwort | In Ihrer Loxone-Konfiguration hinterlegt | Damit verbindet sich das Programm mit dem Miniserver |
 
-Per SCP oder Git-Pull alle vier Dateien aus `docs/loxone-ws-worker/` auf den
-Server kopieren, z. B. nach `/opt/loxone-ws-worker/`:
+> **Sie brauchen keine Programmierkenntnisse.** Sie kopieren nur Textblöcke und fügen sie ein.
+
+---
+
+## Wichtige Warnung
+
+Diese Funktion ist ein **Feldtest (BETA)**. Bitte aktivieren Sie sie nur an 2–3 Test-Standorten, nicht an allen Kunden-Standorten. Wenn etwas schiefgeht, können Sie sie jederzeit wieder ausschalten.
+
+---
+
+## Schritt 0: Auf Ihren Hetzner-Server zugreifen
+
+Sie müssen sich auf Ihren Server „einklinken“, als würden Sie eine Fernwartung starten.
+
+### Windows:
+
+1. Drücken Sie die **Windows-Taste**.
+2. Tippen Sie `cmd` und drücken Sie **Enter**.
+3. Ein schwarzes Fenster öffnet sich (das ist die Eingabeaufforderung).
+
+### Mac:
+
+1. Drücken Sie **Cmd + Leertaste**.
+2. Tippen Sie `Terminal` und drücken Sie **Enter**.
+
+### Den Verbindungsbefehl eingeben:
+
+Tippen Sie folgenden Befehl ein und drücken Sie **Enter**. Ersetzen Sie `root` und `123.456.789.012` durch den Benutzernamen und die IP-Adresse, die Sie von Ihrem Administrator bekommen haben:
+
+```bash
+ssh root@123.456.789.012
+```
+
+> **Was passiert hier?** `ssh` ist wie ein sicheres Telefon zu Ihrem Server. Sie sehen danach ein Passwort-Feld oder eine Frage, ob Sie dem Server vertrauen. Tippen Sie `yes` (falls gefragt) und dann Ihr Passwort.  
+> **Tipp:** Wenn Sie das Passwort eingeben, erscheinen keine Sternchen – das ist normal. Einfach tippen und Enter drücken.
+
+Wenn alles geklappt hat, sehen Sie jetzt etwas wie:
 
 ```
-/opt/loxone-ws-worker/
-├── Dockerfile
-├── index.ts
-├── package.json
-└── tsconfig.json
+root@mein-server:~#
 ```
 
-### 2. Docker-Image bauen
+Das bedeutet: Sie sind drin! Ab jetzt sind alle Befehle für Ihren Server.
 
-Im Verzeichnis `/opt/loxone-ws-worker/`:
+---
+
+## Schritt 1: Einen Ordner erstellen
+
+Das Programm braucht einen eigenen Ordner auf dem Server. Tippen Sie exakt diesen Befehl ein und drücken Sie **Enter**:
+
+```bash
+mkdir -p /opt/loxone-ws-worker
+```
+
+> **Was passiert hier?** `mkdir` heißt „make directory“ – einen Ordner erstellen. `/opt/loxone-ws-worker` ist der Pfad, also die Adresse des Ordners.
+
+Wechseln Sie in den Ordner:
+
+```bash
+cd /opt/loxone-ws-worker
+```
+
+> **Was passiert hier?** `cd` heißt „change directory“ – in den Ordner springen. Die Zeile `root@mein-server:/opt/loxone-ws-worker#` zeigt Ihnen danach, dass Sie im richtigen Ordner sind.
+
+---
+
+## Schritt 2: Die erste Datei anlegen (package.json)
+
+Diese Datei sagt dem Programm, welche Hilfs-Bibliotheken es braucht. Sie müssen nicht verstehen, was drinsteht – einfach kopieren und einfügen.
+
+Tippen Sie folgenden Befehl ein. **Achtung:** Kopieren Sie den kompletten Block von `cat` bis `EOF`, fügen Sie ihn ein und drücken Sie **Enter**.
+
+```bash
+cat << 'EOF' > package.json
+{
+  "name": "loxone-ws-worker",
+  "version": "0.1.0",
+  "description": "Feldtest-Worker: persistente Loxone-WebSocket über Remote Connect",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node index.ts"
+  },
+  "dependencies": {
+    "lxcommunicator": "^1.1.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.13",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}
+EOF
+```
+
+> **Was passiert hier?** `cat << 'EOF'` sagt dem Computer: „Schreibe alles, was jetzt kommt, in eine Datei, bis ich `EOF` sage.“ Die Datei heißt `package.json`.
+
+---
+
+## Schritt 3: Die zweite Datei anlegen (tsconfig.json)
+
+Diese Datei sagt dem Computer, wie er das Programm übersetzen soll. Wieder: einfach kopieren, einfügen, Enter.
+
+```bash
+cat << 'EOF' > tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "include": ["index.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+EOF
+```
+
+---
+
+## Schritt 4: Die dritte Datei anlegen (Dockerfile)
+
+Diese Datei baut eine geschlossene Box (einen „Container“), in der das Programm läuft. So kann nichts mit anderen Programmen auf dem Server kollidieren.
+
+```bash
+cat << 'EOF' > Dockerfile
+# Loxone WS Worker – Dockerfile
+FROM node:20-alpine AS builder
+RUN apk add --no-cache python3 make g++
+WORKDIR /app
+COPY package.json ./
+RUN npm install
+COPY tsconfig.json ./
+COPY index.ts ./
+RUN npm run build
+
+FROM node:20-alpine AS runner
+RUN addgroup -g 1001 -S nodejs && adduser -S worker -u 1001
+USER worker
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist/index.js ./index.js
+
+ENV NODE_ENV=production
+ENV LOG_LEVEL=info
+ENV FLUSH_INTERVAL_MS=1000
+ENV RELOAD_INTERVAL_MS=300000
+
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+  CMD node -e "process.exit(0)" || exit 1
+
+CMD ["node", "index.js"]
+EOF
+```
+
+---
+
+## Schritt 5: Die vierte Datei anlegen (index.ts)
+
+Das ist das eigentliche Programm. Es ist etwas länger, aber Sie müssen es trotzdem nur kopieren und einfügen.
+
+> **Tipp:** Klicken Sie in das Terminal-Fenster, drücken Sie **Rechtsklick** (Windows) oder **Cmd + V** (Mac), um den Text einzufügen. Warten Sie, bis alles eingefügt ist, und drücken Sie dann **Enter**.
+
+```bash
+cat << 'EOF' > index.ts
+/**
+ * Loxone Remote-Connect WebSocket Worker (Feldtest)
+ * ==================================================
+ * Hält pro Loxone-Miniserver, der für den Feldtest freigeschaltet ist
+ * (location_integrations.loxone_remote_connect_ws_enabled = TRUE), EINE
+ * persistente WebSocket-Verbindung über Loxone Remote Connect
+ * (dns.loxonecloud.com/<serial>).
+ *
+ * Aufgaben:
+ *   1. Meter-Liste alle 5 Min beim Backend abfragen
+ *      (gateway-ingest?action=list-loxone-ws-meters)
+ *   2. Pro Miniserver einen lxcommunicator-Socket aufbauen
+ *      (übernimmt Auth, AES, JWT, Keepalive)
+ *   3. Werte sekündlich an gateway-ingest pushen
+ *   4. Session-Start/-Ende inkl. Reconnect-Zähler &
+ *      Disconnect-Grund an loxone_ws_session_log loggen
+ *
+ * Was dieser Worker NICHT macht:
+ *   - Kein HTTP-Polling für andere Gateways (läuft via Edge Functions)
+ *   - Kein OCPP-Proxy
+ *   - Kein Schreiben von Befehlen an Loxone
+ *   - Keine Produktiv-Tenants — nur Test-Standorte mit Feature-Flag
+ *
+ * Umgebungsvariablen:
+ *   SUPABASE_URL        z. B. https://ihre-projekt-id.supabase.co
+ *   GATEWAY_API_KEY     Bearer Token (gleicher Wert wie bei gateway-ingest)
+ *   FLUSH_INTERVAL_MS   Wie oft Werte gepusht werden (Standard: 1000)
+ *   RELOAD_INTERVAL_MS  Wie oft die Meter-Liste neu geladen wird (Standard: 300000)
+ *   LOG_LEVEL           "debug" | "info" | "warn" | "error" (Standard: "info")
+ *   WORKER_HOST         Freier Text, taucht im Session-Log auf (Standard: hostname)
+ */
+
+import os from "os";
+
+// ─── Konfiguration ───────────────────────────────────────────────────────────
+
+const SUPABASE_URL = process.env.SUPABASE_URL!;
+const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY!;
+const FLUSH_INTERVAL_MS = parseInt(process.env.FLUSH_INTERVAL_MS || "1000", 10);
+const RELOAD_INTERVAL_MS = parseInt(process.env.RELOAD_INTERVAL_MS || "300000", 10);
+const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
+const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
+
+if (!SUPABASE_URL || !GATEWAY_API_KEY) {
+  console.error("[FATAL] SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein");
+  process.exit(1);
+}
+
+const INGEST_URL = `${SUPABASE_URL}/functions/v1/gateway-ingest`;
+
+// ─── Logging ─────────────────────────────────────────────────────────────────
+
+const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
+const currentLevel = LOG_LEVELS[LOG_LEVEL] ?? 1;
+function log(level: keyof typeof LOG_LEVELS, msg: string, ...args: any[]) {
+  if (LOG_LEVELS[level] >= currentLevel) {
+    const ts = new Date().toISOString();
+    const fn = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
+    fn(`[${ts}] [${level.toUpperCase()}] ${msg}`, ...args);
+  }
+}
+
+// ─── Spike-Filter ────────────────────────────────────────────────────────────
+
+const SPIKE_THRESHOLDS: Record<string, number> = {
+  strom: 10000, gas: 5000, wasser: 1000, wärme: 5000, kälte: 2000, default: 50000,
+};
+function isSpike(v: number, energyType: string): boolean {
+  if (!isFinite(v) || isNaN(v)) return true;
+  return Math.abs(v) > (SPIKE_THRESHOLDS[energyType] ?? SPIKE_THRESHOLDS.default);
+}
+
+// ─── HTTP-Helfer ─────────────────────────────────────────────────────────────
+
+async function ingestGet(action: string): Promise<any> {
+  const r = await fetch(`${INGEST_URL}?action=${action}`, {
+    headers: { Authorization: `Bearer ${GATEWAY_API_KEY}` },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!r.ok) throw new Error(`GET ${action} HTTP ${r.status}`);
+  return r.json();
+}
+
+async function ingestPost(action: string | null, body: any): Promise<any> {
+  const url = action ? `${INGEST_URL}?action=${action}` : INGEST_URL;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${GATEWAY_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!r.ok) throw new Error(`POST ${action ?? "(readings)"} HTTP ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+// ─── Typen ───────────────────────────────────────────────────────────────────
+
+interface WsMeter {
+  id: string;
+  name: string;
+  energy_type: string;
+  sensor_uuid: string;
+  tenant_id: string;
+  location_integration_id: string;
+  location_integration: {
+    id: string;
+    config: { serial_number?: string; username?: string; password?: string };
+  };
+}
+
+interface UuidEntry {
+  meter_id: string;
+  tenant_id: string;
+  energy_type: string;
+  latest_value: number | null;
+}
+
+interface ConnState {
+  serialNumber: string;
+  username: string;
+  password: string;
+  tenantId: string;
+  locationIntegrationId: string;
+  uuidMap: Map<string, UuidEntry>;
+  ws: any;
+  authenticated: boolean;
+  reconnectDelay: number;
+  reconnecting: boolean;
+  sessionId: string | null;
+  eventsReceived: number;
+  reconnectCount: number;
+}
+
+const connections = new Map<string, ConnState>();
+
+// ─── Loxone DNS-Auflösung (Remote Connect) ───────────────────────────────────
+
+const dnsCache = new Map<string, string>();
+async function resolveLoxoneHost(serial: string): Promise<string | null> {
+  if (dnsCache.has(serial)) return dnsCache.get(serial)!;
+  try {
+    const r = await fetch(`https://dns.loxonecloud.com/${serial}`, {
+      method: "GET", redirect: "follow", signal: AbortSignal.timeout(8000),
+    });
+    const finalUrl = r.url;
+    if (finalUrl && finalUrl.toLowerCase().includes(serial.toLowerCase())) {
+      const host = new URL(finalUrl).host;
+      dnsCache.set(serial, host);
+      log("info", `[DNS] ${serial} → ${host}`);
+      return host;
+    }
+  } catch (err) {
+    log("warn", `[DNS] ${serial} fehlgeschlagen: ${(err as Error).message}`);
+  }
+  const fb = `${serial.toLowerCase()}.dns.loxonecloud.com`;
+  dnsCache.set(serial, fb);
+  return fb;
+}
+
+// ─── Session-Log ─────────────────────────────────────────────────────────────
+
+async function sessionStart(state: ConnState): Promise<void> {
+  try {
+    const r = await ingestPost("ws-session-start", {
+      tenant_id: state.tenantId,
+      location_integration_id: state.locationIntegrationId,
+      worker_host: WORKER_HOST,
+    });
+    state.sessionId = r.session_id || null;
+    state.eventsReceived = 0;
+    state.reconnectCount = 0;
+  } catch (err) {
+    log("warn", `[Session] start fehlgeschlagen: ${(err as Error).message}`);
+  }
+}
+
+async function sessionEnd(state: ConnState, reason: string): Promise<void> {
+  if (!state.sessionId) return;
+  try {
+    await ingestPost("ws-session-end", {
+      session_id: state.sessionId,
+      disconnect_reason: reason,
+      events_received: state.eventsReceived,
+      reconnect_count: state.reconnectCount,
+    });
+  } catch (err) {
+    log("warn", `[Session] end fehlgeschlagen: ${(err as Error).message}`);
+  }
+  state.sessionId = null;
+}
+
+// ─── WebSocket-Verbindung via lxcommunicator ─────────────────────────────────
+
+async function connect(state: ConnState): Promise<void> {
+  if (state.ws) { try { state.ws.close(); } catch { } state.ws = null; }
+  state.authenticated = false;
+
+  const host = await resolveLoxoneHost(state.serialNumber);
+  if (!host) { scheduleReconnect(state, "dns-failed"); return; }
+
+  const LxCommunicator = require("lxcommunicator");
+  const config = new LxCommunicator.WebSocketConfig(
+    LxCommunicator.WebSocketConfig.protocol.WSS,
+    state.serialNumber,
+    "LoxoneWsWorker",
+    LxCommunicator.WebSocketConfig.permission.APP,
+    false,
+  );
+
+  config.delegate = {
+    socketOnEventReceived: (_s: any, events: any[]) => {
+      for (const ev of events) {
+        const uuid = (ev.uuid || "").toLowerCase();
+        const entry = state.uuidMap.get(uuid);
+        if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type)) {
+          entry.latest_value = ev.value;
+          state.eventsReceived++;
+        }
+      }
+    },
+    socketOnConnectionClosed: (_s: any, code: number) => {
+      log("warn", `[WS] ${state.serialNumber} geschlossen (code=${code})`);
+      state.authenticated = false;
+      state.ws = null;
+      sessionEnd(state, `close-${code}`);
+      scheduleReconnect(state, `close-${code}`);
+    },
+    socketOnTokenRefreshFailed: () => log("warn", `[WS] Token-Refresh fehlgeschlagen: ${state.serialNumber}`),
+  };
+
+  const socket = new LxCommunicator.WebSocket(config);
+  state.ws = socket;
+
+  log("info", `[WS] verbinde ${state.serialNumber} → ${host}`);
+  try {
+    await socket.open(host, state.username, state.password);
+    await socket.send("jdev/sps/enablebinstatusupdate");
+    state.authenticated = true;
+    state.reconnectDelay = 1000;
+    await sessionStart(state);
+    log("info", `[WS] authentifiziert ${state.serialNumber} (${state.uuidMap.size} UUIDs)`);
+  } catch (err) {
+    log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${err}`);
+    state.ws = null;
+    scheduleReconnect(state, `connect-error: ${(err as Error).message ?? err}`);
+  }
+}
+
+function scheduleReconnect(state: ConnState, reason: string): void {
+  if (state.reconnecting) return;
+  state.reconnecting = true;
+  state.reconnectCount++;
+  const delay = state.reconnectDelay;
+  state.reconnectDelay = Math.min(state.reconnectDelay * 2, 60000);
+  log("info", `[WS] Reconnect ${state.serialNumber} in ${delay}ms (reason=${reason})`);
+  setTimeout(() => { state.reconnecting = false; connect(state); }, delay);
+}
+
+// ─── Flush ───────────────────────────────────────────────────────────────────
+
+async function flush(): Promise<void> {
+  const readings: any[] = [];
+  const now = new Date().toISOString();
+  for (const state of connections.values()) {
+    if (!state.authenticated) continue;
+    for (const entry of state.uuidMap.values()) {
+      if (entry.latest_value === null) continue;
+      readings.push({
+        meter_id: entry.meter_id,
+        tenant_id: entry.tenant_id,
+        power_value: entry.latest_value,
+        energy_type: entry.energy_type,
+        recorded_at: now,
+      });
+    }
+  }
+  if (readings.length === 0) return;
+  try {
+    await ingestPost(null, { readings });
+    log("debug", `[Flush] ${readings.length} Werte gepusht`);
+  } catch (err) {
+    log("warn", `[Flush] fehlgeschlagen: ${(err as Error).message}`);
+  }
+}
+
+// ─── Meter-Liste laden & Verbindungen synchronisieren ────────────────────────
+
+async function reloadMeters(): Promise<void> {
+  let meters: WsMeter[] = [];
+  try {
+    const r = await ingestGet("list-loxone-ws-meters");
+    meters = (r.meters || []) as WsMeter[];
+  } catch (err) {
+    log("error", `[Reload] fehlgeschlagen: ${(err as Error).message}`);
+    return;
+  }
+
+  const bySerial = new Map<string, { config: any; meters: WsMeter[]; tenantId: string; integrationId: string }>();
+  for (const m of meters) {
+    const cfg = m.location_integration?.config;
+    if (!cfg?.serial_number || !cfg.username || !cfg.password || !m.sensor_uuid) continue;
+    const serial = cfg.serial_number;
+    if (!bySerial.has(serial)) {
+      bySerial.set(serial, {
+        config: cfg, meters: [],
+        tenantId: m.tenant_id,
+        integrationId: m.location_integration_id,
+      });
+    }
+    bySerial.get(serial)!.meters.push(m);
+  }
+
+  for (const [serial, group] of bySerial) {
+    let state = connections.get(serial);
+    if (!state) {
+      state = {
+        serialNumber: serial,
+        username: group.config.username,
+        password: group.config.password,
+        tenantId: group.tenantId,
+        locationIntegrationId: group.integrationId,
+        uuidMap: new Map(),
+        ws: null,
+        authenticated: false,
+        reconnectDelay: 1000,
+        reconnecting: false,
+        sessionId: null,
+        eventsReceived: 0,
+        reconnectCount: 0,
+      };
+      connections.set(serial, state);
+    }
+    state.uuidMap.clear();
+    for (const m of group.meters) {
+      state.uuidMap.set(m.sensor_uuid.toLowerCase(), {
+        meter_id: m.id,
+        tenant_id: m.tenant_id,
+        energy_type: m.energy_type,
+        latest_value: null,
+      });
+    }
+    if (!state.ws) connect(state);
+  }
+
+  for (const [serial, state] of connections) {
+    if (!bySerial.has(serial)) {
+      log("info", `[Reload] entferne ${serial} (nicht mehr im Feldtest)`);
+      try { state.ws?.close(); } catch { }
+      await sessionEnd(state, "removed-from-test");
+      connections.delete(serial);
+    }
+  }
+
+  log("info", `[Reload] aktive Miniserver: ${connections.size}`);
+}
+
+// ─── Main ────────────────────────────────────────────────────────────────────
+
+async function main() {
+  log("info", `Loxone WS Worker (Feldtest) startet — host=${WORKER_HOST}`);
+  log("info", `  SUPABASE_URL=${SUPABASE_URL}`);
+  log("info", `  FLUSH_INTERVAL_MS=${FLUSH_INTERVAL_MS}  RELOAD_INTERVAL_MS=${RELOAD_INTERVAL_MS}`);
+
+  const shutdown = async (signal: string) => {
+    log("info", `${signal} — beende Sessions...`);
+    for (const state of connections.values()) {
+      try { state.ws?.close(); } catch { }
+      await sessionEnd(state, `shutdown-${signal}`);
+    }
+    process.exit(0);
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+
+  await reloadMeters();
+  setInterval(reloadMeters, RELOAD_INTERVAL_MS);
+  setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
+}
+
+main().catch((err) => {
+  console.error("[FATAL]", err);
+  process.exit(1);
+});
+EOF
+```
+
+> **Wichtig:** Warten Sie, bis der Cursor wieder erscheint (das kann ein paar Sekunden dauern). Wenn Sie stattdessen `cat >` sehen, haben Sie möglicherweise das `EOF` am Ende nicht richtig eingefügt. In dem Fall drücken Sie **Strg + C**, um abzubrechen, und fangen Sie bei Schritt 5 nochmal an.
+
+---
+
+## Schritt 6: Das Docker-Image bauen
+
+Jetzt bauen wir die geschlossene Box (den Container). Tippen Sie:
 
 ```bash
 docker build -t loxone-ws-worker .
 ```
 
-Dauert beim ersten Mal ca. 1–2 Minuten (npm install + TypeScript-Build).
+> **Was passiert hier?** Docker liest die Dateien, lädt Hilfsprogramme herunter und packt alles zusammen.  
+> **Dauer:** ca. 1–2 Minuten beim ersten Mal. Sie sehen viele Zeilen mit „Downloading“ und „Installing“ – das ist normal.  
+> **Fertig:** Wenn am Ende `Successfully tagged loxone-ws-worker:latest` steht, hat es geklappt.
 
-### 3. Container starten
+---
+
+## Schritt 7: Den Container starten
+
+Bevor Sie den folgenden Befehl eingeben, müssen Sie **zwei Platzhalter ersetzen**:
+
+1. `[HIER_SUPABASE_URL]` → Ihre Supabase-URL. Diese bekommen Sie von Ihrem Administrator. Sie sieht aus wie `https://abcdefg12345.supabase.co`.
+2. `[HIER_API_KEY]` → Ihr `GATEWAY_API_KEY`. Diesen finden Sie im AICONO-Backend unter **Einstellungen → Integrationen → Gateway-Geräte**.
+
+Ersetzen Sie die Platzhalter im folgenden Befehl und fügen Sie ihn ein:
 
 ```bash
 docker run -d --restart=always --name loxone-ws-worker \
-  -e SUPABASE_URL=https://xnveugycurplszevdxtw.supabase.co \
-  -e GATEWAY_API_KEY=DEIN_API_KEY \
+  -e SUPABASE_URL=[HIER_SUPABASE_URL] \
+  -e GATEWAY_API_KEY=[HIER_API_KEY] \
   -e LOG_LEVEL=info \
   -e WORKER_HOST=hetzner-prod-1 \
   loxone-ws-worker
 ```
 
-> `WORKER_HOST` taucht im Session-Log auf — frei wählbar, hilft beim späteren
-> Auswerten, wenn mehrere Worker laufen.
+> **Beispiel, wie es aussieht, wenn es fertig ist:**
+> ```bash
+> docker run -d --restart=always --name loxone-ws-worker \
+>   -e SUPABASE_URL=https://abcdefg12345.supabase.co \
+>   -e GATEWAY_API_KEY=sk_live_51H8xyz... \
+>   -e LOG_LEVEL=info \
+>   -e WORKER_HOST=hetzner-prod-1 \
+>   loxone-ws-worker
+> ```
 
-### 4. Logs prüfen
+> **Was passiert hier?** `docker run` startet die Box. `-d` bedeutet „im Hintergrund“. `--restart=always` bedeutet: Wenn der Server neu startet, startet auch diese Box automatisch wieder. `WORKER_HOST` ist ein beliebiger Name, damit Sie später im Log sehen, welcher Worker was gemacht hat.
+
+Wenn alles geklappt hat, sehen Sie eine lange Zeichenkette aus Buchstaben und Zahlen – das ist die ID des gestarteten Containers.
+
+---
+
+## Schritt 8: Prüfen, ob es läuft
+
+Schauen wir nach, ob das Programm gestartet ist und arbeitet:
 
 ```bash
 docker logs -f loxone-ws-worker
 ```
 
-Erwartet:
+> **Was passiert hier?** Sie sehen das „Tagebuch“ des Programms. `-f` bedeutet: Zeige neue Einträge sofort an.
+
+Drücken Sie **Enter**. Sie sollten nach einigen Sekunden etwa Folgendes sehen:
 
 ```
 [INFO] Loxone WS Worker (Feldtest) startet — host=hetzner-prod-1
-[INFO] [Reload] aktive Miniserver: 2
-[INFO] [DNS] 504F94AB1234 → 504f94ab1234.dns.loxonecloud.com
-[INFO] [WS] verbinde 504F94AB1234 → 504f94ab1234.dns.loxonecloud.com
-[INFO] [WS] authentifiziert 504F94AB1234 (5 UUIDs)
+[INFO]   SUPABASE_URL=https://...
+[INFO]   FLUSH_INTERVAL_MS=1000  RELOAD_INTERVAL_MS=300000
+[INFO] [Reload] aktive Miniserver: 0
 ```
 
-Sind 0 aktive Miniserver zu sehen → noch keine Integration hat das Feature-Flag
-gesetzt. Das wird per SQL gemacht (siehe unten).
+**Steht dort `aktive Miniserver: 0`?** Das ist im Moment noch richtig! Das bedeutet nur, dass noch kein Standort im Backend für den Feldtest freigeschaltet wurde.
+
+Drücken Sie **Strg + C**, um die Log-Anzeige zu beenden (das Programm läuft weiter im Hintergrund).
 
 ---
 
-## Test-Tenant freischalten (SQL)
+## Schritt 9: Im AICONO-Backend freischalten
 
-Im Backend (Super-Admin → SQL-Editor) für 2–3 Test-Standorte aktivieren:
+Jetzt müssen Sie dem System sagen: „Dieser Standort darf am Feldtest teilnehmen.“
+
+### Für Tenant-Administratoren (die einfache Methode):
+
+1. Melden Sie sich im AICONO-Backend an.
+2. Gehen Sie zu dem Standort, an dem der Loxone-Miniserver hängt.
+3. Klicken Sie auf die Loxone-Integration (die Karte mit dem Miniserver).
+4. Klicken Sie auf das **Zahnrad-Symbol** (Bearbeiten).
+5. Scrollen Sie nach unten zum Abschnitt **„Remote Connect WebSocket (BETA)“**.
+6. Klicken Sie auf den Button **„Aktivieren“**.
+7. Das System speichert die Einstellung automatisch.
+
+> **Wichtig:** Dieser Button ist nur für Test-Standorte gedacht. Aktivieren Sie ihn nicht auf Produktiv-Systemen.
+
+### Für Super-Administratoren (Fallback):
+
+Falls der Button nicht sichtbar ist oder Sie mehrere Standorte auf einmal freischalten möchten, können Sie im Super-Admin-Bereich unter **SQL-Editor** folgenden Befehl ausführen:
 
 ```sql
 UPDATE location_integrations
@@ -98,68 +689,83 @@ SET loxone_remote_connect_ws_enabled = TRUE
 WHERE id IN ('<integration-id-1>', '<integration-id-2>');
 ```
 
-Innerhalb von max. 5 Minuten lädt der Worker die Liste neu und verbindet sich.
-
-Wieder deaktivieren:
-
-```sql
-UPDATE location_integrations
-SET loxone_remote_connect_ws_enabled = FALSE
-WHERE id = '<integration-id>';
-```
+> Ersetzen Sie `<integration-id-1>` und `<integration-id-2>` durch die tatsächlichen IDs der Standorte. Diese finden Sie in der Datenbank oder fragen Sie Ihren Administrator.
 
 ---
 
-## Monitoring
+## Schritt 10: Warten und nochmal prüfen
 
-Alle Verbindungs-Events landen in der Tabelle `loxone_ws_session_log`:
+Nachdem Sie den Standort freigeschaltet haben, warten Sie **maximal 5 Minuten**. Der Worker lädt die Liste automatisch neu.
 
-| Spalte               | Bedeutung                                            |
-|----------------------|------------------------------------------------------|
-| `started_at`         | Wann die WS-Verbindung aufgebaut wurde               |
-| `ended_at`           | Wann sie geschlossen wurde (NULL = noch aktiv)       |
-| `disconnect_reason`  | `close-1006`, `connect-error: ...`, `shutdown-...`   |
-| `events_received`    | Wie viele Wert-Events während der Session ankamen    |
-| `reconnect_count`    | Reconnect-Versuche dieser Verbindung                 |
-| `worker_host`        | Welcher Worker das Log geschrieben hat               |
-
-Auswertung-Beispiel (durchschnittliche Session-Länge pro Standort):
-
-```sql
-SELECT location_integration_id,
-       COUNT(*)                                                AS sessions,
-       AVG(EXTRACT(EPOCH FROM (ended_at - started_at)))/60     AS avg_min,
-       SUM(reconnect_count)                                    AS total_reconnects
-FROM loxone_ws_session_log
-WHERE started_at > now() - interval '14 days'
-  AND ended_at IS NOT NULL
-GROUP BY location_integration_id;
-```
-
-Ein **Super-Admin-Dashboard** kommt in Schritt 3 (separat).
-
----
-
-## Container neu starten / stoppen
+Schauen Sie nochmal in die Logs:
 
 ```bash
-docker restart loxone-ws-worker     # Neustart
-docker stop    loxone-ws-worker     # Stop
-docker rm  -f  loxone-ws-worker     # Löschen
+docker logs -f loxone-ws-worker
 ```
 
-Nach Code-Änderungen: Image neu bauen (`docker build -t loxone-ws-worker .`)
-und Container neu starten.
+Jetzt sollten Sie etwa Folgendes sehen:
+
+```
+[INFO] [Reload] aktive Miniserver: 1
+[INFO] [DNS] 504F94AB1234 → 504f94ab1234.dns.loxonecloud.com
+[INFO] [WS] verbinde 504F94AB1234 → 504f94ab1234.dns.loxonecloud.com
+[INFO] [WS] authentifiziert 504F94AB1234 (5 UUIDs)
+```
+
+**Herzlichen Glückwunsch!** Die Verbindung steht. Werte kommen jetzt in Echtzeit an.
+
+Drücken Sie wieder **Strg + C**, um die Log-Anzeige zu beenden.
 
 ---
 
-## Wichtig: was dieser Worker NICHT macht
+## Befehle für später (Stoppen, Neustarten, Löschen)
 
-- Kein HTTP-Polling für andere Gateways (Shelly/Tuya/… → läuft weiter über die
-  Edge Functions)
-- Kein OCPP-Proxy
-- Kein Schreiben von Befehlen an Loxone (nur Read)
-- Keine Produktiv-Tenants — nur Standorte mit gesetztem Feature-Flag
+Sie müssen diese jetzt nicht ausführen, aber merken Sie sich diese Befehle für den Fall, dass Sie etwas ändern möchten:
 
-Der alte `docs/_DEPRECATED_gateway-worker/` bleibt als historische Referenz
-liegen, wird aber nicht mehr deployed.
+| Was möchten Sie? | Befehl |
+|---|---|
+| Programm anhalten (ohne zu löschen) | `docker stop loxone-ws-worker` |
+| Programm wieder starten | `docker start loxone-ws-worker` |
+| Programm komplett neu starten | `docker restart loxone-ws-worker` |
+| Programm und Box löschen | `docker rm -f loxone-ws-worker` |
+| Logs anschauen (live) | `docker logs -f loxone-ws-worker` |
+| Logs anschauen (letzte 50 Zeilen) | `docker logs --tail 50 loxone-ws-worker` |
+| Alle laufenden Boxen anzeigen | `docker ps` |
+
+> **Tipp:** Nachdem Sie den Programm-Code geändert haben (z. B. eine neue Version), müssen Sie erst `docker rm -f loxone-ws-worker` (löschen), dann `docker build -t loxone-ws-worker .` (neu bauen) und dann den `docker run ...`-Befehl aus Schritt 7 nochmal ausführen.
+
+---
+
+## Wenn etwas nicht klappt
+
+### „docker: command not found“
+
+Docker ist nicht installiert. Fragen Sie Ihren Administrator, ob Docker auf dem Server vorhanden ist. Falls nicht, muss er es installieren.
+
+### „FATAL: SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein“
+
+Sie haben in Schritt 7 die Platzhalter `[HIER_SUPABASE_URL]` und `[HIER_API_KEY]` nicht durch die richtigen Werte ersetzt. Löschen Sie den Container (`docker rm -f loxone-ws-worker`) und starten Sie bei Schritt 7 nochmal.
+
+### „aktive Miniserver: 0“ bleibt für immer
+
+1. Prüfen Sie im AICONO-Backend, ob der Standort wirklich freigeschaltet ist (Schritt 9).
+2. Prüfen Sie, ob in der Loxone-Integration die **Seriennummer, der Benutzername und das Passwort** korrekt eingetragen sind.
+3. Warten Sie noch etwas – es kann bis zu 5 Minuten dauern.
+
+### „WS Verbindung fehlgeschlagen“
+
+1. Prüfen Sie, ob der Miniserver überhaupt online ist (können Sie sich normal in die Loxone-App einloggen?).
+2. Prüfen Sie, ob Benutzername und Passwort in der Integration stimmen.
+3. Prüfen Sie, ob der Miniserver über Remote Connect erreichbar ist (dns.loxonecloud.com).
+
+### Ich habe mich vertippt und weiß nicht, wie ich zurückkomme
+
+Drücken Sie **Strg + C**. Das bricht den aktuellen Befehl ab. Dann können Sie es nochmal versuchen.
+
+---
+
+## Noch Fragen?
+
+Wenn Sie an einer Stelle nicht weiterkommen, machen Sie einen **Screenshot** des Terminal-Fensters und schreiben Sie eine kurze E-Mail an **support@aicono.org** mit dem Betreff „Loxone WS Worker Einrichtung“. Fügen Sie den Screenshot bei.
+
+> **Denken Sie daran:** Sagen Sie uns Bescheid, sobald Sie einen Schritt geschafft haben (z. B. „Schritt 6 ist fertig, das Image wurde gebaut“). So können wir Sie bei Problemen gezielt unterstützen, bevor Sie mit dem nächsten Schritt weitermachen.
