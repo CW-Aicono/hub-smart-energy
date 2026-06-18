@@ -1731,6 +1731,7 @@ Deno.serve(async (req) => {
   if (req.method === "POST") {
     if (action === "ws-session-start") return handleWsSessionStart(req);
     if (action === "ws-session-end") return handleWsSessionEnd(req);
+    if (action === "ws-session-heartbeat") return handleWsSessionHeartbeat(req);
     if (action === "compact-day") return handleCompactDay(req);
     if (action === "schneider-push") return handleSchneiderPush(req);
     if (action === "heartbeat") return handleHeartbeat(req);
