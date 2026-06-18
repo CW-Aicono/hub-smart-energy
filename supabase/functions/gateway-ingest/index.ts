@@ -1693,10 +1693,13 @@ Deno.serve(async (req) => {
     if (action === "get-locations-summary") return handleGetLocationsSummary(url, scopeTenantId);
     if (action === "addon-version") return handleAddonVersion();
     if (action === "sync-automations") return handleSyncAutomations(url, req);
+    if (action === "list-loxone-ws-meters") return handleListLoxoneWsMeters();
   }
 
   // POST routes
   if (req.method === "POST") {
+    if (action === "ws-session-start") return handleWsSessionStart(req);
+    if (action === "ws-session-end") return handleWsSessionEnd(req);
     if (action === "compact-day") return handleCompactDay(req);
     if (action === "schneider-push") return handleSchneiderPush(req);
     if (action === "heartbeat") return handleHeartbeat(req);
