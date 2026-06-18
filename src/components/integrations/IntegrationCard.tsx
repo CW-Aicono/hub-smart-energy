@@ -177,6 +177,13 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
                   integrationType={integration?.type}
                   lastSyncAt={locationIntegration.last_sync_at}
                 />
+                <LoxoneWsStatus
+                  locationIntegrationId={locationIntegration.id}
+                  enabled={
+                    (integration?.type === "loxone" || integration?.type === "loxone_miniserver") &&
+                    !!locationIntegration.loxone_remote_connect_ws_enabled
+                  }
+                />
                 {integration?.description && <p className="text-xs text-muted-foreground">{integration.description}</p>}
                 {integration?.type === "loxone_miniserver" && isConfigured && (
                   <LoxoneFirmwareSection locationIntegrationId={locationIntegration.id} />
