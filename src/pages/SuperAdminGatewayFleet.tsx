@@ -371,13 +371,13 @@ const SuperAdminGatewayFleet = () => {
                                 </SelectContent>
                               </Select>
                             </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{formatTime(d.last_heartbeat_at)}</TableCell>
                             <TableCell>
                               <Switch
                                 checked={d.auto_update_enabled}
                                 onCheckedChange={(v) => setAutoMutation.mutate({ deviceId: d.id, enabled: v })}
                               />
                             </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{formatTime(d.last_heartbeat_at)}</TableCell>
                             <TableCell className="text-right">
                               <Button
                                 size="sm" variant="outline"
