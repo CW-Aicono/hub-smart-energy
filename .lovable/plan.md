@@ -1,25 +1,35 @@
+## Befund
+
+Der Job `compact-meter-power-readings-daily` läuft **nur einmal pro Nacht** (Cron `5 0 * * *`) und verdichtet jeweils den **Vortag** aus `meter_power_readings` (roh) in `meter_power_readings_5min`.
+
+- Vor dem WebSocket: Rohtabelle enthielt ~1 Punkt alle 15 Min → Chart sah glatt aus.
+- Seit WebSocket-Start um 13 Uhr: Rohtabelle enthält bei „Energiemonitor" **5437 Punkte in 10 h** (≈ alle 7 s) → jede kurze Last-Spitze wird einzeln gezeichnet → Zick-Zack.
+
+Die Daten sind korrekt, nur ungefiltert dargestellt.
+
 ## Ziel
-Im Dialog "Gefundene Geräte" für Loxone sollen **alle** vom Miniserver gelieferten Bausteine erscheinen – Zähler, Sensoren, Aktoren und beliebige weitere Control-Typen. Aktuell filtert eine Whitelist (`ASSIGNABLE_CONTROL_TYPES`) in `src/components/integrations/SensorsDialog.tsx` alles raus, was nicht explizit gelistet ist (z. B. `Jalousie`-Varianten, `IRoomControllerV2`, `AudioZone`, `Gate`, `Daytimer`, `Tracker`, viele Wetter-/Helligkeits-Controls usw.).
 
-## Änderung
-Datei: `src/components/integrations/SensorsDialog.tsx`
+Tageschart zeigt auch für „heute" geglättete 5-Min-Mittelwerte, ohne die Rohdaten zu verändern und ohne den nächtlichen Compactor zu gefährden.
 
-1. Konstante `ASSIGNABLE_CONTROL_TYPES` (Zeile 65–75) entfernen.
-2. Filter-Zeile 138–141 vereinfachen zu:
-   ```ts
-   const meterSensors = sensors;
-   ```
-   Damit gilt für Loxone dieselbe Regel wie für alle anderen Gateways: was die Edge-Function `loxone-api` zurückliefert, wird gezeigt.
+## Empfehlung: Frontend-Fallback (günstig, risikoarm)
 
-Die Edge-Function `loxone-api` liefert bereits jeden Control mit auswertbaren States (`Pushbutton`, `Switch`, `Dimmer`, `Jalousie`, `InfoOnlyAnalog/Digital`, `TextState`, alle `*Meter`, sowie unbekannte Typen via `detectSensorMeta`). Ein zusätzlicher clientseitiger Filter ist nicht nötig.
+Im Chart-Datenloader für die Tagesansicht: Wenn Bucket-Daten aus `meter_power_readings_5min` für heute fehlen, **on-the-fly auf 5-Min-Buckets aggregieren** (Mittelwert) und anschließend zeichnen. Der nächtliche Compactor bleibt unverändert; ab dem nächsten Morgen liegen die echten Buckets vor.
 
-## Nicht-Änderungen
-- Keine Änderung an `loxone-api`, DB oder Zuordnungslogik.
-- Klassifizierung (Zähler / Sensor / Aktor) bleibt unverändert über `deviceClassification.ts`.
-- Andere Gateways (Shelly, HA, EMS…) sind nicht betroffen, da der Filter ohnehin nur für `loxone_miniserver` griff.
+### Umsetzungsschritte
 
-## Test nach dem Deployment
-1. Hard-Reload (Strg+Shift+R).
-2. Standort → Loxone-Integration → "Gefundene Geräte" → "Aktualisieren".
-3. Erwartet: deutlich mehr Einträge, inkl. aller Taster, Schalter, Jalousien, Raumregler, Wetter-Bausteine.
-4. Zuordnung wie gehabt; danach erscheinen sie im jeweiligen Tab (Zähler / Sensoren / Aktoren).
+1. Hook identifizieren, der den Tageschart füttert (vermutlich `src/hooks/useRealtimePower.ts` oder ein Chart-Loader unter `src/components/dashboard/`).
+2. Logik ergänzen:
+   - Für Zeitraum **heute** zusätzlich `meter_power_readings` mit `recorded_at >= heute_00:00` laden.
+   - Auf 5-Min-Buckets reduzieren (`Math.floor(min/5)*5`), Mittelwert je Bucket bilden.
+   - Mit vorhandenen 5-Min-Werten (aus Vortagen) mergen.
+3. Keine Schreiboperation. Keine DB-Migration. Keine Edge-Function-Änderung.
+4. Kurzer Funktionstest: Tageschart heute neu laden — Zick-Zack ist weg, Verlauf glatt, Werte realistisch.
+
+## Bewusst NICHT geändert
+
+- Compactor-Cron auf häufiger als 1×/Tag stellen → zu riskant, weil seine SQL-Funktion Rohzeilen ganzer Tage löschen kann; mid-day Ausführung könnte aktuelle Sekundenwerte zerstören. Wenn das später gewünscht ist, separates Plan-Thema.
+- Realtime-Tabellen-Schema oder WebSocket-Worker.
+
+## Aufwand
+
+Eine kleine Frontend-Änderung in 1 Hook + ggf. 1 Hilfsfunktion. Keine Migration, kein Edge-Function-Deploy.
