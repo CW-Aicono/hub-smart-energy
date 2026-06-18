@@ -35,8 +35,8 @@ export function LoxoneWsStatus({ locationIntegrationId, enabled }: LoxoneWsStatu
       return data as WsSession | null;
     },
     enabled,
-    refetchInterval: 10_000,
-    staleTime: 5_000,
+    refetchInterval: 20_000,
+    staleTime: 10_000,
   });
 
   if (!enabled) return null;
@@ -51,7 +51,7 @@ export function LoxoneWsStatus({ locationIntegrationId, enabled }: LoxoneWsStatu
 
   if (session) {
     const updatedMs = Date.now() - new Date(session.updated_at).getTime();
-    if (!session.ended_at && updatedMs < 60_000) {
+    if (!session.ended_at && updatedMs < 45_000) {
       statusColor = "text-green-600 dark:text-green-400";
       statusLabel = "WebSocket aktiv";
       StatusIcon = Radio;
