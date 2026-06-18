@@ -43,6 +43,7 @@ export interface LocationIntegration {
   is_enabled: boolean;
   last_sync_at: string | null;
   sync_status: string;
+  loxone_remote_connect_ws_enabled: boolean | null;
   created_at: string;
   updated_at: string;
   integration?: Integration;
