@@ -1102,6 +1102,115 @@ async function handleWorkerHeartbeat(req: Request): Promise<Response> {
   return json({ success: true, recorded_at: new Date().toISOString() });
 }
 
+/* ── Loxone Remote-Connect WebSocket Feldtest ───────────────────────────────── */
+
+/**
+ * GET ?action=list-loxone-ws-meters
+ * Liefert ausschließlich Loxone-Zähler an Standort-Integrationen mit
+ * loxone_remote_connect_ws_enabled = TRUE. Wird vom Loxone-WS-Worker
+ * auf Hetzner gepollt (alle 5 Min), um die Test-Tenants zu kennen.
+ */
+async function handleListLoxoneWsMeters(): Promise<Response> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("meters")
+    .select(`
+      id, name, energy_type, sensor_uuid, tenant_id, location_integration_id,
+      location_integration:location_integrations!meters_location_integration_id_fkey (
+        id, config, loxone_remote_connect_ws_enabled,
+        integration:integrations!location_integrations_integration_id_fkey ( type )
+      )
+    `)
+    .eq("is_archived", false)
+    .not("sensor_uuid", "is", null);
+
+  if (error) {
+    console.error("[gateway-ingest] list-loxone-ws-meters error:", error.message);
+    return json({ success: false, error: "Internal error" }, 500);
+  }
+
+  const filtered = (data || []).filter((m: any) => {
+    const li = m.location_integration;
+    if (!li || li.loxone_remote_connect_ws_enabled !== true) return false;
+    const type = li.integration?.type;
+    return type === "loxone" || type === "loxone_miniserver";
+  });
+
+  return json({ success: true, meters: filtered });
+}
+
+/**
+ * POST ?action=ws-session-start
+ * Body: { tenant_id, location_integration_id, worker_host? }
+ * Antwort: { success, session_id }
+ */
+async function handleWsSessionStart(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: { tenant_id?: string; location_integration_id?: string; worker_host?: string };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.tenant_id || !body.location_integration_id) {
+    return json({ error: "tenant_id and location_integration_id required" }, 400);
+  }
+
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("loxone_ws_session_log")
+    .insert({
+      tenant_id: body.tenant_id,
+      location_integration_id: body.location_integration_id,
+      worker_host: body.worker_host || null,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.error("[gateway-ingest] ws-session-start error:", error.message);
+    return json({ error: "Database error" }, 500);
+  }
+
+  return json({ success: true, session_id: data.id });
+}
+
+/**
+ * POST ?action=ws-session-end
+ * Body: { session_id, disconnect_reason?, events_received?, reconnect_count? }
+ */
+async function handleWsSessionEnd(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    session_id?: string;
+    disconnect_reason?: string;
+    events_received?: number;
+    reconnect_count?: number;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.session_id) return json({ error: "session_id required" }, 400);
+
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from("loxone_ws_session_log")
+    .update({
+      ended_at: new Date().toISOString(),
+      disconnect_reason: body.disconnect_reason || null,
+      events_received: body.events_received ?? 0,
+      reconnect_count: body.reconnect_count ?? 0,
+    })
+    .eq("id", body.session_id);
+
+  if (error) {
+    console.error("[gateway-ingest] ws-session-end error:", error.message);
+    return json({ error: "Database error" }, 500);
+  }
+
+  return json({ success: true });
+}
+
 /* ── Gateway backup handler ──────────────────────────────────────────────────── */
 
 async function handleGatewayBackup(req: Request): Promise<Response> {
@@ -1584,10 +1693,13 @@ Deno.serve(async (req) => {
     if (action === "get-locations-summary") return handleGetLocationsSummary(url, scopeTenantId);
     if (action === "addon-version") return handleAddonVersion();
     if (action === "sync-automations") return handleSyncAutomations(url, req);
+    if (action === "list-loxone-ws-meters") return handleListLoxoneWsMeters();
   }
 
   // POST routes
   if (req.method === "POST") {
+    if (action === "ws-session-start") return handleWsSessionStart(req);
+    if (action === "ws-session-end") return handleWsSessionEnd(req);
     if (action === "compact-day") return handleCompactDay(req);
     if (action === "schneider-push") return handleSchneiderPush(req);
     if (action === "heartbeat") return handleHeartbeat(req);
