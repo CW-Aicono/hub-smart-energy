@@ -74,7 +74,7 @@ export default function LoxonePollingOverviewCard() {
               <tbody>
                 {rows.map((r) => {
                   const raw = Number((r.config as any)?.poll_interval_minutes);
-                  const interval = Number.isFinite(raw) && raw >= 1 && raw <= 15 ? Math.floor(raw) : 5;
+                  const interval = Number.isFinite(raw) && raw >= 1 && raw <= 60 ? Math.floor(raw) : 15;
                   const isDefault = !Number.isFinite(raw);
                   const lastSync = r.last_sync_at ? new Date(r.last_sync_at) : null;
                   const ageSec = lastSync ? Math.round((Date.now() - lastSync.getTime()) / 1000) : null;
