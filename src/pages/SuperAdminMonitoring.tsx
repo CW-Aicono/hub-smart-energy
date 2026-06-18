@@ -121,6 +121,10 @@ const SuperAdminMonitoring = () => {
               {/* Gateway Worker Status (Hetzner) */}
               <GatewayWorkerStatusCard />
 
+              {/* Loxone Miniserver WebSocket-Monitor (pro Liegenschaft) */}
+              <LoxoneMiniserverMonitorCard />
+
+
               {/* Hetzner Node Live-Metriken (CPU/RAM/Disk) */}
               <HetznerNodesCard />
 
