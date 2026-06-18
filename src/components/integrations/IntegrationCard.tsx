@@ -16,6 +16,7 @@ import { SensorsDialog } from "./SensorsDialog";
 import { DeviceCard } from "./gateway/DeviceCard";
 import { useUserRole } from "@/hooks/useUserRole";
 import { MiniserverStatus } from "./MiniserverStatus";
+import { LoxoneWsStatus } from "./LoxoneWsStatus";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
 import { getGatewayDefinition, getEdgeFunctionName } from "@/lib/gatewayRegistry";
 import { invokeWithRetry } from "@/lib/invokeWithRetry";
