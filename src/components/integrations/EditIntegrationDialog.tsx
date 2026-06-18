@@ -69,7 +69,7 @@ export function EditIntegrationDialog({
 
     setBaseConfig(nextConfig);
     const raw = Number(nextConfig.poll_interval_minutes);
-    setPollIntervalMin(Number.isFinite(raw) && raw >= 1 && raw <= 15 ? Math.floor(raw) : 5);
+    setPollIntervalMin(Number.isFinite(raw) && raw >= 1 && raw <= 60 ? Math.floor(raw) : 15);
     form.reset(vals);
   }, [locationIntegration, gatewayDef, form, open]);
 
