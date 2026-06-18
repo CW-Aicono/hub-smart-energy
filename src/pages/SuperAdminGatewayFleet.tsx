@@ -333,7 +333,9 @@ const SuperAdminGatewayFleet = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-8"></TableHead>
                         <TableHead>Gateway</TableHead>
+                        <TableHead>Liegenschaft</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Version</TableHead>
                         <TableHead>Channel</TableHead>
@@ -344,49 +346,124 @@ const SuperAdminGatewayFleet = () => {
                     </TableHeader>
                     <TableBody>
                       {fleet.length === 0 && (
-                        <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">Keine Gateways registriert.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-8">Keine Gateways registriert.</TableCell></TableRow>
                       )}
-                      {fleet.map((d) => (
-                        <TableRow key={d.id}>
-                          <TableCell>
-                            <div className="font-medium">{d.device_name}</div>
-                            <div className="text-xs text-muted-foreground">{(d.tenant_id && tenantNameMap[d.tenant_id]) || "—"}</div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={d.status === "online" ? "default" : "secondary"}>{d.status}</Badge>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">{d.addon_version ?? "—"}</TableCell>
-                          <TableCell>
-                            <Select
-                              value={d.update_channel}
-                              onValueChange={(v) => setAutoMutation.mutate({ deviceId: d.id, enabled: d.auto_update_enabled, channel: v })}
-                            >
-                              <SelectTrigger className="h-8 w-24"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="stable">stable</SelectItem>
-                                <SelectItem value="beta">beta</SelectItem>
-                                <SelectItem value="dev">dev</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell>
-                            <Switch
-                              checked={d.auto_update_enabled}
-                              onCheckedChange={(v) => setAutoMutation.mutate({ deviceId: d.id, enabled: v })}
-                            />
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{formatTime(d.last_heartbeat_at)}</TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              size="sm" variant="outline"
-                              onClick={() => queueMutation.mutate({ deviceId: d.id, channel: d.update_channel })}
-                              disabled={queueMutation.isPending || d.status !== "online"}
-                            >
-                              Update jetzt
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {fleet.map((d) => {
+                        const isOpen = !!expanded[d.id];
+                        const locationName = (d.location_id && locationNameMap[d.location_id]) || "—";
+                        return (
+                          <>
+                          <TableRow key={d.id}>
+                            <TableCell className="p-2">
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleExpand(d.id)}>
+                                {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              </Button>
+                            </TableCell>
+                            <TableCell>
+                              <div className="font-medium">{d.device_name}</div>
+                              <div className="text-xs text-muted-foreground">{(d.tenant_id && tenantNameMap[d.tenant_id]) || "—"}</div>
+                            </TableCell>
+                            <TableCell className="text-sm">{locationName}</TableCell>
+                            <TableCell>
+                              <Badge variant={d.status === "online" ? "default" : "secondary"}>{d.status}</Badge>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">{d.addon_version ?? "—"}</TableCell>
+                            <TableCell>
+                              <Select
+                                value={d.update_channel}
+                                onValueChange={(v) => setAutoMutation.mutate({ deviceId: d.id, enabled: d.auto_update_enabled, channel: v })}
+                              >
+                                <SelectTrigger className="h-8 w-24"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="stable">stable</SelectItem>
+                                  <SelectItem value="beta">beta</SelectItem>
+                                  <SelectItem value="dev">dev</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Switch
+                                checked={d.auto_update_enabled}
+                                onCheckedChange={(v) => setAutoMutation.mutate({ deviceId: d.id, enabled: v })}
+                              />
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{formatTime(d.last_heartbeat_at)}</TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm" variant="outline"
+                                onClick={() => queueMutation.mutate({ deviceId: d.id, channel: d.update_channel })}
+                                disabled={queueMutation.isPending || d.status !== "online"}
+                              >
+                                Update jetzt
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                          {isOpen && (
+                            <TableRow key={d.id + "-details"} className="bg-muted/30 hover:bg-muted/30">
+                              <TableCell></TableCell>
+                              <TableCell colSpan={8} className="py-4">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
+                                  <div>
+                                    <div className="text-muted-foreground">Verbunden seit</div>
+                                    <div className="font-medium">{formatTime(d.ws_connected_since ?? d.last_heartbeat_at)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">Letzter Heartbeat</div>
+                                    <div className="font-medium">{formatTime(d.last_heartbeat_at)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">Letzter WS-Ping</div>
+                                    <div className="font-medium">{formatTime(d.last_ws_ping_at)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">Offline-Buffer</div>
+                                    <div className="font-medium">{(d.offline_buffer_count ?? 0).toLocaleString("de-DE")} Events</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">Lokale IP</div>
+                                    <div className="font-mono">{d.local_ip ?? "—"}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">MAC-Adresse</div>
+                                    <div className="font-mono">{d.mac_address ?? "—"}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">HA-Version</div>
+                                    <div className="font-mono">{d.ha_version ?? "—"}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">Lokale Zeit</div>
+                                    <div className="font-mono">{d.local_time ?? "—"}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">Letzter Update-Versuch</div>
+                                    <div className="font-medium">{formatTime(d.last_update_attempt_at)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">Letztes Update</div>
+                                    <div className="font-medium">{formatTime(d.updated_at)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">Registriert</div>
+                                    <div className="font-medium">{formatTime(d.created_at)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-muted-foreground">Device-ID</div>
+                                    <div className="font-mono truncate" title={d.id}>{d.id.slice(0, 8)}…</div>
+                                  </div>
+                                  {d.last_update_error && (
+                                    <div className="col-span-2 md:col-span-4">
+                                      <div className="text-muted-foreground">Letzter Update-Fehler</div>
+                                      <div className="text-destructive font-mono whitespace-pre-wrap">{d.last_update_error}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          </>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </CardContent>
