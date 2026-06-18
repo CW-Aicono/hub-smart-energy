@@ -206,6 +206,21 @@ const SuperAdminGatewayFleet = () => {
     },
   });
 
+  const { data: locationNameMap = {} } = useQuery({
+    queryKey: ["sa-gateway-fleet-location-names"],
+    enabled: !!isSuperAdmin,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("locations").select("id, name");
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      (data ?? []).forEach((l: { id: string; name: string }) => { map[l.id] = l.name; });
+      return map;
+    },
+  });
+
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const toggleExpand = (id: string) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
+
   const { data: channels = [], refetch: refetchChannels } = useQuery({
     queryKey: ["sa-gateway-channels"],
     queryFn: async () => {
