@@ -352,7 +352,7 @@ const SuperAdminGatewayFleet = () => {
                         const isOpen = !!expanded[d.id];
                         const locationName = (d.location_id && locationNameMap[d.location_id]) || "—";
                         return (
-                          <>
+                          <Fragment key={d.id}>
                           <TableRow key={d.id}>
                             <TableCell className="p-2">
                               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleExpand(d.id)}>
