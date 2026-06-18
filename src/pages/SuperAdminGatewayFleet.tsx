@@ -339,7 +339,7 @@ const SuperAdminGatewayFleet = () => {
                         <TableHead>Status</TableHead>
                         <TableHead>Version</TableHead>
                         <TableHead>Channel</TableHead>
-                        <TableHead>Auto</TableHead>
+                        <TableHead>Auto-Update</TableHead>
                         <TableHead>Letzter Heartbeat</TableHead>
                         <TableHead className="text-right">Aktion</TableHead>
                       </TableRow>
