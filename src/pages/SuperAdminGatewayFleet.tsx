@@ -35,6 +35,15 @@ interface FleetDevice {
   update_channel: string;
   last_update_attempt_at: string | null;
   last_update_error: string | null;
+  location_id: string | null;
+  local_ip: string | null;
+  mac_address: string | null;
+  ws_connected_since: string | null;
+  last_ws_ping_at: string | null;
+  offline_buffer_count: number | null;
+  local_time: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 interface ReleaseChannel {
