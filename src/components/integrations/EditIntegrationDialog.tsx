@@ -166,13 +166,13 @@ export function EditIntegrationDialog({
                       id="poll-interval"
                       type="number"
                       min={1}
-                      max={15}
+                      max={60}
                       step={1}
                       value={pollIntervalMin}
                       onChange={(e) => setPollIntervalMin(Number(e.target.value))}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Wie oft AICONO neue Sensorwerte vom Miniserver abruft. Erlaubt: 1–15 Minuten. Niedriger = aktuellere Werte, höher = weniger Netzwerk-Last. Empfehlung: 5 Minuten.
+                      Wie oft AICONO neue Sensorwerte vom Miniserver abruft. Erlaubt: 1–60 Minuten. Niedriger = aktuellere Werte (höhere Schreiblast), höher = weniger Datenbank-Last. Empfehlung: 15 Minuten.
                     </p>
                   </div>
                 )}
