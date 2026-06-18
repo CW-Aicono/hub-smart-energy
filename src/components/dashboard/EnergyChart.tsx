@@ -393,68 +393,76 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         } as DayBucket;
       });
 
-      // Track which indices actually received a real reading
+      // Track which indices actually received a real reading (per energy type, post-sum)
       const realIndices: Record<string, Set<number>> = { strom: new Set(), gas: new Set(), waerme: new Set(), wasser: new Set() };
 
-      // Accumulate per meter_id per bucket to correctly average multiple readings
-      // from the same meter in the same 5-min slot (e.g. sync jitter producing 2 readings),
-      // then SUM the per-meter averages across all meters into the bucket.
-      // Structure: bucketAccum[idx][meter_id] = { sum, count, energy_type }
-      const bucketAccum: Record<number, Record<string, { sum: number; count: number; et: string }>> = {};
+      // Step 1: Build a per-meter time series of 288 slots.
+      // Multiple raw readings inside the same 5-min slot are averaged.
+      // Structure: meterSeries[meter_id] = { et, values: (number|null)[288] }
+      const meterSeries: Record<string, { et: string; values: (number | null)[]; counts: number[] }> = {};
 
-      // Use power readings from DB for automatic main meters
       powerReadings.forEach((pr) => {
         const info = meterMap[pr.meter_id];
         if (!info) return;
         const d = new Date(pr.recorded_at);
         const idx = Math.min(d.getHours() * 12 + Math.floor(d.getMinutes() / 5), 287);
         const et = info.energy_type || "strom";
-        if (!bucketAccum[idx]) bucketAccum[idx] = {};
-        if (!bucketAccum[idx][pr.meter_id]) bucketAccum[idx][pr.meter_id] = { sum: 0, count: 0, et };
-        bucketAccum[idx][pr.meter_id].sum += pr.power_value;
-        bucketAccum[idx][pr.meter_id].count += 1;
+        if (!meterSeries[pr.meter_id]) {
+          meterSeries[pr.meter_id] = {
+            et,
+            values: Array.from({ length: 288 }, () => null),
+            counts: Array.from({ length: 288 }, () => 0),
+          };
+        }
+        const s = meterSeries[pr.meter_id];
+        const cur = s.values[idx];
+        const cnt = s.counts[idx];
+        s.values[idx] = cur == null ? pr.power_value : (cur * cnt + pr.power_value) / (cnt + 1);
+        s.counts[idx] = cnt + 1;
       });
 
-      // For each bucket: average readings per meter, then sum across meters per energy type
-      for (const [idxStr, meterMap2] of Object.entries(bucketAccum)) {
-        const idx = Number(idxStr);
-        for (const [, accum] of Object.entries(meterMap2)) {
-          const et = accum.et as EnergyKey;
-          if (ENERGY_KEYS.includes(et)) {
-            buckets[idx][et] += accum.sum / accum.count;
-            realIndices[et]?.add(idx);
+      // Step 2: Per meter, forward-fill (step function) up to MAX_FILL_SLOTS = 36 (= 3 h)
+      // beyond each real reading. Larger gaps remain null = real data outage.
+      // This makes the SUM across meters stable when meters poll at 15-min intervals
+      // but at different sub-minutes within the window.
+      const MAX_FILL_SLOTS = 36; // 3 hours; covers 15-min polling + safety margin
+      const filledFlag: Record<string, boolean[]> = {}; // per meter: was this slot real (false) or forward-filled (true)?
+      for (const [mid, s] of Object.entries(meterSeries)) {
+        const flags = Array.from({ length: 288 }, () => false);
+        let lastVal: number | null = null;
+        let slotsSinceReal = 0;
+        for (let i = 0; i < 288; i++) {
+          if (s.values[i] != null) {
+            lastVal = s.values[i];
+            slotsSinceReal = 0;
+          } else if (lastVal != null && slotsSinceReal < MAX_FILL_SLOTS) {
+            s.values[i] = lastVal;
+            flags[i] = true;
+            slotsSinceReal++;
+          } else {
+            slotsSinceReal++;
           }
+        }
+        filledFlag[mid] = flags;
+      }
+
+      // Step 3: Sum per-meter series into per-bucket per-energy-type totals.
+      // A bucket counts as "real" for an energy type if at least one contributing
+      // meter has a real (non-forward-filled) reading at that slot.
+      for (let i = 0; i < 288; i++) {
+        for (const [mid, s] of Object.entries(meterSeries)) {
+          const v = s.values[i];
+          if (v == null) continue;
+          const et = s.et as EnergyKey;
+          if (!ENERGY_KEYS.includes(et)) continue;
+          buckets[i][et] += v;
+          if (!filledFlag[mid][i]) realIndices[et]?.add(i);
         }
       }
 
       // Manual meters are excluded from day view – no meaningful daily granularity
 
-      // Interpolate small gaps (≤ 12 slots = 1 hour) and mark them as gap (not real)
-      for (const key of ENERGY_KEYS) {
-        const points: Array<{ idx: number; val: number }> = [];
-        buckets.forEach((b, i) => {
-          const v = getEnergyValue(b, key);
-          if (v > 0) points.push({ idx: i, val: v });
-        });
-        for (let p = 0; p < points.length - 1; p++) {
-          const start = points[p];
-          const end = points[p + 1];
-          const gap = end.idx - start.idx;
-          if (gap > 1 && gap <= 12) {
-            // Treat sub-15-min gaps (≤ 3 slots) as the normal polling cadence:
-            // interpolated points count as "real" so the solid line stays connected.
-            // Larger gaps remain dashed to signal actual data outages.
-            const treatAsReal = gap <= 3;
-            for (let g = 1; g < gap; g++) {
-              const t = g / gap;
-              setEnergyValue(buckets[start.idx + g], key, start.val + (end.val - start.val) * t);
-              if (treatAsReal) realIndices[key]?.add(start.idx + g);
-            }
-          }
-        }
-      }
-
-      // Populate real_* fields: only set where we have an actual data point
+      // Populate real_* fields: mark slots where at least one meter had a real reading
       buckets.forEach((b, i) => {
         for (const key of ENERGY_KEYS) {
           if (realIndices[key]?.has(i)) {
