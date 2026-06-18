@@ -90,9 +90,9 @@ serve(async (req) => {
       if (respectPollInterval) {
         const cfg = ((li as any).config as Record<string, any> | null) || {};
         const rawInterval = Number(cfg.poll_interval_minutes);
-        const intervalMin = Number.isFinite(rawInterval) && rawInterval >= 1 && rawInterval <= 15
+        const intervalMin = Number.isFinite(rawInterval) && rawInterval >= 1 && rawInterval <= 60
           ? Math.floor(rawInterval)
-          : 5;
+          : 15;
         const intervalMs = intervalMin * 60_000;
         const lastSyncIso = (li as any).last_sync_at as string | null;
         if (lastSyncIso) {
