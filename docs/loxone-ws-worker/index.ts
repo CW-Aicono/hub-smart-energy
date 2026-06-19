@@ -597,6 +597,14 @@ async function main() {
   // Watchdog (Phase 3): forciert Reconnect bei "toten" Verbindungen
   setInterval(watchdogTick, WATCHDOG_CHECK_MS);
   log("info", `[Watchdog] aktiv: prüft alle ${WATCHDOG_CHECK_MS / 1000}s, Schwelle ${WATCHDOG_STALE_MS / 1000}s`);
+
+  // Keep-Alive (Phase 4): hält NAT offen & validiert Socket/Token
+  if (KEEPALIVE_INTERVAL_MS > 0) {
+    setInterval(() => { keepaliveTick().catch((e) => log("error", "keepalive:", e)); }, KEEPALIVE_INTERVAL_MS);
+    log("info", `[Keepalive] aktiv: Ping alle ${KEEPALIVE_INTERVAL_MS / 1000}s`);
+  } else {
+    log("info", `[Keepalive] deaktiviert (KEEPALIVE_INTERVAL_MS=0)`);
+  }
 }
 
 main().catch((err) => {
