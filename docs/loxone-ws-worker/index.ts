@@ -37,8 +37,7 @@
  */
 
 import os from "os";
-
-// ─── Konfiguration ───────────────────────────────────────────────────────────
+import http from "http";
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY!;
@@ -48,6 +47,10 @@ const MIN_DELTA = parseFloat(process.env.MIN_DELTA || "0.01");
 const RELOAD_INTERVAL_MS = parseInt(process.env.RELOAD_INTERVAL_MS || "300000", 10);
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
 const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
+const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
+const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "30000", 10);
+const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase2-skeleton";
 
 if (!SUPABASE_URL || !GATEWAY_API_KEY) {
   console.error("[FATAL] SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein");
