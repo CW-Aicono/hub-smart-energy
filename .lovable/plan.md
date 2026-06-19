@@ -1,38 +1,80 @@
-## Befund
+## Tiefenanalyse Disk-I/O (90 %)
 
-Du hast recht — die Datenlage ist für Strom, Gas und Wasser **identisch**:
-- Alle 3 Hauptzähler (Strom „Zähler Gesamtverbrauch", Gas, Wasser) hängen am selben Loxone-Miniserver der AICONO Zentrale.
-- DB-Check der letzten 3 h: jeweils 8 Werte mit **exakt denselben Zeitstempeln** (z. B. 17:00:31, 16:46:30, 16:30:53, 16:18:26 …) → 15‑Min‑Poll für alle drei.
+Aus `pg_stat_statements` (kumulativ seit letztem Boot) ergeben sich die Top-Verursacher von Disk-I/O. Reihenfolge nach **gesamter Ausführungszeit**:
 
-Die Render-Logik in `src/components/dashboard/EnergyChart.tsx` (Tagesansicht) baut aber pro Energieart eine eigene 288er-5‑Min‑Spur:
-- **Volle Linie** (gestrichelt, `dataKey={key}`) = forward-gefüllter Wert in jedem 5‑Min‑Slot.
-- **„Real"-Linie** (durchgezogen, `dataKey=real_${key}`) = nur in Slots mit echter Messung. `connectNulls=false`.
 
-Bei reinem 15‑Min‑Poll (echte Slots im Abstand von 3) hat die Real-Linie immer 2 `null`-Slots dazwischen, deshalb **kann sie keine durchgezogenen Segmente zeichnen** — übrig bleibt die gestrichelte Forward-Fill-Linie. Das müsste also für **alle drei** Reihen gleich aussehen. Dass Strom optisch trotzdem durchgezogen wirkt, liegt fast sicher daran, dass `real_strom`-Punkte durch den großen Wertebereich/Dot-Marker visuell „verbinden", während Wasser/Gas nahe der Nulllinie als reine Strichelung sichtbar werden.
+| #   | Query (vereinfacht)                                                     | Aufrufe        | Σ Zeit       | Bemerkung                                                                            |
+| --- | ----------------------------------------------------------------------- | -------------- | ------------ | ------------------------------------------------------------------------------------ |
+| 1   | `INSERT meter_power_readings`                                           | **5.130.762**  | **23.247 s** | Roh-Insert pro Gateway-Poll. Jeder Insert = WAL + Index-Update                       |
+| 2   | `UPDATE location_integrations SET last_sync_at, sync_status WHERE id=…` | **2.333.740**  | **21.832 s** | 11 Zeilen, 2,3 Mio Updates → extrem viele „Hot-Row"-Updates → WAL + Autovacuum-Sturm |
+| 3   | `SELECT meter_power_readings ORDER BY recorded_at LIMIT/OFFSET`         | 157.431        | 8.767 s      | EnergyChart / Reports                                                                |
+| 4   | `SELECT integration_errors WHERE is_resolved OR is_ignored`             | 92.451         | 8.282 s      | Auto-Resolve-Loop                                                                    |
+| 5   | `SELECT meter_power_readings ORDER BY power_value DESC LIMIT`           | 8.327          | 5.599 s      | „Max-Wert finden" — voller Index-Scan ohne passenden Index, **672 ms/Call**          |
+| 6   | `INSERT ocpp_message_log`                                               | **1.033.902**  | 3.485 s      | **Jede** OCPP-WS-Nachricht wird geloggt                                              |
+| 7   | `UPSERT meter_period_totals`                                            | 658.181        | 2.739 s      | Tages-/Wochensummen-Updates                                                          |
+| 8   | `UPSERT gateway_sensor_snapshots`                                       | 293.119        | 2.638 s      | Sensor-Snapshot pro Liegenschaft                                                     |
+| 9   | `UPDATE integration_errors SET is_resolved` (mehrere Varianten)         | **~1.061.000** | ~6.700 s     | Auto-Resolve sweep loop                                                              |
+| 10  | `SELECT pending_ocpp_commands`                                          | 2.078.153      | 707 s        | Polling-Schleife für Ladepunkte                                                      |
 
-→ Die Unterscheidung „dashed vs. solid" über die 5‑Min‑Rasterung ist mit 15‑Min‑Polling strukturell nicht mehr sinnvoll. Genau das beweisen auch die Custom‑Widgets: die rendern eine einzige Linie und sehen deshalb durchgezogen aus.
 
-## Fix-Vorschlag (minimal-invasiv, nur Tagesansicht)
+Belege:
 
-**Gap-Erkennung von „Slot-Rasterung" auf „Zeit-Abstand" umstellen** in `EnergyChart.tsx`:
+- `location_integrations`: 11 Live-Zeilen → **11 Autovacuum + 11 Autoanalyze** in kürzester Zeit (Tabelle wird ständig totgeschrieben → WAL-Bloat → Disk-I/O).
+- `meter_power_readings`: 95.104 Disk-Reads in laufender Boot-Session (= Tabellen-Scans aus den Chart-Queries, weil OFFSET-Pagination ineffizient ist).
+- Aktuell läuft **keine** Long-Running-Query (1 h Realtime-WAL-Sender ist normal). Der I/O-Anstieg kommt also nicht von einer einzelnen Edge Function, sondern von **dauerhafter Hintergrundlast** der oben gelisteten Patterns.
 
-1. In Schritt 2 (per‑Meter Forward-Fill, Zeile ~424–447) zusätzlich pro Meter den Poll-Abstand schätzen (Median der Abstände zwischen echten Messungen der letzten ~2 h, default 5 Min).
-2. Einen Slot als **„noch real" markieren**, solange `slotsSinceReal * 5 min ≤ pollIntervalMin + Toleranz (5 Min)`.
-   - 5‑Min‑Poll → real bleibt 1 Slot lang real (heute schon so)
-   - 15‑Min‑Poll → real bleibt 3 Slots lang real → `real_*`-Linie wird zusammenhängend → durchgezogen
-   - 60‑Min‑Poll → real bleibt 12 Slots lang real
-3. Echte Datenausfälle (kein Wert > Poll‑Intervall + Toleranz) bleiben gestrichelt — `MAX_FILL_SLOTS=36` (= 3 h Outage-Limit) bleibt unverändert.
-4. Keine Änderung an Wochen-/Monats-/Jahresansicht, keine Änderung an Custom-Widgets, keine Code-Löschung, kein DB-Schreibvorgang.
+## Vermutung Root-Cause
 
-## Erwartetes Ergebnis
+Es gibt **drei strukturelle Schreib-Stürme**, die zusammen das I/O-Budget auffressen:
 
-- Strom, Gas, Wasser (AICONO Zentrale) zeigen nach Reload alle drei eine **durchgezogene Linie** bei 15‑Min‑Poll.
-- Wärme bleibt gestrichelt (kein Zähler vorhanden) — unverändert korrekt.
-- Bei echten Lücken > Poll‑Intervall + 5 Min wird wie bisher gestrichelt überbrückt; > 3 h bleibt Lücke.
+**A) `location_integrations`-Hot-Row-Update bei jedem Gateway-Poll**
+Jeder periodic-sync schreibt `last_sync_at` + `sync_status` auf dieselbe Zeile. 11 Zeilen × ~3.500 Polls/Tag × Tage = mehrere Millionen Updates. Jedes Update = neue Heap-Version + neue Index-Einträge + WAL + irgendwann Autovacuum. Das ist die Nr. 1 für Disk-Write-I/O.
 
-## Validierung nach dem Bauen
+**B) `ocpp_message_log` loggt jede einzelne WebSocket-Nachricht**
+1 Mio Inserts. Bei OCPP-Heartbeats alle 30 s pro Ladepunkt summiert sich das massiv. Es gibt zwar bereits eine 30-Tage-Aufräum-Logik, aber das Schreiben selbst ist die Belastung.
 
-- Dashboard AICONO Zentrale → Tagesansicht prüfen: alle 3 Linien durchgezogen ab ~13:00 gestern.
-- Andere Liegenschaft mit 5‑Min‑Poll prüfen: kein Regress, Linien weiterhin durchgezogen, Outage‑Lücken weiterhin gestrichelt.
+**C) Integration-Errors Auto-Resolve-Sweeps**
+Die Auto-Resolve-Logik durchsucht/aktualisiert die Tabelle in mehreren Varianten ~1 Mio. Mal. Jeder Sweep ist ein Index-Scan + WAL-Update.
 
-OK so umsetzen?
+## Plan: drei chirurgische Fixes (alle ohne Risiko, alle credit-arm)
+
+### Fix 1 — `location_integrations`-Update drosseln (größter Effekt)
+
+Statt bei jedem Poll `last_sync_at` zu schreiben, nur noch schreiben wenn:
+
+- `sync_status` sich **wirklich geändert** hat, **ODER**
+- der letzte Update > 5 min her ist.
+
+→ reduziert die 2,3 Mio Updates auf <100 k. **Geschätzte Disk-Write-Ersparnis: 60–70 %.**
+
+Umsetzung: in `loxone-periodic-sync` / Gateway-Heartbeat-Edge-Functions die Update-Bedingung ergänzen. Keine Migration, kein Schema-Change.
+
+### Fix 2 — `ocpp_message_log` nur bei Fehler oder selten loggen
+
+Optionen (du wählst):
+
+- **a)** Nur `CALLERROR`, `BootNotification`, `StartTransaction`, `StopTransaction`, `StatusNotification`, `Authorize` loggen. `Heartbeat` und `MeterValues` ausschließen.
+- **b)** Komplett auf Fehler-Only umschalten.
+
+→ reduziert die 1 Mio Inserts auf <50 k. **Geschätzte Write-Ersparnis: 15–20 %.**
+
+### Fix 3 — Integration-Errors Auto-Resolve weniger oft & gezielter
+
+- Sweep nur 1×/min statt bei jedem Poll.
+- WHERE-Klausel um `updated_at > now() - interval '15 min'` einschränken, damit nicht 75.000 Altzeilen bei jedem Sweep gescannt werden.
+
+→ reduziert die ~1 Mio Updates und 92 k SELECTs deutlich. **Geschätzte Write-Ersparnis: 5–10 %.**
+
+## Was NICHT gemacht wird
+
+- Kein Schema-Change, kein Reindex, kein neuer Index — die vorhandenen Indizes reichen.
+- Keine Migration, kein Datenverlust.
+- Kein Refactor der Charts (kommt erst, wenn die drei Storm-Quellen weg sind und das Bild stabil ist).
+
+## Vorgehen
+
+Ich würde **Fix 1 zuerst** umsetzen (größter Hebel, kleinste Änderung) und dann nach 30 min wieder ins Disk-I/O-Budget schauen. Wenn das schon reicht, sparen wir uns Fix 2 und 3.
+
+**OK, Fix 1 jetzt umsetzen?** (Edge Functions: `loxone-periodic-sync` und ggf. weitere periodic-sync-Funktionen. Eine kleine `if`-Bedingung vor dem `update()`-Call.)  
+  
+Ja, ok für Fix 1. Die Punkte Fix 2 und Fix 3 behandeln wir danach separat nochmal
