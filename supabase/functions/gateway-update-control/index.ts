@@ -122,10 +122,48 @@ Deno.serve(async (req) => {
   if (action === "fleet_list") {
     const { data, error } = await sb
       .from("gateway_devices")
-      .select("id, tenant_id, device_name, device_type, status, addon_version, latest_available_version, ha_version, last_heartbeat_at, auto_update_enabled, update_channel, last_update_check_at, last_update_attempt_at, last_update_error, location_id")
+      .select("id, tenant_id, device_name, device_type, status, addon_version, latest_available_version, ha_version, last_heartbeat_at, auto_update_enabled, update_channel, last_update_check_at, last_update_attempt_at, last_update_error, location_id, location_integration_id, local_ip, mac_address, ws_connected_since, last_ws_ping_at, offline_buffer_count, local_time, created_at, updated_at")
       .order("last_heartbeat_at", { ascending: false, nullsFirst: false });
     if (error) return json({ error: error.message }, 500);
-    return json({ success: true, devices: data ?? [] });
+
+    const integrationIds = Array.from(new Set((data ?? [])
+      .map((d: any) => d.location_integration_id)
+      .filter(Boolean)));
+
+    const integrationLocationMap: Record<string, string> = {};
+    if (integrationIds.length > 0) {
+      const { data: integrations, error: integrationError } = await sb
+        .from("location_integrations")
+        .select("id, location_id")
+        .in("id", integrationIds);
+      if (integrationError) return json({ error: integrationError.message }, 500);
+      (integrations ?? []).forEach((i: any) => {
+        if (i.id && i.location_id) integrationLocationMap[i.id] = i.location_id;
+      });
+    }
+
+    const locationIds = Array.from(new Set((data ?? [])
+      .map((d: any) => d.location_id ?? integrationLocationMap[d.location_integration_id])
+      .filter(Boolean)));
+
+    const locationNameMap: Record<string, string> = {};
+    if (locationIds.length > 0) {
+      const { data: locations, error: locationsError } = await sb
+        .from("locations")
+        .select("id, name")
+        .in("id", locationIds);
+      if (locationsError) return json({ error: locationsError.message }, 500);
+      (locations ?? []).forEach((l: any) => {
+        if (l.id && l.name) locationNameMap[l.id] = l.name;
+      });
+    }
+
+    const devices = (data ?? []).map((d: any) => ({
+      ...d,
+      location_id: d.location_id ?? integrationLocationMap[d.location_integration_id] ?? null,
+      location_name: locationNameMap[d.location_id ?? integrationLocationMap[d.location_integration_id]] ?? null,
+    }));
+    return json({ success: true, devices });
   }
 
   if (action === "channels_list") {

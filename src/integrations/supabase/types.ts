@@ -5799,6 +5799,7 @@ export type Database = {
           is_enabled: boolean | null
           last_sync_at: string | null
           location_id: string
+          loxone_remote_connect_ws_enabled: boolean
           sync_status: string | null
           updated_at: string
         }
@@ -5810,6 +5811,7 @@ export type Database = {
           is_enabled?: boolean | null
           last_sync_at?: string | null
           location_id: string
+          loxone_remote_connect_ws_enabled?: boolean
           sync_status?: string | null
           updated_at?: string
         }
@@ -5821,6 +5823,7 @@ export type Database = {
           is_enabled?: boolean | null
           last_sync_at?: string | null
           location_id?: string
+          loxone_remote_connect_ws_enabled?: boolean
           sync_status?: string | null
           updated_at?: string
         }
@@ -5951,6 +5954,63 @@ export type Database = {
           },
           {
             foreignKeyName: "locations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loxone_ws_session_log: {
+        Row: {
+          created_at: string
+          disconnect_reason: string | null
+          ended_at: string | null
+          events_received: number
+          id: string
+          location_integration_id: string
+          reconnect_count: number
+          started_at: string
+          tenant_id: string
+          updated_at: string
+          worker_host: string | null
+        }
+        Insert: {
+          created_at?: string
+          disconnect_reason?: string | null
+          ended_at?: string | null
+          events_received?: number
+          id?: string
+          location_integration_id: string
+          reconnect_count?: number
+          started_at?: string
+          tenant_id: string
+          updated_at?: string
+          worker_host?: string | null
+        }
+        Update: {
+          created_at?: string
+          disconnect_reason?: string | null
+          ended_at?: string | null
+          events_received?: number
+          id?: string
+          location_integration_id?: string
+          reconnect_count?: number
+          started_at?: string
+          tenant_id?: string
+          updated_at?: string
+          worker_host?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loxone_ws_session_log_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loxone_ws_session_log_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -11772,6 +11832,10 @@ export type Database = {
           p_tenant_id?: string
           p_to: string
         }
+        Returns: number
+      }
+      refresh_meter_period_totals_5min: {
+        Args: { p_from?: string; p_to?: string }
         Returns: number
       }
       refresh_meter_weekly_totals: {
