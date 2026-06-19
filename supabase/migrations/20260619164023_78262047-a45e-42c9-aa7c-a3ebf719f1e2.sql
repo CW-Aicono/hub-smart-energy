@@ -1,0 +1,1 @@
+UPDATE public.location_integrations SET loxone_remote_connect_ws_enabled = false WHERE loxone_remote_connect_ws_enabled = true;
