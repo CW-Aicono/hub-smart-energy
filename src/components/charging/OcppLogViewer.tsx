@@ -31,7 +31,11 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
     if (cp?.id && !list.includes(cp.id)) list.push(cp.id);
     if (cp?.ocpp_id && !list.includes(cp.ocpp_id)) list.push(cp.ocpp_id);
     return list;
-  }, [chargePointId, chargePoints]);
+    // Nur auf die tatsächlich relevanten ID-Werte hören, nicht auf das gesamte
+    // chargePoints-Array — sonst löst jedes Realtime-Update einen Reload aus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chargePointId, chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId)?.id, chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId)?.ocpp_id]);
+
   const { logs, loading, paused, setPaused, refetch } = useOcppLogs(logIds, messageTypeFilter);
 
   // Standard OCPP 1.6 message types + types found in current logs
