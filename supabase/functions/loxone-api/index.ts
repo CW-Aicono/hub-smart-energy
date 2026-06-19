@@ -1208,7 +1208,20 @@ serve(async (req) => {
               }
             }
           }
+
+          // Bulk-Insert der Zählerstands-Snapshots (Konflikt = bereits vorhandener Zeitpunkt → ignorieren)
+          if (cumulativeInserts.length > 0) {
+            const { error: cumErr } = await supabase
+              .from("meter_cumulative_readings")
+              .upsert(cumulativeInserts, { onConflict: "meter_id,reading_at" });
+            if (cumErr) {
+              console.error("Error inserting cumulative readings:", cumErr);
+            } else {
+              console.log(`Inserted ${cumulativeInserts.length} cumulative meter readings`);
+            }
+          }
         }
+
       } catch (archiveErr) {
         console.error("Error archiving data:", archiveErr);
       }
