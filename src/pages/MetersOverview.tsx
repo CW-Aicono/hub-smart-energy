@@ -24,6 +24,7 @@ import { Gauge, ClipboardEdit, Filter, QrCode, Pencil, Archive, ArchiveRestore, 
 import { format } from "date-fns";
 import { de, enUS, es, nl } from "date-fns/locale";
 import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 
 const MetersOverview = () => {
   const { user, loading: authLoading } = useAuth();
@@ -305,10 +306,13 @@ const MetersOverview = () => {
                                     <Button size="sm" variant="ghost" onClick={() => archiveMeter(m.id, false)} title="Wiederherstellen">
                                       <ArchiveRestore className="h-4 w-4 text-primary" />
                                     </Button>
-                                    <Button size="sm" variant="ghost" onClick={() => {
-                                      if (window.confirm(`Möchten Sie "${m.name}" endgültig löschen? Historische Messwerte bleiben erhalten, sind aber nicht mehr dieser Messstelle zugeordnet.`)) {
-                                        deleteMeter(m.id);
-                                      }
+                                    <Button size="sm" variant="ghost" onClick={async () => {
+                                      const ok = await confirmDialog({
+                                        title: "Zähler endgültig löschen?",
+                                        description: `Möchten Sie "${m.name}" endgültig löschen? Historische Messwerte bleiben erhalten, sind aber nicht mehr dieser Messstelle zugeordnet.`,
+                                        confirmLabel: "Endgültig löschen",
+                                      });
+                                      if (ok) deleteMeter(m.id);
                                     }} title="Endgültig löschen">
                                       <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
