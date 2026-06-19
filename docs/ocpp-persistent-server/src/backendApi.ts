@@ -124,6 +124,20 @@ export async function logOcppFrame(
   await callBackend("log-message", { chargePointId, direction, raw });
 }
 
+export interface OcppLogBatchEntry {
+  chargePointId: string;
+  direction: "incoming" | "outgoing";
+  raw: string;
+  responseRaw?: string | null;
+  responseAt?: string | null;
+  createdAt?: string;
+}
+
+export async function logOcppFramesBatch(entries: OcppLogBatchEntry[]): Promise<void> {
+  if (entries.length === 0) return;
+  await callBackend("log-messages-batch", { entries });
+}
+
 export async function fetchPendingCommands(connectedIds: string[]): Promise<PendingCommandRow[]> {
   const result = await callBackend<{ commands: PendingCommandRow[] }>("fetch-pending-commands", { connectedIds });
   return result.commands;
