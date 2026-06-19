@@ -807,21 +807,13 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                     if (bidirectionalTypes.has(key)) {
                       return (
                         <React.Fragment key={key}>
-                          <Bar dataKey={`${key}_bezug`} name={`${T(`energy.${key}`)} Bezug`} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)}>
-                            {filteredChartData.map((entry: any, i: number) => (
-                              <Cell key={`c-bz-${key}-${i}`} fill={entry[`__gap_${key}`] ? `url(#gap-pattern-${key})` : ENERGY_CHART_COLORS[key]} />
-                            ))}
-                          </Bar>
+                          <Bar dataKey={`${key}_bezug`} name={`${T(`energy.${key}`)} Bezug`} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />
                           <Bar dataKey={`${key}_einspeisung`} name={`${T(`energy.${key}`)} Einspeisung`} fill="#10b981" radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />
                         </React.Fragment>
                       );
                     }
                     return (
-                      <Bar key={key} dataKey={key} name={T(`energy.${key}`)} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)}>
-                        {filteredChartData.map((entry: any, i: number) => (
-                          <Cell key={`c-${key}-${i}`} fill={entry[`__gap_${key}`] ? `url(#gap-pattern-${key})` : ENERGY_CHART_COLORS[key]} />
-                        ))}
-                      </Bar>
+                      <Bar key={key} dataKey={key} name={T(`energy.${key}`)} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />
                     );
                   })}
                 </BarChart>
