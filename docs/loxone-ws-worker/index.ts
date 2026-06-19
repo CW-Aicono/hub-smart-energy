@@ -451,15 +451,54 @@ async function reloadMeters(): Promise<void> {
   log("info", `[Reload] aktive Miniserver: ${connections.size}`);
 }
 
+// ─── Health-HTTP-Server (Phase 2) ────────────────────────────────────────────
+
+function startHealthServer(): void {
+  if (!HEALTH_PORT || HEALTH_PORT <= 0) return;
+  const server = http.createServer((req, res) => {
+    if (req.url === "/healthz") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, worker: BRIDGE_WORKER_NAME, host: WORKER_HOST }));
+      return;
+    }
+    if (req.url === "/state") {
+      const state = {
+        worker: BRIDGE_WORKER_NAME,
+        version: WORKER_VERSION,
+        host: WORKER_HOST,
+        connections: Array.from(connections.values()).map((c) => ({
+          serial: c.serialNumber,
+          authenticated: c.authenticated,
+          uuids: c.uuidMap.size,
+          events_received: c.eventsReceived,
+          reconnect_count: c.reconnectCount,
+          last_connected_at: c.lastConnectedAt ? new Date(c.lastConnectedAt).toISOString() : null,
+          last_event_at: c.lastEventAt ? new Date(c.lastEventAt).toISOString() : null,
+        })),
+      };
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(state, null, 2));
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  server.listen(HEALTH_PORT, () => log("info", `[Health] HTTP-Endpoint auf Port ${HEALTH_PORT} (GET /healthz, /state)`));
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  log("info", `Loxone WS Worker (Feldtest) startet — host=${WORKER_HOST}`);
+  log("info", `Loxone WS Worker startet — worker=${BRIDGE_WORKER_NAME} host=${WORKER_HOST} version=${WORKER_VERSION}`);
   log("info", `  SUPABASE_URL=${SUPABASE_URL}`);
-  log("info", `  FLUSH_INTERVAL_MS=${FLUSH_INTERVAL_MS}  RELOAD_INTERVAL_MS=${RELOAD_INTERVAL_MS}`);
+  log("info", `  FLUSH_INTERVAL_MS=${FLUSH_INTERVAL_MS}  RELOAD_INTERVAL_MS=${RELOAD_INTERVAL_MS}  BRIDGE_HEARTBEAT_MS=${BRIDGE_HEARTBEAT_MS}`);
+
+  startHealthServer();
 
   const shutdown = async (signal: string) => {
     log("info", `${signal} — beende Sessions...`);
+    await bridgeHeartbeat("offline", `shutdown-${signal}`);
+    await bridgeLog("info", "worker_shutdown", `Worker beendet (${signal})`);
     for (const state of connections.values()) {
       try { state.ws?.close(); } catch { /* ignore */ }
       await sessionEnd(state, `shutdown-${signal}`);
@@ -469,9 +508,16 @@ async function main() {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
+  // Initialer Heartbeat + Start-Event, damit bridge_workers.status sofort auf "online" geht
+  await bridgeHeartbeat("online");
+  await bridgeLog("info", "worker_started", `Worker gestartet auf ${WORKER_HOST}`);
+
   await reloadMeters();
   setInterval(reloadMeters, RELOAD_INTERVAL_MS);
   setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
+
+  // Bridge-Heartbeat: hält bridge_workers.last_heartbeat_at frisch (Phase 2)
+  setInterval(() => { bridgeHeartbeat("online").catch(() => { /* siehe bridgeHeartbeat */ }); }, BRIDGE_HEARTBEAT_MS);
 
   // Session-Heartbeat alle 15s: hält die aktive Session "live" und liefert
   // events_received an die UI, damit die Miniserver-Kachel WS-Traffic anzeigt.
