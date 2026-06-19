@@ -754,17 +754,15 @@ async function handleAuth(
 
   // Mark the parent location_integration as successfully connected so the
   // map / locations overview shows the gateway as online (not "pending").
+  // IO-Optimierung: gedrosselter RPC (nur bei Status-Wechsel oder älter als 60s).
   if (device.location_integration_id) {
-    await sb
-      .from("location_integrations")
-      .update({
-        sync_status: "success",
-        last_sync_at: nowIso,
-        sync_error: null,
-        updated_at: nowIso,
-      })
-      .eq("id", device.location_integration_id);
+    await sb.rpc("touch_location_integration_sync", {
+      _id: device.location_integration_id,
+      _status: "success",
+      _min_interval_seconds: 60,
+    });
   }
+
 
   safeSend(socket, {
     type: "auth_ok",
@@ -808,11 +806,14 @@ async function handleFrame(session: Session, raw: any) {
       }
       await svc().from("gateway_devices").update(update).eq("id", session.deviceId);
       if (session.locationIntegrationId) {
-        await svc()
-          .from("location_integrations")
-          .update({ sync_status: "success", last_sync_at: nowIso, sync_error: null, updated_at: nowIso })
-          .eq("id", session.locationIntegrationId);
+        // IO-Optimierung: gedrosselter RPC (nur bei Status-Wechsel oder >60s).
+        await svc().rpc("touch_location_integration_sync", {
+          _id: session.locationIntegrationId,
+          _status: "success",
+          _min_interval_seconds: 60,
+        });
       }
+
       safeSend(session.socket, { type: "pong" });
       break;
     }

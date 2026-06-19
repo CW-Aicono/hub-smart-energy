@@ -24,7 +24,9 @@
  * Umgebungsvariablen:
  *   SUPABASE_URL        z. B. https://ihre-projekt-id.supabase.co
  *   GATEWAY_API_KEY     Bearer Token (gleicher Wert wie bei gateway-ingest)
- *   FLUSH_INTERVAL_MS   Wie oft Werte gepusht werden (Standard: 1000)
+ *   FLUSH_INTERVAL_MS   Wie oft Werte gepusht werden (Standard: 5000)
+ *   MIN_PUSH_INTERVAL_MS Mindestabstand zwischen 2 Pushes desselben Werts (Standard: 60000)
+ *   MIN_DELTA           Minimale Änderung in kW, ab der gepusht wird (Standard: 0.01)
  *   RELOAD_INTERVAL_MS  Wie oft die Meter-Liste neu geladen wird (Standard: 300000)
  *   LOG_LEVEL           "debug" | "info" | "warn" | "error" (Standard: "info")
  *   WORKER_HOST         Freier Text, taucht im Session-Log auf (Standard: hostname)
@@ -36,7 +38,9 @@ import os from "os";
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY!;
-const FLUSH_INTERVAL_MS = parseInt(process.env.FLUSH_INTERVAL_MS || "1000", 10);
+const FLUSH_INTERVAL_MS = parseInt(process.env.FLUSH_INTERVAL_MS || "5000", 10);
+const MIN_PUSH_INTERVAL_MS = parseInt(process.env.MIN_PUSH_INTERVAL_MS || "60000", 10);
+const MIN_DELTA = parseFloat(process.env.MIN_DELTA || "0.01");
 const RELOAD_INTERVAL_MS = parseInt(process.env.RELOAD_INTERVAL_MS || "300000", 10);
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
 const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
@@ -116,6 +120,8 @@ interface UuidEntry {
   tenant_id: string;
   energy_type: string;
   latest_value: number | null;
+  last_pushed_value: number | null;
+  last_pushed_at: number; // ms epoch
 }
 
 interface ConnState {
@@ -265,18 +271,31 @@ function scheduleReconnect(state: ConnState, reason: string): void {
 
 async function flush(): Promise<void> {
   const readings: any[] = [];
-  const now = new Date().toISOString();
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
   for (const state of connections.values()) {
     if (!state.authenticated) continue;
     for (const entry of state.uuidMap.values()) {
       if (entry.latest_value === null) continue;
+
+      // IO-Optimierung: nur pushen, wenn sich der Wert spürbar geändert hat
+      // ODER der letzte Push älter als MIN_PUSH_INTERVAL_MS ist (Keepalive).
+      const prev = entry.last_pushed_value;
+      const ageMs = nowMs - entry.last_pushed_at;
+      const delta = prev === null ? Infinity : Math.abs(entry.latest_value - prev);
+      const changed = delta >= MIN_DELTA;
+      const stale = ageMs >= MIN_PUSH_INTERVAL_MS;
+      if (!changed && !stale) continue;
+
       readings.push({
         meter_id: entry.meter_id,
         tenant_id: entry.tenant_id,
         power_value: entry.latest_value,
         energy_type: entry.energy_type,
-        recorded_at: now,
+        recorded_at: nowIso,
       });
+      entry.last_pushed_value = entry.latest_value;
+      entry.last_pushed_at = nowMs;
     }
   }
   if (readings.length === 0) return;
@@ -287,6 +306,7 @@ async function flush(): Promise<void> {
     log("warn", `[Flush] fehlgeschlagen: ${(err as Error).message}`);
   }
 }
+
 
 // ─── Meter-Liste laden & Verbindungen synchronisieren ────────────────────────
 
@@ -344,8 +364,11 @@ async function reloadMeters(): Promise<void> {
         tenant_id: m.tenant_id,
         energy_type: m.energy_type,
         latest_value: null,
+        last_pushed_value: null,
+        last_pushed_at: 0,
       });
     }
+
     if (!state.ws) connect(state);
   }
 
