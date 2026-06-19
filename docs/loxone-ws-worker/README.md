@@ -795,7 +795,7 @@ Der Worker meldet sich jetzt zusätzlich alle 30 Sekunden bei zwei neuen Tabelle
    - **`name`** = `hetzner-bridge-test`
    - **`status`** = `online`
    - **`last_heartbeat_at`** = nicht älter als 1 Minute
-   - **`version`** = `phase2-skeleton` (oder Ihr Wert aus `WORKER_VERSION`)
+   - **`version`** = `phase3` (oder Ihr Wert aus `WORKER_VERSION`)
 4. Öffnen Sie zusätzlich die Tabelle **`bridge_event_log`** und sortieren Sie nach `occurred_at` absteigend. Sie sollten ganz oben Ereignisse sehen wie:
    - `worker_started` – beim Start des Containers
    - `ws_connected` – sobald ein Miniserver verbunden ist
