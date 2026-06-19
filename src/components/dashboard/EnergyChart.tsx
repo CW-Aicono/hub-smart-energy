@@ -768,10 +768,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                     const hidden = hiddenKeys.has(key);
                     const displayName = T(`energy.${key}`);
                     return (
-                      <React.Fragment key={key}>
-                        <Line type="monotone" dataKey={key} name={`__gap_${key}`} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
-                        <Line type="monotone" dataKey={hidden ? key : `real_${key}`} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={false} legendType="line" />
-                      </React.Fragment>
+                      <Line key={key} type="monotone" dataKey={key} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={false} legendType="line" />
                     );
                   })}
                 </LineChart>
@@ -810,21 +807,13 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                     if (bidirectionalTypes.has(key)) {
                       return (
                         <React.Fragment key={key}>
-                          <Bar dataKey={`${key}_bezug`} name={`${T(`energy.${key}`)} Bezug`} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)}>
-                            {filteredChartData.map((entry: any, i: number) => (
-                              <Cell key={`c-bz-${key}-${i}`} fill={entry[`__gap_${key}`] ? `url(#gap-pattern-${key})` : ENERGY_CHART_COLORS[key]} />
-                            ))}
-                          </Bar>
+                          <Bar dataKey={`${key}_bezug`} name={`${T(`energy.${key}`)} Bezug`} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />
                           <Bar dataKey={`${key}_einspeisung`} name={`${T(`energy.${key}`)} Einspeisung`} fill="#10b981" radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />
                         </React.Fragment>
                       );
                     }
                     return (
-                      <Bar key={key} dataKey={key} name={T(`energy.${key}`)} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)}>
-                        {filteredChartData.map((entry: any, i: number) => (
-                          <Cell key={`c-${key}-${i}`} fill={entry[`__gap_${key}`] ? `url(#gap-pattern-${key})` : ENERGY_CHART_COLORS[key]} />
-                        ))}
-                      </Bar>
+                      <Bar key={key} dataKey={key} name={T(`energy.${key}`)} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />
                     );
                   })}
                 </BarChart>
