@@ -654,24 +654,33 @@ Ersetzen Sie die Platzhalter im folgenden Befehl und fügen Sie ihn ein:
 
 ```bash
 docker run -d --restart=always --name loxone-ws-worker \
+  -p 8080:8080 \
   -e SUPABASE_URL=[HIER_SUPABASE_URL] \
   -e GATEWAY_API_KEY=[HIER_API_KEY] \
   -e LOG_LEVEL=info \
   -e WORKER_HOST=hetzner-prod-1 \
+  -e BRIDGE_WORKER_NAME=hetzner-bridge-test \
   loxone-ws-worker
 ```
 
 > **Beispiel, wie es aussieht, wenn es fertig ist:**
 > ```bash
 > docker run -d --restart=always --name loxone-ws-worker \
+>   -p 8080:8080 \
 >   -e SUPABASE_URL=https://abcdefg12345.supabase.co \
 >   -e GATEWAY_API_KEY=sk_live_51H8xyz... \
 >   -e LOG_LEVEL=info \
 >   -e WORKER_HOST=hetzner-prod-1 \
+>   -e BRIDGE_WORKER_NAME=hetzner-bridge-test \
 >   loxone-ws-worker
 > ```
 
-> **Was passiert hier?** `docker run` startet die Box. `-d` bedeutet „im Hintergrund“. `--restart=always` bedeutet: Wenn der Server neu startet, startet auch diese Box automatisch wieder. `WORKER_HOST` ist ein beliebiger Name, damit Sie später im Log sehen, welcher Worker was gemacht hat.
+> **Was passiert hier?**
+> - `docker run` startet die Box. `-d` bedeutet „im Hintergrund".
+> - `--restart=always` startet die Box automatisch nach einem Server-Neustart.
+> - `-p 8080:8080` öffnet den Port 8080 für die Statusseite (`/healthz` und `/state`).
+> - `WORKER_HOST` ist ein beliebiger Name, taucht im Log auf.
+> - `BRIDGE_WORKER_NAME` muss exakt mit dem Eintrag in der Tabelle `bridge_workers` übereinstimmen (Standard: `hetzner-bridge-test`, ist bereits angelegt).
 
 Wenn alles geklappt hat, sehen Sie eine lange Zeichenkette aus Buchstaben und Zahlen – das ist die ID des gestarteten Containers.
 
@@ -685,18 +694,31 @@ Schauen wir nach, ob das Programm gestartet ist und arbeitet:
 docker logs -f loxone-ws-worker
 ```
 
-> **Was passiert hier?** Sie sehen das „Tagebuch“ des Programms. `-f` bedeutet: Zeige neue Einträge sofort an.
+> **Was passiert hier?** Sie sehen das „Tagebuch" des Programms. `-f` bedeutet: Zeige neue Einträge sofort an.
 
 Drücken Sie **Enter**. Sie sollten nach einigen Sekunden etwa Folgendes sehen:
 
 ```
-[INFO] Loxone WS Worker (Feldtest) startet — host=hetzner-prod-1
+[INFO] Loxone WS Worker startet — worker=hetzner-bridge-test host=hetzner-prod-1 version=phase2-skeleton
 [INFO]   SUPABASE_URL=https://...
-[INFO]   FLUSH_INTERVAL_MS=1000  RELOAD_INTERVAL_MS=300000
+[INFO]   FLUSH_INTERVAL_MS=1000  RELOAD_INTERVAL_MS=300000  BRIDGE_HEARTBEAT_MS=30000
+[INFO] [Health] HTTP-Endpoint auf Port 8080 (GET /healthz, /state)
 [INFO] [Reload] aktive Miniserver: 0
 ```
 
 **Steht dort `aktive Miniserver: 0`?** Das ist im Moment noch richtig! Das bedeutet nur, dass noch kein Standort im Backend für den Feldtest freigeschaltet wurde.
+
+**Zweite kurze Prüfung – die Statusseite:** Tippen Sie auf dem Server (oder von Ihrem Rechner aus, falls Port 8080 nach außen geöffnet ist):
+
+```bash
+curl http://127.0.0.1:8080/healthz
+```
+
+Sie sollten so etwas sehen:
+
+```
+{"ok":true,"worker":"hetzner-bridge-test","host":"hetzner-prod-1"}
+```
 
 Drücken Sie **Strg + C**, um die Log-Anzeige zu beenden (das Programm läuft weiter im Hintergrund).
 
