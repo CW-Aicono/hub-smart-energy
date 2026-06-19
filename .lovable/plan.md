@@ -1,81 +1,131 @@
-## Korrektur: Du hast recht — der Worker-Fix allein reicht nicht
+## Befund aus der Live-Prüfung
 
-### Was die DB-Statistik wirklich zeigt (`pg_stat_user_tables`, kumulativ)
+Der Backend-Zustand selbst ist erreichbar und stabil. Der Warnhinweis kommt sehr wahrscheinlich nicht von vollem Speicherplatz, sondern vom **I/O-Budget**: also wie viel Lesen/Schreiben die Cloud-Instanz pro Zeitraum leisten darf.
 
+Wichtig: Die aktuelle Messung zeigt **nicht**, dass OCPP gerade der größte Daten-Schreiber ist.
 
-| Tabelle                     | Inserts       | Updates      | Deletes   | Live-Rows |
-| --------------------------- | ------------- | ------------ | --------- | --------- |
-| `meter_power_readings`      | **12,86 Mio** | 0            | 12,00 Mio | 865 k     |
-| `meter_power_readings_5min` | 1,49 Mio      | **1,98 Mio** | 2         | 1,47 Mio  |
-| `meter_period_totals`       | 6 k           | **9,79 Mio** | 344       | 5,7 k     |
-| `ocpp_message_log`          | 1,03 Mio      | 0            | 894 k     | 139 k     |
-| `spot_prices`               | 508 k         | 0            | 496 k     | 11 k      |
-| `charge_points`             | 1,5 k         | 636 k        | 51        | 6         |
-| `integration_errors`        | 80 k          | 165 k        | 5 k       | 75 k      |
-| `tasks`                     | 149 k         | 69 k         | 36 k      | 112 k     |
-| `pv_forecast_hourly`        | 3,7 k         | 108 k        | 168       | 3,5 k     |
+Aktuelle Live-Werte:
 
+- `ocpp_message_log`: ca. **120 Zeilen in 60 Minuten** = sehr gering.
+- `ocpp_meter_samples`: ca. **60 Zeilen in 60 Minuten** = sehr gering.
+- `meter_power_readings`: ca. **1.220 Zeilen in 60 Minuten** = deutlich mehr.
+- Edge Function `ocpp-persistent-api`: ca. **221 Aufrufe in 60 Minuten**.
+- Top-Last laut Datenbankstatistik:
+  - `meter_power_readings` Inserts: ca. **5,13 Mio. Aufrufe** historisch in der Statistik.
+  - `location_integrations` Updates: ca. **2,33 Mio. Aufrufe** historisch in der Statistik.
+  - Leseabfragen auf `meter_power_readings`: sehr teuer.
+  - `integration_errors` Prüfung: ebenfalls auffällig.
 
-### Die eigentliche IO-Last (drei Treiber, nicht einer)
+Zusätzlich auffällig: `ocpp-persistent-api` zeigt sehr viele `booted` / `shutdown` Logs. Das heißt: die Funktion wird sehr häufig kurz gestartet und beendet. Das ist nicht zwingend ein Datenbank-Schreibproblem, erzeugt aber unnötige Backend-Arbeit.
 
-**1. Schreib-Verstärkung über Trigger (größter Posten)**
-Jeder Insert in `meter_power_readings` löst Folge-Updates aus:
+## Sehr wichtiger Punkt
 
-- 1 Insert Rohwert → 1 Update in `meter_power_readings_5min` → 1 Update in `meter_period_totals`
-- Verhältnis Updates/Inserts bei `meter_period_totals` = **1.613 zu 1**. Das heißt: pro Rohwert-Insert werden im Schnitt ~1.600 Aggregations-Zellen aktualisiert (vermutlich pro Periode × Energietyp).
-- Das ist DER Hauptverursacher der Disk-IO, **unabhängig vom Loxone-Worker**, und war auch vor Hetzner schon aktiv (Brighthub, Shelly, Schneider, MQTT etc. nutzen denselben Pfad).
+Die Änderung am OCPP Persistent Server reduziert die Last **erst dann vollständig**, wenn der externe Persistent Server wirklich neu gebaut / neu gestartet / neu deployed wurde. Die Datenbank- und Edge-Function-Seite ist vorbereitet, aber der Prozess außerhalb von Lovable muss die neue Batch-Logik auch tatsächlich verwenden.
 
-**2. Heißlauf-Tabellen ohne Bezug zu Loxone**
+Trotzdem zeigen die aktuellen Tabellenzahlen: selbst wenn OCPP noch nicht optimal läuft, ist OCPP aktuell nicht der sichtbar größte Datenbank-Schreiber.
 
-- `charge_points`: **636 k Updates** auf 6 Live-Rows — jede OCPP-Heartbeat-Nachricht schreibt Status zurück.
-- `ocpp_message_log`: 1 Mio Inserts + 894 k Deletes — Log-Churn.
-- `spot_prices`: 508 k Inserts / 496 k Deletes — wahrscheinlich täglicher Full-Refresh statt UPSERT.
-- `pv_forecast_hourly`: 108 k Updates auf 3,5 k Rows.
+## Ziel
 
-**3. Loxone-Worker Spam** (mein vorheriger Befund)
-Rathaus-Energiemonitor: 23.770 Inserts/Tag. Real, aber „nur" Posten 3 — anteilig vielleicht 5-10 % der Gesamt-IO.
+Jetzt keine dritte Rateschleife, sondern ein messbarer Akut-Fix:
 
-### Ehrliche Konsequenz
+1. Schreiblast sofort senken.
+2. Keine Messwerte verlieren, die für Energieauswertung nötig sind.
+3. Keine OCPP-Logs löschen.
+4. Danach erneut messen, ob das I/O-Budget fällt.
 
-Den Worker zu fixen senkt die IO **moderat** (geschätzt 5-10 %), löst das 82 %-Problem aber **nicht** dauerhaft. Die strukturelle Schreib-Verstärkung über Trigger und die OCPP/Spotprice-Churn-Tabellen bleiben.
+## Plan zur Umsetzung
 
-### Optionen (nach Wirkung sortiert, du entscheidest, was wir anfassen)
+### Schritt 1: Leselast auf `meter_power_readings` prüfen und gezielt indizieren
 
-**A) Trigger-Aggregation entzerren** — größter Hebel
+Ich prüfe die vorhandenen Indizes und die konkreten Abfragepläne für:
 
-- Aktuell wird `meter_period_totals` synchron pro Insert via Trigger aktualisiert.
-- Alternative: Trigger entfernen, Aggregation per `pg_cron`-Job alle 5 min batchweise (1 Schreiboperation statt 1.600).
-- Erwartete IO-Reduktion: **40-60 %**.
-- Risiko: Aggregat-Werte hinken bis zu 5 min hinterher. Aufwand: 1 Migration + 1 Edge/SQL-Job.
+- Zeitreihen-Abfragen pro Zähler und Zeitraum.
+- Maximum-/Peak-Abfragen pro Zähler und Zeitraum.
 
-**B) `charge_points`-Heartbeat-Updates drosseln**
+Wenn ein passender Index fehlt, lege ich gezielt einen Index an, zum Beispiel für:
 
-- 636 k Updates auf 6 Zeilen ist absurd. Nur bei Status­wechsel oder ≥60 s Abstand schreiben.
-- Erwartete IO-Reduktion: 10-15 %.
-- Risiko: keins. Aufwand: 1 Code-Änderung im OCPP-Server.
+- `meter_id + recorded_at`
+- optional für Peak-Abfragen zusätzlich passend zur Sortierung nach `power_value`
 
-**C) `spot_prices` UPSERT statt Delete+Insert**
+Erwarteter Effekt:
 
-- Erwartete IO-Reduktion: 5 %.
-- Aufwand: 1 Edge-Function-Änderung.
+- Weniger Disk-Lesen bei Dashboards und Graphen.
+- Weniger I/O-Verbrauch ohne Datenverlust.
 
-**D) Loxone-Worker Dedupe** (mein vorheriger Plan)
+### Schritt 2: Schreiblast bei `meter_power_readings` entschärfen
 
-- Erwartete IO-Reduktion: 5-10 %.
-- Aufwand: 1 Datei, kein DB-Change.
+Ich suche die Stellen, die `meter_power_readings` schreiben, besonders Gateway-/Loxone-/Shelly-/OCPP-Pfade.
 
-### Empfehlung
+Ziel ist **nicht**, Daten zu verlieren, sondern doppelte oder unnötig kleinteilige Schreibvorgänge zu vermeiden:
 
-Bevor wir irgendetwas implementieren: **EXPLAIN/Trigger-Definition prüfen** (5 Min, kein Credit-Risiko), um zu bestätigen welcher Trigger die 9,79 Mio Updates auf `meter_period_totals` erzeugt. Erst danach entscheiden, ob A, B, C, D — oder Kombination — angefasst wird.
+- gleiche Messwerte im gleichen engen Zeitfenster nicht mehrfach speichern,
+- wenn möglich Batch-Insert statt vieler Einzel-Inserts,
+- bestehende 5-Minuten-Aggregation nicht umgehen.
 
-### Fragen an dich
+Erwarteter Effekt:
 
-1. Soll ich zuerst die Trigger-Analyse machen (lesend, kostengünstig) und dann einen gezielten Plan vorlegen?
-2. Oder direkt mit Option B (`charge_points`-Drossel, risikofrei) starten?
-3. Option D (Loxone-Worker) wie ursprünglich geplant, parallel?  
-  
-Antwort: Ja, bitte führe zuerst nur eine Trigger-Analyse durch.  
-  
-  
-  
- 
+- Weniger einzelne Datenbank-Schreibvorgänge.
+- Historische Kurven bleiben erhalten.
+
+### Schritt 3: `location_integrations`-Status-Updates endgültig begrenzen
+
+Die vorherige Änderung reduziert echte Datenbank-Updates auf 5 Minuten. Ich prüfe aber, ob noch Codepfade direkt `location_integrations` aktualisieren und die neue Drosselung umgehen.
+
+Falls ja:
+
+- direkte Updates ersetzen durch die gedrosselte Funktion,
+- harte 5-Minuten-Grenze überall einheitlich verwenden,
+- Statuswechsel weiterhin sofort speichern.
+
+Erwarteter Effekt:
+
+- Weniger Update-Last und weniger tote Zeilen.
+
+### Schritt 4: `integration_errors`-Prüfung optimieren
+
+Die Statistik zeigt viele Abfragen nach:
+
+- `location_integration_id`
+- `error_type`
+- `is_resolved` / `is_ignored`
+
+Ich prüfe, ob dafür ein passender Teilindex fehlt. Falls ja, lege ich einen gezielten Index für offene/aktive Fehler an.
+
+Erwarteter Effekt:
+
+- Weniger Disk-Lesen bei Fehlerprüfung und Auto-Resolve-Logik.
+
+### Schritt 5: OCPP sauber fertigziehen, aber nicht als Hauptursache behandeln
+
+OCPP bleibt wichtig, aber aktuell ist es nicht der größte Schreibtreiber.
+
+Ich prüfe:
+
+- ob `log-messages-batch` wirklich aufgerufen wird,
+- ob Request/Response-Pairing greift,
+- ob der Persistent Server noch die alte Einzel-Logik nutzt.
+
+Falls der externe Persistent Server noch nicht aktualisiert ist, gebe ich dir danach eine sehr klare Anfänger-Anleitung, wie du ihn neu bauen / neu starten kannst.
+
+### Schritt 6: Nach jeder Änderung messen
+
+Nach den Änderungen prüfe ich wieder:
+
+- Backend Health,
+- Top Slow Queries,
+- Tabellen-Schreibzahlen,
+- Edge-Function-Aufrufe der letzten 60 Minuten.
+
+Nur wenn danach weiterhin 100% Disk-I/O-Budget steht, ist der nächste sachliche Schritt eine temporäre größere Lovable-Cloud-Instanz. Das wäre dann kein Code-Bug mehr, sondern schlicht zu wenig I/O-Leistung für die aktuelle Last.
+
+## Was ich bewusst nicht mache
+
+- Keine OCPP-Logs löschen.
+- Keine historischen Messwerte löschen.
+- Kein Sampling bei OCPP Heartbeats als Sofortmaßnahme.
+- Keine riskante Tabellen-Partitionierung als ersten Schritt.
+- Kein Backend-Neustart als „Blindfix“, solange die Datenbank erreichbar ist.
+
+## Erwartetes Ergebnis
+
+Nach Umsetzung sollten die auffälligen Datenbankabfragen weniger Disk-I/O verbrauchen. Besonders wichtig sind jetzt `meter_power_readings`, `location_integrations` und `integration_errors`; OCPP wird parallel verifiziert, aber nicht mehr als Hauptursache angenommen.

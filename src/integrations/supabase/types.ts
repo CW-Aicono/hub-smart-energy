@@ -7119,6 +7119,8 @@ export type Database = {
           id: string
           message_type: string | null
           raw_message: Json
+          response_at: string | null
+          response_message: Json | null
         }
         Insert: {
           charge_point_id: string
@@ -7127,6 +7129,8 @@ export type Database = {
           id?: string
           message_type?: string | null
           raw_message: Json
+          response_at?: string | null
+          response_message?: Json | null
         }
         Update: {
           charge_point_id?: string
@@ -7135,6 +7139,8 @@ export type Database = {
           id?: string
           message_type?: string | null
           raw_message?: Json
+          response_at?: string | null
+          response_message?: Json | null
         }
         Relationships: []
       }
