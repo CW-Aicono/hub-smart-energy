@@ -11834,6 +11834,10 @@ export type Database = {
         }
         Returns: number
       }
+      refresh_meter_period_totals_5min: {
+        Args: { p_from?: string; p_to?: string }
+        Returns: number
+      }
       refresh_meter_weekly_totals: {
         Args: {
           p_from: string
