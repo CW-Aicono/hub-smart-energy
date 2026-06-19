@@ -30,6 +30,10 @@
  *   RELOAD_INTERVAL_MS  Wie oft die Meter-Liste neu geladen wird (Standard: 300000)
  *   LOG_LEVEL           "debug" | "info" | "warn" | "error" (Standard: "info")
  *   WORKER_HOST         Freier Text, taucht im Session-Log auf (Standard: hostname)
+ *   BRIDGE_WORKER_NAME  Name in Tabelle bridge_workers (Standard: hetzner-bridge-test)
+ *   BRIDGE_HEARTBEAT_MS Heartbeat-Intervall in ms (Standard: 30000)
+ *   HEALTH_PORT         HTTP-Port für /healthz und /state (Standard: 8080, 0 = aus)
+ *   WORKER_VERSION      Versions-String, taucht in bridge_workers.version auf
  */
 
 import os from "os";
