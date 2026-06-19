@@ -418,6 +418,8 @@ async function reloadMeters(): Promise<void> {
         sessionId: null,
         eventsReceived: 0,
         reconnectCount: 0,
+        lastConnectedAt: 0,
+        lastEventAt: 0,
       };
       connections.set(serial, state);
     }
