@@ -976,6 +976,16 @@ serve(async (req) => {
             recorded_at: string;
           }> = [];
 
+          // Kumulative Zählerstands-Snapshots (für intervall-unabhängige Ist-Berechnung)
+          const cumulativeInserts: Array<{
+            tenant_id: string;
+            meter_id: string;
+            reading_at: string;
+            kwh_total: number;
+            source: string;
+          }> = [];
+
+
           // Spike-Detection: Fetch the last few power readings per meter to compute a baseline.
           // A new reading is considered a spike if it is > SPIKE_FACTOR × median of recent readings.
           // We use the last 6 readings (~30 min) as baseline window.
@@ -1081,6 +1091,27 @@ serve(async (req) => {
               });
             }
 
+            // Snapshot des kumulativen Zählerstandes (totalYear bevorzugt — monoton steigend;
+            // sonst totalDay). Wird in `meter_cumulative_readings` geschrieben und vom
+            // Aggregator `aggregate_pv_actual_hourly` zur intervall-unabhängigen
+            // Berechnung der Ist-Erzeugung pro Stunde verwendet.
+            const cumulativeKwh = (stateData?.totalYear != null && stateData.totalYear > 0)
+              ? Number(stateData.totalYear)
+              : (stateData?.totalDay != null && stateData.totalDay >= 0 ? Number(stateData.totalDay) : null);
+            const cumulativeSource = (stateData?.totalYear != null && stateData.totalYear > 0)
+              ? "loxone_live_year"
+              : "loxone_live_day";
+            if (cumulativeKwh != null && isFinite(cumulativeKwh)) {
+              cumulativeInserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                reading_at: now.toISOString(),
+                kwh_total: cumulativeKwh,
+                source: cumulativeSource,
+              });
+            }
+
+
             // Store instantaneous power reading for time-series (with spike filter)
             if (stateData?.value != null) {
               const powerVal = typeof stateData.value === "number" ? stateData.value : parseFloat(String(stateData.value));
@@ -1177,7 +1208,20 @@ serve(async (req) => {
               }
             }
           }
+
+          // Bulk-Insert der Zählerstands-Snapshots (Konflikt = bereits vorhandener Zeitpunkt → ignorieren)
+          if (cumulativeInserts.length > 0) {
+            const { error: cumErr } = await supabase
+              .from("meter_cumulative_readings")
+              .upsert(cumulativeInserts, { onConflict: "meter_id,reading_at" });
+            if (cumErr) {
+              console.error("Error inserting cumulative readings:", cumErr);
+            } else {
+              console.log(`Inserted ${cumulativeInserts.length} cumulative meter readings`);
+            }
+          }
         }
+
       } catch (archiveErr) {
         console.error("Error archiving data:", archiveErr);
       }
