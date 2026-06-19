@@ -768,10 +768,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                     const hidden = hiddenKeys.has(key);
                     const displayName = T(`energy.${key}`);
                     return (
-                      <React.Fragment key={key}>
-                        <Line type="monotone" dataKey={key} name={`__gap_${key}`} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
-                        <Line type="monotone" dataKey={hidden ? key : `real_${key}`} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={false} legendType="line" />
-                      </React.Fragment>
+                      <Line key={key} type="monotone" dataKey={key} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={false} legendType="line" />
                     );
                   })}
                 </LineChart>
