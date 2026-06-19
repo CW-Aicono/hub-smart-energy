@@ -976,6 +976,16 @@ serve(async (req) => {
             recorded_at: string;
           }> = [];
 
+          // Kumulative Zählerstands-Snapshots (für intervall-unabhängige Ist-Berechnung)
+          const cumulativeInserts: Array<{
+            tenant_id: string;
+            meter_id: string;
+            reading_at: string;
+            kwh_total: number;
+            source: string;
+          }> = [];
+
+
           // Spike-Detection: Fetch the last few power readings per meter to compute a baseline.
           // A new reading is considered a spike if it is > SPIKE_FACTOR × median of recent readings.
           // We use the last 6 readings (~30 min) as baseline window.
