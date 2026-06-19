@@ -34,6 +34,9 @@
  *   BRIDGE_HEARTBEAT_MS Heartbeat-Intervall in ms (Standard: 30000)
  *   HEALTH_PORT         HTTP-Port für /healthz und /state (Standard: 8080, 0 = aus)
  *   WORKER_VERSION      Versions-String, taucht in bridge_workers.version auf
+ *   WATCHDOG_STALE_MS   (Phase 3) Forcierter Reconnect, wenn so lange kein Event
+ *                       von einem authentifizierten Miniserver kam (Standard: 300000 = 5 Min)
+ *   WATCHDOG_CHECK_MS   (Phase 3) Prüfintervall des Watchdogs (Standard: 30000 = 30 s)
  */
 
 import os from "os";
@@ -50,7 +53,9 @@ const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
 const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
 const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "30000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase2-skeleton";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase3";
+const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "300000", 10);
+const WATCHDOG_CHECK_MS = parseInt(process.env.WATCHDOG_CHECK_MS || "30000", 10);
 
 if (!SUPABASE_URL || !GATEWAY_API_KEY) {
   console.error("[FATAL] SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein");
@@ -324,11 +329,37 @@ function scheduleReconnect(state: ConnState, reason: string): void {
   if (state.reconnecting) return;
   state.reconnecting = true;
   state.reconnectCount++;
-  const delay = state.reconnectDelay;
+  // Exponential Backoff 1s → 60s + Jitter ±20 % (verhindert Thundering Herd)
+  const base = state.reconnectDelay;
+  const jitter = Math.floor(base * (Math.random() * 0.4 - 0.2));
+  const delay = Math.max(500, base + jitter);
   state.reconnectDelay = Math.min(state.reconnectDelay * 2, 60000);
   log("info", `[WS] Reconnect ${state.serialNumber} in ${delay}ms (reason=${reason})`);
   bridgeLog("info", "ws_reconnect_scheduled", `Reconnect in ${delay}ms (Grund: ${reason})`, state.serialNumber, { delay_ms: delay, reason });
   setTimeout(() => { state.reconnecting = false; connect(state); }, delay);
+}
+
+// ─── Watchdog (Phase 3) ──────────────────────────────────────────────────────
+// Erkennt "tote" WebSockets, bei denen lxcommunicator zwar noch verbunden ist,
+// aber seit WATCHDOG_STALE_MS keine Events mehr eintreffen. Erzwingt Reconnect.
+function watchdogTick(): void {
+  const now = Date.now();
+  for (const state of connections.values()) {
+    if (!state.authenticated || state.uuidMap.size === 0) continue;
+    // Referenzzeit: letztes Event ODER letzter erfolgreicher Connect
+    const ref = state.lastEventAt || state.lastConnectedAt;
+    if (!ref) continue;
+    const idleMs = now - ref;
+    if (idleMs >= WATCHDOG_STALE_MS) {
+      log("warn", `[Watchdog] ${state.serialNumber} seit ${Math.round(idleMs / 1000)}s ohne Event → forciere Reconnect`);
+      bridgeLog("warn", "watchdog_stale", `Kein Event seit ${Math.round(idleMs / 1000)}s, forciere Reconnect`, state.serialNumber, { idle_ms: idleMs });
+      try { state.ws?.close(); } catch { /* ignore */ }
+      state.authenticated = false;
+      state.ws = null;
+      sessionEnd(state, "watchdog-stale");
+      scheduleReconnect(state, "watchdog-stale");
+    }
+  }
 }
 
 // ─── Flush ───────────────────────────────────────────────────────────────────
@@ -535,6 +566,10 @@ async function main() {
       }
     }
   }, 15000);
+
+  // Watchdog (Phase 3): forciert Reconnect bei "toten" Verbindungen
+  setInterval(watchdogTick, WATCHDOG_CHECK_MS);
+  log("info", `[Watchdog] aktiv: prüft alle ${WATCHDOG_CHECK_MS / 1000}s, Schwelle ${WATCHDOG_STALE_MS / 1000}s`);
 }
 
 main().catch((err) => {
