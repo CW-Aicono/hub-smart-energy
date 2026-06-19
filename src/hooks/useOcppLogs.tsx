@@ -103,7 +103,15 @@ export function useOcppLogs(
           const entry = payload.new as unknown as OcppLogEntry;
           if (ids.length > 1 && !idsSet.has(entry.charge_point_id)) return;
           if (activeType && entry.message_type !== activeType) return;
-          setLogs((prev) => [entry, ...prev].slice(0, 500));
+          setLogs((prev) => {
+            if (prev.some((l) => l.id === entry.id)) return prev;
+            return [entry, ...prev]
+              .sort(
+                (a, b) =>
+                  new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+              )
+              .slice(0, 500);
+          });
         }
       )
       .subscribe();

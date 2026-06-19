@@ -1,31 +1,31 @@
 ## Problem
-
-Der OCPP-Log-Bereich rendert sich alle paar Sekunden komplett neu (Liste verschwindet kurz, "Lade Logs…" blitzt auf, dann ist sie wieder da). Das wirkt unruhig.
+Im OCPP-Nachrichtenlog werden neu eintreffende Nachrichten in der Reihenfolge ihres Eintreffens oben angehängt, nicht nach ihrem tatsächlichen Zeitstempel einsortiert. Dadurch erscheint z. B. ein `RemoteStartTransaction` (22:02:25) optisch oberhalb von `StatusNotification` (22:02:28), obwohl es zeitlich davor liegt. Nach Neuladen der Seite ist die Reihenfolge korrekt, weil dann nach `created_at` sortiert wird.
 
 ## Ursache
+In `src/hooks/useOcppLogs.tsx` (Zeile 106) wird ein per Realtime eintreffender Log einfach vorne angehängt:
+```
+setLogs((prev) => [entry, ...prev].slice(0, 500));
+```
+Es fehlt die Sortierung nach `created_at`.
 
-Zwei Punkte im Code arbeiten gegeneinander:
+## Änderung
+Nur eine Stelle, rein im Frontend-Hook:
 
-1. **`useOcppLogs.tsx`** ruft bei jeder Änderung der `ids`-Array-Referenz einen kompletten Reload aus und setzt dabei `loading = true`. Solange `loading = true` ist, ersetzt der Viewer die ganze Tabelle durch den Text „Lade Logs…".
-2. **`OcppLogViewer.tsx`** baut `logIds` über `useMemo` mit der Abhängigkeit `[chargePointId, chargePoints]`. `chargePoints` kommt aus `useChargePoints` und wird durch Realtime-Updates (WS-Status, Heartbeat usw.) regelmäßig **als neues Array-Objekt** zurückgegeben — auch wenn sich an unserem konkreten Ladepunkt inhaltlich nichts ändert. Dadurch entsteht alle paar Sekunden eine neue `logIds`-Referenz → neue `ids` → neuer `fetchLogs` → kompletter Reload + Blinken.
+1. Realtime-Insert in `useOcppLogs.tsx`:
+   - Neue Einträge in die Liste einfügen und anschließend **absteigend nach `created_at` sortieren**, dann auf 500 begrenzen.
+   - Duplikate per `id` vermeiden (falls Initial-Fetch und Realtime-Event denselben Eintrag liefern).
 
-Die Realtime-Subscription für neue Log-Zeilen funktioniert dabei tadellos — das Blinken kommt also nicht von neuen Logs, sondern von einem unnötigen Voll-Reload der Historie.
+Pseudocode:
+```
+setLogs((prev) => {
+  if (prev.some((l) => l.id === entry.id)) return prev;
+  return [entry, ...prev]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 500);
+});
+```
 
-## Lösung (minimal, nur UI/Hook)
+Keine Backend-, RLS- oder UI-Änderungen nötig.
 
-Zwei kleine, gezielte Änderungen — keine neuen Features, keine Backend-Änderungen.
-
-### 1. `src/hooks/useOcppLogs.tsx`
-- `loading` nur beim **allerersten** Laden (oder wenn die `idsKey` wirklich wechselt) auf `true` setzen. Bei Folge-Refetches im Hintergrund still nachladen, ohne `loading` zu togglen.
-- `fetchLogs` von `[ids, activeType]` auf `[idsKey, activeType]` umstellen (`idsKey` ist der stabile String-Join), damit identische ID-Listen keinen neuen Refetch auslösen.
-
-### 2. `src/components/charging/OcppLogViewer.tsx`
-- `logIds` so memoisieren, dass nur der **String** der zusammengesetzten IDs in die Dependency geht (z. B. via `useMemo` mit `[chargePointId, cp?.id, cp?.ocpp_id]` statt dem gesamten `chargePoints`-Array). Dann triggert ein neues `chargePoints`-Array keinen unnötigen Reload mehr.
-- Den `loading`-Zweig so anpassen, dass nur beim allerersten Laden (also wenn `logs.length === 0`) „Lade Logs…" gezeigt wird. Sobald einmal Daten da sind, bleibt die Tabelle stehen, auch wenn im Hintergrund nachgeladen wird.
-
-### Was sich NICHT ändert
-- Filter, Realtime-Subscription, Pause-Button, Layout, Farben, Polling-Verhalten des OCPP-Servers, Backend.
-- Neue Log-Einträge erscheinen wie bisher live über die bestehende Realtime-Subscription.
-
-## Erwartetes Ergebnis
-Die Log-Tabelle bleibt ruhig stehen. Neue Zeilen erscheinen oben weich eingeschoben, ohne dass die ganze Liste verschwindet und neu aufgebaut wird.
+## Verifikation
+- Ladevorgang per Fernbefehl starten → `RemoteStartTransaction`, `Authorize`, `StatusNotification`, `MeterValues` müssen sofort in korrekter Zeitstempel-Reihenfolge erscheinen, ohne dass das Log-Fenster neu geöffnet werden muss.
