@@ -551,6 +551,188 @@ export type Database = {
           },
         ]
       }
+      bridge_event_log: {
+        Row: {
+          details: Json | null
+          event_type: string
+          id: number
+          link_id: string | null
+          message: string | null
+          occurred_at: string
+          severity: Database["public"]["Enums"]["bridge_event_severity"]
+          tenant_id: string | null
+          worker_id: string | null
+        }
+        Insert: {
+          details?: Json | null
+          event_type: string
+          id?: number
+          link_id?: string | null
+          message?: string | null
+          occurred_at?: string
+          severity?: Database["public"]["Enums"]["bridge_event_severity"]
+          tenant_id?: string | null
+          worker_id?: string | null
+        }
+        Update: {
+          details?: Json | null
+          event_type?: string
+          id?: number
+          link_id?: string | null
+          message?: string | null
+          occurred_at?: string
+          severity?: Database["public"]["Enums"]["bridge_event_severity"]
+          tenant_id?: string | null
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bridge_event_log_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_miniserver_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_event_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_event_log_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bridge_miniserver_links: {
+        Row: {
+          connection_kind: Database["public"]["Enums"]["bridge_connection_kind"]
+          created_at: string
+          credentials_encrypted: string | null
+          enabled: boolean
+          endpoint: string | null
+          firmware: string | null
+          id: string
+          last_connected_at: string | null
+          last_event_at: string | null
+          location_id: string | null
+          miniserver_generation: number
+          miniserver_serial: string
+          notes: string | null
+          subscribed_uuids: Json
+          tenant_id: string | null
+          updated_at: string
+          worker_id: string
+        }
+        Insert: {
+          connection_kind?: Database["public"]["Enums"]["bridge_connection_kind"]
+          created_at?: string
+          credentials_encrypted?: string | null
+          enabled?: boolean
+          endpoint?: string | null
+          firmware?: string | null
+          id?: string
+          last_connected_at?: string | null
+          last_event_at?: string | null
+          location_id?: string | null
+          miniserver_generation?: number
+          miniserver_serial: string
+          notes?: string | null
+          subscribed_uuids?: Json
+          tenant_id?: string | null
+          updated_at?: string
+          worker_id: string
+        }
+        Update: {
+          connection_kind?: Database["public"]["Enums"]["bridge_connection_kind"]
+          created_at?: string
+          credentials_encrypted?: string | null
+          enabled?: boolean
+          endpoint?: string | null
+          firmware?: string | null
+          id?: string
+          last_connected_at?: string | null
+          last_event_at?: string | null
+          location_id?: string | null
+          miniserver_generation?: number
+          miniserver_serial?: string
+          notes?: string | null
+          subscribed_uuids?: Json
+          tenant_id?: string | null
+          updated_at?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bridge_miniserver_links_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_miniserver_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_miniserver_links_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bridge_workers: {
+        Row: {
+          created_at: string
+          description: string | null
+          enabled: boolean
+          host: string | null
+          id: string
+          last_error: string | null
+          last_heartbeat_at: string | null
+          name: string
+          status: Database["public"]["Enums"]["bridge_worker_status"]
+          updated_at: string
+          version: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          host?: string | null
+          id?: string
+          last_error?: string | null
+          last_heartbeat_at?: string | null
+          name: string
+          status?: Database["public"]["Enums"]["bridge_worker_status"]
+          updated_at?: string
+          version?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          host?: string | null
+          id?: string
+          last_error?: string | null
+          last_heartbeat_at?: string | null
+          name?: string
+          status?: Database["public"]["Enums"]["bridge_worker_status"]
+          updated_at?: string
+          version?: string | null
+        }
+        Relationships: []
+      }
       brighthub_settings: {
         Row: {
           api_key: string
@@ -11522,6 +11704,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      bridge_event_log_cleanup: { Args: never; Returns: undefined }
       can_access_sales_project: {
         Args: { _project_id: string }
         Returns: boolean
@@ -11914,6 +12097,9 @@ export type Database = {
         | "community_member"
         | "partner_admin"
         | "partner_user"
+      bridge_connection_kind: "lan" | "cloud_dns" | "remote_connect"
+      bridge_event_severity: "debug" | "info" | "warn" | "error"
+      bridge_worker_status: "online" | "degraded" | "offline" | "disabled"
       device_class:
         | "meter"
         | "gateway"
@@ -12073,6 +12259,9 @@ export const Constants = {
         "partner_admin",
         "partner_user",
       ],
+      bridge_connection_kind: ["lan", "cloud_dns", "remote_connect"],
+      bridge_event_severity: ["debug", "info", "warn", "error"],
+      bridge_worker_status: ["online", "degraded", "offline", "disabled"],
       device_class: [
         "meter",
         "gateway",
