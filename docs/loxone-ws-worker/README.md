@@ -1024,6 +1024,106 @@ Wenn beides stimmt, ist Phase 4 erfolgreich aktiv. Ab jetzt taucht im Fehlerfall
 
 ---
 
+## Schritt 14: Auf Phase 5 (Smart-Split – echte Daten in die Datenbank) aktualisieren
+
+Ab Phase 5 schickt der Worker die Loxone-Werte **wirklich** an die AICONO-Cloud — in eine **Schatten-Tabelle** parallel zum bestehenden Polling-Pfad. Es wird **nichts** an den alten Daten verändert.
+
+> **Was wurde vorbereitet (haben wir schon erledigt, Sie müssen nichts tun):**
+> - Drei neue Tabellen in der AICONO-Datenbank: `bridge_raw_samples`, `meter_power_readings_5min_bridge`, `meter_cumulative_readings_bridge`
+> - Neue Cloud-Funktion `bridge-aggregator`, die alle 5 Minuten automatisch läuft
+> - Feature-Schalter `loxone_remote_connect_ws_enabled` ist für die 3 Miniserver Stadt Steinfurt bereits aktiviert
+>
+> **Was Sie jetzt machen müssen:** Den Worker-Container auf die neue Code-Version neu bauen — Vorgehen identisch zu Schritt 12 und 13, nur die zu prüfende Version ist anders.
+
+### 14.1 Mit dem Server verbinden
+
+Wie in **Schritt 12.1**.
+
+### 14.2 In den Worker-Ordner wechseln
+
+Wie in **Schritt 12.2**.
+
+### 14.3 Die neue Datei `index.ts` auf den Server bringen
+
+Wie in **Schritt 12.3** (Nano-Anleitung) – mit einer Änderung im **letzten Prüf-Schritt (12.3.8)**:
+
+```bash
+grep "phase5-smart-split" /opt/loxone-ws-worker/index.ts
+```
+
+➡️ **Erwartetes Ergebnis:** Mindestens eine Zeile mit `"phase5-smart-split"`.
+> **Wenn nichts erscheint:** Die Datei wurde nicht richtig gespeichert. Wiederholen Sie die Schritte aus 12.3 noch einmal.
+
+### 14.4 Alten Container stoppen und löschen
+
+```bash
+docker rm -f loxone-ws-worker
+```
+
+### 14.5 Docker-Image neu bauen
+
+```bash
+docker build -t loxone-ws-worker .
+```
+
+### 14.6 Container neu starten
+
+Wie in **Schritt 12.6** – derselbe `docker run`-Befehl, keine Änderungen an den Umgebungsvariablen nötig.
+
+### 14.7 Erfolg in den Logs prüfen
+
+Warten Sie **30 Sekunden** nach dem Start, dann:
+
+```bash
+docker logs loxone-ws-worker 2>&1 | grep -E "phase5-smart-split|aktive Miniserver"
+```
+
+➡️ **Erwartetes Ergebnis:**
+
+```
+[INFO] Loxone WS Worker startet — worker=hetzner-bridge-test host=hetzner-prod-1 version=phase5-smart-split
+[INFO] [Reload] aktive Miniserver: 3
+```
+
+Die Zahl `3` ist entscheidend — vorher war sie `0`, weil das Feature-Flag fehlte. Jetzt findet der Worker die Miniserver der Stadt Steinfurt.
+
+### 14.8 Nach 6 Minuten in der Datenbank prüfen, ob Daten kommen
+
+Warten Sie nach dem Container-Start **mindestens 6 Minuten** (Worker pusht alle 5 s in `bridge_raw_samples`, Aggregator läuft alle 5 Min und schreibt in die Schatten-Tabelle).
+
+Im AICONO-Backend (Super-Admin) folgende Tabellen prüfen:
+
+**a) `bridge_raw_samples`** — Roh-Werte vom Worker:
+- Sollte **viele Zeilen** mit `received_at` der letzten Minuten enthalten
+- Spalte `miniserver_serial` zeigt die 3 Loxone-Seriennummern
+- Spalte `processed_at` ist **NULL für ganz frische Zeilen** (gut!) und **gefüllt für ältere** (Aggregator hat sie verarbeitet)
+
+**b) `meter_power_readings_5min_bridge`** — aggregierte Werte:
+- Sollte alle 5 Minuten **neue Zeilen** bekommen, eine pro Zähler pro 5-Min-Block
+- Spalte `source` = `bridge_ws`
+- Spalte `sample_count` zeigt, wie viele Roh-Werte aggregiert wurden (typisch 1–60)
+
+**c) `bridge_workers`**:
+- `version` = `phase5-smart-split`
+- `last_heartbeat_at` = jünger als 1 Minute
+
+### 14.9 Wenn nach 10 Minuten keine Daten in den Tabellen sind
+
+1. Worker-Logs auf Fehler prüfen:
+   ```bash
+   docker logs --tail 50 loxone-ws-worker 2>&1 | grep -E "Flush|fehlgeschlagen|error"
+   ```
+   - Erwartet: `[Flush] N Roh-Samples an bridge-readings gepusht` (alle 5 s)
+   - Falls `Flush fehlgeschlagen` → Fehlertext an Lovable schicken.
+
+2. Aggregator-Logs in der AICONO-Cloud prüfen (Backend → Edge Functions → `bridge-aggregator` → Logs). Letzter Eintrag sollte ein JSON wie `{"raw_read":523,"buckets_written":47,...}` sein.
+
+3. Wenn `unmapped_uuids` hoch ist, heißt das: der Worker sendet UUIDs, denen kein Zähler (Tabelle `meters`) zugeordnet ist. Das ist **normal für Option A** (= alle UUIDs der Loxone-Struktur). Wir filtern später in Phase 6 nach Zuordnung.
+
+---
+
+
+
 
 
 

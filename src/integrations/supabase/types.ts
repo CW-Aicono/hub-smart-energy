@@ -691,6 +691,64 @@ export type Database = {
           },
         ]
       }
+      bridge_raw_samples: {
+        Row: {
+          id: number
+          link_id: string | null
+          miniserver_serial: string
+          processed_at: string | null
+          received_at: string
+          tenant_id: string | null
+          uuid: string
+          value: number
+          worker_id: string | null
+        }
+        Insert: {
+          id?: number
+          link_id?: string | null
+          miniserver_serial: string
+          processed_at?: string | null
+          received_at?: string
+          tenant_id?: string | null
+          uuid: string
+          value: number
+          worker_id?: string | null
+        }
+        Update: {
+          id?: number
+          link_id?: string | null
+          miniserver_serial?: string
+          processed_at?: string | null
+          received_at?: string
+          tenant_id?: string | null
+          uuid?: string
+          value?: number
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bridge_raw_samples_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_miniserver_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_raw_samples_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_raw_samples_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bridge_workers: {
         Row: {
           created_at: string
@@ -6257,6 +6315,51 @@ export type Database = {
         }
         Relationships: []
       }
+      meter_cumulative_readings_bridge: {
+        Row: {
+          created_at: string
+          id: string
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+          source: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+          source?: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kwh_total?: number
+          meter_id?: string
+          reading_at?: string
+          source?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_cumulative_readings_bridge_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_cumulative_readings_bridge_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_daily_totals_mv: {
         Row: {
           bucket_start: string
@@ -6619,6 +6722,63 @@ export type Database = {
           },
           {
             foreignKeyName: "meter_power_readings_5min_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_power_readings_5min_bridge: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_power_readings_5min_bridge_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_power_readings_5min_bridge_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -11709,6 +11869,7 @@ export type Database = {
         Args: { _project_id: string }
         Returns: boolean
       }
+      cleanup_bridge_raw_samples: { Args: never; Returns: undefined }
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_cron_job_history: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
