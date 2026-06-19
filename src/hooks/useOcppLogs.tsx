@@ -51,7 +51,6 @@ export function useOcppLogs(
       return;
     }
 
-    setLoading(true);
     const requests = ids.map((id) => {
       // Mehrere kleine EQ-Abfragen sind hier absichtlich schneller/stabiler als IN(...):
       // Die RLS-Regeln für ocpp_message_log prüfen UUID und OCPP-ID; mit IN lief die
@@ -79,7 +78,8 @@ export function useOcppLogs(
       setLogs(merged);
     }
     setLoading(false);
-  }, [ids, activeType]);
+  }, [idsKey, activeType]);
+
 
   useEffect(() => {
     fetchLogs();
