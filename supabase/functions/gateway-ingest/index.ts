@@ -1102,7 +1102,143 @@ async function handleWorkerHeartbeat(req: Request): Promise<Response> {
   return json({ success: true, recorded_at: new Date().toISOString() });
 }
 
+/* ── Bridge-Worker (Variante B): Heartbeat & Event-Log ─────────────────────── */
+
+/**
+ * POST ?action=bridge-heartbeat
+ * Body: { worker_name: string, version?: string, host?: string,
+ *         status?: "online"|"degraded"|"offline", last_error?: string|null,
+ *         links_state?: Array<{ miniserver_serial: string,
+ *                               last_connected_at?: string, last_event_at?: string }> }
+ *
+ * Aktualisiert `bridge_workers.last_heartbeat_at` (anhand worker_name) und
+ * optional die Zeitstempel der zugehörigen `bridge_miniserver_links`.
+ */
+async function handleBridgeHeartbeat(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    worker_name?: string;
+    version?: string;
+    host?: string;
+    status?: string;
+    last_error?: string | null;
+    links_state?: Array<{
+      miniserver_serial: string;
+      last_connected_at?: string;
+      last_event_at?: string;
+    }>;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.worker_name) return json({ error: "worker_name required" }, 400);
+
+  const supabase = getSupabase();
+  const nowIso = new Date().toISOString();
+
+  const patch: Record<string, unknown> = {
+    last_heartbeat_at: nowIso,
+    status: body.status ?? "online",
+  };
+  if (body.version !== undefined) patch.version = body.version;
+  if (body.host !== undefined) patch.host = body.host;
+  if (body.last_error !== undefined) patch.last_error = body.last_error;
+
+  const { data: worker, error } = await supabase
+    .from("bridge_workers")
+    .update(patch)
+    .eq("name", body.worker_name)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !worker) {
+    return json({ success: false, error: error?.message ?? "worker not found" }, 404);
+  }
+
+  // Optional: pro Miniserver Zeitstempel nachziehen
+  if (Array.isArray(body.links_state) && body.links_state.length > 0) {
+    for (const link of body.links_state) {
+      if (!link.miniserver_serial) continue;
+      const linkPatch: Record<string, unknown> = {};
+      if (link.last_connected_at) linkPatch.last_connected_at = link.last_connected_at;
+      if (link.last_event_at) linkPatch.last_event_at = link.last_event_at;
+      if (Object.keys(linkPatch).length === 0) continue;
+      await supabase
+        .from("bridge_miniserver_links")
+        .update(linkPatch)
+        .eq("worker_id", worker.id)
+        .eq("miniserver_serial", link.miniserver_serial);
+    }
+  }
+
+  return json({ success: true, worker_id: worker.id, recorded_at: nowIso });
+}
+
+/**
+ * POST ?action=bridge-log-event
+ * Body: { worker_name: string, severity?: "debug"|"info"|"warn"|"error",
+ *         event_type: string, message?: string, details?: any,
+ *         miniserver_serial?: string }
+ *
+ * Schreibt einen Eintrag in `bridge_event_log` (Retention: 7 Tage).
+ * Dient als Diagnose-Quelle für stille WebSocket-Abbrüche / Token-Refresh-Fehler.
+ */
+async function handleBridgeLogEvent(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    worker_name?: string;
+    severity?: "debug" | "info" | "warn" | "error";
+    event_type?: string;
+    message?: string;
+    details?: unknown;
+    miniserver_serial?: string;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.worker_name || !body.event_type) {
+    return json({ error: "worker_name and event_type required" }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  // Worker + (optional) Link auflösen
+  const { data: worker } = await supabase
+    .from("bridge_workers")
+    .select("id")
+    .eq("name", body.worker_name)
+    .maybeSingle();
+
+  let linkId: string | null = null;
+  let tenantId: string | null = null;
+  if (worker && body.miniserver_serial) {
+    const { data: link } = await supabase
+      .from("bridge_miniserver_links")
+      .select("id, tenant_id")
+      .eq("worker_id", worker.id)
+      .eq("miniserver_serial", body.miniserver_serial)
+      .maybeSingle();
+    if (link) { linkId = link.id; tenantId = link.tenant_id ?? null; }
+  }
+
+  const { error } = await supabase.from("bridge_event_log").insert({
+    worker_id: worker?.id ?? null,
+    link_id: linkId,
+    tenant_id: tenantId,
+    severity: body.severity ?? "info",
+    event_type: body.event_type,
+    message: body.message ?? null,
+    details: body.details ?? null,
+  });
+
+  if (error) return json({ success: false, error: error.message }, 500);
+  return json({ success: true });
+}
+
 /* ── Loxone Remote-Connect WebSocket Feldtest ───────────────────────────────── */
+
 
 /**
  * GET ?action=list-loxone-ws-meters
