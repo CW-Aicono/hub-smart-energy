@@ -34,6 +34,9 @@
  *   BRIDGE_HEARTBEAT_MS Heartbeat-Intervall in ms (Standard: 30000)
  *   HEALTH_PORT         HTTP-Port für /healthz und /state (Standard: 8080, 0 = aus)
  *   WORKER_VERSION      Versions-String, taucht in bridge_workers.version auf
+ *   WATCHDOG_STALE_MS   (Phase 3) Forcierter Reconnect, wenn so lange kein Event
+ *                       von einem authentifizierten Miniserver kam (Standard: 300000 = 5 Min)
+ *   WATCHDOG_CHECK_MS   (Phase 3) Prüfintervall des Watchdogs (Standard: 30000 = 30 s)
  */
 
 import os from "os";
@@ -50,7 +53,9 @@ const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
 const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
 const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "30000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase2-skeleton";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase3";
+const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "300000", 10);
+const WATCHDOG_CHECK_MS = parseInt(process.env.WATCHDOG_CHECK_MS || "30000", 10);
 
 if (!SUPABASE_URL || !GATEWAY_API_KEY) {
   console.error("[FATAL] SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein");
