@@ -17,6 +17,8 @@ Dieses Programm (der „Worker“) sitzt auf Ihrem Hetzner-Server und hält eine
 > **Neu in Phase 2:** Der Worker meldet sich zusätzlich alle 30 Sekunden in der Datenbank (Tabellen `bridge_workers` + `bridge_event_log`) und stellt eine kleine Statusseite unter `http://<server>:8080/healthz` und `/state` bereit. So sehen wir sofort, ob er noch lebt – und sehen jede Verbindungsänderung im Klartext.
 >
 > **Neu in Phase 3:** Ein eingebauter **Watchdog** prüft alle 30 Sekunden, ob noch Daten von jedem Miniserver kommen. Wenn von einem Miniserver **5 Minuten lang kein einziges Ereignis** mehr eintrifft (obwohl die Verbindung scheinbar steht), erzwingt der Worker einen **kompletten Reconnect**. Zusätzlich verteilt er die Reconnect-Versuche mit ±20 % Zufallsverzögerung, damit nach einem Netzaussetzer nicht alle Miniserver gleichzeitig versuchen, wieder zu verbinden. Genau das war die Hauptursache, warum die alte Worker-Version „still" stehen blieb.
+>
+> **Neu in Phase 4:** Ein **Keep-Alive-Ping alle 60 Sekunden** an jeden Miniserver. Das hält NAT- und Firewall-Pfade dauerhaft offen (verhindert „stille" Verbindungsabbrüche durch Router) **und** validiert in einem Rutsch, dass Socket und Loxone-Token noch funktionieren. Wenn der Ping fehlschlägt, erzwingt der Worker einen Reconnect **sofort** — statt bis zu 5 Minuten auf den Watchdog zu warten.
 
 ---
 
@@ -950,6 +952,80 @@ Und in der Startzeile darüber muss `version=phase3` stehen.
 Wenn beides stimmt, ist Phase 3 erfolgreich aktiv. Ab jetzt taucht im Fehlerfall in `bridge_event_log` der neue Ereignis-Typ **`watchdog_stale`** auf – das wäre das erste Mal in der Geschichte des Workers, dass wir „stille" Hänger direkt sehen, **bevor** ein Nutzer sie meldet.
 
 ---
+
+## Schritt 13: Auf Phase 4 (Keep-Alive) aktualisieren
+
+Phase 4 ergänzt einen **Keep-Alive-Ping alle 60 Sekunden** an jeden Miniserver. Vorgehen ist **identisch zu Schritt 12** – nur die zu prüfende Versionsnummer ist anders. **Es werden keine Daten gelöscht.**
+
+### 13.1 Mit dem Server verbinden
+
+Wie in **Schritt 12.1**.
+
+### 13.2 In den Worker-Ordner wechseln
+
+Wie in **Schritt 12.2**.
+
+### 13.3 Die neue Datei `index.ts` auf den Server bringen
+
+Wie in **Schritt 12.3** (Nano-Anleitung) – mit einer Änderung im **letzten Prüf-Schritt (12.3.8)**:
+
+```bash
+grep "phase4" /opt/loxone-ws-worker/index.ts
+```
+
+➡️ **Erwartetes Ergebnis:** Mindestens eine Zeile mit `"phase4"`.
+> **Wenn nichts erscheint:** Die Datei wurde nicht richtig gespeichert. Wiederholen Sie die Schritte aus 12.3 noch einmal.
+
+### 13.4 Alten Container stoppen und löschen
+
+```bash
+docker rm -f loxone-ws-worker
+```
+
+### 13.5 Docker-Image neu bauen
+
+```bash
+docker build -t loxone-ws-worker .
+```
+
+### 13.6 Container neu starten
+
+Wie in **Schritt 12.6** – derselbe `docker run`-Befehl, keine Änderungen an den Umgebungsvariablen nötig.
+
+> **Optional:** Wenn Sie das Ping-Intervall ändern wollen, fügen Sie eine zusätzliche Zeile hinzu (Beispiel: alle 30 Sekunden statt 60):
+> ```
+>   -e KEEPALIVE_INTERVAL_MS=30000 \
+> ```
+> Wert `0` deaktiviert den Keep-Alive komplett (nicht empfohlen).
+
+### 13.7 Erfolg in den Logs prüfen
+
+```bash
+docker logs --tail 25 loxone-ws-worker
+```
+
+➡️ **Erwartetes Ergebnis:** Sie sollten **diese zwei neuen Zeilen** sehen:
+
+```
+[INFO] [Watchdog] aktiv: prüft alle 30s, Schwelle 300s
+[INFO] [Keepalive] aktiv: Ping alle 60s
+```
+
+Und in der Startzeile ganz oben muss `version=phase4` stehen.
+
+### 13.8 In der Datenbank prüfen
+
+Öffnen Sie im AICONO-Backend die Tabelle **`bridge_workers`**. Der Eintrag `hetzner-bridge-test` muss jetzt:
+
+- **`version`** = `phase4`
+- **`last_heartbeat_at`** = jünger als 1 Minute
+
+Wenn beides stimmt, ist Phase 4 erfolgreich aktiv. Ab jetzt taucht im Fehlerfall in `bridge_event_log` der neue Ereignis-Typ **`keepalive_failed`** auf – das bedeutet, der Worker hat selbständig erkannt, dass der Token oder Socket abgelaufen war, und sofort neu verbunden.
+
+---
+
+
+
 
 
 

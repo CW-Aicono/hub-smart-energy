@@ -37,6 +37,8 @@
  *   WATCHDOG_STALE_MS   (Phase 3) Forcierter Reconnect, wenn so lange kein Event
  *                       von einem authentifizierten Miniserver kam (Standard: 300000 = 5 Min)
  *   WATCHDOG_CHECK_MS   (Phase 3) Prüfintervall des Watchdogs (Standard: 30000 = 30 s)
+ *   KEEPALIVE_INTERVAL_MS (Phase 4) Loxone Keep-Alive Ping (Standard: 60000 = 60 s,
+ *                       0 = aus). Hält NAT/Firewall offen & validiert Socket+Token.
  */
 
 import os from "os";
@@ -53,9 +55,10 @@ const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
 const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
 const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "30000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase3";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase4";
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "300000", 10);
 const WATCHDOG_CHECK_MS = parseInt(process.env.WATCHDOG_CHECK_MS || "30000", 10);
+const KEEPALIVE_INTERVAL_MS = parseInt(process.env.KEEPALIVE_INTERVAL_MS || "60000", 10);
 
 if (!SUPABASE_URL || !GATEWAY_API_KEY) {
   console.error("[FATAL] SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein");
@@ -362,6 +365,30 @@ function watchdogTick(): void {
   }
 }
 
+// ─── Keep-Alive (Phase 4) ────────────────────────────────────────────────────
+// Sendet alle KEEPALIVE_INTERVAL_MS einen leichten Befehl an jeden Miniserver.
+// Zweck:
+//   1. Hält NAT/Firewall-Pfade offen (verhindert "silent drops")
+//   2. Validiert Socket & Token: schlägt Send fehl → sofortiger Reconnect
+//      (statt bis zu 5 Min auf den Watchdog zu warten).
+async function keepaliveTick(): Promise<void> {
+  for (const state of connections.values()) {
+    if (!state.authenticated || !state.ws) continue;
+    try {
+      await state.ws.send("jdev/cfg/api");
+    } catch (err) {
+      const msg = (err as Error)?.message ?? String(err);
+      log("warn", `[Keepalive] ${state.serialNumber} fehlgeschlagen: ${msg} → Reconnect`);
+      bridgeLog("warn", "keepalive_failed", `Keep-Alive fehlgeschlagen: ${msg}`, state.serialNumber);
+      try { state.ws?.close(); } catch { /* ignore */ }
+      state.authenticated = false;
+      state.ws = null;
+      await sessionEnd(state, "keepalive-failed");
+      scheduleReconnect(state, "keepalive-failed");
+    }
+  }
+}
+
 // ─── Flush ───────────────────────────────────────────────────────────────────
 
 async function flush(): Promise<void> {
@@ -570,6 +597,14 @@ async function main() {
   // Watchdog (Phase 3): forciert Reconnect bei "toten" Verbindungen
   setInterval(watchdogTick, WATCHDOG_CHECK_MS);
   log("info", `[Watchdog] aktiv: prüft alle ${WATCHDOG_CHECK_MS / 1000}s, Schwelle ${WATCHDOG_STALE_MS / 1000}s`);
+
+  // Keep-Alive (Phase 4): hält NAT offen & validiert Socket/Token
+  if (KEEPALIVE_INTERVAL_MS > 0) {
+    setInterval(() => { keepaliveTick().catch((e) => log("error", "keepalive:", e)); }, KEEPALIVE_INTERVAL_MS);
+    log("info", `[Keepalive] aktiv: Ping alle ${KEEPALIVE_INTERVAL_MS / 1000}s`);
+  } else {
+    log("info", `[Keepalive] deaktiviert (KEEPALIVE_INTERVAL_MS=0)`);
+  }
 }
 
 main().catch((err) => {
