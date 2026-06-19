@@ -1,131 +1,31 @@
-## Befund aus der Live-Prüfung
+## Problem
 
-Der Backend-Zustand selbst ist erreichbar und stabil. Der Warnhinweis kommt sehr wahrscheinlich nicht von vollem Speicherplatz, sondern vom **I/O-Budget**: also wie viel Lesen/Schreiben die Cloud-Instanz pro Zeitraum leisten darf.
+Der OCPP-Log-Bereich rendert sich alle paar Sekunden komplett neu (Liste verschwindet kurz, "Lade Logs…" blitzt auf, dann ist sie wieder da). Das wirkt unruhig.
 
-Wichtig: Die aktuelle Messung zeigt **nicht**, dass OCPP gerade der größte Daten-Schreiber ist.
+## Ursache
 
-Aktuelle Live-Werte:
+Zwei Punkte im Code arbeiten gegeneinander:
 
-- `ocpp_message_log`: ca. **120 Zeilen in 60 Minuten** = sehr gering.
-- `ocpp_meter_samples`: ca. **60 Zeilen in 60 Minuten** = sehr gering.
-- `meter_power_readings`: ca. **1.220 Zeilen in 60 Minuten** = deutlich mehr.
-- Edge Function `ocpp-persistent-api`: ca. **221 Aufrufe in 60 Minuten**.
-- Top-Last laut Datenbankstatistik:
-  - `meter_power_readings` Inserts: ca. **5,13 Mio. Aufrufe** historisch in der Statistik.
-  - `location_integrations` Updates: ca. **2,33 Mio. Aufrufe** historisch in der Statistik.
-  - Leseabfragen auf `meter_power_readings`: sehr teuer.
-  - `integration_errors` Prüfung: ebenfalls auffällig.
+1. **`useOcppLogs.tsx`** ruft bei jeder Änderung der `ids`-Array-Referenz einen kompletten Reload aus und setzt dabei `loading = true`. Solange `loading = true` ist, ersetzt der Viewer die ganze Tabelle durch den Text „Lade Logs…".
+2. **`OcppLogViewer.tsx`** baut `logIds` über `useMemo` mit der Abhängigkeit `[chargePointId, chargePoints]`. `chargePoints` kommt aus `useChargePoints` und wird durch Realtime-Updates (WS-Status, Heartbeat usw.) regelmäßig **als neues Array-Objekt** zurückgegeben — auch wenn sich an unserem konkreten Ladepunkt inhaltlich nichts ändert. Dadurch entsteht alle paar Sekunden eine neue `logIds`-Referenz → neue `ids` → neuer `fetchLogs` → kompletter Reload + Blinken.
 
-Zusätzlich auffällig: `ocpp-persistent-api` zeigt sehr viele `booted` / `shutdown` Logs. Das heißt: die Funktion wird sehr häufig kurz gestartet und beendet. Das ist nicht zwingend ein Datenbank-Schreibproblem, erzeugt aber unnötige Backend-Arbeit.
+Die Realtime-Subscription für neue Log-Zeilen funktioniert dabei tadellos — das Blinken kommt also nicht von neuen Logs, sondern von einem unnötigen Voll-Reload der Historie.
 
-## Sehr wichtiger Punkt
+## Lösung (minimal, nur UI/Hook)
 
-Die Änderung am OCPP Persistent Server reduziert die Last **erst dann vollständig**, wenn der externe Persistent Server wirklich neu gebaut / neu gestartet / neu deployed wurde. Die Datenbank- und Edge-Function-Seite ist vorbereitet, aber der Prozess außerhalb von Lovable muss die neue Batch-Logik auch tatsächlich verwenden.
+Zwei kleine, gezielte Änderungen — keine neuen Features, keine Backend-Änderungen.
 
-Trotzdem zeigen die aktuellen Tabellenzahlen: selbst wenn OCPP noch nicht optimal läuft, ist OCPP aktuell nicht der sichtbar größte Datenbank-Schreiber.
+### 1. `src/hooks/useOcppLogs.tsx`
+- `loading` nur beim **allerersten** Laden (oder wenn die `idsKey` wirklich wechselt) auf `true` setzen. Bei Folge-Refetches im Hintergrund still nachladen, ohne `loading` zu togglen.
+- `fetchLogs` von `[ids, activeType]` auf `[idsKey, activeType]` umstellen (`idsKey` ist der stabile String-Join), damit identische ID-Listen keinen neuen Refetch auslösen.
 
-## Ziel
+### 2. `src/components/charging/OcppLogViewer.tsx`
+- `logIds` so memoisieren, dass nur der **String** der zusammengesetzten IDs in die Dependency geht (z. B. via `useMemo` mit `[chargePointId, cp?.id, cp?.ocpp_id]` statt dem gesamten `chargePoints`-Array). Dann triggert ein neues `chargePoints`-Array keinen unnötigen Reload mehr.
+- Den `loading`-Zweig so anpassen, dass nur beim allerersten Laden (also wenn `logs.length === 0`) „Lade Logs…" gezeigt wird. Sobald einmal Daten da sind, bleibt die Tabelle stehen, auch wenn im Hintergrund nachgeladen wird.
 
-Jetzt keine dritte Rateschleife, sondern ein messbarer Akut-Fix:
-
-1. Schreiblast sofort senken.
-2. Keine Messwerte verlieren, die für Energieauswertung nötig sind.
-3. Keine OCPP-Logs löschen.
-4. Danach erneut messen, ob das I/O-Budget fällt.
-
-## Plan zur Umsetzung
-
-### Schritt 1: Leselast auf `meter_power_readings` prüfen und gezielt indizieren
-
-Ich prüfe die vorhandenen Indizes und die konkreten Abfragepläne für:
-
-- Zeitreihen-Abfragen pro Zähler und Zeitraum.
-- Maximum-/Peak-Abfragen pro Zähler und Zeitraum.
-
-Wenn ein passender Index fehlt, lege ich gezielt einen Index an, zum Beispiel für:
-
-- `meter_id + recorded_at`
-- optional für Peak-Abfragen zusätzlich passend zur Sortierung nach `power_value`
-
-Erwarteter Effekt:
-
-- Weniger Disk-Lesen bei Dashboards und Graphen.
-- Weniger I/O-Verbrauch ohne Datenverlust.
-
-### Schritt 2: Schreiblast bei `meter_power_readings` entschärfen
-
-Ich suche die Stellen, die `meter_power_readings` schreiben, besonders Gateway-/Loxone-/Shelly-/OCPP-Pfade.
-
-Ziel ist **nicht**, Daten zu verlieren, sondern doppelte oder unnötig kleinteilige Schreibvorgänge zu vermeiden:
-
-- gleiche Messwerte im gleichen engen Zeitfenster nicht mehrfach speichern,
-- wenn möglich Batch-Insert statt vieler Einzel-Inserts,
-- bestehende 5-Minuten-Aggregation nicht umgehen.
-
-Erwarteter Effekt:
-
-- Weniger einzelne Datenbank-Schreibvorgänge.
-- Historische Kurven bleiben erhalten.
-
-### Schritt 3: `location_integrations`-Status-Updates endgültig begrenzen
-
-Die vorherige Änderung reduziert echte Datenbank-Updates auf 5 Minuten. Ich prüfe aber, ob noch Codepfade direkt `location_integrations` aktualisieren und die neue Drosselung umgehen.
-
-Falls ja:
-
-- direkte Updates ersetzen durch die gedrosselte Funktion,
-- harte 5-Minuten-Grenze überall einheitlich verwenden,
-- Statuswechsel weiterhin sofort speichern.
-
-Erwarteter Effekt:
-
-- Weniger Update-Last und weniger tote Zeilen.
-
-### Schritt 4: `integration_errors`-Prüfung optimieren
-
-Die Statistik zeigt viele Abfragen nach:
-
-- `location_integration_id`
-- `error_type`
-- `is_resolved` / `is_ignored`
-
-Ich prüfe, ob dafür ein passender Teilindex fehlt. Falls ja, lege ich einen gezielten Index für offene/aktive Fehler an.
-
-Erwarteter Effekt:
-
-- Weniger Disk-Lesen bei Fehlerprüfung und Auto-Resolve-Logik.
-
-### Schritt 5: OCPP sauber fertigziehen, aber nicht als Hauptursache behandeln
-
-OCPP bleibt wichtig, aber aktuell ist es nicht der größte Schreibtreiber.
-
-Ich prüfe:
-
-- ob `log-messages-batch` wirklich aufgerufen wird,
-- ob Request/Response-Pairing greift,
-- ob der Persistent Server noch die alte Einzel-Logik nutzt.
-
-Falls der externe Persistent Server noch nicht aktualisiert ist, gebe ich dir danach eine sehr klare Anfänger-Anleitung, wie du ihn neu bauen / neu starten kannst.
-
-### Schritt 6: Nach jeder Änderung messen
-
-Nach den Änderungen prüfe ich wieder:
-
-- Backend Health,
-- Top Slow Queries,
-- Tabellen-Schreibzahlen,
-- Edge-Function-Aufrufe der letzten 60 Minuten.
-
-Nur wenn danach weiterhin 100% Disk-I/O-Budget steht, ist der nächste sachliche Schritt eine temporäre größere Lovable-Cloud-Instanz. Das wäre dann kein Code-Bug mehr, sondern schlicht zu wenig I/O-Leistung für die aktuelle Last.
-
-## Was ich bewusst nicht mache
-
-- Keine OCPP-Logs löschen.
-- Keine historischen Messwerte löschen.
-- Kein Sampling bei OCPP Heartbeats als Sofortmaßnahme.
-- Keine riskante Tabellen-Partitionierung als ersten Schritt.
-- Kein Backend-Neustart als „Blindfix“, solange die Datenbank erreichbar ist.
+### Was sich NICHT ändert
+- Filter, Realtime-Subscription, Pause-Button, Layout, Farben, Polling-Verhalten des OCPP-Servers, Backend.
+- Neue Log-Einträge erscheinen wie bisher live über die bestehende Realtime-Subscription.
 
 ## Erwartetes Ergebnis
-
-Nach Umsetzung sollten die auffälligen Datenbankabfragen weniger Disk-I/O verbrauchen. Besonders wichtig sind jetzt `meter_power_readings`, `location_integrations` und `integration_errors`; OCPP wird parallel verifiziert, aber nicht mehr als Hauptursache angenommen.
+Die Log-Tabelle bleibt ruhig stehen. Neue Zeilen erscheinen oben weich eingeschoben, ohne dass die ganze Liste verschwindet und neu aufgebaut wird.
