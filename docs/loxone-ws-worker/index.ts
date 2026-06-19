@@ -533,10 +533,7 @@ async function main() {
     for (const state of connections.values()) {
       try { state.ws?.close(); } catch { /* ignore */ }
       await sessionEnd(state, `shutdown-${signal}`);
-  // Watchdog (Phase 3): forciert Reconnect bei "toten" Verbindungen
-  setInterval(watchdogTick, WATCHDOG_CHECK_MS);
-  log("info", `[Watchdog] aktiv: prüft alle ${WATCHDOG_CHECK_MS / 1000}s, Schwelle ${WATCHDOG_STALE_MS / 1000}s`);
-}
+    }
     process.exit(0);
   };
   process.on("SIGTERM", () => shutdown("SIGTERM"));
@@ -569,6 +566,10 @@ async function main() {
       }
     }
   }, 15000);
+
+  // Watchdog (Phase 3): forciert Reconnect bei "toten" Verbindungen
+  setInterval(watchdogTick, WATCHDOG_CHECK_MS);
+  log("info", `[Watchdog] aktiv: prüft alle ${WATCHDOG_CHECK_MS / 1000}s, Schwelle ${WATCHDOG_STALE_MS / 1000}s`);
 }
 
 main().catch((err) => {
