@@ -329,11 +329,37 @@ function scheduleReconnect(state: ConnState, reason: string): void {
   if (state.reconnecting) return;
   state.reconnecting = true;
   state.reconnectCount++;
-  const delay = state.reconnectDelay;
+  // Exponential Backoff 1s → 60s + Jitter ±20 % (verhindert Thundering Herd)
+  const base = state.reconnectDelay;
+  const jitter = Math.floor(base * (Math.random() * 0.4 - 0.2));
+  const delay = Math.max(500, base + jitter);
   state.reconnectDelay = Math.min(state.reconnectDelay * 2, 60000);
   log("info", `[WS] Reconnect ${state.serialNumber} in ${delay}ms (reason=${reason})`);
   bridgeLog("info", "ws_reconnect_scheduled", `Reconnect in ${delay}ms (Grund: ${reason})`, state.serialNumber, { delay_ms: delay, reason });
   setTimeout(() => { state.reconnecting = false; connect(state); }, delay);
+}
+
+// ─── Watchdog (Phase 3) ──────────────────────────────────────────────────────
+// Erkennt "tote" WebSockets, bei denen lxcommunicator zwar noch verbunden ist,
+// aber seit WATCHDOG_STALE_MS keine Events mehr eintreffen. Erzwingt Reconnect.
+function watchdogTick(): void {
+  const now = Date.now();
+  for (const state of connections.values()) {
+    if (!state.authenticated || state.uuidMap.size === 0) continue;
+    // Referenzzeit: letztes Event ODER letzter erfolgreicher Connect
+    const ref = state.lastEventAt || state.lastConnectedAt;
+    if (!ref) continue;
+    const idleMs = now - ref;
+    if (idleMs >= WATCHDOG_STALE_MS) {
+      log("warn", `[Watchdog] ${state.serialNumber} seit ${Math.round(idleMs / 1000)}s ohne Event → forciere Reconnect`);
+      bridgeLog("warn", "watchdog_stale", `Kein Event seit ${Math.round(idleMs / 1000)}s, forciere Reconnect`, state.serialNumber, { idle_ms: idleMs });
+      try { state.ws?.close(); } catch { /* ignore */ }
+      state.authenticated = false;
+      state.ws = null;
+      sessionEnd(state, "watchdog-stale");
+      scheduleReconnect(state, "watchdog-stale");
+    }
+  }
 }
 
 // ─── Flush ───────────────────────────────────────────────────────────────────
