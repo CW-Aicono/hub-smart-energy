@@ -811,6 +811,83 @@ Der Worker meldet sich jetzt zusätzlich alle 30 Sekunden bei zwei neuen Tabelle
 
 ---
 
+## Schritt 12: Auf Phase 3 (Watchdog) aktualisieren
+
+Wenn der Worker bei Ihnen bereits in Phase 2 läuft und Sie nur die neue Watchdog-Funktion aktivieren möchten, gehen Sie genau diese Schritte durch. **Es werden keine Daten gelöscht** – nur der Container wird neu gebaut.
+
+### 12.1 Mit dem Server verbinden
+
+Öffnen Sie ein Terminal (Mac: „Terminal"; Windows: „PowerShell") und tippen Sie:
+
+```bash
+ssh root@<IP-Ihres-Servers>
+```
+
+### 12.2 In den Worker-Ordner wechseln
+
+```bash
+cd /opt/loxone-ws-worker
+```
+
+### 12.3 Die neue Datei `index.ts` aus diesem Ordner (Lovable / GitHub) auf den Server kopieren
+
+Laden Sie die aktuelle `docs/loxone-ws-worker/index.ts` aus dem AICONO-Repository herunter und ersetzen Sie damit die Datei auf dem Server. Falls Sie sich unsicher sind, melden Sie sich bei Ihrem Lovable-Ansprechpartner – die Datei muss **byteweise** identisch sein.
+
+**Prüfen, dass die Datei aktualisiert ist:**
+
+```bash
+grep "phase3" /opt/loxone-ws-worker/index.ts
+```
+
+➡️ Erwartete Ausgabe: mindestens eine Zeile mit `"phase3"`. Wenn nichts erscheint, wurde die Datei nicht ersetzt – bitte nochmal hochladen.
+
+### 12.4 Alten Container stoppen und löschen
+
+```bash
+docker rm -f loxone-ws-worker
+```
+
+➡️ Erwartete Ausgabe: `loxone-ws-worker`
+
+### 12.5 Image neu bauen
+
+```bash
+docker build -t loxone-ws-worker .
+```
+
+➡️ Dauert ca. 30–60 Sekunden. Am Ende muss `Successfully tagged loxone-ws-worker:latest` stehen.
+
+### 12.6 Container neu starten (mit unveränderten Umgebungsvariablen)
+
+Führen Sie exakt **denselben** `docker run`-Befehl aus, den Sie in **Schritt 7** dieser Anleitung verwendet haben. Es ist nichts an den Variablen zu ändern – die neuen Watchdog-Defaults (5 Min Schwelle, 30 s Prüfintervall) gelten automatisch.
+
+### 12.7 Erfolg prüfen
+
+```bash
+docker logs --tail 20 loxone-ws-worker
+```
+
+➡️ Sie sollten **diese Zeile** sehen:
+
+```
+[INFO] [Watchdog] aktiv: prüft alle 30s, Schwelle 300s
+```
+
+Und in der Startzeile darüber muss `version=phase3` stehen.
+
+### 12.8 In der Datenbank prüfen
+
+Öffnen Sie im AICONO-Backend die Tabelle **`bridge_workers`**. Der Eintrag `hetzner-bridge-test` muss jetzt:
+
+- **`version`** = `phase3`
+- **`last_heartbeat_at`** = jünger als 1 Minute
+
+Wenn beides stimmt, ist Phase 3 erfolgreich aktiv. Ab jetzt taucht im Fehlerfall in `bridge_event_log` der neue Ereignis-Typ **`watchdog_stale`** auf – das wäre das erste Mal in der Geschichte des Workers, dass wir „stille" Hänger direkt sehen, **bevor** ein Nutzer sie meldet.
+
+---
+
+
+
 ## Befehle für später (Stoppen, Neustarten, Löschen)
 
 Sie müssen diese jetzt nicht ausführen, aber merken Sie sich diese Befehle für den Fall, dass Sie etwas ändern möchten:
