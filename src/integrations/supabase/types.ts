@@ -6045,6 +6045,36 @@ export type Database = {
         }
         Relationships: []
       }
+      meter_cumulative_readings: {
+        Row: {
+          created_at: string
+          id: string
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+          source: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+          source?: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kwh_total?: number
+          meter_id?: string
+          reading_at?: string
+          source?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       meter_daily_totals_mv: {
         Row: {
           bucket_start: string
