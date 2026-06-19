@@ -37,6 +37,8 @@
  *   WATCHDOG_STALE_MS   (Phase 3) Forcierter Reconnect, wenn so lange kein Event
  *                       von einem authentifizierten Miniserver kam (Standard: 300000 = 5 Min)
  *   WATCHDOG_CHECK_MS   (Phase 3) Prüfintervall des Watchdogs (Standard: 30000 = 30 s)
+ *   KEEPALIVE_INTERVAL_MS (Phase 4) Loxone Keep-Alive Ping (Standard: 60000 = 60 s,
+ *                       0 = aus). Hält NAT/Firewall offen & validiert Socket+Token.
  */
 
 import os from "os";
