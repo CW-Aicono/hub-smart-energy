@@ -257,7 +257,11 @@ async function connect(state: ConnState): Promise<void> {
   state.authenticated = false;
 
   const host = await resolveLoxoneHost(state.serialNumber);
-  if (!host) { scheduleReconnect(state, "dns-failed"); return; }
+  if (!host) {
+    bridgeLog("warn", "dns_failed", `DNS-Auflösung fehlgeschlagen: ${state.serialNumber}`, state.serialNumber);
+    scheduleReconnect(state, "dns-failed");
+    return;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const LxCommunicator = require("lxcommunicator");
@@ -277,17 +281,22 @@ async function connect(state: ConnState): Promise<void> {
         if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type)) {
           entry.latest_value = ev.value;
           state.eventsReceived++;
+          state.lastEventAt = Date.now();
         }
       }
     },
     socketOnConnectionClosed: (_s: any, code: number) => {
       log("warn", `[WS] ${state.serialNumber} geschlossen (code=${code})`);
+      bridgeLog("warn", "ws_closed", `WebSocket geschlossen (code=${code})`, state.serialNumber, { code });
       state.authenticated = false;
       state.ws = null;
       sessionEnd(state, `close-${code}`);
       scheduleReconnect(state, `close-${code}`);
     },
-    socketOnTokenRefreshFailed: () => log("warn", `[WS] Token-Refresh fehlgeschlagen: ${state.serialNumber}`),
+    socketOnTokenRefreshFailed: () => {
+      log("warn", `[WS] Token-Refresh fehlgeschlagen: ${state.serialNumber}`);
+      bridgeLog("error", "token_refresh_failed", "Token-Refresh fehlgeschlagen", state.serialNumber);
+    },
   };
 
   const socket = new LxCommunicator.WebSocket(config);
@@ -299,10 +308,13 @@ async function connect(state: ConnState): Promise<void> {
     await socket.send("jdev/sps/enablebinstatusupdate");
     state.authenticated = true;
     state.reconnectDelay = 1000;
+    state.lastConnectedAt = Date.now();
     await sessionStart(state);
     log("info", `[WS] authentifiziert ${state.serialNumber} (${state.uuidMap.size} UUIDs)`);
+    bridgeLog("info", "ws_connected", `Verbunden, ${state.uuidMap.size} UUIDs abonniert`, state.serialNumber);
   } catch (err) {
     log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${err}`);
+    bridgeLog("error", "ws_connect_failed", `Verbindung fehlgeschlagen: ${(err as Error).message ?? err}`, state.serialNumber);
     state.ws = null;
     scheduleReconnect(state, `connect-error: ${(err as Error).message ?? err}`);
   }
@@ -315,6 +327,7 @@ function scheduleReconnect(state: ConnState, reason: string): void {
   const delay = state.reconnectDelay;
   state.reconnectDelay = Math.min(state.reconnectDelay * 2, 60000);
   log("info", `[WS] Reconnect ${state.serialNumber} in ${delay}ms (reason=${reason})`);
+  bridgeLog("info", "ws_reconnect_scheduled", `Reconnect in ${delay}ms (Grund: ${reason})`, state.serialNumber, { delay_ms: delay, reason });
   setTimeout(() => { state.reconnecting = false; connect(state); }, delay);
 }
 
