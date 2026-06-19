@@ -779,6 +779,34 @@ Drücken Sie wieder **Strg + C**, um die Log-Anzeige zu beenden.
 
 ---
 
+## Schritt 11: Im AICONO-Backend den Bridge-Worker-Status sehen (Phase 2)
+
+Der Worker meldet sich jetzt zusätzlich alle 30 Sekunden bei zwei neuen Tabellen in der Datenbank. So sehen wir auf einen Blick, ob er noch lebt und welcher Miniserver verbunden ist.
+
+**So prüfen Sie es:**
+
+1. Öffnen Sie das AICONO-Backend (Lovable-Umgebung) und gehen Sie als Super-Admin auf **View Backend → Tables**.
+2. Öffnen Sie die Tabelle **`bridge_workers`**.
+3. Sie sollten dort einen Eintrag sehen mit:
+   - **`name`** = `hetzner-bridge-test`
+   - **`status`** = `online`
+   - **`last_heartbeat_at`** = nicht älter als 1 Minute
+   - **`version`** = `phase2-skeleton` (oder Ihr Wert aus `WORKER_VERSION`)
+4. Öffnen Sie zusätzlich die Tabelle **`bridge_event_log`** und sortieren Sie nach `occurred_at` absteigend. Sie sollten ganz oben Ereignisse sehen wie:
+   - `worker_started` – beim Start des Containers
+   - `ws_connected` – sobald ein Miniserver verbunden ist
+   - `ws_reconnect_scheduled` – nur wenn die Verbindung zwischendurch abreißt
+
+**Wenn in `bridge_workers` nichts erscheint** (oder `last_heartbeat_at` bleibt leer):
+
+- Prüfen Sie in den Docker-Logs (`docker logs --tail 50 loxone-ws-worker`), ob Zeilen wie `[Bridge] heartbeat fehlgeschlagen` auftauchen.
+- Häufigste Ursache: Der `GATEWAY_API_KEY` ist falsch oder der Worker erreicht das Backend nicht (z.B. Firewall).
+- Zweithäufigste Ursache: `BRIDGE_WORKER_NAME` weicht vom Eintrag in `bridge_workers` ab (Groß-/Kleinschreibung zählt).
+
+> **Warum ist das wichtig?** Genau das war der Grund, warum die alte Worker-Version unbemerkt stehen blieb: Es gab keine zentrale Stelle, an der wir gesehen haben, ob sie noch arbeitet. Jetzt sind beide Tabellen unsere „Lebenszeichen-Kontrolle".
+
+---
+
 ## Befehle für später (Stoppen, Neustarten, Löschen)
 
 Sie müssen diese jetzt nicht ausführen, aber merken Sie sich diese Befehle für den Fall, dass Sie etwas ändern möchten:
