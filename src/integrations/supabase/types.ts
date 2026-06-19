@@ -11474,6 +11474,7 @@ export type Database = {
       }
     }
     Functions: {
+      _oneshot_delete_energiemonitor: { Args: never; Returns: undefined }
       aggregate_pv_actual_hourly: {
         Args: { p_from?: string; p_to?: string }
         Returns: number
