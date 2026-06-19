@@ -190,8 +190,9 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
         </div>
       </CardHeader>
       <CardContent>
-        {loading ? (
+        {loading && logs.length === 0 ? (
           <p className="text-sm text-muted-foreground">Lade Logs...</p>
+
         ) : filtered.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <ArrowDownUp className="h-8 w-8 mx-auto mb-2 opacity-40" />
