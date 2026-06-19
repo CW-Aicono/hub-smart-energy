@@ -187,6 +187,9 @@ interface ConnState {
   sessionId: string | null;
   eventsReceived: number;
   reconnectCount: number;
+  // Bridge-Worker (Phase 2) Zeitstempel
+  lastConnectedAt: number; // ms epoch, 0 = nie
+  lastEventAt: number;     // ms epoch, 0 = nie
 }
 
 const connections = new Map<string, ConnState>(); // key = serial
