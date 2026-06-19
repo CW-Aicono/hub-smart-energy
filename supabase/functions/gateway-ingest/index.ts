@@ -1237,6 +1237,85 @@ async function handleBridgeLogEvent(req: Request): Promise<Response> {
   return json({ success: true });
 }
 
+/**
+ * POST ?action=bridge-readings
+ * Body: {
+ *   worker_name: string,
+ *   readings: [{ miniserver_serial, sensor_uuid, value, recorded_at? }]
+ * }
+ * Schreibt die Roh-Werte in `bridge_raw_samples` (Ringpuffer, 24 h).
+ * Aggregation in die Schatten-Tabellen passiert separat in der
+ * Edge-Function `bridge-aggregator` (pg_cron, alle 5 Min).
+ */
+async function handleBridgeReadings(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    worker_name?: string;
+    readings?: Array<{
+      miniserver_serial?: string;
+      sensor_uuid?: string;
+      value?: number;
+      recorded_at?: string;
+    }>;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.worker_name || !Array.isArray(body.readings) || body.readings.length === 0) {
+    return json({ error: "worker_name and non-empty readings[] required" }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  const { data: worker } = await supabase
+    .from("bridge_workers")
+    .select("id")
+    .eq("name", body.worker_name)
+    .maybeSingle();
+  if (!worker) return json({ error: "unknown worker_name" }, 404);
+
+  // Link-Cache pro Aufruf (1 DB-Query je Miniserver, nicht je Reading)
+  const linkCache = new Map<string, { id: string; tenant_id: string | null }>();
+  const serials = [...new Set(body.readings.map(r => r.miniserver_serial).filter(Boolean) as string[])];
+  if (serials.length > 0) {
+    const { data: links } = await supabase
+      .from("bridge_miniserver_links")
+      .select("id, tenant_id, miniserver_serial")
+      .eq("worker_id", worker.id)
+      .in("miniserver_serial", serials);
+    for (const l of links ?? []) {
+      linkCache.set(l.miniserver_serial, { id: l.id, tenant_id: l.tenant_id ?? null });
+    }
+  }
+
+  const rows: any[] = [];
+  let skipped = 0;
+  for (const r of body.readings) {
+    if (!r.miniserver_serial || !r.sensor_uuid || typeof r.value !== "number" || !isFinite(r.value)) {
+      skipped++;
+      continue;
+    }
+    const link = linkCache.get(r.miniserver_serial);
+    rows.push({
+      worker_id: worker.id,
+      link_id: link?.id ?? null,
+      tenant_id: link?.tenant_id ?? null,
+      miniserver_serial: r.miniserver_serial,
+      uuid: r.sensor_uuid.toLowerCase(),
+      value: r.value,
+      received_at: r.recorded_at ?? new Date().toISOString(),
+    });
+  }
+
+  if (rows.length === 0) return json({ success: true, inserted: 0, skipped });
+
+  const { error } = await supabase.from("bridge_raw_samples").insert(rows);
+  if (error) return json({ success: false, error: error.message }, 500);
+
+  return json({ success: true, inserted: rows.length, skipped });
+}
+
 /* ── Loxone Remote-Connect WebSocket Feldtest ───────────────────────────────── */
 
 
