@@ -14,6 +14,8 @@ Dieses Programm (der „Worker“) sitzt auf Ihrem Hetzner-Server und hält eine
 
 > **Wichtig:** Der Worker ersetzt nichts. Das alte Abfragen läuft weiter als Sicherheitsnetz. Er ist nur ein **Zusatz** für den Feldtest.
 
+> **Neu in Phase 2:** Der Worker meldet sich zusätzlich alle 30 Sekunden in der Datenbank (Tabellen `bridge_workers` + `bridge_event_log`) und stellt eine kleine Statusseite unter `http://<server>:8080/healthz` und `/state` bereit. So sehen wir sofort, ob er noch lebt – und sehen jede Verbindungsänderung im Klartext.
+
 ---
 
 ## Was brauchen Sie vorher?
