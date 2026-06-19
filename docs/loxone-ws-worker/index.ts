@@ -389,7 +389,12 @@ async function keepaliveTick(): Promise<void> {
   }
 }
 
-// ─── Flush ───────────────────────────────────────────────────────────────────
+// ─── Flush (Phase 5: Smart-Split → bridge_raw_samples) ───────────────────────
+// Schickt Roh-Werte an gateway-ingest?action=bridge-readings.
+// gateway-ingest schreibt sie in `bridge_raw_samples` (Ringpuffer 24 h);
+// die Edge-Function `bridge-aggregator` aggregiert sie alle 5 Min in die
+// Schatten-Tabelle `meter_power_readings_5min_bridge` — parallel zum
+// bestehenden Polling-Pfad, der unberührt weiterläuft.
 
 async function flush(): Promise<void> {
   const readings: any[] = [];
@@ -397,7 +402,7 @@ async function flush(): Promise<void> {
   const nowIso = new Date(nowMs).toISOString();
   for (const state of connections.values()) {
     if (!state.authenticated) continue;
-    for (const entry of state.uuidMap.values()) {
+    for (const [uuid, entry] of state.uuidMap) {
       if (entry.latest_value === null) continue;
 
       // IO-Optimierung: nur pushen, wenn sich der Wert spürbar geändert hat
@@ -410,10 +415,9 @@ async function flush(): Promise<void> {
       if (!changed && !stale) continue;
 
       readings.push({
-        meter_id: entry.meter_id,
-        tenant_id: entry.tenant_id,
-        power_value: entry.latest_value,
-        energy_type: entry.energy_type,
+        miniserver_serial: state.serialNumber,
+        sensor_uuid: uuid,
+        value: entry.latest_value,
         recorded_at: nowIso,
       });
       entry.last_pushed_value = entry.latest_value;
@@ -422,12 +426,13 @@ async function flush(): Promise<void> {
   }
   if (readings.length === 0) return;
   try {
-    await ingestPost(null, { readings });
-    log("debug", `[Flush] ${readings.length} Werte gepusht`);
+    await ingestPost("bridge-readings", { worker_name: BRIDGE_WORKER_NAME, readings });
+    log("debug", `[Flush] ${readings.length} Roh-Samples an bridge-readings gepusht`);
   } catch (err) {
     log("warn", `[Flush] fehlgeschlagen: ${(err as Error).message}`);
   }
 }
+
 
 
 // ─── Meter-Liste laden & Verbindungen synchronisieren ────────────────────────
