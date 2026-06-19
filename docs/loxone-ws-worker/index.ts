@@ -55,9 +55,10 @@ const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
 const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
 const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "30000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase3";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase4";
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "300000", 10);
 const WATCHDOG_CHECK_MS = parseInt(process.env.WATCHDOG_CHECK_MS || "30000", 10);
+const KEEPALIVE_INTERVAL_MS = parseInt(process.env.KEEPALIVE_INTERVAL_MS || "60000", 10);
 
 if (!SUPABASE_URL || !GATEWAY_API_KEY) {
   console.error("[FATAL] SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein");
