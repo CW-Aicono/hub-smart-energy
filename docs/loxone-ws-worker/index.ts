@@ -365,6 +365,30 @@ function watchdogTick(): void {
   }
 }
 
+// ─── Keep-Alive (Phase 4) ────────────────────────────────────────────────────
+// Sendet alle KEEPALIVE_INTERVAL_MS einen leichten Befehl an jeden Miniserver.
+// Zweck:
+//   1. Hält NAT/Firewall-Pfade offen (verhindert "silent drops")
+//   2. Validiert Socket & Token: schlägt Send fehl → sofortiger Reconnect
+//      (statt bis zu 5 Min auf den Watchdog zu warten).
+async function keepaliveTick(): Promise<void> {
+  for (const state of connections.values()) {
+    if (!state.authenticated || !state.ws) continue;
+    try {
+      await state.ws.send("jdev/cfg/api");
+    } catch (err) {
+      const msg = (err as Error)?.message ?? String(err);
+      log("warn", `[Keepalive] ${state.serialNumber} fehlgeschlagen: ${msg} → Reconnect`);
+      bridgeLog("warn", "keepalive_failed", `Keep-Alive fehlgeschlagen: ${msg}`, state.serialNumber);
+      try { state.ws?.close(); } catch { /* ignore */ }
+      state.authenticated = false;
+      state.ws = null;
+      await sessionEnd(state, "keepalive-failed");
+      scheduleReconnect(state, "keepalive-failed");
+    }
+  }
+}
+
 // ─── Flush ───────────────────────────────────────────────────────────────────
 
 async function flush(): Promise<void> {
