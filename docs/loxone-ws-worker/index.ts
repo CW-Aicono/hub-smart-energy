@@ -107,6 +107,47 @@ async function ingestPost(action: string | null, body: any): Promise<any> {
   return r.json();
 }
 
+// ─── Bridge-Worker (Phase 2): Heartbeat & Event-Log ──────────────────────────
+
+async function bridgeHeartbeat(status: "online" | "degraded" | "offline" = "online", lastError: string | null = null): Promise<void> {
+  const linksState: Array<{ miniserver_serial: string; last_connected_at?: string; last_event_at?: string }> = [];
+  for (const s of connections.values()) {
+    const item: any = { miniserver_serial: s.serialNumber };
+    if (s.lastConnectedAt) item.last_connected_at = new Date(s.lastConnectedAt).toISOString();
+    if (s.lastEventAt) item.last_event_at = new Date(s.lastEventAt).toISOString();
+    linksState.push(item);
+  }
+  try {
+    await ingestPost("bridge-heartbeat", {
+      worker_name: BRIDGE_WORKER_NAME,
+      version: WORKER_VERSION,
+      host: WORKER_HOST,
+      status,
+      last_error: lastError,
+      links_state: linksState,
+    });
+  } catch (err) {
+    log("debug", `[Bridge] heartbeat fehlgeschlagen: ${(err as Error).message}`);
+  }
+}
+
+async function bridgeLog(
+  severity: "debug" | "info" | "warn" | "error",
+  event_type: string,
+  message: string,
+  miniserver_serial?: string,
+  details?: unknown,
+): Promise<void> {
+  try {
+    await ingestPost("bridge-log-event", {
+      worker_name: BRIDGE_WORKER_NAME,
+      severity, event_type, message, miniserver_serial, details,
+    });
+  } catch {
+    /* still log locally via log(); never crash on event-log failure */
+  }
+}
+
 // ─── Typen ───────────────────────────────────────────────────────────────────
 
 interface WsMeter {
