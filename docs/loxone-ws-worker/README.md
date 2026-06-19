@@ -815,31 +815,69 @@ Der Worker meldet sich jetzt zusätzlich alle 30 Sekunden bei zwei neuen Tabelle
 
 Wenn der Worker bei Ihnen bereits in Phase 2 läuft und Sie nur die neue Watchdog-Funktion aktivieren möchten, gehen Sie genau diese Schritte durch. **Es werden keine Daten gelöscht** – nur der Container wird neu gebaut.
 
+> **Tipp:** Öffnen Sie diese Anleitung in einem Fenster und Ihr Terminal in einem zweiten Fenster, damit Sie hin- und herkopieren können.
+
 ### 12.1 Mit dem Server verbinden
 
-Öffnen Sie ein Terminal (Mac: „Terminal"; Windows: „PowerShell") und tippen Sie:
+Öffnen Sie ein Terminal (Mac: „Terminal"; Windows: „PowerShell") und tippen Sie (ersetzen Sie `123.456.789.012` durch die echte IP-Adresse Ihres Servers):
 
 ```bash
-ssh root@<IP-Ihres-Servers>
+ssh root@123.456.789.012
 ```
 
+Tippen Sie Ihr Passwort ein und drücken Sie **Enter**. Sie sind auf dem Server, wenn Sie am Ende `root@...` sehen.
+
 ### 12.2 In den Worker-Ordner wechseln
+
+Tippen Sie exakt diesen Befehl ein:
 
 ```bash
 cd /opt/loxone-ws-worker
 ```
 
-### 12.3 Die neue Datei `index.ts` aus diesem Ordner (Lovable / GitHub) auf den Server kopieren
+### 12.3 Die neue Datei `index.ts` auf den Server bringen
 
-Laden Sie die aktuelle `docs/loxone-ws-worker/index.ts` aus dem AICONO-Repository herunter und ersetzen Sie damit die Datei auf dem Server. Falls Sie sich unsicher sind, melden Sie sich bei Ihrem Lovable-Ansprechpartner – die Datei muss **byteweise** identisch sein.
+Sie haben den neuen Code in Lovable im Browser vor sich. Jetzt müssen Sie ihn auf den Server übertragen. Das geht am einfachsten mit dem Texteditor **Nano** direkt auf dem Server.
 
-**Prüfen, dass die Datei aktualisiert ist:**
+**Schritt-für-Schritt:**
 
-```bash
-grep "phase3" /opt/loxone-ws-worker/index.ts
-```
+1. **Löschen Sie die alte Datei** (damit keine Reste übrigbleiben):
+   ```bash
+   rm -f index.ts
+   ```
 
-➡️ Erwartete Ausgabe: mindestens eine Zeile mit `"phase3"`. Wenn nichts erscheint, wurde die Datei nicht ersetzt – bitte nochmal hochladen.
+2. **Öffnen Sie den Editor Nano** mit einer neuen Datei:
+   ```bash
+   nano index.ts
+   ```
+   Der Bildschirm wird jetzt weiß oder zeigt unten eine Hilfszeile an. Das ist Nano.
+
+3. **Wechseln Sie in Ihren Browser**, wo Lovable geöffnet ist. Klicken Sie dort auf die Datei `docs/loxone-ws-worker/index.ts` im Dateibaum.
+
+4. **Markieren Sie den gesamten Inhalt** der Datei:
+   - Drücken Sie **Strg + A** (alles markieren).
+   - Drücken Sie **Strg + C** (kopieren).
+
+5. **Wechseln Sie zurück in Ihr Terminal** (das Nano-Fenster).
+
+6. **Fügen Sie den kopierten Text ein**:
+   - **Windows (PowerShell):** Klicken Sie mit der **rechten Maustaste** ins Nano-Fenster.
+   - **Mac (Terminal):** Drücken Sie **Cmd + V**.
+   - **Alternativ bei älteren Windows-Systemen:** Drücken Sie **Umschalt + Einfügen**.
+
+   > Sie werden sehen, wie der gesamte Code in Nano erscheint. Das kann einen Moment dauern, weil die Datei lang ist.
+
+7. **Speichern und beenden:**
+   - Drücken Sie **Strg + O** (das Buchstabe „O" wie „Otto"). Unten fragt Nano: `File Name to Write: index.ts`.
+   - Drücken Sie **Enter**, um zu bestätigen.
+   - Drücken Sie **Strg + X**, um Nano zu schließen.
+
+8. **Prüfen, dass die Datei aktualisiert ist:**
+   ```bash
+   grep "phase3" /opt/loxone-ws-worker/index.ts
+   ```
+   ➡️ **Erwartetes Ergebnis:** Sie sehen mindestens eine Zeile mit `"phase3"`.
+   > **Wenn nichts erscheint:** Die Datei wurde nicht richtig gespeichert. Wiederholen Sie die Schritte 12.3.2 bis 12.3.7 noch einmal.
 
 ### 12.4 Alten Container stoppen und löschen
 
@@ -847,27 +885,54 @@ grep "phase3" /opt/loxone-ws-worker/index.ts
 docker rm -f loxone-ws-worker
 ```
 
-➡️ Erwartete Ausgabe: `loxone-ws-worker`
+➡️ **Erwartetes Ergebnis:** `loxone-ws-worker`
 
-### 12.5 Image neu bauen
+### 12.5 Docker-Image neu bauen
 
 ```bash
 docker build -t loxone-ws-worker .
 ```
 
-➡️ Dauert ca. 30–60 Sekunden. Am Ende muss `Successfully tagged loxone-ws-worker:latest` stehen.
+➡️ **Erwartetes Ergebnis:** Dauert ca. 30–60 Sekunden. Am Ende muss `Successfully tagged loxone-ws-worker:latest` stehen.
 
-### 12.6 Container neu starten (mit unveränderten Umgebungsvariablen)
+### 12.6 Container neu starten
 
-Führen Sie exakt **denselben** `docker run`-Befehl aus, den Sie in **Schritt 7** dieser Anleitung verwendet haben. Es ist nichts an den Variablen zu ändern – die neuen Watchdog-Defaults (5 Min Schwelle, 30 s Prüfintervall) gelten automatisch.
+> **Wichtig:** Ersetzen Sie in den folgenden Zeilen die beiden Platzhalter durch Ihre echten Werte:
+> - `[HIER_SUPABASE_URL]` → Ihre Supabase-URL (z. B. `https://abcdefg12345.supabase.co`)
+> - `[HIER_API_KEY]` → Ihr `GATEWAY_API_KEY` aus dem AICONO-Backend (Einstellungen → Integrationen → Reiter API)
 
-### 12.7 Erfolg prüfen
+```bash
+docker run -d --restart=always --name loxone-ws-worker \
+  -p 8080:8080 \
+  -e SUPABASE_URL=[HIER_SUPABASE_URL] \
+  -e GATEWAY_API_KEY=[HIER_API_KEY] \
+  -e LOG_LEVEL=info \
+  -e WORKER_HOST=hetzner-prod-1 \
+  -e BRIDGE_WORKER_NAME=hetzner-bridge-test \
+  loxone-ws-worker
+```
+
+> **Beispiel, wie es aussieht, wenn es fertig ist:**
+> ```bash
+> docker run -d --restart=always --name loxone-ws-worker \
+>   -p 8080:8080 \
+>   -e SUPABASE_URL=https://abcdefg12345.supabase.co \
+>   -e GATEWAY_API_KEY=sk_live_51H8xyz... \
+>   -e LOG_LEVEL=info \
+>   -e WORKER_HOST=hetzner-prod-1 \
+>   -e BRIDGE_WORKER_NAME=hetzner-bridge-test \
+>   loxone-ws-worker
+> ```
+
+➡️ **Erwartetes Ergebnis:** Eine lange Zeichenkette aus Buchstaben und Zahlen – das ist die ID des gestarteten Containers.
+
+### 12.7 Erfolg in den Logs prüfen
 
 ```bash
 docker logs --tail 20 loxone-ws-worker
 ```
 
-➡️ Sie sollten **diese Zeile** sehen:
+➡️ **Erwartetes Ergebnis:** Sie sollten **diese Zeile** sehen:
 
 ```
 [INFO] [Watchdog] aktiv: prüft alle 30s, Schwelle 300s
