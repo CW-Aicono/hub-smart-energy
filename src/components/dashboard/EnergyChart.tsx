@@ -425,9 +425,31 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       // beyond each real reading. Larger gaps remain null = real data outage.
       // This makes the SUM across meters stable when meters poll at 15-min intervals
       // but at different sub-minutes within the window.
+      //
+      // "Real" vs. "forward-filled" wird zeitbasiert bewertet: pro Meter wird der
+      // tatsächliche Poll-Abstand (Median der Slot-Abstände zwischen echten Messungen)
+      // geschätzt. Forward-Fill innerhalb von (pollSlots + Toleranz=1 Slot) gilt
+      // weiterhin als "real", damit die durchgezogene Linie auch bei 15-Min-Poll
+      // entsteht. Erst echte Datenausfälle (länger als Poll-Intervall + Toleranz)
+      // werden als gestrichelte Lücke dargestellt.
       const MAX_FILL_SLOTS = 36; // 3 hours; covers 15-min polling + safety margin
-      const filledFlag: Record<string, boolean[]> = {}; // per meter: was this slot real (false) or forward-filled (true)?
+      const TOLERANCE_SLOTS = 1; // = 5 Min Toleranz
+      const filledFlag: Record<string, boolean[]> = {}; // per meter: was this slot real (false) or forward-filled-but-treated-as-gap (true)?
       for (const [mid, s] of Object.entries(meterSeries)) {
+        // Geschätzten Poll-Abstand bestimmen: Median der Slot-Abstände zwischen
+        // aufeinanderfolgenden echten Messungen. Fallback: 1 Slot (5 Min).
+        const realIdx: number[] = [];
+        for (let i = 0; i < 288; i++) if (s.values[i] != null) realIdx.push(i);
+        let pollSlots = 1;
+        if (realIdx.length >= 2) {
+          const diffs: number[] = [];
+          for (let k = 1; k < realIdx.length; k++) diffs.push(realIdx[k] - realIdx[k - 1]);
+          diffs.sort((a, b) => a - b);
+          const med = diffs[Math.floor(diffs.length / 2)];
+          pollSlots = Math.max(1, Math.min(12, med)); // cap auf 60 Min (12 Slots)
+        }
+        const realWindow = pollSlots + TOLERANCE_SLOTS;
+
         const flags = Array.from({ length: 288 }, () => false);
         let lastVal: number | null = null;
         let slotsSinceReal = 0;
@@ -437,7 +459,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
             slotsSinceReal = 0;
           } else if (lastVal != null && slotsSinceReal < MAX_FILL_SLOTS) {
             s.values[i] = lastVal;
-            flags[i] = true;
+            // Innerhalb des Poll-Fensters zählt der Slot weiterhin als "real",
+            // damit die durchgezogene Linie nicht ausfranst.
+            flags[i] = slotsSinceReal >= realWindow;
             slotsSinceReal++;
           } else {
             slotsSinceReal++;
