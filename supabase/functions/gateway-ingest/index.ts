@@ -1977,6 +1977,7 @@ Deno.serve(async (req) => {
     if (action === "worker-heartbeat") return handleWorkerHeartbeat(req);
     if (action === "bridge-heartbeat") return handleBridgeHeartbeat(req);
     if (action === "bridge-log-event") return handleBridgeLogEvent(req);
+    if (action === "bridge-readings") return handleBridgeReadings(req);
     if (action === "gateway-backup") return handleGatewayBackup(req);
     if (action === "gateway-command") return handleGatewayCommand(req);
     if (action === "push-execution-logs") return handlePushExecutionLogs(req);
