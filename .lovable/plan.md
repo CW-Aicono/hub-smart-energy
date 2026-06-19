@@ -1,80 +1,83 @@
-## Tiefenanalyse Disk-I/O (90 %)
+## Ausgangslage
 
-Aus `pg_stat_statements` (kumulativ seit letztem Boot) ergeben sich die Top-Verursacher von Disk-I/O. Reihenfolge nach **gesamter Ausführungszeit**:
+`ocpp_message_log` ist aktuell der zweitgrößte Schreib-Hotspot:
+- ~1 Mio. Inserts kumuliert
+- Pro OCPP-Nachricht **zwei** Inserts (eingehend + ausgehende Antwort)
+- Jeder Insert geht als eigener HTTP-Call vom Persistent-Server → Edge-Function → DB (kein Batching)
+- Heartbeats (alle ~5 min) und MeterValues (alle ~10–30 s) dominieren das Volumen, sind aber wichtig fürs Debugging — sollen bleiben
 
+Vergleich Monta (26.000 Zeilen/Monat pro Charge Point): bewältigt Monta nur, weil dort Batch-Append-only-Logs in spaltenorientierten Backends laufen. Wir können einen ähnlichen Effekt in Postgres erreichen, **ohne Daten zu verlieren**.
 
-| #   | Query (vereinfacht)                                                     | Aufrufe        | Σ Zeit       | Bemerkung                                                                            |
-| --- | ----------------------------------------------------------------------- | -------------- | ------------ | ------------------------------------------------------------------------------------ |
-| 1   | `INSERT meter_power_readings`                                           | **5.130.762**  | **23.247 s** | Roh-Insert pro Gateway-Poll. Jeder Insert = WAL + Index-Update                       |
-| 2   | `UPDATE location_integrations SET last_sync_at, sync_status WHERE id=…` | **2.333.740**  | **21.832 s** | 11 Zeilen, 2,3 Mio Updates → extrem viele „Hot-Row"-Updates → WAL + Autovacuum-Sturm |
-| 3   | `SELECT meter_power_readings ORDER BY recorded_at LIMIT/OFFSET`         | 157.431        | 8.767 s      | EnergyChart / Reports                                                                |
-| 4   | `SELECT integration_errors WHERE is_resolved OR is_ignored`             | 92.451         | 8.282 s      | Auto-Resolve-Loop                                                                    |
-| 5   | `SELECT meter_power_readings ORDER BY power_value DESC LIMIT`           | 8.327          | 5.599 s      | „Max-Wert finden" — voller Index-Scan ohne passenden Index, **672 ms/Call**          |
-| 6   | `INSERT ocpp_message_log`                                               | **1.033.902**  | 3.485 s      | **Jede** OCPP-WS-Nachricht wird geloggt                                              |
-| 7   | `UPSERT meter_period_totals`                                            | 658.181        | 2.739 s      | Tages-/Wochensummen-Updates                                                          |
-| 8   | `UPSERT gateway_sensor_snapshots`                                       | 293.119        | 2.638 s      | Sensor-Snapshot pro Liegenschaft                                                     |
-| 9   | `UPDATE integration_errors SET is_resolved` (mehrere Varianten)         | **~1.061.000** | ~6.700 s     | Auto-Resolve sweep loop                                                              |
-| 10  | `SELECT pending_ocpp_commands`                                          | 2.078.153      | 707 s        | Polling-Schleife für Ladepunkte                                                      |
+## Ziel
 
+Schreiblast auf `ocpp_message_log` um **~80–90 %** senken, vollständige Historie behalten, Lesbarkeit im UI gleich oder besser.
 
-Belege:
+## Maßnahmen (in dieser Reihenfolge)
 
-- `location_integrations`: 11 Live-Zeilen → **11 Autovacuum + 11 Autoanalyze** in kürzester Zeit (Tabelle wird ständig totgeschrieben → WAL-Bloat → Disk-I/O).
-- `meter_power_readings`: 95.104 Disk-Reads in laufender Boot-Session (= Tabellen-Scans aus den Chart-Queries, weil OFFSET-Pagination ineffizient ist).
-- Aktuell läuft **keine** Long-Running-Query (1 h Realtime-WAL-Sender ist normal). Der I/O-Anstieg kommt also nicht von einer einzelnen Edge Function, sondern von **dauerhafter Hintergrundlast** der oben gelisteten Patterns.
+### 1. Request/Response zu einer Zeile zusammenführen (–50 % Zeilen, sofort)
+Aktuell wird pro OCPP-Aufruf zweimal geschrieben (incoming Call + outgoing CallResult). Wie Monta das CSV zeigt: dort steht **eine** Zeile pro Transaktion mit Feldern `request` und `response`.
 
-## Vermutung Root-Cause
+- Neue Spalten `response_message jsonb` und `response_at timestamptz` ergänzen.
+- Persistent-Server merkt sich pro `message_id` den Request kurz im Speicher (Map, TTL 30 s) und schreibt **erst beim Eintreffen der Antwort** eine einzige Zeile.
+- Outbound-Server-Initiated Calls (RemoteStart usw.) → ebenso: 1 Zeile pro Round-Trip.
+- Fallback: wenn keine Antwort kommt (Timeout 30 s), wird die Zeile mit `response_message = null` geflushed → keine Info-Verluste.
 
-Es gibt **drei strukturelle Schreib-Stürme**, die zusammen das I/O-Budget auffressen:
+### 2. Batched Inserts im Persistent-Server (–80 % HTTP-Calls + DB-Roundtrips)
+Der Server schreibt heute bei jeder Nachricht synchron. Stattdessen:
 
-**A) `location_integrations`-Hot-Row-Update bei jedem Gateway-Poll**
-Jeder periodic-sync schreibt `last_sync_at` + `sync_status` auf dieselbe Zeile. 11 Zeilen × ~3.500 Polls/Tag × Tage = mehrere Millionen Updates. Jedes Update = neue Heap-Version + neue Index-Einträge + WAL + irgendwann Autovacuum. Das ist die Nr. 1 für Disk-Write-I/O.
+- In-Memory-Puffer pro Prozess, geflusht **alle 2 s** ODER bei **50 Einträgen**, je nachdem was zuerst eintritt.
+- Ein Bulk-Insert per Edge-Function-Call (`log-messages-batch` mit Array).
+- Bei Server-Shutdown wird der Puffer noch geflusht (graceful drain).
+- Vorteil: aus ~1 Mio. Einzel-Inserts werden <50 k Bulk-Inserts → WAL- und Index-Pflege drastisch geringer, aber jede einzelne Nachricht bleibt zeilenweise in der DB.
 
-**B) `ocpp_message_log` loggt jede einzelne WebSocket-Nachricht**
-1 Mio Inserts. Bei OCPP-Heartbeats alle 30 s pro Ladepunkt summiert sich das massiv. Es gibt zwar bereits eine 30-Tage-Aufräum-Logik, aber das Schreiben selbst ist die Belastung.
+### 3. Monatliche Tabellen-Partitionierung (bessere Vacuum-Last + günstige Retention)
+`ocpp_message_log` wird zu einer **RANGE-partitionierten** Tabelle (nach `created_at`, monatlich).
 
-**C) Integration-Errors Auto-Resolve-Sweeps**
-Die Auto-Resolve-Logik durchsucht/aktualisiert die Tabelle in mehreren Varianten ~1 Mio. Mal. Jeder Sweep ist ein Index-Scan + WAL-Update.
+- pg_cron-Job legt jeden Monatsanfang die neue Partition an.
+- Indexe pro Partition bleiben klein → Inserts schneller, Autovacuum schneller.
+- Retention/Archivierung später durch reines `DETACH PARTITION` möglich (kein Massen-DELETE).
+- Migration: neue partitionierte Tabelle anlegen, alte Daten in passende Partitionen einhängen, dann umbenennen. Bestehende Policies, GRANTs und FKs übernehmen.
 
-## Plan: drei chirurgische Fixes (alle ohne Risiko, alle credit-arm)
+### 4. Heartbeat-Sampling als optionaler späterer Schritt (NICHT in diesem Plan)
+Falls nach 1+2+3 die I/O-Last immer noch zu hoch sein sollte, könnte man Heartbeats später deduplizieren (1 Zeile pro 10 min mit Counter). Bewusst **erst nach Messung** entscheiden, damit wir jetzt nichts verlieren.
 
-### Fix 1 — `location_integrations`-Update drosseln (größter Effekt)
+## Technische Details
 
-Statt bei jedem Poll `last_sync_at` zu schreiben, nur noch schreiben wenn:
+**DB-Migration**
+```sql
+-- Spalten für Response-Paarung
+ALTER TABLE public.ocpp_message_log
+  ADD COLUMN response_message jsonb,
+  ADD COLUMN response_at timestamptz;
 
-- `sync_status` sich **wirklich geändert** hat, **ODER**
-- der letzte Update > 5 min her ist.
+-- Partitionierte Nachfolge-Tabelle
+CREATE TABLE public.ocpp_message_log_p (LIKE public.ocpp_message_log INCLUDING ALL)
+  PARTITION BY RANGE (created_at);
 
-→ reduziert die 2,3 Mio Updates auf <100 k. **Geschätzte Disk-Write-Ersparnis: 60–70 %.**
+-- monatliche Partitionen via pg_cron-Funktion ocpp_log_ensure_partition()
+-- Initial-Befüllung + RENAME im selben Migrationsschritt
+```
+GRANTs und RLS-Policies werden 1:1 übernommen.
 
-Umsetzung: in `loxone-periodic-sync` / Gateway-Heartbeat-Edge-Functions die Update-Bedingung ergänzen. Keine Migration, kein Schema-Change.
+**Edge-Function `ocpp-persistent-api`**
+- Neue Action `log-messages-batch`: nimmt `entries: [{ chargePointId, direction, raw, responseRaw?, responseAt? }]`, ein einziger `.insert([...])`.
+- Alte Action `log-message` bleibt rückwärtskompatibel (nutzt intern dieselbe Insert-Logik).
 
-### Fix 2 — `ocpp_message_log` nur bei Fehler oder selten loggen
+**Persistent-Server (`docs/ocpp-persistent-server/`)**
+- `messageLog.ts`: in-memory `pendingResponses: Map<messageId, {row, timer}>` + `flushBuffer: BatchEntry[]`.
+- `setInterval(flush, 2000)` + `if (buffer.length >= 50) flush()`.
+- `index.ts`, `commandDispatcher.ts`, `configurationProbe.ts`: bleibt API-kompatibel (rufen weiterhin `logOcppMessage`/`logOcppResponse`).
 
-Optionen (du wählst):
+**UI**
+- `useOcppLogs.tsx` zeigt Request + Response künftig in einer Zeile (Spalte „Antwort" mit Status/Payload-Preview), Realtime-Subscription bleibt auf `ocpp_message_log`.
 
-- **a)** Nur `CALLERROR`, `BootNotification`, `StartTransaction`, `StopTransaction`, `StatusNotification`, `Authorize` loggen. `Heartbeat` und `MeterValues` ausschließen.
-- **b)** Komplett auf Fehler-Only umschalten.
-
-→ reduziert die 1 Mio Inserts auf <50 k. **Geschätzte Write-Ersparnis: 15–20 %.**
-
-### Fix 3 — Integration-Errors Auto-Resolve weniger oft & gezielter
-
-- Sweep nur 1×/min statt bei jedem Poll.
-- WHERE-Klausel um `updated_at > now() - interval '15 min'` einschränken, damit nicht 75.000 Altzeilen bei jedem Sweep gescannt werden.
-
-→ reduziert die ~1 Mio Updates und 92 k SELECTs deutlich. **Geschätzte Write-Ersparnis: 5–10 %.**
+## Validierung
+1. Nach Migration: `pg_stat_user_tables` für `ocpp_message_log` beobachten → Insert-Rate sollte < 20 % der Vorwoche sein.
+2. Stichprobe im UI: jede OCPP-Transaktion erscheint genau einmal mit Request **und** Response.
+3. Edge-Function-Logs auf `log-messages-batch` Fehlerfreiheit prüfen.
+4. Nach 30 min `supabase--db_health` erneut prüfen.
 
 ## Was NICHT gemacht wird
-
-- Kein Schema-Change, kein Reindex, kein neuer Index — die vorhandenen Indizes reichen.
-- Keine Migration, kein Datenverlust.
-- Kein Refactor der Charts (kommt erst, wenn die drei Storm-Quellen weg sind und das Bild stabil ist).
-
-## Vorgehen
-
-Ich würde **Fix 1 zuerst** umsetzen (größter Hebel, kleinste Änderung) und dann nach 30 min wieder ins Disk-I/O-Budget schauen. Wenn das schon reicht, sparen wir uns Fix 2 und 3.
-
-**OK, Fix 1 jetzt umsetzen?** (Edge Functions: `loxone-periodic-sync` und ggf. weitere periodic-sync-Funktionen. Eine kleine `if`-Bedingung vor dem `update()`-Call.)  
-  
-Ja, ok für Fix 1. Die Punkte Fix 2 und Fix 3 behandeln wir danach separat nochmal
+- Kein Filtern oder Wegwerfen von Heartbeats/MeterValues (Info-Verlust ausgeschlossen).
+- Kein Wechsel des Storage-Backends.
+- Keine Änderung der OCPP-Server-Logik außer Logging.
