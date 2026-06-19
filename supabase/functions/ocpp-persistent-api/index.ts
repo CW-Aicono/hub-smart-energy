@@ -431,6 +431,7 @@ async function handle(action: string, body: Record<string, unknown>) {
     }
 
     case "log-message": {
+      // Legacy: einzelne Zeile (Request ODER Response). Rückwärtskompatibel.
       const chargePointId = String(body.chargePointId ?? "");
       const direction = body.direction === "outgoing" ? "outgoing" : "incoming";
       const raw = String(body.raw ?? "");
@@ -444,6 +445,44 @@ async function handle(action: string, body: Record<string, unknown>) {
       });
       if (error) return fail(500, error.message);
       return ok();
+    }
+
+    case "log-messages-batch": {
+      // Bulk-Insert mehrerer Einträge in EINEM DB-Roundtrip.
+      // Jeder Eintrag kann eine gepaarte Response enthalten -> 1 Zeile statt 2.
+      const entries = Array.isArray(body.entries) ? body.entries : [];
+      if (entries.length === 0) return ok({ inserted: 0 });
+      if (entries.length > 500) return fail(400, "Batch zu groß (max 500)");
+
+      const rows: Record<string, unknown>[] = [];
+      for (const raw of entries) {
+        if (!raw || typeof raw !== "object") continue;
+        const e = raw as Record<string, unknown>;
+        const chargePointId = String(e.chargePointId ?? "");
+        const rawMsg = String(e.raw ?? "");
+        if (!chargePointId || !rawMsg) continue;
+        const direction = e.direction === "outgoing" ? "outgoing" : "incoming";
+        const reqParsed = parseMessage(rawMsg);
+        let responseMessage: unknown = null;
+        let responseAt: string | null = null;
+        if (typeof e.responseRaw === "string" && e.responseRaw.length > 0) {
+          responseMessage = parseMessage(e.responseRaw).parsedJson;
+          responseAt = typeof e.responseAt === "string" ? e.responseAt : new Date().toISOString();
+        }
+        rows.push({
+          charge_point_id: chargePointId,
+          direction,
+          message_type: reqParsed.messageType,
+          raw_message: reqParsed.parsedJson,
+          response_message: responseMessage,
+          response_at: responseAt,
+          ...(typeof e.createdAt === "string" ? { created_at: e.createdAt } : {}),
+        });
+      }
+      if (rows.length === 0) return ok({ inserted: 0 });
+      const { error } = await admin.from("ocpp_message_log").insert(rows);
+      if (error) return fail(500, error.message);
+      return ok({ inserted: rows.length });
     }
 
     case "fetch-pending-commands": {
