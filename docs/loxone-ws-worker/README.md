@@ -847,6 +847,17 @@ Sie haben in Schritt 7 die Platzhalter `[HIER_SUPABASE_URL]` und `[HIER_API_KEY]
 2. Prüfen Sie, ob Benutzername und Passwort in der Integration stimmen.
 3. Prüfen Sie, ob der Miniserver über Remote Connect erreichbar ist (dns.loxonecloud.com).
 
+### „bridge_workers" zeigt `status = offline` oder kein `last_heartbeat_at`
+
+1. `docker logs --tail 100 loxone-ws-worker` aufrufen und nach Zeilen mit `[Bridge]` suchen.
+2. Prüfen Sie, dass die Umgebungsvariable `BRIDGE_WORKER_NAME` exakt dem Eintrag in der Tabelle entspricht (Standard: `hetzner-bridge-test`).
+3. Prüfen Sie, ob der `GATEWAY_API_KEY` korrekt ist – dieselbe Variable wird auch für `bridge-heartbeat` verwendet.
+
+### `curl http://127.0.0.1:8080/healthz` gibt keine Antwort
+
+1. Im Container ist der Health-Server vielleicht abgeschaltet. Prüfen Sie in `docker logs` nach der Zeile `[Health] HTTP-Endpoint auf Port 8080`.
+2. Falls Sie den Port von außen erreichen wollen: Stellen Sie sicher, dass beim `docker run` der Parameter `-p 8080:8080` mit angegeben wurde, und dass Ihre Firewall den Port nicht blockiert.
+
 ### Ich habe mich vertippt und weiß nicht, wie ich zurückkomme
 
 Drücken Sie **Strg + C**. Das bricht den aktuellen Befehl ab. Dann können Sie es nochmal versuchen.
