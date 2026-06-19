@@ -42,7 +42,7 @@ Schreiben in die **bestehenden** Aggregat-Tabellen (`meter_power_readings_5min`,
 
 ---
 
-## Phase 2 – Bridge-Worker Skelett auf Hetzner (Testumgebung)
+## Phase 2 – Bridge-Worker Skelett auf Hetzner (Testumgebung) ✅ Code bereit
 
 Eigenes kleines Node/TypeScript-Projekt (`ems-loxone-bridge`), Docker-Container, läuft als systemd/compose-Service neben der bestehenden WS-Testumgebung. **Noch keine** echte Loxone-Verbindung, nur:
 

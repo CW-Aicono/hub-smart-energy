@@ -30,11 +30,14 @@
  *   RELOAD_INTERVAL_MS  Wie oft die Meter-Liste neu geladen wird (Standard: 300000)
  *   LOG_LEVEL           "debug" | "info" | "warn" | "error" (Standard: "info")
  *   WORKER_HOST         Freier Text, taucht im Session-Log auf (Standard: hostname)
+ *   BRIDGE_WORKER_NAME  Name in Tabelle bridge_workers (Standard: hetzner-bridge-test)
+ *   BRIDGE_HEARTBEAT_MS Heartbeat-Intervall in ms (Standard: 30000)
+ *   HEALTH_PORT         HTTP-Port für /healthz und /state (Standard: 8080, 0 = aus)
+ *   WORKER_VERSION      Versions-String, taucht in bridge_workers.version auf
  */
 
 import os from "os";
-
-// ─── Konfiguration ───────────────────────────────────────────────────────────
+import http from "http";
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY!;
@@ -44,6 +47,10 @@ const MIN_DELTA = parseFloat(process.env.MIN_DELTA || "0.01");
 const RELOAD_INTERVAL_MS = parseInt(process.env.RELOAD_INTERVAL_MS || "300000", 10);
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
 const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
+const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
+const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "30000", 10);
+const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase2-skeleton";
 
 if (!SUPABASE_URL || !GATEWAY_API_KEY) {
   console.error("[FATAL] SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein");
@@ -100,6 +107,47 @@ async function ingestPost(action: string | null, body: any): Promise<any> {
   return r.json();
 }
 
+// ─── Bridge-Worker (Phase 2): Heartbeat & Event-Log ──────────────────────────
+
+async function bridgeHeartbeat(status: "online" | "degraded" | "offline" = "online", lastError: string | null = null): Promise<void> {
+  const linksState: Array<{ miniserver_serial: string; last_connected_at?: string; last_event_at?: string }> = [];
+  for (const s of connections.values()) {
+    const item: any = { miniserver_serial: s.serialNumber };
+    if (s.lastConnectedAt) item.last_connected_at = new Date(s.lastConnectedAt).toISOString();
+    if (s.lastEventAt) item.last_event_at = new Date(s.lastEventAt).toISOString();
+    linksState.push(item);
+  }
+  try {
+    await ingestPost("bridge-heartbeat", {
+      worker_name: BRIDGE_WORKER_NAME,
+      version: WORKER_VERSION,
+      host: WORKER_HOST,
+      status,
+      last_error: lastError,
+      links_state: linksState,
+    });
+  } catch (err) {
+    log("debug", `[Bridge] heartbeat fehlgeschlagen: ${(err as Error).message}`);
+  }
+}
+
+async function bridgeLog(
+  severity: "debug" | "info" | "warn" | "error",
+  event_type: string,
+  message: string,
+  miniserver_serial?: string,
+  details?: unknown,
+): Promise<void> {
+  try {
+    await ingestPost("bridge-log-event", {
+      worker_name: BRIDGE_WORKER_NAME,
+      severity, event_type, message, miniserver_serial, details,
+    });
+  } catch {
+    /* still log locally via log(); never crash on event-log failure */
+  }
+}
+
 // ─── Typen ───────────────────────────────────────────────────────────────────
 
 interface WsMeter {
@@ -139,6 +187,9 @@ interface ConnState {
   sessionId: string | null;
   eventsReceived: number;
   reconnectCount: number;
+  // Bridge-Worker (Phase 2) Zeitstempel
+  lastConnectedAt: number; // ms epoch, 0 = nie
+  lastEventAt: number;     // ms epoch, 0 = nie
 }
 
 const connections = new Map<string, ConnState>(); // key = serial
@@ -206,7 +257,11 @@ async function connect(state: ConnState): Promise<void> {
   state.authenticated = false;
 
   const host = await resolveLoxoneHost(state.serialNumber);
-  if (!host) { scheduleReconnect(state, "dns-failed"); return; }
+  if (!host) {
+    bridgeLog("warn", "dns_failed", `DNS-Auflösung fehlgeschlagen: ${state.serialNumber}`, state.serialNumber);
+    scheduleReconnect(state, "dns-failed");
+    return;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const LxCommunicator = require("lxcommunicator");
@@ -226,17 +281,22 @@ async function connect(state: ConnState): Promise<void> {
         if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type)) {
           entry.latest_value = ev.value;
           state.eventsReceived++;
+          state.lastEventAt = Date.now();
         }
       }
     },
     socketOnConnectionClosed: (_s: any, code: number) => {
       log("warn", `[WS] ${state.serialNumber} geschlossen (code=${code})`);
+      bridgeLog("warn", "ws_closed", `WebSocket geschlossen (code=${code})`, state.serialNumber, { code });
       state.authenticated = false;
       state.ws = null;
       sessionEnd(state, `close-${code}`);
       scheduleReconnect(state, `close-${code}`);
     },
-    socketOnTokenRefreshFailed: () => log("warn", `[WS] Token-Refresh fehlgeschlagen: ${state.serialNumber}`),
+    socketOnTokenRefreshFailed: () => {
+      log("warn", `[WS] Token-Refresh fehlgeschlagen: ${state.serialNumber}`);
+      bridgeLog("error", "token_refresh_failed", "Token-Refresh fehlgeschlagen", state.serialNumber);
+    },
   };
 
   const socket = new LxCommunicator.WebSocket(config);
@@ -248,10 +308,13 @@ async function connect(state: ConnState): Promise<void> {
     await socket.send("jdev/sps/enablebinstatusupdate");
     state.authenticated = true;
     state.reconnectDelay = 1000;
+    state.lastConnectedAt = Date.now();
     await sessionStart(state);
     log("info", `[WS] authentifiziert ${state.serialNumber} (${state.uuidMap.size} UUIDs)`);
+    bridgeLog("info", "ws_connected", `Verbunden, ${state.uuidMap.size} UUIDs abonniert`, state.serialNumber);
   } catch (err) {
     log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${err}`);
+    bridgeLog("error", "ws_connect_failed", `Verbindung fehlgeschlagen: ${(err as Error).message ?? err}`, state.serialNumber);
     state.ws = null;
     scheduleReconnect(state, `connect-error: ${(err as Error).message ?? err}`);
   }
@@ -264,6 +327,7 @@ function scheduleReconnect(state: ConnState, reason: string): void {
   const delay = state.reconnectDelay;
   state.reconnectDelay = Math.min(state.reconnectDelay * 2, 60000);
   log("info", `[WS] Reconnect ${state.serialNumber} in ${delay}ms (reason=${reason})`);
+  bridgeLog("info", "ws_reconnect_scheduled", `Reconnect in ${delay}ms (Grund: ${reason})`, state.serialNumber, { delay_ms: delay, reason });
   setTimeout(() => { state.reconnecting = false; connect(state); }, delay);
 }
 
@@ -354,6 +418,8 @@ async function reloadMeters(): Promise<void> {
         sessionId: null,
         eventsReceived: 0,
         reconnectCount: 0,
+        lastConnectedAt: 0,
+        lastEventAt: 0,
       };
       connections.set(serial, state);
     }
@@ -385,15 +451,54 @@ async function reloadMeters(): Promise<void> {
   log("info", `[Reload] aktive Miniserver: ${connections.size}`);
 }
 
+// ─── Health-HTTP-Server (Phase 2) ────────────────────────────────────────────
+
+function startHealthServer(): void {
+  if (!HEALTH_PORT || HEALTH_PORT <= 0) return;
+  const server = http.createServer((req, res) => {
+    if (req.url === "/healthz") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, worker: BRIDGE_WORKER_NAME, host: WORKER_HOST }));
+      return;
+    }
+    if (req.url === "/state") {
+      const state = {
+        worker: BRIDGE_WORKER_NAME,
+        version: WORKER_VERSION,
+        host: WORKER_HOST,
+        connections: Array.from(connections.values()).map((c) => ({
+          serial: c.serialNumber,
+          authenticated: c.authenticated,
+          uuids: c.uuidMap.size,
+          events_received: c.eventsReceived,
+          reconnect_count: c.reconnectCount,
+          last_connected_at: c.lastConnectedAt ? new Date(c.lastConnectedAt).toISOString() : null,
+          last_event_at: c.lastEventAt ? new Date(c.lastEventAt).toISOString() : null,
+        })),
+      };
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(state, null, 2));
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  server.listen(HEALTH_PORT, () => log("info", `[Health] HTTP-Endpoint auf Port ${HEALTH_PORT} (GET /healthz, /state)`));
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  log("info", `Loxone WS Worker (Feldtest) startet — host=${WORKER_HOST}`);
+  log("info", `Loxone WS Worker startet — worker=${BRIDGE_WORKER_NAME} host=${WORKER_HOST} version=${WORKER_VERSION}`);
   log("info", `  SUPABASE_URL=${SUPABASE_URL}`);
-  log("info", `  FLUSH_INTERVAL_MS=${FLUSH_INTERVAL_MS}  RELOAD_INTERVAL_MS=${RELOAD_INTERVAL_MS}`);
+  log("info", `  FLUSH_INTERVAL_MS=${FLUSH_INTERVAL_MS}  RELOAD_INTERVAL_MS=${RELOAD_INTERVAL_MS}  BRIDGE_HEARTBEAT_MS=${BRIDGE_HEARTBEAT_MS}`);
+
+  startHealthServer();
 
   const shutdown = async (signal: string) => {
     log("info", `${signal} — beende Sessions...`);
+    await bridgeHeartbeat("offline", `shutdown-${signal}`);
+    await bridgeLog("info", "worker_shutdown", `Worker beendet (${signal})`);
     for (const state of connections.values()) {
       try { state.ws?.close(); } catch { /* ignore */ }
       await sessionEnd(state, `shutdown-${signal}`);
@@ -403,9 +508,16 @@ async function main() {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
+  // Initialer Heartbeat + Start-Event, damit bridge_workers.status sofort auf "online" geht
+  await bridgeHeartbeat("online");
+  await bridgeLog("info", "worker_started", `Worker gestartet auf ${WORKER_HOST}`);
+
   await reloadMeters();
   setInterval(reloadMeters, RELOAD_INTERVAL_MS);
   setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
+
+  // Bridge-Heartbeat: hält bridge_workers.last_heartbeat_at frisch (Phase 2)
+  setInterval(() => { bridgeHeartbeat("online").catch(() => { /* siehe bridgeHeartbeat */ }); }, BRIDGE_HEARTBEAT_MS);
 
   // Session-Heartbeat alle 15s: hält die aktive Session "live" und liefert
   // events_received an die UI, damit die Miniserver-Kachel WS-Traffic anzeigt.
