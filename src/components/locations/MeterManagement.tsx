@@ -319,10 +319,13 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const displayedSensors = showArchived ? archivedSensorsByType : sensorTypeMeters;
   const displayedActuators = showArchived ? archivedActuatorsByType : actuatorTypeMeters;
 
-  const confirmDelete = (m: Meter) => {
-    if (window.confirm(`Möchten Sie "${m.name}" endgültig löschen? Historische Messwerte bleiben erhalten, sind aber nicht mehr dieser Messstelle zugeordnet.`)) {
-      deleteMeter(m.id);
-    }
+  const confirmDelete = async (m: Meter) => {
+    const ok = await confirmDialog({
+      title: "Zähler endgültig löschen?",
+      description: `Möchten Sie "${m.name}" endgültig löschen? Historische Messwerte bleiben erhalten, sind aber nicht mehr dieser Messstelle zugeordnet.`,
+      confirmLabel: "Endgültig löschen",
+    });
+    if (ok) deleteMeter(m.id);
   };
 
   // Gateway-Devices, die der User über den "Gefundene Geräte"-Dialog aktiv
