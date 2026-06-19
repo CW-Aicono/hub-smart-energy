@@ -31,6 +31,7 @@ import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors
 import { filterAssignedGatewayDevices } from "@/lib/gatewayDeviceFiltering";
 import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
 import { LocationChargingInfrastructure } from "./LocationChargingInfrastructure";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 
 interface MeterManagementProps {
   locationId: string;
