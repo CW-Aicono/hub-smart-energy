@@ -24,6 +24,7 @@ import { Gauge, ClipboardEdit, Filter, QrCode, Pencil, Archive, ArchiveRestore, 
 import { format } from "date-fns";
 import { de, enUS, es, nl } from "date-fns/locale";
 import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 
 const MetersOverview = () => {
   const { user, loading: authLoading } = useAuth();
