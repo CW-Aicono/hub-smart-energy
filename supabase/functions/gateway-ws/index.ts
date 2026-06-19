@@ -810,7 +810,7 @@ async function handleFrame(session: Session, raw: any) {
         await svc().rpc("touch_location_integration_sync", {
           _id: session.locationIntegrationId,
           _status: "success",
-          _min_interval_seconds: 60,
+          _min_interval_seconds: 300,
         });
       }
 
