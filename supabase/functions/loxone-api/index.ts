@@ -1091,6 +1091,27 @@ serve(async (req) => {
               });
             }
 
+            // Snapshot des kumulativen Zählerstandes (totalYear bevorzugt — monoton steigend;
+            // sonst totalDay). Wird in `meter_cumulative_readings` geschrieben und vom
+            // Aggregator `aggregate_pv_actual_hourly` zur intervall-unabhängigen
+            // Berechnung der Ist-Erzeugung pro Stunde verwendet.
+            const cumulativeKwh = (stateData?.totalYear != null && stateData.totalYear > 0)
+              ? Number(stateData.totalYear)
+              : (stateData?.totalDay != null && stateData.totalDay >= 0 ? Number(stateData.totalDay) : null);
+            const cumulativeSource = (stateData?.totalYear != null && stateData.totalYear > 0)
+              ? "loxone_live_year"
+              : "loxone_live_day";
+            if (cumulativeKwh != null && isFinite(cumulativeKwh)) {
+              cumulativeInserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                reading_at: now.toISOString(),
+                kwh_total: cumulativeKwh,
+                source: cumulativeSource,
+              });
+            }
+
+
             // Store instantaneous power reading for time-series (with spike filter)
             if (stateData?.value != null) {
               const powerVal = typeof stateData.value === "number" ? stateData.value : parseFloat(String(stateData.value));
