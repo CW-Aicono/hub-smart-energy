@@ -17,6 +17,8 @@ Dieses Programm (der „Worker“) sitzt auf Ihrem Hetzner-Server und hält eine
 > **Neu in Phase 2:** Der Worker meldet sich zusätzlich alle 30 Sekunden in der Datenbank (Tabellen `bridge_workers` + `bridge_event_log`) und stellt eine kleine Statusseite unter `http://<server>:8080/healthz` und `/state` bereit. So sehen wir sofort, ob er noch lebt – und sehen jede Verbindungsänderung im Klartext.
 >
 > **Neu in Phase 3:** Ein eingebauter **Watchdog** prüft alle 30 Sekunden, ob noch Daten von jedem Miniserver kommen. Wenn von einem Miniserver **5 Minuten lang kein einziges Ereignis** mehr eintrifft (obwohl die Verbindung scheinbar steht), erzwingt der Worker einen **kompletten Reconnect**. Zusätzlich verteilt er die Reconnect-Versuche mit ±20 % Zufallsverzögerung, damit nach einem Netzaussetzer nicht alle Miniserver gleichzeitig versuchen, wieder zu verbinden. Genau das war die Hauptursache, warum die alte Worker-Version „still" stehen blieb.
+>
+> **Neu in Phase 4:** Ein **Keep-Alive-Ping alle 60 Sekunden** an jeden Miniserver. Das hält NAT- und Firewall-Pfade dauerhaft offen (verhindert „stille" Verbindungsabbrüche durch Router) **und** validiert in einem Rutsch, dass Socket und Loxone-Token noch funktionieren. Wenn der Ping fehlschlägt, erzwingt der Worker einen Reconnect **sofort** — statt bis zu 5 Minuten auf den Watchdog zu warten.
 
 ---
 
