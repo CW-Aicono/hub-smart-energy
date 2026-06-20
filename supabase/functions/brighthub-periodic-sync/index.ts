@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { decrypt } from "../_shared/crypto.ts";
+import { isWorkerEnabled } from "../_shared/workerKillswitch.ts";
 
 const BRIGHTHUB_API_URL =
   "https://jcewrsouppdsvaipdpsy.supabase.co/functions/v1/energy-api";
