@@ -11783,6 +11783,39 @@ export type Database = {
           },
         ]
       }
+      worker_controls: {
+        Row: {
+          description: string | null
+          display_name: string
+          enabled: boolean
+          note: string | null
+          paused_at: string | null
+          paused_by: string | null
+          updated_at: string
+          worker_key: string
+        }
+        Insert: {
+          description?: string | null
+          display_name: string
+          enabled?: boolean
+          note?: string | null
+          paused_at?: string | null
+          paused_by?: string | null
+          updated_at?: string
+          worker_key: string
+        }
+        Update: {
+          description?: string | null
+          display_name?: string
+          enabled?: boolean
+          note?: string | null
+          paused_at?: string | null
+          paused_by?: string | null
+          updated_at?: string
+          worker_key?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       charging_users_public: {
