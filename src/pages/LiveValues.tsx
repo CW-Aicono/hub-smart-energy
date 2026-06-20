@@ -26,6 +26,19 @@ interface MeterLiveValue {
   loading: boolean;
 }
 
+const getBerlinDateKey = (date: Date): string => {
+  const parts = new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return `${year}-${month}-${day}`;
+};
+
 const LiveValues = () => {
   const { user, loading: authLoading } = useAuth();
   const { locations, loading: locationsLoading } = useLocations();
@@ -255,8 +268,10 @@ const LiveValues = () => {
       .in("meter_id", autoMeters.map((m) => m.id))
       .order("recorded_at", { ascending: false });
 
-    // Fetch period totals (day/month/year) from meter_period_totals
-    const today = new Date().toISOString().split("T")[0];
+    // Fetch period totals (day/month/year) from meter_period_totals.
+    // Wichtig: exakt auf die aktuellen Perioden filtern, sonst kann Supabase bei vielen
+    // historischen Tageszeilen vor dem heutigen Wert abschneiden.
+    const today = getBerlinDateKey(new Date());
     const firstOfMonth = today.substring(0, 7) + "-01";
     const firstOfYear = today.substring(0, 4) + "-01-01";
 
@@ -264,7 +279,8 @@ const LiveValues = () => {
       .from("meter_period_totals")
       .select("meter_id, period_type, period_start, total_value, energy_type")
       .in("meter_id", autoMeters.map((m) => m.id))
-      .in("period_type", ["day", "month", "year"]);
+      .in("period_type", ["day", "month", "year"])
+      .in("period_start", [today, firstOfMonth, firstOfYear]);
 
     // Build period totals map
     const periodMap = new Map<string, { totalDay: number | null; totalMonth: number | null; totalYear: number | null }>();
