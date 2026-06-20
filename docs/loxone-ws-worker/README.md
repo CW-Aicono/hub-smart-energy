@@ -447,6 +447,8 @@ async function connect(state: ConnState): Promise<void> {
   try {
     await socket.open(host, state.username, state.password);
     await socket.send("jdev/sps/enablebinstatusupdate");
+    // Phase 5.1: zusätzlich analoge Statusupdates abonnieren (kWh, Power, Temperatur, Zählerstände)
+    await socket.send("jdev/sps/enablestatusupdate");
     state.authenticated = true;
     state.reconnectDelay = 1000;
     state.lastConnectedAt = Date.now();
@@ -1121,6 +1123,101 @@ Im AICONO-Backend (Super-Admin) folgende Tabellen prüfen:
 3. Wenn `unmapped_uuids` hoch ist, heißt das: der Worker sendet UUIDs, denen kein Zähler (Tabelle `meters`) zugeordnet ist. Das ist **normal für Option A** (= alle UUIDs der Loxone-Struktur). Wir filtern später in Phase 6 nach Zuordnung.
 
 ---
+
+## Schritt 15: Auf Phase 5.1 (analoge Events – kWh, Power, Zählerstände) aktualisieren
+
+In Phase 5 hat der Worker zwar erfolgreich verbunden und Roh-Samples gepusht, es kamen aber **nur binäre Werte** (z. B. Wasserimpulse, Status-Bits) an. Der Grund: Der Befehl `enablebinstatusupdate` aktiviert beim Miniserver **ausschließlich binäre** Status-Pushes. Für **analoge** Werte (Energie in kWh, Leistung in W, Zählerstände, Temperaturen) muss zusätzlich `enablestatusupdate` gesendet werden.
+
+> **Was wurde geändert (haben wir bereits gemacht):**
+> - In `index.ts` wird nach `enablebinstatusupdate` zusätzlich `enablestatusupdate` gesendet.
+> - Die Versionskennung lautet jetzt `phase5.1-analog-events`.
+>
+> **Was Sie jetzt machen müssen:** Den Worker-Container mit der neuen `index.ts` neu bauen — Vorgehen identisch zu Schritt 14, nur die zu prüfende Version ist anders.
+
+### 15.1 Mit dem Server verbinden
+
+Wie in **Schritt 12.1**.
+
+### 15.2 In den Worker-Ordner wechseln
+
+Wie in **Schritt 12.2**.
+
+### 15.3 Die neue Datei `index.ts` auf den Server bringen
+
+Wie in **Schritt 12.3** (Nano-Anleitung) – mit dieser Änderung im **letzten Prüf-Schritt (12.3.8)**:
+
+```bash
+grep "phase5.1-analog-events" /opt/loxone-ws-worker/index.ts
+```
+
+➡️ **Erwartetes Ergebnis:** Mindestens eine Zeile mit `"phase5.1-analog-events"`.
+> **Wenn nichts erscheint:** Die Datei wurde nicht richtig gespeichert. Wiederholen Sie die Schritte aus 12.3 noch einmal.
+
+Zur Sicherheit zusätzlich prüfen, dass **beide** Subscribe-Befehle in der Datei stehen:
+
+```bash
+grep -E "enablebinstatusupdate|enablestatusupdate" /opt/loxone-ws-worker/index.ts
+```
+
+➡️ **Erwartetes Ergebnis:** **zwei** Zeilen — eine mit `enablebinstatusupdate`, eine mit `enablestatusupdate`.
+
+### 15.4 Alten Container stoppen und löschen
+
+```bash
+docker rm -f loxone-ws-worker
+```
+
+### 15.5 Docker-Image neu bauen
+
+```bash
+docker build -t loxone-ws-worker .
+```
+
+### 15.6 Container neu starten
+
+Wie in **Schritt 12.6** – derselbe `docker run`-Befehl, keine Änderungen an den Umgebungsvariablen nötig.
+
+### 15.7 Erfolg in den Logs prüfen
+
+Warten Sie **30 Sekunden** nach dem Start, dann:
+
+```bash
+docker logs loxone-ws-worker 2>&1 | grep -E "phase5.1-analog-events|aktive Miniserver|authentifiziert"
+```
+
+➡️ **Erwartetes Ergebnis:**
+
+```
+[INFO] Loxone WS Worker startet — worker=hetzner-bridge-test host=hetzner-prod-1 version=phase5.1-analog-events
+[INFO] [Reload] aktive Miniserver: 3
+[INFO] [WS] authentifiziert 504F94A22D9C (30 UUIDs)
+[INFO] [WS] authentifiziert 504F94A2BAA2 (10 UUIDs)
+[INFO] [WS] authentifiziert 504F94D107EE (7 UUIDs)
+```
+
+### 15.8 Nach 5–10 Minuten in der Datenbank prüfen, ob analoge Werte ankommen
+
+Warten Sie nach dem Container-Start **mindestens 5 Minuten** und lassen Sie idealerweise an einem Verbraucher tatsächlich Strom fließen (sonst sendet Loxone keine Wert-Änderungen).
+
+Geben Sie Lovable kurz Bescheid mit `prüfen`, sobald 5 Minuten vergangen sind. Wir prüfen dann in der Datenbank:
+
+- **`bridge_raw_samples`** sollte jetzt **deutlich mehr unterschiedliche UUIDs** mit **wechselnden Werten** enthalten (vorher: nur 2 UUIDs, beide konstant 0/1).
+- **`meter_power_readings_5min_bridge`** sollte neue 5-Min-Buckets mit `source = bridge_ws` und Werten **> 0** für Leistungs-Zähler bekommen.
+- **`bridge_workers.version`** = `phase5.1-analog-events`.
+
+### 15.9 Wenn nach 10 Minuten immer noch nur binäre Werte ankommen
+
+1. Im Worker-Log nach Push-Aktivität schauen:
+   ```bash
+   docker logs --tail 100 loxone-ws-worker 2>&1 | grep -E "Flush|Samples|enablestatus"
+   ```
+   Erwartet: regelmäßige `[Flush] N Roh-Samples ...`-Zeilen, wobei `N` größer ist als vor dem Update.
+
+2. Falls weiterhin nur 2 UUIDs Werte liefern: An Lovable melden mit der Ausgabe von Schritt 15.7. Dann prüfen wir Option C (`jdev/sps/io/<uuid>/all` explizit pro UUID abfragen).
+
+---
+
+
 
 
 
