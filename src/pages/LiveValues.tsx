@@ -345,18 +345,23 @@ const LiveValues = () => {
         .channel(channelName, { config: { broadcast: { self: false } } })
         .on("broadcast", { event: "readings" }, (msg: { payload: { events?: Array<{ uuid: string; value: number; at: string }> } }) => {
           const events = msg.payload?.events ?? [];
-          console.log(`[live-values] broadcast received on ${channelName}: ${events.length} events`);
           if (events.length === 0) return;
           setLiveValues((prev) => {
             let changed = false;
             const next = new Map(prev);
+            let unmatched = 0;
             for (const ev of events) {
               const meterId = uuidToMeterId.get(ev.uuid.toLowerCase());
-              if (!meterId) continue;
+              if (!meterId) { unmatched++; continue; }
               const existing = next.get(meterId);
-              if (!existing) continue;
-              next.set(meterId, { ...existing, value: ev.value });
+              // Auch ohne initial geladenen DB-Wert den Live-Wert aus der WS-Bridge übernehmen.
+              next.set(meterId, existing
+                ? { ...existing, value: ev.value }
+                : { value: ev.value, unit: "", totalDay: null, totalWeek: null, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "kWh" });
               changed = true;
+            }
+            if (unmatched > 0) {
+              console.log(`[live-values] ${unmatched}/${events.length} broadcast events ohne passenden Zähler (UUID nicht gemappt).`);
             }
             return changed ? next : prev;
           });
