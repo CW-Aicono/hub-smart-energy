@@ -247,6 +247,16 @@ async function resolveLoxoneHost(serial: string): Promise<string | null> {
 // ─── Session-Log ─────────────────────────────────────────────────────────────
 
 async function sessionStart(state: ConnState): Promise<void> {
+  // Phase 6: Wenn noch ein deferred sessionEnd anhängt, abbrechen und alte Session wiederverwenden.
+  if (state.pendingEndTimer) {
+    clearTimeout(state.pendingEndTimer);
+    state.pendingEndTimer = null;
+    state.pendingEndReason = null;
+    if (state.sessionId) {
+      log("info", `[Session] ${state.serialNumber} Reconnect < ${SESSION_REUSE_WINDOW_MS / 1000}s – behalte session_id ${state.sessionId}`);
+      return;
+    }
+  }
   try {
     const r = await ingestPost("ws-session-start", {
       tenant_id: state.tenantId,
@@ -263,6 +273,19 @@ async function sessionStart(state: ConnState): Promise<void> {
 
 async function sessionEnd(state: ConnState, reason: string): Promise<void> {
   if (!state.sessionId) return;
+  // Phase 6 (IO-Optimierung): sessionEnd verzögern – bei schnellem Reconnect kein neuer Log-Eintrag.
+  if (state.pendingEndTimer) clearTimeout(state.pendingEndTimer);
+  state.pendingEndReason = reason;
+  state.pendingEndTimer = setTimeout(() => {
+    state.pendingEndTimer = null;
+    void flushSessionEnd(state);
+  }, SESSION_REUSE_WINDOW_MS);
+}
+
+async function flushSessionEnd(state: ConnState): Promise<void> {
+  if (!state.sessionId) return;
+  const reason = state.pendingEndReason ?? "unknown";
+  state.pendingEndReason = null;
   try {
     await ingestPost("ws-session-end", {
       session_id: state.sessionId,
@@ -275,6 +298,7 @@ async function sessionEnd(state: ConnState, reason: string): Promise<void> {
   }
   state.sessionId = null;
 }
+
 
 // ─── WebSocket-Verbindung via lxcommunicator ─────────────────────────────────
 
