@@ -688,7 +688,7 @@ async function main() {
         log("debug", `[Heartbeat] ${state.serialNumber}: ${(err as Error).message}`);
       }
     }
-  }, 15000);
+  }, SESSION_HEARTBEAT_MS);
 
   // Watchdog (Phase 3): forciert Reconnect bei "toten" Verbindungen
   setInterval(watchdogTick, WATCHDOG_CHECK_MS);
