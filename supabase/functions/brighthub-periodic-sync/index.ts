@@ -94,6 +94,15 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (!(await isWorkerEnabled("brighthub_periodic_sync"))) {
+    console.log("brighthub-periodic-sync: paused via worker_controls — skipping");
+    return new Response(JSON.stringify({ success: true, skipped: true, reason: "worker_paused" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
