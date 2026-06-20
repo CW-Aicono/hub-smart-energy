@@ -344,7 +344,23 @@ async function connect(state: ConnState): Promise<void> {
         subscribedOk++;
       } catch (err) {
         subscribedErr++;
-        const reason = (err as Error)?.message ?? String(err);
+        // Loxone-Fehler kommen als Objekt { LL: { Code: "...", value: "..." } } oder als Error.
+        // Wir serialisieren robust, damit nie "[object Object]" geloggt wird.
+        let reason: string;
+        if (err instanceof Error) {
+          reason = err.message;
+        } else if (err && typeof err === "object") {
+          const anyErr = err as any;
+          const code = anyErr?.LL?.Code ?? anyErr?.Code ?? anyErr?.code;
+          const val = anyErr?.LL?.value ?? anyErr?.value;
+          if (code || val) {
+            reason = `code=${code ?? "?"} value=${val ?? "?"}`;
+          } else {
+            try { reason = JSON.stringify(err); } catch { reason = String(err); }
+          }
+        } else {
+          reason = String(err);
+        }
         failedUuids.push({ uuid, reason });
         log("warn", `[WS] ${state.serialNumber} subscribe ${uuid} fehlgeschlagen: ${reason}`);
       }
