@@ -148,6 +148,9 @@ async function bridgeHeartbeat(status: "online" | "degraded" | "offline" = "onli
   }
 }
 
+const SEVERITY_RANK: Record<string, number> = { debug: 0, info: 1, warn: 2, error: 3 };
+const BRIDGE_LOG_DB_THRESHOLD = SEVERITY_RANK[BRIDGE_LOG_DB_MIN_SEVERITY] ?? 2;
+
 async function bridgeLog(
   severity: "debug" | "info" | "warn" | "error",
   event_type: string,
@@ -155,6 +158,9 @@ async function bridgeLog(
   miniserver_serial?: string,
   details?: unknown,
 ): Promise<void> {
+  // Phase 6 (IO-Optimierung): Routine-Infos NICHT in bridge_event_log persistieren.
+  // Sie erscheinen weiterhin in der Container-Konsole (log(...)) für Debugging.
+  if ((SEVERITY_RANK[severity] ?? 1) < BRIDGE_LOG_DB_THRESHOLD) return;
   try {
     await ingestPost("bridge-log-event", {
       worker_name: BRIDGE_WORKER_NAME,
