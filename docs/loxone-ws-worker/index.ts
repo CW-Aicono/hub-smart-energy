@@ -572,6 +572,8 @@ async function reloadMeters(): Promise<void> {
         reconnectCount: 0,
         lastConnectedAt: 0,
         lastEventAt: 0,
+        pendingEndTimer: null,
+        pendingEndReason: null,
       };
       connections.set(serial, state);
     }
