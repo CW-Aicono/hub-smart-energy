@@ -1342,7 +1342,15 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
           Authorization: `Bearer ${SERVICE_ROLE}`,
         },
         body: JSON.stringify({ messages }),
+      }).then(async (r) => {
+        if (!r.ok) {
+          const txt = await r.text().catch(() => "");
+          console.error(`[bridge-readings] broadcast HTTP ${r.status}: ${txt}`);
+        } else {
+          console.log(`[bridge-readings] broadcast ok: ${messages.length} topic(s), ${rows.length} sample(s)`);
+        }
       }).catch((e) => console.error("[bridge-readings] broadcast failed:", e?.message ?? e));
+
     }
   } catch (e) {
     console.error("[bridge-readings] broadcast prep error:", (e as Error).message);
