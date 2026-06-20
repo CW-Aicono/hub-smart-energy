@@ -55,7 +55,7 @@ const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
 const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
 const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "30000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase5.2-per-uuid-subscribe";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase5.2.1-subscribe-error-detail";
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "300000", 10);
 const WATCHDOG_CHECK_MS = parseInt(process.env.WATCHDOG_CHECK_MS || "30000", 10);
 const KEEPALIVE_INTERVAL_MS = parseInt(process.env.KEEPALIVE_INTERVAL_MS || "60000", 10);
@@ -329,6 +329,7 @@ async function connect(state: ConnState): Promise<void> {
     // aktuellen Wert (LL.value) — wir nutzen das als Initial-Sample.
     let subscribedOk = 0;
     let subscribedErr = 0;
+    const failedUuids: Array<{ uuid: string; reason: string }> = [];
     for (const [uuid, entry] of state.uuidMap) {
       try {
         const resp: any = await socket.send(`jdev/sps/io/${uuid}/all`);
@@ -343,11 +344,13 @@ async function connect(state: ConnState): Promise<void> {
         subscribedOk++;
       } catch (err) {
         subscribedErr++;
-        log("debug", `[WS] ${state.serialNumber} subscribe ${uuid} fehlgeschlagen: ${(err as Error).message}`);
+        const reason = (err as Error)?.message ?? String(err);
+        failedUuids.push({ uuid, reason });
+        log("warn", `[WS] ${state.serialNumber} subscribe ${uuid} fehlgeschlagen: ${reason}`);
       }
     }
-    log("info", `[WS] ${state.serialNumber} per-UUID subscribe: ok=${subscribedOk} err=${subscribedErr}`);
-    bridgeLog("info", "ws_per_uuid_subscribed", `Per-UUID subscribe: ok=${subscribedOk} err=${subscribedErr}`, state.serialNumber, { ok: subscribedOk, err: subscribedErr });
+    log("info", `[WS] ${state.serialNumber} per-UUID subscribe: ok=${subscribedOk} err=${subscribedErr}${failedUuids.length ? ` failed=[${failedUuids.map((f) => f.uuid).join(",")}]` : ""}`);
+    bridgeLog("info", "ws_per_uuid_subscribed", `Per-UUID subscribe: ok=${subscribedOk} err=${subscribedErr}`, state.serialNumber, { ok: subscribedOk, err: subscribedErr, failed: failedUuids });
   } catch (err) {
     log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${err}`);
     bridgeLog("error", "ws_connect_failed", `Verbindung fehlgeschlagen: ${(err as Error).message ?? err}`, state.serialNumber);
