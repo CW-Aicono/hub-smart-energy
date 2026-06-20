@@ -322,6 +322,32 @@ async function connect(state: ConnState): Promise<void> {
     await sessionStart(state);
     log("info", `[WS] authentifiziert ${state.serialNumber} (${state.uuidMap.size} UUIDs)`);
     bridgeLog("info", "ws_connected", `Verbunden, ${state.uuidMap.size} UUIDs abonniert`, state.serialNumber);
+
+    // Phase 5.2: pro abonnierter UUID gezielt `jdev/sps/io/<uuid>/all` schicken.
+    // Zwingt den Miniserver, den aktuellen Wert auszuliefern UND die UUID
+    // in den Live-Push-Stream aufzunehmen. Antwort enthält bereits den
+    // aktuellen Wert (LL.value) — wir nutzen das als Initial-Sample.
+    let subscribedOk = 0;
+    let subscribedErr = 0;
+    for (const [uuid, entry] of state.uuidMap) {
+      try {
+        const resp: any = await socket.send(`jdev/sps/io/${uuid}/all`);
+        // lxcommunicator liefert typischerweise { LL: { value: "..." } } oder direkt einen Wert
+        const raw = resp?.LL?.value ?? resp?.value ?? resp;
+        const num = typeof raw === "number" ? raw : parseFloat(String(raw));
+        if (Number.isFinite(num) && !isSpike(num, entry.energy_type)) {
+          entry.latest_value = num;
+          state.eventsReceived++;
+          state.lastEventAt = Date.now();
+        }
+        subscribedOk++;
+      } catch (err) {
+        subscribedErr++;
+        log("debug", `[WS] ${state.serialNumber} subscribe ${uuid} fehlgeschlagen: ${(err as Error).message}`);
+      }
+    }
+    log("info", `[WS] ${state.serialNumber} per-UUID subscribe: ok=${subscribedOk} err=${subscribedErr}`);
+    bridgeLog("info", "ws_per_uuid_subscribed", `Per-UUID subscribe: ok=${subscribedOk} err=${subscribedErr}`, state.serialNumber, { ok: subscribedOk, err: subscribedErr });
   } catch (err) {
     log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${err}`);
     bridgeLog("error", "ws_connect_failed", `Verbindung fehlgeschlagen: ${(err as Error).message ?? err}`, state.serialNumber);
