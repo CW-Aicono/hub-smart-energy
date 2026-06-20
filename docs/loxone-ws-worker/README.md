@@ -1217,6 +1217,104 @@ Geben Sie Lovable kurz Bescheid mit `prüfen`, sobald 5 Minuten vergangen sind. 
 
 ---
 
+## Schritt 16: Auf Phase 5.2 (Per-UUID-Subscribe – Option C) aktualisieren
+
+Phase 5.1 (nur `enablestatusupdate`) hat bei den getesteten Miniservern **nicht** ausgereicht — es kamen weiterhin nur zwei binäre Status-UUIDs an, keine analogen Werte (kWh, Power, Zählerstände). In Phase 5.2 fragt der Worker daher nach erfolgreichem Login **gezielt für jede einzelne abonnierte UUID** den Befehl `jdev/sps/io/<uuid>/all` ab. Das hat zwei Effekte:
+
+1. Der Miniserver liefert in der Antwort **sofort den aktuellen Wert** der UUID (Initial-Sample).
+2. Die UUID wird vom Miniserver in den **Live-Push-Stream aufgenommen**, sodass danach Wert-Änderungen automatisch gepusht werden.
+
+> **Was wurde geändert (haben wir bereits gemacht):**
+> - In `index.ts` wird nach `enablestatusupdate` für jede UUID `jdev/sps/io/<uuid>/all` gesendet.
+> - Die Versionskennung lautet jetzt `phase5.2-per-uuid-subscribe`.
+> - Eine neue Log-Zeile zeigt das Ergebnis: `[WS] <serial> per-UUID subscribe: ok=<n> err=<m>`.
+>
+> **Was Sie jetzt machen müssen:** Den Worker-Container mit der neuen `index.ts` neu bauen — Vorgehen identisch zu Schritt 15, nur die zu prüfende Version ist anders.
+
+### 16.1 Mit dem Server verbinden
+
+Wie in **Schritt 12.1**.
+
+### 16.2 In den Worker-Ordner wechseln
+
+Wie in **Schritt 12.2**.
+
+### 16.3 Die neue Datei `index.ts` auf den Server bringen
+
+Wie in **Schritt 12.3** (Nano-Anleitung) – mit dieser Änderung im **letzten Prüf-Schritt (12.3.8)**:
+
+```bash
+grep "phase5.2-per-uuid-subscribe" /opt/loxone-ws-worker/index.ts
+```
+
+➡️ **Erwartetes Ergebnis:** Mindestens eine Zeile mit `"phase5.2-per-uuid-subscribe"`.
+> **Wenn nichts erscheint:** Die Datei wurde nicht richtig gespeichert. Wiederholen Sie die Schritte aus 12.3 noch einmal.
+
+Zur Sicherheit zusätzlich prüfen, dass die neue Subscribe-Schleife in der Datei steht:
+
+```bash
+grep -E "per-UUID subscribe|jdev/sps/io/\\\$\\{uuid\\}/all" /opt/loxone-ws-worker/index.ts
+```
+
+➡️ **Erwartetes Ergebnis:** **zwei** Zeilen — eine mit `per-UUID subscribe` (Log-Text) und eine mit `jdev/sps/io/${uuid}/all` (die eigentliche Anfrage).
+
+### 16.4 Alten Container stoppen und löschen
+
+```bash
+docker rm -f loxone-ws-worker
+```
+
+### 16.5 Docker-Image neu bauen
+
+```bash
+docker build -t loxone-ws-worker .
+```
+
+### 16.6 Container neu starten
+
+Wie in **Schritt 12.6** – derselbe `docker run`-Befehl, keine Änderungen an den Umgebungsvariablen nötig.
+
+### 16.7 Erfolg in den Logs prüfen
+
+Warten Sie **30 Sekunden** nach dem Start, dann:
+
+```bash
+docker logs loxone-ws-worker 2>&1 | grep -E "phase5.2-per-uuid-subscribe|aktive Miniserver|authentifiziert|per-UUID subscribe"
+```
+
+➡️ **Erwartetes Ergebnis (Beispiel):**
+
+```
+[INFO] Loxone WS Worker startet — worker=hetzner-bridge-test host=hetzner-prod-1 version=phase5.2-per-uuid-subscribe
+[INFO] [Reload] aktive Miniserver: 3
+[INFO] [WS] authentifiziert 504F94A22D9C (30 UUIDs)
+[INFO] [WS] 504F94A22D9C per-UUID subscribe: ok=30 err=0
+[INFO] [WS] authentifiziert 504F94A2BAA2 (10 UUIDs)
+[INFO] [WS] 504F94A2BAA2 per-UUID subscribe: ok=10 err=0
+[INFO] [WS] authentifiziert 504F94D107EE (7 UUIDs)
+[INFO] [WS] 504F94D107EE per-UUID subscribe: ok=7 err=0
+```
+
+> **Wichtig:** `ok=<n>` sollte möglichst der UUID-Anzahl entsprechen, `err=<m>` idealerweise `0`. Falls `err` hoch ist: Das bedeutet, dass diese UUIDs auf dem Miniserver gar nicht (mehr) existieren — dann ist die Konfiguration in der AICONO-Integration veraltet und sollte überprüft werden.
+
+### 16.8 Nach 5–10 Minuten in der Datenbank prüfen, ob analoge Werte ankommen
+
+Warten Sie nach dem Container-Start **mindestens 5 Minuten** und lassen Sie idealerweise an einem Verbraucher tatsächlich Strom fließen.
+
+Geben Sie Lovable kurz Bescheid mit `prüfen`, sobald 5 Minuten vergangen sind. Wir prüfen dann in der Datenbank:
+
+- **`bridge_raw_samples`** sollte jetzt **deutlich mehr unterschiedliche UUIDs** mit **wechselnden Werten** enthalten — auch für die Miniserver Jugendzentrum (504F94A2BAA2) und Rathaus (504F94D107EE), die in Phase 5.1 noch gar nichts geliefert haben.
+- **`meter_power_readings_5min_bridge`** sollte neue 5-Min-Buckets mit `source = bridge_ws` und Werten **> 0** für Leistungs-Zähler bekommen.
+- **`bridge_workers.version`** = `phase5.2-per-uuid-subscribe`.
+
+### 16.9 Wenn auch Phase 5.2 keine analogen Werte liefert
+
+Dann hat das Miniserver-Modell auf diesem Firmware-Stand keinen funktionierenden WebSocket-Push für analoge Werte. In dem Fall sagen Sie uns kurz Bescheid — wir greifen dann auf das bestehende HTTP-Polling als Datenquelle zurück (läuft ohnehin parallel weiter, keine Datenlücke).
+
+---
+
+
+
 
 
 
