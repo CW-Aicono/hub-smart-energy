@@ -55,7 +55,7 @@ const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
 const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
 const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "30000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase5.2.1-subscribe-error-detail";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase5.2.2-error-serialize";
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "300000", 10);
 const WATCHDOG_CHECK_MS = parseInt(process.env.WATCHDOG_CHECK_MS || "30000", 10);
 const KEEPALIVE_INTERVAL_MS = parseInt(process.env.KEEPALIVE_INTERVAL_MS || "60000", 10);
@@ -344,7 +344,23 @@ async function connect(state: ConnState): Promise<void> {
         subscribedOk++;
       } catch (err) {
         subscribedErr++;
-        const reason = (err as Error)?.message ?? String(err);
+        // Loxone-Fehler kommen als Objekt { LL: { Code: "...", value: "..." } } oder als Error.
+        // Wir serialisieren robust, damit nie "[object Object]" geloggt wird.
+        let reason: string;
+        if (err instanceof Error) {
+          reason = err.message;
+        } else if (err && typeof err === "object") {
+          const anyErr = err as any;
+          const code = anyErr?.LL?.Code ?? anyErr?.Code ?? anyErr?.code;
+          const val = anyErr?.LL?.value ?? anyErr?.value;
+          if (code || val) {
+            reason = `code=${code ?? "?"} value=${val ?? "?"}`;
+          } else {
+            try { reason = JSON.stringify(err); } catch { reason = String(err); }
+          }
+        } else {
+          reason = String(err);
+        }
         failedUuids.push({ uuid, reason });
         log("warn", `[WS] ${state.serialNumber} subscribe ${uuid} fehlgeschlagen: ${reason}`);
       }
