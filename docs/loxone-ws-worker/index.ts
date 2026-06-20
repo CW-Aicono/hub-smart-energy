@@ -58,9 +58,10 @@ const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "300000"
 // Phase 6: Session-Heartbeat von 15s auf 60s erhöht (IO-Optimierung)
 const SESSION_HEARTBEAT_MS = parseInt(process.env.SESSION_HEARTBEAT_MS || "60000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase6.0-io-reduction";
-// Phase 6: Watchdog-Schwelle von 5min auf 10min erhöht (weniger Reconnect-Stürme)
-const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "600000", 10);
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase6.1-watchdog-relax";
+// Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
+// daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
+const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
 const WATCHDOG_CHECK_MS = parseInt(process.env.WATCHDOG_CHECK_MS || "60000", 10);
 // Phase 6: Keepalive von 60s auf 120s erhöht (Loxone schließt aktive Sessions ohnehin selbst)
 const KEEPALIVE_INTERVAL_MS = parseInt(process.env.KEEPALIVE_INTERVAL_MS || "120000", 10);
@@ -465,6 +466,10 @@ async function keepaliveTick(): Promise<void> {
     if (!state.authenticated || !state.ws) continue;
     try {
       await state.ws.send("jdev/cfg/api");
+      // Phase 6.1: Erfolgreicher Keepalive zählt als Lebenszeichen. Verhindert,
+      // dass der Watchdog Verbindungen nur deshalb trennt, weil 10 Minuten lang
+      // kein Wert-Event kam (Miniserver schickt nur bei Änderungen).
+      state.lastEventAt = Date.now();
     } catch (err) {
       const msg = (err as Error)?.message ?? String(err);
       log("warn", `[Keepalive] ${state.serialNumber} fehlgeschlagen: ${msg} → Reconnect`);
