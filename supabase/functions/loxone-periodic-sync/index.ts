@@ -17,11 +17,7 @@ serve(async (req) => {
     });
   }
 
-serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req);
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+
 
   console.warn("loxone-periodic-sync disabled: Loxone measurement values are WS-Bridge only during isolation.");
   return new Response(
