@@ -496,6 +496,7 @@ async function keepaliveTick(): Promise<void> {
 // bestehenden Polling-Pfad, der unberührt weiterläuft.
 
 async function flush(): Promise<void> {
+  if (workerPaused) return;
   const readings: any[] = [];
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
