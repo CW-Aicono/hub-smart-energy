@@ -76,6 +76,11 @@ if (!SUPABASE_URL || !GATEWAY_API_KEY) {
 }
 
 const INGEST_URL = `${SUPABASE_URL}/functions/v1/gateway-ingest`;
+const KILLSWITCH_URL = `${SUPABASE_URL}/functions/v1/worker-killswitch?key=loxone_ws_worker`;
+const KILLSWITCH_POLL_MS = parseInt(process.env.KILLSWITCH_POLL_MS || "30000", 10);
+
+// Globaler Pausen-Zustand. Wird im Killswitch-Poll gesetzt.
+let workerPaused = false;
 
 // ─── Logging ─────────────────────────────────────────────────────────────────
 
