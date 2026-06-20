@@ -15,7 +15,6 @@ import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer }
 import { supabase } from "@/integrations/supabase/client";
 import { formatEnergy, formatGasDual } from "@/lib/formatEnergy";
 import { cn } from "@/lib/utils";
-import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 
 interface MeterLiveValue {
   meterId: string;
@@ -306,100 +305,12 @@ const LiveValues = () => {
     setLoadingLive(false);
   }, [meters]);
 
-  // Fetch period totals + meter readings from loxone-api once per session (for totalDay, meterReading etc.)
-  const fetchLiveValues = useCallback(async () => {
-    const autoMeters = meters.filter(
-      (m) => !m.is_archived && m.capture_type === "automatic" && m.sensor_uuid && m.location_integration_id
-    );
-    if (autoMeters.length === 0) return;
-
-    setLoadingLive(true);
-
-    // Group by integration
-    const byIntegration = new Map<string, typeof autoMeters>();
-    autoMeters.forEach((m) => {
-      const key = m.location_integration_id!;
-      const arr = byIntegration.get(key) || [];
-      arr.push(m);
-      byIntegration.set(key, arr);
-    });
-
-    // Fetch integration types for all relevant integration IDs
-    const integrationIds = Array.from(byIntegration.keys());
-    const { data: liRows } = await supabase
-      .from("location_integrations")
-      .select("id, integrations(type)")
-      .in("id", integrationIds);
-
-    const typeMap = new Map<string, string>();
-    if (liRows) {
-      for (const row of liRows) {
-        const intType = (row as any).integrations?.type;
-        if (intType) typeMap.set(row.id, intType);
-      }
-    }
-
-    for (const [integrationId, intMeters] of byIntegration) {
-      try {
-        const edgeFunction = getEdgeFunctionName(typeMap.get(integrationId) || "");
-        const { invokeWithRetry } = await import("@/lib/invokeWithRetry");
-        const { data, error } = await invokeWithRetry(edgeFunction, {
-          body: { locationIntegrationId: integrationId, action: "getSensors" },
-        });
-        if (error || !data?.success) continue;
-
-        for (const meter of intMeters) {
-          const sensor = data.sensors?.find((s: any) => s.id === meter.sensor_uuid);
-          if (sensor) {
-            const numVal = typeof sensor.rawValue === "number"
-              ? sensor.rawValue
-              : (sensor.rawValue != null ? parseFloat(String(sensor.rawValue)) : NaN);
-            const totalDay = typeof sensor.totalDay === "number"
-              ? sensor.totalDay
-              : (sensor.totalDay != null ? parseFloat(String(sensor.totalDay)) : null);
-            const totalWeek = typeof sensor.totalWeek === "number" ? sensor.totalWeek : (sensor.totalWeek != null ? parseFloat(String(sensor.totalWeek)) : null);
-            const totalMonth = typeof sensor.totalMonth === "number" ? sensor.totalMonth : (sensor.totalMonth != null ? parseFloat(String(sensor.totalMonth)) : null);
-            const totalYear = typeof sensor.totalYear === "number" ? sensor.totalYear : (sensor.totalYear != null ? parseFloat(String(sensor.totalYear)) : null);
-            const meterReadingRaw = sensor.secondaryValue != null && sensor.secondaryValue !== ""
-              ? (typeof sensor.secondaryValue === "number" ? sensor.secondaryValue : parseFloat(String(sensor.secondaryValue).replace(/\./g, "").replace(",", ".")))
-              : null;
-            const meterReading = meterReadingRaw !== null && !isNaN(meterReadingRaw) ? meterReadingRaw : null;
-            const meterReadingUnit = sensor.secondaryUnit || "kWh";
-
-            if (!isNaN(numVal)) {
-              setLiveValues((prev) => {
-                const next = new Map(prev);
-                next.set(meter.id, {
-                  value: numVal,
-                  unit: sensor.unit || "",
-                  totalDay: totalDay !== null && !isNaN(totalDay) ? totalDay : null,
-                  totalWeek: totalWeek !== null && !isNaN(totalWeek as number) ? totalWeek : null,
-                  totalMonth: totalMonth !== null && !isNaN(totalMonth as number) ? totalMonth : null,
-                  totalYear: totalYear !== null && !isNaN(totalYear as number) ? totalYear : null,
-                  meterReading,
-                  meterReadingUnit,
-                });
-                return next;
-              });
-            }
-          }
-        }
-      } catch (err) {
-        console.warn(`Failed to fetch live sensors for integration ${integrationId}:`, err);
-      }
-    }
-
-    setLastRefresh(new Date());
-    setLoadingLive(false);
-  }, [meters]);
-
-  // On mount: load initial DB values, then fetch full data from loxone-api once,
-  // then subscribe to Loxone-WS-Bridge via Realtime-Broadcast (pro Tenant) für Live-Updates
+  // On mount: load only existing DB values, then subscribe to Loxone-WS-Bridge via Realtime-Broadcast.
+  // Temporär: KEIN loxone-api/getSensors HTTP-Polling auf dieser Seite.
   useEffect(() => {
     if (meters.length === 0) return;
 
     loadInitialPowerValues();
-    fetchLiveValues();
 
     // uuid → meter_id Map (für schnelles Lookup im Broadcast-Handler)
     const uuidToMeterId = new Map<string, string>();
@@ -447,12 +358,10 @@ const LiveValues = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meters.length]);
 
-  // Manuell-Refresh-Button: erst frische DB-Werte (vom WS-Bridge geschrieben),
-  // dann zusätzlich loxone-api für totalDay/Monat/Jahr + Zählerstände.
+  // Manuell-Refresh-Button: temporär nur DB lesen, kein loxone-api/getSensors HTTP-Polling.
   const handleManualRefresh = useCallback(async () => {
     await loadInitialPowerValues();
-    await fetchLiveValues();
-  }, [loadInitialPowerValues, fetchLiveValues]);
+  }, [loadInitialPowerValues]);
 
 
 
