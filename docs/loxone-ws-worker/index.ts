@@ -544,7 +544,7 @@ async function pollKillswitch(): Promise<void> {
       log("warn", `[Killswitch] HTTP ${r.status} — ignoriere, behalte Zustand bei`);
       return;
     }
-    const body = await r.json();
+    const body = await r.json() as { enabled?: boolean };
     const enabled = body.enabled !== false;
     const nextPaused = !enabled;
     if (nextPaused === workerPaused) return; // kein Zustandswechsel
