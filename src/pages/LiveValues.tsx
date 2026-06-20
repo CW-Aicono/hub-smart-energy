@@ -590,10 +590,11 @@ const LiveValues = () => {
                   {t("common.refreshed" as any)}: {lastRefresh.toLocaleTimeString(dateLocale)}
                 </span>
               )}
-              <Button variant="outline" size="sm" onClick={fetchLiveValues} disabled={loadingLive}>
+              <Button variant="outline" size="sm" onClick={handleManualRefresh} disabled={loadingLive}>
                 <RefreshCw className={cn("h-4 w-4 mr-2", loadingLive && "animate-spin")} />
                 {t("common.refresh" as any)}
               </Button>
+
             </div>
           </div>
         </header>
