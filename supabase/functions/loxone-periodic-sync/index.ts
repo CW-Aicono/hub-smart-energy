@@ -8,6 +8,16 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  console.warn("loxone-periodic-sync disabled: Loxone measurement values are WS-Bridge only during isolation.");
+  return new Response(
+    JSON.stringify({
+      success: false,
+      disabled: "loxone_non_ws_measurement_path",
+      error: "Temporär deaktiviert: Loxone-Messwerte dürfen ausschließlich über die WS-Bridge/gateway-ingest?action=bridge-readings kommen.",
+    }),
+    { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey);
