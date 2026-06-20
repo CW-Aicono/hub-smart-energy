@@ -716,6 +716,12 @@ async function main() {
   await bridgeHeartbeat("online");
   await bridgeLog("info", "worker_started", `Worker gestartet auf ${WORKER_HOST}`);
 
+  // Initialer Killswitch-Check (vor reloadMeters), damit ein pausierter Worker
+  // gar nicht erst Verbindungen aufbaut.
+  await pollKillswitch();
+  setInterval(() => { pollKillswitch().catch((e) => log("error", "killswitch:", e)); }, KILLSWITCH_POLL_MS);
+  log("info", `[Killswitch] aktiv: poll alle ${KILLSWITCH_POLL_MS / 1000}s gegen ${KILLSWITCH_URL}`);
+
   await reloadMeters();
   setInterval(reloadMeters, RELOAD_INTERVAL_MS);
   setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
