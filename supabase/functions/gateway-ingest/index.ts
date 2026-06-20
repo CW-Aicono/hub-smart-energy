@@ -2045,7 +2045,11 @@ Deno.serve(async (req) => {
       return handleSchneiderPush(req);
     }
 
-    return handlePostReadings(req);
+    return json({
+      success: false,
+      error: "Temporär deaktiviert: alter Polling-/Push-Pfad ohne action. Für Loxone sind nur bridge-readings per WS-Bridge erlaubt.",
+      disabled: "legacy_post_readings",
+    }, 410);
   }
 
   return json({ error: "Method not allowed" }, 405);
