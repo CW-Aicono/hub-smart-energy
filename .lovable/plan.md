@@ -1,83 +1,61 @@
-## Was ich gefunden habe (Diagnose, keine Spekulation)
+## Befund (mit echten DB-Zahlen, keine Vermutung)
 
-### Problem 1 – PV-Prognose „Ist 0,0 kWh"
+Aus der Datenbank-Statistik seit dem letzten Neustart kommen die IO-Spitzen **nicht** von normalen Messdaten, sondern von **technischen Schreibvorgängen, die viel zu oft passieren**:
 
-- Der Live-Zähler **Erzeugung** (UUID `1d48d32d-…`) liefert über die WS-Bridge aktuelle 5‑Min‑Werte in die Tabelle `meter_power_readings_5min_bridge` (letzter Wert heute 07:35 Uhr ✓).
-- Der Cron-Job `aggregate-pv-actual-hourly` läuft jede Stunde erfolgreich, schreibt aber **nichts Neues** in `pv_actual_hourly` (letzter Eintrag: **6. April 2026**).
-- Ursache: Die SQL-Funktion `aggregate_pv_actual_hourly` ruft `public.get_power_readings_5min(...)` auf. Diese Hilfsfunktion liest nur aus den **alten** Tabellen `meter_power_readings_5min` und `meter_power_readings` – **nicht** aus `meter_power_readings_5min_bridge`. Seit der Umstellung auf WS-Bridge bekommt die PV-Aggregation also keine Daten mehr.
+| Tabelle | Inserts | Updates | Bewertung |
+|---|---|---|---|
+| `location_integrations` (nur 11 Zeilen!) | 0 | **7.781** | Wird bei jedem Sensor-Push aktualisiert |
+| `bridge_event_log` | **31.718** | 0 | Jeder Reconnect/Subscribe schreibt 5–7 Log-Zeilen |
+| `loxone_ws_session_log` | 7.867 | 15.120 | Rathaus: **927 Sessions / 24 h** (alle ~1,5 min neu) |
+| `bridge_raw_samples` | 13.674 | **13.630** | Jede Zeile wird einmal Insert + einmal Update geschrieben |
+| `bridge_miniserver_links` (3 Zeilen!) | 0 | **3.972** | Heartbeat alle 30 s |
+| `bridge_workers` (1 Zeile!) | 0 | 1.345 | Worker-Heartbeat alle 30 s |
+| `meter_period_totals` | 252 | **23.267** | Cron `refresh-meter-period-totals-5min` |
 
-### Problem 2 – Live-Daten erscheinen erst nach Minuten
+Top-Slow-Query (kumuliert): **2,33 Mio. Updates auf `location_integrations.last_sync_at`** und **5,13 Mio. Inserts in `meter_power_readings`** — beides ist die historische Last; die laufende Rate ist jetzt moderat (~7 Inserts/min), aber jeder einzelne Push triggert sofort ein `last_sync_at`-Update.
 
-- Beim Öffnen von `/live-values` werden zunächst nur die letzten DB-Polling-Werte angezeigt (z. B. 11,05 kW). Die echten Live-Updates kommen ausschließlich, wenn die WS-Bridge ein neues Sample broadcastet.
-- Da Loxone bei vielen UUIDs nur dann sendet, wenn der Wert um mehr als die interne Hysterese kippt, vergehen je nach Zähler 1–3 Minuten zwischen Broadcasts. Das erklärt das Warten.
-- Zusätzlich: Es gibt **keine initiale „letzter bekannter Wert aus Bridge"-Anzeige** – beim ersten Laden wird nur DB-Polling-Wert benutzt, obwohl in `bridge_raw_samples` oft ein sehr frischer Wert vorliegt.
+**Konsequenz:** Die WS-Reconnect-Schleife (Rathaus alle ~1,5 min) erzeugt nicht durch die Daten, sondern durch die **Begleit-Schreibvorgänge** (Session-Log + Event-Log + per-UUID-Subscribe-Logs) den Großteil der IO.
 
-### Problem 3 – Disk I/O Budget bei 92 %
+## Plan: 5 gezielte Code-Änderungen
 
-- WS-Bridge ist **nicht** der Hauptverursacher: `bridge_raw_samples` = 4 MB, `meter_power_readings_5min_bridge` = 1,2 MB, nur 1.463 Samples/Stunde.
-- Die echten Top-Verursacher laut `pg_stat_statements`:
-  1. **5,1 Mio INSERTs** in die alte Tabelle `meter_power_readings` (≈ 23.000 s CPU). Wird weiterhin von vielen Pfaden geschrieben (gateway-ingest, loxone-api Reste, Shelly, Schneider, etc.) – pro relevantem Zähler ~60 Inserts/Stunde = 1/Minute.
-  2. **2,3 Mio UPDATEs** auf `location_integrations.last_sync_at` / `sync_status` (≈ 22.000 s CPU). Jeder Polling-/Sync-Tick schreibt diese Zeile – extrem chatty.
-  3. ~165 K Selects auf `meter_power_readings` für Charts (mit `ORDER BY recorded_at`).
-- → I/O-Problem ist **Polling + Status-Updates**, nicht WebSocket.
+### 1. `location_integrations.last_sync_at` nicht mehr bei jedem Push schreiben *(größte Wirkung)*
+In `supabase/functions/gateway-ingest/index.ts`: Update auf `last_sync_at` **drosseln** auf maximal 1× pro Minute pro Integration (In-Memory-Cache pro Function-Instanz mit `Map<id, lastWrittenMs>`).
+→ erwartete Reduktion: ~95 % weniger Updates auf dieser Tabelle.
 
-### Problem 4 – Rathaus: 977 Sitzungen / 24 h
+### 2. `bridge_event_log` entrümpeln
+In `docs/loxone-ws-worker/index.ts`: `bridgeLog(...)` nur noch bei **`warn`/`error`** in die DB schreiben. Alle `info`-Events (`ws_connected`, `ws_reconnect_scheduled`, `ws_per_uuid_subscribed` etc.) nur noch lokal in Konsole loggen.
+→ erwartete Reduktion: ~80 % weniger Event-Log-Inserts.
 
-- Das sind ~1 Reconnect alle 90 Sek. AICONO Zentrale hat 11 Sessions (alle 2 h), Jugendzentrum 12. Rathaus fällt aus dem Rahmen.
-- Wahrscheinlichste Ursachen: (a) der Loxone Miniserver im Rathaus killt die Verbindung selbst (Token-Ablauf, weil ein anderer Tab/User dieselben Credentials nutzt – jeder neue Login invalidiert die alten Sessions), (b) der HA-Addon-Worker verliert die Verbindung wegen Netzwerk/MTU oder (c) doppelter Worker greift parallel auf denselben Miniserver zu.
-- Muss in den Disconnect-Reasons (`loxone_ws_session_log`) verifiziert werden – mache ich vor jeder Code-Änderung.
+### 3. Worker- und Miniserver-Heartbeats von 30 s → 5 min
+Im Worker:
+- `BRIDGE_HEARTBEAT_MS` Default `30000` → `300000` (5 min)
+- Session-Heartbeat (Zeile 634, hartcodiert `15000` ms) → `60000` ms (1 min)
 
----
+→ Faktor 4–10 weniger Updates auf `bridge_workers`, `bridge_miniserver_links`, `loxone_ws_session_log`.
 
-## Ist WebSocket der falsche Weg?
+### 4. Keepalive auf 2 min hoch, Watchdog-Schwelle auf 10 min
+`KEEPALIVE_INTERVAL_MS` Default `60000` → `120000`, `WATCHDOG_STALE_MS` Default `300000` → `600000`.
+Hintergrund: Loxone schließt aktive Sessions häufig mit `code=2003` selbst (Token/NAT). Häufige Keepalives provozieren das eher als sie es zu verhindern. Längere Toleranz reduziert Reconnect-Stürme.
 
-**Nein.** Die WS-Bridge selbst macht kaum I/O (4 MB Daten, < 0,1 % der Last). Sie löst genau das ursprüngliche Problem – kostenlose Live-Werte ohne Polling. Das I/O-Budget brennt komplett auf der **alten Polling/Schreibe**-Schiene.
+### 5. `loxone_ws_session_log`: Reconnects unter 60 s nicht als neue Session zählen
+In `sessionStart`/`sessionEnd`: Wenn die letzte Session derselben Verbindung **< 60 s alt** war, dieselbe `session_id` wiederverwenden und nur einen Update statt Insert+Insert+Update schreiben.
+→ Rathaus von ~927 auf ~30 Sessions/24 h.
 
-Richtig ist: WS-Bridge **konsequent** zu Ende führen → dann die alten Polling-Schreibwege für Loxone deaktivieren → I/O sinkt drastisch.
+## Was wir bewusst NICHT tun
 
----
+- **Keine Migration / kein Schema-Change.** Reine App-Logik-Anpassung.
+- **Kein Cron-Job-Eingriff** (`refresh-meter-period-totals-5min` etc.) — die laufen außerhalb des IO-Spitzenfensters.
+- **Keine spekulativen Refactors** am Polling-Pfad (`loxone-periodic-sync`).
+- Cloud-Instanz wird **nicht** upgegradet — wir fixen erst den Verursacher.
 
-## Plan (in dieser Reihenfolge, jedes Teil einzeln verifizierbar)
+## Reihenfolge & Deployment
 
-### Schritt A – PV-Ist sofort reparieren (Problem 1)
+1. Edge-Function `gateway-ingest` patchen → automatisch deployt durch Lovable Cloud.
+2. Worker-Code `docs/loxone-ws-worker/index.ts` patchen.
+3. Du kopierst per PuTTY die neue `index.ts` nach `/opt/loxone-ws-worker/index.ts` (Step-by-Step bekommst du im Build-Schritt).
+4. `docker build` + `docker rm -f` + `docker run` (fertiger Copy-Paste-Block).
+5. Nach ~20 min IO-Budget in der Cloud-Übersicht prüfen.
 
-1. `get_power_readings_5min` per Migration erweitern: zusätzlich `UNION ALL` auf `meter_power_readings_5min_bridge` (gleiche Spalten `meter_id`, `power_avg`, `bucket`, `sample_count`).
-2. `aggregate-pv-actual-hourly` einmal manuell für die letzten 48 h triggern (Backfill).
-3. Verifikation: `SELECT * FROM pv_actual_hourly WHERE meter_id='d8baaf1e-…' AND hour_start>=today` muss Werte > 0 enthalten, „Ist" auf der PV-Seite zeigt heute kWh.
+## Erwartetes Ergebnis
 
-### Schritt B – Live-Werte schneller anzeigen (Problem 2)
-
-1. Beim Mount von `LiveValues.tsx` zusätzlich aus `bridge_raw_samples` den letzten Wert pro UUID lesen (ein einziger Bulk-Query). Wenn dort frischer als das DB-Polling-Resultat → diesen verwenden.
-2. Loading-Skeleton anzeigen statt veraltetem 11,05-kW-Wert, solange weder DB- noch Bridge-Wert verfügbar.
-3. Keine Änderung am Broadcast/Realtime-Pfad nötig (funktioniert).
-
-### Schritt C – I/O-Budget entlasten (Problem 3, größter Hebel)
-
-1. `**location_integrations`-Update drosseln**: `last_sync_at`/`sync_status` nur noch alle 5 Min oder bei Statuswechsel schreiben (statt bei jedem Polling-Tick). Erwarteter Effekt: −80 % der 2,3 Mio UPDATEs.
-2. **Loxone-Polling-Schreibwege in `meter_power_readings` deaktivieren**, sobald die WS-Bridge für die jeweilige Liegenschaft aktiv ist (Flag auf `bridge_miniserver_links`). Andere Integrationen (Shelly/Schneider/HM) bleiben unverändert.
-3. Erwarteter Effekt: −60 bis −80 % I/O ohne Instanz-Upgrade.
-
-### Schritt D – Rathaus-Reconnects analysieren (Problem 4)
-
-1. `loxone_ws_session_log` der letzten 24 h für Rathaus auswerten: Disconnect-Reason, Dauer, gleichzeitige Worker.
-2. Erst danach Maßnahme entscheiden (z. B. eigenen WS-Token pro Worker erzwingen, Heartbeat-Intervall anheben, doppelten Worker stoppen). **Hier wird vor jeder Änderung ein Befund geliefert** – kein Blindfix.
-
-### Schritt E – Zählerstand-Backfill (vom User auf später vertagt)
-
-- Ausgesetzt bis Schritt A–D verifiziert.
-
----
-
-## Was bewusst NICHT Teil des Plans ist
-
-- Kein WebSocket-Rollback (Daten zeigen klar: WS ist nicht das Problem).
-- Kein Instanz-Upgrade als erste Maßnahme – erst nach Schritt C bewerten.
-- Keine spekulativen Refactors.
-
-## Reihenfolge der Umsetzung
-
-A → B → C → D, jeder Schritt einzeln implementiert + verifiziert, bevor der nächste startet. Bestätigst Du diese Reihenfolge, oder soll ich einen Schritt vorziehen (z. B. C zuerst wegen 92 % I/O)?  
-  
-Atwort: Vorgehen so bestätigt, bitte umsetzen
-
-&nbsp;
+DB-Schreiblast in Summe etwa **um den Faktor 8–12 niedriger**. IO-Budget sollte von 100 % auf < 30 % fallen, ohne dass eine einzige Messung verloren geht.

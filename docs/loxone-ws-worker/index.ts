@@ -53,12 +53,21 @@ const RELOAD_INTERVAL_MS = parseInt(process.env.RELOAD_INTERVAL_MS || "300000", 
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
 const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
 const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
-const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "30000", 10);
+// Phase 6: Heartbeat-Intervall von 30s auf 5min erhöht (IO-Optimierung)
+const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "300000", 10);
+// Phase 6: Session-Heartbeat von 15s auf 60s erhöht (IO-Optimierung)
+const SESSION_HEARTBEAT_MS = parseInt(process.env.SESSION_HEARTBEAT_MS || "60000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase5.2.2-error-serialize";
-const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "300000", 10);
-const WATCHDOG_CHECK_MS = parseInt(process.env.WATCHDOG_CHECK_MS || "30000", 10);
-const KEEPALIVE_INTERVAL_MS = parseInt(process.env.KEEPALIVE_INTERVAL_MS || "60000", 10);
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase6.0-io-reduction";
+// Phase 6: Watchdog-Schwelle von 5min auf 10min erhöht (weniger Reconnect-Stürme)
+const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "600000", 10);
+const WATCHDOG_CHECK_MS = parseInt(process.env.WATCHDOG_CHECK_MS || "60000", 10);
+// Phase 6: Keepalive von 60s auf 120s erhöht (Loxone schließt aktive Sessions ohnehin selbst)
+const KEEPALIVE_INTERVAL_MS = parseInt(process.env.KEEPALIVE_INTERVAL_MS || "120000", 10);
+// Phase 6: Reconnects unter dieser Schwelle behalten die alte session_id (kein neuer Log-Eintrag)
+const SESSION_REUSE_WINDOW_MS = parseInt(process.env.SESSION_REUSE_WINDOW_MS || "60000", 10);
+// Phase 6: bridge_event_log nur ab dieser Severity in DB schreiben
+const BRIDGE_LOG_DB_MIN_SEVERITY = (process.env.BRIDGE_LOG_DB_MIN_SEVERITY || "warn") as "debug" | "info" | "warn" | "error";
 
 if (!SUPABASE_URL || !GATEWAY_API_KEY) {
   console.error("[FATAL] SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein");
@@ -139,6 +148,9 @@ async function bridgeHeartbeat(status: "online" | "degraded" | "offline" = "onli
   }
 }
 
+const SEVERITY_RANK: Record<string, number> = { debug: 0, info: 1, warn: 2, error: 3 };
+const BRIDGE_LOG_DB_THRESHOLD = SEVERITY_RANK[BRIDGE_LOG_DB_MIN_SEVERITY] ?? 2;
+
 async function bridgeLog(
   severity: "debug" | "info" | "warn" | "error",
   event_type: string,
@@ -146,6 +158,9 @@ async function bridgeLog(
   miniserver_serial?: string,
   details?: unknown,
 ): Promise<void> {
+  // Phase 6 (IO-Optimierung): Routine-Infos NICHT in bridge_event_log persistieren.
+  // Sie erscheinen weiterhin in der Container-Konsole (log(...)) für Debugging.
+  if ((SEVERITY_RANK[severity] ?? 1) < BRIDGE_LOG_DB_THRESHOLD) return;
   try {
     await ingestPost("bridge-log-event", {
       worker_name: BRIDGE_WORKER_NAME,
@@ -198,6 +213,9 @@ interface ConnState {
   // Bridge-Worker (Phase 2) Zeitstempel
   lastConnectedAt: number; // ms epoch, 0 = nie
   lastEventAt: number;     // ms epoch, 0 = nie
+  // Phase 6 (IO-Optimierung): deferred session-end für Reconnect-Dedup
+  pendingEndTimer: NodeJS.Timeout | null;
+  pendingEndReason: string | null;
 }
 
 const connections = new Map<string, ConnState>(); // key = serial
@@ -229,6 +247,16 @@ async function resolveLoxoneHost(serial: string): Promise<string | null> {
 // ─── Session-Log ─────────────────────────────────────────────────────────────
 
 async function sessionStart(state: ConnState): Promise<void> {
+  // Phase 6: Wenn noch ein deferred sessionEnd anhängt, abbrechen und alte Session wiederverwenden.
+  if (state.pendingEndTimer) {
+    clearTimeout(state.pendingEndTimer);
+    state.pendingEndTimer = null;
+    state.pendingEndReason = null;
+    if (state.sessionId) {
+      log("info", `[Session] ${state.serialNumber} Reconnect < ${SESSION_REUSE_WINDOW_MS / 1000}s – behalte session_id ${state.sessionId}`);
+      return;
+    }
+  }
   try {
     const r = await ingestPost("ws-session-start", {
       tenant_id: state.tenantId,
@@ -245,6 +273,19 @@ async function sessionStart(state: ConnState): Promise<void> {
 
 async function sessionEnd(state: ConnState, reason: string): Promise<void> {
   if (!state.sessionId) return;
+  // Phase 6 (IO-Optimierung): sessionEnd verzögern – bei schnellem Reconnect kein neuer Log-Eintrag.
+  if (state.pendingEndTimer) clearTimeout(state.pendingEndTimer);
+  state.pendingEndReason = reason;
+  state.pendingEndTimer = setTimeout(() => {
+    state.pendingEndTimer = null;
+    void flushSessionEnd(state);
+  }, SESSION_REUSE_WINDOW_MS);
+}
+
+async function flushSessionEnd(state: ConnState): Promise<void> {
+  if (!state.sessionId) return;
+  const reason = state.pendingEndReason ?? "unknown";
+  state.pendingEndReason = null;
   try {
     await ingestPost("ws-session-end", {
       session_id: state.sessionId,
@@ -257,6 +298,7 @@ async function sessionEnd(state: ConnState, reason: string): Promise<void> {
   }
   state.sessionId = null;
 }
+
 
 // ─── WebSocket-Verbindung via lxcommunicator ─────────────────────────────────
 
@@ -530,6 +572,8 @@ async function reloadMeters(): Promise<void> {
         reconnectCount: 0,
         lastConnectedAt: 0,
         lastEventAt: 0,
+        pendingEndTimer: null,
+        pendingEndReason: null,
       };
       connections.set(serial, state);
     }
@@ -644,7 +688,7 @@ async function main() {
         log("debug", `[Heartbeat] ${state.serialNumber}: ${(err as Error).message}`);
       }
     }
-  }, 15000);
+  }, SESSION_HEARTBEAT_MS);
 
   // Watchdog (Phase 3): forciert Reconnect bei "toten" Verbindungen
   setInterval(watchdogTick, WATCHDOG_CHECK_MS);
