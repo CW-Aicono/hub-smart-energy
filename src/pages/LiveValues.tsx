@@ -394,41 +394,55 @@ const LiveValues = () => {
   }, [meters]);
 
   // On mount: load initial DB values, then fetch full data from loxone-api once,
-  // then subscribe to Realtime for instant power_value updates
+  // then subscribe to Loxone-WS-Bridge via Realtime-Broadcast (pro Tenant) für Live-Updates
   useEffect(() => {
     if (meters.length === 0) return;
 
     loadInitialPowerValues();
     fetchLiveValues();
 
-    // Realtime subscription: update power_value instantly on every new INSERT
-    const channel = supabase
-      .channel("meter-power-readings-live")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "meter_power_readings" },
-        (payload) => {
-          const r = payload.new as { meter_id: string; power_value: number; recorded_at: string };
+    // uuid → meter_id Map (für schnelles Lookup im Broadcast-Handler)
+    const uuidToMeterId = new Map<string, string>();
+    for (const m of meters) {
+      if (m.sensor_uuid) uuidToMeterId.set(m.sensor_uuid.toLowerCase(), m.id);
+    }
+
+    // Eindeutige tenant_ids der angezeigten Meter
+    const tenantIds = [...new Set(meters.map((m) => m.tenant_id).filter(Boolean))] as string[];
+    if (tenantIds.length === 0) return;
+
+    // Pro Tenant einen Broadcast-Channel abonnieren
+    const channels = tenantIds.map((tenantId) => {
+      const ch = supabase
+        .channel(`loxone-live-${tenantId}`, { config: { broadcast: { self: false } } })
+        .on("broadcast", { event: "readings" }, (msg: { payload: { events?: Array<{ uuid: string; value: number; at: string }> } }) => {
+          const events = msg.payload?.events ?? [];
+          if (events.length === 0) return;
           setLiveValues((prev) => {
-            const existing = prev.get(r.meter_id);
-            if (!existing) return prev; // ignore meters not in our list
+            let changed = false;
             const next = new Map(prev);
-            next.set(r.meter_id, {
-              ...existing,
-              value: r.power_value,
-            });
-            return next;
+            for (const ev of events) {
+              const meterId = uuidToMeterId.get(ev.uuid.toLowerCase());
+              if (!meterId) continue;
+              const existing = next.get(meterId);
+              if (!existing) continue;
+              next.set(meterId, { ...existing, value: ev.value });
+              changed = true;
+            }
+            return changed ? next : prev;
           });
           setLastRefresh(new Date());
-        }
-      )
-      .subscribe();
+        })
+        .subscribe();
+      return ch;
+    });
 
     return () => {
-      supabase.removeChannel(channel);
+      for (const ch of channels) supabase.removeChannel(ch);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meters.length]);
+
 
   // Filter meters
   const filteredMeters = useMemo(() => {
