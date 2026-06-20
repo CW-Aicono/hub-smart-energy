@@ -261,65 +261,92 @@ const LiveValues = () => {
 
     setLoadingLive(true);
 
-    // Fetch latest power reading per meter from DB
-    const { data: powerRows } = await supabase
-      .from("meter_power_readings")
-      .select("meter_id, power_value, recorded_at")
-      .in("meter_id", autoMeters.map((m) => m.id))
-      .order("recorded_at", { ascending: false });
+    const meterIds = autoMeters.map((m) => m.id);
+    const uuids = autoMeters.map((m) => m.sensor_uuid!.toLowerCase());
+    const uuidToMeterId = new Map<string, string>();
+    for (const m of autoMeters) uuidToMeterId.set(m.sensor_uuid!.toLowerCase(), m.id);
 
-    // Fetch period totals (day/month/year) from meter_period_totals.
-    // Wichtig: exakt auf die aktuellen Perioden filtern, sonst kann Supabase bei vielen
-    // historischen Tageszeilen vor dem heutigen Wert abschneiden.
     const today = getBerlinDateKey(new Date());
     const firstOfMonth = today.substring(0, 7) + "-01";
     const firstOfYear = today.substring(0, 4) + "-01-01";
 
-    const { data: periodRows } = await supabase
-      .from("meter_period_totals")
-      .select("meter_id, period_type, period_start, total_value, energy_type")
-      .in("meter_id", autoMeters.map((m) => m.id))
-      .in("period_type", ["day", "month", "year"])
-      .in("period_start", [today, firstOfMonth, firstOfYear]);
+    // Parallel: DB-Polling-Wert, Bridge-Raw-Wert (Live), Perioden-Totals
+    const [powerRes, bridgeRes, periodRes] = await Promise.all([
+      supabase
+        .from("meter_power_readings")
+        .select("meter_id, power_value, recorded_at")
+        .in("meter_id", meterIds)
+        .gte("recorded_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
+        .order("recorded_at", { ascending: false }),
+      supabase
+        .from("bridge_raw_samples")
+        .select("uuid, value, received_at")
+        .in("uuid", uuids)
+        .gte("received_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
+        .order("received_at", { ascending: false }),
+      supabase
+        .from("meter_period_totals")
+        .select("meter_id, period_type, period_start, total_value, energy_type")
+        .in("meter_id", meterIds)
+        .in("period_type", ["day", "month", "year"])
+        .in("period_start", [today, firstOfMonth, firstOfYear]),
+    ]);
 
-    // Build period totals map
+    // Letzten Bridge-Wert pro UUID extrahieren
+    const bridgeLatest = new Map<string, { value: number; at: number }>();
+    for (const row of bridgeRes.data ?? []) {
+      const u = row.uuid.toLowerCase();
+      if (bridgeLatest.has(u)) continue;
+      bridgeLatest.set(u, { value: Number(row.value), at: new Date(row.received_at).getTime() });
+    }
+
+    // Letzten Polling-Wert pro Meter extrahieren
+    const pollingLatest = new Map<string, { value: number; at: number }>();
+    for (const row of powerRes.data ?? []) {
+      if (pollingLatest.has(row.meter_id)) continue;
+      pollingLatest.set(row.meter_id, { value: Number(row.power_value), at: new Date(row.recorded_at).getTime() });
+    }
+
     const periodMap = new Map<string, { totalDay: number | null; totalMonth: number | null; totalYear: number | null }>();
-    if (periodRows) {
-      for (const row of periodRows) {
-        const existing = periodMap.get(row.meter_id) ?? { totalDay: null, totalMonth: null, totalYear: null };
-        if (row.period_type === "day" && row.period_start === today) existing.totalDay = row.total_value;
-        if (row.period_type === "month" && row.period_start === firstOfMonth) existing.totalMonth = row.total_value;
-        if (row.period_type === "year" && row.period_start === firstOfYear) existing.totalYear = row.total_value;
-        periodMap.set(row.meter_id, existing);
-      }
+    for (const row of periodRes.data ?? []) {
+      const existing = periodMap.get(row.meter_id) ?? { totalDay: null, totalMonth: null, totalYear: null };
+      if (row.period_type === "day" && row.period_start === today) existing.totalDay = row.total_value;
+      if (row.period_type === "month" && row.period_start === firstOfMonth) existing.totalMonth = row.total_value;
+      if (row.period_type === "year" && row.period_start === firstOfYear) existing.totalYear = row.total_value;
+      periodMap.set(row.meter_id, existing);
     }
 
-    // Build live values map — last value per meter
-    if (powerRows) {
-      setLiveValues((prev) => {
-        const next = new Map(prev);
-        const seen = new Set<string>();
-        for (const row of powerRows) {
-          if (seen.has(row.meter_id)) continue;
-          seen.add(row.meter_id);
-          const periods = periodMap.get(row.meter_id) ?? { totalDay: null, totalMonth: null, totalYear: null };
-          next.set(row.meter_id, {
-            value: row.power_value,
-            unit: "",
-            totalDay: periods.totalDay,
-            totalWeek: null,
-            totalMonth: periods.totalMonth,
-            totalYear: periods.totalYear,
-            meterReading: null,
-            meterReadingUnit: "kWh",
-          });
+    setLiveValues((prev) => {
+      const next = new Map(prev);
+      for (const m of autoMeters) {
+        const polling = pollingLatest.get(m.id);
+        const bridge = bridgeLatest.get(m.sensor_uuid!.toLowerCase());
+        let chosen: { value: number } | undefined;
+        // Neueres Sample gewinnt; Bridge bei Gleichstand bevorzugt
+        if (bridge && polling) {
+          chosen = bridge.at >= polling.at ? bridge : polling;
+        } else {
+          chosen = bridge ?? polling;
         }
-        return next;
-      });
-      setLastRefresh(new Date());
-    }
+        if (!chosen) continue;
+        const periods = periodMap.get(m.id) ?? { totalDay: null, totalMonth: null, totalYear: null };
+        next.set(m.id, {
+          value: chosen.value,
+          unit: "",
+          totalDay: periods.totalDay,
+          totalWeek: null,
+          totalMonth: periods.totalMonth,
+          totalYear: periods.totalYear,
+          meterReading: null,
+          meterReadingUnit: "kWh",
+        });
+      }
+      return next;
+    });
+    setLastRefresh(new Date());
     setLoadingLive(false);
   }, [meters]);
+
 
   // On mount: load only existing DB values, then subscribe to Loxone-WS-Bridge via Realtime-Broadcast.
   // Temporär: KEIN loxone-api/getSensors HTTP-Polling auf dieser Seite.
