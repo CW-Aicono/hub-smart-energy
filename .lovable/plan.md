@@ -1,63 +1,136 @@
-# Worker-Killswitch im Super-Admin-Dashboard
-
-Ziel: Du kannst im Super-Admin-Bereich per Schalter einzelne Worker **anhalten** und **wieder starten** — ohne neues Deployment, ohne SSH, ohne Cron-Eingriff. Effekt ist innerhalb von ≤ 1 Minute aktiv.
-
-## Welche Worker sind steuerbar
 
 
-| Schalter                  | Was er stoppt                                           | Wo läuft das?  |
-| ------------------------- | ------------------------------------------------------- | -------------- |
-| `loxone_ws_worker`        | Hetzner Loxone-WebSocket-Worker (Haupt-IO-Verdächtiger) | Hetzner Docker |
-| `loxone_periodic_sync`    | Edge-Function `loxone-periodic-sync`                    | Cron + Cloud   |
-| `shelly_periodic_sync`    | Edge-Function `shelly-periodic-sync`                    | Cron + Cloud   |
-| `gateway_periodic_sync`   | Edge-Function `gateway-periodic-sync`                   | Cron + Cloud   |
-| `brighthub_periodic_sync` | Edge-Function `brighthub-periodic-sync`                 | Cron + Cloud   |
+# Fix: TypeScript-Build-Fehler im Loxone-Worker
 
+## Was ist passiert?
 
-Jeder Schalter ist einzeln, unabhängig, jederzeit reversibel. Default: **alle „aktiv"**.
+Beim Build im Container ist genau ein Fehler aufgetreten:
 
-## Wie es technisch funktioniert (eine Quelle der Wahrheit)
+```
+index.ts(548,26): error TS2339: Property 'enabled' does not exist on type 'unknown'.
+```
 
-1. **Neue Tabelle `worker_controls**` mit einer Zeile pro Worker (`worker_key`, `enabled`, `paused_at`, `paused_by`, `note`). Nur Super-Admins dürfen lesen/schreiben (RLS + GRANT).
-2. **Edge-Functions** (`loxone-periodic-sync`, `shelly-periodic-sync`, `gateway-periodic-sync`, `brighthub-periodic-sync`) bekommen **am Anfang einen Killswitch-Check**: Wenn `enabled = false`, sofort `200 OK` mit `{skipped: true}` zurück — keine DB-Schreibarbeit, keine externen Calls.
-3. **Hetzner Loxone-Worker** (`docs/loxone-ws-worker/index.ts`) pollt die Tabelle **alle 30 Sekunden**. Wenn `enabled = false`: alle WebSocket-Verbindungen sauber trennen, Flush-/Reload-Loops pausieren, Heartbeat weiterlaufen lassen (damit man sieht: er lebt, ist aber „idle"). Bei Wieder-Aktivierung: normaler Reconnect-Pfad.
-4. **UI**: Neuer Tab „Worker-Steuerung" in `SuperAdminDashboard` mit 5 Schaltern, jeweils Status-Badge (Aktiv / Pausiert seit hh:mm, von wem), Notizfeld, „Pausieren"/„Starten"-Button mit Bestätigungsdialog. Live-Refresh alle 15 s.
+**Übersetzt:** Die Antwort von `fetch(...).json()` ist für TypeScript erstmal vom Typ „unbekannt". Wir müssen ihm sagen, dass darin ein Feld `enabled` steckt. Eine einzige Zeile ändern, fertig.
 
-## Sicherheit & Sichtbarkeit
+**Wichtig zu deinem `docker run` danach:** Der zweite Befehl in deinem Putty-Log hat *zwar* einen Container gestartet — aber mit dem Image-Tag `loxone-ws-worker:phase6.1`, also dem **alten Image** von vorher. Der Build war ja fehlgeschlagen, das neue Image existiert noch gar nicht. Der laufende Container hat daher **immer noch keine Killswitch-Logik**. Das erklärt, warum im Monitor weiter Heartbeats kommen.
 
-- Nur `super_admin` darf den Toggle sehen und betätigen (RLS + UI-Guard).
-- Jede Schaltung schreibt `audit_logs`-Eintrag (wer, wann, welcher Worker, an/aus, Notiz).
-- Im normalen Tenant-UI taucht nichts davon auf.
+---
 
-## Was es **nicht** macht
+## Was ich in Lovable ändere (1 Zeile)
 
-- Es löscht keine Cron-Jobs und ändert keine Schedules. Cron läuft weiter, die Function antwortet nur sofort mit „skipped". Das hält den Cron-Status sauber und reversibel.
-- Es fasst den Loxone-Worker-Container nicht an (kein `docker stop`). Der Prozess läuft, ist aber idle.
-- Es ändert keine bestehenden Daten in `meter_power_readings` o. ä.
+Datei: `docs/loxone-ws-worker/index.ts`, Zeile 547–548
 
-## Wirkung auf das IO-Budget (Erinnerung)
+**Vorher:**
+```ts
+const body = await r.json();
+const enabled = body.enabled !== false;
+```
 
-Das IO-Budget ist ein 24-Stunden-Mittel. Auch mit Killswitch wird der Balken **erst nach ca. 6 h sichtbar**, **nach 24 h vollständig** sinken. Der Schalter ist also gleichzeitig das **saubere Messinstrument**, das wir vorher diskutiert haben: einschalten = Worker still, dann 24 h beobachten, danach Entscheidung.
+**Nachher:**
+```ts
+const body = await r.json() as { enabled?: boolean };
+const enabled = body.enabled !== false;
+```
 
-## Technische Details (für später)
+Sonst nichts. Keine weiteren Code- oder DB-Änderungen.
 
-- Migration: `worker_controls` (PK `worker_key text`), 5 Seed-Zeilen, RLS (`has_role(auth.uid(),'super_admin')`), GRANT für `authenticated` + `service_role`.
-- Hook `useWorkerControls` mit React-Query, `staleTime: 10s`, `refetchInterval: 15s`.
-- Komponente `WorkerControlsPanel.tsx` (neu) eingebunden als neuer Tab in `SuperAdminDashboard.tsx`.
-- Edge-Funktionen: ein gemeinsamer Helper `_shared/workerKillswitch.ts` (Service-Role-Read), 4 Funktionen rufen ihn am Anfang auf.
-- Hetzner-Worker: Datei `docs/loxone-ws-worker/index.ts` bekommt `pollKillswitch()` (alle 30 s, Service-Role-Key vorhanden), neue Zustände `RUNNING` / `PAUSED`. **Du musst das Worker-Image danach 1× manuell auf Hetzner aktualisieren** (Anleitung folgt nach Implementierung als beginner-sichere Klick-Schritte).
+---
 
-## Reihenfolge der Umsetzung
+## Was du danach auf Hetzner machst (exakte Copy-Paste-Blöcke)
 
-1. Migration `worker_controls` + Seed + RLS + GRANT.
-2. Edge-Helper + Killswitch-Check in den 4 periodischen Functions, redeploy.
-3. UI-Panel im `SuperAdminDashboard`.
-4. Loxone-Worker-Code-Patch + exakte Hetzner-Update-Anleitung in Deutsch.
+### Schritt 1 — In Putty einloggen und ins Worker-Verzeichnis
 
-Schritt 1–3 wirken sofort nach Approval (Cloud-Teil). Schritt 4 (Hetzner) brauchst **du** für ~5 Minuten am Server, wird Klick-für-Klick erklärt.
+```bash
+cd /opt/loxone-ws-worker
+```
 
-## Frage vor Implementierung
+→ Erwartetes Ergebnis: Prompt zeigt `/opt/loxone-ws-worker`.
 
-Sollen wirklich **alle 5 Worker** steuerbar sein, oder reicht dir für den Anfang **nur `loxone_ws_worker**` (der einzig belegte IO-Treiber)? Variante „nur Loxone" ist deutlich kleiner und billiger — Cron-Worker können wir später nachrüsten, falls nötig.  
-  
-antwort: mache alle 5 Worker per Switch steuerbar
+### Schritt 2 — Neuen Code holen
+
+```bash
+git pull
+```
+
+→ Erwartetes Ergebnis: Meldung `Updating ...` mit `index.ts` in der Dateiliste.
+**Wenn „Already up to date." kommt:** STOPP, sag mir Bescheid (dann ist der Lovable-Code noch nicht im GitHub-Repo angekommen — siehe deine Memory-Regel „Publish → Hard Reload → manuell committen").
+
+### Schritt 3 — Prüfen, dass der Fix wirklich drin ist
+
+```bash
+grep -n "as { enabled" index.ts
+```
+
+→ Erwartetes Ergebnis: **Genau eine Zeile** wird ausgegeben, etwa:
+```
+547:    const body = await r.json() as { enabled?: boolean };
+```
+**Wenn nichts ausgegeben wird:** STOPP, nicht weitermachen.
+
+### Schritt 4 — Alten Container stoppen und löschen
+
+```bash
+docker stop loxone-ws-worker
+docker rm loxone-ws-worker
+```
+
+→ Erwartetes Ergebnis: Zwei Zeilen mit dem Namen `loxone-ws-worker`. (Falls „No such container": ignorieren, dann ist er schon weg.)
+
+### Schritt 5 — Image neu bauen (mit neuem Tag)
+
+```bash
+docker build -t loxone-ws-worker:phase7 .
+```
+
+→ Erwartetes Ergebnis: Am Ende `Successfully tagged loxone-ws-worker:phase7` (oder `naming to docker.io/library/loxone-ws-worker:phase7 done`). **Kein** TS2339-Fehler mehr.
+
+**Wenn doch ein Fehler kommt:** STOPP, schick mir die letzten 20 Zeilen der Ausgabe.
+
+### Schritt 6 — Container mit dem NEUEN Image starten
+
+Genau dein bisheriger `docker run`-Befehl, aber mit `:phase7` statt `:phase6.1`:
+
+```bash
+docker run -d --restart=always --name loxone-ws-worker \
+  -p 8080:8080 \
+  -e SUPABASE_URL=https://xnveugycurplszevdxtw.supabase.co \
+  -e GATEWAY_API_KEY=sk_live_odclyxINkLa0XcHuIXbeeNw44lwzzDHp \
+  -e LOG_LEVEL=info \
+  -e WORKER_HOST=hetzner-prod-1 \
+  -e WORKER_NAME=hetzner-bridge-test \
+  -e FLUSH_INTERVAL_MS=1000 \
+  -e RELOAD_INTERVAL_MS=300000 \
+  -e BRIDGE_WORKER_NAME=hetzner-bridge-test \
+  -e BRIDGE_HEARTBEAT_MS=300000 \
+  -e HEALTH_PORT=8080 \
+  loxone-ws-worker:phase7
+```
+
+→ Erwartetes Ergebnis: Eine lange Hex-Zeichenkette (Container-ID).
+
+### Schritt 7 — Killswitch-Beweis-Test
+
+```bash
+docker logs --tail 30 loxone-ws-worker
+```
+
+→ Erwartetes Ergebnis: Logzeilen aus den letzten Sekunden, **u. a. eine Zeile mit `[Killswitch]`** (z. B. beim Start, weil `pollKillswitch()` sofort einmal läuft). Außerdem WS-Verbindungen zu den 3 Miniservern.
+
+Dann im UI: **Super-Admin → Worker-Steuerung → `loxone_ws_worker` auf Pausiert**, 60 s warten, nochmal:
+
+```bash
+docker logs --tail 20 loxone-ws-worker
+```
+
+→ Erwartetes Ergebnis: Zeile `[Killswitch] Worker wurde im Admin-Dashboard PAUSIERT. Trenne alle WS-Verbindungen.`
+Im **WebSocket-Monitor** zeigen die 3 Miniserver **Inaktiv**, keine neuen Heartbeats mehr.
+
+### Schritt 8 — Wieder einschalten
+
+Im UI Toggle zurück auf **Aktiv**. Innerhalb 60 s sollten WS-Verbindungen wieder stehen, im Log: `[Killswitch] Worker wurde im Admin-Dashboard AKTIVIERT.`
+
+---
+
+## Hard-Stop-Regel
+
+Wenn Schritt 5 erneut mit einem TypeScript-Fehler abbricht, oder Schritt 7 keine `[Killswitch]`-Zeile zeigt: **STOPP nach dem 2. Versuch**, Logs schicken, ich entscheide ehrlich, ob der Weg geht. Nicht raten.
