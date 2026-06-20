@@ -76,6 +76,11 @@ if (!SUPABASE_URL || !GATEWAY_API_KEY) {
 }
 
 const INGEST_URL = `${SUPABASE_URL}/functions/v1/gateway-ingest`;
+const KILLSWITCH_URL = `${SUPABASE_URL}/functions/v1/worker-killswitch?key=loxone_ws_worker`;
+const KILLSWITCH_POLL_MS = parseInt(process.env.KILLSWITCH_POLL_MS || "30000", 10);
+
+// Globaler Pausen-Zustand. Wird im Killswitch-Poll gesetzt.
+let workerPaused = false;
 
 // ─── Logging ─────────────────────────────────────────────────────────────────
 
@@ -491,6 +496,7 @@ async function keepaliveTick(): Promise<void> {
 // bestehenden Polling-Pfad, der unberührt weiterläuft.
 
 async function flush(): Promise<void> {
+  if (workerPaused) return;
   const readings: any[] = [];
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
@@ -529,9 +535,48 @@ async function flush(): Promise<void> {
 
 
 
+// ─── Killswitch (Pausen-Schalter aus dem Cloud-Backend) ──────────────────────
+
+async function pollKillswitch(): Promise<void> {
+  try {
+    const r = await fetch(KILLSWITCH_URL, { signal: AbortSignal.timeout(10000) });
+    if (!r.ok) {
+      log("warn", `[Killswitch] HTTP ${r.status} — ignoriere, behalte Zustand bei`);
+      return;
+    }
+    const body = await r.json();
+    const enabled = body.enabled !== false;
+    const nextPaused = !enabled;
+    if (nextPaused === workerPaused) return; // kein Zustandswechsel
+
+    if (nextPaused) {
+      workerPaused = true;
+      log("warn", `[Killswitch] Worker wurde im Admin-Dashboard PAUSIERT. Trenne alle WS-Verbindungen.`);
+      await bridgeLog("warn", "worker_paused", "Worker via worker_controls pausiert");
+      await bridgeHeartbeat("degraded", "paused-by-admin");
+      for (const state of connections.values()) {
+        try { state.ws?.close(); } catch { /* ignore */ }
+        try { await sessionEnd(state, "killswitch-pause"); } catch { /* ignore */ }
+      }
+    } else {
+      workerPaused = false;
+      log("info", `[Killswitch] Worker wurde im Admin-Dashboard AKTIVIERT. Lade Meter-Liste neu.`);
+      await bridgeLog("info", "worker_resumed", "Worker via worker_controls wieder aktiviert");
+      await bridgeHeartbeat("online");
+      try { await reloadMeters(); } catch (e) { log("error", `[Killswitch] reload nach Resume: ${(e as Error).message}`); }
+    }
+  } catch (err) {
+    log("debug", `[Killswitch] poll: ${(err as Error).message}`);
+  }
+}
+
 // ─── Meter-Liste laden & Verbindungen synchronisieren ────────────────────────
 
 async function reloadMeters(): Promise<void> {
+  if (workerPaused) {
+    log("debug", "[Reload] übersprungen — Worker pausiert");
+    return;
+  }
   let meters: WsMeter[] = [];
   try {
     const r = await ingestGet("list-loxone-ws-meters");
@@ -670,6 +715,12 @@ async function main() {
   // Initialer Heartbeat + Start-Event, damit bridge_workers.status sofort auf "online" geht
   await bridgeHeartbeat("online");
   await bridgeLog("info", "worker_started", `Worker gestartet auf ${WORKER_HOST}`);
+
+  // Initialer Killswitch-Check (vor reloadMeters), damit ein pausierter Worker
+  // gar nicht erst Verbindungen aufbaut.
+  await pollKillswitch();
+  setInterval(() => { pollKillswitch().catch((e) => log("error", "killswitch:", e)); }, KILLSWITCH_POLL_MS);
+  log("info", `[Killswitch] aktiv: poll alle ${KILLSWITCH_POLL_MS / 1000}s gegen ${KILLSWITCH_URL}`);
 
   await reloadMeters();
   setInterval(reloadMeters, RELOAD_INTERVAL_MS);

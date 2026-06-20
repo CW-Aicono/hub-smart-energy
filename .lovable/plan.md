@@ -1,65 +1,63 @@
-Du hast recht, sauer zu sein.
+# Worker-Killswitch im Super-Admin-Dashboard
 
-Ja: Die bisherigen Maßnahmen waren nicht sauber genug als Hypothesen gekennzeichnet. Ich hätte vor Änderungen eindeutig beweisen müssen, welcher Prozess oder welche Tabelle den Disk-IO-Balken wirklich treibt. Dass die Anpassungen keine Verbesserung zeigen, bedeutet: Die Ursache ist noch nicht belastbar gefunden. Ich stoppe deshalb alle weiteren Optimierungs- oder Fix-Vorschläge.
+Ziel: Du kannst im Super-Admin-Bereich per Schalter einzelne Worker **anhalten** und **wieder starten** — ohne neues Deployment, ohne SSH, ohne Cron-Eingriff. Effekt ist innerhalb von ≤ 1 Minute aktiv.
 
-Plan: reine Diagnose, keine Änderungen
+## Welche Worker sind steuerbar
 
-Ziel:
-- Nicht weiter „probieren“.
-- Keine Cron-Änderungen, keine Code-Änderungen, keine Datenbank-Änderungen.
-- Nur lesen, messen, belegen.
-- Am Ende gibt es entweder eine belegte Ursache oder die ehrliche Aussage, dass die Lovable-Cloud-Anzeige mit den verfügbaren Projektmitteln nicht eindeutig auflösbar ist.
 
-Vorgehen:
+| Schalter                  | Was er stoppt                                           | Wo läuft das?  |
+| ------------------------- | ------------------------------------------------------- | -------------- |
+| `loxone_ws_worker`        | Hetzner Loxone-WebSocket-Worker (Haupt-IO-Verdächtiger) | Hetzner Docker |
+| `loxone_periodic_sync`    | Edge-Function `loxone-periodic-sync`                    | Cron + Cloud   |
+| `shelly_periodic_sync`    | Edge-Function `shelly-periodic-sync`                    | Cron + Cloud   |
+| `gateway_periodic_sync`   | Edge-Function `gateway-periodic-sync`                   | Cron + Cloud   |
+| `brighthub_periodic_sync` | Edge-Function `brighthub-periodic-sync`                 | Cron + Cloud   |
 
-1. Aktuellen Cloud-Zustand prüfen
-- Prüfen, ob die Backend-Instanz gesund ist.
-- Prüfen, ob die Anzeige „100 % Disk read and write“ eventuell eine Infrastruktur-/Instanz-Empfehlung ist und nicht direkt aus einer einzelnen Projekttabelle ableitbar.
-- Ergebnis: klare Einordnung, ob wir eine echte Messgröße im Projekt sehen oder nur die Cloud-Warnanzeige.
 
-2. Read-only Datenbank-Analyse
-Nur lesende Abfragen, keine Änderungen:
-- Welche Tabellen haben aktuell die meisten Inserts, Updates und Deletes?
-- Welche Tabellen wachsen am schnellsten?
-- Welche Tabellen erzeugen viele Dead Tuples / Autovacuum-Arbeit?
-- Welche Indexe werden stark geschrieben?
-- Welche Tabellen werden häufig gelesen?
-- Gibt es auffällige Rollbacks oder Fehlerwellen?
+Jeder Schalter ist einzeln, unabhängig, jederzeit reversibel. Default: **alle „aktiv"**.
 
-3. Cron- und Job-Aktivität beweisen statt schätzen
-Nur lesen:
-- Welche geplanten Jobs sind aktiv?
-- Wie oft laufen sie wirklich?
-- Welche Jobs erzeugen Logs oder HTTP-Queue-Einträge?
-- Ob die vorher reduzierte Cron-Frequenz messbar überhaupt etwas verändert hat.
+## Wie es technisch funktioniert (eine Quelle der Wahrheit)
 
-4. Edge-Function- und Log-Last prüfen
-Nur lesen:
-- Welche Funktionen laufen sehr häufig?
-- Welche Funktionen schreiben viele Logzeilen?
-- Ob wiederholte Fehler, Timeouts oder Retries IO verursachen.
+1. **Neue Tabelle `worker_controls**` mit einer Zeile pro Worker (`worker_key`, `enabled`, `paused_at`, `paused_by`, `note`). Nur Super-Admins dürfen lesen/schreiben (RLS + GRANT).
+2. **Edge-Functions** (`loxone-periodic-sync`, `shelly-periodic-sync`, `gateway-periodic-sync`, `brighthub-periodic-sync`) bekommen **am Anfang einen Killswitch-Check**: Wenn `enabled = false`, sofort `200 OK` mit `{skipped: true}` zurück — keine DB-Schreibarbeit, keine externen Calls.
+3. **Hetzner Loxone-Worker** (`docs/loxone-ws-worker/index.ts`) pollt die Tabelle **alle 30 Sekunden**. Wenn `enabled = false`: alle WebSocket-Verbindungen sauber trennen, Flush-/Reload-Loops pausieren, Heartbeat weiterlaufen lassen (damit man sieht: er lebt, ist aber „idle"). Bei Wieder-Aktivierung: normaler Reconnect-Pfad.
+4. **UI**: Neuer Tab „Worker-Steuerung" in `SuperAdminDashboard` mit 5 Schaltern, jeweils Status-Badge (Aktiv / Pausiert seit hh:mm, von wem), Notizfeld, „Pausieren"/„Starten"-Button mit Bestätigungsdialog. Live-Refresh alle 15 s.
 
-5. Loxone-/Bridge-Worker getrennt bewerten
-Nur lesen:
-- Ob der externe Worker wirklich nennenswert Daten schreibt.
-- Ob `bridge_raw_samples`, `bridge_event_log`, `loxone_ws_session_log` oder `meter_power_readings_5min_bridge` seit der letzten Änderung weiter stark steigen.
-- Falls ja: mit Zahlen pro Minute/Stunde, nicht als Vermutung.
+## Sicherheit & Sichtbarkeit
 
-6. Ergebnisbericht statt Fix
-Ich liefere danach eine kurze, harte Auswertung:
+- Nur `super_admin` darf den Toggle sehen und betätigen (RLS + UI-Guard).
+- Jede Schaltung schreibt `audit_logs`-Eintrag (wer, wann, welcher Worker, an/aus, Notiz).
+- Im normalen Tenant-UI taucht nichts davon auf.
 
-```text
-Befund A: belegt / nicht belegt
-Messwert vorher/nachher: ...
-Betroffene Tabelle/Funktion/Job: ...
-Warum das IO erzeugt: ...
-Sicherheit der Aussage: hoch / mittel / niedrig
-Nächster sinnvoller Schritt: ja/nein
-```
+## Was es **nicht** macht
 
-Wichtige Grenze:
-- Wenn nach dieser reinen Lesediagnose kein eindeutiger Projekt-Verursacher sichtbar ist, sage ich das offen.
-- Dann ist die wahrscheinlichste Erklärung: Die 100-%-Warnung kommt aus der Cloud-Infrastruktur-Metrik der Instanz und ist mit Projekt-SQL allein nicht vollständig rückführbar.
-- Dann wäre kein weiterer Code-Fix gerechtfertigt, sondern nur: Lovable-Cloud-Instanz prüfen/hochskalieren oder Support mit Messdaten einschalten.
+- Es löscht keine Cron-Jobs und ändert keine Schedules. Cron läuft weiter, die Function antwortet nur sofort mit „skipped". Das hält den Cron-Status sauber und reversibel.
+- Es fasst den Loxone-Worker-Container nicht an (kein `docker stop`). Der Prozess läuft, ist aber idle.
+- Es ändert keine bestehenden Daten in `meter_power_readings` o. ä.
 
-Ich werde erst nach deiner Freigabe mit dieser reinen Diagnose beginnen.
+## Wirkung auf das IO-Budget (Erinnerung)
+
+Das IO-Budget ist ein 24-Stunden-Mittel. Auch mit Killswitch wird der Balken **erst nach ca. 6 h sichtbar**, **nach 24 h vollständig** sinken. Der Schalter ist also gleichzeitig das **saubere Messinstrument**, das wir vorher diskutiert haben: einschalten = Worker still, dann 24 h beobachten, danach Entscheidung.
+
+## Technische Details (für später)
+
+- Migration: `worker_controls` (PK `worker_key text`), 5 Seed-Zeilen, RLS (`has_role(auth.uid(),'super_admin')`), GRANT für `authenticated` + `service_role`.
+- Hook `useWorkerControls` mit React-Query, `staleTime: 10s`, `refetchInterval: 15s`.
+- Komponente `WorkerControlsPanel.tsx` (neu) eingebunden als neuer Tab in `SuperAdminDashboard.tsx`.
+- Edge-Funktionen: ein gemeinsamer Helper `_shared/workerKillswitch.ts` (Service-Role-Read), 4 Funktionen rufen ihn am Anfang auf.
+- Hetzner-Worker: Datei `docs/loxone-ws-worker/index.ts` bekommt `pollKillswitch()` (alle 30 s, Service-Role-Key vorhanden), neue Zustände `RUNNING` / `PAUSED`. **Du musst das Worker-Image danach 1× manuell auf Hetzner aktualisieren** (Anleitung folgt nach Implementierung als beginner-sichere Klick-Schritte).
+
+## Reihenfolge der Umsetzung
+
+1. Migration `worker_controls` + Seed + RLS + GRANT.
+2. Edge-Helper + Killswitch-Check in den 4 periodischen Functions, redeploy.
+3. UI-Panel im `SuperAdminDashboard`.
+4. Loxone-Worker-Code-Patch + exakte Hetzner-Update-Anleitung in Deutsch.
+
+Schritt 1–3 wirken sofort nach Approval (Cloud-Teil). Schritt 4 (Hetzner) brauchst **du** für ~5 Minuten am Server, wird Klick-für-Klick erklärt.
+
+## Frage vor Implementierung
+
+Sollen wirklich **alle 5 Worker** steuerbar sein, oder reicht dir für den Anfang **nur `loxone_ws_worker**` (der einzig belegte IO-Treiber)? Variante „nur Loxone" ist deutlich kleiner und billiger — Cron-Worker können wir später nachrüsten, falls nötig.  
+  
+antwort: mache alle 5 Worker per Switch steuerbar
