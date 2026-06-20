@@ -413,10 +413,12 @@ const LiveValues = () => {
 
     // Pro Tenant einen Broadcast-Channel abonnieren
     const channels = tenantIds.map((tenantId) => {
+      const channelName = `loxone-live-${tenantId}`;
       const ch = supabase
-        .channel(`loxone-live-${tenantId}`, { config: { broadcast: { self: false } } })
+        .channel(channelName, { config: { broadcast: { self: false } } })
         .on("broadcast", { event: "readings" }, (msg: { payload: { events?: Array<{ uuid: string; value: number; at: string }> } }) => {
           const events = msg.payload?.events ?? [];
+          console.log(`[live-values] broadcast received on ${channelName}: ${events.length} events`);
           if (events.length === 0) return;
           setLiveValues((prev) => {
             let changed = false;
@@ -433,7 +435,9 @@ const LiveValues = () => {
           });
           setLastRefresh(new Date());
         })
-        .subscribe();
+        .subscribe((status) => {
+          console.log(`[live-values] channel ${channelName} status: ${status}`);
+        });
       return ch;
     });
 
@@ -442,6 +446,14 @@ const LiveValues = () => {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meters.length]);
+
+  // Manuell-Refresh-Button: erst frische DB-Werte (vom WS-Bridge geschrieben),
+  // dann zusätzlich loxone-api für totalDay/Monat/Jahr + Zählerstände.
+  const handleManualRefresh = useCallback(async () => {
+    await loadInitialPowerValues();
+    await fetchLiveValues();
+  }, [loadInitialPowerValues, fetchLiveValues]);
+
 
 
   // Filter meters
@@ -578,10 +590,11 @@ const LiveValues = () => {
                   {t("common.refreshed" as any)}: {lastRefresh.toLocaleTimeString(dateLocale)}
                 </span>
               )}
-              <Button variant="outline" size="sm" onClick={fetchLiveValues} disabled={loadingLive}>
+              <Button variant="outline" size="sm" onClick={handleManualRefresh} disabled={loadingLive}>
                 <RefreshCw className={cn("h-4 w-4 mr-2", loadingLive && "animate-spin")} />
                 {t("common.refresh" as any)}
               </Button>
+
             </div>
           </div>
         </header>
