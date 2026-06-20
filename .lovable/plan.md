@@ -1,78 +1,65 @@
+Du hast recht, sauer zu sein.
 
-# Ursache "100% Disk IO" — vollständige Analyse
+Ja: Die bisherigen Maßnahmen waren nicht sauber genug als Hypothesen gekennzeichnet. Ich hätte vor Änderungen eindeutig beweisen müssen, welcher Prozess oder welche Tabelle den Disk-IO-Balken wirklich treibt. Dass die Anpassungen keine Verbesserung zeigen, bedeutet: Die Ursache ist noch nicht belastbar gefunden. Ich stoppe deshalb alle weiteren Optimierungs- oder Fix-Vorschläge.
 
-## Wichtig vorab: zwei verschiedene "Disk"-Begriffe
-- **Disk-Speicher (Platz)**: aktuell **19 % belegt** (1,2 GB von Plan-Kontingent). Kein Problem.
-- **Disk-IO-Budget (Schreib-/Lese-Operationen pro Sekunde)**: aktuell **100 %**. Das ist die Auslastung der Festplatte durch ständiges Schreiben/Lesen — und genau das ist das Problem.
+Plan: reine Diagnose, keine Änderungen
 
-Eine Vergrößerung der Cloud-Instanz behebt das **nur, wenn die größere Instanz mehr IOPS bekommt**. Sinnvoller ist, die **Ursache** zu reduzieren.
+Ziel:
+- Nicht weiter „probieren“.
+- Keine Cron-Änderungen, keine Code-Änderungen, keine Datenbank-Änderungen.
+- Nur lesen, messen, belegen.
+- Am Ende gibt es entweder eine belegte Ursache oder die ehrliche Aussage, dass die Lovable-Cloud-Anzeige mit den verfügbaren Projektmitteln nicht eindeutig auflösbar ist.
 
-## Der Loxone-Worker ist NICHT die Hauptursache
-Der Worker schreibt nur in `bridge_raw_samples`, `bridge_event_log`, `meter_power_readings_5min_bridge` und `loxone_ws_session_log`. Aktuelle Werte (1 h):
-- `meter_power_readings` Insert-Rate: nur **~420 Zeilen/Stunde** → unkritisch.
-- Die im Slow-Query-Report sichtbaren **5,1 Mio Inserts** sind **kumuliert seit DB-Start** (nicht aktuell).
+Vorgehen:
 
-## Tatsächliche IO-Treiber (jetzt aktiv)
+1. Aktuellen Cloud-Zustand prüfen
+- Prüfen, ob die Backend-Instanz gesund ist.
+- Prüfen, ob die Anzeige „100 % Disk read and write“ eventuell eine Infrastruktur-/Instanz-Empfehlung ist und nicht direkt aus einer einzelnen Projekttabelle ableitbar.
+- Ergebnis: klare Einordnung, ob wir eine echte Messgröße im Projekt sehen oder nur die Cloud-Warnanzeige.
 
-**1. Cron-Job-Sturm (Hauptursache, ~394 Läufe/Stunde)**
+2. Read-only Datenbank-Analyse
+Nur lesende Abfragen, keine Änderungen:
+- Welche Tabellen haben aktuell die meisten Inserts, Updates und Deletes?
+- Welche Tabellen wachsen am schnellsten?
+- Welche Tabellen erzeugen viele Dead Tuples / Autovacuum-Arbeit?
+- Welche Indexe werden stark geschrieben?
+- Welche Tabellen werden häufig gelesen?
+- Gibt es auffällige Rollbacks oder Fehlerwellen?
+
+3. Cron- und Job-Aktivität beweisen statt schätzen
+Nur lesen:
+- Welche geplanten Jobs sind aktiv?
+- Wie oft laufen sie wirklich?
+- Welche Jobs erzeugen Logs oder HTTP-Queue-Einträge?
+- Ob die vorher reduzierte Cron-Frequenz messbar überhaupt etwas verändert hat.
+
+4. Edge-Function- und Log-Last prüfen
+Nur lesen:
+- Welche Funktionen laufen sehr häufig?
+- Welche Funktionen schreiben viele Logzeilen?
+- Ob wiederholte Fehler, Timeouts oder Retries IO verursachen.
+
+5. Loxone-/Bridge-Worker getrennt bewerten
+Nur lesen:
+- Ob der externe Worker wirklich nennenswert Daten schreibt.
+- Ob `bridge_raw_samples`, `bridge_event_log`, `loxone_ws_session_log` oder `meter_power_readings_5min_bridge` seit der letzten Änderung weiter stark steigen.
+- Falls ja: mit Zahlen pro Minute/Stunde, nicht als Vermutung.
+
+6. Ergebnisbericht statt Fix
+Ich liefere danach eine kurze, harte Auswertung:
+
+```text
+Befund A: belegt / nicht belegt
+Messwert vorher/nachher: ...
+Betroffene Tabelle/Funktion/Job: ...
+Warum das IO erzeugt: ...
+Sicherheit der Aussage: hoch / mittel / niedrig
+Nächster sinnvoller Schritt: ja/nein
 ```
-ems-automation-scheduler         jede Minute   →  Edge Function
-peak-shaving-scheduler           jede Minute   →  Edge Function
-ems-power-limit-scheduler        jede Minute   →  Edge Function
-ems-dlm-scheduler                jede Minute   →  Edge Function
-ems-cheap-charging-scheduler     alle 2 min    →  Edge Function
-ems-gateway-periodic-sync        alle 2 min    →  Edge Function
-ems-solar-charging-scheduler     alle 2 min    →  Edge Function
-refresh-meter-period-totals-5min alle 5 min    →  UPDATE meter_period_totals
-bridge-aggregator-every-5min     alle 5 min    →  liest bridge_raw_samples
-ems-brighthub-periodic-sync      alle 5 min    →  Edge Function
-snapshot-charge-point-uptime     alle 5 min    →  INSERT
-```
-Jeder Lauf führt zu Reads + Writes in `job_run_details`, `_http_response`, `http_request_queue` (deren Churn auch im pg_stat_user_tables sichtbar ist), plus die Function selbst schreibt in App-Tabellen.
 
-**2. Bridge-Tabellen-Churn (Loxone WS Worker)**
-- `bridge_raw_samples`: 17.868 INSERTS + 17.868 UPDATES in wenigen Stunden (Worker schreibt JEDEN Wert).
-- `bridge_event_log`: 31.989 Inserts.
-- `loxone_ws_session_log`: 16.416 UPDATES (Heartbeat).
-- `meter_power_readings_5min`: 16.978 Inserts + Updates durch Aggregator.
+Wichtige Grenze:
+- Wenn nach dieser reinen Lesediagnose kein eindeutiger Projekt-Verursacher sichtbar ist, sage ich das offen.
+- Dann ist die wahrscheinlichste Erklärung: Die 100-%-Warnung kommt aus der Cloud-Infrastruktur-Metrik der Instanz und ist mit Projekt-SQL allein nicht vollständig rückführbar.
+- Dann wäre kein weiterer Code-Fix gerechtfertigt, sondern nur: Lovable-Cloud-Instanz prüfen/hochskalieren oder Support mit Messdaten einschalten.
 
-**3. OCPP-Log-Churn**
-- `ocpp_message_log`: 121.299 Deletes + 1.551 Inserts.
-
-**4. Realtime-Subscription-Churn**
-- `subscription`-Tabelle: 4.630 Insert/Delete (jeder Client-Reconnect).
-
-**5. Statistik-Auffälligkeit**
-- **123.543 rolled-back transactions** seit Boot → es gibt einen Code-Pfad, der ständig fehlschlägt und rollbackt (jeder Rollback erzeugt WAL-IO).
-
-## Maßnahmenplan (in Reihenfolge nach Aufwand/Nutzen)
-
-### Stufe 1 — Sofort, größter Effekt, kein Risiko
-1. **Cron-Frequenz halbieren** für die "jede Minute"-Jobs, die das nicht zwingend brauchen:
-   - `ems-power-limit-scheduler`:  1 min → 5 min
-   - `ems-dlm-scheduler`:          1 min → 2 min
-   - `peak-shaving-scheduler`:     1 min → 5 min (Events werden ohnehin im Voraus geplant)
-   - `ems-automation-scheduler`:   bleibt 1 min (zeitkritisch), aber Edge-Function-internes Skip-Logging einbauen, wenn nichts zu tun ist.
-2. **`bridge_event_log` Cleanup auf hourly** statt daily (Tabelle wird sonst zu groß für effiziente Indexes).
-
-### Stufe 2 — Schreibrate des Loxone-Workers entlasten
-3. **`bridge_raw_samples` nur noch bei Wertänderung schreiben** (Dedup im Worker statt jedes Sample). Heute werden identische Werte mehrfach pro Sekunde geschrieben.
-4. **`loxone_ws_session_log` Heartbeat-Update**: nur alle 5 min schreiben (heute alle ~30 s).
-5. **Batch-Insert** in `bridge_raw_samples` (alle Samples eines `FLUSH_INTERVAL_MS` in einem einzigen INSERT statt N Einzel-Inserts) — drastische IO-Reduktion durch weniger WAL-Records.
-
-### Stufe 3 — Rollback-Welle stoppen
-6. **Finden und fixen, was 123 k Rollbacks erzeugt** — kandidiert sind: `ON CONFLICT`-INSERTs ohne passenden Constraint, fehlschlagende RLS-Checks, Edge-Functions mit doppelter `insert()`-Logik. Diagnose: `SELECT query, calls, rows FROM pg_stat_statements WHERE rows = 0 AND calls > 1000 ORDER BY calls DESC LIMIT 20;`
-
-### Stufe 4 — Strukturell
-7. **`meter_period_totals` nicht alle 5 min komplett refreshen**, sondern inkrementell (nur die seit letztem Lauf veränderten Buckets).
-8. **OCPP-Cleanup-Batch verkleinern** (statt einmal täglich 120 k löschen → stündlich 5 k löschen, gleichmäßigere IO-Last).
-
-## Erwartete Wirkung
-- Stufe 1 allein: **~40 % weniger Cron-IO** (von 394 auf ~230 Läufe/h).
-- Stufe 1+2: typischerweise zurück auf **< 60 % IO-Budget**.
-
-## Was ich danach noch verifiziere
-- 24 h nach Umsetzung erneut `supabase--slow_queries` + `pg_stat_user_tables` + `db_health` → vergleichen.
-
-## Hinweis zur Cloud-Empfehlung im UI
-Die Lovable-UI rät zur Instanz-Vergrößerung. Das **maskiert** das Problem (mehr IOPS verfügbar), behebt es aber nicht und verursacht laufende Mehrkosten. Empfehlung: erst Stufe 1–3 umsetzen, dann neu bewerten.
+Ich werde erst nach deiner Freigabe mit dieser reinen Diagnose beginnen.
