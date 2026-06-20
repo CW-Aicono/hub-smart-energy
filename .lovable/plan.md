@@ -1,136 +1,89 @@
+# Plan: RLS-Last auf Hot-Tabellen reduzieren
+
+## Kurzfassung deiner Frage
+
+> "Können wir die Abfrage bauen, ohne dass RLS-Policies getriggert werden?"
+
+**Kurze Antwort: Ja, aber das ist hier nicht der richtige Hebel.**
+
+Ich habe nachgesehen, woher die teuren Queries wirklich kommen:
 
 
-# Fix: TypeScript-Build-Fehler im Loxone-Worker
+| Query                                       | Aufrufe                    | Pfad             | RLS aktiv? |
+| ------------------------------------------- | -------------------------- | ---------------- | ---------- |
+| INSERT `meter_power_readings` (5,1 Mio)     | Edge `gateway-ingest`      | **service_role** | **Nein**   |
+| UPDATE `location_integrations` (2,3 Mio)    | Edge `gateway-ingest` etc. | **service_role** | **Nein**   |
+| SELECT `meter_power_readings` (167k, ⌀52ms) | Browser/PostgREST          | User-JWT         | **Ja**     |
+| SELECT `integration_errors` (92k, ⌀90ms)    | Browser/PostgREST          | User-JWT         | **Ja**     |
 
-## Was ist passiert?
 
-Beim Build im Container ist genau ein Fehler aufgetreten:
+Die **Schreiblast** (das wirkliche IO-Monster) läuft schon heute mit `SERVICE_ROLE_KEY` durch und umgeht RLS komplett. Daran ändert ein RLS-Bypass nichts.
+
+Die **Leselast** (SELECTs) geht direkt vom React-Client über PostgREST mit dem User-JWT — **hier feuert RLS pro Zeile**. Und die aktuellen Policies sind teuer:
 
 ```
-index.ts(548,26): error TS2339: Property 'enabled' does not exist on type 'unknown'.
+meter_power_readings:
+  USING: tenant_id = get_user_tenant_id()            -- SELECT auf profiles
+  USING: partner_has_tenant_access(auth.uid(), ...)  -- JOIN partner_members + tenants
 ```
 
-**Übersetzt:** Die Antwort von `fetch(...).json()` ist für TypeScript erstmal vom Typ „unbekannt". Wir müssen ihm sagen, dass darin ein Feld `enabled` steckt. Eine einzige Zeile ändern, fertig.
+Bei einem Chart-Query mit ~10.000 Zeilen werden diese Subselects potenziell pro Zeile evaluiert. Das erklärt die ⌀52 ms.
 
-**Wichtig zu deinem `docker run` danach:** Der zweite Befehl in deinem Putty-Log hat *zwar* einen Container gestartet — aber mit dem Image-Tag `loxone-ws-worker:phase6.1`, also dem **alten Image** von vorher. Der Build war ja fehlgeschlagen, das neue Image existiert noch gar nicht. Der laufende Container hat daher **immer noch keine Killswitch-Logik**. Das erklärt, warum im Monitor weiter Heartbeats kommen.
+## Zwei Wege, die Last loszuwerden
 
----
+### Weg A (empfohlen, klein, sicher): RLS-Policies cachen lassen
 
-## Was ich in Lovable ändere (1 Zeile)
+Statt RLS zu umgehen, zwingen wir Postgres, die Tenant-Prüfung **einmal pro Query** statt pro Zeile auszuführen. Trick: die Helper-Funktion in ein `(SELECT …)` einwickeln. Das ist ein offiziell von Supabase empfohlenes Muster und wirkt sofort.
 
-Datei: `docs/loxone-ws-worker/index.ts`, Zeile 547–548
+Vorher:
 
-**Vorher:**
-```ts
-const body = await r.json();
-const enabled = body.enabled !== false;
+```sql
+USING (tenant_id = get_user_tenant_id())
 ```
 
-**Nachher:**
-```ts
-const body = await r.json() as { enabled?: boolean };
-const enabled = body.enabled !== false;
+Nachher:
+
+```sql
+USING (tenant_id = (SELECT public.get_user_tenant_id()))
 ```
 
-Sonst nichts. Keine weiteren Code- oder DB-Änderungen.
+Gleiche Änderung für `partner_has_tenant_access`. Effekt typisch: Faktor 10–50 schneller bei großen Lesequeries, weil aus N Funktionsaufrufen ein InitPlan-Cache wird.
 
----
+**Geplante Tabellen für diese Umstellung** (die Heavy-Hitter aus den Slow-Queries):
 
-## Was du danach auf Hetzner machst (exakte Copy-Paste-Blöcke)
+- `meter_power_readings`
+- `meter_power_readings_5min`
+- `meter_period_totals`
+- `integration_errors`
+- `location_integrations`
+- `meters`
 
-### Schritt 1 — In Putty einloggen und ins Worker-Verzeichnis
+Keine Code-Änderungen im Frontend nötig, keine Sicherheitsverschlechterung.
 
-```bash
-cd /opt/loxone-ws-worker
-```
+### Weg B (groß, nur falls A nicht reicht): Edge-Function als Daten-Proxy
 
-→ Erwartetes Ergebnis: Prompt zeigt `/opt/loxone-ws-worker`.
+Chart-Reads über eine neue Edge-Function `chart-data` laufen lassen:
 
-### Schritt 2 — Neuen Code holen
+1. Edge prüft einmalig den User-JWT (`getClaims`) und ermittelt `tenant_id`.
+2. Edge benutzt `SERVICE_ROLE_KEY` → RLS umgangen.
+3. Edge filtert die Query manuell auf diese `tenant_id`.
 
-```bash
-git pull
-```
+Kosten: jeder betroffene Hook (`useMeterPowerReadings`, `useIntegrationErrors`, Dashboard-Charts, …) muss umgestellt werden. Risiko: jede vergessene Stelle ist ein Tenant-Leak. Würde ich erst angehen, wenn Weg A messbar nicht ausreicht.
 
-→ Erwartetes Ergebnis: Meldung `Updating ...` mit `index.ts` in der Dateiliste.
-**Wenn „Already up to date." kommt:** STOPP, sag mir Bescheid (dann ist der Lovable-Code noch nicht im GitHub-Repo angekommen — siehe deine Memory-Regel „Publish → Hard Reload → manuell committen").
+## Vorschlag konkret
 
-### Schritt 3 — Prüfen, dass der Fix wirklich drin ist
+1. **Phase 1 (jetzt, 1 Migration, ~2 Min IO):** Policies auf den 6 Tabellen oben auf das `(SELECT …)`-Muster umstellen. Keine Frontend-Änderung.
+2. **Phase 2 (Messung, ~30 Min):** IO-Budget und `pg_stat_statements` für `meter_power_readings` SELECT erneut ansehen. Erwartung: `mean_ms` fällt von 52 ms auf <10 ms, Disk-Reads brechen ein.
+3. **Phase 3 (nur falls nötig):** Weg B für die Top-2-Hooks.
 
-```bash
-grep -n "as { enabled" index.ts
-```
+## Was ich **nicht** tue
 
-→ Erwartetes Ergebnis: **Genau eine Zeile** wird ausgegeben, etwa:
-```
-547:    const body = await r.json() as { enabled?: boolean };
-```
-**Wenn nichts ausgegeben wird:** STOPP, nicht weitermachen.
+- Schreibpfad anfassen (läuft schon ohne RLS).
+- Cron-Frequenzen senken (separater Vorschlag, hier nicht vermischt).
+- Vorhandene Indizes verändern — Index `idx_meter_power_readings_meter_time` ist passend.
 
-### Schritt 4 — Alten Container stoppen und löschen
+## Freigabe nötig
 
-```bash
-docker stop loxone-ws-worker
-docker rm loxone-ws-worker
-```
-
-→ Erwartetes Ergebnis: Zwei Zeilen mit dem Namen `loxone-ws-worker`. (Falls „No such container": ignorieren, dann ist er schon weg.)
-
-### Schritt 5 — Image neu bauen (mit neuem Tag)
-
-```bash
-docker build -t loxone-ws-worker:phase7 .
-```
-
-→ Erwartetes Ergebnis: Am Ende `Successfully tagged loxone-ws-worker:phase7` (oder `naming to docker.io/library/loxone-ws-worker:phase7 done`). **Kein** TS2339-Fehler mehr.
-
-**Wenn doch ein Fehler kommt:** STOPP, schick mir die letzten 20 Zeilen der Ausgabe.
-
-### Schritt 6 — Container mit dem NEUEN Image starten
-
-Genau dein bisheriger `docker run`-Befehl, aber mit `:phase7` statt `:phase6.1`:
-
-```bash
-docker run -d --restart=always --name loxone-ws-worker \
-  -p 8080:8080 \
-  -e SUPABASE_URL=https://xnveugycurplszevdxtw.supabase.co \
-  -e GATEWAY_API_KEY=sk_live_odclyxINkLa0XcHuIXbeeNw44lwzzDHp \
-  -e LOG_LEVEL=info \
-  -e WORKER_HOST=hetzner-prod-1 \
-  -e WORKER_NAME=hetzner-bridge-test \
-  -e FLUSH_INTERVAL_MS=1000 \
-  -e RELOAD_INTERVAL_MS=300000 \
-  -e BRIDGE_WORKER_NAME=hetzner-bridge-test \
-  -e BRIDGE_HEARTBEAT_MS=300000 \
-  -e HEALTH_PORT=8080 \
-  loxone-ws-worker:phase7
-```
-
-→ Erwartetes Ergebnis: Eine lange Hex-Zeichenkette (Container-ID).
-
-### Schritt 7 — Killswitch-Beweis-Test
-
-```bash
-docker logs --tail 30 loxone-ws-worker
-```
-
-→ Erwartetes Ergebnis: Logzeilen aus den letzten Sekunden, **u. a. eine Zeile mit `[Killswitch]`** (z. B. beim Start, weil `pollKillswitch()` sofort einmal läuft). Außerdem WS-Verbindungen zu den 3 Miniservern.
-
-Dann im UI: **Super-Admin → Worker-Steuerung → `loxone_ws_worker` auf Pausiert**, 60 s warten, nochmal:
-
-```bash
-docker logs --tail 20 loxone-ws-worker
-```
-
-→ Erwartetes Ergebnis: Zeile `[Killswitch] Worker wurde im Admin-Dashboard PAUSIERT. Trenne alle WS-Verbindungen.`
-Im **WebSocket-Monitor** zeigen die 3 Miniserver **Inaktiv**, keine neuen Heartbeats mehr.
-
-### Schritt 8 — Wieder einschalten
-
-Im UI Toggle zurück auf **Aktiv**. Innerhalb 60 s sollten WS-Verbindungen wieder stehen, im Log: `[Killswitch] Worker wurde im Admin-Dashboard AKTIVIERT.`
-
----
-
-## Hard-Stop-Regel
-
-Wenn Schritt 5 erneut mit einem TypeScript-Fehler abbricht, oder Schritt 7 keine `[Killswitch]`-Zeile zeigt: **STOPP nach dem 2. Versuch**, Logs schicken, ich entscheide ehrlich, ob der Weg geht. Nicht raten.
+Bitte sag mir, ob ich **Phase 1** umsetzen soll (eine einzige Migration, reversibel). Danach messen wir, bevor wir über Phase 2/3 reden.  
+  
+Antwort: ok, jetzt Phase 1 umsetzen
