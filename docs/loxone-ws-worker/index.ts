@@ -309,6 +309,10 @@ async function flushSessionEnd(state: ConnState): Promise<void> {
 // ─── WebSocket-Verbindung via lxcommunicator ─────────────────────────────────
 
 async function connect(state: ConnState): Promise<void> {
+  if (workerPaused) {
+    log("debug", `[WS] connect ${state.serialNumber} übersprungen — Worker pausiert`);
+    return;
+  }
   if (state.ws) { try { state.ws.close(); } catch { /* ignore */ } state.ws = null; }
   state.authenticated = false;
 
