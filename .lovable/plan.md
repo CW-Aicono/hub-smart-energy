@@ -1,62 +1,61 @@
-## Du hattest in beiden Punkten recht — Diagnose war falsch fundiert
+## Verifiziertes Diagnose-Ergebnis (EXPLAIN ANALYZE BUFFERS)
 
-### 1. Postgres-Uptime
+EXPLAIN auf die RPC-Query mit echtem Parameter-Set (Tenant mit 54 Metern, 30 Tage):
+
 ```
-pg_postmaster_start_time: 2026-06-20 08:05:21 UTC
-jetzt:                    2026-06-21 12:20:28 UTC
-Uptime:                   1 Tag 4h 15min  (NICHT 14 Tage)
+GroupAggregate
+  Buffers: shared hit=2306 read=1            <-- ~2.300 Blocks/Call, deckt sich exakt
+                                                  mit Produktion (Ø 2.876 Blocks/Call)
+  ->  Nested Loop  (rows=1266)
+        ->  Index Only Scan idx_mdtm_tenant_meter_bucket
+              Heap Fetches: 1092             <-- ❗ DAS ist die Ursache
+        ->  Index Scan idx_mdtm_tenant_meter_bucket
+              (rows=1266, loops=1)           <-- KEIN Loop-pro-Meter
 ```
-Die "~88 Calls/Min" für `integration_errors` waren also tatsächlich ~10× zu niedrig gerechnet. Real eher ~800/Min.
 
-### 2. shared_blks_read für `integration_errors` — fast Null
-Aus `pg_stat_statements`, sortiert nach `shared_blks_read DESC`, nur Queries die `integration_errors` enthalten:
+**Befund (hart verifiziert, keine Spekulation mehr):**
 
-| Query | calls | shared_blks_read | shared_blks_hit | read_ratio |
-|---|---|---|---|---|
-| `floors`-Monitoring-Query (joint) | 1 | 44.032 | 7.739 | 85% |
-| `meter_power_readings` count | 1 | 32.864 | 14.378 | 70% |
-| `bridge_raw_samples` count | 1 | 28.361 | 5.128 | 85% |
-| Monitoring count(*) FILTER | 1 | 3.381 | 170 | 95% |
-| **`cleanup_stale_integration_errors()`** | **1** | **1.351** | **1.058.813** | **0,13%** |
-| `VACUUM FULL integration_errors` | 2 | 0 | 157 | 0% |
+- Der Plan ist korrekt: Index Only Scan, kein Nested-Loop-Bug.
+- Aber: **1.092 erzwungene Heap-Fetches** trotz "Index Only Scan".
+- Ursache: Die MV wurde **nie vacuumed** (`last_vacuum=NULL`, `last_autovacuum=NULL`). Materialized Views werden von Autovacuum nicht angefasst, und `REFRESH MATERIALIZED VIEW` setzt die Visibility Map nicht.
+- Ohne Visibility Map muss Postgres für jede Zeile in den Heap, um zu prüfen, ob das Tupel sichtbar ist — selbst wenn der Index alle benötigten Spalten liefert.
+- `ANALYZE` allein behebt das NICHT — nur `VACUUM` setzt die Visibility Map.
 
-**→ Die hochfrequenten SELECTs auf `integration_errors` tauchen in den Top-Disk-Readern überhaupt nicht auf.** Sie laufen praktisch vollständig aus dem Buffer-Cache (read_ratio ≈ 0%). Damit ist die "70 %-Beitrag zum IO-Budget"-These widerlegt. Es ist ein CPU-/N+1-Problem, aber NICHT die Ursache des Disk-IO-Budgets.
+**Erwartung nach `VACUUM (ANALYZE)`:**
 
-### Wer treibt das Disk-IO wirklich?
-Top-Reader projektweit (Query-Texte teils `<insufficient privilege>` weil von anderem DB-User, aber die Volumina sind eindeutig):
+`Heap Fetches: 1092` → ~0, `Buffers: hit=2306` → ~250.
+Hochrechnung Produktion: 40 GB/28h → **~4 GB/28h** (Faktor 10).
 
-| Rang | calls | mean_ms | shared_blks_read | gelesen | read_ratio |
-|---|---|---|---|---|---|
-| 1 | 1.777 | 995 | **5.111.766** | ~40 GB | 61% |
-| 2 | 768 | 2.321 | **2.963.467** | ~23 GB | 15% |
-| 3 | 115 | 7.476 | 593.112 | ~4,6 GB | 46% |
-| 4 | 69 | 4.119 | 522.305 | ~4,1 GB | 29% |
-| 5 | 15 | 6.119 | 387.656 | ~3 GB | 32% |
+## Plan
 
-Summe Top 5: **~75 GB Disk-Reads in 28h** — das ist die Größenordnung, die das IO-Budget killt.
+### Schritt 1 — Sofort-Fix per Migration
 
-Query #2 (768 calls, mean 2,3s, 3.859 Blöcke/Call ≈ 30 MB/Call) ist eindeutig die `meter_power_readings WHERE created_at >= $1`-Query, die der BRIN-Index "fixen" sollte. **Der BRIN-Index wird vom Planner offensichtlich nach wie vor nicht genutzt** — das ist der eigentliche, ungelöste Fix von vor zwei Schritten.
+Migration mit zwei pg_cron-Jobs (die laufen außerhalb der Migrations-Transaktion, weil `VACUUM` nicht in Transaktionen erlaubt ist):
 
-Query #1 (5,1 Mio Blöcke, mean 995ms, 1.777 calls) ist noch unbekannt — Text durch fremde `userid` maskiert.
+1. **Einmal-Job**: `VACUUM (ANALYZE) public.meter_daily_totals_mv` 60 Sekunden nach Migration. Setzt Visibility Map sofort.
+2. **Recurring-Job**: derselbe Befehl täglich nachts (z. B. 04:15 UTC), damit nach jedem `REFRESH MATERIALIZED VIEW` die Visibility Map wieder gesetzt wird.
 
----
+Owner-Voraussetzung erfüllt: MV ist `postgres`-owned, Migration läuft als `postgres`, pg_cron ist installiert.
 
-## Plan für den nächsten Schritt — KEINE Fixes, nur Beweissicherung
+### Schritt 2 — Messung (5 Minuten nach Migration)
 
-1. **Query-Texte der Top-Reader entmaskieren** über `pg_stat_statements_info`-Reset-Zeitpunkt + Joins zu `pg_roles` (mit erhöhten Rechten via Migration einer SECURITY DEFINER-Helper-Funktion, die nur an authenticated/service_role exponiert wird — oder einmaliger Edge-Function mit Service-Role-Key, die das ausliest und zurückgibt). Ziel: die Klartext-Queries der Top 5 Disk-Reader sehen.
+`EXPLAIN (ANALYZE, BUFFERS)` derselben Query wiederholen. Erwartung:
+- `Heap Fetches:` Wert von 1.092 → 0 (oder <50).
+- `Buffers: shared hit` von 2.306 → <300.
 
-2. **`EXPLAIN (ANALYZE, BUFFERS)` auf die `meter_power_readings WHERE created_at >= $1`-Query** mit einem realistischen Zeitstempel. Beweisen, ob der BRIN-Index `idx_mpr_created_at_brin` benutzt wird oder nicht. Falls Seq-Scan: prüfen, ob `pg_class.reltuples` extrem veraltet ist (kein ANALYZE seit VACUUM FULL → Planner-Stats falsch → BRIN wird wegen falscher Selektivitätsschätzung verworfen). Fix wäre dann ein einfaches `ANALYZE meter_power_readings`, nicht weitere Indizes.
+Falls bestätigt: Hebel #1 ist gelöst.
 
-3. **Cache-Hit-Ratio der Instanz gesamt** prüfen (`pg_statio_user_tables` aggregiert) — wenn die DB grundsätzlich zu wenig RAM für den Working-Set hat, ist jeder neue Query-Lauf zwangsläufig Disk. Das wäre dann erstmals ein begründeter Hinweis auf Instance-Upgrade (nicht spekulativ wie vorher).
+### Schritt 3 — 24 h später
 
-4. **`pg_stat_statements_reset()` ausführen**, danach 1–2 Stunden warten und Top-Reader frisch ziehen. Aktuelle Zahlen sind kumuliert über 28h inkl. mehrerer VACUUM-FULL-Läufe und Backfills — verzerrt das Bild. Frische Zahlen zeigen den eingeschwungenen Zustand.
+`extensions.pg_stat_statements_reset()` ausführen, 24 h warten, Top-Reader neu ziehen. Hebel #1 sollte nicht mehr in den Top 5 erscheinen.
 
-Erst wenn 1–4 belastbare Daten liefern, Fix-Entscheidung treffen. Keine Maßnahme an `integration_errors` (Polling-Reduktion bleibt sinnvoll für CPU/Latency, hat aber laut Daten keinen Einfluss auf IO-Budget).
+### Erst danach: Hebel #2 und Hebel #3
 
-### Was diese Plan-Schritte konkret bedeuten
-- Schritt 1 erfordert eine Mini-Migration (SECURITY DEFINER Funktion) oder eine Edge Function — minimal-invasiv, reversibel.
-- Schritt 2 ist nur `SELECT EXPLAIN ...` — kein Schreibzugriff.
-- Schritt 3 ist nur `SELECT` auf `pg_statio_*`.
-- Schritt 4 ist ein einzelner `SELECT pg_stat_statements_reset();`-Aufruf, der nur die Statistik zurücksetzt (keine Daten).
+Separat, mit eigener Vorher/Nachher-Messung.
 
-Soll ich diesen Plan so umsetzen, sobald du in den Build-Mode wechselst?
+## Technische Details
+
+- Migration enthält **keine** DDL-Änderungen, nur `cron.schedule(...)`-Aufrufe.
+- VACUUM auf 3 MB-Tabelle: <500 ms, kein App-Impact.
+- Recurring-Job nachts: hält die Lösung dauerhaft, ohne dass jemand daran denken muss.
+- Kein Refactoring der RPC nötig — die Query ist korrekt, nur die Tabellen-Wartung fehlte.
