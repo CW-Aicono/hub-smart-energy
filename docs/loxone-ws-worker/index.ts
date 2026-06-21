@@ -431,6 +431,9 @@ async function connect(state: ConnState): Promise<void> {
     state.authenticated = true;
     state.reconnectDelay = 1000;
     state.lastConnectedAt = Date.now();
+    // Phase 6.2: Diagnose-Zähler pro Connect resetten
+    state.diagEventCount = 0;
+    state.diagCallbacksSeen = new Set<string>();
     await sessionStart(state);
     log("info", `[WS] authentifiziert ${state.serialNumber} (${state.uuidMap.size} UUIDs)`);
     bridgeLog("info", "ws_connected", `Verbunden, ${state.uuidMap.size} UUIDs abonniert`, state.serialNumber);
