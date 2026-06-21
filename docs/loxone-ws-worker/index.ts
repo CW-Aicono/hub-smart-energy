@@ -384,7 +384,7 @@ async function connect(state: ConnState): Promise<void> {
       for (const ev of (events || [])) {
         const uuid = (ev?.uuid || "").toLowerCase();
         const entry = state.uuidMap.get(uuid);
-        if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type)) {
+        if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type, entry.role)) {
           entry.latest_value = ev.value;
           state.eventsReceived++;
           state.lastEventAt = Date.now();
