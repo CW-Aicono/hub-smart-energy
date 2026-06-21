@@ -549,7 +549,7 @@ async function connect(state: ConnState): Promise<void> {
         const resp: any = await socket.send(`jdev/sps/io/${uuid}/all`);
         const raw = resp?.LL?.value ?? resp?.value ?? resp;
         const num = typeof raw === "number" ? raw : parseFloat(String(raw));
-        if (Number.isFinite(num) && !isSpike(num, entry.energy_type)) {
+        if (Number.isFinite(num) && !isSpike(num, entry.energy_type, entry.role)) {
           entry.latest_value = num;
           state.eventsReceived++;
           state.lastEventAt = Date.now();
