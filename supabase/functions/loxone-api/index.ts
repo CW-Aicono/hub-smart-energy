@@ -483,19 +483,10 @@ serve(async (req) => {
     const isRefreshAction = action === "refreshSensors";
     if (isRefreshAction) action = "getSensors";
     const shouldPersistReadings = isServiceRole || isRefreshAction || requestBody?.persistToDb === true;
-    const disabledNonWsMeasurementActions = new Set(["getSensors", "getSensorDetails", "backfillStatistics"]);
+    // Hybrid-Strategie (Phase 6.4): getSensors/Details/backfill sind wieder
+    // aktiv — sie liefern die driftfreien Zählerstände, während die WS-Bridge
+    // parallel die Live-Power-Events sendet.
 
-    if (disabledNonWsMeasurementActions.has(action)) {
-      console.warn(`[loxone-api] disabled non-WS measurement path blocked: action=${action}`);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          disabled: "loxone_non_ws_measurement_path",
-          error: "Temporär deaktiviert: Loxone-Messwerte dürfen ausschließlich über die WS-Bridge/gateway-ingest?action=bridge-readings kommen.",
-        }),
-        { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
     // Manual UI-triggered refresh (Tacho/Discovery button) → bypass the 1 h
     // structure cache so newly added Loxone sensors/actuators show up instantly.
     // Cron/background calls (service role) keep using the cache to save traffic.
