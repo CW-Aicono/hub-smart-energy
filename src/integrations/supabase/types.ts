@@ -11885,6 +11885,19 @@ export type Database = {
       }
     }
     Functions: {
+      admin_top_disk_readers: {
+        Args: { limit_n?: number }
+        Returns: {
+          calls: number
+          mean_ms: number
+          query: string
+          read_ratio: number
+          rolname: string
+          shared_blks_hit: number
+          shared_blks_read: number
+          total_ms: number
+        }[]
+      }
       aggregate_pv_actual_hourly: {
         Args: { p_from?: string; p_to?: string }
         Returns: number
