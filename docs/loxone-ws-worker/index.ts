@@ -815,19 +815,26 @@ async function reloadMeters(): Promise<void> {
       };
       connections.set(serial, state);
     }
-    state.uuidMap.clear();
-    for (const m of group.meters) {
-      const blockUuid = m.sensor_uuid.toLowerCase();
-      state.uuidMap.set(blockUuid, {
-        meter_id: m.id,
-        tenant_id: m.tenant_id,
-        energy_type: m.energy_type,
-        block_uuid: blockUuid,
-        role: "pwr",                    // wird in connect() ggf. durch LoxAPP3-Expansion ersetzt
-        latest_value: null,
-        last_pushed_value: null,
-        last_pushed_at: 0,
-      });
+    // Phase 7.2: NUR neu befüllen, wenn die Verbindung noch nicht authentifiziert ist.
+    // Bei bereits aktiver WS hat connect() die uuidMap mittels LoxAPP3-Expansion
+    // mit State-UUIDs (pwr/today/total/...) bestückt. Ein clear() hier würde dieses
+    // Mapping zerstören und alle eingehenden Binary-Status-Updates lautlos verwerfen
+    // → genau das hat die Live-Updates exakt nach 5 Min (erster Reload) eingefroren.
+    if (!state.authenticated || !state.ws) {
+      state.uuidMap.clear();
+      for (const m of group.meters) {
+        const blockUuid = m.sensor_uuid.toLowerCase();
+        state.uuidMap.set(blockUuid, {
+          meter_id: m.id,
+          tenant_id: m.tenant_id,
+          energy_type: m.energy_type,
+          block_uuid: blockUuid,
+          role: "pwr",                    // wird in connect() durch LoxAPP3-Expansion ersetzt
+          latest_value: null,
+          last_pushed_value: null,
+          last_pushed_at: 0,
+        });
+      }
     }
 
     if (!state.ws) connect(state);
