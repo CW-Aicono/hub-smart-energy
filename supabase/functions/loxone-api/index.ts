@@ -1130,6 +1130,28 @@ serve(async (req) => {
             }
 
 
+            // Phase 7: Tagessnapshot (Europe/Berlin-Datum) — letzter Wert pro Tag bleibt persistent.
+            try {
+              const berlinDate = new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit",
+              }).format(now); // → "YYYY-MM-DD"
+              const totalKwh = (stateData?.totalYear != null && stateData.totalYear > 0)
+                ? Number(stateData.totalYear)
+                : (stateData?.totalDay != null ? Number(stateData.totalDay) : null);
+              const todayKwh = stateData?.totalDay != null ? Number(stateData.totalDay) : null;
+              if ((totalKwh != null && isFinite(totalKwh)) || (todayKwh != null && isFinite(todayKwh))) {
+                dailySnapshotInserts.push({
+                  tenant_id: meter.tenant_id,
+                  meter_id: meter.id,
+                  snapshot_date: berlinDate,
+                  energy_total_kwh: totalKwh != null && isFinite(totalKwh) ? totalKwh : null,
+                  energy_today_kwh: todayKwh != null && isFinite(todayKwh) ? todayKwh : null,
+                  source: "loxone_http_poll",
+                });
+              }
+            } catch (_e) { /* date formatting issues → snapshot überspringen */ }
+
+
             // Store instantaneous power reading for time-series (with spike filter)
             if (stateData?.value != null) {
               const powerVal = typeof stateData.value === "number" ? stateData.value : parseFloat(String(stateData.value));
