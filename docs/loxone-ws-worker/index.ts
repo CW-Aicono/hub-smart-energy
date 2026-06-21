@@ -222,6 +222,9 @@ interface ConnState {
   // Phase 6 (IO-Optimierung): deferred session-end für Reconnect-Dedup
   pendingEndTimer: NodeJS.Timeout | null;
   pendingEndReason: string | null;
+  // Phase 6.2 Diagnose: zähle erste Roh-Events pro Connection
+  diagEventCount: number;
+  diagCallbacksSeen: Set<string>;
 }
 
 const connections = new Map<string, ConnState>(); // key = serial
