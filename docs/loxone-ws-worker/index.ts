@@ -99,8 +99,10 @@ function log(level: keyof typeof LOG_LEVELS, msg: string, ...args: any[]) {
 const SPIKE_THRESHOLDS: Record<string, number> = {
   strom: 10000, gas: 5000, wasser: 1000, wärme: 5000, kälte: 2000, default: 50000,
 };
-function isSpike(v: number, energyType: string): boolean {
+// Zählerstände (today/month/year/total) können viele 100.000 kWh groß sein → keinen kW-Spike-Filter darauf anwenden.
+function isSpike(v: number, energyType: string, role: "pwr" | "today" | "total" | "month" | "year" = "pwr"): boolean {
   if (!isFinite(v) || isNaN(v)) return true;
+  if (role !== "pwr") return false; // Energiewerte nicht filtern
   return Math.abs(v) > (SPIKE_THRESHOLDS[energyType] ?? SPIKE_THRESHOLDS.default);
 }
 
