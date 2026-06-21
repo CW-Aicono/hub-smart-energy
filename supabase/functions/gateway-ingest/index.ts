@@ -1258,6 +1258,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
       sensor_uuid?: string;
       value?: number;
       recorded_at?: string;
+      role?: "pwr" | "today" | "total" | "month" | "year";
     }>;
   };
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
@@ -1289,23 +1290,34 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     }
   }
 
-  const rows: any[] = [];
+  // Phase 7: rollenbasiertes Routing
+  //  - role="pwr" (Default)  → bridge_raw_samples (für 5-Min-Aggregator) + Broadcast
+  //  - role!="pwr"            → nur Broadcast (kein DB-Write); UI nutzt den Wert live in KPI-Kacheln
+  type Role = "pwr" | "today" | "total" | "month" | "year";
+  const rawRows: any[] = [];
+  const broadcastRows: Array<{ tenant_id: string | null; uuid: string; value: number; at: string; role: Role }> = [];
   let skipped = 0;
   for (const r of body.readings) {
     if (!r.miniserver_serial || !r.sensor_uuid || typeof r.value !== "number" || !isFinite(r.value)) {
       skipped++;
       continue;
     }
+    const role: Role = (r.role as Role) ?? "pwr";
     const link = linkCache.get(r.miniserver_serial);
-    rows.push({
-      worker_id: worker.id,
-      link_id: link?.id ?? null,
-      tenant_id: link?.tenant_id ?? null,
-      miniserver_serial: r.miniserver_serial,
-      uuid: r.sensor_uuid.toLowerCase(),
-      value: r.value,
-      received_at: r.recorded_at ?? new Date().toISOString(),
-    });
+    const uuid = r.sensor_uuid.toLowerCase();
+    const at = r.recorded_at ?? new Date().toISOString();
+    broadcastRows.push({ tenant_id: link?.tenant_id ?? null, uuid, value: r.value, at, role });
+    if (role === "pwr") {
+      rawRows.push({
+        worker_id: worker.id,
+        link_id: link?.id ?? null,
+        tenant_id: link?.tenant_id ?? null,
+        miniserver_serial: r.miniserver_serial,
+        uuid,
+        value: r.value,
+        received_at: at,
+      });
+    }
   }
 
   if (rows.length === 0) return json({ success: true, inserted: 0, skipped });
