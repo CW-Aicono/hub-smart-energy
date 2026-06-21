@@ -81,7 +81,7 @@ const EnergyData = () => {
     const fetchCount = async () => {
       const { count } = await supabase
         .from("meter_readings")
-        .select("*", { count: "exact", head: true });
+        .select("*", { count: "estimated", head: true });
       setReadingsCount(count || 0);
     };
     fetchCount();
