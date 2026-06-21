@@ -673,21 +673,25 @@ async function flush(): Promise<void> {
   const nowIso = new Date(nowMs).toISOString();
   for (const state of connections.values()) {
     if (!state.authenticated) continue;
-    for (const [uuid, entry] of state.uuidMap) {
+    for (const [, entry] of state.uuidMap) {
       if (entry.latest_value === null) continue;
 
       // IO-Optimierung: nur pushen, wenn sich der Wert spürbar geändert hat
       // ODER der letzte Push älter als MIN_PUSH_INTERVAL_MS ist (Keepalive).
+      // Energiezähler (today/total/month/year) ändern sich in kleinen Schritten →
+      // niedrigere Mindest-Änderung, damit kWh-Inkremente nicht verschluckt werden.
       const prev = entry.last_pushed_value;
       const ageMs = nowMs - entry.last_pushed_at;
       const delta = prev === null ? Infinity : Math.abs(entry.latest_value - prev);
-      const changed = delta >= MIN_DELTA;
+      const minDelta = entry.role === "pwr" ? MIN_DELTA : 0.001;
+      const changed = delta >= minDelta;
       const stale = ageMs >= MIN_PUSH_INTERVAL_MS;
       if (!changed && !stale) continue;
 
       readings.push({
         miniserver_serial: state.serialNumber,
-        sensor_uuid: uuid,
+        sensor_uuid: entry.block_uuid,   // immer Block-UUID, damit DB-Mapping konsistent bleibt
+        role: entry.role,                 // Phase 7: rollenbasiertes Routing in gateway-ingest
         value: entry.latest_value,
         recorded_at: nowIso,
       });
