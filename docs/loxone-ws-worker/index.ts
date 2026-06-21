@@ -336,10 +336,41 @@ async function connect(state: ConnState): Promise<void> {
     false,
   );
 
+  // Phase 6.2 Diagnose-Helfer: loggt einmalig pro Callback-Name, dass dieser feuert
+  const diagSeenCallback = (cbName: string) => {
+    if (!state.diagCallbacksSeen.has(cbName)) {
+      state.diagCallbacksSeen.add(cbName);
+      log("info", `[DIAG] ${state.serialNumber} CALLBACK '${cbName}' feuert ZUM ERSTEN MAL`);
+    }
+  };
+
   config.delegate = {
-    socketOnEventReceived: (_s: any, events: any[]) => {
-      for (const ev of events) {
-        const uuid = (ev.uuid || "").toLowerCase();
+    socketOnEventReceived: (_s: any, events: any[], evType?: any) => {
+      diagSeenCallback("socketOnEventReceived");
+      // Phase 6.2: Logge die ersten 20 Roh-Events pro Connection KOMPLETT,
+      // damit wir die exakte Struktur sehen (uuid/value/Property-Namen).
+      if (events && Array.isArray(events)) {
+        for (const ev of events) {
+          if (state.diagEventCount < 20) {
+            state.diagEventCount++;
+            try {
+              log("info", `[DIAG] ${state.serialNumber} RAW EVENT #${state.diagEventCount} type=${evType ?? "?"} keys=${Object.keys(ev || {}).join(",")} json=${JSON.stringify(ev)}`);
+            } catch {
+              log("info", `[DIAG] ${state.serialNumber} RAW EVENT #${state.diagEventCount} (nicht serialisierbar)`);
+            }
+          }
+        }
+      } else {
+        if (state.diagEventCount < 20) {
+          state.diagEventCount++;
+          try {
+            log("info", `[DIAG] ${state.serialNumber} RAW EVENT-CONTAINER #${state.diagEventCount} type=${evType ?? "?"} json=${JSON.stringify(events)}`);
+          } catch { /* ignore */ }
+        }
+      }
+      // Original-Logik unverändert:
+      for (const ev of (events || [])) {
+        const uuid = (ev?.uuid || "").toLowerCase();
         const entry = state.uuidMap.get(uuid);
         if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type)) {
           entry.latest_value = ev.value;
@@ -347,6 +378,32 @@ async function connect(state: ConnState): Promise<void> {
           state.lastEventAt = Date.now();
         }
       }
+    },
+    // Weitere bekannte lxcommunicator-Callbacks als Diagnose-Stubs:
+    socketOnTextMessage: (_s: any, msg: any) => {
+      diagSeenCallback("socketOnTextMessage");
+      if (state.diagEventCount < 20) {
+        state.diagEventCount++;
+        try { log("info", `[DIAG] ${state.serialNumber} TEXT MSG #${state.diagEventCount} json=${JSON.stringify(msg).slice(0, 500)}`); } catch { /* ignore */ }
+      }
+    },
+    socketOnBinaryMessage: (_s: any, msg: any) => {
+      diagSeenCallback("socketOnBinaryMessage");
+    },
+    socketOnEventTableValuesUpdate: (_s: any, events: any[]) => {
+      diagSeenCallback("socketOnEventTableValuesUpdate");
+      if (state.diagEventCount < 20 && Array.isArray(events)) {
+        for (const ev of events.slice(0, 5)) {
+          state.diagEventCount++;
+          try { log("info", `[DIAG] ${state.serialNumber} VALUES-UPDATE #${state.diagEventCount} json=${JSON.stringify(ev)}`); } catch { /* ignore */ }
+        }
+      }
+    },
+    socketOnEventTableTextUpdate: (_s: any, events: any[]) => {
+      diagSeenCallback("socketOnEventTableTextUpdate");
+    },
+    socketOnKeepAlive: () => {
+      diagSeenCallback("socketOnKeepAlive");
     },
     socketOnConnectionClosed: (_s: any, code: number) => {
       log("warn", `[WS] ${state.serialNumber} geschlossen (code=${code})`);
