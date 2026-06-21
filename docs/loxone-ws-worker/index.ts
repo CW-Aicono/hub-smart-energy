@@ -568,13 +568,25 @@ async function pollKillswitch(): Promise<void> {
       await bridgeHeartbeat("degraded", "paused-by-admin");
       for (const state of connections.values()) {
         try { state.ws?.close(); } catch { /* ignore */ }
+        state.ws = null;
+        state.authenticated = false;
+        state.reconnecting = false;
         try { await sessionEnd(state, "killswitch-pause"); } catch { /* ignore */ }
       }
     } else {
       workerPaused = false;
-      log("info", `[Killswitch] Worker wurde im Admin-Dashboard AKTIVIERT. Lade Meter-Liste neu.`);
+      log("info", `[Killswitch] Worker wurde im Admin-Dashboard AKTIVIERT. Erzwinge frische WS-Verbindungen.`);
       await bridgeLog("info", "worker_resumed", "Worker via worker_controls wieder aktiviert");
       await bridgeHeartbeat("online");
+      // Bestehende (ggf. Zombie-)Sockets hart verwerfen, damit reloadMeters()
+      // garantiert neue Verbindungen aufbaut.
+      for (const state of connections.values()) {
+        try { state.ws?.close(); } catch { /* ignore */ }
+        state.ws = null;
+        state.authenticated = false;
+        state.reconnecting = false;
+        state.reconnectDelay = 1000;
+      }
       try { await reloadMeters(); } catch (e) { log("error", `[Killswitch] reload nach Resume: ${(e as Error).message}`); }
     }
   } catch (err) {
