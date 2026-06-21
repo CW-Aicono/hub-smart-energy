@@ -1320,20 +1320,20 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     }
   }
 
-  if (rows.length === 0) return json({ success: true, inserted: 0, skipped });
+  // Power-Werte in bridge_raw_samples persistieren (für 5-Min-Aggregator).
+  if (rawRows.length > 0) {
+    const { error } = await supabase.from("bridge_raw_samples").insert(rawRows);
+    if (error) return json({ success: false, error: error.message }, 500);
+  }
 
-  const { error } = await supabase.from("bridge_raw_samples").insert(rows);
-  if (error) return json({ success: false, error: error.message }, 500);
-
-  // Realtime-Broadcast pro Tenant: jeder verbundene Browser auf /live-values
-  // bekommt die neuen Werte in <1 s, ohne weitere DB-Last.
-  // Gruppiert: 1 Broadcast pro Tenant pro Request (statt 1 pro Sample).
+  // Realtime-Broadcast pro Tenant: Power + Energiestände (today/total/...) zusammen.
+  // UI unterscheidet anhand der `role`, welches Feld zu aktualisieren ist.
   try {
-    const byTenant = new Map<string, Array<{ uuid: string; value: number; at: string }>>();
-    for (const r of rows) {
+    const byTenant = new Map<string, Array<{ uuid: string; value: number; at: string; role: Role }>>();
+    for (const r of broadcastRows) {
       if (!r.tenant_id) continue;
       const arr = byTenant.get(r.tenant_id) ?? [];
-      arr.push({ uuid: r.uuid, value: r.value, at: r.received_at });
+      arr.push({ uuid: r.uuid, value: r.value, at: r.at, role: r.role });
       byTenant.set(r.tenant_id, arr);
     }
     if (byTenant.size > 0) {
@@ -1345,7 +1345,6 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
         payload: { events },
         private: false,
       }));
-      // Fire-and-forget: Broadcast-Fehler dürfen den Ingest nicht blockieren
       fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
         method: "POST",
         headers: {
@@ -1359,16 +1358,15 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
           const txt = await r.text().catch(() => "");
           console.error(`[bridge-readings] broadcast HTTP ${r.status}: ${txt}`);
         } else {
-          console.log(`[bridge-readings] broadcast ok: ${messages.length} topic(s), ${rows.length} sample(s)`);
+          console.log(`[bridge-readings] broadcast ok: ${messages.length} topic(s), ${broadcastRows.length} event(s) (raw_inserted=${rawRows.length})`);
         }
       }).catch((e) => console.error("[bridge-readings] broadcast failed:", e?.message ?? e));
-
     }
   } catch (e) {
     console.error("[bridge-readings] broadcast prep error:", (e as Error).message);
   }
 
-  return json({ success: true, inserted: rows.length, skipped });
+  return json({ success: true, inserted: rawRows.length, broadcast: broadcastRows.length, skipped });
 }
 
 /* ── Loxone Remote-Connect WebSocket Feldtest ───────────────────────────────── */
