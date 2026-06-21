@@ -192,10 +192,20 @@ interface WsMeter {
   };
 }
 
+// Rolle einer State-UUID innerhalb eines Loxone-Blocks
+//   pwr     → momentane Leistung (kW)
+//   today   → Tagesverbrauch (kWh)
+//   total   → Zählerstand gesamt (kWh)
+//   month   → Monatsverbrauch (kWh, optional)
+//   year    → Jahresverbrauch (kWh, optional)
+type StateRole = "pwr" | "today" | "total" | "month" | "year";
+
 interface UuidEntry {
   meter_id: string;
   tenant_id: string;
   energy_type: string;
+  block_uuid: string;          // Original sensor_uuid aus DB (Block-UUID)
+  role: StateRole;             // Rolle dieser State-UUID
   latest_value: number | null;
   last_pushed_value: number | null;
   last_pushed_at: number; // ms epoch
