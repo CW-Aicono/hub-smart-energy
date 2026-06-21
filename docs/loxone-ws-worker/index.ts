@@ -309,6 +309,10 @@ async function flushSessionEnd(state: ConnState): Promise<void> {
 // ─── WebSocket-Verbindung via lxcommunicator ─────────────────────────────────
 
 async function connect(state: ConnState): Promise<void> {
+  if (workerPaused) {
+    log("debug", `[WS] connect ${state.serialNumber} übersprungen — Worker pausiert`);
+    return;
+  }
   if (state.ws) { try { state.ws.close(); } catch { /* ignore */ } state.ws = null; }
   state.authenticated = false;
 
@@ -424,6 +428,10 @@ async function connect(state: ConnState): Promise<void> {
 }
 
 function scheduleReconnect(state: ConnState, reason: string): void {
+  if (workerPaused) {
+    log("debug", `[WS] Reconnect ${state.serialNumber} übersprungen — Worker pausiert (reason=${reason})`);
+    return;
+  }
   if (state.reconnecting) return;
   state.reconnecting = true;
   state.reconnectCount++;
@@ -434,7 +442,11 @@ function scheduleReconnect(state: ConnState, reason: string): void {
   state.reconnectDelay = Math.min(state.reconnectDelay * 2, 60000);
   log("info", `[WS] Reconnect ${state.serialNumber} in ${delay}ms (reason=${reason})`);
   bridgeLog("info", "ws_reconnect_scheduled", `Reconnect in ${delay}ms (Grund: ${reason})`, state.serialNumber, { delay_ms: delay, reason });
-  setTimeout(() => { state.reconnecting = false; connect(state); }, delay);
+  setTimeout(() => {
+    state.reconnecting = false;
+    if (workerPaused) return;
+    connect(state);
+  }, delay);
 }
 
 // ─── Watchdog (Phase 3) ──────────────────────────────────────────────────────
@@ -556,13 +568,25 @@ async function pollKillswitch(): Promise<void> {
       await bridgeHeartbeat("degraded", "paused-by-admin");
       for (const state of connections.values()) {
         try { state.ws?.close(); } catch { /* ignore */ }
+        state.ws = null;
+        state.authenticated = false;
+        state.reconnecting = false;
         try { await sessionEnd(state, "killswitch-pause"); } catch { /* ignore */ }
       }
     } else {
       workerPaused = false;
-      log("info", `[Killswitch] Worker wurde im Admin-Dashboard AKTIVIERT. Lade Meter-Liste neu.`);
+      log("info", `[Killswitch] Worker wurde im Admin-Dashboard AKTIVIERT. Erzwinge frische WS-Verbindungen.`);
       await bridgeLog("info", "worker_resumed", "Worker via worker_controls wieder aktiviert");
       await bridgeHeartbeat("online");
+      // Bestehende (ggf. Zombie-)Sockets hart verwerfen, damit reloadMeters()
+      // garantiert neue Verbindungen aufbaut.
+      for (const state of connections.values()) {
+        try { state.ws?.close(); } catch { /* ignore */ }
+        state.ws = null;
+        state.authenticated = false;
+        state.reconnecting = false;
+        state.reconnectDelay = 1000;
+      }
       try { await reloadMeters(); } catch (e) { log("error", `[Killswitch] reload nach Resume: ${(e as Error).message}`); }
     }
   } catch (err) {
