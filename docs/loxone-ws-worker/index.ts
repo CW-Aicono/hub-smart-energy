@@ -428,6 +428,10 @@ async function connect(state: ConnState): Promise<void> {
 }
 
 function scheduleReconnect(state: ConnState, reason: string): void {
+  if (workerPaused) {
+    log("debug", `[WS] Reconnect ${state.serialNumber} übersprungen — Worker pausiert (reason=${reason})`);
+    return;
+  }
   if (state.reconnecting) return;
   state.reconnecting = true;
   state.reconnectCount++;
@@ -438,7 +442,11 @@ function scheduleReconnect(state: ConnState, reason: string): void {
   state.reconnectDelay = Math.min(state.reconnectDelay * 2, 60000);
   log("info", `[WS] Reconnect ${state.serialNumber} in ${delay}ms (reason=${reason})`);
   bridgeLog("info", "ws_reconnect_scheduled", `Reconnect in ${delay}ms (Grund: ${reason})`, state.serialNumber, { delay_ms: delay, reason });
-  setTimeout(() => { state.reconnecting = false; connect(state); }, delay);
+  setTimeout(() => {
+    state.reconnecting = false;
+    if (workerPaused) return;
+    connect(state);
+  }, delay);
 }
 
 // ─── Watchdog (Phase 3) ──────────────────────────────────────────────────────
