@@ -18,16 +18,11 @@ serve(async (req) => {
   }
 
 
+  // Hybrid-Strategie (Phase 6.4): WS-Bridge liefert Live-Power, dieser Sync
+  // liefert alle 15 Min driftfreie Zählerstände (Today/Month/Year/Total) direkt
+  // vom Miniserver per HTTP. WS-Power-Events überschreiben den 15-Min-Power-
+  // Snapshot innerhalb von Sekunden — kein Konflikt.
 
-  console.warn("loxone-periodic-sync disabled: Loxone measurement values are WS-Bridge only during isolation.");
-  return new Response(
-    JSON.stringify({
-      success: false,
-      disabled: "loxone_non_ws_measurement_path",
-      error: "Temporär deaktiviert: Loxone-Messwerte dürfen ausschließlich über die WS-Bridge/gateway-ingest?action=bridge-readings kommen.",
-    }),
-    { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-  );
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
