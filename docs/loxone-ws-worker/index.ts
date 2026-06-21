@@ -58,7 +58,7 @@ const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "300000"
 // Phase 6: Session-Heartbeat von 15s auf 60s erhöht (IO-Optimierung)
 const SESSION_HEARTBEAT_MS = parseInt(process.env.SESSION_HEARTBEAT_MS || "60000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase6.3-loxapp3";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase7-multistate";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -99,8 +99,10 @@ function log(level: keyof typeof LOG_LEVELS, msg: string, ...args: any[]) {
 const SPIKE_THRESHOLDS: Record<string, number> = {
   strom: 10000, gas: 5000, wasser: 1000, wärme: 5000, kälte: 2000, default: 50000,
 };
-function isSpike(v: number, energyType: string): boolean {
+// Zählerstände (today/month/year/total) können viele 100.000 kWh groß sein → keinen kW-Spike-Filter darauf anwenden.
+function isSpike(v: number, energyType: string, role: "pwr" | "today" | "total" | "month" | "year" = "pwr"): boolean {
   if (!isFinite(v) || isNaN(v)) return true;
+  if (role !== "pwr") return false; // Energiewerte nicht filtern
   return Math.abs(v) > (SPIKE_THRESHOLDS[energyType] ?? SPIKE_THRESHOLDS.default);
 }
 
@@ -192,10 +194,20 @@ interface WsMeter {
   };
 }
 
+// Rolle einer State-UUID innerhalb eines Loxone-Blocks
+//   pwr     → momentane Leistung (kW)
+//   today   → Tagesverbrauch (kWh)
+//   total   → Zählerstand gesamt (kWh)
+//   month   → Monatsverbrauch (kWh, optional)
+//   year    → Jahresverbrauch (kWh, optional)
+type StateRole = "pwr" | "today" | "total" | "month" | "year";
+
 interface UuidEntry {
   meter_id: string;
   tenant_id: string;
   energy_type: string;
+  block_uuid: string;          // Original sensor_uuid aus DB (Block-UUID)
+  role: StateRole;             // Rolle dieser State-UUID
   latest_value: number | null;
   last_pushed_value: number | null;
   last_pushed_at: number; // ms epoch
@@ -372,7 +384,7 @@ async function connect(state: ConnState): Promise<void> {
       for (const ev of (events || [])) {
         const uuid = (ev?.uuid || "").toLowerCase();
         const entry = state.uuidMap.get(uuid);
-        if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type)) {
+        if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type, entry.role)) {
           entry.latest_value = ev.value;
           state.eventsReceived++;
           state.lastEventAt = Date.now();
@@ -427,9 +439,17 @@ async function connect(state: ConnState): Promise<void> {
     await socket.open(host, state.username, state.password);
     // Phase 6.3: Loxone-Requirement — Strukturdatei muss 1x nach Auth abgerufen werden,
     // sonst sendet der Miniserver keine Status-Änderungen (nur Initial-Snapshot).
+    // Phase 7: Antwort auch parsen, um pro registriertem Block (sensor_uuid) die
+    // zugehörigen State-UUIDs (Pwr/EnergyToday/EnergyTotal/...) zu ermitteln.
+    let loxApp3: any = null;
     try {
-      await socket.send("data/LoxAPP3.json");
-      log("info", `[WS] ${state.serialNumber} LoxAPP3.json geladen — Live-Updates aktiviert`);
+      const resp: any = await socket.send("data/LoxAPP3.json");
+      loxApp3 = resp?.LL?.value ?? resp?.value ?? resp;
+      if (typeof loxApp3 === "string") {
+        try { loxApp3 = JSON.parse(loxApp3); } catch { /* leave as string */ }
+      }
+      const controlCount = loxApp3?.controls ? Object.keys(loxApp3.controls).length : 0;
+      log("info", `[WS] ${state.serialNumber} LoxAPP3.json geladen — Live-Updates aktiviert (controls=${controlCount})`);
     } catch (err) {
       log("warn", `[WS] ${state.serialNumber} LoxAPP3.json fehlgeschlagen: ${(err as Error).message}`);
     }
@@ -439,27 +459,97 @@ async function connect(state: ConnState): Promise<void> {
     state.authenticated = true;
     state.reconnectDelay = 1000;
     state.lastConnectedAt = Date.now();
-    // Phase 6.2: Diagnose-Zähler pro Connect resetten
     state.diagEventCount = 0;
     state.diagCallbacksSeen = new Set<string>();
     await sessionStart(state);
-    log("info", `[WS] authentifiziert ${state.serialNumber} (${state.uuidMap.size} UUIDs)`);
-    bridgeLog("info", "ws_connected", `Verbunden, ${state.uuidMap.size} UUIDs abonniert`, state.serialNumber);
 
-    // Phase 5.2: pro abonnierter UUID gezielt `jdev/sps/io/<uuid>/all` schicken.
-    // Zwingt den Miniserver, den aktuellen Wert auszuliefern UND die UUID
-    // in den Live-Push-Stream aufzunehmen. Antwort enthält bereits den
-    // aktuellen Wert (LL.value) — wir nutzen das als Initial-Sample.
+    // ── Phase 7: State-UUIDs pro Block aus LoxAPP3 expandieren ───────────────
+    // state.uuidMap enthält initial die Block-UUIDs (sensor_uuid aus DB) mit role="pwr".
+    // Für Meter-Blöcke ersetzen wir den Eintrag durch mehrere State-UUID-Einträge
+    // (Pwr, EnergyToday, EnergyTotal, ...). Block-UUID bleibt im Eintrag erhalten,
+    // damit der Aggregator/Broadcast weiterhin auf den Meter zuordnen kann.
+    const blockEntries = Array.from(state.uuidMap.entries());
+    state.uuidMap.clear();
+
+    const ROLE_PATTERNS: Array<{ role: StateRole; rx: RegExp }> = [
+      // Reihenfolge wichtig: spezifischere Patterns zuerst
+      { role: "today", rx: /^(energytoday|today|daily|day|tagesverbrauch)$/i },
+      { role: "month", rx: /^(energymonth|month|monthly|monatsverbrauch)$/i },
+      { role: "year",  rx: /^(energyyear|year|yearly|jahresverbrauch)$/i },
+      { role: "total", rx: /^(energytotal|total|totalenergy|zaehlerstand|meter)$/i },
+      { role: "pwr",   rx: /^(pwr|power|currentpower|actual|actualpower|value|p)$/i },
+    ];
+    function classifyState(key: string): StateRole | null {
+      for (const { role, rx } of ROLE_PATTERNS) if (rx.test(key)) return role;
+      return null;
+    }
+
+    function findControl(blockUuid: string): any | null {
+      if (!loxApp3?.controls) return null;
+      // Loxone-Schlüssel sind case-sensitive UUIDs; DB-UUIDs sind lowercase.
+      for (const [k, v] of Object.entries(loxApp3.controls as Record<string, any>)) {
+        if (k.toLowerCase() === blockUuid) return v;
+      }
+      return null;
+    }
+
+    let blocksMapped = 0;
+    let blocksFallback = 0;
+    let totalSubs = 0;
+    for (const [blockUuid, baseEntry] of blockEntries) {
+      const ctrl = findControl(blockUuid);
+      const states = ctrl?.states as Record<string, string> | undefined;
+      const stateEntries: Array<{ stateUuid: string; role: StateRole; key: string }> = [];
+
+      if (states && typeof states === "object") {
+        for (const [k, v] of Object.entries(states)) {
+          if (typeof v !== "string") continue;
+          const role = classifyState(k);
+          if (!role) continue;
+          stateEntries.push({ stateUuid: v.toLowerCase(), role, key: k });
+        }
+      }
+
+      if (stateEntries.length === 0) {
+        // Fallback: Block-UUID direkt als pwr behandeln (alte Logik)
+        state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: "pwr" });
+        blocksFallback++;
+        totalSubs++;
+        continue;
+      }
+
+      // Dedup auf Rolle: falls mehrere Keys auf gleiche Rolle mappen, ersten nehmen
+      const seenRoles = new Set<StateRole>();
+      for (const se of stateEntries) {
+        if (seenRoles.has(se.role)) continue;
+        seenRoles.add(se.role);
+        state.uuidMap.set(se.stateUuid, {
+          ...baseEntry,
+          block_uuid: blockUuid,
+          role: se.role,
+          latest_value: null,
+          last_pushed_value: null,
+          last_pushed_at: 0,
+        });
+        totalSubs++;
+      }
+      blocksMapped++;
+      log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} → ${[...seenRoles].join(",")} (type=${ctrl?.type ?? "?"})`);
+    }
+
+    log("info", `[WS] ${state.serialNumber} LoxAPP3-Mapping: blocks=${blockEntries.length}, mapped=${blocksMapped}, fallback=${blocksFallback}, totalStateUuids=${totalSubs}`);
+    bridgeLog("info", "ws_connected", `Verbunden, ${totalSubs} State-UUIDs aus ${blockEntries.length} Blöcken (mapped=${blocksMapped}, fallback=${blocksFallback})`, state.serialNumber, { blocks: blockEntries.length, mapped: blocksMapped, fallback: blocksFallback, totalStateUuids: totalSubs });
+
+    // Phase 5.2 / Phase 7: pro abonnierter State-UUID gezielt `jdev/sps/io/<uuid>/all` schicken.
     let subscribedOk = 0;
     let subscribedErr = 0;
     const failedUuids: Array<{ uuid: string; reason: string }> = [];
     for (const [uuid, entry] of state.uuidMap) {
       try {
         const resp: any = await socket.send(`jdev/sps/io/${uuid}/all`);
-        // lxcommunicator liefert typischerweise { LL: { value: "..." } } oder direkt einen Wert
         const raw = resp?.LL?.value ?? resp?.value ?? resp;
         const num = typeof raw === "number" ? raw : parseFloat(String(raw));
-        if (Number.isFinite(num) && !isSpike(num, entry.energy_type)) {
+        if (Number.isFinite(num) && !isSpike(num, entry.energy_type, entry.role)) {
           entry.latest_value = num;
           state.eventsReceived++;
           state.lastEventAt = Date.now();
@@ -467,8 +557,6 @@ async function connect(state: ConnState): Promise<void> {
         subscribedOk++;
       } catch (err) {
         subscribedErr++;
-        // Loxone-Fehler kommen als Objekt { LL: { Code: "...", value: "..." } } oder als Error.
-        // Wir serialisieren robust, damit nie "[object Object]" geloggt wird.
         let reason: string;
         if (err instanceof Error) {
           reason = err.message;
@@ -484,8 +572,8 @@ async function connect(state: ConnState): Promise<void> {
         } else {
           reason = String(err);
         }
-        failedUuids.push({ uuid, reason });
-        log("warn", `[WS] ${state.serialNumber} subscribe ${uuid} fehlgeschlagen: ${reason}`);
+        failedUuids.push({ uuid: `${uuid}(${entry.role})`, reason });
+        log("warn", `[WS] ${state.serialNumber} subscribe ${uuid}(${entry.role}) fehlgeschlagen: ${reason}`);
       }
     }
     log("info", `[WS] ${state.serialNumber} per-UUID subscribe: ok=${subscribedOk} err=${subscribedErr}${failedUuids.length ? ` failed=[${failedUuids.map((f) => f.uuid).join(",")}]` : ""}`);
@@ -585,21 +673,25 @@ async function flush(): Promise<void> {
   const nowIso = new Date(nowMs).toISOString();
   for (const state of connections.values()) {
     if (!state.authenticated) continue;
-    for (const [uuid, entry] of state.uuidMap) {
+    for (const [, entry] of state.uuidMap) {
       if (entry.latest_value === null) continue;
 
       // IO-Optimierung: nur pushen, wenn sich der Wert spürbar geändert hat
       // ODER der letzte Push älter als MIN_PUSH_INTERVAL_MS ist (Keepalive).
+      // Energiezähler (today/total/month/year) ändern sich in kleinen Schritten →
+      // niedrigere Mindest-Änderung, damit kWh-Inkremente nicht verschluckt werden.
       const prev = entry.last_pushed_value;
       const ageMs = nowMs - entry.last_pushed_at;
       const delta = prev === null ? Infinity : Math.abs(entry.latest_value - prev);
-      const changed = delta >= MIN_DELTA;
+      const minDelta = entry.role === "pwr" ? MIN_DELTA : 0.001;
+      const changed = delta >= minDelta;
       const stale = ageMs >= MIN_PUSH_INTERVAL_MS;
       if (!changed && !stale) continue;
 
       readings.push({
         miniserver_serial: state.serialNumber,
-        sensor_uuid: uuid,
+        sensor_uuid: entry.block_uuid,   // immer Block-UUID, damit DB-Mapping konsistent bleibt
+        role: entry.role,                 // Phase 7: rollenbasiertes Routing in gateway-ingest
         value: entry.latest_value,
         recorded_at: nowIso,
       });
@@ -726,10 +818,13 @@ async function reloadMeters(): Promise<void> {
     }
     state.uuidMap.clear();
     for (const m of group.meters) {
-      state.uuidMap.set(m.sensor_uuid.toLowerCase(), {
+      const blockUuid = m.sensor_uuid.toLowerCase();
+      state.uuidMap.set(blockUuid, {
         meter_id: m.id,
         tenant_id: m.tenant_id,
         energy_type: m.energy_type,
+        block_uuid: blockUuid,
+        role: "pwr",                    // wird in connect() ggf. durch LoxAPP3-Expansion ersetzt
         latest_value: null,
         last_pushed_value: null,
         last_pushed_at: 0,

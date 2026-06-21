@@ -6468,6 +6468,50 @@ export type Database = {
         }
         Relationships: []
       }
+      meter_loxone_daily_snapshots: {
+        Row: {
+          created_at: string
+          energy_today_kwh: number | null
+          energy_total_kwh: number | null
+          id: string
+          meter_id: string
+          snapshot_date: string
+          source: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          energy_today_kwh?: number | null
+          energy_total_kwh?: number | null
+          id?: string
+          meter_id: string
+          snapshot_date: string
+          source?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          energy_today_kwh?: number | null
+          energy_total_kwh?: number | null
+          id?: string
+          meter_id?: string
+          snapshot_date?: string
+          source?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_loxone_daily_snapshots_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_monthly_totals: {
         Row: {
           bucket_start: string

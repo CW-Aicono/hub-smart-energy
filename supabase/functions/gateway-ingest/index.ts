@@ -1258,6 +1258,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
       sensor_uuid?: string;
       value?: number;
       recorded_at?: string;
+      role?: "pwr" | "today" | "total" | "month" | "year";
     }>;
   };
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
@@ -1289,39 +1290,50 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     }
   }
 
-  const rows: any[] = [];
+  // Phase 7: rollenbasiertes Routing
+  //  - role="pwr" (Default)  → bridge_raw_samples (für 5-Min-Aggregator) + Broadcast
+  //  - role!="pwr"            → nur Broadcast (kein DB-Write); UI nutzt den Wert live in KPI-Kacheln
+  type Role = "pwr" | "today" | "total" | "month" | "year";
+  const rawRows: any[] = [];
+  const broadcastRows: Array<{ tenant_id: string | null; uuid: string; value: number; at: string; role: Role }> = [];
   let skipped = 0;
   for (const r of body.readings) {
     if (!r.miniserver_serial || !r.sensor_uuid || typeof r.value !== "number" || !isFinite(r.value)) {
       skipped++;
       continue;
     }
+    const role: Role = (r.role as Role) ?? "pwr";
     const link = linkCache.get(r.miniserver_serial);
-    rows.push({
-      worker_id: worker.id,
-      link_id: link?.id ?? null,
-      tenant_id: link?.tenant_id ?? null,
-      miniserver_serial: r.miniserver_serial,
-      uuid: r.sensor_uuid.toLowerCase(),
-      value: r.value,
-      received_at: r.recorded_at ?? new Date().toISOString(),
-    });
+    const uuid = r.sensor_uuid.toLowerCase();
+    const at = r.recorded_at ?? new Date().toISOString();
+    broadcastRows.push({ tenant_id: link?.tenant_id ?? null, uuid, value: r.value, at, role });
+    if (role === "pwr") {
+      rawRows.push({
+        worker_id: worker.id,
+        link_id: link?.id ?? null,
+        tenant_id: link?.tenant_id ?? null,
+        miniserver_serial: r.miniserver_serial,
+        uuid,
+        value: r.value,
+        received_at: at,
+      });
+    }
   }
 
-  if (rows.length === 0) return json({ success: true, inserted: 0, skipped });
+  // Power-Werte in bridge_raw_samples persistieren (für 5-Min-Aggregator).
+  if (rawRows.length > 0) {
+    const { error } = await supabase.from("bridge_raw_samples").insert(rawRows);
+    if (error) return json({ success: false, error: error.message }, 500);
+  }
 
-  const { error } = await supabase.from("bridge_raw_samples").insert(rows);
-  if (error) return json({ success: false, error: error.message }, 500);
-
-  // Realtime-Broadcast pro Tenant: jeder verbundene Browser auf /live-values
-  // bekommt die neuen Werte in <1 s, ohne weitere DB-Last.
-  // Gruppiert: 1 Broadcast pro Tenant pro Request (statt 1 pro Sample).
+  // Realtime-Broadcast pro Tenant: Power + Energiestände (today/total/...) zusammen.
+  // UI unterscheidet anhand der `role`, welches Feld zu aktualisieren ist.
   try {
-    const byTenant = new Map<string, Array<{ uuid: string; value: number; at: string }>>();
-    for (const r of rows) {
+    const byTenant = new Map<string, Array<{ uuid: string; value: number; at: string; role: Role }>>();
+    for (const r of broadcastRows) {
       if (!r.tenant_id) continue;
       const arr = byTenant.get(r.tenant_id) ?? [];
-      arr.push({ uuid: r.uuid, value: r.value, at: r.received_at });
+      arr.push({ uuid: r.uuid, value: r.value, at: r.at, role: r.role });
       byTenant.set(r.tenant_id, arr);
     }
     if (byTenant.size > 0) {
@@ -1333,7 +1345,6 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
         payload: { events },
         private: false,
       }));
-      // Fire-and-forget: Broadcast-Fehler dürfen den Ingest nicht blockieren
       fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
         method: "POST",
         headers: {
@@ -1347,16 +1358,15 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
           const txt = await r.text().catch(() => "");
           console.error(`[bridge-readings] broadcast HTTP ${r.status}: ${txt}`);
         } else {
-          console.log(`[bridge-readings] broadcast ok: ${messages.length} topic(s), ${rows.length} sample(s)`);
+          console.log(`[bridge-readings] broadcast ok: ${messages.length} topic(s), ${broadcastRows.length} event(s) (raw_inserted=${rawRows.length})`);
         }
       }).catch((e) => console.error("[bridge-readings] broadcast failed:", e?.message ?? e));
-
     }
   } catch (e) {
     console.error("[bridge-readings] broadcast prep error:", (e as Error).message);
   }
 
-  return json({ success: true, inserted: rows.length, skipped });
+  return json({ success: true, inserted: rawRows.length, broadcast: broadcastRows.length, skipped });
 }
 
 /* ── Loxone Remote-Connect WebSocket Feldtest ───────────────────────────────── */

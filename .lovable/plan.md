@@ -1,78 +1,75 @@
+# Loxone Hybrid 2.0 — Maximale WebSocket-Abdeckung
+
 ## Ziel
 
-Hybrid-Datenfluss für Loxone:
-- **WebSocket-Bridge (Hetzner-Worker, läuft bereits)** → Live-Power (W) + Steuerbefehle
-- **HTTP-Snapshot (Edge Function, alle 15 Min)** → Zählerstände `Total / Today / Month / Year`
-- **DB-Aggregation (bereits vorhanden)** → Woche / Monat / Quartal / Jahr aus Tagestotals
+Möglichst viele Werte live über WebSocket vom Miniserver beziehen — passend zu Deinem Vorschlag. HTTP-Poll nur noch als Korrektur/Fallback. Wochen-/Quartalswerte aus täglich gespeicherten Loxone-Snapshots aggregieren.
 
----
+## Konzept
 
-## Aktueller Stand (verifiziert im Code)
+### Datenquellen pro Wert
 
-- `docs/loxone-ws-worker/index.ts` (Phase 6.3) läuft auf Hetzner, lädt `LoxAPP3.json`, schickt aber nur 60 Live-Events → reicht für Power, nicht für Zählerstände
-- `supabase/functions/loxone-periodic-sync/index.ts` ist **per Hard-Code deaktiviert** (gibt HTTP 410 zurück mit Begründung „WS-Bridge only during isolation")
-- `supabase/functions/loxone-api/index.ts` existiert noch (kompletter HTTP-Client für Miniserver, `CONTROL_TYPE_MAPPINGS`, totalDay/Week/Month/Year-Felder)
-- DB-Aggregation für Woche/Monat existiert (`meter_weekly_totals`, `meter_monthly_totals`, `meter_period_totals`) — wird bereits für andere Gateways genutzt
+| Wert | Quelle | Aktualisierung |
+|---|---|---|
+| Live-Leistung (kW) | WebSocket `Pwr`-State | Sekunden |
+| Heute (kWh) | WebSocket `EnergyToday`-State | Sekunden |
+| Monat (kWh) | WebSocket `EnergyTotal` minus Monatsanfangs-Snapshot | live mit jedem WS-Event |
+| Jahr (kWh) | WebSocket `EnergyTotal` minus Jahresanfangs-Snapshot | live mit jedem WS-Event |
+| Gesamt (kWh) | WebSocket `EnergyTotal`-State | Sekunden |
+| Woche (Graph) | Aggregation aus Tages-Snapshots | täglich neu |
+| Quartal (Graph) | Aggregation aus Tages-Snapshots | täglich neu |
+| Tag/Monat/Jahr (Graph) | Tages-Snapshots (neu) statt 5-Min-Buckets | täglich neu |
+| HTTP-Poll alle 15 Min | Korrekturwert + Fallback wenn WS offline | 15 Min |
 
-→ **Wir bauen nichts neu, wir reaktivieren gezielt.**
+Loxone-Meter-Blöcke haben in `LoxAPP3.json` immer `Pwr` und `EnergyTotal` als States, meist auch `EnergyToday`. `EnergyMonth`/`EnergyYear` gibt es nicht zuverlässig — daher berechnen wir Monat/Jahr aus `EnergyTotal` minus gespeichertem Anfangswert.
 
----
+## Umsetzung in 4 Schritten
 
-## Plan (Schritt 1–3 in **einem** Patch, danach Validierung)
+### Schritt 1 — Worker: LoxAPP3-Parser + Multi-State-Subscription
+Datei: `docs/loxone-ws-worker/index.ts`
 
-### Schritt 1 — `loxone-periodic-sync` reaktivieren, aber **auf Zählerstände beschränken**
+- Nach `socket.send("data/LoxAPP3.json")` die Antwort parsen.
+- Für jede in `meters.sensor_uuid` registrierte Block-UUID alle zugehörigen `states` ermitteln: `Pwr`, `EnergyToday`, `EnergyTotal`.
+- Pro State-UUID separat `/jdev/sps/io/<state-uuid>/all` aufrufen.
+- Erweiterte `uuidMap`: speichert jetzt zu jeder State-UUID den zugehörigen Meter + die State-Rolle (`pwr` | `today` | `total`).
+- Sample-Handler schreibt je nach Rolle in das richtige Feld der Broadcast-Payload.
 
-Datei: `supabase/functions/loxone-periodic-sync/index.ts`
+### Schritt 2 — DB: Tagessnapshot-Tabelle + Monats-/Jahres-Basiswerte
+Neue Tabelle `meter_loxone_daily_snapshots`:
+- `meter_id`, `snapshot_date`, `energy_total_kwh` (Zählerstand 00:00 Loxone), `energy_today_kwh` (Vortag final)
+- Wird täglich um 00:05 Uhr gefüllt: `loxone-periodic-sync` extra Lauf, der pro Meter den aktuellen `EnergyTotal` abruft und speichert.
 
-- Den Hard-Stop (Zeilen ~22–32, `return 410 disabled`) entfernen
-- Im Sync-Loop nur die **Total-Felder** schreiben (`total_kwh`, `today_kwh`, `month_kwh`, `year_kwh`)
-- **Power-Werte (W) NICHT** mehr schreiben — die kommen weiter ausschließlich vom WS-Worker (verhindert Doppel-Schreibungen und Konflikte)
-- Schreibziel: gleiche Ingest-Route wie heute (`gateway-ingest?action=...`), nur mit reduziertem Payload
+Daraus ableitbar in Views/Queries:
+- **Monat** = aktueller `EnergyTotal` − Snapshot am Monats-1.
+- **Jahr** = aktueller `EnergyTotal` − Snapshot am 01.01.
+- **Woche** = Summe `energy_today_kwh` der letzten 7 Tage.
+- **Quartal** = Summe `energy_today_kwh` des Quartals.
 
-### Schritt 2 — Cron auf 15 Minuten setzen
+### Schritt 3 — Edge Function: Realtime-Broadcast erweitern
+- Broadcast-Payload auf `loxone-live-{tenant}`-Kanal um `today_kwh` und `total_kwh` ergänzen (bisher nur Leistung).
+- UI-Hook `useLoxoneLive` empfängt die neuen Felder.
+- KPI-Kacheln (Heute / Monat / Jahr / Gesamt) berechnen Monat/Jahr clientseitig aus `total_kwh − Monats-/Jahres-Snapshot` (Snapshots werden initial einmal per Query geladen, Browser-Cache reicht).
 
-Tool: `supabase--insert` (kein Migration, weil projektspezifische URL/Key)
+### Schritt 4 — Graphen umstellen
+- Hooks für Tages-/Monats-/Jahres-Graph: statt `meter_period_totals` (5-Min-Integration) jetzt `meter_loxone_daily_snapshots` (Loxone-Wahrheit).
+- Woche/Quartal werden serverseitig (View oder Edge Function) als Summe der Tagessnapshots berechnet.
+- 5-Min-Buckets bleiben unverändert für den Tages-Leistungsgraph (kW-Verlauf), da der Tagesverlauf der Leistung sonst nicht darstellbar ist.
 
-```sql
-select cron.schedule(
-  'loxone-periodic-sync-15min',
-  '*/15 * * * *',
-  $$ select net.http_post(
-       url := 'https://<project>.supabase.co/functions/v1/loxone-periodic-sync',
-       headers := '{"Content-Type":"application/json","apikey":"<anon>"}'::jsonb
-     ); $$
-);
-```
+## Was bleibt unverändert
+- HTTP-Poll alle 15 Min (`loxone-periodic-sync` → `loxone-api`) läuft weiter als Korrektur + Fallback bei WS-Ausfall.
+- 5-Min-Power-Integration für den Tages-Leistungsgraph bleibt.
+- Bestehendes Live-Power-Display funktioniert nach Schritt 1 erstmals für alle Meter (heute nur für simple UUIDs).
 
-Falls ein alter Cron-Job (z. B. minütlich) existiert: vorher `cron.unschedule(...)`.
+## Risiken & ehrliche Einschätzung
 
-### Schritt 3 — Aggregation verifizieren (nur lesen, kein Code)
+1. **LoxAPP3-Struktur:** Variantenreich (verschiedene Meter-Block-Typen). Erste Iteration deckt EnergyMeter + ModbusMeter ab — andere Typen fallen sanft zurück auf HTTP-Poll. Wir loggen, was nicht gemappt werden konnte.
+2. **Monats-/Jahressnapshots Migration:** Für bereits laufende Tenants haben wir keinen Snapshot vom 01. des Monats. Lösung: einmaliger Backfill aus letztem bekannten HTTP-Poll-Wert.
+3. **Graph-Umstellung (Schritt 4)** ist der invasivste Teil. Falls Du das Risiko klein halten willst, können wir Schritt 4 weglassen und Graphen unverändert auf 5-Min-Buckets lassen — dann ist nur die KPI-Anzeige live, Graphen bleiben wie heute.
 
-- `meter_period_totals` (täglich) wird vom Ingest aus `today_kwh`/`total_kwh` bereits befüllt → Loxone-Zähler reihen sich automatisch ein
-- Wochen-/Monatsaggregation läuft schon per pg_cron / View-Refresh für alle Gateways
-- **Quartal**: per Query aus Monatswerten ableitbar — falls UI das nicht selbst macht, ist das ein separates Frontend-Ticket (nicht Teil dieses Patches)
+## Empfohlene Reihenfolge
 
----
+1. Schritt 1+2 (Worker + Snapshot-Tabelle) — bringt Live-Werte für Heute/Monat/Jahr/Gesamt.
+2. Schritt 3 (Broadcast + KPI-Kacheln) — sichtbarer Effekt für Dich.
+3. **Validieren mit AICONO Zentrale** — erst wenn das passt:
+4. Schritt 4 (Graphen umstellen) — optional, separat bestätigen.
 
-## Was sich für den User ändert
-
-- Live-Power, Energieflüsse, Automatisierung → unverändert, WS-basiert, sofortig
-- Zählerstände (Today/Monat/Jahr/Total) → spätestens nach 15 Min aktuell, **driftfrei** (direkt vom Miniserver)
-- Wochen-/Quartalswerte → wie heute aus Tagestotals aggregiert
-- Server-Last: zusätzlich ~120 HTTP-Requests / 15 Min über alle Miniserver = vernachlässigbar
-
----
-
-## Validierung nach Deploy (Du führst aus)
-
-1. Edge-Logs `loxone-periodic-sync` → erwartet alle 15 Min ein `success: true` mit Zähleranzahl
-2. SQL-Check (Du): `select meter_id, total_kwh, today_kwh, updated_at from meter_cumulative_readings where source = 'loxone' order by updated_at desc limit 20;` → `updated_at` darf nie älter als 16 Min sein
-3. UI-Check: ein Loxone-Zähler in Dashboard → Total-Wert muss mit Miniserver-Web-UI übereinstimmen (±0)
-
----
-
-## Nicht Teil dieses Patches
-
-- Hetzner-Worker bleibt **unverändert** auf Phase 6.3 (läuft, mappt Power live)
-- UI-Änderungen für Quartalsansicht (falls überhaupt nötig — separat klären)
-- UUID-Mapping der 60 WS-Events (Option B aus vorheriger Diskussion) — nur bei Bedarf, da Zählerstände jetzt über HTTP autoritativ sind
+Soll ich so umsetzen?

@@ -370,7 +370,7 @@ const LiveValues = () => {
       const channelName = `loxone-live-${tenantId}`;
       const ch = supabase
         .channel(channelName, { config: { broadcast: { self: false } } })
-        .on("broadcast", { event: "readings" }, (msg: { payload: { events?: Array<{ uuid: string; value: number; at: string }> } }) => {
+        .on("broadcast", { event: "readings" }, (msg: { payload: { events?: Array<{ uuid: string; value: number; at: string; role?: "pwr" | "today" | "total" | "month" | "year" }> } }) => {
           const events = msg.payload?.events ?? [];
           if (events.length === 0) return;
           setLiveValues((prev) => {
@@ -380,11 +380,18 @@ const LiveValues = () => {
             for (const ev of events) {
               const meterId = uuidToMeterId.get(ev.uuid.toLowerCase());
               if (!meterId) { unmatched++; continue; }
-              const existing = next.get(meterId);
-              // Auch ohne initial geladenen DB-Wert den Live-Wert aus der WS-Bridge übernehmen.
-              next.set(meterId, existing
-                ? { ...existing, value: ev.value }
-                : { value: ev.value, unit: "", totalDay: null, totalWeek: null, totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "kWh" });
+              const role = ev.role ?? "pwr";
+              const existing = next.get(meterId) ?? {
+                value: 0, unit: "", totalDay: null, totalWeek: null,
+                totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "kWh",
+              };
+              let updated = existing;
+              if (role === "pwr") updated = { ...existing, value: ev.value };
+              else if (role === "today") updated = { ...existing, totalDay: ev.value };
+              else if (role === "month") updated = { ...existing, totalMonth: ev.value };
+              else if (role === "year") updated = { ...existing, totalYear: ev.value };
+              else if (role === "total") updated = { ...existing, meterReading: ev.value };
+              next.set(meterId, updated);
               changed = true;
             }
             if (unmatched > 0) {

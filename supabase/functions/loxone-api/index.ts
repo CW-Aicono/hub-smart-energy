@@ -989,6 +989,20 @@ serve(async (req) => {
             source: string;
           }> = [];
 
+          // Phase 7: Tagessnapshot pro Meter (Loxone-Wahrheit). Wird mehrmals täglich
+          // durch den 15-Min-Poll überschrieben → letzter Wert vor Mitternacht bleibt
+          // als finaler Tageswert stehen. Grundlage für Monat/Jahr-Berechnung
+          // (= aktuelles total minus Snapshot vom 01. des Monats / 01.01.) und für
+          // Wochen-/Quartalsaggregation.
+          const dailySnapshotInserts: Array<{
+            tenant_id: string;
+            meter_id: string;
+            snapshot_date: string;
+            energy_total_kwh: number | null;
+            energy_today_kwh: number | null;
+            source: string;
+          }> = [];
+
 
           // Spike-Detection: Fetch the last few power readings per meter to compute a baseline.
           // A new reading is considered a spike if it is > SPIKE_FACTOR × median of recent readings.
@@ -1116,6 +1130,28 @@ serve(async (req) => {
             }
 
 
+            // Phase 7: Tagessnapshot (Europe/Berlin-Datum) — letzter Wert pro Tag bleibt persistent.
+            try {
+              const berlinDate = new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit",
+              }).format(now); // → "YYYY-MM-DD"
+              const totalKwh = (stateData?.totalYear != null && stateData.totalYear > 0)
+                ? Number(stateData.totalYear)
+                : (stateData?.totalDay != null ? Number(stateData.totalDay) : null);
+              const todayKwh = stateData?.totalDay != null ? Number(stateData.totalDay) : null;
+              if ((totalKwh != null && isFinite(totalKwh)) || (todayKwh != null && isFinite(todayKwh))) {
+                dailySnapshotInserts.push({
+                  tenant_id: meter.tenant_id,
+                  meter_id: meter.id,
+                  snapshot_date: berlinDate,
+                  energy_total_kwh: totalKwh != null && isFinite(totalKwh) ? totalKwh : null,
+                  energy_today_kwh: todayKwh != null && isFinite(todayKwh) ? todayKwh : null,
+                  source: "loxone_http_poll",
+                });
+              }
+            } catch (_e) { /* date formatting issues → snapshot überspringen */ }
+
+
             // Store instantaneous power reading for time-series (with spike filter)
             if (stateData?.value != null) {
               const powerVal = typeof stateData.value === "number" ? stateData.value : parseFloat(String(stateData.value));
@@ -1222,6 +1258,18 @@ serve(async (req) => {
               console.error("Error inserting cumulative readings:", cumErr);
             } else {
               console.log(`Inserted ${cumulativeInserts.length} cumulative meter readings`);
+            }
+          }
+
+          // Phase 7: Tagessnapshot upserten (1 Zeile pro Meter+Tag, mehrfach pro Tag überschrieben)
+          if (dailySnapshotInserts.length > 0) {
+            const { error: snapErr } = await supabase
+              .from("meter_loxone_daily_snapshots")
+              .upsert(dailySnapshotInserts, { onConflict: "meter_id,snapshot_date" });
+            if (snapErr) {
+              console.error("Error upserting daily snapshots:", snapErr);
+            } else {
+              console.log(`Upserted ${dailySnapshotInserts.length} daily Loxone snapshots`);
             }
           }
         }
