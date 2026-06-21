@@ -989,6 +989,20 @@ serve(async (req) => {
             source: string;
           }> = [];
 
+          // Phase 7: Tagessnapshot pro Meter (Loxone-Wahrheit). Wird mehrmals täglich
+          // durch den 15-Min-Poll überschrieben → letzter Wert vor Mitternacht bleibt
+          // als finaler Tageswert stehen. Grundlage für Monat/Jahr-Berechnung
+          // (= aktuelles total minus Snapshot vom 01. des Monats / 01.01.) und für
+          // Wochen-/Quartalsaggregation.
+          const dailySnapshotInserts: Array<{
+            tenant_id: string;
+            meter_id: string;
+            snapshot_date: string;
+            energy_total_kwh: number | null;
+            energy_today_kwh: number | null;
+            source: string;
+          }> = [];
+
 
           // Spike-Detection: Fetch the last few power readings per meter to compute a baseline.
           // A new reading is considered a spike if it is > SPIKE_FACTOR × median of recent readings.
