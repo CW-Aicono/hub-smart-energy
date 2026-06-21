@@ -186,7 +186,7 @@ ENV LOG_LEVEL=info
 ENV FLUSH_INTERVAL_MS=1000
 ENV RELOAD_INTERVAL_MS=300000
 ENV BRIDGE_WORKER_NAME=hetzner-bridge-test
-ENV BRIDGE_HEARTBEAT_MS=30000
+ENV BRIDGE_HEARTBEAT_MS=300000
 ENV HEALTH_PORT=8080
 
 EXPOSE 8080
@@ -709,7 +709,7 @@ Drücken Sie **Enter**. Sie sollten nach einigen Sekunden etwa Folgendes sehen:
 ```
 [INFO] Loxone WS Worker startet — worker=hetzner-bridge-test host=hetzner-prod-1 version=phase2-skeleton
 [INFO]   SUPABASE_URL=https://...
-[INFO]   FLUSH_INTERVAL_MS=1000  RELOAD_INTERVAL_MS=300000  BRIDGE_HEARTBEAT_MS=30000
+[INFO]   FLUSH_INTERVAL_MS=1000  RELOAD_INTERVAL_MS=300000  BRIDGE_HEARTBEAT_MS=300000
 [INFO] [Health] HTTP-Endpoint auf Port 8080 (GET /healthz, /state)
 [INFO] [Reload] aktive Miniserver: 0
 ```

@@ -590,7 +590,7 @@ async function pollKillswitch(): Promise<void> {
       try { await reloadMeters(); } catch (e) { log("error", `[Killswitch] reload nach Resume: ${(e as Error).message}`); }
     }
   } catch (err) {
-    log("debug", `[Killswitch] poll: ${(err as Error).message}`);
+    log("warn", `[Killswitch] Poll fehlgeschlagen — behalte bisherigen Zustand bei: ${(err as Error).message}`);
   }
 }
 
@@ -720,6 +720,7 @@ async function main() {
   log("info", `Loxone WS Worker startet — worker=${BRIDGE_WORKER_NAME} host=${WORKER_HOST} version=${WORKER_VERSION}`);
   log("info", `  SUPABASE_URL=${SUPABASE_URL}`);
   log("info", `  FLUSH_INTERVAL_MS=${FLUSH_INTERVAL_MS}  RELOAD_INTERVAL_MS=${RELOAD_INTERVAL_MS}  BRIDGE_HEARTBEAT_MS=${BRIDGE_HEARTBEAT_MS}`);
+  log("info", `  KILLSWITCH_POLL_MS=${KILLSWITCH_POLL_MS}  SESSION_HEARTBEAT_MS=${SESSION_HEARTBEAT_MS}  WATCHDOG_CHECK_MS=${WATCHDOG_CHECK_MS}  WATCHDOG_STALE_MS=${WATCHDOG_STALE_MS}  KEEPALIVE_INTERVAL_MS=${KEEPALIVE_INTERVAL_MS}`);
 
   startHealthServer();
 
