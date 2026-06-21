@@ -40,7 +40,7 @@ export default function GatewayWorkerStatusCard() {
   const { data, isLoading } = useQuery({
     queryKey: ["gateway-worker-status"],
     queryFn: fetchStatus,
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
   });
 
   const toggle = useMutation({

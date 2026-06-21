@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const { count: insertsLast5min } = await supabase
       .from("meter_power_readings")
-      .select("id", { count: "exact", head: true })
+      .select("id", { count: "estimated", head: true })
       .gte("created_at", fiveMinAgo);
 
     // 3) Active gateway devices (HA add-ons etc.) — last_heartbeat in last 5 min
