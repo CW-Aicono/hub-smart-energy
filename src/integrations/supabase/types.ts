@@ -11925,6 +11925,10 @@ export type Database = {
       cleanup_old_ocpp_logs: { Args: never; Returns: number }
       cleanup_pg_net_responses: { Args: never; Returns: number }
       cleanup_stale_integration_errors: { Args: never; Returns: number }
+      close_orphan_loxone_ws_sessions: {
+        Args: { _location_integration_id: string; _tenant_id: string }
+        Returns: number
+      }
       collect_db_metrics: { Args: never; Returns: Json }
       community_data_quality: {
         Args: { p_community_id: string }

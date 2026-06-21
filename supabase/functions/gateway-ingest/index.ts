@@ -1414,6 +1414,19 @@ async function handleWsSessionStart(req: Request): Promise<Response> {
   }
 
   const supabase = getSupabase();
+
+  // A) Vor dem Anlegen einer neuen Session alle noch offenen Vorgänger-Zeilen
+  //    derselben (tenant_id, location_integration_id) schließen.
+  //    Verhindert Zombie-Rows mit ended_at=NULL, die im Monitor als "200+ Sitzungen" zählen.
+  const { error: closeErr } = await supabase
+    .rpc("close_orphan_loxone_ws_sessions", {
+      _tenant_id: body.tenant_id,
+      _location_integration_id: body.location_integration_id,
+    });
+  if (closeErr) {
+    console.warn("[gateway-ingest] ws-session-start orphan close warning:", closeErr.message);
+  }
+
   const { data, error } = await supabase
     .from("loxone_ws_session_log")
     .insert({
@@ -1431,6 +1444,7 @@ async function handleWsSessionStart(req: Request): Promise<Response> {
 
   return json({ success: true, session_id: data.id });
 }
+
 
 /**
  * POST ?action=ws-session-end

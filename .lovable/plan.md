@@ -1,61 +1,77 @@
-## Verifiziertes Diagnose-Ergebnis (EXPLAIN ANALYZE BUFFERS)
+# Analyse der Loxone Miniserver-Monitor-Zahlen
 
-EXPLAIN auf die RPC-Query mit echtem Parameter-Set (Tenant mit 54 Metern, 30 Tage):
+Keine Code-Änderungen ausgeführt — nur Analyse. Am Ende stehen drei optionale Folgeschritte zur Auswahl.
+
+---
+
+## 1. Was die Spalten **tatsächlich** anzeigen (aus `LoxoneMiniserverMonitorCard.tsx`)
+
+
+| Spalte                 | Wirkliche Bedeutung                                                                                                                      |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Verbunden seit**     | Alter der **aktuellen** (neuesten) Session-Zeile (`started_at` der jüngsten Zeile). Bei AICONO Zentrale: 2026-06-20 17:01 UTC → ~20,5 h. |
+| **Letzter Heartbeat**  | `now() − updated_at` der aktuellen Zeile. ~11 s = frisch.                                                                                |
+| **Events (Sitzung)**   | **Nur die aktuelle Session**, nicht 24 h. Hartkodiert: `s?.events_received`.                                                             |
+| **Reconnects 24 h**    | Summe von `reconnect_count` über **alle** Session-Zeilen im 24-h-Fenster (in-Session-Reconnects, kein Neuaufbau).                        |
+| **Uptime 24 h**        | Summe aller (geclippten) Session-Intervalle ÷ 24 h.                                                                                      |
+| **Sitzungen 24 h**     | Anzahl der DB-Zeilen in `loxone_ws_session_log` mit `started_at ≥ now-24h` **ODER** `ended_at IS NULL`.                                  |
+| **Letzter Disconnect** | Zeigt `s.disconnect_reason`. Wenn aktuelle Session offen (`ended_at IS NULL`) → "—". Deshalb hier leer.                                  |
+
+
+---
+
+## 2. Warum "20 h verbunden" aber "200+ Sitzungen"?
+
+Das ist **kein Verbindungs-Problem, sondern ein Daten-Bug im Worker**. Beweis aus `loxone_ws_session_log` für AICONO Zentrale:
 
 ```
-GroupAggregate
-  Buffers: shared hit=2306 read=1            <-- ~2.300 Blocks/Call, deckt sich exakt
-                                                  mit Produktion (Ø 2.876 Blocks/Call)
-  ->  Nested Loop  (rows=1266)
-        ->  Index Only Scan idx_mdtm_tenant_meter_bucket
-              Heap Fetches: 1092             <-- ❗ DAS ist die Ursache
-        ->  Index Scan idx_mdtm_tenant_meter_bucket
-              (rows=1266, loops=1)           <-- KEIN Loop-pro-Meter
+started_at              updated_at              ended_at  events  reconnects
+2026-06-20 17:01:44     2026-06-21 13:32:43     NULL      20      1     ← aktuelle Session
+2026-06-20 16:58:25     2026-06-20 17:00:24     NULL      10      0     ← "tot", nie geschlossen
+2026-06-20 16:52:39     2026-06-20 16:57:38     NULL      10      0     ← "tot"
+2026-06-20 14:45:30     2026-06-20 16:51:28     NULL      10      0     ← "tot"
+... 197 weitere Zeilen mit ended_at = NULL ...
 ```
 
-**Befund (hart verifiziert, keine Spekulation mehr):**
+**Alle 227 Zeilen haben `ended_at = NULL**`. Der Worker (`hetzner-prod-1`) legt bei jedem Neustart/Redeploy bzw. WS-Reconnect eine **neue** Zeile an, schreibt aber **nie `ended_at**` auf die vorherige. Das Komponenten-Filter `started_at ≥ 24h OR ended_at IS NULL` zählt jede dieser Leichen mit.
 
-- Der Plan ist korrekt: Index Only Scan, kein Nested-Loop-Bug.
-- Aber: **1.092 erzwungene Heap-Fetches** trotz "Index Only Scan".
-- Ursache: Die MV wurde **nie vacuumed** (`last_vacuum=NULL`, `last_autovacuum=NULL`). Materialized Views werden von Autovacuum nicht angefasst, und `REFRESH MATERIALIZED VIEW` setzt die Visibility Map nicht.
-- Ohne Visibility Map muss Postgres für jede Zeile in den Heap, um zu prüfen, ob das Tupel sichtbar ist — selbst wenn der Index alle benötigten Spalten liefert.
-- `ANALYZE` allein behebt das NICHT — nur `VACUUM` setzt die Visibility Map.
+**Konsequenz für die UI:**
 
-**Erwartung nach `VACUUM (ANALYZE)`:**
+- "Sitzungen 24 h" ist im Moment ein **Zombie-Zeilen-Zähler**, kein echter Sitzungszähler.
+- "Uptime 24 h = 100 %" stimmt trotzdem, weil sich die geclippten Intervalle aneinanderreihen.
+- "Letzter Disconnect" bleibt leer, weil die aktuelle Session offen ist.
 
-`Heap Fetches: 1092` → ~0, `Buffers: hit=2306` → ~250.
-Hochrechnung Produktion: 40 GB/28h → **~4 GB/28h** (Faktor 10).
+**Echte Reconnect-Dichte** (innerhalb derselben WS-Verbindung): 17/24 h ≈ alle 1,4 h ein in-Session-Reconnect. Das ist für Loxone-WS unauffällig, aber nicht null.
 
-## Plan
+---
 
-### Schritt 1 — Sofort-Fix per Migration
+## 3. Logs
 
-Migration mit zwei pg_cron-Jobs (die laufen außerhalb der Migrations-Transaktion, weil `VACUUM` nicht in Transaktionen erlaubt ist):
+Server-/Worker-Logs (`hetzner-prod-1`) liegen außerhalb von Lovable Cloud — kann ich von hier nicht einsehen. Was ich in Cloud-Logs prüfen könnte:
 
-1. **Einmal-Job**: `VACUUM (ANALYZE) public.meter_daily_totals_mv` 60 Sekunden nach Migration. Setzt Visibility Map sofort.
-2. **Recurring-Job**: derselbe Befehl täglich nachts (z. B. 04:15 UTC), damit nach jedem `REFRESH MATERIALIZED VIEW` die Visibility Map wieder gesetzt wird.
+- Edge-Function-Logs (falls Worker über Edge Functions kommuniziert)
+- Postgres-Logs (Insert-Muster)
 
-Owner-Voraussetzung erfüllt: MV ist `postgres`-owned, Migration läuft als `postgres`, pg_cron ist installiert.
+Wenn gewünscht, prüfe ich gezielt — Hinweis welche Funktion(en) involviert sind, hilft.
 
-### Schritt 2 — Messung (5 Minuten nach Migration)
+---
 
-`EXPLAIN (ANALYZE, BUFFERS)` derselben Query wiederholen. Erwartung:
-- `Heap Fetches:` Wert von 1.092 → 0 (oder <50).
-- `Buffers: shared hit` von 2.306 → <300.
+## 4. Stabilitätsbewertung
 
-Falls bestätigt: Hebel #1 ist gelöst.
+**Verbindung selbst: stabil.** Aktive Session läuft seit ~20 h, Heartbeat 11 s frisch, Uptime 100 %, nur 17 in-Session-Reconnects/Tag.
 
-### Schritt 3 — 24 h später
+**Aber:** Die UI-Zahl "Sitzungen 24 h = 200+" suggeriert Instabilität, die es real nicht gibt — das ist ein **Logging-Bug**, kein Connectivity-Problem.
 
-`extensions.pg_stat_statements_reset()` ausführen, 24 h warten, Top-Reader neu ziehen. Hebel #1 sollte nicht mehr in den Top 5 erscheinen.
+---
 
-### Erst danach: Hebel #2 und Hebel #3
+## 5. Vorschlag — drei mögliche Folgeschritte (eines auswählen)
 
-Separat, mit eigener Vorher/Nachher-Messung.
+**A) Worker-Fix** (Ursache beheben): Worker so anpassen, dass beim Anlegen einer neuen Session alle älteren offenen Zeilen derselben `location_integration_id` mit `ended_at = updated_at` geschlossen werden. Erfordert Zugriff auf den Worker-Code (HA-Addon / Hetzner-Repo, nicht Lovable).
 
-## Technische Details
+**B) Monitor-Fix** (Symptom kaschieren): In `LoxoneMiniserverMonitorCard.tsx` "Sitzungen 24 h" anders zählen — nur Zeilen, deren `updated_at` im 24-h-Fenster wirklich gepflegt wurde, oder nur die jüngste pro Integration als "aktuelle" Session werten. Spaltenkopf "Events (Sitzung)" bleibt korrekt; ggf. Tooltip ergänzen.
 
-- Migration enthält **keine** DDL-Änderungen, nur `cron.schedule(...)`-Aufrufe.
-- VACUUM auf 3 MB-Tabelle: <500 ms, kein App-Impact.
-- Recurring-Job nachts: hält die Lösung dauerhaft, ohne dass jemand daran denken muss.
-- Kein Refactoring der RPC nötig — die Query ist korrekt, nur die Tabellen-Wartung fehlte.
+**C) Einmal-Reparatur**: SQL-Migration, die alle Zombie-Zeilen mit `ended_at = updated_at` schließt — bereinigt die Historie, ohne die Ursache zu beheben.
+
+Bitte gib an, welcher Schritt (oder welche Kombination) als Nächstes umgesetzt werden soll. Ohne Freigabe bleibt der Code unverändert.  
+  
+Antwort: A) und C). Dann haben wir die Ursache gefixt UND eine saubere Historie.
