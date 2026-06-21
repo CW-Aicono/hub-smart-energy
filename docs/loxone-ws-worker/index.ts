@@ -58,7 +58,7 @@ const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "300000"
 // Phase 6: Session-Heartbeat von 15s auf 60s erhöht (IO-Optimierung)
 const SESSION_HEARTBEAT_MS = parseInt(process.env.SESSION_HEARTBEAT_MS || "60000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase6.1-watchdog-relax";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase6.2-diagnose";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -222,6 +222,9 @@ interface ConnState {
   // Phase 6 (IO-Optimierung): deferred session-end für Reconnect-Dedup
   pendingEndTimer: NodeJS.Timeout | null;
   pendingEndReason: string | null;
+  // Phase 6.2 Diagnose: zähle erste Roh-Events pro Connection
+  diagEventCount: number;
+  diagCallbacksSeen: Set<string>;
 }
 
 const connections = new Map<string, ConnState>(); // key = serial
@@ -333,10 +336,41 @@ async function connect(state: ConnState): Promise<void> {
     false,
   );
 
+  // Phase 6.2 Diagnose-Helfer: loggt einmalig pro Callback-Name, dass dieser feuert
+  const diagSeenCallback = (cbName: string) => {
+    if (!state.diagCallbacksSeen.has(cbName)) {
+      state.diagCallbacksSeen.add(cbName);
+      log("info", `[DIAG] ${state.serialNumber} CALLBACK '${cbName}' feuert ZUM ERSTEN MAL`);
+    }
+  };
+
   config.delegate = {
-    socketOnEventReceived: (_s: any, events: any[]) => {
-      for (const ev of events) {
-        const uuid = (ev.uuid || "").toLowerCase();
+    socketOnEventReceived: (_s: any, events: any[], evType?: any) => {
+      diagSeenCallback("socketOnEventReceived");
+      // Phase 6.2: Logge die ersten 20 Roh-Events pro Connection KOMPLETT,
+      // damit wir die exakte Struktur sehen (uuid/value/Property-Namen).
+      if (events && Array.isArray(events)) {
+        for (const ev of events) {
+          if (state.diagEventCount < 20) {
+            state.diagEventCount++;
+            try {
+              log("info", `[DIAG] ${state.serialNumber} RAW EVENT #${state.diagEventCount} type=${evType ?? "?"} keys=${Object.keys(ev || {}).join(",")} json=${JSON.stringify(ev)}`);
+            } catch {
+              log("info", `[DIAG] ${state.serialNumber} RAW EVENT #${state.diagEventCount} (nicht serialisierbar)`);
+            }
+          }
+        }
+      } else {
+        if (state.diagEventCount < 20) {
+          state.diagEventCount++;
+          try {
+            log("info", `[DIAG] ${state.serialNumber} RAW EVENT-CONTAINER #${state.diagEventCount} type=${evType ?? "?"} json=${JSON.stringify(events)}`);
+          } catch { /* ignore */ }
+        }
+      }
+      // Original-Logik unverändert:
+      for (const ev of (events || [])) {
+        const uuid = (ev?.uuid || "").toLowerCase();
         const entry = state.uuidMap.get(uuid);
         if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type)) {
           entry.latest_value = ev.value;
@@ -344,6 +378,32 @@ async function connect(state: ConnState): Promise<void> {
           state.lastEventAt = Date.now();
         }
       }
+    },
+    // Weitere bekannte lxcommunicator-Callbacks als Diagnose-Stubs:
+    socketOnTextMessage: (_s: any, msg: any) => {
+      diagSeenCallback("socketOnTextMessage");
+      if (state.diagEventCount < 20) {
+        state.diagEventCount++;
+        try { log("info", `[DIAG] ${state.serialNumber} TEXT MSG #${state.diagEventCount} json=${JSON.stringify(msg).slice(0, 500)}`); } catch { /* ignore */ }
+      }
+    },
+    socketOnBinaryMessage: (_s: any, msg: any) => {
+      diagSeenCallback("socketOnBinaryMessage");
+    },
+    socketOnEventTableValuesUpdate: (_s: any, events: any[]) => {
+      diagSeenCallback("socketOnEventTableValuesUpdate");
+      if (state.diagEventCount < 20 && Array.isArray(events)) {
+        for (const ev of events.slice(0, 5)) {
+          state.diagEventCount++;
+          try { log("info", `[DIAG] ${state.serialNumber} VALUES-UPDATE #${state.diagEventCount} json=${JSON.stringify(ev)}`); } catch { /* ignore */ }
+        }
+      }
+    },
+    socketOnEventTableTextUpdate: (_s: any, events: any[]) => {
+      diagSeenCallback("socketOnEventTableTextUpdate");
+    },
+    socketOnKeepAlive: () => {
+      diagSeenCallback("socketOnKeepAlive");
     },
     socketOnConnectionClosed: (_s: any, code: number) => {
       log("warn", `[WS] ${state.serialNumber} geschlossen (code=${code})`);
@@ -371,6 +431,9 @@ async function connect(state: ConnState): Promise<void> {
     state.authenticated = true;
     state.reconnectDelay = 1000;
     state.lastConnectedAt = Date.now();
+    // Phase 6.2: Diagnose-Zähler pro Connect resetten
+    state.diagEventCount = 0;
+    state.diagCallbacksSeen = new Set<string>();
     await sessionStart(state);
     log("info", `[WS] authentifiziert ${state.serialNumber} (${state.uuidMap.size} UUIDs)`);
     bridgeLog("info", "ws_connected", `Verbunden, ${state.uuidMap.size} UUIDs abonniert`, state.serialNumber);
@@ -648,6 +711,8 @@ async function reloadMeters(): Promise<void> {
         lastEventAt: 0,
         pendingEndTimer: null,
         pendingEndReason: null,
+        diagEventCount: 0,
+        diagCallbacksSeen: new Set<string>(),
       };
       connections.set(serial, state);
     }
