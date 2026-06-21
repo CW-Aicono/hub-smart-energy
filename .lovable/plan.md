@@ -1,77 +1,109 @@
-# Analyse der Loxone Miniserver-Monitor-Zahlen
+## Befund: Du hast recht — wir haben an der falschen Seite optimiert
 
-Keine Code-Änderungen ausgeführt — nur Analyse. Am Ende stehen drei optionale Folgeschritte zur Auswahl.
+Die Live-Daten aus der DB bestätigen deine Vermutung zu 100 %. Das "Disk IO Budget" misst Read **und** Write, und der Engpass liegt fast komplett auf der Schreibseite. Die bisherigen Read-Fixes (BRIN, VACUUM FULL, MV-Visibility) berühren diesen Hebel nicht — daher die 74 % ohne jede Bewegung.
 
----
+### Was die Datenbank gerade wirklich macht
 
-## 1. Was die Spalten **tatsächlich** anzeigen (aus `LoxoneMiniserverMonitorCard.tsx`)
-
-
-| Spalte                 | Wirkliche Bedeutung                                                                                                                      |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Verbunden seit**     | Alter der **aktuellen** (neuesten) Session-Zeile (`started_at` der jüngsten Zeile). Bei AICONO Zentrale: 2026-06-20 17:01 UTC → ~20,5 h. |
-| **Letzter Heartbeat**  | `now() − updated_at` der aktuellen Zeile. ~11 s = frisch.                                                                                |
-| **Events (Sitzung)**   | **Nur die aktuelle Session**, nicht 24 h. Hartkodiert: `s?.events_received`.                                                             |
-| **Reconnects 24 h**    | Summe von `reconnect_count` über **alle** Session-Zeilen im 24-h-Fenster (in-Session-Reconnects, kein Neuaufbau).                        |
-| **Uptime 24 h**        | Summe aller (geclippten) Session-Intervalle ÷ 24 h.                                                                                      |
-| **Sitzungen 24 h**     | Anzahl der DB-Zeilen in `loxone_ws_session_log` mit `started_at ≥ now-24h` **ODER** `ended_at IS NULL`.                                  |
-| **Letzter Disconnect** | Zeigt `s.disconnect_reason`. Wenn aktuelle Session offen (`ended_at IS NULL`) → "—". Deshalb hier leer.                                  |
+Aus `pg_stat_statements` (sortiert nach Dirty-Blocks + WAL):
 
 
----
+| #   | Statement                                        | Calls         | Dirty Blocks   | WAL         |
+| --- | ------------------------------------------------ | ------------- | -------------- | ----------- |
+| 1   | `INSERT INTO meter_power_readings` (PostgREST)   | **5.13 Mio.** | **14.16 Mio.** | **63.3 GB** |
+| 2   | `INSERT INTO ocpp_message_log` (PostgREST)       | **1.03 Mio.** | 1.32 Mio.      | 6.7 GB      |
+| 3   | `compact_power_readings_day()`                   | 105           | 599 k          | 5.0 GB      |
+| 4   | `INSERT … meter_period_totals` ON CONFLICT       | 659 k         | 394 k          | 5.0 GB      |
+| 5   | `INSERT … meter_power_readings_5min` ON CONFLICT | 34 k          | …              | …           |
 
-## 2. Warum "20 h verbunden" aber "200+ Sitzungen"?
 
-Das ist **kein Verbindungs-Problem, sondern ein Daten-Bug im Worker**. Beweis aus `loxone_ws_session_log` für AICONO Zentrale:
+**Hebel #1 allein erzeugt ~75 % der WAL-Bytes und ~80 % der Dirty Blocks.** Das ist das IO-Budget.
 
-```
-started_at              updated_at              ended_at  events  reconnects
-2026-06-20 17:01:44     2026-06-21 13:32:43     NULL      20      1     ← aktuelle Session
-2026-06-20 16:58:25     2026-06-20 17:00:24     NULL      10      0     ← "tot", nie geschlossen
-2026-06-20 16:52:39     2026-06-20 16:57:38     NULL      10      0     ← "tot"
-2026-06-20 14:45:30     2026-06-20 16:51:28     NULL      10      0     ← "tot"
-... 197 weitere Zeilen mit ended_at = NULL ...
-```
+Zusätzliche Indikatoren:
 
-**Alle 227 Zeilen haben `ended_at = NULL**`. Der Worker (`hetzner-prod-1`) legt bei jedem Neustart/Redeploy bzw. WS-Reconnect eine **neue** Zeile an, schreibt aber **nie `ended_at**` auf die vorherige. Das Komponenten-Filter `started_at ≥ 24h OR ended_at IS NULL` zählt jede dieser Leichen mit.
+- Memory 62 %, Disk 16 %, Connections 18/60, **0 Restarts** → kein RAM/Connection-Problem, kein Crash → Instance-Upgrade wäre wieder die falsche Antwort.
+- 5,3 k temp_files / 20 GB temp_bytes → ein paar große Sorts (eher `compact_power_readings_day`).
+- `bridge_event_log`: 32 k Inserts ohne Vacuum (autovacuum_count 9 aber wenige) — Nebenrolle.
 
-**Konsequenz für die UI:**
+### Warum die 74 % „eingefroren" wirken
 
-- "Sitzungen 24 h" ist im Moment ein **Zombie-Zeilen-Zähler**, kein echter Sitzungszähler.
-- "Uptime 24 h = 100 %" stimmt trotzdem, weil sich die geclippten Intervalle aneinanderreihen.
-- "Letzter Disconnect" bleibt leer, weil die aktuelle Session offen ist.
-
-**Echte Reconnect-Dichte** (innerhalb derselben WS-Verbindung): 17/24 h ≈ alle 1,4 h ein in-Session-Reconnect. Das ist für Loxone-WS unauffällig, aber nicht null.
+Es sind keine echten Live-IOPS, sondern ein **rollender Aggregat-Indikator** über mehrere Stunden/Tage. Solange der Schreibstrom konstant weiterläuft (jede Sekunde neue `meter_power_readings`-Inserts), bleibt der Wert klebrig — egal wie viele Reads wir wegoptimieren.
 
 ---
 
-## 3. Logs
+## Plan: Schreib-IO am Hebel #1 reduzieren (ohne Datenverlust)
 
-Server-/Worker-Logs (`hetzner-prod-1`) liegen außerhalb von Lovable Cloud — kann ich von hier nicht einsehen. Was ich in Cloud-Logs prüfen könnte:
+### Schritt A — Verifikation, was die 5,13 Mio. Inserts erzeugt (read-only, 5 Min)
 
-- Edge-Function-Logs (falls Worker über Edge Functions kommuniziert)
-- Postgres-Logs (Insert-Muster)
+1. Per `pg_stat_statements` prüfen, ob es genau **ein** Caller-Pattern ist (PostgREST `?on_conflict=…` oder plain INSERT) → wir wissen es bereits: PostgREST-Bulk-Insert ohne ON CONFLICT.
+2. Im Code: alle Aufrufstellen von `from('meter_power_readings').insert(...)` listen (Edge Functions + Worker + Gateway-Ingest) und die Insert-Frequenz/Batch-Größe pro Quelle ermitteln.
+3. Pro Quelle Calls/Tag × Rows/Call gegenrechnen → wir identifizieren, wer wirklich 5 Mio. Inserts/Tag schiebt.
 
-Wenn gewünscht, prüfe ich gezielt — Hinweis welche Funktion(en) involviert sind, hilft.
+Erwartete Hauptverdächtige: `gateway-ingest`, Loxone-Worker, EMS-Worker — vermutlich pro Sensor **alle 5–10 s eine eigene Zeile** statt Batch.
+
+### Schritt B — Write-Amplification senken
+
+Drei orthogonale Maßnahmen, einzeln messbar:
+
+**B1 — Batching am Ingest-Endpoint** (größter Effekt, geringes Risiko)
+
+- Worker sammeln Messwerte 30–60 s clientseitig und schicken **einen** Bulk-Insert statt N Einzel-Inserts.
+- Senkt Calls, WAL-Overhead pro Row (FPI/Tuple-Header), Index-Updates und HTTP-Round-Trips gleichzeitig.
+- Erwartung: 5–10× weniger WAL bei gleichem Datenvolumen.
+
+**B2 — Throttling/Deduplication redundanter Werte**
+
+- Wenn ein Sensor 4 Werte/Minute mit identischem Power-Value liefert, nur den ersten + Change-Events speichern (oder 1×/Min Aggregate). Das halbiert bis viertelt die Row-Anzahl.
+- Optional: Insert nur, wenn |neuer - letzter| > Schwelle ODER ≥60 s seit letztem.
+
+**B3 — `meter_power_readings` als UNLOGGED-Staging + periodischer Move** (nur falls B1+B2 nicht reichen)
+
+- Heißes 5-Min-Fenster in UNLOGGED-Tabelle (kein WAL), via Cron alle 5 Min aggregiert in `meter_power_readings_5min` mergen, Roh-Rows verwerfen oder seltener persistieren.
+- Höheres Architektur-Risiko (Datenverlust bei Crash im 5-Min-Fenster) — daher zuletzt.
+
+### Schritt C — Hebel #2 `ocpp_message_log`
+
+- 1,03 Mio. INSERTs/Rolling-Window für reine Protokoll-Logs.
+- Filter im OCPP-Server: `Heartbeat`, `StatusNotification` ohne State-Change und `MeterValues` nicht roh persistieren — nur Fehler/CallError und State-Changes loggen.
+- Erwartung: −70 bis −90 % Inserts, ohne dass `charge_point_uptime_snapshots` oder Billing leidet (die ziehen aus separaten Tabellen).
+- Memory dazu existiert bereits: *EV Log Maintenance* (CALLERROR-Filter, 30-Tage-Cleanup) — das ist die Retention; was hier fehlt, ist das **Insert-seitige** Filtern.
+
+### Schritt D — Verifikation
+
+Nach jedem Teilschritt (B1, B2, C) parallel messen:
+
+- `pg_stat_statements`: Dirty Blocks + WAL für genau diese 2 Statements (Delta).
+- `pg_stat_database.tup_inserted` Rate.
+- IO-Budget-Anzeige im Dashboard nach 6–12 h erneut.
+
+**Abbruchkriterium / Hard-Stop-Regel:** Wenn nach B1+B2+C die Anzeige weiterhin exakt 74 % zeigt, ist die Metrik selbst stale/kaputt — dann nicht weiter optimieren, sondern Lovable explizit fragen, wie der Wert berechnet wird (genau wie du vorschlägst).
 
 ---
 
-## 4. Stabilitätsbewertung
+## Was ich **nicht** vorschlage
 
-**Verbindung selbst: stabil.** Aktive Session läuft seit ~20 h, Heartbeat 11 s frisch, Uptime 100 %, nur 17 in-Session-Reconnects/Tag.
-
-**Aber:** Die UI-Zahl "Sitzungen 24 h = 200+" suggeriert Instabilität, die es real nicht gibt — das ist ein **Logging-Bug**, kein Connectivity-Problem.
+- Kein Instance-Upgrade (RAM/CPU/Connections sind entspannt; das wäre Geldverbrennung gegen ein Write-Volumen-Problem).
+- Kein weiteres VACUUM FULL.
+- Keine neuen Indizes (würden Writes noch teurer machen).
 
 ---
 
-## 5. Vorschlag — drei mögliche Folgeschritte (eines auswählen)
+## Reihenfolge & geschätzter Effekt
 
-**A) Worker-Fix** (Ursache beheben): Worker so anpassen, dass beim Anlegen einer neuen Session alle älteren offenen Zeilen derselben `location_integration_id` mit `ended_at = updated_at` geschlossen werden. Erfordert Zugriff auf den Worker-Code (HA-Addon / Hetzner-Repo, nicht Lovable).
 
-**B) Monitor-Fix** (Symptom kaschieren): In `LoxoneMiniserverMonitorCard.tsx` "Sitzungen 24 h" anders zählen — nur Zeilen, deren `updated_at` im 24-h-Fenster wirklich gepflegt wurde, oder nur die jüngste pro Integration als "aktuelle" Session werten. Spaltenkopf "Events (Sitzung)" bleibt korrekt; ggf. Tooltip ergänzen.
+| Schritt        | Aufwand           | Risiko | Erwarteter WAL-Drop       |
+| -------------- | ----------------- | ------ | ------------------------- |
+| A Verifikation | 15 Min            | 0      | —                         |
+| B1 Batching    | 1–2 h Worker-Code | gering | **−60 bis −80 %**         |
+| B2 Dedup       | 1 h               | gering | zusätzlich −30 %          |
+| C OCPP-Filter  | 30 Min            | gering | −5–10 % gesamt            |
+| B3 UNLOGGED    | halber Tag        | mittel | optional, nur falls nötig |
 
-**C) Einmal-Reparatur**: SQL-Migration, die alle Zombie-Zeilen mit `ended_at = updated_at` schließt — bereinigt die Historie, ohne die Ursache zu beheben.
 
-Bitte gib an, welcher Schritt (oder welche Kombination) als Nächstes umgesetzt werden soll. Ohne Freigabe bleibt der Code unverändert.  
+Wenn du grünes Licht gibst, starte ich mit Schritt A (Code-Audit, wer die 5,13 Mio. Inserts erzeugt) und melde mich mit konkreten Zahlen pro Quelle, **bevor** ich an Code/Worker rangehe.  
   
-Antwort: A) und C). Dann haben wir die Ursache gefixt UND eine saubere Historie.
+Antwort: beachte dabei, dass wir vor ca. 20 Stunden keine Meter Readings mehr bekommen, da wir alle Worker pausiert haben. Zumindest im Dashboard werden auch keine Werte mehr angezeigt. Weder Shelly oder loxone, noch AICONO-Gateway oder andere Gateways liefern noch werte. Bitte bestätige das nochmals.   
+  
+  
+  
+  
+  
