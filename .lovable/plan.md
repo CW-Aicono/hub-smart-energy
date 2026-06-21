@@ -1,89 +1,66 @@
-# Plan: RLS-Last auf Hot-Tabellen reduzieren
+## Aktueller Befund (Last der letzten ~24 h, seit Postgres-Neustart 2026-06-20 08:05 UTC)
 
-## Kurzfassung deiner Frage
+**Die RLS-Migration war NICHT die Ursache** – sie hat geholfen, aber der echte IO-Fresser ist eine andere Query.
 
-> "Können wir die Abfrage bauen, ohne dass RLS-Policies getriggert werden?"
+### Schreib-Last (24 h) – unauffällig
+- `meter_power_readings`: nur **18.329 INSERTs** in 24 h (~12/Min). Sehr wenig.
+- `meter_period_totals`: 71.575 UPDATEs.
+- `location_integrations`: 9.809 UPDATEs.
 
-**Kurze Antwort: Ja, aber das ist hier nicht der richtige Hebel.**
-
-Ich habe nachgesehen, woher die teuren Queries wirklich kommen:
-
-
-| Query                                       | Aufrufe                    | Pfad             | RLS aktiv? |
-| ------------------------------------------- | -------------------------- | ---------------- | ---------- |
-| INSERT `meter_power_readings` (5,1 Mio)     | Edge `gateway-ingest`      | **service_role** | **Nein**   |
-| UPDATE `location_integrations` (2,3 Mio)    | Edge `gateway-ingest` etc. | **service_role** | **Nein**   |
-| SELECT `meter_power_readings` (167k, ⌀52ms) | Browser/PostgREST          | User-JWT         | **Ja**     |
-| SELECT `integration_errors` (92k, ⌀90ms)    | Browser/PostgREST          | User-JWT         | **Ja**     |
-
-
-Die **Schreiblast** (das wirkliche IO-Monster) läuft schon heute mit `SERVICE_ROLE_KEY` durch und umgeht RLS komplett. Daran ändert ein RLS-Bypass nichts.
-
-Die **Leselast** (SELECTs) geht direkt vom React-Client über PostgREST mit dem User-JWT — **hier feuert RLS pro Zeile**. Und die aktuellen Policies sind teuer:
-
-```
-meter_power_readings:
-  USING: tenant_id = get_user_tenant_id()            -- SELECT auf profiles
-  USING: partner_has_tenant_access(auth.uid(), ...)  -- JOIN partner_members + tenants
-```
-
-Bei einem Chart-Query mit ~10.000 Zeilen werden diese Subselects potenziell pro Zeile evaluiert. Das erklärt die ⌀52 ms.
-
-## Zwei Wege, die Last loszuwerden
-
-### Weg A (empfohlen, klein, sicher): RLS-Policies cachen lassen
-
-Statt RLS zu umgehen, zwingen wir Postgres, die Tenant-Prüfung **einmal pro Query** statt pro Zeile auszuführen. Trick: die Helper-Funktion in ein `(SELECT …)` einwickeln. Das ist ein offiziell von Supabase empfohlenes Muster und wirkt sofort.
-
-Vorher:
+### Lese-Last (24 h) – DAS ist der IO-Killer
+`pg_stat_statements` zeigt eine einzige Query, die fast alle Disk-Reads verursacht:
 
 ```sql
-USING (tenant_id = get_user_tenant_id())
+SELECT id FROM meter_power_readings WHERE created_at >= $1 LIMIT $2 OFFSET $3
+-- + paralleler COUNT(*) auf identischen Filter
 ```
+- **768 Aufrufe**, Mittelwert **2.321 ms** pro Aufruf
+- **2.963.467 Disk-Blocks gelesen** (~23 GB von Platte) – nur durch diese eine Query
+- Insgesamt **1.563 Sequential-Scans × 525 Mio. Zeilen** auf `meter_power_readings`
 
-Nachher:
+### Quelle der Query – eindeutig identifiziert
+Edge-Function **`gateway-worker-status`** (Zeile 60–65) macht:
+```ts
+.from("meter_power_readings")
+.select("id", { count: "exact", head: true })
+.gte("created_at", fiveMinAgo);
+```
+- Filter auf `created_at` – darauf gibt es **keinen Index** → Full Table Scan
+- `count: "exact"` zwingt Postgres jedes Mal die komplette gefilterte Menge zu zählen
+- Aufgerufen von `GatewayWorkerStatusCard.tsx` mit `refetchInterval: 15_000` → alle 15 s, sobald irgendwer den Super-Admin-Bereich offen hat
+
+→ Jeder Aufruf liest ~23 GB von Platte. Das passt exakt zu 74 % IO-Budget.
+
+---
+
+## Fix-Plan (2 kleine Änderungen, keine Frontend-Logik-Änderung)
+
+### Schritt 1 – Migration: BRIN-Index auf `meter_power_readings.created_at`
+BRIN ist ideal für Zeitreihen (winzig, ~80 KB statt mehrerer GB B-Tree). Damit wird der Filter `created_at >= now() - 5min` in Millisekunden beantwortet statt Vollscan.
 
 ```sql
-USING (tenant_id = (SELECT public.get_user_tenant_id()))
+CREATE INDEX IF NOT EXISTS idx_meter_power_readings_created_at_brin
+  ON public.meter_power_readings
+  USING BRIN (created_at) WITH (pages_per_range = 32);
 ```
 
-Gleiche Änderung für `partner_has_tenant_access`. Effekt typisch: Faktor 10–50 schneller bei großen Lesequeries, weil aus N Funktionsaufrufen ein InitPlan-Cache wird.
+### Schritt 2 – Edge-Function `gateway-worker-status` anpassen
+`count: "exact"` durch `count: "estimated"` ersetzen (für die Anzeige reicht eine Schätzung; der echte Wert braucht den Vollscan nicht).
 
-**Geplante Tabellen für diese Umstellung** (die Heavy-Hitter aus den Slow-Queries):
+```ts
+.select("id", { count: "estimated", head: true })
+```
 
-- `meter_power_readings`
-- `meter_power_readings_5min`
-- `meter_period_totals`
-- `integration_errors`
-- `location_integrations`
-- `meters`
+### Schritt 3 – Polling-Intervall der Karte erhöhen
+`refetchInterval: 15_000` → **60_000** (1 × pro Minute statt 4 ×). Genügt für ein Worker-Heartbeat-Display vollkommen.
 
-Keine Code-Änderungen im Frontend nötig, keine Sicherheitsverschlechterung.
+---
 
-### Weg B (groß, nur falls A nicht reicht): Edge-Function als Daten-Proxy
+## Erwartung
+- IO-Budget sollte innerhalb von 30–60 Min nach Deploy deutlich fallen (Ziel < 30 %).
+- Falls nicht: Verifizieren durch erneutes `pg_stat_statements`-Snapshot – die genannte Query darf nicht mehr unter den Top-Disk-Reads stehen.
 
-Chart-Reads über eine neue Edge-Function `chart-data` laufen lassen:
-
-1. Edge prüft einmalig den User-JWT (`getClaims`) und ermittelt `tenant_id`.
-2. Edge benutzt `SERVICE_ROLE_KEY` → RLS umgangen.
-3. Edge filtert die Query manuell auf diese `tenant_id`.
-
-Kosten: jeder betroffene Hook (`useMeterPowerReadings`, `useIntegrationErrors`, Dashboard-Charts, …) muss umgestellt werden. Risiko: jede vergessene Stelle ist ein Tenant-Leak. Würde ich erst angehen, wenn Weg A messbar nicht ausreicht.
-
-## Vorschlag konkret
-
-1. **Phase 1 (jetzt, 1 Migration, ~2 Min IO):** Policies auf den 6 Tabellen oben auf das `(SELECT …)`-Muster umstellen. Keine Frontend-Änderung.
-2. **Phase 2 (Messung, ~30 Min):** IO-Budget und `pg_stat_statements` für `meter_power_readings` SELECT erneut ansehen. Erwartung: `mean_ms` fällt von 52 ms auf <10 ms, Disk-Reads brechen ein.
-3. **Phase 3 (nur falls nötig):** Weg B für die Top-2-Hooks.
-
-## Was ich **nicht** tue
-
-- Schreibpfad anfassen (läuft schon ohne RLS).
-- Cron-Frequenzen senken (separater Vorschlag, hier nicht vermischt).
-- Vorhandene Indizes verändern — Index `idx_meter_power_readings_meter_time` ist passend.
-
-## Freigabe nötig
-
-Bitte sag mir, ob ich **Phase 1** umsetzen soll (eine einzige Migration, reversibel). Danach messen wir, bevor wir über Phase 2/3 reden.  
-  
-Antwort: ok, jetzt Phase 1 umsetzen
+## Was wir NICHT tun
+- Kein Instance-Upgrade kaufen, bevor diese eine Query gefixt ist.
+- Keine RLS weiter umbauen (die letzte Migration war korrekt, aber nicht der Hebel).
+- Keine Cron-Jobs deaktivieren.
