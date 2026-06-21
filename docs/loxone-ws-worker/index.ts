@@ -818,10 +818,13 @@ async function reloadMeters(): Promise<void> {
     }
     state.uuidMap.clear();
     for (const m of group.meters) {
-      state.uuidMap.set(m.sensor_uuid.toLowerCase(), {
+      const blockUuid = m.sensor_uuid.toLowerCase();
+      state.uuidMap.set(blockUuid, {
         meter_id: m.id,
         tenant_id: m.tenant_id,
         energy_type: m.energy_type,
+        block_uuid: blockUuid,
+        role: "pwr",                    // wird in connect() ggf. durch LoxAPP3-Expansion ersetzt
         latest_value: null,
         last_pushed_value: null,
         last_pushed_at: 0,
