@@ -1,66 +1,130 @@
-## Aktueller Befund (Last der letzten ~24 h, seit Postgres-Neustart 2026-06-20 08:05 UTC)
+## Ziel
 
-**Die RLS-Migration war NICHT die Ursache** – sie hat geholfen, aber der echte IO-Fresser ist eine andere Query.
+Den Disk-Bloat in `meter_power_readings` (272 MB bei 0 Live-Rows) einmalig beseitigen und so absichern, dass er sich nach dem täglichen Cleanup-Job nicht wieder aufbaut.
 
-### Schreib-Last (24 h) – unauffällig
-- `meter_power_readings`: nur **18.329 INSERTs** in 24 h (~12/Min). Sehr wenig.
-- `meter_period_totals`: 71.575 UPDATEs.
-- `location_integrations`: 9.809 UPDATEs.
+## Ursache (bestätigt)
 
-### Lese-Last (24 h) – DAS ist der IO-Killer
-`pg_stat_statements` zeigt eine einzige Query, die fast alle Disk-Reads verursacht:
+- DB-Funktion `public.compact_power_readings_day()` aggregiert tägliche Roh-Readings in `meter_power_readings_5min` und löscht danach den kompletten Tagesbereich aus `meter_power_readings`. Das ist das gewollte Design — die Tabelle ist als 24h-Rohpuffer gedacht.
+- Autovacuum ist aktiv (global on, keine table-level Deaktivierung), läuft aber faktisch nie auf dieser Tabelle (`last_autovacuum = NULL`). Folge: 44.738 dead tuples, 272 MB Disk-Belegung, jeder Seq Scan liest 2,1 Mio. leere Pages → das ist der IO-Treiber.
+
+## Vorgehen (3 Schritte, alle als eine Migration)
+
+### Schritt 1 — Einmalige Bloat-Bereinigung
+
+`VACUUM FULL` auf den drei betroffenen Tabellen:
+
+- `meter_power_readings` (272 MB → wenige KB, Lock-Dauer Sekunden weil 0 Live-Rows)
+- `integration_errors` (33 MB, 107 Live-Rows — vernachlässigbar, aber gleich mitnehmen)
+- `ocpp_message_log` (110 MB, 18.609 Live-Rows — Lock-Dauer evtl. 10–30 Sek; betrifft nur OCPP-Logging, nicht Live-Wallbox-Funktion)
+
+`VACUUM FULL` darf nicht in einer Transaktion laufen → wird als eigene Migration ohne BEGIN/COMMIT eingereicht.
+
+### Schritt 2 — Aggressiveres Autovacuum als table-level Setting
+
+Auf `meter_power_readings` per `ALTER TABLE ... SET (...)`:
+
+- `autovacuum_vacuum_scale_factor = 0` (Schwelle nicht prozentual, sondern absolut)
+- `autovacuum_vacuum_threshold = 1000` (ab 1000 dead tuples vacuumen)
+- `autovacuum_vacuum_insert_scale_factor = 0` + `autovacuum_vacuum_insert_threshold = 5000` (auch nach Inserts triggern, damit Visibility-Map aktuell bleibt)
+
+Damit greift Autovacuum verlässlich nach jedem `compact_power_readings_day()`-Lauf.
+
+### Schritt 3 — Explizites VACUUM nach jedem Compact-Run
+
+Neuer Cron-Job (über `cron.schedule`, nicht über Migration, da projektspezifisch):
+
+- Täglich 03:30 UTC (nach dem Compact-Lauf): `VACUUM (ANALYZE) public.meter_power_readings;`
+- Eigene Funktion `public.vacuum_power_readings_buffer()` SECURITY DEFINER, weil VACUUM erhöhte Rechte braucht.
+
+Damit ist garantiert: selbst wenn Autovacuum mal aussetzt, wird die Tabelle planmäßig geräumt.
+
+## Erwartetes Ergebnis
+
+- Direkt nach VACUUM FULL: `heap_blks_read` auf `meter_power_readings` geht gegen Null bei jedem Scan (statt 2,1 Mio.).
+- IO-Budget sollte innerhalb von 1–2 h sichtbar fallen (rolling 24h window).
+- Langfristig: kein Bloat-Aufbau mehr trotz Insert/Delete-Churn.
+
+## Was NICHT Teil dieses Plans ist
+
+- Keine Änderung an `compact_power_readings_day()` selbst — Logik bleibt wie sie ist.
+- Kein TRUNCATE statt DELETE (würde die Tabelle komplett leeren, nicht nur einen Tag — zu riskant).
+- Keine Änderung am Gateway-Schreib-Verhalten (war nicht die Ursache).
+
+## Technische Details
 
 ```sql
-SELECT id FROM meter_power_readings WHERE created_at >= $1 LIMIT $2 OFFSET $3
--- + paralleler COUNT(*) auf identischen Filter
+-- Migration 1 (autocommit, nicht in Transaktion):
+VACUUM FULL public.meter_power_readings;
+VACUUM FULL public.integration_errors;
+VACUUM FULL public.ocpp_message_log;
+
+-- Migration 2 (in Transaktion ok):
+ALTER TABLE public.meter_power_readings SET (
+  autovacuum_vacuum_scale_factor = 0,
+  autovacuum_vacuum_threshold = 1000,
+  autovacuum_vacuum_insert_scale_factor = 0,
+  autovacuum_vacuum_insert_threshold = 5000
+);
+
+CREATE OR REPLACE FUNCTION public.vacuum_power_readings_buffer()
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  EXECUTE 'VACUUM (ANALYZE) public.meter_power_readings';
+END $$;
+
+-- Cron (separat per insert-tool, projektspezifisch):
+SELECT cron.schedule('vacuum-power-readings-buffer', '30 3 * * *',
+  $$ SELECT public.vacuum_power_readings_buffer(); $$);
 ```
-- **768 Aufrufe**, Mittelwert **2.321 ms** pro Aufruf
-- **2.963.467 Disk-Blocks gelesen** (~23 GB von Platte) – nur durch diese eine Query
-- Insgesamt **1.563 Sequential-Scans × 525 Mio. Zeilen** auf `meter_power_readings`
 
-### Quelle der Query – eindeutig identifiziert
-Edge-Function **`gateway-worker-status`** (Zeile 60–65) macht:
-```ts
-.from("meter_power_readings")
-.select("id", { count: "exact", head: true })
-.gte("created_at", fiveMinAgo);
-```
-- Filter auf `created_at` – darauf gibt es **keinen Index** → Full Table Scan
-- `count: "exact"` zwingt Postgres jedes Mal die komplette gefilterte Menge zu zählen
-- Aufgerufen von `GatewayWorkerStatusCard.tsx` mit `refetchInterval: 15_000` → alle 15 s, sobald irgendwer den Super-Admin-Bereich offen hat
+## Rückfrage vorab
 
-→ Jeder Aufruf liest ~23 GB von Platte. Das passt exakt zu 74 % IO-Budget.
+`ocpp_message_log` enthält ~18k Live-Rows. `VACUUM FULL` sperrt die Tabelle exklusiv (geschätzt 10–30 Sek). Während dieser Zeit blockieren OCPP-Logging-Schreiber kurz — Wallbox-Funktion selbst läuft weiter, nur die Log-Inserts warten. Soll ich `ocpp_message_log` mit reinnehmen oder weglassen?  
+  
+Antworten, die du bitte in die Umsetzung sofort mit einbeziehst:   
+  
+1. `ocpp_message_log` bitte gleich mit rein nehmen.  
+  
+  
+2. Der Plan ist insgesamt solide und identifiziert jetzt wirklich die Wurzel (lösch-basiertes Tagespuffer-Design + nie laufendes Autovacuum), statt nur Symptome zu behandeln. Ein technisches Problem würde ich aber vorher fixen lassen, sonst schlägt Schritt 3 fehl:
 
----
+**Der Knackpunkt:** `VACUUM` **funktioniert nicht innerhalb einer PL/pgSQL-Funktion**
 
-## Fix-Plan (2 kleine Änderungen, keine Frontend-Logik-Änderung)
-
-### Schritt 1 – Migration: BRIN-Index auf `meter_power_readings.created_at`
-BRIN ist ideal für Zeitreihen (winzig, ~80 KB statt mehrerer GB B-Tree). Damit wird der Filter `created_at >= now() - 5min` in Millisekunden beantwortet statt Vollscan.
+sql
 
 ```sql
-CREATE INDEX IF NOT EXISTS idx_meter_power_readings_created_at_brin
-  ON public.meter_power_readings
-  USING BRIN (created_at) WITH (pages_per_range = 32);
+CREATE OR REPLACE FUNCTION public.vacuum_power_readings_buffer()
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  EXECUTE 'VACUUM (ANALYZE) public.meter_power_readings';
+END $$;
 ```
 
-### Schritt 2 – Edge-Function `gateway-worker-status` anpassen
-`count: "exact"` durch `count: "estimated"` ersetzen (für die Anzeige reicht eine Schätzung; der echte Wert braucht den Vollscan nicht).
+Das wird beim Aufruf fehlschlagen mit einem Fehler in der Art *"VACUUM cannot run inside a transaction block"*. Eine `plpgsql`-Funktion läuft immer implizit innerhalb einer Transaktion (egal ob via `EXECUTE` aufgerufen), und `VACUUM` verlangt explizit Autocommit-Modus außerhalb jeder Transaktion. Das gilt auch für `SECURITY DEFINER`-Funktionen.
 
-```ts
-.select("id", { count: "estimated", head: true })
+**Fix dafür — zwei Optionen:**
+
+1. **Einfachste Lösung:** Cron-Job ruft `VACUUM` direkt auf, ganz ohne Wrapper-Funktion:
+
+sql
+
+```sql
+SELECT cron.schedule(
+  'vacuum-power-readings-buffer',
+  '30 3 * * *',
+  $$ VACUUM (ANALYZE) public.meter_power_readings; $$
+);
 ```
 
-### Schritt 3 – Polling-Intervall der Karte erhöhen
-`refetchInterval: 15_000` → **60_000** (1 × pro Minute statt 4 ×). Genügt für ein Worker-Heartbeat-Display vollkommen.
+`pg_cron` führt jeden Job in einer eigenen Hintergrund-Connection im Autocommit-Modus aus — das funktioniert mit `VACUUM` direkt als Statement, ohne Funktions-Umweg. Damit fällt der `SECURITY DEFINER`-Teil weg, ist aber auch nicht nötig, wenn der Cron-Job ohnehin mit ausreichenden Rechten läuft.
 
----
+2. Falls ihr aus irgendeinem Grund eine Funktion braucht (z.B. für zusätzliche Logik drumherum), müsste das eine `PROCEDURE` mit `CALL` sein statt `FUNCTION`, und selbst dann nur, wenn ihr non-atomic execution sicherstellt — unnötig kompliziert für diesen Zweck. Option 1 ist hier klar einfacher und robuster.
+  &nbsp;
 
-## Erwartung
-- IO-Budget sollte innerhalb von 30–60 Min nach Deploy deutlich fallen (Ziel < 30 %).
-- Falls nicht: Verifizieren durch erneutes `pg_stat_statements`-Snapshot – die genannte Query darf nicht mehr unter den Top-Disk-Reads stehen.
+**Sonst keine Einwände:**
 
-## Was wir NICHT tun
-- Kein Instance-Upgrade kaufen, bevor diese eine Query gefixt ist.
-- Keine RLS weiter umbauen (die letzte Migration war korrekt, aber nicht der Hebel).
-- Keine Cron-Jobs deaktivieren.
+- Schritt 1 (VACUUM FULL, autocommit, separate Migration) ist korrekt aufgebaut.
+- Schritt 2 (table-level Autovacuum-Tuning mit absoluten statt prozentualen Schwellen) ist genau richtig für eine Tabelle, die regelmäßig auf 0 Zeilen fällt — prozentuale Schwellen (`scale_factor`) würden bei 0 Live-Rows nie triggern, das habt ihr richtig erkannt.
+- Die Erwartung (1–2h bis sichtbarer IO-Rückgang wegen Rolling Window) ist diesmal korrekt begründet, weil ihr die tatsächliche Ursache behebt, nicht nur eine Symptom-Query.
+
+Mit der Cron-Korrektur sollte das der richtige, vollständige Fix sein.
