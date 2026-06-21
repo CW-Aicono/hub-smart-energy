@@ -651,6 +651,8 @@ async function reloadMeters(): Promise<void> {
         lastEventAt: 0,
         pendingEndTimer: null,
         pendingEndReason: null,
+        diagEventCount: 0,
+        diagCallbacksSeen: new Set<string>(),
       };
       connections.set(serial, state);
     }
