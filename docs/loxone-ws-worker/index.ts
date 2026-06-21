@@ -58,7 +58,7 @@ const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "300000"
 // Phase 6: Session-Heartbeat von 15s auf 60s erhöht (IO-Optimierung)
 const SESSION_HEARTBEAT_MS = parseInt(process.env.SESSION_HEARTBEAT_MS || "60000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase7-multistate";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.1-blocksnapshot";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -540,20 +540,19 @@ async function connect(state: ConnState): Promise<void> {
     log("info", `[WS] ${state.serialNumber} LoxAPP3-Mapping: blocks=${blockEntries.length}, mapped=${blocksMapped}, fallback=${blocksFallback}, totalStateUuids=${totalSubs}`);
     bridgeLog("info", "ws_connected", `Verbunden, ${totalSubs} State-UUIDs aus ${blockEntries.length} Blöcken (mapped=${blocksMapped}, fallback=${blocksFallback})`, state.serialNumber, { blocks: blockEntries.length, mapped: blocksMapped, fallback: blocksFallback, totalStateUuids: totalSubs });
 
-    // Phase 5.2 / Phase 7: pro abonnierter State-UUID gezielt `jdev/sps/io/<uuid>/all` schicken.
+    // Phase 7.1: Initial-Snapshot pro Block-UUID holen (`jdev/sps/io/<block>/all` liefert ALLE States des Blocks).
+    // State-UUIDs sind selbst NICHT subscribable (Loxone antwortet code=404). Live-Updates kommen
+    // anschließend automatisch via `enablebinstatusupdate` für jede State-UUID.
+    const uniqueBlocks = new Set<string>();
+    for (const entry of state.uuidMap.values()) {
+      if (entry.block_uuid) uniqueBlocks.add(entry.block_uuid);
+    }
     let subscribedOk = 0;
     let subscribedErr = 0;
-    const failedUuids: Array<{ uuid: string; reason: string }> = [];
-    for (const [uuid, entry] of state.uuidMap) {
+    const failedBlocks: Array<{ block: string; reason: string }> = [];
+    for (const blockUuid of uniqueBlocks) {
       try {
-        const resp: any = await socket.send(`jdev/sps/io/${uuid}/all`);
-        const raw = resp?.LL?.value ?? resp?.value ?? resp;
-        const num = typeof raw === "number" ? raw : parseFloat(String(raw));
-        if (Number.isFinite(num) && !isSpike(num, entry.energy_type, entry.role)) {
-          entry.latest_value = num;
-          state.eventsReceived++;
-          state.lastEventAt = Date.now();
-        }
+        await socket.send(`jdev/sps/io/${blockUuid}/all`);
         subscribedOk++;
       } catch (err) {
         subscribedErr++;
@@ -572,12 +571,12 @@ async function connect(state: ConnState): Promise<void> {
         } else {
           reason = String(err);
         }
-        failedUuids.push({ uuid: `${uuid}(${entry.role})`, reason });
-        log("warn", `[WS] ${state.serialNumber} subscribe ${uuid}(${entry.role}) fehlgeschlagen: ${reason}`);
+        failedBlocks.push({ block: blockUuid, reason });
+        log("warn", `[WS] ${state.serialNumber} block-snapshot ${blockUuid} fehlgeschlagen: ${reason}`);
       }
     }
-    log("info", `[WS] ${state.serialNumber} per-UUID subscribe: ok=${subscribedOk} err=${subscribedErr}${failedUuids.length ? ` failed=[${failedUuids.map((f) => f.uuid).join(",")}]` : ""}`);
-    bridgeLog("info", "ws_per_uuid_subscribed", `Per-UUID subscribe: ok=${subscribedOk} err=${subscribedErr}`, state.serialNumber, { ok: subscribedOk, err: subscribedErr, failed: failedUuids });
+    log("info", `[WS] ${state.serialNumber} per-block snapshot: ok=${subscribedOk} err=${subscribedErr} (blocks=${uniqueBlocks.size}, stateUuids=${state.uuidMap.size})`);
+    bridgeLog("info", "ws_per_block_snapshot", `Per-block snapshot: ok=${subscribedOk} err=${subscribedErr}`, state.serialNumber, { ok: subscribedOk, err: subscribedErr, blocks: uniqueBlocks.size, stateUuids: state.uuidMap.size, failed: failedBlocks });
   } catch (err) {
     log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${err}`);
     bridgeLog("error", "ws_connect_failed", `Verbindung fehlgeschlagen: ${(err as Error).message ?? err}`, state.serialNumber);
