@@ -1260,6 +1260,18 @@ serve(async (req) => {
               console.log(`Inserted ${cumulativeInserts.length} cumulative meter readings`);
             }
           }
+
+          // Phase 7: Tagessnapshot upserten (1 Zeile pro Meter+Tag, mehrfach pro Tag überschrieben)
+          if (dailySnapshotInserts.length > 0) {
+            const { error: snapErr } = await supabase
+              .from("meter_loxone_daily_snapshots")
+              .upsert(dailySnapshotInserts, { onConflict: "meter_id,snapshot_date" });
+            if (snapErr) {
+              console.error("Error upserting daily snapshots:", snapErr);
+            } else {
+              console.log(`Upserted ${dailySnapshotInserts.length} daily Loxone snapshots`);
+            }
+          }
         }
 
       } catch (archiveErr) {
