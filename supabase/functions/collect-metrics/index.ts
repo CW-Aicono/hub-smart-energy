@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     // We track how many edge functions are configured as a basic metric
     const { count: edgeFunctionCount } = await supabase
       .from("infrastructure_metrics")
-      .select("id", { count: "exact", head: true })
+      .select("id", { count: "estimated", head: true })
       .eq("metric_type", "edge_function")
       .gte(
         "recorded_at",
