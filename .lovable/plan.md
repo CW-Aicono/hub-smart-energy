@@ -1,60 +1,25 @@
-## Befund
+## Lage
+- Der `loxone-ws-worker` loggt nur Heartbeats (alle 5 Min „Reload aktive Miniserver: 3"). Einzelne UUID-Werte erscheinen bewusst nicht im Log — sonst würde das Log pro Tag mehrere GB groß.
+- Damit ist `docker logs` als Diagnose-Weg **erschöpft**. Wir müssen den Datenfluss eine Stufe weiter prüfen: was der Worker tatsächlich in die Datenbank schreibt.
 
-Der 15-Min-HTTP-Sync (`loxone-periodic-sync` → `loxone-api?action=getSensors`) liest zwar **alle** relevanten Loxone-Felder vom Miniserver (`Rd`=Heute, `Rm`=aktueller Monat, `Ry`=aktuelles Jahr, `Mr`=Zählerstand, `Rlm`=Vormonat, `Rldc`=Vortag), schreibt aber in `meter_period_totals` nur:
+## Plan (ohne weitere PuTTY-Aktion)
+Ich frage hier in drei kleinen, lesenden SQL-Abfragen die Datenbank ab — du musst nichts tun, nur die Ergebnisse anschauen, die ich dir hier zeige:
 
-- `period_type='day'` – gestern (`Rldc`, source=`loxone`)
-- `period_type='day'` – heute (`Rd`, source=`loxone_live`)
-- `period_type='month'` – **Vormonat** (`Rlm`, source=`loxone`)
+1. **bridge_raw_samples**, letzte 60 Minuten, gefiltert auf die UUID-Familie `20cebdeb-01ad-53c9…53d1`.
+   → Beantwortet eindeutig: Empfängt der Worker die 6 States des Zählers „Gesamtverbrauch"?
 
-**Es fehlen die Schreiboperationen für:**
-- `period_type='month'` – **aktueller Monat** (`Rm`)
-- `period_type='year'` – aktuelles Jahr (`Ry`)
-- Zählerstand (`Mr`) als verbindliche Quelle (aktuell wird in `meter_cumulative_readings` nur `Ry`/`Rd` als Proxy gespeichert, nie der echte `Mr`-Wert)
+2. **meter_power_readings_5min_bridge** und **meter_cumulative_readings_bridge** für den Zähler „Zähler Gesamtverbrauch" (AICONO Zentrale), letzte 60 Minuten.
+   → Beantwortet: Hat der Worker die UUIDs auf den richtigen Zähler gemappt und persistent gespeichert?
 
-Die Live-Karte liest `month`/`year` aus `meter_period_totals` und den Zählerstand aus dem WS-Bridge-Broadcast (`role='total'`). Solange das HTTP-Sync diese Werte nicht in die DB schreibt, hängt die Karte komplett von der WS-Bridge ab. Ist die Bridge in einem Zeitraum offline (was im Februar 2026 6 Wochen der Fall war), entstehen Lücken – genau die jetzt sichtbare Jahres-Diskrepanz (130 MWh statt 192 MWh).
+3. **meter_period_totals** für genau diesen Zähler, alle Source-Typen, letzte 24 h.
+   → Beantwortet: Warum stehen auf der Kachel ~130 MWh statt 192 MWh — wird `loxone_live` für month/year geschrieben oder nicht?
 
-Woche und Quartal bleiben weiter aus den eigenen 5-Min-Daten berechnet (nicht von Loxone geliefert) – das ist unverändert korrekt.
+## Entscheidung danach
+- Treffer in 1, aber leer in 2 → Mapping-Bug im Worker (UUID → meter_id). Fix dort.
+- Treffer in 1 + 2, aber `loxone_live` fehlt in 3 → Bug im gestern hinzugefügten Upsert in `loxone-api` (Edge Function). Fix dort, kein Worker-Deploy nötig.
+- Kein Treffer in 1 → Miniserver liefert den Baustein gar nicht an den Worker. Dann reden wir über Loxone-Konfiguration, nicht über Code.
 
-## Änderung
+**Keine** Code-Änderung in diesem Plan — nur Lese-Abfragen. Erst wenn die Ergebnisse vorliegen, schlage ich den genau einen Fix vor, der das Problem löst.
 
-**Eine Datei betroffen:** `supabase/functions/loxone-api/index.ts` (`action=getSensors`, ab Zeile ~1042 in der Meter-Schleife).
-
-Pro Hauptzähler zusätzlich folgende `meter_period_totals`-Upserts vorbereiten und im bestehenden Bulk-Upsert (Zeile 1190 ff., inkl. der bestehenden Change-Detection für IO-Schonung) mitsenden:
-
-1. **Aktueller Monat** (`Rm`)
-   - `period_type = 'month'`
-   - `period_start = ` 1. des aktuellen Monats (Europe/Berlin)
-   - `total_value = stateData.totalMonth`
-   - `source = 'loxone_live'`
-   - nur wenn `totalMonth != null && totalMonth >= 0`
-
-2. **Aktuelles Jahr** (`Ry`)
-   - `period_type = 'year'`
-   - `period_start = ` 1. Januar des aktuellen Jahres (Europe/Berlin)
-   - `total_value = stateData.totalYear`
-   - `source = 'loxone_live'`
-   - nur wenn `totalYear != null && totalYear >= 0`
-
-3. **Zählerstand (`Mr`)** – separater Pfad
-   - Im `cumulativeInserts`-Block (Zeile 1116) die Priorisierung ändern: **zuerst `stateData.total` (= Loxone `Mr`)**, dann erst `totalYear` als Fallback, dann `totalDay`. Source dann entsprechend `'loxone_live_total'` / `'loxone_live_year'` / `'loxone_live_day'`.
-   - Damit landet alle 15 Min der echte Zählerstand in `meter_cumulative_readings`, unabhängig von der WS-Bridge.
-
-## Sicherheits-Checks
-
-- Beide neuen Upserts laufen durch die schon vorhandene Change-Detection (Zeile 1208–1215): wenn `total_value` und `source` unverändert → kein DB-Write, also kein IO-Mehraufwand außer 2 zusätzlichen Lesezeilen.
-- `onConflict='meter_id,period_type,period_start'` bleibt unverändert; die neuen Zeilen passen in dasselbe Schema.
-- Wenn der Cron-Lauf in der Sekunde nach Monats-/Jahreswechsel läuft, schreibt Loxone selbst schon den neuen `Rm`/`Ry`-Wert auf den 1. des neuen Monats – kein doppelter Eintrag möglich.
-- Quelle bleibt nach Monatsende stehen, bis der nächste Lauf (vom 1. des Folgemonats) sie überschreibt. Das nächste Vormonats-Archiv (`Rlm`, source=`'loxone'`) liegt ohnehin schon im Code – beide Zeilen koexistieren, da unterschiedliche `period_start`.
-
-## Was bewusst NICHT geändert wird
-
-- Keine Backfill-Logik für Februar 2026 (separates Thema, kann später per einmaligem Lauf von `loxone-api?action=backfillStatistics&totalsOnly=true` erfolgen, sobald die Sperre in `loxone-daily-totals-backfill` aufgehoben wird).
-- Kein Eingriff in `EnergyChart.tsx` – die Jahres-Bar im Diagramm bleibt vorerst aus 5-Min-Fallback. Sobald die `month`-Zeilen vollständig sind, kann das Diagramm in einem zweiten Schritt umgestellt werden.
-- Keine WS-Bridge-Änderung.
-- Woche/Quartal bleiben berechnet (Loxone liefert dafür nichts Vergleichbares).
-
-## Erwartete Wirkung nach Deployment
-
-- Beim nächsten 15-Min-Tick wird für jeden Loxone-Hauptzähler `Monat` und `Jahr` direkt aus dem Miniserver (`Rm`/`Ry`) in `meter_period_totals` geschrieben.
-- Karte „Zähler Gesamtverbrauch" zeigt dann den von Loxone gelieferten Wert – inklusive der Tage aus Phasen ohne Bridge-Verbindung.
-- Zählerstand (Mr) wird ebenfalls alle 15 Min als verbindliche Quelle abgelegt.
+## Was du tust
+Nichts. Du wechselst in Build-Mode (Button „Implement plan"), ich führe die drei Lese-Abfragen aus und poste dir die Ergebnisse zusammen mit der Diagnose und dem Fix-Vorschlag in einer einzigen Antwort.
