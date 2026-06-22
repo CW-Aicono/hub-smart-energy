@@ -45,19 +45,23 @@ trotzdem manuell im SQL-Editor nachgebessert (schneller Fix, Backfill,
 einzelner Cronjob), muss dieser Schritt nachtraeglich als eigene Migration
 nachgezogen werden, sonst geht er beim naechsten Deploy verloren.
 
-**Drift pruefen:** `scripts/check-cron-drift.sh` vergleicht die in den
-Migrationen definierten Jobs mit dem tatsaechlichen Stand einer laufenden
-DB. Gegen staging ausfuehren, um Jobs zu finden, die nur dort per UI
-angelegt wurden (und so nie nach Prod kommen wuerden); gegen Prod nach einem
-Deploy ausfuehren, um zu pruefen, dass alle erwarteten Jobs auch wirklich aktiv
-sind:
+**Drift pruefen:** `scripts/check-cron-drift.sh` vergleicht den in den
+Migrationen definierten Stand (pg_cron-Jobs ODER `public.permissions`,
+je nach Modus) mit dem tatsaechlichen Stand einer laufenden DB. Gegen
+staging ausfuehren, um Eintraege zu finden, die nur dort per UI angelegt
+wurden (und so nie nach Prod kommen wuerden); gegen Prod nach einem Deploy
+ausfuehren, um zu pruefen, dass alles Erwartete auch wirklich da/aktiv ist:
 
 ```bash
-# gegen den lokal erreichbaren Container (z.B. auf dem Hetzner-Server):
-./scripts/check-cron-drift.sh docker exec -i supabase-db psql -U supabase_admin -d postgres
+# Cron-Jobs, gegen den lokal erreichbaren Container (z.B. Hetzner-Server):
+./scripts/check-cron-drift.sh cron docker exec -i supabase-db psql -U supabase_admin -d postgres
 
-# gegen eine Cloud-DB (z.B. Lovable-Staging) per Connection-String:
-./scripts/check-cron-drift.sh psql "postgresql://user:pass@host:5432/postgres"
+# Cron-Jobs, gegen eine Cloud-DB (z.B. Lovable-Staging) per Connection-String:
+./scripts/check-cron-drift.sh cron psql "postgresql://user:pass@host:5432/postgres"
+
+# Permissions-Katalog, gleiches Schema, anderer Modus:
+./scripts/check-cron-drift.sh permissions docker exec -i supabase-db psql -U supabase_admin -d postgres
+./scripts/check-cron-drift.sh permissions psql "postgresql://user:pass@host:5432/postgres"
 ```
 
 ## Einmaliges Setup

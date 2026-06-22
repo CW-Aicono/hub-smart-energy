@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
-# Vergleicht die in supabase/migrations/ versionierten pg_cron-Jobs mit dem
-# tatsaechlichen Stand in einer laufenden Postgres-Instanz (cron.job).
+# Vergleicht den in supabase/migrations/ versionierten Stand von pg_cron-Jobs
+# UND von public.permissions mit dem tatsaechlichen Stand in einer laufenden
+# Postgres-Instanz.
 #
-# Deckt zwei Drift-Arten auf:
-#   1. Jobs, die in der DB aktiv sind, aber durch KEINE Migration erklaert werden
-#      -> typischerweise direkt im Supabase-Studio-UI angelegt. Solche Jobs landen
-#         NIE in Prod, weil deploy-prod.yml nur Dateien aus dem Repo synct.
-#   2. Jobs, die laut Migrations aktiv sein sollten, aber in der DB fehlen/inaktiv
-#      sind -> Deploy/Migration ist nie (richtig) gelaufen (Bootstrap-Drift).
+# Deckt pro Bereich zwei Drift-Arten auf:
+#   1. Etwas ist in der DB vorhanden, aber durch KEINE Migration erklaert
+#      -> typischerweise direkt im Supabase-Studio-UI angelegt. Landet NIE in
+#         Prod, weil deploy-prod.yml nur Dateien aus dem Repo synct.
+#   2. Etwas sollte laut Migrations vorhanden sein, fehlt aber in der DB
+#      -> Deploy/Migration ist nie (richtig) gelaufen (Bootstrap-Drift).
 #
-# Aufruf: alles nach dem Scriptnamen wird 1:1 als Befehl ausgefuehrt, der SQL
-# ueber stdin/-c entgegennimmt (psql-kompatibel).
+# Aufruf: erstes Argument ist der Modus, alles danach wird 1:1 als Befehl
+# ausgefuehrt, der SQL ueber stdin/-c entgegennimmt (psql-kompatibel).
 #
-#   ./scripts/check-cron-drift.sh docker exec -i supabase-db psql -U supabase_admin -d postgres
-#   ./scripts/check-cron-drift.sh psql "postgresql://user:pass@host:5432/postgres"
+#   ./scripts/check-cron-drift.sh cron docker exec -i supabase-db psql -U supabase_admin -d postgres
+#   ./scripts/check-cron-drift.sh permissions psql "postgresql://user:pass@host:5432/postgres"
 #
 # Gegen staging (Lovable Cloud) UND gegen prod (Hetzner) ausfuehren und beide
 # Ausgaben vergleichen, um echten Drift zwischen den beiden Umgebungen zu finden.
@@ -21,9 +22,57 @@ set -euo pipefail
 
 MIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/supabase/migrations"
 
-if [ "$#" -eq 0 ]; then
-  echo "Usage: $0 <psql-command...>" >&2
-  echo '  e.g. $0 docker exec -i supabase-db psql -U supabase_admin -d postgres' >&2
+if [ "$#" -lt 2 ]; then
+  echo "Usage: $0 <cron|permissions> <psql-command...>" >&2
+  echo '  e.g. $0 cron docker exec -i supabase-db psql -U supabase_admin -d postgres' >&2
+  echo '  e.g. $0 permissions psql "postgresql://user:pass@host:5432/postgres"' >&2
+  exit 1
+fi
+
+MODE="$1"
+shift
+
+if [ "$MODE" = "permissions" ]; then
+  expected_tmp="$(mktemp)"
+  live_tmp="$(mktemp)"
+  trap 'rm -f "$expected_tmp" "$live_tmp"' EXIT
+
+  # Erwartete Permission-Codes aus allen "INSERT INTO public.permissions"-Bloecken
+  # extrahieren. Es gibt im Repo keine Migration, die Permissions wieder loescht -
+  # daher reicht reines Sammeln aller je inserteten Codes (kein Status-Tracking
+  # wie beim Cron-Check noetig).
+  while IFS= read -r file; do
+    flat="$(tr '\n' ' ' < "$file")"
+    (printf '%s' "$flat" \
+      | grep -oE "INSERT INTO public\.permissions[[:space:]]*\([^)]*\)[[:space:]]*VALUES[[:space:]]*[^;]+;" \
+      | grep -oE "\([[:space:]]*'[a-zA-Z0-9_.-]+'" \
+      | grep -oE "'[a-zA-Z0-9_.-]+'" \
+      | tr -d "'" || true)
+  done < <(find "$MIG_DIR" -maxdepth 1 -name '*.sql' | sort) | sort -u > "$expected_tmp"
+
+  "$@" -At -c "SELECT code FROM public.permissions ORDER BY code;" | sort -u > "$live_tmp"
+
+  echo "=== Permissions in DB, aber durch KEINE Migration erklaert (Studio-UI-Drift-Verdacht) ==="
+  shadow="$(comm -23 "$live_tmp" "$expected_tmp")"
+  if [ -n "$shadow" ]; then
+    echo "$shadow" | sed 's/^/  - /'
+  else
+    echo "  (keine)"
+  fi
+
+  echo
+  echo "=== Permissions laut Migrations erwartet, aber NICHT in der DB (Deploy/Bootstrap-Drift) ==="
+  missing="$(comm -13 "$live_tmp" "$expected_tmp")"
+  if [ -n "$missing" ]; then
+    echo "$missing" | sed 's/^/  - /'
+  else
+    echo "  (keine)"
+  fi
+  exit 0
+fi
+
+if [ "$MODE" != "cron" ]; then
+  echo "Unbekannter Modus '$MODE'. Erlaubt: cron, permissions" >&2
   exit 1
 fi
 
