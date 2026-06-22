@@ -1,75 +1,57 @@
-# Loxone Hybrid 2.0 — Maximale WebSocket-Abdeckung
-
 ## Ziel
+Loxone-Websocket-Events pro UUID auf **maximal 1 Sample alle 5 Sekunden** drosseln, damit die DB-Schreiblast (IO-Budget) stark sinkt. Live-Werte und Tagesverbrauch bleiben gefühlt "live" (5s-Updates sind für Menschen nicht von Echtzeit unterscheidbar).
 
-Möglichst viele Werte live über WebSocket vom Miniserver beziehen — passend zu Deinem Vorschlag. HTTP-Poll nur noch als Korrektur/Fallback. Wochen-/Quartalswerte aus täglich gespeicherten Loxone-Snapshots aggregieren.
+## Hintergrund
+- Loxone pusht `pwr`-Werte teils mehrfach pro Sekunde (bis ~100 ms).
+- Aktuell schreibt der Worker **jeden** Event 1:1 in `bridge_raw_samples` → ~1.000 Events/min (~17/s, ~1,4 Mio Zeilen/Tag).
+- Davon ist nur ein Bruchteil für die spätere 5-Min-Aggregation nötig.
+- Das eigentliche aktuelle IO-Problem (74 % Budget) hat **andere** Ursachen (siehe Hinweis unten) — diese Drosselung ist die Vorsorge, damit der Worker das Problem nicht zusätzlich anheizt.
 
-## Konzept
+## Vorgehen (1 kleine Änderung im Worker, keine Cloud-Migration)
 
-### Datenquellen pro Wert
+### Änderung in `docs/loxone-ws-worker/index.ts`
+Ein **Throttle-Map pro `(miniserverSerial, stateUuid)`** ergänzen:
 
-| Wert | Quelle | Aktualisierung |
-|---|---|---|
-| Live-Leistung (kW) | WebSocket `Pwr`-State | Sekunden |
-| Heute (kWh) | WebSocket `EnergyToday`-State | Sekunden |
-| Monat (kWh) | WebSocket `EnergyTotal` minus Monatsanfangs-Snapshot | live mit jedem WS-Event |
-| Jahr (kWh) | WebSocket `EnergyTotal` minus Jahresanfangs-Snapshot | live mit jedem WS-Event |
-| Gesamt (kWh) | WebSocket `EnergyTotal`-State | Sekunden |
-| Woche (Graph) | Aggregation aus Tages-Snapshots | täglich neu |
-| Quartal (Graph) | Aggregation aus Tages-Snapshots | täglich neu |
-| Tag/Monat/Jahr (Graph) | Tages-Snapshots (neu) statt 5-Min-Buckets | täglich neu |
-| HTTP-Poll alle 15 Min | Korrekturwert + Fallback wenn WS offline | 15 Min |
+```text
+lastWrittenAt: Map<key, timestampMs>
+lastValueBuffer: Map<key, { value, ts, eventMeta }>  // letzter "verworfener" Wert
+```
 
-Loxone-Meter-Blöcke haben in `LoxAPP3.json` immer `Pwr` und `EnergyTotal` als States, meist auch `EnergyToday`. `EnergyMonth`/`EnergyYear` gibt es nicht zuverlässig — daher berechnen wir Monat/Jahr aus `EnergyTotal` minus gespeichertem Anfangswert.
+Logik beim eingehenden WS-Event:
+1. `key = serial + ":" + uuid`
+2. `dt = now - lastWrittenAt.get(key)`
+3. Wenn `dt >= 5000 ms` (oder noch nie geschrieben) → **direkt in `bridge_raw_samples` schreiben**, `lastWrittenAt = now`, Buffer leeren.
+4. Sonst → nur `lastValueBuffer.set(key, …)` (kein DB-Write).
+5. Alle 5 s ein Sweep-Timer: für alle Keys mit Buffer-Eintrag, deren `dt >= 5000`, den **zuletzt gepufferten Wert** schreiben → garantiert, dass auch der letzte Wert einer Burst-Serie ankommt.
 
-## Umsetzung in 4 Schritten
+### Konfigurierbarkeit
+- Neue Env-Variable `WS_MIN_INTERVAL_MS` (Default `5000`).
+- Kann pro Deployment auf z. B. `2000` oder `10000` justiert werden, ohne Code-Änderung.
 
-### Schritt 1 — Worker: LoxAPP3-Parser + Multi-State-Subscription
-Datei: `docs/loxone-ws-worker/index.ts`
+### Bewusst NICHT geändert
+- 15-Min-HTTP-Pull bleibt unverändert (liefert die "Wahrheit" für Zähler).
+- 5-Min-Aggregation (`meter_power_readings_5min`) bleibt unverändert — bekommt ab jetzt sauberere, dünnere Quelldaten.
+- UI-Pfade, Heartbeat, Snapshot-Logik bleiben unangetastet.
 
-- Nach `socket.send("data/LoxAPP3.json")` die Antwort parsen.
-- Für jede in `meters.sensor_uuid` registrierte Block-UUID alle zugehörigen `states` ermitteln: `Pwr`, `EnergyToday`, `EnergyTotal`.
-- Pro State-UUID separat `/jdev/sps/io/<state-uuid>/all` aufrufen.
-- Erweiterte `uuidMap`: speichert jetzt zu jeder State-UUID den zugehörigen Meter + die State-Rolle (`pwr` | `today` | `total`).
-- Sample-Handler schreibt je nach Rolle in das richtige Feld der Broadcast-Payload.
+## Erwartete Wirkung
+- Schreibvolumen in `bridge_raw_samples`: **~17/s → maximal ~0,2/s pro aktivem UUID-Stream**.
+- Bei ~85 State-UUIDs (3 Miniserver): theoretisches Maximum ~17/s, real durch Inaktivität deutlich darunter — typisch **80–95 % weniger Inserts**.
+- Live-Wert im Dashboard aktualisiert sich weiterhin alle 5 s (für den Nutzer "live").
+- Tagesverbrauch unverändert genau (basiert auf 15-Min-HTTP-Pull + 5-Min-Aggregation).
 
-### Schritt 2 — DB: Tagessnapshot-Tabelle + Monats-/Jahres-Basiswerte
-Neue Tabelle `meter_loxone_daily_snapshots`:
-- `meter_id`, `snapshot_date`, `energy_total_kwh` (Zählerstand 00:00 Loxone), `energy_today_kwh` (Vortag final)
-- Wird täglich um 00:05 Uhr gefüllt: `loxone-periodic-sync` extra Lauf, der pro Meter den aktuellen `EnergyTotal` abruft und speichert.
+## Risiken / Edge Cases
+- **Kurzpeaks** (z. B. 8 kW für 1 s) können verloren gehen → akzeptabel, da Peak-Analyse ohnehin auf 5-Min-Aggregat basiert.
+- **Letzter Wert vor Ruhephase** wird durch den Sweep-Timer garantiert geschrieben → keine "hängenden" alten Anzeigen.
+- **Worker-Restart**: Maps sind in-memory → nach Restart wird der erste Wert sofort geschrieben (gewollt).
 
-Daraus ableitbar in Views/Queries:
-- **Monat** = aktueller `EnergyTotal` − Snapshot am Monats-1.
-- **Jahr** = aktueller `EnergyTotal` − Snapshot am 01.01.
-- **Woche** = Summe `energy_today_kwh` der letzten 7 Tage.
-- **Quartal** = Summe `energy_today_kwh` des Quartals.
+## Wichtiger Hinweis zum aktuellen IO-Budget (74 %)
+Diese Änderung adressiert **nicht** das bestehende IO-Problem, da WS erst seit ~1 h läuft. Empfehlung: parallel das IO-Playbook abarbeiten (`supabase--slow_queries` + `pg_stat_statements`), um den eigentlichen Treiber zu finden. Das ist eine separate, reine Lese-Analyse ohne Code-Änderung.
 
-### Schritt 3 — Edge Function: Realtime-Broadcast erweitern
-- Broadcast-Payload auf `loxone-live-{tenant}`-Kanal um `today_kwh` und `total_kwh` ergänzen (bisher nur Leistung).
-- UI-Hook `useLoxoneLive` empfängt die neuen Felder.
-- KPI-Kacheln (Heute / Monat / Jahr / Gesamt) berechnen Monat/Jahr clientseitig aus `total_kwh − Monats-/Jahres-Snapshot` (Snapshots werden initial einmal per Query geladen, Browser-Cache reicht).
+## Deployment-Schritte (nach Build-Mode-Freigabe)
+1. `docs/loxone-ws-worker/index.ts` anpassen (Throttle + Sweep-Timer + Env).
+2. `WORKER_VERSION` auf `phase7.3-throttle5s` setzen.
+3. Auf dem Hetzner-Server: `git pull` (bzw. Datei kopieren) → `docker build -t loxone-ws-worker:phase7.3 .` → `docker compose up -d`.
+4. Nach 10 min in `bridge_raw_samples` per `count(*)` über die letzten 5 min vs. vorher vergleichen → Reduktion bestätigen.
 
-### Schritt 4 — Graphen umstellen
-- Hooks für Tages-/Monats-/Jahres-Graph: statt `meter_period_totals` (5-Min-Integration) jetzt `meter_loxone_daily_snapshots` (Loxone-Wahrheit).
-- Woche/Quartal werden serverseitig (View oder Edge Function) als Summe der Tagessnapshots berechnet.
-- 5-Min-Buckets bleiben unverändert für den Tages-Leistungsgraph (kW-Verlauf), da der Tagesverlauf der Leistung sonst nicht darstellbar ist.
-
-## Was bleibt unverändert
-- HTTP-Poll alle 15 Min (`loxone-periodic-sync` → `loxone-api`) läuft weiter als Korrektur + Fallback bei WS-Ausfall.
-- 5-Min-Power-Integration für den Tages-Leistungsgraph bleibt.
-- Bestehendes Live-Power-Display funktioniert nach Schritt 1 erstmals für alle Meter (heute nur für simple UUIDs).
-
-## Risiken & ehrliche Einschätzung
-
-1. **LoxAPP3-Struktur:** Variantenreich (verschiedene Meter-Block-Typen). Erste Iteration deckt EnergyMeter + ModbusMeter ab — andere Typen fallen sanft zurück auf HTTP-Poll. Wir loggen, was nicht gemappt werden konnte.
-2. **Monats-/Jahressnapshots Migration:** Für bereits laufende Tenants haben wir keinen Snapshot vom 01. des Monats. Lösung: einmaliger Backfill aus letztem bekannten HTTP-Poll-Wert.
-3. **Graph-Umstellung (Schritt 4)** ist der invasivste Teil. Falls Du das Risiko klein halten willst, können wir Schritt 4 weglassen und Graphen unverändert auf 5-Min-Buckets lassen — dann ist nur die KPI-Anzeige live, Graphen bleiben wie heute.
-
-## Empfohlene Reihenfolge
-
-1. Schritt 1+2 (Worker + Snapshot-Tabelle) — bringt Live-Werte für Heute/Monat/Jahr/Gesamt.
-2. Schritt 3 (Broadcast + KPI-Kacheln) — sichtbarer Effekt für Dich.
-3. **Validieren mit AICONO Zentrale** — erst wenn das passt:
-4. Schritt 4 (Graphen umstellen) — optional, separat bestätigen.
-
-Soll ich so umsetzen?
+## Frage an dich vor Implementierung
+Soll ich das Intervall **fix auf 5 s** setzen, oder lieber direkt **per Env konfigurierbar** (Default 5 s) machen, damit wir später ohne Re-Build justieren können?
