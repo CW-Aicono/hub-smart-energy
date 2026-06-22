@@ -1520,21 +1520,21 @@ docker run -d --restart=always --name loxone-ws-worker-live \
   loxone-ws-worker-live
 ```
 
-**Beispiel mit Beispielwerten** (so darf es NICHT bleiben — Ihre echten Werte einsetzen!):
+**Beispiel mit echten Live-Werten** (SUPABASE_URL ist hier bereits korrekt eingetragen; nur den API-Key noch ersetzen):
 
 ```bash
 docker run -d --restart=always --name loxone-ws-worker-live \
   -p 8081:8080 \
-  -e SUPABASE_URL=https://abcdefg12345.supabase.co \
-  -e GATEWAY_API_KEY=sk_live_51H8xyz... \
+  -e SUPABASE_URL=https://api-ems.aicono.org \
+  -e GATEWAY_API_KEY=[HIER_LIVE_API_KEY] \
   loxone-ws-worker-live
 ```
 
 **Worauf Sie achten müssen, bevor Sie auf Enter drücken:**
 
 - Alle vier Backslashes (`\`) am Zeilenende sind drin (kein Leerzeichen dahinter!).
-- Die eckigen Klammern `[` und `]` sind **vollständig entfernt** und durch Ihre echten Werte ersetzt.
-- Die SUPABASE_URL beginnt mit `https://` und endet mit `.supabase.co` (ohne Schrägstrich am Ende).
+- Die eckigen Klammern `[` und `]` beim API-Key sind **vollständig entfernt** und durch Ihren echten Live-Wert ersetzt.
+- Die SUPABASE_URL lautet **exakt** `https://api-ems.aicono.org` (kein Schrägstrich am Ende).
 - Der Container-Name ist `loxone-ws-worker-live` (NICHT `loxone-ws-worker` — sonst überschreiben Sie den Test-Worker).
 - Der Port ist `8081:8080` (NICHT `8080:8080` — Port 8080 ist vom Test-Worker belegt).
 
