@@ -1102,7 +1102,275 @@ async function handleWorkerHeartbeat(req: Request): Promise<Response> {
   return json({ success: true, recorded_at: new Date().toISOString() });
 }
 
+/* ── Bridge-Worker (Variante B): Heartbeat & Event-Log ─────────────────────── */
+
+/**
+ * POST ?action=bridge-heartbeat
+ * Body: { worker_name: string, version?: string, host?: string,
+ *         status?: "online"|"degraded"|"offline", last_error?: string|null,
+ *         links_state?: Array<{ miniserver_serial: string,
+ *                               last_connected_at?: string, last_event_at?: string }> }
+ *
+ * Aktualisiert `bridge_workers.last_heartbeat_at` (anhand worker_name) und
+ * optional die Zeitstempel der zugehörigen `bridge_miniserver_links`.
+ */
+async function handleBridgeHeartbeat(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    worker_name?: string;
+    version?: string;
+    host?: string;
+    status?: string;
+    last_error?: string | null;
+    links_state?: Array<{
+      miniserver_serial: string;
+      last_connected_at?: string;
+      last_event_at?: string;
+    }>;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.worker_name) return json({ error: "worker_name required" }, 400);
+
+  const supabase = getSupabase();
+  const nowIso = new Date().toISOString();
+
+  const patch: Record<string, unknown> = {
+    last_heartbeat_at: nowIso,
+    status: body.status ?? "online",
+  };
+  if (body.version !== undefined) patch.version = body.version;
+  if (body.host !== undefined) patch.host = body.host;
+  if (body.last_error !== undefined) patch.last_error = body.last_error;
+
+  const { data: worker, error } = await supabase
+    .from("bridge_workers")
+    .update(patch)
+    .eq("name", body.worker_name)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !worker) {
+    return json({ success: false, error: error?.message ?? "worker not found" }, 404);
+  }
+
+  // Optional: pro Miniserver Zeitstempel nachziehen
+  if (Array.isArray(body.links_state) && body.links_state.length > 0) {
+    for (const link of body.links_state) {
+      if (!link.miniserver_serial) continue;
+      const linkPatch: Record<string, unknown> = {};
+      if (link.last_connected_at) linkPatch.last_connected_at = link.last_connected_at;
+      if (link.last_event_at) linkPatch.last_event_at = link.last_event_at;
+      if (Object.keys(linkPatch).length === 0) continue;
+      await supabase
+        .from("bridge_miniserver_links")
+        .update(linkPatch)
+        .eq("worker_id", worker.id)
+        .eq("miniserver_serial", link.miniserver_serial);
+    }
+  }
+
+  return json({ success: true, worker_id: worker.id, recorded_at: nowIso });
+}
+
+/**
+ * POST ?action=bridge-log-event
+ * Body: { worker_name: string, severity?: "debug"|"info"|"warn"|"error",
+ *         event_type: string, message?: string, details?: any,
+ *         miniserver_serial?: string }
+ *
+ * Schreibt einen Eintrag in `bridge_event_log` (Retention: 7 Tage).
+ * Dient als Diagnose-Quelle für stille WebSocket-Abbrüche / Token-Refresh-Fehler.
+ */
+async function handleBridgeLogEvent(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    worker_name?: string;
+    severity?: "debug" | "info" | "warn" | "error";
+    event_type?: string;
+    message?: string;
+    details?: unknown;
+    miniserver_serial?: string;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.worker_name || !body.event_type) {
+    return json({ error: "worker_name and event_type required" }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  // Worker + (optional) Link auflösen
+  const { data: worker } = await supabase
+    .from("bridge_workers")
+    .select("id")
+    .eq("name", body.worker_name)
+    .maybeSingle();
+
+  let linkId: string | null = null;
+  let tenantId: string | null = null;
+  if (worker && body.miniserver_serial) {
+    const { data: link } = await supabase
+      .from("bridge_miniserver_links")
+      .select("id, tenant_id")
+      .eq("worker_id", worker.id)
+      .eq("miniserver_serial", body.miniserver_serial)
+      .maybeSingle();
+    if (link) { linkId = link.id; tenantId = link.tenant_id ?? null; }
+  }
+
+  const { error } = await supabase.from("bridge_event_log").insert({
+    worker_id: worker?.id ?? null,
+    link_id: linkId,
+    tenant_id: tenantId,
+    severity: body.severity ?? "info",
+    event_type: body.event_type,
+    message: body.message ?? null,
+    details: body.details ?? null,
+  });
+
+  if (error) return json({ success: false, error: error.message }, 500);
+  return json({ success: true });
+}
+
+/**
+ * POST ?action=bridge-readings
+ * Body: {
+ *   worker_name: string,
+ *   readings: [{ miniserver_serial, sensor_uuid, value, recorded_at? }]
+ * }
+ * Schreibt die Roh-Werte in `bridge_raw_samples` (Ringpuffer, 24 h).
+ * Aggregation in die Schatten-Tabellen passiert separat in der
+ * Edge-Function `bridge-aggregator` (pg_cron, alle 5 Min).
+ */
+async function handleBridgeReadings(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    worker_name?: string;
+    readings?: Array<{
+      miniserver_serial?: string;
+      sensor_uuid?: string;
+      value?: number;
+      recorded_at?: string;
+      role?: "pwr" | "today" | "total" | "month" | "year";
+    }>;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.worker_name || !Array.isArray(body.readings) || body.readings.length === 0) {
+    return json({ error: "worker_name and non-empty readings[] required" }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  const { data: worker } = await supabase
+    .from("bridge_workers")
+    .select("id")
+    .eq("name", body.worker_name)
+    .maybeSingle();
+  if (!worker) return json({ error: "unknown worker_name" }, 404);
+
+  // Link-Cache pro Aufruf (1 DB-Query je Miniserver, nicht je Reading)
+  const linkCache = new Map<string, { id: string; tenant_id: string | null }>();
+  const serials = [...new Set(body.readings.map(r => r.miniserver_serial).filter(Boolean) as string[])];
+  if (serials.length > 0) {
+    const { data: links } = await supabase
+      .from("bridge_miniserver_links")
+      .select("id, tenant_id, miniserver_serial")
+      .eq("worker_id", worker.id)
+      .in("miniserver_serial", serials);
+    for (const l of links ?? []) {
+      linkCache.set(l.miniserver_serial, { id: l.id, tenant_id: l.tenant_id ?? null });
+    }
+  }
+
+  // Phase 7: rollenbasiertes Routing
+  //  - role="pwr" (Default)  → bridge_raw_samples (für 5-Min-Aggregator) + Broadcast
+  //  - role!="pwr"            → nur Broadcast (kein DB-Write); UI nutzt den Wert live in KPI-Kacheln
+  type Role = "pwr" | "today" | "total" | "month" | "year";
+  const rawRows: any[] = [];
+  const broadcastRows: Array<{ tenant_id: string | null; uuid: string; value: number; at: string; role: Role }> = [];
+  let skipped = 0;
+  for (const r of body.readings) {
+    if (!r.miniserver_serial || !r.sensor_uuid || typeof r.value !== "number" || !isFinite(r.value)) {
+      skipped++;
+      continue;
+    }
+    const role: Role = (r.role as Role) ?? "pwr";
+    const link = linkCache.get(r.miniserver_serial);
+    const uuid = r.sensor_uuid.toLowerCase();
+    const at = r.recorded_at ?? new Date().toISOString();
+    broadcastRows.push({ tenant_id: link?.tenant_id ?? null, uuid, value: r.value, at, role });
+    if (role === "pwr") {
+      rawRows.push({
+        worker_id: worker.id,
+        link_id: link?.id ?? null,
+        tenant_id: link?.tenant_id ?? null,
+        miniserver_serial: r.miniserver_serial,
+        uuid,
+        value: r.value,
+        received_at: at,
+      });
+    }
+  }
+
+  // Power-Werte in bridge_raw_samples persistieren (für 5-Min-Aggregator).
+  if (rawRows.length > 0) {
+    const { error } = await supabase.from("bridge_raw_samples").insert(rawRows);
+    if (error) return json({ success: false, error: error.message }, 500);
+  }
+
+  // Realtime-Broadcast pro Tenant: Power + Energiestände (today/total/...) zusammen.
+  // UI unterscheidet anhand der `role`, welches Feld zu aktualisieren ist.
+  try {
+    const byTenant = new Map<string, Array<{ uuid: string; value: number; at: string; role: Role }>>();
+    for (const r of broadcastRows) {
+      if (!r.tenant_id) continue;
+      const arr = byTenant.get(r.tenant_id) ?? [];
+      arr.push({ uuid: r.uuid, value: r.value, at: r.at, role: r.role });
+      byTenant.set(r.tenant_id, arr);
+    }
+    if (byTenant.size > 0) {
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+      const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const messages = [...byTenant.entries()].map(([tenantId, events]) => ({
+        topic: `loxone-live-${tenantId}`,
+        event: "readings",
+        payload: { events },
+        private: false,
+      }));
+      fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SERVICE_ROLE,
+          Authorization: `Bearer ${SERVICE_ROLE}`,
+        },
+        body: JSON.stringify({ messages }),
+      }).then(async (r) => {
+        if (!r.ok) {
+          const txt = await r.text().catch(() => "");
+          console.error(`[bridge-readings] broadcast HTTP ${r.status}: ${txt}`);
+        } else {
+          console.log(`[bridge-readings] broadcast ok: ${messages.length} topic(s), ${broadcastRows.length} event(s) (raw_inserted=${rawRows.length})`);
+        }
+      }).catch((e) => console.error("[bridge-readings] broadcast failed:", e?.message ?? e));
+    }
+  } catch (e) {
+    console.error("[bridge-readings] broadcast prep error:", (e as Error).message);
+  }
+
+  return json({ success: true, inserted: rawRows.length, broadcast: broadcastRows.length, skipped });
+}
+
 /* ── Loxone Remote-Connect WebSocket Feldtest ───────────────────────────────── */
+
 
 /**
  * GET ?action=list-loxone-ws-meters
@@ -1156,6 +1424,19 @@ async function handleWsSessionStart(req: Request): Promise<Response> {
   }
 
   const supabase = getSupabase();
+
+  // A) Vor dem Anlegen einer neuen Session alle noch offenen Vorgänger-Zeilen
+  //    derselben (tenant_id, location_integration_id) schließen.
+  //    Verhindert Zombie-Rows mit ended_at=NULL, die im Monitor als "200+ Sitzungen" zählen.
+  const { error: closeErr } = await supabase
+    .rpc("close_orphan_loxone_ws_sessions", {
+      _tenant_id: body.tenant_id,
+      _location_integration_id: body.location_integration_id,
+    });
+  if (closeErr) {
+    console.warn("[gateway-ingest] ws-session-start orphan close warning:", closeErr.message);
+  }
+
   const { data, error } = await supabase
     .from("loxone_ws_session_log")
     .insert({
@@ -1173,6 +1454,7 @@ async function handleWsSessionStart(req: Request): Promise<Response> {
 
   return json({ success: true, session_id: data.id });
 }
+
 
 /**
  * POST ?action=ws-session-end
@@ -1760,6 +2042,9 @@ Deno.serve(async (req) => {
     if (action === "schneider-push") return handleSchneiderPush(req);
     if (action === "heartbeat") return handleHeartbeat(req);
     if (action === "worker-heartbeat") return handleWorkerHeartbeat(req);
+    if (action === "bridge-heartbeat") return handleBridgeHeartbeat(req);
+    if (action === "bridge-log-event") return handleBridgeLogEvent(req);
+    if (action === "bridge-readings") return handleBridgeReadings(req);
     if (action === "gateway-backup") return handleGatewayBackup(req);
     if (action === "gateway-command") return handleGatewayCommand(req);
     if (action === "push-execution-logs") return handlePushExecutionLogs(req);
@@ -1784,7 +2069,11 @@ Deno.serve(async (req) => {
       return handleSchneiderPush(req);
     }
 
-    return handlePostReadings(req);
+    return json({
+      success: false,
+      error: "Temporär deaktiviert: alter Polling-/Push-Pfad ohne action. Für Loxone sind nur bridge-readings per WS-Bridge erlaubt.",
+      disabled: "legacy_post_readings",
+    }, 410);
   }
 
   return json({ error: "Method not allowed" }, 405);

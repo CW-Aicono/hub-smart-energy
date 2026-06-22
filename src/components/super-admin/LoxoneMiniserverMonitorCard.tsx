@@ -38,7 +38,9 @@ interface MiniserverRow {
 }
 
 const LOOKBACK_MS = 24 * 60 * 60 * 1000;
-const FRESH_HEARTBEAT_MS = 45_000;
+// Worker sendet Heartbeat alle 5 Min (BRIDGE_HEARTBEAT_MS=300000).
+// Schwelle = 6 Min, damit Anzeige stabil grün bleibt zwischen zwei Heartbeats.
+const FRESH_HEARTBEAT_MS = 360_000;
 
 async function fetchData(): Promise<MiniserverRow[]> {
   const sinceIso = new Date(Date.now() - LOOKBACK_MS).toISOString();

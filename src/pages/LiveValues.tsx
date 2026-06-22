@@ -15,7 +15,6 @@ import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer }
 import { supabase } from "@/integrations/supabase/client";
 import { formatEnergy, formatGasDual } from "@/lib/formatEnergy";
 import { cn } from "@/lib/utils";
-import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
 
 interface MeterLiveValue {
   meterId: string;
@@ -26,6 +25,19 @@ interface MeterLiveValue {
   totalYear: number | null;
   loading: boolean;
 }
+
+const getBerlinDateKey = (date: Date): string => {
+  const parts = new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return `${year}-${month}-${day}`;
+};
 
 const LiveValues = () => {
   const { user, loading: authLoading } = useAuth();
@@ -249,186 +261,170 @@ const LiveValues = () => {
 
     setLoadingLive(true);
 
-    // Fetch latest power reading per meter from DB
-    const { data: powerRows } = await supabase
-      .from("meter_power_readings")
-      .select("meter_id, power_value, recorded_at")
-      .in("meter_id", autoMeters.map((m) => m.id))
-      .order("recorded_at", { ascending: false });
+    const meterIds = autoMeters.map((m) => m.id);
+    const uuids = autoMeters.map((m) => m.sensor_uuid!.toLowerCase());
+    const uuidToMeterId = new Map<string, string>();
+    for (const m of autoMeters) uuidToMeterId.set(m.sensor_uuid!.toLowerCase(), m.id);
 
-    // Fetch period totals (day/month/year) from meter_period_totals
-    const today = new Date().toISOString().split("T")[0];
+    const today = getBerlinDateKey(new Date());
     const firstOfMonth = today.substring(0, 7) + "-01";
     const firstOfYear = today.substring(0, 4) + "-01-01";
 
-    const { data: periodRows } = await supabase
-      .from("meter_period_totals")
-      .select("meter_id, period_type, period_start, total_value, energy_type")
-      .in("meter_id", autoMeters.map((m) => m.id))
-      .in("period_type", ["day", "month", "year"]);
+    // Parallel: DB-Polling-Wert, Bridge-Raw-Wert (Live), Perioden-Totals
+    const [powerRes, bridgeRes, periodRes] = await Promise.all([
+      supabase
+        .from("meter_power_readings")
+        .select("meter_id, power_value, recorded_at")
+        .in("meter_id", meterIds)
+        .gte("recorded_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
+        .order("recorded_at", { ascending: false }),
+      supabase
+        .from("bridge_raw_samples")
+        .select("uuid, value, received_at")
+        .in("uuid", uuids)
+        .gte("received_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
+        .order("received_at", { ascending: false }),
+      supabase
+        .from("meter_period_totals")
+        .select("meter_id, period_type, period_start, total_value, energy_type")
+        .in("meter_id", meterIds)
+        .in("period_type", ["day", "month", "year"])
+        .in("period_start", [today, firstOfMonth, firstOfYear]),
+    ]);
 
-    // Build period totals map
+    // Letzten Bridge-Wert pro UUID extrahieren
+    const bridgeLatest = new Map<string, { value: number; at: number }>();
+    for (const row of bridgeRes.data ?? []) {
+      const u = row.uuid.toLowerCase();
+      if (bridgeLatest.has(u)) continue;
+      bridgeLatest.set(u, { value: Number(row.value), at: new Date(row.received_at).getTime() });
+    }
+
+    // Letzten Polling-Wert pro Meter extrahieren
+    const pollingLatest = new Map<string, { value: number; at: number }>();
+    for (const row of powerRes.data ?? []) {
+      if (pollingLatest.has(row.meter_id)) continue;
+      pollingLatest.set(row.meter_id, { value: Number(row.power_value), at: new Date(row.recorded_at).getTime() });
+    }
+
     const periodMap = new Map<string, { totalDay: number | null; totalMonth: number | null; totalYear: number | null }>();
-    if (periodRows) {
-      for (const row of periodRows) {
-        const existing = periodMap.get(row.meter_id) ?? { totalDay: null, totalMonth: null, totalYear: null };
-        if (row.period_type === "day" && row.period_start === today) existing.totalDay = row.total_value;
-        if (row.period_type === "month" && row.period_start === firstOfMonth) existing.totalMonth = row.total_value;
-        if (row.period_type === "year" && row.period_start === firstOfYear) existing.totalYear = row.total_value;
-        periodMap.set(row.meter_id, existing);
-      }
+    for (const row of periodRes.data ?? []) {
+      const existing = periodMap.get(row.meter_id) ?? { totalDay: null, totalMonth: null, totalYear: null };
+      if (row.period_type === "day" && row.period_start === today) existing.totalDay = row.total_value;
+      if (row.period_type === "month" && row.period_start === firstOfMonth) existing.totalMonth = row.total_value;
+      if (row.period_type === "year" && row.period_start === firstOfYear) existing.totalYear = row.total_value;
+      periodMap.set(row.meter_id, existing);
     }
 
-    // Build live values map — last value per meter
-    if (powerRows) {
-      setLiveValues((prev) => {
-        const next = new Map(prev);
-        const seen = new Set<string>();
-        for (const row of powerRows) {
-          if (seen.has(row.meter_id)) continue;
-          seen.add(row.meter_id);
-          const periods = periodMap.get(row.meter_id) ?? { totalDay: null, totalMonth: null, totalYear: null };
-          next.set(row.meter_id, {
-            value: row.power_value,
-            unit: "",
-            totalDay: periods.totalDay,
-            totalWeek: null,
-            totalMonth: periods.totalMonth,
-            totalYear: periods.totalYear,
-            meterReading: null,
-            meterReadingUnit: "kWh",
-          });
+    setLiveValues((prev) => {
+      const next = new Map(prev);
+      for (const m of autoMeters) {
+        const polling = pollingLatest.get(m.id);
+        const bridge = bridgeLatest.get(m.sensor_uuid!.toLowerCase());
+        let chosen: { value: number } | undefined;
+        // Neueres Sample gewinnt; Bridge bei Gleichstand bevorzugt
+        if (bridge && polling) {
+          chosen = bridge.at >= polling.at ? bridge : polling;
+        } else {
+          chosen = bridge ?? polling;
         }
-        return next;
-      });
-      setLastRefresh(new Date());
-    }
-    setLoadingLive(false);
-  }, [meters]);
-
-  // Fetch period totals + meter readings from loxone-api once per session (for totalDay, meterReading etc.)
-  const fetchLiveValues = useCallback(async () => {
-    const autoMeters = meters.filter(
-      (m) => !m.is_archived && m.capture_type === "automatic" && m.sensor_uuid && m.location_integration_id
-    );
-    if (autoMeters.length === 0) return;
-
-    setLoadingLive(true);
-
-    // Group by integration
-    const byIntegration = new Map<string, typeof autoMeters>();
-    autoMeters.forEach((m) => {
-      const key = m.location_integration_id!;
-      const arr = byIntegration.get(key) || [];
-      arr.push(m);
-      byIntegration.set(key, arr);
-    });
-
-    // Fetch integration types for all relevant integration IDs
-    const integrationIds = Array.from(byIntegration.keys());
-    const { data: liRows } = await supabase
-      .from("location_integrations")
-      .select("id, integrations(type)")
-      .in("id", integrationIds);
-
-    const typeMap = new Map<string, string>();
-    if (liRows) {
-      for (const row of liRows) {
-        const intType = (row as any).integrations?.type;
-        if (intType) typeMap.set(row.id, intType);
-      }
-    }
-
-    for (const [integrationId, intMeters] of byIntegration) {
-      try {
-        const edgeFunction = getEdgeFunctionName(typeMap.get(integrationId) || "");
-        const { invokeWithRetry } = await import("@/lib/invokeWithRetry");
-        const { data, error } = await invokeWithRetry(edgeFunction, {
-          body: { locationIntegrationId: integrationId, action: "getSensors" },
+        if (!chosen) continue;
+        const periods = periodMap.get(m.id) ?? { totalDay: null, totalMonth: null, totalYear: null };
+        next.set(m.id, {
+          value: chosen.value,
+          unit: "",
+          totalDay: periods.totalDay,
+          totalWeek: null,
+          totalMonth: periods.totalMonth,
+          totalYear: periods.totalYear,
+          meterReading: null,
+          meterReadingUnit: "kWh",
         });
-        if (error || !data?.success) continue;
-
-        for (const meter of intMeters) {
-          const sensor = data.sensors?.find((s: any) => s.id === meter.sensor_uuid);
-          if (sensor) {
-            const numVal = typeof sensor.rawValue === "number"
-              ? sensor.rawValue
-              : (sensor.rawValue != null ? parseFloat(String(sensor.rawValue)) : NaN);
-            const totalDay = typeof sensor.totalDay === "number"
-              ? sensor.totalDay
-              : (sensor.totalDay != null ? parseFloat(String(sensor.totalDay)) : null);
-            const totalWeek = typeof sensor.totalWeek === "number" ? sensor.totalWeek : (sensor.totalWeek != null ? parseFloat(String(sensor.totalWeek)) : null);
-            const totalMonth = typeof sensor.totalMonth === "number" ? sensor.totalMonth : (sensor.totalMonth != null ? parseFloat(String(sensor.totalMonth)) : null);
-            const totalYear = typeof sensor.totalYear === "number" ? sensor.totalYear : (sensor.totalYear != null ? parseFloat(String(sensor.totalYear)) : null);
-            const meterReadingRaw = sensor.secondaryValue != null && sensor.secondaryValue !== ""
-              ? (typeof sensor.secondaryValue === "number" ? sensor.secondaryValue : parseFloat(String(sensor.secondaryValue).replace(/\./g, "").replace(",", ".")))
-              : null;
-            const meterReading = meterReadingRaw !== null && !isNaN(meterReadingRaw) ? meterReadingRaw : null;
-            const meterReadingUnit = sensor.secondaryUnit || "kWh";
-
-            if (!isNaN(numVal)) {
-              setLiveValues((prev) => {
-                const next = new Map(prev);
-                next.set(meter.id, {
-                  value: numVal,
-                  unit: sensor.unit || "",
-                  totalDay: totalDay !== null && !isNaN(totalDay) ? totalDay : null,
-                  totalWeek: totalWeek !== null && !isNaN(totalWeek as number) ? totalWeek : null,
-                  totalMonth: totalMonth !== null && !isNaN(totalMonth as number) ? totalMonth : null,
-                  totalYear: totalYear !== null && !isNaN(totalYear as number) ? totalYear : null,
-                  meterReading,
-                  meterReadingUnit,
-                });
-                return next;
-              });
-            }
-          }
-        }
-      } catch (err) {
-        console.warn(`Failed to fetch live sensors for integration ${integrationId}:`, err);
       }
-    }
-
+      return next;
+    });
     setLastRefresh(new Date());
     setLoadingLive(false);
   }, [meters]);
 
-  // On mount: load initial DB values, then fetch full data from loxone-api once,
-  // then subscribe to Realtime for instant power_value updates
+
+  // On mount: load only existing DB values, then subscribe to Loxone-WS-Bridge via Realtime-Broadcast.
+  // Temporär: KEIN loxone-api/getSensors HTTP-Polling auf dieser Seite.
   useEffect(() => {
     if (meters.length === 0) return;
 
     loadInitialPowerValues();
-    fetchLiveValues();
 
-    // Realtime subscription: update power_value instantly on every new INSERT
-    const channel = supabase
-      .channel("meter-power-readings-live")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "meter_power_readings" },
-        (payload) => {
-          const r = payload.new as { meter_id: string; power_value: number; recorded_at: string };
+    // uuid → meter_id Map (für schnelles Lookup im Broadcast-Handler)
+    const uuidToMeterId = new Map<string, string>();
+    for (const m of meters) {
+      if (m.sensor_uuid) uuidToMeterId.set(m.sensor_uuid.toLowerCase(), m.id);
+    }
+
+    // Eindeutige tenant_ids der angezeigten Meter
+    const tenantIds = [...new Set(meters.map((m) => m.tenant_id).filter(Boolean))] as string[];
+    if (tenantIds.length === 0) return;
+
+    // Pro Tenant einen Broadcast-Channel abonnieren
+    const channels = tenantIds.map((tenantId) => {
+      const channelName = `loxone-live-${tenantId}`;
+      const ch = supabase
+        .channel(channelName, { config: { broadcast: { self: false } } })
+        .on("broadcast", { event: "readings" }, (msg: { payload: { events?: Array<{ uuid: string; value: number; at: string; role?: "pwr" | "today" | "total" | "month" | "year" }> } }) => {
+          const events = msg.payload?.events ?? [];
+          if (events.length === 0) return;
           setLiveValues((prev) => {
-            const existing = prev.get(r.meter_id);
-            if (!existing) return prev; // ignore meters not in our list
+            let changed = false;
             const next = new Map(prev);
-            next.set(r.meter_id, {
-              ...existing,
-              value: r.power_value,
-            });
-            return next;
+            let unmatched = 0;
+            for (const ev of events) {
+              if (Math.abs(ev.value) > 1000) {
+                console.warn("[live-values][diag] suspicious event", {
+                  uuid: ev.uuid, role: ev.role, value: ev.value, at: ev.at,
+                });
+              }
+              const meterId = uuidToMeterId.get(ev.uuid.toLowerCase());
+              if (!meterId) { unmatched++; continue; }
+
+              const role = ev.role ?? "pwr";
+              const existing = next.get(meterId) ?? {
+                value: 0, unit: "", totalDay: null, totalWeek: null,
+                totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "kWh",
+              };
+              let updated = existing;
+              if (role === "pwr") updated = { ...existing, value: ev.value };
+              else if (role === "today") updated = { ...existing, totalDay: ev.value };
+              else if (role === "month") updated = { ...existing, totalMonth: ev.value };
+              else if (role === "year") updated = { ...existing, totalYear: ev.value };
+              else if (role === "total") updated = { ...existing, meterReading: ev.value };
+              next.set(meterId, updated);
+              changed = true;
+            }
+            if (unmatched > 0) {
+              console.log(`[live-values] ${unmatched}/${events.length} broadcast events ohne passenden Zähler (UUID nicht gemappt).`);
+            }
+            return changed ? next : prev;
           });
           setLastRefresh(new Date());
-        }
-      )
-      .subscribe();
+        })
+        .subscribe((status) => {
+          console.log(`[live-values] channel ${channelName} status: ${status}`);
+        });
+      return ch;
+    });
 
     return () => {
-      supabase.removeChannel(channel);
+      for (const ch of channels) supabase.removeChannel(ch);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meters.length]);
+
+  // Manuell-Refresh-Button: temporär nur DB lesen, kein loxone-api/getSensors HTTP-Polling.
+  const handleManualRefresh = useCallback(async () => {
+    await loadInitialPowerValues();
+  }, [loadInitialPowerValues]);
+
+
 
   // Filter meters
   const filteredMeters = useMemo(() => {
@@ -564,10 +560,11 @@ const LiveValues = () => {
                   {t("common.refreshed" as any)}: {lastRefresh.toLocaleTimeString(dateLocale)}
                 </span>
               )}
-              <Button variant="outline" size="sm" onClick={fetchLiveValues} disabled={loadingLive}>
+              <Button variant="outline" size="sm" onClick={handleManualRefresh} disabled={loadingLive}>
                 <RefreshCw className={cn("h-4 w-4 mr-2", loadingLive && "animate-spin")} />
                 {t("common.refresh" as any)}
               </Button>
+
             </div>
           </div>
         </header>

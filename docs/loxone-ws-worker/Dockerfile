@@ -19,8 +19,14 @@ ENV NODE_ENV=production
 ENV LOG_LEVEL=info
 ENV FLUSH_INTERVAL_MS=1000
 ENV RELOAD_INTERVAL_MS=300000
+ENV BRIDGE_WORKER_NAME=hetzner-bridge-test
+ENV BRIDGE_HEARTBEAT_MS=300000
+ENV HEALTH_PORT=8080
 
+EXPOSE 8080
+
+# Healthcheck nutzt den eingebauten /healthz Endpoint
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-  CMD node -e "process.exit(0)" || exit 1
+  CMD wget -q -O- http://127.0.0.1:8080/healthz || exit 1
 
 CMD ["node", "index.js"]

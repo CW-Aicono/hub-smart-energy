@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { decrypt } from "../_shared/crypto.ts";
+import { isWorkerEnabled } from "../_shared/workerKillswitch.ts";
 
 const BRIGHTHUB_API_URL =
   "https://jcewrsouppdsvaipdpsy.supabase.co/functions/v1/energy-api";
@@ -92,6 +93,15 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  if (!(await isWorkerEnabled("brighthub_periodic_sync"))) {
+    console.log("brighthub-periodic-sync: paused via worker_controls — skipping");
+    return new Response(JSON.stringify({ success: true, skipped: true, reason: "worker_paused" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

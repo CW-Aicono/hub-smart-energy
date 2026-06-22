@@ -109,6 +109,7 @@ const Demo = lazy(() => import("./pages/Demo"));
 const SuperAdminMap = lazy(() => import("./pages/SuperAdminMap"));
 const SuperAdminSettings = lazy(() => import("./pages/SuperAdminSettings"));
 const SuperAdminMonitoring = lazy(() => import("./pages/SuperAdminMonitoring"));
+const SuperAdminWorkerControls = lazy(() => import("./pages/SuperAdminWorkerControls"));
 const SuperAdminGatewayFleet = lazy(() => import("./pages/SuperAdminGatewayFleet"));
 const SuperAdminWallboxTemplates = lazy(() => import("./pages/SuperAdminWallboxTemplates"));
 const SuperAdminSalesCatalog = lazy(() => import("./pages/SuperAdminSalesCatalog"));
@@ -238,6 +239,7 @@ const App = () => (
                       <Route path="/super-admin/support" element={<SA><SuperAdminSupport /></SA>} />
                       <Route path="/super-admin/settings" element={<SA><SuperAdminSettings /></SA>} />
                       <Route path="/super-admin/monitoring" element={<SA><SuperAdminMonitoring /></SA>} />
+                      <Route path="/super-admin/worker-controls" element={<SA><SuperAdminWorkerControls /></SA>} />
                       <Route path="/super-admin/gateways" element={<SA><SuperAdminGatewayFleet /></SA>} />
                       <Route path="/super-admin/wallbox-templates" element={<SA><SuperAdminWallboxTemplates /></SA>} />
                       <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />

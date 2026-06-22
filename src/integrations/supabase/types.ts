@@ -551,6 +551,246 @@ export type Database = {
           },
         ]
       }
+      bridge_event_log: {
+        Row: {
+          details: Json | null
+          event_type: string
+          id: number
+          link_id: string | null
+          message: string | null
+          occurred_at: string
+          severity: Database["public"]["Enums"]["bridge_event_severity"]
+          tenant_id: string | null
+          worker_id: string | null
+        }
+        Insert: {
+          details?: Json | null
+          event_type: string
+          id?: number
+          link_id?: string | null
+          message?: string | null
+          occurred_at?: string
+          severity?: Database["public"]["Enums"]["bridge_event_severity"]
+          tenant_id?: string | null
+          worker_id?: string | null
+        }
+        Update: {
+          details?: Json | null
+          event_type?: string
+          id?: number
+          link_id?: string | null
+          message?: string | null
+          occurred_at?: string
+          severity?: Database["public"]["Enums"]["bridge_event_severity"]
+          tenant_id?: string | null
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bridge_event_log_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_miniserver_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_event_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_event_log_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bridge_miniserver_links: {
+        Row: {
+          connection_kind: Database["public"]["Enums"]["bridge_connection_kind"]
+          created_at: string
+          credentials_encrypted: string | null
+          enabled: boolean
+          endpoint: string | null
+          firmware: string | null
+          id: string
+          last_connected_at: string | null
+          last_event_at: string | null
+          location_id: string | null
+          miniserver_generation: number
+          miniserver_serial: string
+          notes: string | null
+          subscribed_uuids: Json
+          tenant_id: string | null
+          updated_at: string
+          worker_id: string
+        }
+        Insert: {
+          connection_kind?: Database["public"]["Enums"]["bridge_connection_kind"]
+          created_at?: string
+          credentials_encrypted?: string | null
+          enabled?: boolean
+          endpoint?: string | null
+          firmware?: string | null
+          id?: string
+          last_connected_at?: string | null
+          last_event_at?: string | null
+          location_id?: string | null
+          miniserver_generation?: number
+          miniserver_serial: string
+          notes?: string | null
+          subscribed_uuids?: Json
+          tenant_id?: string | null
+          updated_at?: string
+          worker_id: string
+        }
+        Update: {
+          connection_kind?: Database["public"]["Enums"]["bridge_connection_kind"]
+          created_at?: string
+          credentials_encrypted?: string | null
+          enabled?: boolean
+          endpoint?: string | null
+          firmware?: string | null
+          id?: string
+          last_connected_at?: string | null
+          last_event_at?: string | null
+          location_id?: string | null
+          miniserver_generation?: number
+          miniserver_serial?: string
+          notes?: string | null
+          subscribed_uuids?: Json
+          tenant_id?: string | null
+          updated_at?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bridge_miniserver_links_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_miniserver_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_miniserver_links_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bridge_raw_samples: {
+        Row: {
+          id: number
+          link_id: string | null
+          miniserver_serial: string
+          processed_at: string | null
+          received_at: string
+          tenant_id: string | null
+          uuid: string
+          value: number
+          worker_id: string | null
+        }
+        Insert: {
+          id?: number
+          link_id?: string | null
+          miniserver_serial: string
+          processed_at?: string | null
+          received_at?: string
+          tenant_id?: string | null
+          uuid: string
+          value: number
+          worker_id?: string | null
+        }
+        Update: {
+          id?: number
+          link_id?: string | null
+          miniserver_serial?: string
+          processed_at?: string | null
+          received_at?: string
+          tenant_id?: string | null
+          uuid?: string
+          value?: number
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bridge_raw_samples_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_miniserver_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_raw_samples_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_raw_samples_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bridge_workers: {
+        Row: {
+          created_at: string
+          description: string | null
+          enabled: boolean
+          host: string | null
+          id: string
+          last_error: string | null
+          last_heartbeat_at: string | null
+          name: string
+          status: Database["public"]["Enums"]["bridge_worker_status"]
+          updated_at: string
+          version: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          host?: string | null
+          id?: string
+          last_error?: string | null
+          last_heartbeat_at?: string | null
+          name: string
+          status?: Database["public"]["Enums"]["bridge_worker_status"]
+          updated_at?: string
+          version?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          host?: string | null
+          id?: string
+          last_error?: string | null
+          last_heartbeat_at?: string | null
+          name?: string
+          status?: Database["public"]["Enums"]["bridge_worker_status"]
+          updated_at?: string
+          version?: string | null
+        }
+        Relationships: []
+      }
       brighthub_settings: {
         Row: {
           api_key: string
@@ -6045,6 +6285,81 @@ export type Database = {
         }
         Relationships: []
       }
+      meter_cumulative_readings: {
+        Row: {
+          created_at: string
+          id: string
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+          source: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+          source?: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kwh_total?: number
+          meter_id?: string
+          reading_at?: string
+          source?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_cumulative_readings_bridge: {
+        Row: {
+          created_at: string
+          id: string
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+          source: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+          source?: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kwh_total?: number
+          meter_id?: string
+          reading_at?: string
+          source?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_cumulative_readings_bridge_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_cumulative_readings_bridge_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_daily_totals_mv: {
         Row: {
           bucket_start: string
@@ -6152,6 +6467,50 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      meter_loxone_daily_snapshots: {
+        Row: {
+          created_at: string
+          energy_today_kwh: number | null
+          energy_total_kwh: number | null
+          id: string
+          meter_id: string
+          snapshot_date: string
+          source: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          energy_today_kwh?: number | null
+          energy_total_kwh?: number | null
+          id?: string
+          meter_id: string
+          snapshot_date: string
+          source?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          energy_today_kwh?: number | null
+          energy_total_kwh?: number | null
+          id?: string
+          meter_id?: string
+          snapshot_date?: string
+          source?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_loxone_daily_snapshots_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meter_monthly_totals: {
         Row: {
@@ -6407,6 +6766,63 @@ export type Database = {
           },
           {
             foreignKeyName: "meter_power_readings_5min_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_power_readings_5min_bridge: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_power_readings_5min_bridge_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_power_readings_5min_bridge_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -11411,6 +11827,39 @@ export type Database = {
           },
         ]
       }
+      worker_controls: {
+        Row: {
+          description: string | null
+          display_name: string
+          enabled: boolean
+          note: string | null
+          paused_at: string | null
+          paused_by: string | null
+          updated_at: string
+          worker_key: string
+        }
+        Insert: {
+          description?: string | null
+          display_name: string
+          enabled?: boolean
+          note?: string | null
+          paused_at?: string | null
+          paused_by?: string | null
+          updated_at?: string
+          worker_key: string
+        }
+        Update: {
+          description?: string | null
+          display_name?: string
+          enabled?: boolean
+          note?: string | null
+          paused_at?: string | null
+          paused_by?: string | null
+          updated_at?: string
+          worker_key?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       charging_users_public: {
@@ -11480,6 +11929,19 @@ export type Database = {
       }
     }
     Functions: {
+      admin_top_disk_readers: {
+        Args: { limit_n?: number }
+        Returns: {
+          calls: number
+          mean_ms: number
+          query: string
+          read_ratio: number
+          rolname: string
+          shared_blks_hit: number
+          shared_blks_read: number
+          total_ms: number
+        }[]
+      }
       aggregate_pv_actual_hourly: {
         Args: { p_from?: string; p_to?: string }
         Returns: number
@@ -11492,10 +11954,12 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      bridge_event_log_cleanup: { Args: never; Returns: undefined }
       can_access_sales_project: {
         Args: { _project_id: string }
         Returns: boolean
       }
+      cleanup_bridge_raw_samples: { Args: never; Returns: undefined }
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_cron_job_history: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
@@ -11505,6 +11969,10 @@ export type Database = {
       cleanup_old_ocpp_logs: { Args: never; Returns: number }
       cleanup_pg_net_responses: { Args: never; Returns: number }
       cleanup_stale_integration_errors: { Args: never; Returns: number }
+      close_orphan_loxone_ws_sessions: {
+        Args: { _location_integration_id: string; _tenant_id: string }
+        Returns: number
+      }
       collect_db_metrics: { Args: never; Returns: Json }
       community_data_quality: {
         Args: { p_community_id: string }
@@ -11884,6 +12352,9 @@ export type Database = {
         | "community_member"
         | "partner_admin"
         | "partner_user"
+      bridge_connection_kind: "lan" | "cloud_dns" | "remote_connect"
+      bridge_event_severity: "debug" | "info" | "warn" | "error"
+      bridge_worker_status: "online" | "degraded" | "offline" | "disabled"
       device_class:
         | "meter"
         | "gateway"
@@ -12043,6 +12514,9 @@ export const Constants = {
         "partner_admin",
         "partner_user",
       ],
+      bridge_connection_kind: ["lan", "cloud_dns", "remote_connect"],
+      bridge_event_severity: ["debug", "info", "warn", "error"],
+      bridge_worker_status: ["online", "degraded", "offline", "disabled"],
       device_class: [
         "meter",
         "gateway",

@@ -483,6 +483,10 @@ serve(async (req) => {
     const isRefreshAction = action === "refreshSensors";
     if (isRefreshAction) action = "getSensors";
     const shouldPersistReadings = isServiceRole || isRefreshAction || requestBody?.persistToDb === true;
+    // Hybrid-Strategie (Phase 6.4): getSensors/Details/backfill sind wieder
+    // aktiv — sie liefern die driftfreien Zählerstände, während die WS-Bridge
+    // parallel die Live-Power-Events sendet.
+
     // Manual UI-triggered refresh (Tacho/Discovery button) → bypass the 1 h
     // structure cache so newly added Loxone sensors/actuators show up instantly.
     // Cron/background calls (service role) keep using the cache to save traffic.
@@ -976,6 +980,30 @@ serve(async (req) => {
             recorded_at: string;
           }> = [];
 
+          // Kumulative Zählerstands-Snapshots (für intervall-unabhängige Ist-Berechnung)
+          const cumulativeInserts: Array<{
+            tenant_id: string;
+            meter_id: string;
+            reading_at: string;
+            kwh_total: number;
+            source: string;
+          }> = [];
+
+          // Phase 7: Tagessnapshot pro Meter (Loxone-Wahrheit). Wird mehrmals täglich
+          // durch den 15-Min-Poll überschrieben → letzter Wert vor Mitternacht bleibt
+          // als finaler Tageswert stehen. Grundlage für Monat/Jahr-Berechnung
+          // (= aktuelles total minus Snapshot vom 01. des Monats / 01.01.) und für
+          // Wochen-/Quartalsaggregation.
+          const dailySnapshotInserts: Array<{
+            tenant_id: string;
+            meter_id: string;
+            snapshot_date: string;
+            energy_total_kwh: number | null;
+            energy_today_kwh: number | null;
+            source: string;
+          }> = [];
+
+
           // Spike-Detection: Fetch the last few power readings per meter to compute a baseline.
           // A new reading is considered a spike if it is > SPIKE_FACTOR × median of recent readings.
           // We use the last 6 readings (~30 min) as baseline window.
@@ -1057,19 +1085,23 @@ serve(async (req) => {
               });
             }
 
+            // Berlin-Datum einmal pro Meter berechnen (für day/month/year period_start)
+            const berlinFmtT = new Intl.DateTimeFormat("en-CA", {
+              timeZone: "Europe/Berlin",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            });
+            const todayStr = berlinFmtT.format(now); // YYYY-MM-DD in Berlin
+            const firstOfMonthStr = `${todayStr.slice(0, 7)}-01`;
+            const firstOfYearStr = `${todayStr.slice(0, 4)}-01-01`;
+
             // Persist TODAY's running total (Rd/Rdc/Rdd) so dashboards & RPCs
             // can rely on the authoritative Loxone counter instead of a
             // 5-min power-aggregation estimate. Stored as source='loxone_live'
             // on today's date (Europe/Berlin). Overwritten at midnight when
             // 'loxone' source archives totalDayLast for the completed day.
             if (stateData?.totalDay != null && stateData.totalDay >= 0) {
-              const berlinFmtT = new Intl.DateTimeFormat("en-CA", {
-                timeZone: "Europe/Berlin",
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-              });
-              const todayStr = berlinFmtT.format(now); // YYYY-MM-DD in Berlin
               monthUpserts.push({
                 tenant_id: meter.tenant_id,
                 meter_id: meter.id,
@@ -1080,6 +1112,91 @@ serve(async (req) => {
                 source: "loxone_live",
               });
             }
+
+            // Persist CURRENT month total (Rm/Rmc/Rmd) als Loxone-Gold-Standard.
+            // Quelle: Loxone Miniserver HTTP-Counter, alle 15 Min aktualisiert.
+            // Überschreibt etwaige 5-Min-aggregierte Schätzungen.
+            if (stateData?.totalMonth != null && stateData.totalMonth >= 0) {
+              monthUpserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                period_type: "month",
+                period_start: firstOfMonthStr,
+                total_value: stateData.totalMonth,
+                energy_type: meter.energy_type,
+                source: "loxone_live",
+              });
+            }
+
+            // Persist CURRENT year total (Ry/Ryc/Ryd) als Loxone-Gold-Standard.
+            // Damit ist der Jahres-Wert auch dann korrekt, wenn die WS-Bridge
+            // zwischenzeitlich offline war und Day-Rows fehlen.
+            if (stateData?.totalYear != null && stateData.totalYear >= 0) {
+              monthUpserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                period_type: "year",
+                period_start: firstOfYearStr,
+                total_value: stateData.totalYear,
+                energy_type: meter.energy_type,
+                source: "loxone_live",
+              });
+            }
+
+            // Snapshot des kumulativen Zählerstandes — Priorität:
+            //   1. Mr (echter Zählerstand, in stateData.secondaryValue für Meter-Controls)
+            //   2. totalYear (Ry) als Fallback
+            //   3. totalDay als letzter Fallback
+            // Wird in `meter_cumulative_readings` geschrieben und vom Aggregator
+            // `aggregate_pv_actual_hourly` zur intervall-unabhängigen Berechnung
+            // der Ist-Erzeugung pro Stunde verwendet.
+            const mrRaw = stateData?.secondaryValue;
+            const mrNum = typeof mrRaw === "number"
+              ? mrRaw
+              : (typeof mrRaw === "string" && mrRaw.trim() !== "" ? parseFloat(mrRaw) : NaN);
+            const mrValid = isFinite(mrNum) && mrNum > 0;
+            const cumulativeKwh = mrValid
+              ? mrNum
+              : (stateData?.totalYear != null && stateData.totalYear > 0)
+                ? Number(stateData.totalYear)
+                : (stateData?.totalDay != null && stateData.totalDay >= 0 ? Number(stateData.totalDay) : null);
+            const cumulativeSource = mrValid
+              ? "loxone_live_total"
+              : (stateData?.totalYear != null && stateData.totalYear > 0)
+                ? "loxone_live_year"
+                : "loxone_live_day";
+            if (cumulativeKwh != null && isFinite(cumulativeKwh)) {
+              cumulativeInserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                reading_at: now.toISOString(),
+                kwh_total: cumulativeKwh,
+                source: cumulativeSource,
+              });
+            }
+
+
+            // Phase 7: Tagessnapshot (Europe/Berlin-Datum) — letzter Wert pro Tag bleibt persistent.
+            try {
+              const berlinDate = new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit",
+              }).format(now); // → "YYYY-MM-DD"
+              const totalKwh = (stateData?.totalYear != null && stateData.totalYear > 0)
+                ? Number(stateData.totalYear)
+                : (stateData?.totalDay != null ? Number(stateData.totalDay) : null);
+              const todayKwh = stateData?.totalDay != null ? Number(stateData.totalDay) : null;
+              if ((totalKwh != null && isFinite(totalKwh)) || (todayKwh != null && isFinite(todayKwh))) {
+                dailySnapshotInserts.push({
+                  tenant_id: meter.tenant_id,
+                  meter_id: meter.id,
+                  snapshot_date: berlinDate,
+                  energy_total_kwh: totalKwh != null && isFinite(totalKwh) ? totalKwh : null,
+                  energy_today_kwh: todayKwh != null && isFinite(todayKwh) ? todayKwh : null,
+                  source: "loxone_http_poll",
+                });
+              }
+            } catch (_e) { /* date formatting issues → snapshot überspringen */ }
+
 
             // Store instantaneous power reading for time-series (with spike filter)
             if (stateData?.value != null) {
@@ -1144,13 +1261,32 @@ serve(async (req) => {
             });
 
             if (toUpsert.length > 0) {
-              const { error: upsertError } = await supabase
-                .from("meter_period_totals")
-                .upsert(toUpsert, { onConflict: "meter_id,period_type,period_start" });
-              if (upsertError) {
-                console.error("Error upserting period totals:", upsertError);
+              // Chunk-Fix: bei großen Integrationen (z.B. AICONO Zentrale mit
+              // 30 Metern → ~90 Zeilen) bricht ein einzelner Upsert still ab,
+              // weil PostgREST/Edge die große Payload ablehnt. 20er-Chunks
+              // umgehen das ohne Schema-Änderung. Fehler werden mit vollem
+              // Inhalt geloggt (kürzeste Retention-Zeit der Edge-Logs reicht).
+              const CHUNK = 20;
+              let okCount = 0;
+              let errCount = 0;
+              for (let i = 0; i < toUpsert.length; i += CHUNK) {
+                const slice = toUpsert.slice(i, i + CHUNK);
+                const { error: upsertError } = await supabase
+                  .from("meter_period_totals")
+                  .upsert(slice, { onConflict: "meter_id,period_type,period_start" });
+                if (upsertError) {
+                  errCount += slice.length;
+                  console.error(
+                    `Error upserting period totals chunk ${i}-${i + slice.length} (size=${slice.length}): ${JSON.stringify(upsertError)} | first row: ${JSON.stringify(slice[0])}`
+                  );
+                } else {
+                  okCount += slice.length;
+                }
+              }
+              if (errCount > 0) {
+                console.error(`Period-totals upsert: ${okCount} ok / ${errCount} failed (of ${monthUpserts.length} total, ${monthUpserts.length - toUpsert.length} unchanged)`);
               } else {
-                console.log(`Upserted ${toUpsert.length}/${monthUpserts.length} period totals for ${periodStart} (skipped ${monthUpserts.length - toUpsert.length} unchanged)`);
+                console.log(`Upserted ${okCount}/${monthUpserts.length} period totals for ${periodStart} (skipped ${monthUpserts.length - toUpsert.length} unchanged)`);
               }
             } else {
               console.log(`Skipped all ${monthUpserts.length} period totals for ${periodStart} (no value changes)`);
@@ -1177,7 +1313,32 @@ serve(async (req) => {
               }
             }
           }
+
+          // Bulk-Insert der Zählerstands-Snapshots (Konflikt = bereits vorhandener Zeitpunkt → ignorieren)
+          if (cumulativeInserts.length > 0) {
+            const { error: cumErr } = await supabase
+              .from("meter_cumulative_readings")
+              .upsert(cumulativeInserts, { onConflict: "meter_id,reading_at" });
+            if (cumErr) {
+              console.error("Error inserting cumulative readings:", cumErr);
+            } else {
+              console.log(`Inserted ${cumulativeInserts.length} cumulative meter readings`);
+            }
+          }
+
+          // Phase 7: Tagessnapshot upserten (1 Zeile pro Meter+Tag, mehrfach pro Tag überschrieben)
+          if (dailySnapshotInserts.length > 0) {
+            const { error: snapErr } = await supabase
+              .from("meter_loxone_daily_snapshots")
+              .upsert(dailySnapshotInserts, { onConflict: "meter_id,snapshot_date" });
+            if (snapErr) {
+              console.error("Error upserting daily snapshots:", snapErr);
+            } else {
+              console.log(`Upserted ${dailySnapshotInserts.length} daily Loxone snapshots`);
+            }
+          }
         }
+
       } catch (archiveErr) {
         console.error("Error archiving data:", archiveErr);
       }
