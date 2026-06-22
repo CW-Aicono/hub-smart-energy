@@ -1,68 +1,47 @@
-# Fix: PV-Prognose Widget zeigt zu niedrigen "Heute (Ist)"-Wert
+# Plan: Zweiten Loxone-Worker für Live-Umgebung auf demselben Hetzner-Server einrichten
 
-## Beobachtung
+## Was wir bauen
+Ein zweiter Docker-Container `loxone-ws-worker-live` parallel zum bestehenden `loxone-ws-worker` (Test). Beide laufen auf demselben Server, verbinden sich aber zu **unterschiedlichen Lovable-Cloud-Backends** (Test vs. Live).
 
-- Kachel "Aktuelle Werte → Erzeugung": **887,89 kWh Gesamt heute** (stimmt exakt mit Loxone überein)
-- Dashboard "PV-Prognose → Heute (Ist)": **537,7 kWh** (zu niedrig)
+## Was du brauchst (zeige ich dir Schritt für Schritt)
 
-Beide beziehen sich auf denselben PV-Zähler, denselben Tag.
-
-## Ursache
-
-Es werden zwei verschiedene Datenquellen verwendet:
-
-| Anzeige | Quelle | Berechnung |
+| Wert | Wo holen | Wofür |
 |---|---|---|
-| Live-Kachel "Gesamt heute" | `meter_period_totals` (period_type=`day`) | Differenz Zählerstand 00:00 → jetzt (kumulativ, exakt) |
-| Dashboard "Heute (Ist)" + Balken | `meter_power_readings` via `fetchPvActualHourly` | Summe aus 5-min Leistungswerten × Intervall (Integration) |
+| **SUPABASE_URL** der Live-Instanz | Live-AICONO-App → unten links Avatar → **„View Backend"** → oben rechts steht die Projekt-URL `https://<id>.supabase.co` | Sagt dem Worker, wohin er die Daten schickt |
+| **GATEWAY_API_KEY** der Live-Instanz | Live-AICONO-App → **Einstellungen → Integrationen → Reiter API** → Feld **API-Key** kopieren | Damit sich der Worker beim Live-Backend authentifiziert |
 
-Die Integration aus 5-min-Leistungswerten verliert systematisch Energie, weil:
-- Loxone-Peak-Filter einzelne 5-min-Samples verwirft (siehe Memory "Loxone Integration / Chart Aggregation")
-- Gaps zwischen Samples > 5 min werden mit Default 5 min eingesetzt (Unterschätzung)
-- der kumulative Zählerstand vom Gerät ist die einzige verlustfreie Quelle
+> Wichtig: **Beide Werte müssen aus der LIVE-Umgebung stammen** (also aus deiner Produktiv-AICONO-App, NICHT aus dem Test-/Preview-System). Sonst landen die Daten in der falschen Datenbank.
 
-Für **vergangene Tage** existiert bereits `pv_actual_hourly` (stored), das stimmt. Das Problem betrifft ausschließlich den **laufenden Tag**.
+## Anpassungen gegenüber dem bestehenden Test-Worker
 
-## Fix
+Da beide Worker auf **demselben Server** laufen, müssen sich drei Dinge unterscheiden:
 
-### 1. Authoritativer Tages-Ist-Wert aus kumulativem Zählerstand
+1. **Container-Name:** `loxone-ws-worker-live` (statt `loxone-ws-worker`)
+2. **Arbeitsordner:** `/opt/loxone-ws-worker-live` (statt `/opt/loxone-ws-worker`) — damit Code und Konfiguration sauber getrennt sind
+3. **Health-Port:** `8081:8080` (statt `8080:8080`) — Port 8080 ist bereits vom Test-Worker belegt
 
-In `src/lib/pvActuals.ts → fetchPvActualHourly`: Wenn der angefragte Tag = heute ist und `meterIds` vorhanden, zusätzlich den kumulativen Tages-Total aus `meter_period_totals` (period_type=`day`, period_start=heute) lesen — genau die Quelle der Live-Kachel.
+Alle anderen Dateien (`index.ts`, `package.json`, `Dockerfile`) sind identisch zum Test-Worker und werden 1:1 kopiert.
 
-### 2. Stündliche Balken proportional skalieren
+## Vorgehen (Implementierung später in Build-Modus)
 
-Die aus `meter_power_readings` berechneten Stundenwerte werden als **Verteilungsmuster** behalten (zeigen die Tageskurve korrekt), aber so skaliert, dass ihre Summe = authoritativer Tages-Total ist:
+Ich erweitere `docs/loxone-ws-worker/README.md` um einen neuen Abschnitt am Ende:
 
-```text
-factor = authoritative_total / sum(integrated_hourly)
-hourly[h] = integrated_hourly[h] * factor
-```
+**„Anhang: Zweiten Worker für Live-Umgebung auf demselben Server einrichten"**
 
-Falls `sum(integrated_hourly) == 0` (z.B. ganz früh morgens, Live-Total aber > 0): Verteilung wie heute über `estimateHourlyActualsFromDailyTotal` mit Prognose-Gewichten.
+Inhalt:
+- **Schritt L1:** Wo finde ich die Live-SUPABASE_URL (mit Screenshot-Beschreibung)
+- **Schritt L2:** Wo finde ich den Live-GATEWAY_API_KEY
+- **Schritt L3:** Neuen Ordner `/opt/loxone-ws-worker-live` anlegen
+- **Schritt L4:** Die 4 Dateien aus dem Test-Ordner kopieren (`cp` Befehl, ein Block zum Copy-Pasten)
+- **Schritt L5:** Docker-Image neu bauen unter eigenem Tag `loxone-ws-worker-live`
+- **Schritt L6:** Container starten mit Port `8081:8080`, eigenem Namen, Live-Werten — vollständiger fertiger `docker run`-Block mit nur zwei klar markierten Platzhaltern `[HIER_LIVE_SUPABASE_URL]` und `[HIER_LIVE_API_KEY]`
+- **Schritt L7:** Verifizieren: `docker ps` (beide Container sichtbar?), `curl http://localhost:8081/healthz`, Logs prüfen
+- **Schritt L8:** In der Live-AICONO-App prüfen, dass unter **Einstellungen → Integrationen → Bridge-Worker** der neue Worker als „online" auftaucht und Events fließen
 
-### 3. Daily-Totals-Hook angleichen
+Keine Änderungen am Worker-Code selbst (`index.ts` etc.) nötig — der Worker ist bereits Mandanten-/Umgebungs-neutral, er folgt einfach den Env-Variablen.
 
-In `fetchPvActualDailyTotals` (Zeile 337–349): heute-Branch ersetzt aktuell `dayMap[todayStr]` per `buildDailyActualTotal(todayReadings)`. Hier ebenfalls den kumulativen Wert aus `meter_period_totals` bevorzugen.
+## Was nicht in den Plan gehört (bewusst weggelassen)
 
-### 4. Keine Änderung an
-
-- Live-Kachel (ist korrekt)
-- Stündliche Speicherung `pv_actual_hourly` (Backend-Job, läuft nachträglich)
-- Vergangene Tage (verwenden `stored` Pfad)
-
-## Technische Details
-
-- Neue Hilfsfunktion `fetchTodayCumulativeKwh(meterIds)`:
-  ```sql
-  SELECT SUM(total_value) FROM meter_period_totals
-  WHERE meter_id = ANY($1) AND period_type='day' AND period_start = CURRENT_DATE
-  ```
-- Skalierungslogik in `buildHourlyActuals` als optionaler Parameter `authoritativeTotalKwh`
-- Keine DB-Migration nötig — nur Frontend-`lib`-Änderung
-- Betroffen: `src/lib/pvActuals.ts` (einzige Datei)
-
-## Erwartetes Ergebnis
-
-- "Heute (Ist)" zeigt 887,9 kWh (= Live-Kachel = Loxone)
-- Grüne Balken behalten ihr Tagesprofil, summieren sich aber zu 887,9 kWh statt 537,7 kWh
-- Δ zur PV-Prognose (981 kWh) wird realistisch (~−10 % statt +82 %)
+- Kein Refactoring der bestehenden Anleitung — nur ein zusätzlicher Anhang
+- Keine docker-compose-Datei — wir bleiben bei `docker run`, weil das die bestehende Anleitung auch nutzt
+- Keine neuen Edge Functions, keine DB-Migrationen

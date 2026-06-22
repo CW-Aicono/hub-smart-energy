@@ -1386,3 +1386,236 @@ Drücken Sie **Strg + C**. Das bricht den aktuellen Befehl ab. Dann können Sie 
 Wenn Sie an einer Stelle nicht weiterkommen, machen Sie einen **Screenshot** des Terminal-Fensters und schreiben Sie eine kurze E-Mail an **support@aicono.org** mit dem Betreff „Loxone WS Worker Einrichtung“. Fügen Sie den Screenshot bei.
 
 > **Denken Sie daran:** Sagen Sie uns Bescheid, sobald Sie einen Schritt geschafft haben (z. B. „Schritt 6 ist fertig, das Image wurde gebaut“). So können wir Sie bei Problemen gezielt unterstützen, bevor Sie mit dem nächsten Schritt weitermachen.
+
+---
+
+# Anhang: Zweiten Worker für die LIVE-Umgebung auf demselben Server einrichten
+
+> **Wann brauchen Sie diesen Anhang?**
+> Sie haben bereits den Test-Worker (`loxone-ws-worker`) auf Ihrem Hetzner-Server laufen und möchten **zusätzlich** einen zweiten Worker einrichten, der die Daten in die **Produktiv-Umgebung (Live)** schickt. Beide Worker laufen dann **gleichzeitig** auf demselben Server, nebeneinander, ohne sich gegenseitig zu stören.
+>
+> **Wichtig:** Sie müssen den Test-Worker dafür NICHT anhalten oder löschen. Er läuft einfach weiter.
+
+## Was ist anders als beim Test-Worker?
+
+Damit zwei Worker friedlich auf einem Server leben können, müssen sich nur drei Dinge unterscheiden:
+
+| Was | Test-Worker (alt) | Live-Worker (neu) |
+|---|---|---|
+| Container-Name | `loxone-ws-worker` | `loxone-ws-worker-live` |
+| Arbeitsordner | `/opt/loxone-ws-worker` | `/opt/loxone-ws-worker-live` |
+| Health-Port (Statusseite) | `8080` | `8081` |
+| SUPABASE_URL | Test-Backend-URL | **Live-Backend-URL** |
+| GATEWAY_API_KEY | Test-API-Key | **Live-API-Key** |
+
+Alles andere (der Programm-Code in `index.ts`, `package.json`, `Dockerfile`) ist **identisch** — wir kopieren die Dateien einfach 1:1 in einen neuen Ordner.
+
+---
+
+## Schritt L1: Die Live-SUPABASE-URL holen
+
+1. Öffnen Sie in Ihrem Browser Ihre **Live-AICONO-App** (das ist die Produktiv-Adresse, NICHT die Test-/Preview-Adresse — falls Sie nicht sicher sind, fragen Sie kurz nach).
+2. Melden Sie sich an.
+3. Klicken Sie unten links auf Ihren **Avatar** (das runde Bild mit Ihren Initialen).
+4. Klicken Sie im Menü auf **„View Backend"** (oder „Backend ansehen").
+5. Es öffnet sich ein neues Fenster/Tab. Oben rechts steht eine Internetadresse, die so aussieht:
+
+   ```
+   https://abcdefg12345.supabase.co
+   ```
+
+6. **Kopieren Sie diese komplette Adresse** (Rechtsklick → Kopieren) in ein Notiz-Dokument auf Ihrem Computer. Beschriften Sie sie mit **„LIVE_SUPABASE_URL"**.
+
+> **Sehr wichtig:** Diese Adresse muss aus der LIVE-AICONO-App stammen, NICHT aus dem Test-System. Wenn Sie versehentlich die Test-URL nehmen, schickt der neue Worker die Daten in die Test-Datenbank — die Live-Datenbank bekommt nichts.
+
+---
+
+## Schritt L2: Den Live-GATEWAY_API_KEY holen
+
+1. Bleiben Sie in Ihrer **Live-AICONO-App**.
+2. Klicken Sie links im Menü auf **Einstellungen**.
+3. Klicken Sie auf **Integrationen**.
+4. Klicken Sie oben auf den Reiter **API**.
+5. Sie sehen ein Feld mit der Beschriftung **API-Key** (oder „Gateway API Key"). Daneben ist ein Kopier-Knopf (kleines Symbol mit zwei übereinanderliegenden Rechtecken).
+6. Klicken Sie auf den **Kopier-Knopf**.
+7. Fügen Sie den kopierten Wert in Ihrem Notiz-Dokument ein. Beschriften Sie ihn mit **„LIVE_GATEWAY_API_KEY"**.
+
+> **Falls dort noch kein API-Key steht:** Klicken Sie auf **„Neuen API-Key erstellen"**, vergeben Sie als Name z. B. `Loxone Live Worker` und kopieren Sie den dann angezeigten Wert sofort — er wird aus Sicherheitsgründen nur einmal angezeigt.
+
+---
+
+## Schritt L3: Auf dem Server einen neuen Ordner anlegen
+
+Verbinden Sie sich wie in Schritt 0 (oben in der Hauptanleitung) per SSH auf Ihren Hetzner-Server. Sobald Sie die Zeile `root@mein-server:~#` sehen, geben Sie folgende Befehle **einzeln nacheinander** ein und drücken nach jedem Befehl **Enter**:
+
+```bash
+mkdir -p /opt/loxone-ws-worker-live
+```
+
+```bash
+cd /opt/loxone-ws-worker-live
+```
+
+> **Was passiert hier?** Sie erstellen einen neuen, eigenen Ordner für den Live-Worker und wechseln dorthin. Der Test-Worker im Ordner `/opt/loxone-ws-worker` bleibt davon unberührt.
+
+Wenn Sie jetzt `pwd` eingeben und Enter drücken, muss als Antwort kommen:
+
+```
+/opt/loxone-ws-worker-live
+```
+
+---
+
+## Schritt L4: Die vier Programmdateien aus dem Test-Ordner kopieren
+
+Die vier Dateien (`package.json`, `tsconfig.json`, `index.ts`, `Dockerfile`) sind beim Live-Worker exakt dieselben wie beim Test-Worker. Wir kopieren sie deshalb einfach. Geben Sie diesen einen Befehl ein (alles in einer Zeile) und drücken Sie **Enter**:
+
+```bash
+cp /opt/loxone-ws-worker/package.json /opt/loxone-ws-worker/tsconfig.json /opt/loxone-ws-worker/index.ts /opt/loxone-ws-worker/Dockerfile /opt/loxone-ws-worker-live/
+```
+
+Prüfen Sie mit:
+
+```bash
+ls /opt/loxone-ws-worker-live
+```
+
+Es müssen **genau diese vier Dateien** angezeigt werden:
+
+```
+Dockerfile  index.ts  package.json  tsconfig.json
+```
+
+> **Wichtig:** Wenn später eine neue Version des Worker-Codes kommt, müssen Sie diesen Kopier-Befehl noch einmal ausführen, damit der Live-Worker auch die neueste Version bekommt.
+
+---
+
+## Schritt L5: Eigenes Docker-Image für den Live-Worker bauen
+
+Geben Sie diesen Befehl ein und drücken Sie **Enter** (Sie müssen im Ordner `/opt/loxone-ws-worker-live` sein — der Punkt am Ende ist wichtig):
+
+```bash
+docker build -t loxone-ws-worker-live .
+```
+
+> **Was passiert hier?** Docker baut aus den vier Dateien eine eigene „Box" (Image) mit dem Namen `loxone-ws-worker-live`. Das dauert 1–3 Minuten. Es scrollen viele Zeilen vorbei — das ist normal. Am Ende muss eine Zeile kommen wie:
+>
+> ```
+> Successfully tagged loxone-ws-worker-live:latest
+> ```
+
+Falls eine Fehlermeldung kommt, gehen Sie zum Hauptkapitel **„Häufige Probleme"** der Anleitung oben.
+
+---
+
+## Schritt L6: Den Live-Worker-Container starten
+
+Jetzt kommt der wichtigste Schritt. Sie brauchen die zwei Werte aus den Schritten L1 und L2 aus Ihrem Notiz-Dokument.
+
+**Kopieren Sie den folgenden Block in Ihren Editor (z. B. Windows-Editor / TextEdit)** und ersetzen Sie die beiden eckigen Klammern durch Ihre Werte:
+
+```bash
+docker run -d --restart=always --name loxone-ws-worker-live \
+  -p 8081:8080 \
+  -e SUPABASE_URL=[HIER_LIVE_SUPABASE_URL] \
+  -e GATEWAY_API_KEY=[HIER_LIVE_API_KEY] \
+  loxone-ws-worker-live
+```
+
+**Beispiel mit Beispielwerten** (so darf es NICHT bleiben — Ihre echten Werte einsetzen!):
+
+```bash
+docker run -d --restart=always --name loxone-ws-worker-live \
+  -p 8081:8080 \
+  -e SUPABASE_URL=https://abcdefg12345.supabase.co \
+  -e GATEWAY_API_KEY=sk_live_51H8xyz... \
+  loxone-ws-worker-live
+```
+
+**Worauf Sie achten müssen, bevor Sie auf Enter drücken:**
+
+- Alle vier Backslashes (`\`) am Zeilenende sind drin (kein Leerzeichen dahinter!).
+- Die eckigen Klammern `[` und `]` sind **vollständig entfernt** und durch Ihre echten Werte ersetzt.
+- Die SUPABASE_URL beginnt mit `https://` und endet mit `.supabase.co` (ohne Schrägstrich am Ende).
+- Der Container-Name ist `loxone-ws-worker-live` (NICHT `loxone-ws-worker` — sonst überschreiben Sie den Test-Worker).
+- Der Port ist `8081:8080` (NICHT `8080:8080` — Port 8080 ist vom Test-Worker belegt).
+
+Jetzt den fertigen Befehl ins Terminal einfügen (Rechtsklick → Einfügen im SSH-Fenster) und **Enter** drücken.
+
+Wenn alles passt, kommt nach 1–2 Sekunden eine lange Hex-Zahl als Antwort (z. B. `4f8a2b...`). **Das ist gut** — der Container läuft jetzt im Hintergrund.
+
+---
+
+## Schritt L7: Prüfen, dass beide Worker laufen
+
+Geben Sie ein:
+
+```bash
+docker ps
+```
+
+Sie müssen **zwei Zeilen** mit Container-Namen sehen:
+
+```
+CONTAINER ID   IMAGE                    ...   PORTS                    NAMES
+xxxxxxx        loxone-ws-worker-live    ...   0.0.0.0:8081->8080/tcp   loxone-ws-worker-live
+yyyyyyy        loxone-ws-worker         ...   0.0.0.0:8080->8080/tcp   loxone-ws-worker
+```
+
+**Wenn Sie nur einen sehen:** Etwas ist schiefgegangen. Mit `docker ps -a` sehen Sie auch gestoppte Container, und mit `docker logs loxone-ws-worker-live` die letzten Fehlermeldungen.
+
+### Statusseite des Live-Workers prüfen
+
+```bash
+curl http://localhost:8081/healthz
+```
+
+Erwartete Antwort:
+
+```
+ok
+```
+
+### Live-Logs ansehen (für 20 Sekunden, dann mit Strg+C abbrechen)
+
+```bash
+docker logs -f --tail 50 loxone-ws-worker-live
+```
+
+Sie sollten Zeilen sehen wie:
+
+```
+[INFO] Loxone WS Worker startet...
+[INFO]   SUPABASE_URL=https://abcdefg12345.supabase.co
+[INFO]   GATEWAY_API_KEY=sk_live_***
+[INFO] Heartbeat gesendet
+[INFO] Verbinde zu Miniserver ...
+```
+
+Wenn Sie `[FATAL]`-Zeilen sehen, schauen Sie ins Hauptkapitel **„Häufige Probleme"** ganz unten in der Anleitung.
+
+---
+
+## Schritt L8: In der Live-AICONO-App prüfen
+
+1. Öffnen Sie die **Live-AICONO-App** im Browser.
+2. Gehen Sie zu **Einstellungen → Integrationen**.
+3. Suchen Sie den Bereich **Bridge-Worker** (oder „Worker-Status").
+4. Innerhalb von 1–2 Minuten muss dort ein neuer Eintrag erscheinen, der als **„online"** / grün angezeigt wird.
+5. Wenn Sie an einem Loxone-Standort schauen, müssen innerhalb weniger Minuten neue Messwerte ankommen.
+
+**Fertig!** Ab jetzt laufen beide Worker parallel: Der Test-Worker liefert weiterhin in die Test-Datenbank, der Live-Worker neu in die Live-Datenbank.
+
+---
+
+## Wenn etwas nicht funktioniert
+
+| Symptom | Was tun |
+|---|---|
+| `docker ps` zeigt den Live-Worker nicht | `docker logs loxone-ws-worker-live` — die Fehlermeldung sagt meist direkt, was fehlt (meistens falsche SUPABASE_URL oder API_KEY) |
+| Logs zeigen `401 Unauthorized` | API_KEY ist falsch oder stammt aus dem Test-System. Schritt L2 wiederholen, dann mit `docker rm -f loxone-ws-worker-live` löschen und Schritt L6 neu ausführen |
+| Logs zeigen `getaddrinfo ENOTFOUND` | SUPABASE_URL ist falsch geschrieben. Schritt L1 wiederholen |
+| Port 8081 bereits belegt | Anderen Port wählen, z. B. `-p 8082:8080`, sonst alles gleich lassen |
+| Bridge-Worker erscheint nicht in der Live-App | 2 Minuten warten, Browser-Tab mit Strg+F5 hart neu laden |
+
+Bei allem anderen: Screenshot vom Terminal + kurze Beschreibung an **support@aicono.org** mit Betreff „Loxone WS Worker Live Einrichtung".
