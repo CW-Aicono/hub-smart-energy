@@ -1261,13 +1261,32 @@ serve(async (req) => {
             });
 
             if (toUpsert.length > 0) {
-              const { error: upsertError } = await supabase
-                .from("meter_period_totals")
-                .upsert(toUpsert, { onConflict: "meter_id,period_type,period_start" });
-              if (upsertError) {
-                console.error("Error upserting period totals:", upsertError);
+              // Chunk-Fix: bei großen Integrationen (z.B. AICONO Zentrale mit
+              // 30 Metern → ~90 Zeilen) bricht ein einzelner Upsert still ab,
+              // weil PostgREST/Edge die große Payload ablehnt. 20er-Chunks
+              // umgehen das ohne Schema-Änderung. Fehler werden mit vollem
+              // Inhalt geloggt (kürzeste Retention-Zeit der Edge-Logs reicht).
+              const CHUNK = 20;
+              let okCount = 0;
+              let errCount = 0;
+              for (let i = 0; i < toUpsert.length; i += CHUNK) {
+                const slice = toUpsert.slice(i, i + CHUNK);
+                const { error: upsertError } = await supabase
+                  .from("meter_period_totals")
+                  .upsert(slice, { onConflict: "meter_id,period_type,period_start" });
+                if (upsertError) {
+                  errCount += slice.length;
+                  console.error(
+                    `Error upserting period totals chunk ${i}-${i + slice.length} (size=${slice.length}): ${JSON.stringify(upsertError)} | first row: ${JSON.stringify(slice[0])}`
+                  );
+                } else {
+                  okCount += slice.length;
+                }
+              }
+              if (errCount > 0) {
+                console.error(`Period-totals upsert: ${okCount} ok / ${errCount} failed (of ${monthUpserts.length} total, ${monthUpserts.length - toUpsert.length} unchanged)`);
               } else {
-                console.log(`Upserted ${toUpsert.length}/${monthUpserts.length} period totals for ${periodStart} (skipped ${monthUpserts.length - toUpsert.length} unchanged)`);
+                console.log(`Upserted ${okCount}/${monthUpserts.length} period totals for ${periodStart} (skipped ${monthUpserts.length - toUpsert.length} unchanged)`);
               }
             } else {
               console.log(`Skipped all ${monthUpserts.length} period totals for ${periodStart} (no value changes)`);
