@@ -378,8 +378,14 @@ const LiveValues = () => {
             const next = new Map(prev);
             let unmatched = 0;
             for (const ev of events) {
+              if (Math.abs(ev.value) > 1000) {
+                console.warn("[live-values][diag] suspicious event", {
+                  uuid: ev.uuid, role: ev.role, value: ev.value, at: ev.at,
+                });
+              }
               const meterId = uuidToMeterId.get(ev.uuid.toLowerCase());
               if (!meterId) { unmatched++; continue; }
+
               const role = ev.role ?? "pwr";
               const existing = next.get(meterId) ?? {
                 value: 0, unit: "", totalDay: null, totalWeek: null,
