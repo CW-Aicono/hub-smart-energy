@@ -229,6 +229,40 @@ async function fetchStoredDailyActuals(
   return [] as StoredDailyActualRow[];
 }
 
+async function fetchTodayCumulativeKwh(meterIds: string[]): Promise<number | null> {
+  if (meterIds.length === 0) return null;
+  const todayStr = toLocalDateKey(new Date());
+  const { data, error } = await supabase
+    .from("meter_period_totals")
+    .select("total_value")
+    .in("meter_id", meterIds)
+    .eq("period_type", "day")
+    .eq("period_start", todayStr);
+  if (error) {
+    console.error("fetchTodayCumulativeKwh error:", error);
+    return null;
+  }
+  if (!data || data.length === 0) return null;
+  const total = data.reduce((sum, row: any) => sum + Math.abs(Number(row.total_value ?? 0)), 0);
+  return total > 0 ? total : null;
+}
+
+function scaleHourlyToTotal(hourly: Record<string, number>, target: number): Record<string, number> {
+  const entries = Object.entries(hourly).sort(([a], [b]) => a.localeCompare(b));
+  const sum = entries.reduce((s, [, v]) => s + Math.abs(v), 0);
+  if (sum <= 0 || target <= 0) return hourly;
+  const factor = target / sum;
+  let allocated = 0;
+  return Object.fromEntries(
+    entries.map(([k, v], idx) => {
+      const isLast = idx === entries.length - 1;
+      const scaled = isLast ? round2(target - allocated) : round2(Math.abs(v) * factor);
+      allocated += scaled;
+      return [k, Math.max(0, scaled)];
+    })
+  );
+}
+
 export async function fetchPvActualHourly({
   meterIds,
   locationId,
@@ -248,9 +282,34 @@ export async function fetchPvActualHourly({
     return { readings: {}, isEstimated: false, isStored: false };
   }
 
+  const dayStr = toLocalDateKey(rangeStart);
+  const todayStr = toLocalDateKey(new Date());
+  const isToday = dayStr === todayStr;
+
   const rawReadings = await fetchMeterPowerReadings(meterIds, rangeStart, rangeEnd);
   if (rawReadings.length > 0) {
-    return { readings: buildHourlyActuals(rawReadings), isEstimated: false, isStored: false };
+    let hourly = buildHourlyActuals(rawReadings);
+    if (isToday) {
+      const authoritative = await fetchTodayCumulativeKwh(meterIds);
+      if (authoritative != null) {
+        const sum = Object.values(hourly).reduce((s, v) => s + Math.abs(v), 0);
+        hourly = sum > 0
+          ? scaleHourlyToTotal(hourly, authoritative)
+          : estimateHourlyActualsFromDailyTotal(dayStr, authoritative, forecastHours);
+      }
+    }
+    return { readings: hourly, isEstimated: false, isStored: false };
+  }
+
+  if (isToday) {
+    const authoritative = await fetchTodayCumulativeKwh(meterIds);
+    if (authoritative != null) {
+      return {
+        readings: estimateHourlyActualsFromDailyTotal(dayStr, authoritative, forecastHours),
+        isEstimated: true,
+        isStored: false,
+      };
+    }
   }
 
   const storedRows = await fetchStoredHourlyActuals(locationId, tenantId, rangeStart, rangeEnd);
@@ -264,8 +323,6 @@ export async function fetchPvActualHourly({
     };
   }
 
-  const dayStr = toLocalDateKey(rangeStart);
-  const todayStr = toLocalDateKey(new Date());
   if (dayStr >= todayStr) {
     return { readings: {}, isEstimated: false, isStored: false };
   }
@@ -292,6 +349,7 @@ export async function fetchPvActualHourly({
     isStored: false,
   };
 }
+
 
 export async function fetchPvActualDailyTotals({
   meterIds,
