@@ -1,51 +1,68 @@
-## Stand & nächster Schritt: gezielter Diagnose-Log (kein Fix)
+# Fix: PV-Prognose Widget zeigt zu niedrigen "Heute (Ist)"-Wert
 
-Wir sind weiterhin im Stopp-Modus (Hard-Stop-Regel). Was wir bisher sicher wissen:
+## Beobachtung
 
-- Der Loxone-Snapshot (`gateway_sensor_snapshots`) für „Zähler Gesamtverbrauch" enthält **richtig**:
-  - `value: "83,18"` kW (Momentanleistung, `stateName: "actual"`)
-  - `secondaryValue: "540.484"` kWh (Zählerstand, `secondaryStateName: "total"`)
-- In `bridge_raw_samples` für diese UUID stehen **nur** korrekte Leistungswerte (71–105 kW). Es gibt dort **keinen** Wert in der Größenordnung 540.000.
-- In `meter_power_readings` ebenfalls keine Werte > 1.000.
-- Edge-Logs zeigen: gateway-ingest broadcastet 17–25 Events alle 5 s, aber nur ~3–10 werden in `bridge_raw_samples` geschrieben → die restlichen Events sind die Rollen `today/total/month/year`, die nur über Realtime an die UI gehen und kein DB-Schreib-Pendant haben.
+- Kachel "Aktuelle Werte → Erzeugung": **887,89 kWh Gesamt heute** (stimmt exakt mit Loxone überein)
+- Dashboard "PV-Prognose → Heute (Ist)": **537,7 kWh** (zu niedrig)
 
-Damit ist mein Verdacht: Auf der Seite **„Aktuelle Werte"** kommt im Realtime-Broadcast für den Meter ein Event an, das fälschlich als Momentanleistung (`role="pwr"`) verarbeitet wird, obwohl es eigentlich der Zählerstand (`role="total"` = 540.480 kWh) ist. Ich kann das aber aus DB/Logs allein nicht belegen — ich muss live sehen, was im Browser ankommt.
+Beide beziehen sich auf denselben PV-Zähler, denselben Tag.
 
-### Vorschlag (1 Datei, 1 Zeile Diagnose, kein Logik-Fix)
+## Ursache
 
-In `src/pages/LiveValues.tsx` im Broadcast-Handler **eine** zusätzliche console.log-Zeile einbauen, die für „auffällige" Events (Wert > 1.000) ausgibt, was Realtime tatsächlich liefert:
+Es werden zwei verschiedene Datenquellen verwendet:
 
-```ts
-for (const ev of events) {
-  if (Math.abs(ev.value) > 1000) {
-    console.warn("[live-values][diag] suspicious event", {
-      uuid: ev.uuid, role: ev.role, value: ev.value, at: ev.at,
-    });
-  }
-  // ... bestehende Logik unverändert ...
-}
+| Anzeige | Quelle | Berechnung |
+|---|---|---|
+| Live-Kachel "Gesamt heute" | `meter_period_totals` (period_type=`day`) | Differenz Zählerstand 00:00 → jetzt (kumulativ, exakt) |
+| Dashboard "Heute (Ist)" + Balken | `meter_power_readings` via `fetchPvActualHourly` | Summe aus 5-min Leistungswerten × Intervall (Integration) |
+
+Die Integration aus 5-min-Leistungswerten verliert systematisch Energie, weil:
+- Loxone-Peak-Filter einzelne 5-min-Samples verwirft (siehe Memory "Loxone Integration / Chart Aggregation")
+- Gaps zwischen Samples > 5 min werden mit Default 5 min eingesetzt (Unterschätzung)
+- der kumulative Zählerstand vom Gerät ist die einzige verlustfreie Quelle
+
+Für **vergangene Tage** existiert bereits `pv_actual_hourly` (stored), das stimmt. Das Problem betrifft ausschließlich den **laufenden Tag**.
+
+## Fix
+
+### 1. Authoritativer Tages-Ist-Wert aus kumulativem Zählerstand
+
+In `src/lib/pvActuals.ts → fetchPvActualHourly`: Wenn der angefragte Tag = heute ist und `meterIds` vorhanden, zusätzlich den kumulativen Tages-Total aus `meter_period_totals` (period_type=`day`, period_start=heute) lesen — genau die Quelle der Live-Kachel.
+
+### 2. Stündliche Balken proportional skalieren
+
+Die aus `meter_power_readings` berechneten Stundenwerte werden als **Verteilungsmuster** behalten (zeigen die Tageskurve korrekt), aber so skaliert, dass ihre Summe = authoritativer Tages-Total ist:
+
+```text
+factor = authoritative_total / sum(integrated_hourly)
+hourly[h] = integrated_hourly[h] * factor
 ```
 
-Keine Logik wird verändert. Keine Werte werden gefiltert. Nur eine Diagnose-Ausgabe in der Browser-Konsole.
+Falls `sum(integrated_hourly) == 0` (z.B. ganz früh morgens, Live-Total aber > 0): Verteilung wie heute über `estimateHourlyActualsFromDailyTotal` mit Prognose-Gewichten.
 
-### Was du dann tust
+### 3. Daily-Totals-Hook angleichen
 
-1. Ich pushe diese eine Log-Zeile.
-2. Du lädst die Seite „Aktuelle Werte" einmal hart neu (Strg+Shift+R).
-3. Wartest 30 Sekunden, bis der falsche Wert auf der Kachel erscheint.
-4. Öffnest die Browser-Konsole (F12 → Tab „Console") und kopierst mir alle Zeilen, die mit `[live-values][diag]` beginnen.
+In `fetchPvActualDailyTotals` (Zeile 337–349): heute-Branch ersetzt aktuell `dayMap[todayStr]` per `buildDailyActualTotal(todayReadings)`. Hier ebenfalls den kumulativen Wert aus `meter_period_totals` bevorzugen.
 
-Damit sehen wir in **einem** Schritt, ob
+### 4. Keine Änderung an
 
-- Realtime tatsächlich `role:"pwr"` mit Wert 540.480 sendet (→ Bug liegt im Worker oder im LoxAPP3-Mapping), oder
-- Realtime `role:"total"` sendet, der Client das aber falsch verarbeitet (→ Bug in `LiveValues.tsx`).
+- Live-Kachel (ist korrekt)
+- Stündliche Speicherung `pv_actual_hourly` (Backend-Job, läuft nachträglich)
+- Vergangene Tage (verwenden `stored` Pfad)
 
-Erst danach schlage ich den genauen Fix vor.
+## Technische Details
 
-### Was wir NICHT tun
+- Neue Hilfsfunktion `fetchTodayCumulativeKwh(meterIds)`:
+  ```sql
+  SELECT SUM(total_value) FROM meter_period_totals
+  WHERE meter_id = ANY($1) AND period_type='day' AND period_start = CURRENT_DATE
+  ```
+- Skalierungslogik in `buildHourlyActuals` als optionaler Parameter `authoritativeTotalKwh`
+- Keine DB-Migration nötig — nur Frontend-`lib`-Änderung
+- Betroffen: `src/lib/pvActuals.ts` (einzige Datei)
 
-- Keine Worker-Änderung erraten.
-- Keine SQL-Migration.
-- Keine UI-Logik-Änderung.
+## Erwartetes Ergebnis
 
-Bestätige bitte kurz mit „ok", dann schalte ich in Build-Modus, füge die eine Log-Zeile ein und du machst Schritt 2–4.
+- "Heute (Ist)" zeigt 887,9 kWh (= Live-Kachel = Loxone)
+- Grüne Balken behalten ihr Tagesprofil, summieren sich aber zu 887,9 kWh statt 537,7 kWh
+- Δ zur PV-Prognose (981 kWh) wird realistisch (~−10 % statt +82 %)
