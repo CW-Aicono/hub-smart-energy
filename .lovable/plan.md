@@ -1,57 +1,60 @@
-## Ziel
-Loxone-Websocket-Events pro UUID auf **maximal 1 Sample alle 5 Sekunden** drosseln, damit die DB-Schreiblast (IO-Budget) stark sinkt. Live-Werte und Tagesverbrauch bleiben gefühlt "live" (5s-Updates sind für Menschen nicht von Echtzeit unterscheidbar).
+## Befund
 
-## Hintergrund
-- Loxone pusht `pwr`-Werte teils mehrfach pro Sekunde (bis ~100 ms).
-- Aktuell schreibt der Worker **jeden** Event 1:1 in `bridge_raw_samples` → ~1.000 Events/min (~17/s, ~1,4 Mio Zeilen/Tag).
-- Davon ist nur ein Bruchteil für die spätere 5-Min-Aggregation nötig.
-- Das eigentliche aktuelle IO-Problem (74 % Budget) hat **andere** Ursachen (siehe Hinweis unten) — diese Drosselung ist die Vorsorge, damit der Worker das Problem nicht zusätzlich anheizt.
+Der 15-Min-HTTP-Sync (`loxone-periodic-sync` → `loxone-api?action=getSensors`) liest zwar **alle** relevanten Loxone-Felder vom Miniserver (`Rd`=Heute, `Rm`=aktueller Monat, `Ry`=aktuelles Jahr, `Mr`=Zählerstand, `Rlm`=Vormonat, `Rldc`=Vortag), schreibt aber in `meter_period_totals` nur:
 
-## Vorgehen (1 kleine Änderung im Worker, keine Cloud-Migration)
+- `period_type='day'` – gestern (`Rldc`, source=`loxone`)
+- `period_type='day'` – heute (`Rd`, source=`loxone_live`)
+- `period_type='month'` – **Vormonat** (`Rlm`, source=`loxone`)
 
-### Änderung in `docs/loxone-ws-worker/index.ts`
-Ein **Throttle-Map pro `(miniserverSerial, stateUuid)`** ergänzen:
+**Es fehlen die Schreiboperationen für:**
+- `period_type='month'` – **aktueller Monat** (`Rm`)
+- `period_type='year'` – aktuelles Jahr (`Ry`)
+- Zählerstand (`Mr`) als verbindliche Quelle (aktuell wird in `meter_cumulative_readings` nur `Ry`/`Rd` als Proxy gespeichert, nie der echte `Mr`-Wert)
 
-```text
-lastWrittenAt: Map<key, timestampMs>
-lastValueBuffer: Map<key, { value, ts, eventMeta }>  // letzter "verworfener" Wert
-```
+Die Live-Karte liest `month`/`year` aus `meter_period_totals` und den Zählerstand aus dem WS-Bridge-Broadcast (`role='total'`). Solange das HTTP-Sync diese Werte nicht in die DB schreibt, hängt die Karte komplett von der WS-Bridge ab. Ist die Bridge in einem Zeitraum offline (was im Februar 2026 6 Wochen der Fall war), entstehen Lücken – genau die jetzt sichtbare Jahres-Diskrepanz (130 MWh statt 192 MWh).
 
-Logik beim eingehenden WS-Event:
-1. `key = serial + ":" + uuid`
-2. `dt = now - lastWrittenAt.get(key)`
-3. Wenn `dt >= 5000 ms` (oder noch nie geschrieben) → **direkt in `bridge_raw_samples` schreiben**, `lastWrittenAt = now`, Buffer leeren.
-4. Sonst → nur `lastValueBuffer.set(key, …)` (kein DB-Write).
-5. Alle 5 s ein Sweep-Timer: für alle Keys mit Buffer-Eintrag, deren `dt >= 5000`, den **zuletzt gepufferten Wert** schreiben → garantiert, dass auch der letzte Wert einer Burst-Serie ankommt.
+Woche und Quartal bleiben weiter aus den eigenen 5-Min-Daten berechnet (nicht von Loxone geliefert) – das ist unverändert korrekt.
 
-### Konfigurierbarkeit
-- Neue Env-Variable `WS_MIN_INTERVAL_MS` (Default `5000`).
-- Kann pro Deployment auf z. B. `2000` oder `10000` justiert werden, ohne Code-Änderung.
+## Änderung
 
-### Bewusst NICHT geändert
-- 15-Min-HTTP-Pull bleibt unverändert (liefert die "Wahrheit" für Zähler).
-- 5-Min-Aggregation (`meter_power_readings_5min`) bleibt unverändert — bekommt ab jetzt sauberere, dünnere Quelldaten.
-- UI-Pfade, Heartbeat, Snapshot-Logik bleiben unangetastet.
+**Eine Datei betroffen:** `supabase/functions/loxone-api/index.ts` (`action=getSensors`, ab Zeile ~1042 in der Meter-Schleife).
 
-## Erwartete Wirkung
-- Schreibvolumen in `bridge_raw_samples`: **~17/s → maximal ~0,2/s pro aktivem UUID-Stream**.
-- Bei ~85 State-UUIDs (3 Miniserver): theoretisches Maximum ~17/s, real durch Inaktivität deutlich darunter — typisch **80–95 % weniger Inserts**.
-- Live-Wert im Dashboard aktualisiert sich weiterhin alle 5 s (für den Nutzer "live").
-- Tagesverbrauch unverändert genau (basiert auf 15-Min-HTTP-Pull + 5-Min-Aggregation).
+Pro Hauptzähler zusätzlich folgende `meter_period_totals`-Upserts vorbereiten und im bestehenden Bulk-Upsert (Zeile 1190 ff., inkl. der bestehenden Change-Detection für IO-Schonung) mitsenden:
 
-## Risiken / Edge Cases
-- **Kurzpeaks** (z. B. 8 kW für 1 s) können verloren gehen → akzeptabel, da Peak-Analyse ohnehin auf 5-Min-Aggregat basiert.
-- **Letzter Wert vor Ruhephase** wird durch den Sweep-Timer garantiert geschrieben → keine "hängenden" alten Anzeigen.
-- **Worker-Restart**: Maps sind in-memory → nach Restart wird der erste Wert sofort geschrieben (gewollt).
+1. **Aktueller Monat** (`Rm`)
+   - `period_type = 'month'`
+   - `period_start = ` 1. des aktuellen Monats (Europe/Berlin)
+   - `total_value = stateData.totalMonth`
+   - `source = 'loxone_live'`
+   - nur wenn `totalMonth != null && totalMonth >= 0`
 
-## Wichtiger Hinweis zum aktuellen IO-Budget (74 %)
-Diese Änderung adressiert **nicht** das bestehende IO-Problem, da WS erst seit ~1 h läuft. Empfehlung: parallel das IO-Playbook abarbeiten (`supabase--slow_queries` + `pg_stat_statements`), um den eigentlichen Treiber zu finden. Das ist eine separate, reine Lese-Analyse ohne Code-Änderung.
+2. **Aktuelles Jahr** (`Ry`)
+   - `period_type = 'year'`
+   - `period_start = ` 1. Januar des aktuellen Jahres (Europe/Berlin)
+   - `total_value = stateData.totalYear`
+   - `source = 'loxone_live'`
+   - nur wenn `totalYear != null && totalYear >= 0`
 
-## Deployment-Schritte (nach Build-Mode-Freigabe)
-1. `docs/loxone-ws-worker/index.ts` anpassen (Throttle + Sweep-Timer + Env).
-2. `WORKER_VERSION` auf `phase7.3-throttle5s` setzen.
-3. Auf dem Hetzner-Server: `git pull` (bzw. Datei kopieren) → `docker build -t loxone-ws-worker:phase7.3 .` → `docker compose up -d`.
-4. Nach 10 min in `bridge_raw_samples` per `count(*)` über die letzten 5 min vs. vorher vergleichen → Reduktion bestätigen.
+3. **Zählerstand (`Mr`)** – separater Pfad
+   - Im `cumulativeInserts`-Block (Zeile 1116) die Priorisierung ändern: **zuerst `stateData.total` (= Loxone `Mr`)**, dann erst `totalYear` als Fallback, dann `totalDay`. Source dann entsprechend `'loxone_live_total'` / `'loxone_live_year'` / `'loxone_live_day'`.
+   - Damit landet alle 15 Min der echte Zählerstand in `meter_cumulative_readings`, unabhängig von der WS-Bridge.
 
-## Frage an dich vor Implementierung
-Soll ich das Intervall **fix auf 5 s** setzen, oder lieber direkt **per Env konfigurierbar** (Default 5 s) machen, damit wir später ohne Re-Build justieren können?
+## Sicherheits-Checks
+
+- Beide neuen Upserts laufen durch die schon vorhandene Change-Detection (Zeile 1208–1215): wenn `total_value` und `source` unverändert → kein DB-Write, also kein IO-Mehraufwand außer 2 zusätzlichen Lesezeilen.
+- `onConflict='meter_id,period_type,period_start'` bleibt unverändert; die neuen Zeilen passen in dasselbe Schema.
+- Wenn der Cron-Lauf in der Sekunde nach Monats-/Jahreswechsel läuft, schreibt Loxone selbst schon den neuen `Rm`/`Ry`-Wert auf den 1. des neuen Monats – kein doppelter Eintrag möglich.
+- Quelle bleibt nach Monatsende stehen, bis der nächste Lauf (vom 1. des Folgemonats) sie überschreibt. Das nächste Vormonats-Archiv (`Rlm`, source=`'loxone'`) liegt ohnehin schon im Code – beide Zeilen koexistieren, da unterschiedliche `period_start`.
+
+## Was bewusst NICHT geändert wird
+
+- Keine Backfill-Logik für Februar 2026 (separates Thema, kann später per einmaligem Lauf von `loxone-api?action=backfillStatistics&totalsOnly=true` erfolgen, sobald die Sperre in `loxone-daily-totals-backfill` aufgehoben wird).
+- Kein Eingriff in `EnergyChart.tsx` – die Jahres-Bar im Diagramm bleibt vorerst aus 5-Min-Fallback. Sobald die `month`-Zeilen vollständig sind, kann das Diagramm in einem zweiten Schritt umgestellt werden.
+- Keine WS-Bridge-Änderung.
+- Woche/Quartal bleiben berechnet (Loxone liefert dafür nichts Vergleichbares).
+
+## Erwartete Wirkung nach Deployment
+
+- Beim nächsten 15-Min-Tick wird für jeden Loxone-Hauptzähler `Monat` und `Jahr` direkt aus dem Miniserver (`Rm`/`Ry`) in `meter_period_totals` geschrieben.
+- Karte „Zähler Gesamtverbrauch" zeigt dann den von Loxone gelieferten Wert – inklusive der Tage aus Phasen ohne Bridge-Verbindung.
+- Zählerstand (Mr) wird ebenfalls alle 15 Min als verbindliche Quelle abgelegt.
