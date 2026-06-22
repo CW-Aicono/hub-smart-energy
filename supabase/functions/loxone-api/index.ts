@@ -1085,19 +1085,23 @@ serve(async (req) => {
               });
             }
 
+            // Berlin-Datum einmal pro Meter berechnen (für day/month/year period_start)
+            const berlinFmtT = new Intl.DateTimeFormat("en-CA", {
+              timeZone: "Europe/Berlin",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            });
+            const todayStr = berlinFmtT.format(now); // YYYY-MM-DD in Berlin
+            const firstOfMonthStr = `${todayStr.slice(0, 7)}-01`;
+            const firstOfYearStr = `${todayStr.slice(0, 4)}-01-01`;
+
             // Persist TODAY's running total (Rd/Rdc/Rdd) so dashboards & RPCs
             // can rely on the authoritative Loxone counter instead of a
             // 5-min power-aggregation estimate. Stored as source='loxone_live'
             // on today's date (Europe/Berlin). Overwritten at midnight when
             // 'loxone' source archives totalDayLast for the completed day.
             if (stateData?.totalDay != null && stateData.totalDay >= 0) {
-              const berlinFmtT = new Intl.DateTimeFormat("en-CA", {
-                timeZone: "Europe/Berlin",
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-              });
-              const todayStr = berlinFmtT.format(now); // YYYY-MM-DD in Berlin
               monthUpserts.push({
                 tenant_id: meter.tenant_id,
                 meter_id: meter.id,
@@ -1109,16 +1113,58 @@ serve(async (req) => {
               });
             }
 
-            // Snapshot des kumulativen Zählerstandes (totalYear bevorzugt — monoton steigend;
-            // sonst totalDay). Wird in `meter_cumulative_readings` geschrieben und vom
-            // Aggregator `aggregate_pv_actual_hourly` zur intervall-unabhängigen
-            // Berechnung der Ist-Erzeugung pro Stunde verwendet.
-            const cumulativeKwh = (stateData?.totalYear != null && stateData.totalYear > 0)
-              ? Number(stateData.totalYear)
-              : (stateData?.totalDay != null && stateData.totalDay >= 0 ? Number(stateData.totalDay) : null);
-            const cumulativeSource = (stateData?.totalYear != null && stateData.totalYear > 0)
-              ? "loxone_live_year"
-              : "loxone_live_day";
+            // Persist CURRENT month total (Rm/Rmc/Rmd) als Loxone-Gold-Standard.
+            // Quelle: Loxone Miniserver HTTP-Counter, alle 15 Min aktualisiert.
+            // Überschreibt etwaige 5-Min-aggregierte Schätzungen.
+            if (stateData?.totalMonth != null && stateData.totalMonth >= 0) {
+              monthUpserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                period_type: "month",
+                period_start: firstOfMonthStr,
+                total_value: stateData.totalMonth,
+                energy_type: meter.energy_type,
+                source: "loxone_live",
+              });
+            }
+
+            // Persist CURRENT year total (Ry/Ryc/Ryd) als Loxone-Gold-Standard.
+            // Damit ist der Jahres-Wert auch dann korrekt, wenn die WS-Bridge
+            // zwischenzeitlich offline war und Day-Rows fehlen.
+            if (stateData?.totalYear != null && stateData.totalYear >= 0) {
+              monthUpserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                period_type: "year",
+                period_start: firstOfYearStr,
+                total_value: stateData.totalYear,
+                energy_type: meter.energy_type,
+                source: "loxone_live",
+              });
+            }
+
+            // Snapshot des kumulativen Zählerstandes — Priorität:
+            //   1. Mr (echter Zählerstand, in stateData.secondaryValue für Meter-Controls)
+            //   2. totalYear (Ry) als Fallback
+            //   3. totalDay als letzter Fallback
+            // Wird in `meter_cumulative_readings` geschrieben und vom Aggregator
+            // `aggregate_pv_actual_hourly` zur intervall-unabhängigen Berechnung
+            // der Ist-Erzeugung pro Stunde verwendet.
+            const mrRaw = stateData?.secondaryValue;
+            const mrNum = typeof mrRaw === "number"
+              ? mrRaw
+              : (typeof mrRaw === "string" && mrRaw.trim() !== "" ? parseFloat(mrRaw) : NaN);
+            const mrValid = isFinite(mrNum) && mrNum > 0;
+            const cumulativeKwh = mrValid
+              ? mrNum
+              : (stateData?.totalYear != null && stateData.totalYear > 0)
+                ? Number(stateData.totalYear)
+                : (stateData?.totalDay != null && stateData.totalDay >= 0 ? Number(stateData.totalDay) : null);
+            const cumulativeSource = mrValid
+              ? "loxone_live_total"
+              : (stateData?.totalYear != null && stateData.totalYear > 0)
+                ? "loxone_live_year"
+                : "loxone_live_day";
             if (cumulativeKwh != null && isFinite(cumulativeKwh)) {
               cumulativeInserts.push({
                 tenant_id: meter.tenant_id,
