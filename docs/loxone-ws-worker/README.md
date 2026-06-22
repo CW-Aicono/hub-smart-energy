@@ -1412,21 +1412,19 @@ Alles andere (der Programm-Code in `index.ts`, `package.json`, `Dockerfile`) ist
 
 ---
 
-## Schritt L1: Die Live-SUPABASE-URL holen
+## Schritt L1: Die Live-SUPABASE-URL
 
-1. Öffnen Sie in Ihrem Browser Ihre **Live-AICONO-App** (das ist die Produktiv-Adresse, NICHT die Test-/Preview-Adresse — falls Sie nicht sicher sind, fragen Sie kurz nach).
-2. Melden Sie sich an.
-3. Klicken Sie unten links auf Ihren **Avatar** (das runde Bild mit Ihren Initialen).
-4. Klicken Sie im Menü auf **„View Backend"** (oder „Backend ansehen").
-5. Es öffnet sich ein neues Fenster/Tab. Oben rechts steht eine Internetadresse, die so aussieht:
+Bei diesem Projekt läuft die Live-Datenbank (Supabase) **selbst gehostet** auf demselben Hetzner-Server wie die App. Die Adresse ist fest und lautet:
 
-   ```
-   https://abcdefg12345.supabase.co
-   ```
+```
+https://api-ems.aicono.org
+```
 
-6. **Kopieren Sie diese komplette Adresse** (Rechtsklick → Kopieren) in ein Notiz-Dokument auf Ihrem Computer. Beschriften Sie sie mit **„LIVE_SUPABASE_URL"**.
+Schreiben Sie diesen Wert in Ihr Notiz-Dokument und beschriften Sie ihn mit **„LIVE_SUPABASE_URL"**.
 
-> **Sehr wichtig:** Diese Adresse muss aus der LIVE-AICONO-App stammen, NICHT aus dem Test-System. Wenn Sie versehentlich die Test-URL nehmen, schickt der neue Worker die Daten in die Test-Datenbank — die Live-Datenbank bekommt nichts.
+> **Hinweis:** Die App selbst läuft unter `https://ems.aicono.org` — das ist **nicht** die SUPABASE_URL. Verwenden Sie für den Worker **ausschließlich** `https://api-ems.aicono.org` (das ist das API-Tor zur Datenbank). Kein Schrägstrich am Ende.
+
+
 
 ---
 
