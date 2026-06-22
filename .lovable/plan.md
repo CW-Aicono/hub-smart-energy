@@ -1,69 +1,46 @@
-# Problem 1: Endlos-Fehler im API-Tab (ems.aicono.org/integrations → API)
+## Antworten auf deine zwei Fragen
 
-## Ursache (im Code gefunden)
+### Frage 1: Warum steht im Worker-Feld `8d621355a384` statt `hetzner-prod-1`?
 
-In `src/components/settings/ApiSettings.tsx` stecken **zwei Fehler**, die zusammen den Endlos-Toast erzeugen:
+**Kurz:** Das ist nicht der Worker-Name, sondern der **Hostname** des Docker-Containers. Die UI zeigt absichtlich den Host, nicht den Namen, damit man bei mehreren parallelen Workern sieht, welcher physische Container die Sitzung hält.
 
-**Fehler A — Endlosschleife durch Render-Seiteneffekt (Zeile 84–86):**
-```ts
-if (!apiKey && !loading) {
-  fetchApiInfo(false);
-}
-```
-Das steht direkt im Render-Body, nicht in einem `useEffect`. Wenn der Fetch fehlschlägt, bleibt `apiKey = null` und `loading = false` → React rendert neu → fetch wird erneut ausgelöst → Toast wieder → Re-Render → endlos.
+**Im Detail:**
+Der Worker kennt zwei verschiedene Variablen:
 
-**Fehler B — Falsche Backend-URL in der Live-Umgebung (Zeile 33–34):**
-```ts
-const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-const baseUrl = `https://${projectId}.supabase.co`;
-```
-Das funktioniert nur für Lovable-Cloud-Projekte (`*.supabase.co`). Auf Hetzner läuft ein **selbst gehostetes** Supabase unter einer eigenen Domain (z. B. `https://supabase.aicono.org`). Die zusammengebaute `*.supabase.co`-URL existiert dort gar nicht → `fetch` wirft Netzwerkfehler → Fehler A schießt den Toast endlos.
+- `BRIDGE_WORKER_NAME` → Logischer Name (Standard: `hetzner-bridge-test`). Wird in der Tabelle `bridge_workers` als ID verwendet.
+- `WORKER_HOST` → Hostname (Standard: automatisch von Docker vergeben, deshalb `8d621355a384`). Wird in jeder WS-Sitzung im Feld `worker_host` mitgeschrieben.
 
-## Fix
+Die Anzeige im Monitor und auf der Integrationskarte zeigt `worker_host`. In deiner **Lovable-Testumgebung** hast du beim Start der Test-Bridge offenbar `WORKER_HOST=hetzner-prod-1` gesetzt — deshalb steht dort dieser sprechende Name. In **Live auf Hetzner** hast du `WORKER_HOST` nicht gesetzt, also nimmt der Container automatisch seine ID.
 
-Beide Bugs in derselben Datei korrigieren — ohne weitere Änderungen am System:
-
-1. `fetchApiInfo` in einen `useEffect(() => { fetchApiInfo(false); }, [])` verlagern, statt im Render-Body aufzurufen. Damit läuft der Fetch genau einmal beim Mounten, und ein Fehler erzeugt **einen** Toast statt unendlich vielen.
-2. Statt aus `VITE_SUPABASE_PROJECT_ID` zusammenzubauen, direkt `import.meta.env.VITE_SUPABASE_URL` verwenden. Diese Variable wird sowohl in Lovable-Cloud als auch in der selbst gehosteten Hetzner-Variante korrekt gesetzt.
-
-Keine weiteren Dateien betroffen. Keine Edge-Function-Änderung. Keine DB-Migration.
+**Wenn du auch live einen sprechenden Namen möchtest** (z. B. `hetzner-prod-1`), kannst du das in einem späteren Schritt machen. Wichtig: rein kosmetisch, beeinflusst die Funktion null. Falls du das willst, sag Bescheid — dann gebe ich dir die genauen Putty-Befehle (eine zusätzliche `-e WORKER_HOST=hetzner-prod-1`-Zeile im Docker-Run-Befehl plus einmal Container neu starten).
 
 ---
 
-# Problem 2: Supabase-URL der Live-Umgebung via Putty herausfinden
+### Frage 2: Bekommt das Backend die Live-Daten jetzt ausschließlich per WebSocket?
 
-Ja, das geht — und zwar ohne Raterei. Vorgehen über Putty (du brauchst nur Copy/Paste):
+**Ja — solange die WebSocket-Sitzung aktiv ist (Status grün "Aktiv" im Monitor), läuft die gesamte Live-Datenübertragung über den WebSocket.** Konkret:
 
-**Schritt P1 — Mit Putty am Hetzner-Server anmelden** (wie gewohnt).
 
-**Schritt P2 — Diesen Befehl ausführen:**
-```
-docker ps --format "table {{.Names}}\t{{.Ports}}" | grep -Ei "kong|supabase"
-```
-Erwartetes Ergebnis: Eine Zeile mit einem Container namens `supabase-kong` (oder ähnlich) und einer Port-Angabe wie `0.0.0.0:8000->8000/tcp`. Kong ist das API-Gateway von Supabase — das ist der Eingang, den der Worker ansprechen muss.
+| Datenpfad                                                     | Verwendung                                                                                                                                                                                                                         |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **WebSocket** (Loxone → Worker → `bridge-readings` → DB)      | Live-Werte aller Loxone-Zähler/Sensoren. Push-basiert, kommt im Sekundenbereich an. **Das ist der Standard, sobald "WebSocket aktiv" angezeigt wird.**                                                                             |
+| **HTTP-Periodic-Sync** (`loxone-periodic-sync` Edge Function) | Läuft als geplanter Hintergrundjob (Cron) und holt sich per HTTP **Tageswerte / Zählerstände** vom Miniserver. Dient als Konsistenzcheck und für historische Korrekturwerte. Nicht WS-Fallback im engeren Sinn, sondern ergänzend. |
+| **HTTP-Direktabfragen** (`loxone-api` Edge Function)          | Wird benutzt für Einzelaktionen wie "Firmware prüfen", "Befehl senden" usw. — nicht für Live-Datenstrom.                                                                                                                           |
 
-**Schritt P3 — Reverse-Proxy-Konfiguration prüfen** (damit wir die *öffentliche* Domain bekommen, nicht nur die interne IP). Je nachdem, welcher Reverse-Proxy auf dem Server läuft:
-```
-docker ps --format "table {{.Names}}\t{{.Image}}" | grep -Ei "caddy|traefik|nginx"
-```
-Sag mir, welcher Proxy erscheint — dann gebe ich dir den exakten nächsten Befehl, um die Domain auszulesen (bei Caddy z. B. `docker exec <caddy-container> cat /etc/caddy/Caddyfile`, bei Traefik die Labels, bei Nginx die Config).
 
-**Schritt P4 — Ergebnis prüfen:** Das, was im Reverse-Proxy als Domain auf den `supabase-kong:8000`-Container zeigt, ist deine `SUPABASE_URL` (Format: `https://supabase.deine-domain.de`, **ohne** abschließenden Slash).
+**Echter Fallback bei WS-Ausfall:** Wenn der WebSocket abreißt (z. B. Internet weg), versucht der Worker automatisch alle paar Sekunden, neu zu verbinden (Reconnect-Zähler im Monitor). Während dieser Zeit fehlen die Live-Werte; sie werden **nicht** über HTTP nachgeholt — die Lücke bleibt eine Lücke, aber die Tageswerte (Zählerstände) gleicht der nächste Periodic-Sync wieder aus.
 
-Sobald wir die URL haben, trage ich sie als verbindlichen Wert in Schritt L1 des README ein, statt der jetzigen „View Backend"-Anleitung (die nur für Lovable-Cloud gilt).
+**Zusammengefasst:**
 
----
-
-# Abarbeitungs-Reihenfolge
-
-1. Code-Fix für den Endlos-Fehler (Problem 1) sofort umsetzen — dann verschwindet der nervige Toast und du kannst den API-Key wieder lesen.
-2. Danach Putty-Schritte P1–P3 ausführen und mir die Ausgaben zeigen — dann passe ich Schritt L1 im README an die echte Live-Supabase-URL an.
+- Live-Strom (Sekunden-/Minutenwerte): **nur WebSocket**.
+- Zählerstände / Tagessummen / Konsistenz: zusätzlich per HTTP-Cron.
+- Steuerbefehle: per HTTP-Direktaufruf.
+- HTTP ist **kein Live-Fallback**, sondern ein ergänzender Kanal für andere Zwecke.
 
 ---
 
-# Technische Details (für später, kannst du überspringen)
+### Was als Nächstes?
 
-- Datei: `src/components/settings/ApiSettings.tsx`
-- Zeilen 23–61 (`fetchApiInfo`): Behalten, nur Zeile 33–34 (`projectId`/`baseUrl`) ersetzen durch `const baseUrl = import.meta.env.VITE_SUPABASE_URL;`
-- Zeilen 83–86: Ersetzen durch `useEffect(() => { fetchApiInfo(false); }, []);` (Import `useEffect` aus `react`).
-- Edge-Function `api-key-info` bleibt unverändert.
+Ich schlage **keinen Code-Change** vor. Wenn du den Worker-Host in der Anzeige umbenennen willst, sag einfach "ja, bitte umbenennen auf hetzner-prod-1" — dann liefere ich die Putty-Schritte. Ansonsten ist alles wie gewünscht in Betrieb.  
+  
+Antwort: ja, bitte umbenennen auf hetzner-prod-1
