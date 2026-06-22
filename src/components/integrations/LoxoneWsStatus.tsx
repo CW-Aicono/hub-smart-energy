@@ -42,8 +42,8 @@ export function LoxoneWsStatus({ locationIntegrationId, enabled }: LoxoneWsStatu
   if (!enabled) return null;
 
   // Status-Logik:
-  // - Aktiv = ended_at IS NULL UND updated_at < 60s alt
-  // - Stale = ended_at IS NULL aber kein Heartbeat seit >60s
+  // - Aktiv = ended_at IS NULL UND updated_at < 120s alt (Worker-Heartbeat alle 60s + Puffer)
+  // - Stale = ended_at IS NULL aber kein Heartbeat seit >120s
   // - Getrennt = ended_at IS NOT NULL
   let statusColor = "text-muted-foreground";
   let statusLabel = "Keine WS-Verbindung";
@@ -51,7 +51,7 @@ export function LoxoneWsStatus({ locationIntegrationId, enabled }: LoxoneWsStatu
 
   if (session) {
     const updatedMs = Date.now() - new Date(session.updated_at).getTime();
-    if (!session.ended_at && updatedMs < 45_000) {
+    if (!session.ended_at && updatedMs < 120_000) {
       statusColor = "text-green-600 dark:text-green-400";
       statusLabel = "WebSocket aktiv";
       StatusIcon = Radio;
