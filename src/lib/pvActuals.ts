@@ -395,16 +395,22 @@ export async function fetchPvActualDailyTotals({
   const today = new Date();
   const todayStr = toLocalDateKey(today);
   if (todayStr >= fromDate && todayStr <= toDate) {
-    const todayStart = new Date(today);
-    todayStart.setHours(0, 0, 0, 0);
-    const todayEnd = new Date(todayStart);
-    todayEnd.setDate(todayEnd.getDate() + 1);
+    const authoritative = await fetchTodayCumulativeKwh(meterIds);
+    if (authoritative != null) {
+      dayMap[todayStr] = authoritative;
+    } else {
+      const todayStart = new Date(today);
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(todayStart);
+      todayEnd.setDate(todayEnd.getDate() + 1);
 
-    const todayReadings = await fetchMeterPowerReadings(meterIds, todayStart, todayEnd);
-    if (todayReadings.length > 0) {
-      dayMap[todayStr] = buildDailyActualTotal(todayReadings);
+      const todayReadings = await fetchMeterPowerReadings(meterIds, todayStart, todayEnd);
+      if (todayReadings.length > 0) {
+        dayMap[todayStr] = buildDailyActualTotal(todayReadings);
+      }
     }
   }
+
 
   return dayMap;
 }
