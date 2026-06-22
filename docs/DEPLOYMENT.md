@@ -25,6 +25,41 @@ Pfad auf dem Server: `/opt/hub-smart-energy`
    - `curl` Healthcheck auf `https://ems.aicono.org/`
    - Bei jedem Fehler: automatisches `scripts/rollback.sh` (DB + Code zurück).
 
+## DB-Aenderungen: nur per Migration, nie per Studio-UI/SQL-Editor
+
+`deploy-prod.yml` synct ausschliesslich Dateien aus dem Git-Tree von `staging`
+nach `main` (siehe oben). **Jede** Datenbank-Aenderung, die in Lovable/staging
+direkt im Supabase-Studio (SQL-Editor, Table-Editor, `Database` → `Cron Jobs`
+o.ae.) gemacht wird, landet **nirgendwo im Repo** — egal ob Tabelle, Spalte,
+Funktion, RLS-Policy, Trigger oder pg_cron-Job. Sie existiert nur live in der
+staging-Cloud-DB und wird durch keinen Deploy je nach Prod uebertragen, egal
+wie oft "Go-Live" gedrueckt wird.
+
+**Regel:** Jede Aenderung am DB-Schema und an pg_cron-Jobs (neu anlegen,
+aendern, loeschen) muss als SQL-Migration in `supabase/migrations/` erfolgen,
+nicht direkt im Studio-UI/SQL-Editor. Nur Migrationen werden von
+`deploy-prod.yml` nach `main` gemerged und von `scripts/apply-migrations.sh`
+auf dem Server ausgefuehrt. Das gilt auch fuer Lovable-generierte Aenderungen:
+Lovable schreibt Schema-Aenderungen normalerweise selbst als Migration — wird
+trotzdem manuell im SQL-Editor nachgebessert (schneller Fix, Backfill,
+einzelner Cronjob), muss dieser Schritt nachtraeglich als eigene Migration
+nachgezogen werden, sonst geht er beim naechsten Deploy verloren.
+
+**Drift pruefen:** `scripts/check-cron-drift.sh` vergleicht die in den
+Migrationen definierten Jobs mit dem tatsaechlichen Stand einer laufenden
+DB. Gegen staging ausfuehren, um Jobs zu finden, die nur dort per UI
+angelegt wurden (und so nie nach Prod kommen wuerden); gegen Prod nach einem
+Deploy ausfuehren, um zu pruefen, dass alle erwarteten Jobs auch wirklich aktiv
+sind:
+
+```bash
+# gegen den lokal erreichbaren Container (z.B. auf dem Hetzner-Server):
+./scripts/check-cron-drift.sh docker exec -i supabase-db psql -U supabase_admin -d postgres
+
+# gegen eine Cloud-DB (z.B. Lovable-Staging) per Connection-String:
+./scripts/check-cron-drift.sh psql "postgresql://user:pass@host:5432/postgres"
+```
+
 ## Einmaliges Setup
 
 Siehe [`CI-SETUP.md`](./CI-SETUP.md). Fasst Lovable-Konfiguration, GitHub-Secrets,
