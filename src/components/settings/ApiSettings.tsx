@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,8 +30,7 @@ export function ApiSettings() {
       });
 
       // Use query param for reveal – invoke via fetch directly
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const baseUrl = `https://${projectId}.supabase.co`;
+      const baseUrl = (import.meta.env.VITE_SUPABASE_URL as string).replace(/\/$/, "");
       const url = `${baseUrl}/functions/v1/api-key-info${reveal ? "?reveal=true" : ""}`;
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
@@ -80,10 +79,11 @@ export function ApiSettings() {
     }
   };
 
-  // Fetch on mount
-  if (!apiKey && !loading) {
+  // Fetch on mount (genau einmal)
+  useEffect(() => {
     fetchApiInfo(false);
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const routes = [
     { method: "GET", action: "list-locations", desc: t("api.route.listLocations") },
