@@ -1,47 +1,51 @@
-## Problem
+## Stand & nächster Schritt: gezielter Diagnose-Log (kein Fix)
 
-Beim Reload zeigt die Kachel "Zähler Gesamtverbrauch" niedrigere Monats-/Jahreswerte (z.B. 131,06 MWh statt 193,3 MWh) als kurz nach dem Live-Sync.
+Wir sind weiterhin im Stopp-Modus (Hard-Stop-Regel). Was wir bisher sicher wissen:
 
-## Ursache (verifiziert per DB-Query)
+- Der Loxone-Snapshot (`gateway_sensor_snapshots`) für „Zähler Gesamtverbrauch" enthält **richtig**:
+  - `value: "83,18"` kW (Momentanleistung, `stateName: "actual"`)
+  - `secondaryValue: "540.484"` kWh (Zählerstand, `secondaryStateName: "total"`)
+- In `bridge_raw_samples` für diese UUID stehen **nur** korrekte Leistungswerte (71–105 kW). Es gibt dort **keinen** Wert in der Größenordnung 540.000.
+- In `meter_power_readings` ebenfalls keine Werte > 1.000.
+- Edge-Logs zeigen: gateway-ingest broadcastet 17–25 Events alle 5 s, aber nur ~3–10 werden in `bridge_raw_samples` geschrieben → die restlichen Events sind die Rollen `today/total/month/year`, die nur über Realtime an die UI gehen und kein DB-Schreib-Pendant haben.
 
-In `meter_period_totals` existiert pro `(meter_id, period_type, period_start)` nur **eine** Zeile (Unique-Constraint). Aktuell:
+Damit ist mein Verdacht: Auf der Seite **„Aktuelle Werte"** kommt im Realtime-Broadcast für den Meter ein Event an, das fälschlich als Momentanleistung (`role="pwr"`) verarbeitet wird, obwohl es eigentlich der Zählerstand (`role="total"` = 540.480 kWh) ist. Ich kann das aber aus DB/Logs allein nicht belegen — ich muss live sehen, was im Browser ankommt.
 
+### Vorschlag (1 Datei, 1 Zeile Diagnose, kein Logik-Fix)
+
+In `src/pages/LiveValues.tsx` im Broadcast-Handler **eine** zusätzliche console.log-Zeile einbauen, die für „auffällige" Events (Wert > 1.000) ausgibt, was Realtime tatsächlich liefert:
+
+```ts
+for (const ev of events) {
+  if (Math.abs(ev.value) > 1000) {
+    console.warn("[live-values][diag] suspicious event", {
+      uuid: ev.uuid, role: ev.role, value: ev.value, at: ev.at,
+    });
+  }
+  // ... bestehende Logik unverändert ...
+}
 ```
-period_type=year  source=computed_5min  total=131.063 kWh   updated_at=12:25:00
-period_type=month source=computed_5min  total= 21.427 kWh   updated_at=12:25:00
-```
 
-Ablauf:
-1. `loxone-api` Cron schreibt korrekt `source='loxone_live'` mit Loxone-Zählerstand (193 MWh) → Chunk-Fix funktioniert.
-2. Direkt danach läuft `refresh_meter_period_totals_5min()` (Aggregator aus 5-Min-Buckets) und **überschreibt** die Zeile mit `source='computed_5min'` und dem aus 5-Min-Power-Buckets berechneten, niedrigeren Wert.
+Keine Logik wird verändert. Keine Werte werden gefiltert. Nur eine Diagnose-Ausgabe in der Browser-Konsole.
 
-Im Aggregator (`supabase/migrations/20260620022305_*.sql`):
+### Was du dann tust
 
-- Day-Upsert preserviert `('loxone','loxone_backfill','manual','smart_meter_mscons')` — aber **nicht** `loxone_live`.
-- Month-Upsert preserviert nur `('manual','smart_meter_mscons')` — Loxone-Werte werden komplett überschrieben.
-- Year-Upsert: gleiche Lücke wie Month.
+1. Ich pushe diese eine Log-Zeile.
+2. Du lädst die Seite „Aktuelle Werte" einmal hart neu (Strg+Shift+R).
+3. Wartest 30 Sekunden, bis der falsche Wert auf der Kachel erscheint.
+4. Öffnest die Browser-Konsole (F12 → Tab „Console") und kopierst mir alle Zeilen, die mit `[live-values][diag]` beginnen.
 
-Live-Broadcast aktualisiert UI im Hintergrund auf die "richtigen" 193 MWh; nach Reload liest LiveValues `meter_period_totals` und bekommt wieder den niedrigeren computed-Wert → Sprung nach unten.
+Damit sehen wir in **einem** Schritt, ob
 
-## Fix
+- Realtime tatsächlich `role:"pwr"` mit Wert 540.480 sendet (→ Bug liegt im Worker oder im LoxAPP3-Mapping), oder
+- Realtime `role:"total"` sendet, der Client das aber falsch verarbeitet (→ Bug in `LiveValues.tsx`).
 
-Eine neue Migration, die `refresh_meter_period_totals_5min()` so anpasst, dass Loxone-Direktwerte (vom Miniserver gemeldete Zählerstände) **nie** durch die 5-Min-Aggregation überschrieben werden.
+Erst danach schlage ich den genauen Fix vor.
 
-Änderungen ausschließlich in den `DO UPDATE … WHERE`-Klauseln:
+### Was wir NICHT tun
 
-| Block | alt | neu |
-|---|---|---|
-| Day  (Zeile 50)  | `NOT IN ('loxone','loxone_backfill','manual','smart_meter_mscons')` | + `'loxone_live'` |
-| Month (Zeile 91) | `NOT IN ('manual','smart_meter_mscons')` | + `'loxone','loxone_live','loxone_backfill'` |
-| Year (Zeile 132) | `NOT IN ('manual','smart_meter_mscons')` | + `'loxone','loxone_live','loxone_backfill'` |
+- Keine Worker-Änderung erraten.
+- Keine SQL-Migration.
+- Keine UI-Logik-Änderung.
 
-Effekt:
-- Solange `loxone-api` aktuelle `loxone_live`-Werte schreibt, bleibt der Miniserver-Zählerstand als Quelle der Wahrheit erhalten.
-- `computed_5min` füllt weiterhin alle Meter ohne Loxone-Quelle (Modbus, MQTT, Shelly, …).
-- Bestehende historische `computed_5min`-Zeilen werden beim nächsten regulären `loxone-api`-Lauf (alle 15 min) korrekt überschrieben (loxone_live → DB).
-
-Keine Schema-Änderung, kein Daten-Backfill, keine Frontend-Anpassung nötig. ~3 geänderte SQL-Zeilen.
-
-## Erwartetes Ergebnis
-
-Innerhalb von ≤15 Min (nächster loxone-api Lauf) zeigt die Kachel auch nach Reload Monat 21,57 MWh / Jahr 193,3 MWh stabil — Live-Wert und gespeicherter Wert sind identisch.
+Bestätige bitte kurz mit „ok", dann schalte ich in Build-Modus, füge die eine Log-Zeile ein und du machst Schritt 2–4.
