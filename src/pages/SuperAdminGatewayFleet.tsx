@@ -437,8 +437,13 @@ const SuperAdminGatewayFleet = () => {
   }, [fleet, loxoneRows, tenantNameMap]);
 
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const deviceTypes = Array.from(new Set(unifiedRows.map((r) => r.type)));
-  const filteredRows = typeFilter === "all" ? unifiedRows : unifiedRows.filter((r) => r.type === typeFilter);
+  const statusOptions = Array.from(new Set(unifiedRows.map((r) => r.status)));
+  const filteredRows = unifiedRows.filter((r) =>
+    (typeFilter === "all" || r.type === typeFilter) &&
+    (statusFilter === "all" || r.status === statusFilter)
+  );
 
   const { data: channels = [], refetch: refetchChannels } = useQuery({
     queryKey: ["sa-gateway-channels"],
