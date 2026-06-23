@@ -87,6 +87,17 @@ interface LoxoneSessionRow {
   disconnect_reason: string | null;
 }
 
+interface LoxoneDetails {
+  integrationId: string;
+  sessionId: string;
+  startedAt: string;
+  endedAt: string | null;
+  updatedAt: string;
+  eventsReceived: number | null;
+  reconnectCount: number | null;
+  disconnectReason: string | null;
+}
+
 interface UnifiedRow {
   key: string;
   type: "AICONO EMS" | "Loxone Miniserver";
@@ -104,6 +115,7 @@ interface UnifiedRow {
   worker: string | null;
   lastDisconnect: string | null;
   device?: FleetDevice;
+  loxone?: LoxoneDetails;
 }
 
 const LOOKBACK_MS = 24 * 60 * 60 * 1000;
