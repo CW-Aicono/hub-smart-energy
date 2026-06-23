@@ -733,6 +733,7 @@ const SuperAdminGatewayFleet = () => {
                                 </TableCell>
                               </TableRow>
                             )}
+                          </Fragment>
                         );
                       })}
                     </TableBody>
