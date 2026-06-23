@@ -714,7 +714,25 @@ const SuperAdminGatewayFleet = () => {
                                 </TableCell>
                               </TableRow>
                             )}
-                          </Fragment>
+                            {isOpen && !d && lx && (
+                              <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                <TableCell></TableCell>
+                                <TableCell colSpan={12} className="py-4">
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
+                                    <div><div className="text-muted-foreground">Gateway-Typ</div><div className="font-medium">Loxone Miniserver</div></div>
+                                    <div><div className="text-muted-foreground">Worker</div><div className="font-mono">{lx ? (r.worker ?? "—") : "—"}</div></div>
+                                    <div><div className="text-muted-foreground">Sitzungs-Start</div><div className="font-mono">{new Date(lx.startedAt).toLocaleString("de-DE")}</div></div>
+                                    <div><div className="text-muted-foreground">Letztes Update</div><div className="font-mono">{new Date(lx.updatedAt).toLocaleString("de-DE")}</div></div>
+                                    <div><div className="text-muted-foreground">Events (Sitzung)</div><div className="font-medium">{(lx.eventsReceived ?? 0).toLocaleString("de-DE")}</div></div>
+                                    <div><div className="text-muted-foreground">Reconnects (Sitzung)</div><div className="font-medium">{(lx.reconnectCount ?? 0).toLocaleString("de-DE")}</div></div>
+                                    <div><div className="text-muted-foreground">Sitzungs-Ende</div><div className="font-mono">{lx.endedAt ? new Date(lx.endedAt).toLocaleString("de-DE") : "—"}</div></div>
+                                    <div><div className="text-muted-foreground">Disconnect-Grund</div><div className="font-medium">{lx.disconnectReason ?? "—"}</div></div>
+                                    <div className="col-span-2"><div className="text-muted-foreground">Integration-ID</div><div className="font-mono truncate" title={lx.integrationId}>{lx.integrationId.slice(0, 8)}…</div></div>
+                                    <div className="col-span-2"><div className="text-muted-foreground">Session-ID</div><div className="font-mono truncate" title={lx.sessionId}>{lx.sessionId.slice(0, 8)}…</div></div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
                         );
                       })}
                     </TableBody>
