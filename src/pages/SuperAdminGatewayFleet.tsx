@@ -212,6 +212,16 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
       sessionsLast24h,
       worker: current?.worker_host ?? null,
       lastDisconnect: current?.disconnect_reason ?? (current && !current.ended_at ? null : "unbekannt"),
+      loxone: current ? {
+        integrationId: intId,
+        sessionId: current.id,
+        startedAt: current.started_at,
+        endedAt: current.ended_at,
+        updatedAt: current.updated_at,
+        eventsReceived: current.events_received,
+        reconnectCount: current.reconnect_count,
+        disconnectReason: current.disconnect_reason,
+      } : undefined,
     });
   }
   return result;
