@@ -117,10 +117,15 @@ async function fetchData(): Promise<MiniserverRow[]> {
       const clippedStart = Math.max(start, windowStart);
       const clippedEnd = Math.max(clippedStart, Math.min(end, now));
       if (clippedEnd > clippedStart) {
-        onlineMs += clippedEnd - clippedStart;
+        const clippedMs = clippedEnd - clippedStart;
+        onlineMs += clippedMs;
         sessionsLast24h++;
         reconnectsLast24h += s.reconnect_count ?? 0;
-        eventsLast24h += s.events_received ?? 0;
+        // events_received ist ein kumulativer Zähler seit Session-Start.
+        // Skaliere proportional auf den Anteil der Session, der im 24h-Fenster liegt.
+        const fullMs = Math.max(1, end - start);
+        const ratio = Math.min(1, clippedMs / fullMs);
+        eventsLast24h += Math.round((s.events_received ?? 0) * ratio);
       }
     }
 
