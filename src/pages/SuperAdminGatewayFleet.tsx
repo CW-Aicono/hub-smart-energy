@@ -74,6 +74,44 @@ interface UpdateJob {
   created_at: string;
 }
 
+interface LoxoneSessionRow {
+  id: string;
+  tenant_id: string;
+  location_integration_id: string;
+  started_at: string;
+  ended_at: string | null;
+  updated_at: string;
+  events_received: number | null;
+  reconnect_count: number | null;
+  worker_host: string | null;
+  disconnect_reason: string | null;
+}
+
+interface UnifiedRow {
+  key: string;
+  type: "AICONO EMS" | "Loxone Miniserver";
+  tenantName: string;
+  locationName: string;
+  status: "active" | "stale" | "disconnected" | "online" | "offline" | "unknown";
+  statusLabel: string;
+  connectedSince: string | null;
+  lastHeartbeat: string | null;
+  heartbeatAgeMs: number | null;
+  eventsLast24h: number | null;
+  reconnectsLast24h: number | null;
+  uptimeRatio24h: number | null;
+  sessionsLast24h: number | null;
+  worker: string | null;
+  lastDisconnect: string | null;
+  device?: FleetDevice;
+}
+
+const LOOKBACK_MS = 24 * 60 * 60 * 1000;
+// Loxone worker heartbeat = 5 min; threshold 6 min so display stays green between beats.
+const LOXONE_FRESH_HEARTBEAT_MS = 360_000;
+// AICONO gateway heartbeat threshold (3 min — see status-monitoring-logic memory).
+const AICONO_FRESH_HEARTBEAT_MS = 180_000;
+
 async function callControl(action: string, payload: Record<string, unknown> = {}) {
   const { data, error } = await supabase.functions.invoke("gateway-update-control", {
     body: { action, ...payload },
@@ -81,6 +119,143 @@ async function callControl(action: string, payload: Record<string, unknown> = {}
   if (error) throw new Error(error.message);
   if (data?.error) throw new Error(data.error);
   return data;
+}
+
+async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
+  const sinceIso = new Date(Date.now() - LOOKBACK_MS).toISOString();
+  const { data: sessions, error: sErr } = await supabase
+    .from("loxone_ws_session_log")
+    .select("id, tenant_id, location_integration_id, started_at, ended_at, updated_at, events_received, reconnect_count, worker_host, disconnect_reason")
+    .or(`started_at.gte.${sinceIso},ended_at.is.null`)
+    .order("started_at", { ascending: false });
+  if (sErr) throw sErr;
+  const rows = (sessions ?? []) as LoxoneSessionRow[];
+  const integrationIds = Array.from(new Set(rows.map((r) => r.location_integration_id)));
+  if (integrationIds.length === 0) return [];
+
+  const { data: integrations } = await supabase
+    .from("location_integrations").select("id, location_id").in("id", integrationIds);
+  const locationIds = Array.from(new Set((integrations ?? []).map((i: any) => i.location_id).filter(Boolean)));
+  const { data: locations } = locationIds.length
+    ? await supabase.from("locations").select("id, name, tenant_id").in("id", locationIds)
+    : { data: [] as any[] };
+  const tenantIds = Array.from(new Set((locations ?? []).map((l: any) => l.tenant_id).filter(Boolean)));
+  const { data: tenants } = tenantIds.length
+    ? await supabase.from("tenants").select("id, name").in("id", tenantIds)
+    : { data: [] as any[] };
+
+  const locById = new Map((locations ?? []).map((l: any) => [l.id, l]));
+  const tenantById = new Map((tenants ?? []).map((t: any) => [t.id, t]));
+  const infoMap = new Map<string, { tenant: string; location: string }>();
+  (integrations ?? []).forEach((it: any) => {
+    const loc = locById.get(it.location_id);
+    const tenant = loc ? tenantById.get(loc.tenant_id) : null;
+    infoMap.set(it.id, { tenant: tenant?.name ?? "—", location: loc?.name ?? "—" });
+  });
+
+  const now = Date.now();
+  const windowStart = now - LOOKBACK_MS;
+  const result: UnifiedRow[] = [];
+  for (const intId of integrationIds) {
+    const intSessions = rows.filter((r) => r.location_integration_id === intId);
+    if (intSessions.length === 0) continue;
+    const current = intSessions[0];
+    let onlineMs = 0, sessionsLast24h = 0, reconnectsLast24h = 0, eventsLast24h = 0;
+    for (const s of intSessions) {
+      const start = new Date(s.started_at).getTime();
+      const end = s.ended_at ? new Date(s.ended_at).getTime() : now;
+      const cs = Math.max(start, windowStart);
+      const ce = Math.max(cs, Math.min(end, now));
+      if (ce > cs) {
+        const ms = ce - cs;
+        onlineMs += ms;
+        sessionsLast24h++;
+        reconnectsLast24h += s.reconnect_count ?? 0;
+        const fullMs = Math.max(1, end - start);
+        eventsLast24h += Math.round((s.events_received ?? 0) * Math.min(1, ms / fullMs));
+      }
+    }
+    const info = infoMap.get(intId);
+    const heartbeatAge = current ? now - new Date(current.updated_at).getTime() : null;
+    let status: UnifiedRow["status"] = "disconnected";
+    let statusLabel = "Getrennt";
+    if (current && !current.ended_at) {
+      if (heartbeatAge !== null && heartbeatAge < LOXONE_FRESH_HEARTBEAT_MS) {
+        status = "active"; statusLabel = "Aktiv";
+      } else {
+        status = "stale"; statusLabel = `Stale (${Math.round((heartbeatAge ?? 0) / 1000)}s)`;
+      }
+    }
+    result.push({
+      key: `loxone:${intId}`,
+      type: "Loxone Miniserver",
+      tenantName: info?.tenant ?? "—",
+      locationName: info?.location ?? "—",
+      status, statusLabel,
+      connectedSince: current && !current.ended_at ? current.started_at : null,
+      lastHeartbeat: current?.updated_at ?? null,
+      heartbeatAgeMs: heartbeatAge,
+      eventsLast24h, reconnectsLast24h,
+      uptimeRatio24h: Math.min(1, onlineMs / LOOKBACK_MS),
+      sessionsLast24h,
+      worker: current?.worker_host ?? null,
+      lastDisconnect: current?.disconnect_reason ?? (current && !current.ended_at ? null : "unbekannt"),
+    });
+  }
+  return result;
+}
+
+function aiconoToUnifiedRow(d: FleetDevice, tenantNameMap: Record<string, string>): UnifiedRow {
+  const now = Date.now();
+  const hbAge = d.last_heartbeat_at ? now - new Date(d.last_heartbeat_at).getTime() : null;
+  let status: UnifiedRow["status"] = "unknown";
+  let statusLabel = d.status || "—";
+  if (hbAge !== null && hbAge < AICONO_FRESH_HEARTBEAT_MS) {
+    status = "active"; statusLabel = "Aktiv";
+  } else if (d.status === "online") {
+    status = "stale"; statusLabel = "Stale";
+  } else if (d.status) {
+    status = d.status === "online" ? "online" : "offline";
+    statusLabel = d.status;
+  }
+  return {
+    key: `aicono:${d.id}`,
+    type: "AICONO EMS",
+    tenantName: (d.tenant_id && tenantNameMap[d.tenant_id]) || "—",
+    locationName: d.location_name || d.device_name || "—",
+    status, statusLabel,
+    connectedSince: d.ws_connected_since,
+    lastHeartbeat: d.last_heartbeat_at,
+    heartbeatAgeMs: hbAge,
+    eventsLast24h: null,
+    reconnectsLast24h: null,
+    uptimeRatio24h: status === "active" ? 1 : null,
+    sessionsLast24h: null,
+    worker: null,
+    lastDisconnect: null,
+    device: d,
+  };
+}
+
+function UnifiedStatusBadge({ status, label }: { status: UnifiedRow["status"]; label: string }) {
+  if (status === "active") {
+    return (
+      <Badge className="bg-green-500/15 text-green-700 border-green-500/30 dark:text-green-400 hover:bg-green-500/15">
+        <Radio className="h-3 w-3 mr-1" />{label}
+      </Badge>
+    );
+  }
+  if (status === "stale") {
+    return (
+      <Badge variant="secondary" className="text-amber-700 dark:text-amber-400">
+        <AlertCircle className="h-3 w-3 mr-1" />{label}
+      </Badge>
+    );
+  }
+  if (status === "disconnected" || status === "offline") {
+    return <Badge variant="destructive"><AlertCircle className="h-3 w-3 mr-1" />{label}</Badge>;
+  }
+  return <Badge variant="secondary">{label}</Badge>;
 }
 
 function StatusBadge({ status }: { status: string }) {
