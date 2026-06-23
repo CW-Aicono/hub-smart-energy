@@ -607,7 +607,8 @@ const SuperAdminGatewayFleet = () => {
                       )}
                       {filteredRows.map((r) => {
                         const d = r.device;
-                        const canExpand = !!d;
+                        const lx = r.loxone;
+                        const canExpand = !!d || !!lx;
                         const isOpen = canExpand && !!expanded[r.key];
                         return (
                           <Fragment key={r.key}>
