@@ -224,7 +224,7 @@ export default function LoxoneMiniserverMonitorCard() {
                   <th className="text-left py-2 pr-3 font-medium">Status</th>
                   <th className="text-left py-2 pr-3 font-medium">Verbunden seit</th>
                   <th className="text-left py-2 pr-3 font-medium">Letzter Heartbeat</th>
-                  <th className="text-right py-2 pr-3 font-medium">Events (Sitzung)</th>
+                  <th className="text-right py-2 pr-3 font-medium">Events 24 h</th>
                   <th className="text-right py-2 pr-3 font-medium">Reconnects 24 h</th>
                   <th className="text-right py-2 pr-3 font-medium">Uptime 24 h</th>
                   <th className="text-right py-2 pr-3 font-medium">Sitzungen 24 h</th>
