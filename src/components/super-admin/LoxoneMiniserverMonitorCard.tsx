@@ -253,7 +253,7 @@ export default function LoxoneMiniserverMonitorCard() {
                       <td className="py-2 pr-3 text-right tabular-nums">
                         <span className="inline-flex items-center gap-1">
                           <Activity className="h-3 w-3 text-muted-foreground" />
-                          {(s?.events_received ?? 0).toLocaleString("de-DE")}
+                          {row.eventsLast24h.toLocaleString("de-DE")}
                         </span>
                       </td>
                       <td className="py-2 pr-3 text-right tabular-nums">
