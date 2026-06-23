@@ -324,14 +324,28 @@ const SuperAdminGatewayFleet = () => {
         </header>
 
         <div className="p-6">
-          <Tabs defaultValue="fleet">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
-              <TabsTrigger value="fleet">Flotte ({fleet.length})</TabsTrigger>
+              <TabsTrigger value="fleet">Flotte ({filteredFleet.length})</TabsTrigger>
               <TabsTrigger value="jobs">Update-Jobs</TabsTrigger>
               <TabsTrigger value="channels">Release-Channels</TabsTrigger>
+              <TabsTrigger value="loxone">Loxone Miniserver</TabsTrigger>
+              <TabsTrigger value="workers">Worker-Steuerung</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="fleet" className="mt-4">
+            <TabsContent value="fleet" className="mt-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-muted-foreground">Gateway-Typ:</label>
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="h-8 w-56"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Alle Typen</SelectItem>
+                    {deviceTypes.map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Card>
                 <CardContent className="p-0">
                   <Table>
