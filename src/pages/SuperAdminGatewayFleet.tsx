@@ -583,6 +583,14 @@ const SuperAdminGatewayFleet = () => {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            <TabsContent value="loxone" className="mt-4">
+              <LoxoneMiniserverMonitorCard />
+            </TabsContent>
+
+            <TabsContent value="workers" className="mt-4">
+              <WorkerControlsPanel />
+            </TabsContent>
           </Tabs>
         </div>
       </main>
