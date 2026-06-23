@@ -87,6 +87,17 @@ interface LoxoneSessionRow {
   disconnect_reason: string | null;
 }
 
+interface LoxoneDetails {
+  integrationId: string;
+  sessionId: string;
+  startedAt: string;
+  endedAt: string | null;
+  updatedAt: string;
+  eventsReceived: number | null;
+  reconnectCount: number | null;
+  disconnectReason: string | null;
+}
+
 interface UnifiedRow {
   key: string;
   type: "AICONO EMS" | "Loxone Miniserver";
@@ -104,6 +115,7 @@ interface UnifiedRow {
   worker: string | null;
   lastDisconnect: string | null;
   device?: FleetDevice;
+  loxone?: LoxoneDetails;
 }
 
 const LOOKBACK_MS = 24 * 60 * 60 * 1000;
@@ -200,6 +212,16 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
       sessionsLast24h,
       worker: current?.worker_host ?? null,
       lastDisconnect: current?.disconnect_reason ?? (current && !current.ended_at ? null : "unbekannt"),
+      loxone: current ? {
+        integrationId: intId,
+        sessionId: current.id,
+        startedAt: current.started_at,
+        endedAt: current.ended_at,
+        updatedAt: current.updated_at,
+        eventsReceived: current.events_received,
+        reconnectCount: current.reconnect_count,
+        disconnectReason: current.disconnect_reason,
+      } : undefined,
     });
   }
   return result;
@@ -415,8 +437,13 @@ const SuperAdminGatewayFleet = () => {
   }, [fleet, loxoneRows, tenantNameMap]);
 
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const deviceTypes = Array.from(new Set(unifiedRows.map((r) => r.type)));
-  const filteredRows = typeFilter === "all" ? unifiedRows : unifiedRows.filter((r) => r.type === typeFilter);
+  const statusOptions = Array.from(new Set(unifiedRows.map((r) => r.status)));
+  const filteredRows = unifiedRows.filter((r) =>
+    (typeFilter === "all" || r.type === typeFilter) &&
+    (statusFilter === "all" || r.status === statusFilter)
+  );
 
   const { data: channels = [], refetch: refetchChannels } = useQuery({
     queryKey: ["sa-gateway-channels"],
@@ -526,7 +553,7 @@ const SuperAdminGatewayFleet = () => {
             </TabsList>
 
             <TabsContent value="fleet" className="mt-4 space-y-4">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <label className="text-sm text-muted-foreground">Gateway-Typ:</label>
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
                   <SelectTrigger className="h-8 w-56"><SelectValue /></SelectTrigger>
@@ -535,6 +562,19 @@ const SuperAdminGatewayFleet = () => {
                     {deviceTypes.map((t) => (
                       <SelectItem key={t} value={t}>{t}</SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+                <label className="text-sm text-muted-foreground ml-2">Status:</label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Alle Status</SelectItem>
+                    {statusOptions.includes("active") && <SelectItem value="active">Aktiv</SelectItem>}
+                    {statusOptions.includes("stale") && <SelectItem value="stale">Stale</SelectItem>}
+                    {statusOptions.includes("disconnected") && <SelectItem value="disconnected">Getrennt</SelectItem>}
+                    {statusOptions.includes("offline") && <SelectItem value="offline">Offline</SelectItem>}
+                    {statusOptions.includes("online") && <SelectItem value="online">Online</SelectItem>}
+                    {statusOptions.includes("unknown") && <SelectItem value="unknown">Unbekannt</SelectItem>}
                   </SelectContent>
                 </Select>
                 <span className="ml-auto text-xs text-muted-foreground">
@@ -567,7 +607,8 @@ const SuperAdminGatewayFleet = () => {
                       )}
                       {filteredRows.map((r) => {
                         const d = r.device;
-                        const canExpand = !!d;
+                        const lx = r.loxone;
+                        const canExpand = !!d || !!lx;
                         const isOpen = canExpand && !!expanded[r.key];
                         return (
                           <Fragment key={r.key}>
@@ -669,6 +710,25 @@ const SuperAdminGatewayFleet = () => {
                                         Update jetzt
                                       </Button>
                                     </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                            {isOpen && !d && lx && (
+                              <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                <TableCell></TableCell>
+                                <TableCell colSpan={12} className="py-4">
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
+                                    <div><div className="text-muted-foreground">Gateway-Typ</div><div className="font-medium">Loxone Miniserver</div></div>
+                                    <div><div className="text-muted-foreground">Worker</div><div className="font-mono">{lx ? (r.worker ?? "—") : "—"}</div></div>
+                                    <div><div className="text-muted-foreground">Sitzungs-Start</div><div className="font-mono">{new Date(lx.startedAt).toLocaleString("de-DE")}</div></div>
+                                    <div><div className="text-muted-foreground">Letztes Update</div><div className="font-mono">{new Date(lx.updatedAt).toLocaleString("de-DE")}</div></div>
+                                    <div><div className="text-muted-foreground">Events (Sitzung)</div><div className="font-medium">{(lx.eventsReceived ?? 0).toLocaleString("de-DE")}</div></div>
+                                    <div><div className="text-muted-foreground">Reconnects (Sitzung)</div><div className="font-medium">{(lx.reconnectCount ?? 0).toLocaleString("de-DE")}</div></div>
+                                    <div><div className="text-muted-foreground">Sitzungs-Ende</div><div className="font-mono">{lx.endedAt ? new Date(lx.endedAt).toLocaleString("de-DE") : "—"}</div></div>
+                                    <div><div className="text-muted-foreground">Disconnect-Grund</div><div className="font-medium">{lx.disconnectReason ?? "—"}</div></div>
+                                    <div className="col-span-2"><div className="text-muted-foreground">Integration-ID</div><div className="font-mono truncate" title={lx.integrationId}>{lx.integrationId.slice(0, 8)}…</div></div>
+                                    <div className="col-span-2"><div className="text-muted-foreground">Session-ID</div><div className="font-mono truncate" title={lx.sessionId}>{lx.sessionId.slice(0, 8)}…</div></div>
                                   </div>
                                 </TableCell>
                               </TableRow>
