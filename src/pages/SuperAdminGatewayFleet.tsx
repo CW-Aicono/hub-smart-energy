@@ -395,9 +395,28 @@ const SuperAdminGatewayFleet = () => {
     setSearchParams(next, { replace: true });
   };
 
+  const { data: loxoneRows = [], refetch: refetchLoxone } = useQuery({
+    queryKey: ["sa-unified-fleet-loxone"],
+    queryFn: fetchLoxoneRows,
+    enabled: !!isSuperAdmin,
+    refetchInterval: 15_000,
+  });
+
+  const unifiedRows: UnifiedRow[] = useMemo(() => {
+    const aicono = (fleet ?? []).map((d) => aiconoToUnifiedRow(d, tenantNameMap));
+    const all = [...aicono, ...loxoneRows];
+    all.sort((a, b) => {
+      const aActive = a.status === "active" ? 0 : 1;
+      const bActive = b.status === "active" ? 0 : 1;
+      if (aActive !== bActive) return aActive - bActive;
+      return a.locationName.localeCompare(b.locationName);
+    });
+    return all;
+  }, [fleet, loxoneRows, tenantNameMap]);
+
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const deviceTypes = Array.from(new Set(((fleet ?? []) as FleetDevice[]).map((d) => d.device_type).filter(Boolean)));
-  const filteredFleet = typeFilter === "all" ? fleet : fleet.filter((d) => d.device_type === typeFilter);
+  const deviceTypes = Array.from(new Set(unifiedRows.map((r) => r.type)));
+  const filteredRows = typeFilter === "all" ? unifiedRows : unifiedRows.filter((r) => r.type === typeFilter);
 
   const { data: channels = [], refetch: refetchChannels } = useQuery({
     queryKey: ["sa-gateway-channels"],
