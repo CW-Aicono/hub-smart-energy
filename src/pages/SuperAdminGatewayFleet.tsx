@@ -553,7 +553,7 @@ const SuperAdminGatewayFleet = () => {
             </TabsList>
 
             <TabsContent value="fleet" className="mt-4 space-y-4">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <label className="text-sm text-muted-foreground">Gateway-Typ:</label>
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
                   <SelectTrigger className="h-8 w-56"><SelectValue /></SelectTrigger>
@@ -562,6 +562,19 @@ const SuperAdminGatewayFleet = () => {
                     {deviceTypes.map((t) => (
                       <SelectItem key={t} value={t}>{t}</SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+                <label className="text-sm text-muted-foreground ml-2">Status:</label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Alle Status</SelectItem>
+                    {statusOptions.includes("active") && <SelectItem value="active">Aktiv</SelectItem>}
+                    {statusOptions.includes("stale") && <SelectItem value="stale">Stale</SelectItem>}
+                    {statusOptions.includes("disconnected") && <SelectItem value="disconnected">Getrennt</SelectItem>}
+                    {statusOptions.includes("offline") && <SelectItem value="offline">Offline</SelectItem>}
+                    {statusOptions.includes("online") && <SelectItem value="online">Online</SelectItem>}
+                    {statusOptions.includes("unknown") && <SelectItem value="unknown">Unbekannt</SelectItem>}
                   </SelectContent>
                 </Select>
                 <span className="ml-auto text-xs text-muted-foreground">
