@@ -117,10 +117,15 @@ async function fetchData(): Promise<MiniserverRow[]> {
       const clippedStart = Math.max(start, windowStart);
       const clippedEnd = Math.max(clippedStart, Math.min(end, now));
       if (clippedEnd > clippedStart) {
-        onlineMs += clippedEnd - clippedStart;
+        const clippedMs = clippedEnd - clippedStart;
+        onlineMs += clippedMs;
         sessionsLast24h++;
         reconnectsLast24h += s.reconnect_count ?? 0;
-        eventsLast24h += s.events_received ?? 0;
+        // events_received ist ein kumulativer Zähler seit Session-Start.
+        // Skaliere proportional auf den Anteil der Session, der im 24h-Fenster liegt.
+        const fullMs = Math.max(1, end - start);
+        const ratio = Math.min(1, clippedMs / fullMs);
+        eventsLast24h += Math.round((s.events_received ?? 0) * ratio);
       }
     }
 
@@ -219,7 +224,7 @@ export default function LoxoneMiniserverMonitorCard() {
                   <th className="text-left py-2 pr-3 font-medium">Status</th>
                   <th className="text-left py-2 pr-3 font-medium">Verbunden seit</th>
                   <th className="text-left py-2 pr-3 font-medium">Letzter Heartbeat</th>
-                  <th className="text-right py-2 pr-3 font-medium">Events (Sitzung)</th>
+                  <th className="text-right py-2 pr-3 font-medium">Events 24 h</th>
                   <th className="text-right py-2 pr-3 font-medium">Reconnects 24 h</th>
                   <th className="text-right py-2 pr-3 font-medium">Uptime 24 h</th>
                   <th className="text-right py-2 pr-3 font-medium">Sitzungen 24 h</th>
@@ -248,7 +253,7 @@ export default function LoxoneMiniserverMonitorCard() {
                       <td className="py-2 pr-3 text-right tabular-nums">
                         <span className="inline-flex items-center gap-1">
                           <Activity className="h-3 w-3 text-muted-foreground" />
-                          {(s?.events_received ?? 0).toLocaleString("de-DE")}
+                          {row.eventsLast24h.toLocaleString("de-DE")}
                         </span>
                       </td>
                       <td className="py-2 pr-3 text-right tabular-nums">
