@@ -1,4 +1,6 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
+import LoxoneMiniserverMonitorCard from "@/components/super-admin/LoxoneMiniserverMonitorCard";
+import WorkerControlsPanel from "@/components/super-admin/WorkerControlsPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
@@ -211,6 +213,18 @@ const SuperAdminGatewayFleet = () => {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const toggleExpand = (id: string) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "fleet";
+  const setActiveTab = (v: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (v === "fleet") next.delete("tab"); else next.set("tab", v);
+    setSearchParams(next, { replace: true });
+  };
+
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const deviceTypes = Array.from(new Set(((fleet ?? []) as FleetDevice[]).map((d) => d.device_type).filter(Boolean)));
+  const filteredFleet = typeFilter === "all" ? fleet : fleet.filter((d) => d.device_type === typeFilter);
+
   const { data: channels = [], refetch: refetchChannels } = useQuery({
     queryKey: ["sa-gateway-channels"],
     queryFn: async () => {
@@ -310,14 +324,28 @@ const SuperAdminGatewayFleet = () => {
         </header>
 
         <div className="p-6">
-          <Tabs defaultValue="fleet">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
-              <TabsTrigger value="fleet">Flotte ({fleet.length})</TabsTrigger>
+              <TabsTrigger value="fleet">Flotte ({filteredFleet.length})</TabsTrigger>
               <TabsTrigger value="jobs">Update-Jobs</TabsTrigger>
               <TabsTrigger value="channels">Release-Channels</TabsTrigger>
+              <TabsTrigger value="loxone">Loxone Miniserver</TabsTrigger>
+              <TabsTrigger value="workers">Worker-Steuerung</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="fleet" className="mt-4">
+            <TabsContent value="fleet" className="mt-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-muted-foreground">Gateway-Typ:</label>
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="h-8 w-56"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Alle Typen</SelectItem>
+                    {deviceTypes.map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Card>
                 <CardContent className="p-0">
                   <Table>
@@ -335,10 +363,10 @@ const SuperAdminGatewayFleet = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {fleet.length === 0 && (
+                      {filteredFleet.length === 0 && (
                         <TableRow><TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-8">Keine Gateways registriert.</TableCell></TableRow>
                       )}
-                      {fleet.map((d) => {
+                      {filteredFleet.map((d) => {
                         const isOpen = !!expanded[d.id];
                         const locationName = d.location_name || "—";
                         return (
@@ -554,6 +582,14 @@ const SuperAdminGatewayFleet = () => {
                   </Table>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="loxone" className="mt-4">
+              <LoxoneMiniserverMonitorCard />
+            </TabsContent>
+
+            <TabsContent value="workers" className="mt-4">
+              <WorkerControlsPanel />
             </TabsContent>
           </Tabs>
         </div>
