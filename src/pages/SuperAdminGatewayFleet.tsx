@@ -363,10 +363,10 @@ const SuperAdminGatewayFleet = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {fleet.length === 0 && (
+                      {filteredFleet.length === 0 && (
                         <TableRow><TableCell colSpan={9} className="text-center text-sm text-muted-foreground py-8">Keine Gateways registriert.</TableCell></TableRow>
                       )}
-                      {fleet.map((d) => {
+                      {filteredFleet.map((d) => {
                         const isOpen = !!expanded[d.id];
                         const locationName = d.location_name || "—";
                         return (
