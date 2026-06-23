@@ -1,4 +1,6 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
+import LoxoneMiniserverMonitorCard from "@/components/super-admin/LoxoneMiniserverMonitorCard";
+import WorkerControlsPanel from "@/components/super-admin/WorkerControlsPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
