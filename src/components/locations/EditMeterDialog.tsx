@@ -542,12 +542,17 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                   <Select value={sourceUnit} onValueChange={setSourceUnit}>
                     <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="kW">kW / kWh</SelectItem>
-                      <SelectItem value="W">W / Wh</SelectItem>
-                      <SelectItem value="m³">m³</SelectItem>
+                      {SOURCE_UNIT_GROUPS.map((group) => (
+                        <SelectGroup key={group.label}>
+                          <SelectLabel>{group.label}</SelectLabel>
+                          {group.options.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectGroup>
+                      ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">Welche Einheiten liefert Ihr Gateway? In der Loxone Config unter den Ausgängen des Zählers sichtbar.</p>
+                  <p className="text-xs text-muted-foreground">Welche Einheit liefert Ihr Gateway für dieses Gerät? Bei Loxone in der Loxone Config unter den Ausgängen des Zählers sichtbar; bei Sensoren (z. B. Shelly H&T) z. B. °C für Temperatur oder % für Luftfeuchte.</p>
                 </div>
               )}
             </div>
