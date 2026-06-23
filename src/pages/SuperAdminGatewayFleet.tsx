@@ -511,7 +511,7 @@ const SuperAdminGatewayFleet = () => {
               Remote- und Auto-Software-Updates für AICONO EMS Gateways
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => { refetchFleet(); refetchJobs(); refetchChannels(); }}>
+          <Button variant="outline" size="sm" onClick={() => { refetchFleet(); refetchJobs(); refetchChannels(); refetchLoxone(); }}>
             <RefreshCw className="h-4 w-4 mr-2" /> Aktualisieren
           </Button>
         </header>
