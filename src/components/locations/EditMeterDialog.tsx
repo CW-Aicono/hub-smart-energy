@@ -338,7 +338,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
         brennwert: brennwertVal ? parseFloat(brennwertVal.replace(",", ".")) : null,
       } : { gas_type: null, zustandszahl: null, brennwert: null }),
       source_unit_power: captureType === "automatic" ? sourceUnit : null,
-      source_unit_energy: captureType === "automatic" ? (sourceUnit === "m³" ? "m³" : sourceUnit === "kW" ? "kWh" : "Wh") : null,
+      source_unit_energy: captureType === "automatic" ? deriveEnergyUnit(sourceUnit) : null,
       ...(deviceType === "meter" ? (() => {
         const parsed = offsetValue.trim() ? parseFloat(offsetValue.replace(",", ".")) : 0;
         const finalOffset = Number.isFinite(parsed) ? parsed : 0;
