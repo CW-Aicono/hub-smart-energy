@@ -213,6 +213,18 @@ const SuperAdminGatewayFleet = () => {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const toggleExpand = (id: string) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") || "fleet";
+  const setActiveTab = (v: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (v === "fleet") next.delete("tab"); else next.set("tab", v);
+    setSearchParams(next, { replace: true });
+  };
+
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const deviceTypes = Array.from(new Set(((fleet ?? []) as FleetDevice[]).map((d) => d.device_type).filter(Boolean)));
+  const filteredFleet = typeFilter === "all" ? fleet : fleet.filter((d) => d.device_type === typeFilter);
+
   const { data: channels = [], refetch: refetchChannels } = useQuery({
     queryKey: ["sa-gateway-channels"],
     queryFn: async () => {
