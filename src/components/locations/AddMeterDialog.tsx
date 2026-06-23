@@ -163,7 +163,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
         location_integration_id: captureType === "automatic" && selectedIntegration ? selectedIntegration : undefined,
         sensor_uuid: captureType === "automatic" && selectedSensor ? selectedSensor : undefined,
         ...(energyType === "gas" ? { gas_type: gasType, zustandszahl: parsedZustandszahl, brennwert: parsedBrennwert || undefined } : {}),
-        ...(captureType === "automatic" ? { source_unit_power: sourceUnit, source_unit_energy: sourceUnit === "m³" ? "m³" : sourceUnit === "kW" ? "kWh" : "Wh" } : {}),
+        ...(captureType === "automatic" ? { source_unit_power: sourceUnit, source_unit_energy: deriveEnergyUnit(sourceUnit) } : {}),
         is_bidirectional: isBidirectional,
         ...(() => {
           const parsed = offsetValue.trim() ? parseFloat(offsetValue.replace(",", ".")) : 0;
