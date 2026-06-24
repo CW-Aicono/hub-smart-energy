@@ -373,6 +373,16 @@ const LiveValues = () => {
 
     loadInitialPowerValues();
 
+    // Periodischer DB-Reconcile (heilt verpasste Broadcast-Events nach WS-Drop / Tab-Sleep)
+    const reconcileInterval = setInterval(() => {
+      loadInitialPowerValues();
+    }, 60_000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadInitialPowerValues();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+
     // uuid → meter_id Map (für schnelles Lookup im Broadcast-Handler)
     const uuidToMeterId = new Map<string, string>();
     for (const m of meters) {
