@@ -270,8 +270,8 @@ const LiveValues = () => {
     const firstOfMonth = today.substring(0, 7) + "-01";
     const firstOfYear = today.substring(0, 4) + "-01-01";
 
-    // Parallel: DB-Polling-Wert, Bridge-Raw-Wert (Live), Perioden-Totals
-    const [powerRes, bridgeRes, periodRes] = await Promise.all([
+    // Parallel: DB-Polling-Wert, Bridge-Raw-Wert (Live), Perioden-Totals, Zählerstand (kumulativ)
+    const [powerRes, bridgeRes, periodRes, cumulativeRes] = await Promise.all([
       supabase
         .from("meter_power_readings")
         .select("meter_id, power_value, recorded_at")
@@ -290,7 +290,13 @@ const LiveValues = () => {
         .in("meter_id", meterIds)
         .in("period_type", ["day", "month", "year"])
         .in("period_start", [today, firstOfMonth, firstOfYear]),
+      supabase
+        .from("meter_cumulative_readings")
+        .select("meter_id, kwh_total, reading_at")
+        .in("meter_id", meterIds)
+        .order("reading_at", { ascending: false }),
     ]);
+
 
     // Letzten Bridge-Wert pro UUID extrahieren
     const bridgeLatest = new Map<string, { value: number; at: number }>();
@@ -316,6 +322,13 @@ const LiveValues = () => {
       periodMap.set(row.meter_id, existing);
     }
 
+    // Letzten Zählerstand (kumulativ) pro Meter extrahieren
+    const cumulativeLatest = new Map<string, number>();
+    for (const row of cumulativeRes.data ?? []) {
+      if (cumulativeLatest.has(row.meter_id)) continue;
+      cumulativeLatest.set(row.meter_id, Number(row.kwh_total));
+    }
+
     setLiveValues((prev) => {
       const next = new Map(prev);
       for (const m of autoMeters) {
@@ -328,17 +341,20 @@ const LiveValues = () => {
         } else {
           chosen = bridge ?? polling;
         }
-        if (!chosen) continue;
         const periods = periodMap.get(m.id) ?? { totalDay: null, totalMonth: null, totalYear: null };
+        const dbReading = cumulativeLatest.get(m.id) ?? null;
+        const existing = next.get(m.id);
+        // Reconcile: DB-Werte als Quelle der Wahrheit übernehmen; vorhandenen Live-Power-Wert
+        // nur ersetzen, wenn wir einen neuen aus DB haben.
         next.set(m.id, {
-          value: chosen.value,
-          unit: "",
-          totalDay: periods.totalDay,
+          value: chosen?.value ?? existing?.value ?? 0,
+          unit: existing?.unit ?? "",
+          totalDay: periods.totalDay ?? existing?.totalDay ?? null,
           totalWeek: null,
-          totalMonth: periods.totalMonth,
-          totalYear: periods.totalYear,
-          meterReading: null,
-          meterReadingUnit: "kWh",
+          totalMonth: periods.totalMonth ?? existing?.totalMonth ?? null,
+          totalYear: periods.totalYear ?? existing?.totalYear ?? null,
+          meterReading: dbReading ?? existing?.meterReading ?? null,
+          meterReadingUnit: existing?.meterReadingUnit ?? "kWh",
         });
       }
       return next;
@@ -348,12 +364,24 @@ const LiveValues = () => {
   }, [meters]);
 
 
+
+
   // On mount: load only existing DB values, then subscribe to Loxone-WS-Bridge via Realtime-Broadcast.
   // Temporär: KEIN loxone-api/getSensors HTTP-Polling auf dieser Seite.
   useEffect(() => {
     if (meters.length === 0) return;
 
     loadInitialPowerValues();
+
+    // Periodischer DB-Reconcile (heilt verpasste Broadcast-Events nach WS-Drop / Tab-Sleep)
+    const reconcileInterval = setInterval(() => {
+      loadInitialPowerValues();
+    }, 60_000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") loadInitialPowerValues();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
 
     // uuid → meter_id Map (für schnelles Lookup im Broadcast-Handler)
     const uuidToMeterId = new Map<string, string>();
@@ -378,16 +406,20 @@ const LiveValues = () => {
             const next = new Map(prev);
             let unmatched = 0;
             for (const ev of events) {
-              if (Math.abs(ev.value) > 1000) {
-                console.warn("[live-values][diag] suspicious event", {
-                  uuid: ev.uuid, role: ev.role, value: ev.value, at: ev.at,
+              const role = ev.role ?? "pwr";
+              // Plausibilitätsfilter: implausible Werte verwerfen (statt anzuzeigen)
+              const limit = role === "pwr" ? 10_000 /* kW */ : 10_000_000 /* kWh */;
+              if (!Number.isFinite(ev.value) || Math.abs(ev.value) > limit) {
+                console.warn("[live-values] dropped implausible event", {
+                  uuid: ev.uuid, role, value: ev.value, at: ev.at,
                 });
+                continue;
               }
               const meterId = uuidToMeterId.get(ev.uuid.toLowerCase());
               if (!meterId) { unmatched++; continue; }
 
-              const role = ev.role ?? "pwr";
               const existing = next.get(meterId) ?? {
+
                 value: 0, unit: "", totalDay: null, totalWeek: null,
                 totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "kWh",
               };
@@ -414,8 +446,11 @@ const LiveValues = () => {
     });
 
     return () => {
+      clearInterval(reconcileInterval);
+      document.removeEventListener("visibilitychange", onVisibility);
       for (const ch of channels) supabase.removeChannel(ch);
     };
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meters.length]);
 
