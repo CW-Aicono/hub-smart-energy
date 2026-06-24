@@ -418,9 +418,8 @@ const LiveValues = () => {
               const meterId = uuidToMeterId.get(ev.uuid.toLowerCase());
               if (!meterId) { unmatched++; continue; }
 
-
-              const role = ev.role ?? "pwr";
               const existing = next.get(meterId) ?? {
+
                 value: 0, unit: "", totalDay: null, totalWeek: null,
                 totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "kWh",
               };
