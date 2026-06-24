@@ -322,6 +322,13 @@ const LiveValues = () => {
       periodMap.set(row.meter_id, existing);
     }
 
+    // Letzten Zählerstand (kumulativ) pro Meter extrahieren
+    const cumulativeLatest = new Map<string, number>();
+    for (const row of cumulativeRes.data ?? []) {
+      if (cumulativeLatest.has(row.meter_id)) continue;
+      cumulativeLatest.set(row.meter_id, Number(row.kwh_total));
+    }
+
     setLiveValues((prev) => {
       const next = new Map(prev);
       for (const m of autoMeters) {
@@ -334,17 +341,20 @@ const LiveValues = () => {
         } else {
           chosen = bridge ?? polling;
         }
-        if (!chosen) continue;
         const periods = periodMap.get(m.id) ?? { totalDay: null, totalMonth: null, totalYear: null };
+        const dbReading = cumulativeLatest.get(m.id) ?? null;
+        const existing = next.get(m.id);
+        // Reconcile: DB-Werte als Quelle der Wahrheit übernehmen; vorhandenen Live-Power-Wert
+        // nur ersetzen, wenn wir einen neuen aus DB haben.
         next.set(m.id, {
-          value: chosen.value,
-          unit: "",
-          totalDay: periods.totalDay,
+          value: chosen?.value ?? existing?.value ?? 0,
+          unit: existing?.unit ?? "",
+          totalDay: periods.totalDay ?? existing?.totalDay ?? null,
           totalWeek: null,
-          totalMonth: periods.totalMonth,
-          totalYear: periods.totalYear,
-          meterReading: null,
-          meterReadingUnit: "kWh",
+          totalMonth: periods.totalMonth ?? existing?.totalMonth ?? null,
+          totalYear: periods.totalYear ?? existing?.totalYear ?? null,
+          meterReading: dbReading ?? existing?.meterReading ?? null,
+          meterReadingUnit: existing?.meterReadingUnit ?? "kWh",
         });
       }
       return next;
@@ -352,6 +362,8 @@ const LiveValues = () => {
     setLastRefresh(new Date());
     setLoadingLive(false);
   }, [meters]);
+
+
 
 
   // On mount: load only existing DB values, then subscribe to Loxone-WS-Bridge via Realtime-Broadcast.
