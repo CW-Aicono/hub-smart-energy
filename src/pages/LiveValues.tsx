@@ -442,8 +442,11 @@ const LiveValues = () => {
     });
 
     return () => {
+      clearInterval(reconcileInterval);
+      document.removeEventListener("visibilitychange", onVisibility);
       for (const ch of channels) supabase.removeChannel(ch);
     };
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meters.length]);
 
