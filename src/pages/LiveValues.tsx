@@ -270,8 +270,8 @@ const LiveValues = () => {
     const firstOfMonth = today.substring(0, 7) + "-01";
     const firstOfYear = today.substring(0, 4) + "-01-01";
 
-    // Parallel: DB-Polling-Wert, Bridge-Raw-Wert (Live), Perioden-Totals
-    const [powerRes, bridgeRes, periodRes] = await Promise.all([
+    // Parallel: DB-Polling-Wert, Bridge-Raw-Wert (Live), Perioden-Totals, Zählerstand (kumulativ)
+    const [powerRes, bridgeRes, periodRes, cumulativeRes] = await Promise.all([
       supabase
         .from("meter_power_readings")
         .select("meter_id, power_value, recorded_at")
@@ -290,7 +290,13 @@ const LiveValues = () => {
         .in("meter_id", meterIds)
         .in("period_type", ["day", "month", "year"])
         .in("period_start", [today, firstOfMonth, firstOfYear]),
+      supabase
+        .from("meter_cumulative_readings")
+        .select("meter_id, kwh_total, reading_at")
+        .in("meter_id", meterIds)
+        .order("reading_at", { ascending: false }),
     ]);
+
 
     // Letzten Bridge-Wert pro UUID extrahieren
     const bridgeLatest = new Map<string, { value: number; at: number }>();
