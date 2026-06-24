@@ -406,13 +406,18 @@ const LiveValues = () => {
             const next = new Map(prev);
             let unmatched = 0;
             for (const ev of events) {
-              if (Math.abs(ev.value) > 1000) {
-                console.warn("[live-values][diag] suspicious event", {
-                  uuid: ev.uuid, role: ev.role, value: ev.value, at: ev.at,
+              const role = ev.role ?? "pwr";
+              // Plausibilitätsfilter: implausible Werte verwerfen (statt anzuzeigen)
+              const limit = role === "pwr" ? 10_000 /* kW */ : 10_000_000 /* kWh */;
+              if (!Number.isFinite(ev.value) || Math.abs(ev.value) > limit) {
+                console.warn("[live-values] dropped implausible event", {
+                  uuid: ev.uuid, role, value: ev.value, at: ev.at,
                 });
+                continue;
               }
               const meterId = uuidToMeterId.get(ev.uuid.toLowerCase());
               if (!meterId) { unmatched++; continue; }
+
 
               const role = ev.role ?? "pwr";
               const existing = next.get(meterId) ?? {
