@@ -1,69 +1,30 @@
-# Problem 1: Endlos-Fehler im API-Tab (ems.aicono.org/integrations → API)
+## Ziel
+Live-Werte auf `/live-values` sollen auf jeder Instanz (Lovable Preview, Hetzner, Published) konsistent dieselben Werte zeigen — unabhängig davon, wann der Tab geöffnet wurde oder ob die WebSocket-Verbindung kurz aussetzte.
 
-## Ursache (im Code gefunden)
+## Ursache (verifiziert in `src/pages/LiveValues.tsx`)
 
-In `src/components/settings/ApiSettings.tsx` stecken **zwei Fehler**, die zusammen den Endlos-Toast erzeugen:
+1. `loadInitialPowerValues` setzt `meterReading` (= „Zählerstand") **immer auf `null`**. Der Zählerstand kommt ausschließlich über `broadcast`-Events mit `role: "total"`. Wer das Event verpasst, sieht den Zählerstand nie → erklärt fehlenden Zählerstand auf Hetzner.
+2. Nach dem Initial-Load gibt es **keinen periodischen DB-Reconcile** mehr für Power / `totalDay` / `totalMonth` / `totalYear`. Werte verharren auf dem zuletzt empfangenen Broadcast → erklärt unterschiedliche „Gesamt heute"-Werte (404 vs. 421 kWh) auf beiden Instanzen.
+3. Der Diagnose-Filter `Math.abs(ev.value) > 1000` **loggt nur**, übernimmt den Wert aber trotzdem ins State. In den Console-Logs erscheinen `role:"total"`-Events mit 542 908 MWh / 390 545 MWh etc. — solche Müll-Broadcasts können den angezeigten Zählerstand verfälschen.
 
-**Fehler A — Endlosschleife durch Render-Seiteneffekt (Zeile 84–86):**
-```ts
-if (!apiKey && !loading) {
-  fetchApiInfo(false);
-}
-```
-Das steht direkt im Render-Body, nicht in einem `useEffect`. Wenn der Fetch fehlschlägt, bleibt `apiKey = null` und `loading = false` → React rendert neu → fetch wird erneut ausgelöst → Toast wieder → Re-Render → endlos.
+## Änderungen (nur `src/pages/LiveValues.tsx`)
 
-**Fehler B — Falsche Backend-URL in der Live-Umgebung (Zeile 33–34):**
-```ts
-const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-const baseUrl = `https://${projectId}.supabase.co`;
-```
-Das funktioniert nur für Lovable-Cloud-Projekte (`*.supabase.co`). Auf Hetzner läuft ein **selbst gehostetes** Supabase unter einer eigenen Domain (z. B. `https://supabase.aicono.org`). Die zusammengebaute `*.supabase.co`-URL existiert dort gar nicht → `fetch` wirft Netzwerkfehler → Fehler A schießt den Toast endlos.
+### 1. Zählerstand aus DB initial laden
+- `loadInitialPowerValues` zusätzlich aus `meter_readings` (oder der bereits vorhandenen „Zählerstand"-Quelle für Loxone — vor Implementierung kurz prüfen, welche Tabelle der `total`-Broadcast spiegelt; voraussichtlich `meter_period_totals` mit `period_type = 'cumulative'` oder `bridge_raw_samples` mit Role-Marker) den letzten bekannten Zählerstand je `meter_id` selektieren und in `liveValues.meterReading` setzen — statt hartem `null`.
 
-## Fix
+### 2. Periodischer Reconcile
+- Bestehenden `loadInitialPowerValues` zusätzlich in einem `setInterval` aufrufen (z. B. alle 60 s, analog zum `fetchCpVirtualValues`-Intervall). Broadcast-Events bleiben für sub-sekündliche Updates aktiv; der Reconcile heilt verlorene Events.
+- Außerdem `loadInitialPowerValues` triggern, wenn das Browser-Tab wieder sichtbar wird (`document.visibilitychange`) — typischer Fall für stehengebliebene Werte nach Sleep.
 
-Beide Bugs in derselben Datei korrigieren — ohne weitere Änderungen am System:
+### 3. Plausibilitätsfilter im Broadcast-Handler
+- Verdächtige Events (`Math.abs(ev.value) > SCHWELLE`, getrennt pro Rolle: `pwr` z. B. > 10 000 kW, `total/today/month/year` z. B. > 10 000 000) **verwerfen**, nicht nur loggen. Damit kein Müll-Broadcast den Zählerstand zerschießt.
 
-1. `fetchApiInfo` in einen `useEffect(() => { fetchApiInfo(false); }, [])` verlagern, statt im Render-Body aufzurufen. Damit läuft der Fetch genau einmal beim Mounten, und ein Fehler erzeugt **einen** Toast statt unendlich vielen.
-2. Statt aus `VITE_SUPABASE_PROJECT_ID` zusammenzubauen, direkt `import.meta.env.VITE_SUPABASE_URL` verwenden. Diese Variable wird sowohl in Lovable-Cloud als auch in der selbst gehosteten Hetzner-Variante korrekt gesetzt.
+## Nicht-Ziele
+- Keine Änderung am Loxone-WS-Bridge / Broadcast-Sender.
+- Keine Änderung an Aggregation, Cron-Jobs oder DB-Schema.
+- Keine UI-/Layout-Änderung an der Karte selbst.
 
-Keine weiteren Dateien betroffen. Keine Edge-Function-Änderung. Keine DB-Migration.
-
----
-
-# Problem 2: Supabase-URL der Live-Umgebung via Putty herausfinden
-
-Ja, das geht — und zwar ohne Raterei. Vorgehen über Putty (du brauchst nur Copy/Paste):
-
-**Schritt P1 — Mit Putty am Hetzner-Server anmelden** (wie gewohnt).
-
-**Schritt P2 — Diesen Befehl ausführen:**
-```
-docker ps --format "table {{.Names}}\t{{.Ports}}" | grep -Ei "kong|supabase"
-```
-Erwartetes Ergebnis: Eine Zeile mit einem Container namens `supabase-kong` (oder ähnlich) und einer Port-Angabe wie `0.0.0.0:8000->8000/tcp`. Kong ist das API-Gateway von Supabase — das ist der Eingang, den der Worker ansprechen muss.
-
-**Schritt P3 — Reverse-Proxy-Konfiguration prüfen** (damit wir die *öffentliche* Domain bekommen, nicht nur die interne IP). Je nachdem, welcher Reverse-Proxy auf dem Server läuft:
-```
-docker ps --format "table {{.Names}}\t{{.Image}}" | grep -Ei "caddy|traefik|nginx"
-```
-Sag mir, welcher Proxy erscheint — dann gebe ich dir den exakten nächsten Befehl, um die Domain auszulesen (bei Caddy z. B. `docker exec <caddy-container> cat /etc/caddy/Caddyfile`, bei Traefik die Labels, bei Nginx die Config).
-
-**Schritt P4 — Ergebnis prüfen:** Das, was im Reverse-Proxy als Domain auf den `supabase-kong:8000`-Container zeigt, ist deine `SUPABASE_URL` (Format: `https://supabase.deine-domain.de`, **ohne** abschließenden Slash).
-
-Sobald wir die URL haben, trage ich sie als verbindlichen Wert in Schritt L1 des README ein, statt der jetzigen „View Backend"-Anleitung (die nur für Lovable-Cloud gilt).
-
----
-
-# Abarbeitungs-Reihenfolge
-
-1. Code-Fix für den Endlos-Fehler (Problem 1) sofort umsetzen — dann verschwindet der nervige Toast und du kannst den API-Key wieder lesen.
-2. Danach Putty-Schritte P1–P3 ausführen und mir die Ausgaben zeigen — dann passe ich Schritt L1 im README an die echte Live-Supabase-URL an.
-
----
-
-# Technische Details (für später, kannst du überspringen)
-
-- Datei: `src/components/settings/ApiSettings.tsx`
-- Zeilen 23–61 (`fetchApiInfo`): Behalten, nur Zeile 33–34 (`projectId`/`baseUrl`) ersetzen durch `const baseUrl = import.meta.env.VITE_SUPABASE_URL;`
-- Zeilen 83–86: Ersetzen durch `useEffect(() => { fetchApiInfo(false); }, []);` (Import `useEffect` aus `react`).
-- Edge-Function `api-key-info` bleibt unverändert.
+## Verifikation
+- Beide Instanzen (Lovable Preview + Hetzner) zeigen nach max. 60 s denselben Power-Wert, dasselbe „Gesamt heute" und denselben Zählerstand.
+- Nach Tab-Sleep > 5 min: Werte aktualisieren sich beim Re-Fokus.
+- Console zeigt keine „suspicious event"-Werte mehr im State (nur noch im Log, mit Hinweis „dropped").

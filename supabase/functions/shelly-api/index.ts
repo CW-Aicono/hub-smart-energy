@@ -112,12 +112,13 @@ serve(async (req) => {
       const authClient = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } },
       });
-      const { data: { user }, error: userError } = await authClient.auth.getUser(token);
-      if (userError || !user) {
+      const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+      const userId = claimsData?.claims?.sub as string | undefined;
+      if (claimsError || !userId) {
         return new Response(JSON.stringify({ success: false, error: "Ungültiges Token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", user.id).single();
+      const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userId).single();
       if (!profile?.tenant_id) {
         return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
