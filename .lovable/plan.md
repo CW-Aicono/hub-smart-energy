@@ -1,39 +1,30 @@
 ## Ziel
-Super-Admin-Navigation verschlanken und Gateway-Themen zentral unter **Gateway-Flotte & Updates** bündeln.
+Live-Werte auf `/live-values` sollen auf jeder Instanz (Lovable Preview, Hetzner, Published) konsistent dieselben Werte zeigen — unabhängig davon, wann der Tab geöffnet wurde oder ob die WebSocket-Verbindung kurz aussetzte.
 
-## Änderungen
+## Ursache (verifiziert in `src/pages/LiveValues.tsx`)
 
-### 1. Menüpunkt „Karte" entfernen
-- In `src/components/super-admin/SuperAdminSidebar.tsx` den Eintrag `/super-admin/map` (Map-Icon, Label „Karte") aus der Navigationsliste löschen.
-- In `src/App.tsx` bleibt die Route `/super-admin/map` (mit `SuperAdminMap`) bestehen, damit alte Bookmarks nicht 404en — nur der Sidebar-Link entfällt. (Falls explizit gewünscht, kann ich die Route auch komplett entfernen.)
+1. `loadInitialPowerValues` setzt `meterReading` (= „Zählerstand") **immer auf `null`**. Der Zählerstand kommt ausschließlich über `broadcast`-Events mit `role: "total"`. Wer das Event verpasst, sieht den Zählerstand nie → erklärt fehlenden Zählerstand auf Hetzner.
+2. Nach dem Initial-Load gibt es **keinen periodischen DB-Reconcile** mehr für Power / `totalDay` / `totalMonth` / `totalYear`. Werte verharren auf dem zuletzt empfangenen Broadcast → erklärt unterschiedliche „Gesamt heute"-Werte (404 vs. 421 kWh) auf beiden Instanzen.
+3. Der Diagnose-Filter `Math.abs(ev.value) > 1000` **loggt nur**, übernimmt den Wert aber trotzdem ins State. In den Console-Logs erscheinen `role:"total"`-Events mit 542 908 MWh / 390 545 MWh etc. — solche Müll-Broadcasts können den angezeigten Zählerstand verfälschen.
 
-### 2. Loxone-Monitor verschieben in „Gateway-Flotte & Updates"
-- `LoxoneMiniserverMonitorCard` wird in `src/pages/SuperAdminGatewayFleet.tsx` als neuer Tab **„Loxone Miniserver"** eingebunden (neben Flotte / Update-Jobs / Release-Channels / Worker-Steuerung).
-- In `src/pages/SuperAdminMonitoring.tsx` wird die Karte entfernt, damit sie nicht doppelt erscheint. Seite „Monitoring" bleibt sonst unverändert.
+## Änderungen (nur `src/pages/LiveValues.tsx`)
 
-### 3. Gateway-Typ-Filter im Tab „Flotte"
-- Über der Tabelle ein **Select-Dropdown** „Gateway-Typ" mit Optionen:
-  - „Alle Typen" (Default)
-  - „AICONO EMS"
-  - „Loxone Miniserver"
-- Aktuell liefert die Flotten-Query nur AICONO-EMS-Gateways. Damit der Filter sinnvoll arbeitet, wird die Liste um Loxone-Miniserver-Einträge aus der bestehenden Loxone-Datenquelle (gleiche Query wie im Monitor-Card) ergänzt und in der Tabelle als zusätzlicher Typ angezeigt. Spalten Channel / Auto-Update / Update jetzt sind für Loxone-Zeilen deaktiviert (mit „—"), da der OTA-Update-Mechanismus dort nicht greift.
-- Der Filter wirkt nur clientseitig auf die zusammengeführte Liste.
+### 1. Zählerstand aus DB initial laden
+- `loadInitialPowerValues` zusätzlich aus `meter_readings` (oder der bereits vorhandenen „Zählerstand"-Quelle für Loxone — vor Implementierung kurz prüfen, welche Tabelle der `total`-Broadcast spiegelt; voraussichtlich `meter_period_totals` mit `period_type = 'cumulative'` oder `bridge_raw_samples` mit Role-Marker) den letzten bekannten Zählerstand je `meter_id` selektieren und in `liveValues.meterReading` setzen — statt hartem `null`.
 
-### 4. Worker-Steuerung als Tab integrieren
-- Neuer Tab **„Worker-Steuerung"** in `SuperAdminGatewayFleet.tsx`.
-- Der bestehende Seiten-Inhalt aus `src/pages/SuperAdminWorkerControls.tsx` (Card-Bereich mit Pause/Aktivieren-Schaltern, Hook `useWorkerControls`) wird in eine eigene Komponente `WorkerControlsPanel` extrahiert und sowohl im neuen Tab gerendert.
-- Sidebar-Eintrag „Worker-Steuerung" (`PauseCircle`, Route `/super-admin/worker-controls`) wird **entfernt**.
-- Route `/super-admin/worker-controls` in `App.tsx` bleibt bestehen und redirected dauerhaft per `<Navigate to="/super-admin/gateways?tab=workers" replace />` (alternativ: Route entfernen — bitte sagen, falls bevorzugt).
-- Tabs in `SuperAdminGatewayFleet.tsx` werden via URL-Param `?tab=` steuerbar gemacht, damit Deep-Links funktionieren.
+### 2. Periodischer Reconcile
+- Bestehenden `loadInitialPowerValues` zusätzlich in einem `setInterval` aufrufen (z. B. alle 60 s, analog zum `fetchCpVirtualValues`-Intervall). Broadcast-Events bleiben für sub-sekündliche Updates aktiv; der Reconcile heilt verlorene Events.
+- Außerdem `loadInitialPowerValues` triggern, wenn das Browser-Tab wieder sichtbar wird (`document.visibilitychange`) — typischer Fall für stehengebliebene Werte nach Sleep.
 
-## Endgültige Tab-Reihenfolge in „Gateway-Flotte & Updates"
-1. Flotte (mit Typ-Filter)
-2. Update-Jobs
-3. Release-Channels
-4. Loxone Miniserver
-5. Worker-Steuerung
+### 3. Plausibilitätsfilter im Broadcast-Handler
+- Verdächtige Events (`Math.abs(ev.value) > SCHWELLE`, getrennt pro Rolle: `pwr` z. B. > 10 000 kW, `total/today/month/year` z. B. > 10 000 000) **verwerfen**, nicht nur loggen. Damit kein Müll-Broadcast den Zählerstand zerschießt.
 
 ## Nicht-Ziele
-- Keine Änderungen an Backend, RLS, Tabellen oder Edge Functions.
-- Keine Änderung an Loxone-Monitor-Logik selbst.
-- Keine Übersetzungs- oder Branding-Updates über die neuen Tab-Labels hinaus.
+- Keine Änderung am Loxone-WS-Bridge / Broadcast-Sender.
+- Keine Änderung an Aggregation, Cron-Jobs oder DB-Schema.
+- Keine UI-/Layout-Änderung an der Karte selbst.
+
+## Verifikation
+- Beide Instanzen (Lovable Preview + Hetzner) zeigen nach max. 60 s denselben Power-Wert, dasselbe „Gesamt heute" und denselben Zählerstand.
+- Nach Tab-Sleep > 5 min: Werte aktualisieren sich beim Re-Fokus.
+- Console zeigt keine „suspicious event"-Werte mehr im State (nur noch im Log, mit Hinweis „dropped").
