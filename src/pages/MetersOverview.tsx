@@ -259,7 +259,7 @@ const MetersOverview = () => {
                                     ? (typeof sensor.secondaryValue === "number" ? sensor.secondaryValue : parseFloat(String(sensor.secondaryValue).replace(/\./g, "").replace(",", ".")))
                                     : null;
                                   if (rawVal != null && !isNaN(rawVal)) {
-                                    const unit = sensor.secondaryUnit || m.unit;
+                                    const unit = m.unit || sensor.secondaryUnit;
                                     return (
                                       <span className="text-sm">
                                         {rawVal.toLocaleString("de-DE", { maximumFractionDigits: 2 })} {unit}
