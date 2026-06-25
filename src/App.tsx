@@ -25,6 +25,7 @@ import PartnerReporting from "@/pages/partner/PartnerReporting";
 import PartnerTenantDetail from "@/pages/partner/PartnerTenantDetail";
 import RecoveryGuard from "@/components/RecoveryGuard";
 import MustChangePasswordGuard from "@/components/MustChangePasswordGuard";
+import { ChunkErrorBoundary } from "@/components/ChunkErrorBoundary";
 import TenantStatusGuard from "@/components/TenantStatusGuard";
 import SalesHostGuard from "@/components/SalesHostGuard";
 import BoardHostGuard from "@/components/BoardHostGuard";
@@ -174,6 +175,7 @@ const App = () => (
                   <SuperAdminImpersonationBar />
                   {!window.location.pathname.startsWith("/public/") && <CookieConsent />}
                   <TenantStatusGuard>
+                  <ChunkErrorBoundary>
                   <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
                     <Routes>
                       {/* Demo routes */}
@@ -320,6 +322,7 @@ const App = () => (
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </Suspense>
+                  </ChunkErrorBoundary>
                   </TenantStatusGuard>
                 </TooltipProvider>
               </ThemeProvider>
