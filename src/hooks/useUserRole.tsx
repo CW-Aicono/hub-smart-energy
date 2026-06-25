@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useDemoMode } from "@/contexts/DemoMode";
@@ -14,51 +14,27 @@ interface UserRoleState {
 export function useUserRole(): UserRoleState {
   const { user } = useAuth();
   const isDemo = useDemoMode();
-  const [role, setRole] = useState<AppRole | null>(isDemo ? "admin" : null);
-  const [loading, setLoading] = useState(!isDemo);
 
-  useEffect(() => {
-    if (isDemo) return;
-
-    let cancelled = false;
-
-    if (!user) {
-      setRole(null);
-      setLoading(false);
-      return;
-    }
-
-    const resolveRole = async () => {
-      setLoading(true);
-
+  const { data: role, isLoading } = useQuery<AppRole | null>({
+    queryKey: ["user-role", user?.id],
+    queryFn: async () => {
       const { data, error } = await supabase.rpc("ensure_at_least_one_admin");
-
-      if (cancelled) return;
-
       if (error) {
         console.error("Error resolving user role:", error);
-        setRole("user");
-      } else {
-        setRole((data as AppRole) ?? "user");
+        return "user";
       }
+      return (data as AppRole) ?? "user";
+    },
+    enabled: !!user && !isDemo,
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
+  });
 
-      setLoading(false);
-    };
-
-    resolveRole();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user, isDemo]);
-
-  // In Impersonation-Sessions ist auth.uid() der Tenant-Support-User mit
-  // Rolle 'admin', daher kein zusätzliches Override mehr nötig.
-  const isAdmin = role === "admin";
+  if (isDemo) return { role: "admin", isAdmin: true, loading: false };
 
   return {
-    role,
-    isAdmin,
-    loading,
+    role: role ?? null,
+    isAdmin: role === "admin",
+    loading: isLoading && !!user,
   };
 }
