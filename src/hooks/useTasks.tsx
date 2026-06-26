@@ -8,6 +8,12 @@ export type TaskStatus = "open" | "in_progress" | "done" | "cancelled";
 export type TaskPriority = "low" | "medium" | "high" | "critical";
 export type TaskSourceType = "manual" | "alert" | "charging" | "automation";
 
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
 export interface Task {
   id: string;
   tenant_id: string;
@@ -29,6 +35,10 @@ export interface Task {
   created_by_name: string | null;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
+  recurrence_rule: string | null;
+  recurrence_parent_id: string | null;
+  checklist: ChecklistItem[];
 }
 
 export interface TaskHistory {
@@ -63,6 +73,8 @@ export interface CreateTaskInput {
   source_id?: string;
   source_label?: string;
   due_date?: string;
+  recurrence_rule?: string | null;
+  checklist?: ChecklistItem[];
 }
 
 export const useTasks = () => {
