@@ -8,6 +8,12 @@ export type TaskStatus = "open" | "in_progress" | "done" | "cancelled";
 export type TaskPriority = "low" | "medium" | "high" | "critical";
 export type TaskSourceType = "manual" | "alert" | "charging" | "automation";
 
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
 export interface Task {
   id: string;
   tenant_id: string;
@@ -29,6 +35,10 @@ export interface Task {
   created_by_name: string | null;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
+  recurrence_rule: string | null;
+  recurrence_parent_id: string | null;
+  checklist: ChecklistItem[];
 }
 
 export interface TaskHistory {
@@ -63,6 +73,8 @@ export interface CreateTaskInput {
   source_id?: string;
   source_label?: string;
   due_date?: string;
+  recurrence_rule?: string | null;
+  checklist?: ChecklistItem[];
 }
 
 export const useTasks = () => {
@@ -80,7 +92,7 @@ export const useTasks = () => {
         .eq("tenant_id", tenant!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as Task[];
+      return (data ?? []) as unknown as Task[];
     },
   });
 
@@ -115,6 +127,8 @@ export const useTasks = () => {
         source_id: input.source_id ?? null,
         source_label: input.source_label ?? null,
         due_date: input.due_date ?? null,
+        recurrence_rule: input.recurrence_rule ?? null,
+        checklist: (input.checklist ?? []) as any,
         created_by: user?.id ?? null,
         created_by_name: user?.email ?? null,
       }).select().single();
@@ -158,7 +172,7 @@ export const useTasks = () => {
     }) => {
       const { error } = await supabase
         .from("tasks")
-        .update(updates)
+        .update(updates as any)
         .eq("id", id)
         .eq("tenant_id", tenant!.id);
       if (error) throw error;

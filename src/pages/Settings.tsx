@@ -12,8 +12,9 @@ import { ManualMetersSetting } from "@/components/settings/ManualMetersSetting";
 import { TenantInfoSettings } from "@/components/settings/TenantInfoSettings";
 import { WidgetDesigner } from "@/components/settings/WidgetDesigner";
 import { BoardThemesSettings } from "@/components/settings/BoardThemesSettings";
+import { TaskSettings } from "@/components/settings/TaskSettings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Palette, HardDrive, Building2, LayoutGrid, LayoutDashboard } from "lucide-react";
+import { Palette, HardDrive, Building2, LayoutGrid, LayoutDashboard, ListChecks } from "lucide-react";
 
 const Settings = () => {
   const { user, loading: authLoading } = useAuth();
@@ -64,6 +65,10 @@ const Settings = () => {
                 <LayoutGrid className="h-4 w-4" />
                 Widget-Designer
               </TabsTrigger>
+              <TabsTrigger value="tasks" className="gap-2">
+                <ListChecks className="h-4 w-4" />
+                Aufgaben
+              </TabsTrigger>
               {cLevelEnabled && (
                 <TabsTrigger value="board-themes" className="gap-2">
                   <LayoutDashboard className="h-4 w-4" />
@@ -84,6 +89,9 @@ const Settings = () => {
             </TabsContent>
             <TabsContent value="widget-designer">
               <WidgetDesigner />
+            </TabsContent>
+            <TabsContent value="tasks">
+              <TaskSettings />
             </TabsContent>
             {cLevelEnabled && (
               <TabsContent value="board-themes">
