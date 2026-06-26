@@ -53,6 +53,10 @@ const baseTask = {
   completed_at: null,
   created_by: null,
   created_by_name: null,
+  archived_at: null,
+  recurrence_rule: null,
+  recurrence_parent_id: null,
+  checklist: [] as any[],
 };
 
 describe("TaskCard", () => {
