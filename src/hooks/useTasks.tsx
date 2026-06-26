@@ -92,7 +92,7 @@ export const useTasks = () => {
         .eq("tenant_id", tenant!.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as Task[];
+      return (data ?? []) as unknown as Task[];
     },
   });
 
@@ -127,6 +127,8 @@ export const useTasks = () => {
         source_id: input.source_id ?? null,
         source_label: input.source_label ?? null,
         due_date: input.due_date ?? null,
+        recurrence_rule: input.recurrence_rule ?? null,
+        checklist: (input.checklist ?? []) as any,
         created_by: user?.id ?? null,
         created_by_name: user?.email ?? null,
       }).select().single();
@@ -170,7 +172,7 @@ export const useTasks = () => {
     }) => {
       const { error } = await supabase
         .from("tasks")
-        .update(updates)
+        .update(updates as any)
         .eq("id", id)
         .eq("tenant_id", tenant!.id);
       if (error) throw error;
