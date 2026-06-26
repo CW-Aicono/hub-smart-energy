@@ -9,7 +9,7 @@ import { TaskDetailSheet } from "@/components/tasks/TaskDetailSheet";
 import {
   MoreHorizontal, User, ExternalLink, Zap, AlertTriangle, PlugZap,
   Clock, CheckCircle2, Circle, ArrowRight, XCircle, CalendarDays, Trash2,
-  ArrowLeftRight,
+  ArrowLeftRight, Repeat, ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -192,6 +192,19 @@ export const TaskCard = ({ task, duplicateCount, duplicateIds, selectable, selec
                     <CalendarDays className="h-3.5 w-3.5" />
                     {format(new Date(task.due_date), "dd.MM.yyyy", { locale: de })}
                     {isOverdue && " (überfällig)"}
+                  </span>
+                )}
+
+                {task.recurrence_rule && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground" title="Wiederkehrende Aufgabe">
+                    <Repeat className="h-3.5 w-3.5" />
+                  </span>
+                )}
+
+                {task.checklist && task.checklist.length > 0 && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground" title="Checkliste">
+                    <ListChecks className="h-3.5 w-3.5" />
+                    {task.checklist.filter((c) => c.done).length}/{task.checklist.length}
                   </span>
                 )}
 

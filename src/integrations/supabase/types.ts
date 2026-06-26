@@ -10563,10 +10563,65 @@ export type Database = {
           },
         ]
       }
+      task_templates: {
+        Row: {
+          checklist: Json
+          created_at: string
+          created_by: string | null
+          default_due_offset_days: number | null
+          description: string | null
+          id: string
+          name: string
+          priority: string
+          recurrence_rule: string | null
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          checklist?: Json
+          created_at?: string
+          created_by?: string | null
+          default_due_offset_days?: number | null
+          description?: string | null
+          id?: string
+          name: string
+          priority?: string
+          recurrence_rule?: string | null
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          checklist?: Json
+          created_at?: string
+          created_by?: string | null
+          default_due_offset_days?: number | null
+          description?: string | null
+          id?: string
+          name?: string
+          priority?: string
+          recurrence_rule?: string | null
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_templates_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
+          archived_at: string | null
           assigned_to: string | null
           assigned_to_name: string | null
+          checklist: Json
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -10578,6 +10633,8 @@ export type Database = {
           external_contact_phone: string | null
           id: string
           priority: string
+          recurrence_parent_id: string | null
+          recurrence_rule: string | null
           source_id: string | null
           source_label: string | null
           source_type: string
@@ -10587,8 +10644,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           assigned_to?: string | null
           assigned_to_name?: string | null
+          checklist?: Json
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -10600,6 +10659,8 @@ export type Database = {
           external_contact_phone?: string | null
           id?: string
           priority?: string
+          recurrence_parent_id?: string | null
+          recurrence_rule?: string | null
           source_id?: string | null
           source_label?: string | null
           source_type?: string
@@ -10609,8 +10670,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           assigned_to?: string | null
           assigned_to_name?: string | null
+          checklist?: Json
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -10622,6 +10685,8 @@ export type Database = {
           external_contact_phone?: string | null
           id?: string
           priority?: string
+          recurrence_parent_id?: string | null
+          recurrence_rule?: string | null
           source_id?: string | null
           source_label?: string | null
           source_type?: string
@@ -11305,6 +11370,9 @@ export type Database = {
           support_price_per_15min: number
           suspended_at: string | null
           suspended_reason: string | null
+          task_auto_archive_days: number
+          task_auto_delete_days: number
+          task_protect_external: boolean
           tenant_type: string
           updated_at: string
           week_start_day: number
@@ -11345,6 +11413,9 @@ export type Database = {
           support_price_per_15min?: number
           suspended_at?: string | null
           suspended_reason?: string | null
+          task_auto_archive_days?: number
+          task_auto_delete_days?: number
+          task_protect_external?: boolean
           tenant_type?: string
           updated_at?: string
           week_start_day?: number
@@ -11385,6 +11456,9 @@ export type Database = {
           support_price_per_15min?: number
           suspended_at?: string | null
           suspended_reason?: string | null
+          task_auto_archive_days?: number
+          task_auto_delete_days?: number
+          task_protect_external?: boolean
           tenant_type?: string
           updated_at?: string
           week_start_day?: number
