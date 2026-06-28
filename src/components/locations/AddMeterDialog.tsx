@@ -21,6 +21,8 @@ import { MeterOffsetSection } from "./MeterOffsetSection";
 import type { MeterOffsetReason } from "@/lib/meterOffset";
 import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
 import { useChargePointGroups } from "@/hooks/useChargePointGroups";
+import { SIMULATION_PRESETS } from "@/lib/simulationMeterPresets";
+import { FlaskConical } from "lucide-react";
 
 interface AddMeterDialogProps {
   locationId: string;
