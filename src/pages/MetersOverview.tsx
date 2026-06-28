@@ -69,6 +69,7 @@ const MetersOverview = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
+  const [expandedSim, setExpandedSim] = useState<Set<string>>(new Set());
 
   if (authLoading || locationsLoading) {
     return (
