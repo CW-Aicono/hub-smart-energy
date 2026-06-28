@@ -1,88 +1,104 @@
-# Plan: Erweiterung Aufgabenverwaltung
+## Ziel
 
-Zwei Funktionsbereiche werden ergänzt:
-**A) Automatisches Aufräumen** (Auto-Archivieren nach 7 Tagen, Auto-Löschen nach 90 Tagen, pro Tenant überschreibbar)
-**B) Wiederkehrende Aufgaben, Vorlagen und Checklisten**
+Ein neuer "Testzähler / Simulationszähler" als vierte Erfassungsart neben Manuell, Automatisch und Virtuell. Werte werden ausschließlich im Arbeitsspeicher / via Realtime-Broadcast bereitgestellt — keine Persistenz in `meter_readings`, keine Graphen, keine Aggregation.
 
----
+## Konzept
 
-## A) Auto-Archivieren & Auto-Löschen
+**Erfassungsart:** `simulation` (Label: „Testzähler (Simulation)")
 
-### Verhalten
-- "Archivieren" = Aufgabe verschwindet aus dem aktiven Tab, bleibt aber im Archiv-Tab sichtbar.
-  Heute zählt jede `done`/`cancelled` Aufgabe sofort als archiviert. Neu: erst nach Ablauf der Archiv-Frist wird ein Flag `archived_at` gesetzt; vorher bleiben erledigte Aufgaben kurz im aktiven Tab (mit grünem "Erledigt"-Badge), damit nichts zu schnell verschwindet.
-- "Löschen" = harte Löschung aus der DB nach Ablauf der Lösch-Frist.
-- **Schutzregeln** (werden NICHT gelöscht/archiviert): Aufgaben mit `external_contact_name` (Kundenkommunikation) und Aufgaben mit aktiven Anhängen werden nur archiviert, nicht gelöscht.
+**Kennzeichnung:**
 
-### Einstellungen (pro Tenant)
-Neue Sektion in **Einstellungen → Aufgaben** mit:
-- Auto-Archivieren nach **X Tagen** (Default 7, 0 = deaktiviert)
-- Auto-Löschen nach **Y Tagen** (Default 90, 0 = deaktiviert)
-- Toggle "Externe Aufgaben nie löschen" (Default an)
+- Orange/Amber Badge „TEST" überall wo der Zähler auftaucht (Kachel, Liste, Lastmanagement-Auswahl, Automation-Bedingungen)
+- Warnhinweis im Dialog: „Werte werden nicht gespeichert. Nur für Tests."
+- Eigenes Icon (FlaskConical)
 
-### Technik
-- Migration: Spalten `tasks.archived_at timestamptz` und `tenants.task_auto_archive_days int default 7`, `tenants.task_auto_delete_days int default 90`, `tenants.task_protect_external bool default true`.
-- Edge-Function `task-cleanup` (täglich per `pg_cron`, 03:15 Europe/Berlin):
-  1. Setzt `archived_at = now()` bei Aufgaben mit `status in ('done','cancelled')` und `updated_at < now() - X days` und `archived_at IS NULL`.
-  2. Löscht Aufgaben mit `archived_at < now() - Y days` (unter Beachtung der Schutzregel).
-  3. Schreibt Lauf-Log nach `task_history` (action `auto_archive` / `auto_delete`).
-- Tasks-Seite: aktiver Tab filtert künftig `archived_at IS NULL` statt nur `status`.
+**Bedienoberfläche** (neue Detail-Komponente / Sheet auf Messstellen-Seite):
 
----
+- Großer horizontaler Slider + numerisches Eingabefeld
+- Quick-Buttons: `0`, `25%`, `50%`, `75%`, `100%`, `Min`, `Max`
+- Vorzeichen-Toggle bei bidirektionalen Größen (Bezug/Einspeisung, Laden/Entladen)
+- Anzeige des aktuell gesendeten Werts groß in der Mitte
+- „Stop"-Button → setzt 0 und stoppt Broadcast
 
-## B) Wiederkehrende Aufgaben, Vorlagen, Checklisten
+## Einheiten & Wertebereiche
 
-### Recurring Tasks
-- Neue Spalten in `tasks`: `recurrence_rule text` (RRULE-Subset: daily/weekly/monthly + Intervall + optional Wochentag), `recurrence_parent_id uuid`, `next_due_at timestamptz`.
-- Wenn eine wiederkehrende Aufgabe auf `done` gesetzt wird, erzeugt eine DB-Trigger-Funktion automatisch die nächste Instanz mit neuem `due_date` gemäß Regel.
-- UI im **CreateTaskDialog**: neuer Abschnitt "Wiederholung" mit Auswahl Keine / Täglich / Wöchentlich / Monatlich + Intervall. Anzeige im TaskCard mit Wiederhol-Icon.
+Auswahl bei Anlage (gekoppelt an Energieart und Verwendungszweck):
 
-### Vorlagen
-- Neue Tabelle `task_templates` (tenant-scoped, RLS): `title`, `description`, `priority`, `default_due_offset_days`, `recurrence_rule`, `checklist jsonb`.
-- Neue Einstellungsseite **Aufgaben → Vorlagen** zum CRUD.
-- Im CreateTaskDialog Dropdown "Aus Vorlage erstellen" oben — füllt Felder vor.
-- Seed-Vorlagen (Migration): "Wartung Wallbox (jährlich)", "PV-Inspektion (jährlich)", "Zählerstand ablesen (monatlich)".
 
-### Checklisten / Subtasks
-- Neue Spalte `tasks.checklist jsonb` (`[{id, text, done}]`).
-- Im **TaskDetailSheet**: Checklisten-Bereich mit Add/Toggle/Delete, Fortschrittsbalken (z. B. "3/5"). Anzeige des Fortschritts auch im TaskCard.
-- Eine Aufgabe gilt nicht automatisch als erledigt, wenn alle Häkchen gesetzt sind — der User entscheidet weiterhin manuell.
+| Einheit       | Bereich           | Schritt | Typischer Use-Case                           |
+| ------------- | ----------------- | ------- | -------------------------------------------- |
+| kW            | −500 … +500       | 0,1     | Netzbezug/Einspeisung für DLM-Referenzzähler |
+| A (pro Phase) | 0 … 250           | 1       | Strom pro Phase für Lastmanagement           |
+| W             | −10.000 … +10.000 | 10      | Kleinverbraucher, Sensoren                   |
+| %             | 0 … 100           | 1       | Auslastung, SoC-Simulation                   |
+| °C            | −20 … +60         | 0,1     | Temperatur für Automationen                  |
+| lx            | 0 … 100.000       | 100     | Helligkeit für Automationen                  |
+| bool (0/1)    | 0 / 1             | —       | Schalter/Trigger für Automationen            |
 
----
 
-## Technische Details
+Standard: **kW, Bereich −100 … +100**, sinnvoll für DLM-Tests.
 
-**Migrationen** (eine Migration, in dieser Reihenfolge):
-1. `ALTER TABLE tasks ADD COLUMN archived_at`, `recurrence_rule`, `recurrence_parent_id`, `next_due_at`, `checklist`.
-2. `ALTER TABLE tenants ADD COLUMN task_auto_archive_days`, `task_auto_delete_days`, `task_protect_external`.
-3. `CREATE TABLE task_templates (...)` + GRANT + RLS (`tenant_id = current tenant`).
-4. Trigger-Funktion `tasks_handle_recurrence_on_done()` + Trigger `AFTER UPDATE OF status ON tasks`.
-5. Seed-Vorlagen via `INSERT ... SELECT FROM tenants` (über Insert-Tool nach Migration).
+## Zuordnung
 
-**Edge Function**
-- `supabase/functions/task-cleanup/index.ts` (verify_jwt false, validiert Service-Role-Header), liest Tenant-Settings, läuft pro Tenant.
-- `pg_cron` Eintrag täglich 03:15 Europe/Berlin.
+- **Liegenschaft:** Pflichtfeld wie bei anderen Zählern (für RLS & Filter)
+- **Etage/Raum:** optional
+- **Zählerfunktion:** wählbar (`consumption`, `production`, `grid`, `storage`) — entscheidend für DLM-Referenzzähler-Auswahl
+- **Bidirektional:** togglebar (erlaubt negative Werte als Einspeisung)
+- **device_type:** `meter` oder `sensor` (steuert, ob er im DLM oder in Automation-Bedingungen erscheint)
+- Wird in allen bestehenden Selektoren angeboten:
+  - DLM-Referenzzähler (`useLocationDlmConfig`)
+  - Energy-Flow-Monitor
+  - Automation-Bedingungen (Sensorwert <, >, =)
+  - Widget-Designer (sichtbar, aber mit TEST-Badge)
 
-**Frontend**
-- `src/pages/Tasks.tsx`: Filter auf `archived_at IS NULL` umstellen.
-- `src/components/tasks/CreateTaskDialog.tsx`: Vorlagen-Dropdown + Wiederholungs-Block + Checklisten-Editor.
-- `src/components/tasks/TaskDetailSheet.tsx`: Checklisten-Bereich + Wiederholungs-Anzeige.
-- `src/components/tasks/TaskCard.tsx`: Fortschritts-Indikator + Wiederhol-Icon.
-- Neue Seite `src/pages/settings/TaskSettings.tsx` (Cleanup-Defaults + Vorlagen-Verwaltung), Eintrag im Settings-Menü.
-- `src/hooks/useTasks.ts` / neuer `useTaskTemplates.ts`.
+## Datenfluss (keine Persistenz)
 
-**Tests**
-- Vitest für Recurrence-Berechnung (next_due_at), Checklist-Reducer, Cleanup-Filterregeln.
+```text
+Slider-UI  ──setValue──►  Supabase Realtime Channel
+                          "sim-meter:<meter_id>"
+                                  │
+            ┌─────────────────────┼─────────────────────┐
+            ▼                     ▼                     ▼
+      LiveValues UI         DLM-Scheduler         Automation-Evaluator
+      (Aktuelle Werte)      (liest letzten        (liest letzten
+                             Broadcast statt       Broadcast statt
+                             snapshot)             snapshot)
+```
 
----
+- Wert lebt in einem Realtime-Broadcast-Channel + im Browser-State der Bedienseite
+- Server-seitig: kleine In-Memory-Map in den Edge-Functions (DLM, Automation) mit Fallback `0` falls > 5 Min kein Update
+- **Keine** Inserts in `meter_readings`, `meter_period_totals_*`, `live_snapshots`
+- DLM/Automation lesen den Wert über eine neue Helper-Funktion `getSimulatedMeterValue(meterId)` die zuerst Realtime-State, sonst 0 nimmt
 
-## Reihenfolge der Umsetzung
-1. Migration (Spalten, Tabelle, Trigger) + GRANT/RLS.
-2. Settings-Seite (Cleanup-Defaults).
-3. Edge-Function `task-cleanup` + pg_cron.
-4. UI: archived_at-Filter, Checklisten, Recurrence im Dialog, TaskCard-Anpassung.
-5. Vorlagen-Verwaltung + Seed.
-6. Tests + Dokumentation in `docs/`.
+## Sicherheit & UX-Schutz
 
-## Nicht enthalten (bewusst weggelassen — können später nachgezogen werden)
-Erinnerungs-E-Mails, Eskalation, Assignees, Kommentare, Kanban-/Kalender-Ansicht, CSV-Export, KPIs.
+- Simulationszähler werden **nie** für Reporting, CO₂-Bilanz, Abrechnung oder Rechnungen verwendet (Filter in entsprechenden Hooks: `capture_type !== 'simulation'`)
+- Banner im Lastmanagement und in Automationen wenn ein Testzähler als Referenz gewählt ist: „Achtung: Referenzzähler ist ein TEST-Zähler"
+- Auto-Reset auf 0 wenn Bedienseite > 30 Min nicht aktiv (verhindert vergessene Testwerte)
+
+## Umsetzungsschritte (Code-seitig, später)
+
+1. **DB-Migration:** `meters.capture_type` erlaubt zusätzlich `'simulation'`; neue Felder `sim_min`, `sim_max`, `sim_step`, `sim_unit`, `sim_current_value` (nur Default, kein Verlauf)
+2. **CreateMeterDialog:** neuer Radio „Testzähler (Simulation)" + Konfigurationsfelder (Einheit, Bereich, Schritt, Bidirektional)
+3. **Neue Komponente** `SimulationMeterControl.tsx` (Slider + Quick-Buttons + Broadcast)
+4. **Hook** `useSimulationMeterValue(meterId)` — abonniert Realtime-Channel, liefert Wert
+5. **Anpassungen** in:
+  - `MetersOverview` / Kachel: TEST-Badge + Slider-Inline-Control
+  - `LiveValues`: TEST-Badge + Live-Wert
+  - DLM-Edge-Function: `getSimulatedMeterValue` Fallback
+  - Automation-Evaluator (`packages/automation-core/evaluator.ts`): gleiches Lookup
+  - Reporting/Invoice-Hooks: Simulation ausschließen
+6. **Optional:** Auto-Reset-Timer & „Alle Testzähler stoppen"-Knopf in Settings
+
+## Offene Punkte
+
+Bevor ich die Migration & UI baue, kurz bestätigen:
+
+- Soll der Wert auch **server-seitig** in einer kleinen Tabelle (`simulation_meter_state`, nur 1 Zeile pro Zähler, immer überschrieben) gehalten werden? Vorteil: DLM/Automation in Edge-Functions sehen den Wert sofort, auch ohne aktive Browser-Session. Nachteil: minimaler DB-Write bei jeder Slider-Bewegung (gedrosselt auf 1×/Sekunde). → **Empfehlung: ja**, sonst funktionieren DLM-Tests nur solange ein Browser-Tab offen ist.
+- Sollen Testzähler in der Hauptliste „Messstellen" zusammen angezeigt werden oder in einem eigenen Tab „Testzähler"?  
+  
+Antworten:  
+  
+1. Bitte kleine Tabelle für Test-Zähler einbauen.  
+  
+2. Ja, mit in die Gesamtübersicht. Testzähler sollen hier deutlich sichtbar angezeigt werden. Bitte auch die Option mit integrieren, diese Geräte auch als Sensor für Tests mit Automationen nutzen zu können

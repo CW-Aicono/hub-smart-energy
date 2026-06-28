@@ -7028,6 +7028,12 @@ export type Database = {
           setup_validated_at: string | null
           setup_validated_by: string | null
           setup_validated_by_email: string | null
+          sim_bidirectional: boolean | null
+          sim_default_value: number | null
+          sim_max: number | null
+          sim_min: number | null
+          sim_step: number | null
+          sim_unit: string | null
           smgw_id: string | null
           source_unit_energy: string | null
           source_unit_power: string | null
@@ -7078,6 +7084,12 @@ export type Database = {
           setup_validated_at?: string | null
           setup_validated_by?: string | null
           setup_validated_by_email?: string | null
+          sim_bidirectional?: boolean | null
+          sim_default_value?: number | null
+          sim_max?: number | null
+          sim_min?: number | null
+          sim_step?: number | null
+          sim_unit?: string | null
           smgw_id?: string | null
           source_unit_energy?: string | null
           source_unit_power?: string | null
@@ -7128,6 +7140,12 @@ export type Database = {
           setup_validated_at?: string | null
           setup_validated_by?: string | null
           setup_validated_by_email?: string | null
+          sim_bidirectional?: boolean | null
+          sim_default_value?: number | null
+          sim_max?: number | null
+          sim_min?: number | null
+          sim_step?: number | null
+          sim_unit?: string | null
           smgw_id?: string | null
           source_unit_energy?: string | null
           source_unit_power?: string | null
@@ -9936,6 +9954,45 @@ export type Database = {
             columns: ["parent_recommendation_id"]
             isOneToOne: false
             referencedRelation: "sales_recommended_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      simulation_meter_state: {
+        Row: {
+          current_value: number
+          meter_id: string
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          current_value?: number
+          meter_id: string
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          current_value?: number
+          meter_id?: string
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulation_meter_state_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: true
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "simulation_meter_state_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
