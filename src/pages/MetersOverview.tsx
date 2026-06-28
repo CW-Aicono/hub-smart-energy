@@ -223,7 +223,7 @@ const MetersOverview = () => {
                             ? t("common.manual" as any)
                             : t("common.automatic" as any);
                       return (
-                        <>
+                        <Fragment key={m.id}>
                           <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
                             <TableCell className="font-medium">
                               <span className="inline-flex items-center gap-1.5">
