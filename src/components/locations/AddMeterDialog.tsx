@@ -241,7 +241,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
             <Label className="mb-2 block">Erfassungsart *</Label>
             <RadioGroup
               value={captureType}
-              onValueChange={(v) => setCaptureType(v as "manual" | "automatic" | "virtual")}
+              onValueChange={(v) => setCaptureType(v as any)}
               className="flex flex-wrap gap-x-6 gap-y-2"
             >
               <div className="flex items-center gap-2">
@@ -262,8 +262,68 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
                   Virtueller Zähler
                 </Label>
               </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="simulation" id="capture-simulation" />
+                <Label htmlFor="capture-simulation" className="cursor-pointer font-normal flex items-center gap-1">
+                  <FlaskConical className="h-3.5 w-3.5 text-amber-600" />
+                  Testzähler (Simulation)
+                </Label>
+              </div>
             </RadioGroup>
           </div>
+
+          {/* Simulation: configuration */}
+          {captureType === "simulation" && (
+            <div className="space-y-3 rounded-md border border-amber-500/40 p-3 bg-amber-50/40 dark:bg-amber-950/20">
+              <div className="flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200">
+                <FlaskConical className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  Werte werden <strong>nicht gespeichert</strong> und nicht in Graphen dargestellt.
+                  Nutzbar als Referenzzähler für Lastmanagement und als Eingang für Automationen.
+                </span>
+              </div>
+              <div>
+                <Label>Wertebereich / Einheit *</Label>
+                <Select value={simPresetId} onValueChange={(v) => {
+                  setSimPresetId(v);
+                  const preset = SIMULATION_PRESETS.find((p) => p.id === v);
+                  if (preset) setSimDeviceType(preset.suggestedDeviceType);
+                }}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SIMULATION_PRESETS.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(() => {
+                  const p = SIMULATION_PRESETS.find((x) => x.id === simPresetId);
+                  return p?.hint ? <p className="text-xs text-muted-foreground mt-1">{p.hint}</p> : null;
+                })()}
+              </div>
+              <div>
+                <Label>Nutzbar als *</Label>
+                <RadioGroup
+                  value={simDeviceType}
+                  onValueChange={(v) => setSimDeviceType(v as "meter" | "sensor")}
+                  className="flex flex-wrap gap-x-6 gap-y-1 mt-1"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="meter" id="sim-dt-meter" />
+                    <Label htmlFor="sim-dt-meter" className="cursor-pointer font-normal text-sm">
+                      Zähler (Lastmanagement, DLM-Referenz)
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="sensor" id="sim-dt-sensor" />
+                    <Label htmlFor="sim-dt-sensor" className="cursor-pointer font-normal text-sm">
+                      Sensor (Automationen)
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            </div>
+          )}
 
           {/* Virtual: Formula builder */}
           {captureType === "virtual" && (
