@@ -226,6 +226,8 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     setOffsetValue("");
     setOffsetReason("");
     setOffsetNote("");
+    setSimPresetId("kw-bidi");
+    setSimDeviceType("meter");
     onOpenChange(false);
   };
 
