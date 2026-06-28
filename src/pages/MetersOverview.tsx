@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, Fragment } from "react";
+import type { Meter } from "@/hooks/useMeters";
 import { MeterQrCode } from "@/components/integrations/MeterQrCode";
 import { EditMeterDialog } from "@/components/locations/EditMeterDialog";
 import { Navigate } from "react-router-dom";
