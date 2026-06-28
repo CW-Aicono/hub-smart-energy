@@ -20,11 +20,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
-import { Gauge, ClipboardEdit, Filter, QrCode, Pencil, Archive, ArchiveRestore, Trash2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { Gauge, ClipboardEdit, Filter, QrCode, Pencil, Archive, ArchiveRestore, Trash2, Eye, EyeOff, CheckCircle2, FlaskConical, ChevronDown, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { de, enUS, es, nl } from "date-fns/locale";
 import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors";
 import { confirmDialog } from "@/components/ui/confirm-dialog";
+import { SimulationMeterControl } from "@/components/meters/SimulationMeterControl";
+import { useSimulationMeterValue } from "@/hooks/useSimulationMeter";
 
 const MetersOverview = () => {
   const { user, loading: authLoading } = useAuth();
