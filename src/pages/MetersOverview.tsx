@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, Fragment } from "react";
 import { MeterQrCode } from "@/components/integrations/MeterQrCode";
 import { EditMeterDialog } from "@/components/locations/EditMeterDialog";
 import { Navigate } from "react-router-dom";
@@ -20,11 +20,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
-import { Gauge, ClipboardEdit, Filter, QrCode, Pencil, Archive, ArchiveRestore, Trash2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { Gauge, ClipboardEdit, Filter, QrCode, Pencil, Archive, ArchiveRestore, Trash2, Eye, EyeOff, CheckCircle2, FlaskConical, ChevronDown, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { de, enUS, es, nl } from "date-fns/locale";
 import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors";
 import { confirmDialog } from "@/components/ui/confirm-dialog";
+import { SimulationMeterControl } from "@/components/meters/SimulationMeterControl";
+import { useSimulationMeterValue } from "@/hooks/useSimulationMeter";
+
+function SimulationLiveValueCell({ meter }: { meter: Meter }) {
+  const { value, loaded } = useSimulationMeterValue(meter.id);
+  const unit = meter.sim_unit || meter.unit || "";
+  const step = Number(meter.sim_step ?? 0.1);
+  if (!loaded && value == null) {
+    return <span className="text-xs text-muted-foreground">–</span>;
+  }
+  const v = value ?? 0;
+  return (
+    <span className="text-sm tabular-nums">
+      {v.toLocaleString("de-DE", { maximumFractionDigits: step < 1 ? 2 : 0 })} {unit}
+      <span className="text-muted-foreground ml-1 text-xs">(TEST)</span>
+    </span>
+  );
+}
+
+
 
 const MetersOverview = () => {
   const { user, loading: authLoading } = useAuth();
@@ -67,6 +87,7 @@ const MetersOverview = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
+  const [expandedSim, setExpandedSim] = useState<Set<string>>(new Set());
 
   if (authLoading || locationsLoading) {
     return (
@@ -162,6 +183,8 @@ const MetersOverview = () => {
                     <SelectItem value="all">{t("meters.allCaptures" as any)}</SelectItem>
                     <SelectItem value="manual">{t("common.manual" as any)}</SelectItem>
                     <SelectItem value="automatic">{t("common.automatic" as any)}</SelectItem>
+                    <SelectItem value="virtual">Virtuell</SelectItem>
+                    <SelectItem value="simulation">Testzähler</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -207,125 +230,169 @@ const MetersOverview = () => {
                     {filteredMeters.map((m) => {
                       const lastReading = getLastReadingForMeter(m.id);
                       const isManual = m.capture_type === "manual";
+                      const isSimulation = m.capture_type === "simulation";
+                      const isVirtual = m.capture_type === "virtual";
+                      const isExpanded = expandedSim.has(m.id);
+                      const captureLabel = isSimulation
+                        ? "TEST"
+                        : isVirtual
+                          ? "Virtuell"
+                          : isManual
+                            ? t("common.manual" as any)
+                            : t("common.automatic" as any);
                       return (
-                        <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
-                          <TableCell className="font-medium">
-                            <span className="inline-flex items-center gap-1.5">
-                              {m.name}
-                              {(m as any).setup_validated_at && (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="inline-flex cursor-help">
-                                      <CheckCircle2
-                                        className="h-4 w-4 text-[hsl(152_55%_42%)]"
-                                        aria-label="Einrichtung validiert"
-                                      />
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top">
-                                    <p className="text-xs">
-                                      Einrichtung validiert am{" "}
-                                      {new Date((m as any).setup_validated_at).toLocaleString("de-DE")}
-                                      {(m as any).setup_validated_by_email
-                                        ? ` von ${(m as any).setup_validated_by_email}`
-                                        : ""}
-                                    </p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              )}
-                            </span>
-                          </TableCell>
-
-                          <TableCell>{getLocationName(m.location_id)}</TableCell>
-                          <TableCell>{m.meter_number || "–"}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={ENERGY_BADGE_CLASSES[m.energy_type] || ""}>
-                              {ENERGY_TYPE_LABELS[m.energy_type] || m.energy_type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={isManual ? "secondary" : "default"}>
-                              {isManual ? t("common.manual" as any) : t("common.automatic" as any)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {(() => {
-                              // For automatic meters: show live meter reading from gateway
-                              if (!isManual && m.location_integration_id && m.sensor_uuid) {
-                                const sensor = sensorMap.get(`${m.location_integration_id}::${m.sensor_uuid}`);
-                                if (sensor) {
-                                  // Use secondaryValue (Mr/Mrc/Mrd = absolute meter reading)
-                                  const rawVal = sensor.secondaryValue != null && sensor.secondaryValue !== ""
-                                    ? (typeof sensor.secondaryValue === "number" ? sensor.secondaryValue : parseFloat(String(sensor.secondaryValue).replace(/\./g, "").replace(",", ".")))
-                                    : null;
-                                  if (rawVal != null && !isNaN(rawVal)) {
-                                    const unit = m.unit || sensor.secondaryUnit;
-                                    return (
-                                      <span className="text-sm">
-                                        {rawVal.toLocaleString("de-DE", { maximumFractionDigits: 2 })} {unit}
-                                        <span className="text-muted-foreground ml-1 text-xs">({t("meters.live" as any)})</span>
+                        <Fragment key={m.id}>
+                          <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
+                            <TableCell className="font-medium">
+                              <span className="inline-flex items-center gap-1.5">
+                                {isSimulation && (
+                                  <button
+                                    type="button"
+                                    className="inline-flex"
+                                    onClick={() => {
+                                      const next = new Set(expandedSim);
+                                      if (next.has(m.id)) next.delete(m.id);
+                                      else next.add(m.id);
+                                      setExpandedSim(next);
+                                    }}
+                                    title={isExpanded ? "Slider einklappen" : "Slider öffnen"}
+                                  >
+                                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                  </button>
+                                )}
+                                {isSimulation && (
+                                  <FlaskConical className="h-4 w-4 text-amber-600" aria-label="Testzähler" />
+                                )}
+                                {m.name}
+                                {(m as any).setup_validated_at && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex cursor-help">
+                                        <CheckCircle2
+                                          className="h-4 w-4 text-[hsl(152_55%_42%)]"
+                                          aria-label="Einrichtung validiert"
+                                        />
                                       </span>
-                                    );
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                      <p className="text-xs">
+                                        Einrichtung validiert am{" "}
+                                        {new Date((m as any).setup_validated_at).toLocaleString("de-DE")}
+                                        {(m as any).setup_validated_by_email
+                                          ? ` von ${(m as any).setup_validated_by_email}`
+                                          : ""}
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </span>
+                            </TableCell>
+
+                            <TableCell>{getLocationName(m.location_id)}</TableCell>
+                            <TableCell>{m.meter_number || "–"}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={ENERGY_BADGE_CLASSES[m.energy_type] || ""}>
+                                {ENERGY_TYPE_LABELS[m.energy_type] || m.energy_type}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {isSimulation ? (
+                                <Badge className="bg-amber-500 hover:bg-amber-500 text-white border-amber-600">
+                                  <FlaskConical className="h-3 w-3 mr-1" />
+                                  TEST
+                                </Badge>
+                              ) : (
+                                <Badge variant={isManual ? "secondary" : "default"}>
+                                  {captureLabel}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {isSimulation ? (
+                                <SimulationLiveValueCell meter={m} />
+                              ) : (() => {
+                                // For automatic meters: show live meter reading from gateway
+                                if (!isManual && m.location_integration_id && m.sensor_uuid) {
+                                  const sensor = sensorMap.get(`${m.location_integration_id}::${m.sensor_uuid}`);
+                                  if (sensor) {
+                                    const rawVal = sensor.secondaryValue != null && sensor.secondaryValue !== ""
+                                      ? (typeof sensor.secondaryValue === "number" ? sensor.secondaryValue : parseFloat(String(sensor.secondaryValue).replace(/\./g, "").replace(",", ".")))
+                                      : null;
+                                    if (rawVal != null && !isNaN(rawVal)) {
+                                      const unit = m.unit || sensor.secondaryUnit;
+                                      return (
+                                        <span className="text-sm">
+                                          {rawVal.toLocaleString("de-DE", { maximumFractionDigits: 2 })} {unit}
+                                          <span className="text-muted-foreground ml-1 text-xs">({t("meters.live" as any)})</span>
+                                        </span>
+                                      );
+                                    }
                                   }
                                 }
-                              }
-                              // Fallback: last manual reading
-                              return lastReading ? (
-                                <span className="text-sm">
-                                  {lastReading.value.toLocaleString("de-DE")} {m.unit}
-                                    <span className="text-muted-foreground ml-1 text-xs">
-                                      ({format(new Date(lastReading.reading_date), "dd.MM.yy", { locale: dateLocale })})
+                                return lastReading ? (
+                                  <span className="text-sm">
+                                    {lastReading.value.toLocaleString("de-DE")} {m.unit}
+                                      <span className="text-muted-foreground ml-1 text-xs">
+                                        ({format(new Date(lastReading.reading_date), "dd.MM.yy", { locale: dateLocale })})
+                                    </span>
                                   </span>
-                                </span>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">–</span>
-                              );
-                            })()}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              {!m.is_archived && isManual && (
-                                <Button size="sm" variant="outline" onClick={() => setReadingDialogMeter(m)}>
-                                  <ClipboardEdit className="h-4 w-4 mr-1" />
-                                  {t("meters.read" as any)}
-                                </Button>
-                              )}
-                              {!m.is_archived && (
-                                <Button size="sm" variant="ghost" onClick={() => setQrMeter(m)} title="QR-Code">
-                                  <QrCode className="h-4 w-4" />
-                                </Button>
-                              )}
-                              {isAdmin && !m.is_archived && (
-                                <Button size="sm" variant="ghost" onClick={() => setEditingMeter(m)} title="Bearbeiten">
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                              )}
-                              {isAdmin && (
-                                m.is_archived ? (
-                                  <>
-                                    <Button size="sm" variant="ghost" onClick={() => archiveMeter(m.id, false)} title="Wiederherstellen">
-                                      <ArchiveRestore className="h-4 w-4 text-primary" />
-                                    </Button>
-                                    <Button size="sm" variant="ghost" onClick={async () => {
-                                      const ok = await confirmDialog({
-                                        title: "Zähler endgültig löschen?",
-                                        description: `Möchten Sie "${m.name}" endgültig löschen? Historische Messwerte bleiben erhalten, sind aber nicht mehr dieser Messstelle zugeordnet.`,
-                                        confirmLabel: "Endgültig löschen",
-                                      });
-                                      if (ok) deleteMeter(m.id);
-                                    }} title="Endgültig löschen">
-                                      <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                  </>
                                 ) : (
-                                  <Button size="sm" variant="ghost" onClick={() => archiveMeter(m.id, true)} title="Archivieren">
-                                    <Archive className="h-4 w-4" />
+                                  <span className="text-xs text-muted-foreground">–</span>
+                                );
+                              })()}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                {!m.is_archived && isManual && (
+                                  <Button size="sm" variant="outline" onClick={() => setReadingDialogMeter(m)}>
+                                    <ClipboardEdit className="h-4 w-4 mr-1" />
+                                    {t("meters.read" as any)}
                                   </Button>
-                                )
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                                )}
+                                {!m.is_archived && !isSimulation && (
+                                  <Button size="sm" variant="ghost" onClick={() => setQrMeter(m)} title="QR-Code">
+                                    <QrCode className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {isAdmin && !m.is_archived && (
+                                  <Button size="sm" variant="ghost" onClick={() => setEditingMeter(m)} title="Bearbeiten">
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {isAdmin && (
+                                  m.is_archived ? (
+                                    <>
+                                      <Button size="sm" variant="ghost" onClick={() => archiveMeter(m.id, false)} title="Wiederherstellen">
+                                        <ArchiveRestore className="h-4 w-4 text-primary" />
+                                      </Button>
+                                      <Button size="sm" variant="ghost" onClick={async () => {
+                                        const ok = await confirmDialog({
+                                          title: "Zähler endgültig löschen?",
+                                          description: `Möchten Sie "${m.name}" endgültig löschen? Historische Messwerte bleiben erhalten, sind aber nicht mehr dieser Messstelle zugeordnet.`,
+                                          confirmLabel: "Endgültig löschen",
+                                        });
+                                        if (ok) deleteMeter(m.id);
+                                      }} title="Endgültig löschen">
+                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button size="sm" variant="ghost" onClick={() => archiveMeter(m.id, true)} title="Archivieren">
+                                      <Archive className="h-4 w-4" />
+                                    </Button>
+                                  )
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          {isSimulation && isExpanded && (
+                            <TableRow key={`${m.id}-sim`}>
+                              <TableCell colSpan={7} className="bg-muted/30 p-3">
+                                <SimulationMeterControl meter={m} />
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
                       );
                     })}
                   </TableBody>

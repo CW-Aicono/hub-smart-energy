@@ -32,6 +32,12 @@ export interface MeterInsert {
   meter_offset_set_at?: string | null;
   meter_offset_reason?: string | null;
   meter_offset_note?: string | null;
+  sim_min?: number | null;
+  sim_max?: number | null;
+  sim_step?: number | null;
+  sim_default_value?: number | null;
+  sim_unit?: string | null;
+  sim_bidirectional?: boolean | null;
 }
 
 export function useMeters(locationId?: string) {

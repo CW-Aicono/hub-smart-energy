@@ -87,6 +87,24 @@ function kwToAmps(kw: number): number {
 }
 
 async function fetchLatestPowerKw(meterId: string): Promise<number | null> {
+  // Testzähler (Simulation) → Wert direkt aus simulation_meter_state
+  const { data: meterRow } = await admin
+    .from("meters")
+    .select("capture_type, sim_unit")
+    .eq("id", meterId)
+    .maybeSingle();
+  if (meterRow?.capture_type === "simulation") {
+    const { data: sim } = await admin
+      .from("simulation_meter_state")
+      .select("current_value")
+      .eq("meter_id", meterId)
+      .maybeSingle();
+    if (!sim) return 0;
+    const raw = Number(sim.current_value);
+    const unit = String(meterRow.sim_unit ?? "kW").toLowerCase();
+    return unit === "w" ? raw / 1000 : raw;
+  }
+
   const cutoff = new Date(Date.now() - RECENT_WINDOW_S * 1000).toISOString();
   const { data: agg } = await admin
     .from("meter_power_readings_5min")
