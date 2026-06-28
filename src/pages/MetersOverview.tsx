@@ -165,6 +165,8 @@ const MetersOverview = () => {
                     <SelectItem value="all">{t("meters.allCaptures" as any)}</SelectItem>
                     <SelectItem value="manual">{t("common.manual" as any)}</SelectItem>
                     <SelectItem value="automatic">{t("common.automatic" as any)}</SelectItem>
+                    <SelectItem value="virtual">Virtuell</SelectItem>
+                    <SelectItem value="simulation">Testzähler</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
