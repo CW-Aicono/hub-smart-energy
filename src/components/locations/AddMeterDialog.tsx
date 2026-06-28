@@ -479,51 +479,55 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
               </div>
             </div>
           )}
-          {/* Hierarchy */}
-          <div className="space-y-3 rounded-md border p-3 bg-muted/30">
-            <div className="flex items-center justify-between">
-              <Label>Hauptzähler (Netzübergabepunkt)</Label>
-              <Switch checked={isMainMeter} onCheckedChange={setIsMainMeter} />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label>Bidirektionaler Zähler (Bezug & Einspeisung)</Label>
-              <Switch checked={isBidirectional} onCheckedChange={setIsBidirectional} />
-            </div>
-            <div>
-              <Label>Zählerfunktion</Label>
-              <Select value={meterFunction} onValueChange={setMeterFunction}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="consumption">Verbrauch</SelectItem>
-                  <SelectItem value="generation">Erzeugung (z.B. PV)</SelectItem>
-                  <SelectItem value="technical">Technisch (z.B. Wärmepumpe)</SelectItem>
-                  <SelectItem value="bidirectional">Bidirektional (Bezug & Einspeisung)</SelectItem>
-                  <SelectItem value="submeter">Unterzähler</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Übergeordneter Zähler</Label>
-              <Select value={parentMeterId} onValueChange={setParentMeterId}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Kein (Hauptzähler)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Kein übergeordneter Zähler</SelectItem>
-                  {activeMeters.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <MeterOffsetSection
-            value={offsetValue}
-            onValueChange={setOffsetValue}
-            reason={offsetReason}
-            onReasonChange={setOffsetReason}
-            note={offsetNote}
-            onNoteChange={setOffsetNote}
-            unit={unit || "kWh"}
-          />
+          {/* Hierarchy + Offset – nicht für Testzähler */}
+          {captureType !== "simulation" && (
+            <>
+              <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <Label>Hauptzähler (Netzübergabepunkt)</Label>
+                  <Switch checked={isMainMeter} onCheckedChange={setIsMainMeter} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Bidirektionaler Zähler (Bezug & Einspeisung)</Label>
+                  <Switch checked={isBidirectional} onCheckedChange={setIsBidirectional} />
+                </div>
+                <div>
+                  <Label>Zählerfunktion</Label>
+                  <Select value={meterFunction} onValueChange={setMeterFunction}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="consumption">Verbrauch</SelectItem>
+                      <SelectItem value="generation">Erzeugung (z.B. PV)</SelectItem>
+                      <SelectItem value="technical">Technisch (z.B. Wärmepumpe)</SelectItem>
+                      <SelectItem value="bidirectional">Bidirektional (Bezug & Einspeisung)</SelectItem>
+                      <SelectItem value="submeter">Unterzähler</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Übergeordneter Zähler</Label>
+                  <Select value={parentMeterId} onValueChange={setParentMeterId}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Kein (Hauptzähler)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Kein übergeordneter Zähler</SelectItem>
+                      {activeMeters.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <MeterOffsetSection
+                value={offsetValue}
+                onValueChange={setOffsetValue}
+                reason={offsetReason}
+                onReasonChange={setOffsetReason}
+                note={offsetNote}
+                onNoteChange={setOffsetNote}
+                unit={unit || "kWh"}
+              />
+            </>
+          )}
           <div>
             <Label>Notizen</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
