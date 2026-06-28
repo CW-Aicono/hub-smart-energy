@@ -154,22 +154,36 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     if (!name.trim()) return;
     const parsedZustandszahl = zustandszahl ? parseFloat(zustandszahl.replace(",", ".")) : undefined;
     const parsedBrennwert = brennwert ? parseFloat(brennwert.replace(",", ".")) : undefined;
+    const simPreset = SIMULATION_PRESETS.find((p) => p.id === simPresetId) ?? SIMULATION_PRESETS[0];
+    const isSimulation = captureType === "simulation";
     await addMeter(
       {
         name: name.trim(),
         location_id: locationId,
         meter_number: meterNumber || undefined,
         energy_type: energyType,
-        unit,
+        unit: isSimulation ? simPreset.unit || unit : unit,
         medium: medium || undefined,
         notes: notes || undefined,
         capture_type: captureType,
         location_integration_id: captureType === "automatic" && selectedIntegration ? selectedIntegration : undefined,
         sensor_uuid: captureType === "automatic" && selectedSensor ? selectedSensor : undefined,
-        ...(energyType === "gas" ? { gas_type: gasType, zustandszahl: parsedZustandszahl, brennwert: parsedBrennwert || undefined } : {}),
+        ...(energyType === "gas" && !isSimulation ? { gas_type: gasType, zustandszahl: parsedZustandszahl, brennwert: parsedBrennwert || undefined } : {}),
         ...(captureType === "automatic" ? { source_unit_power: sourceUnit, source_unit_energy: deriveEnergyUnit(sourceUnit) } : {}),
-        is_bidirectional: isBidirectional,
+        is_bidirectional: isSimulation ? simPreset.bidirectional : isBidirectional,
+        ...(isSimulation
+          ? {
+              device_type: simDeviceType,
+              sim_min: simPreset.min,
+              sim_max: simPreset.max,
+              sim_step: simPreset.step,
+              sim_unit: simPreset.unit,
+              sim_default_value: 0,
+              sim_bidirectional: simPreset.bidirectional,
+            }
+          : {}),
         ...(() => {
+          if (isSimulation) return { meter_offset_kwh: 0 };
           const parsed = offsetValue.trim() ? parseFloat(offsetValue.replace(",", ".")) : 0;
           const finalOffset = Number.isFinite(parsed) ? parsed : 0;
           if (finalOffset === 0) return { meter_offset_kwh: 0 };
@@ -182,8 +196,8 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
         })(),
       } as any,
       parentMeterId && parentMeterId !== "none" ? parentMeterId : null,
-      isMainMeter,
-      meterFunction,
+      isSimulation ? false : isMainMeter,
+      isSimulation ? "consumption" : meterFunction,
       captureType === "virtual" ? virtualSources : undefined,
     );
     resetAndClose();
