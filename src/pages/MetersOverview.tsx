@@ -28,6 +28,24 @@ import { confirmDialog } from "@/components/ui/confirm-dialog";
 import { SimulationMeterControl } from "@/components/meters/SimulationMeterControl";
 import { useSimulationMeterValue } from "@/hooks/useSimulationMeter";
 
+function SimulationLiveValueCell({ meter }: { meter: Meter }) {
+  const { value, loaded } = useSimulationMeterValue(meter.id);
+  const unit = meter.sim_unit || meter.unit || "";
+  const step = Number(meter.sim_step ?? 0.1);
+  if (!loaded && value == null) {
+    return <span className="text-xs text-muted-foreground">–</span>;
+  }
+  const v = value ?? 0;
+  return (
+    <span className="text-sm tabular-nums">
+      {v.toLocaleString("de-DE", { maximumFractionDigits: step < 1 ? 2 : 0 })} {unit}
+      <span className="text-muted-foreground ml-1 text-xs">(TEST)</span>
+    </span>
+  );
+}
+
+
+
 const MetersOverview = () => {
   const { user, loading: authLoading } = useAuth();
   const { locations, loading: locationsLoading } = useLocations();
