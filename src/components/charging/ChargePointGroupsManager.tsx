@@ -392,12 +392,21 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, locat
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div>
-                <p className="font-medium">PV-Überschussladen</p>
-                <p className="text-sm text-muted-foreground">Laden priorisiert mit eigenem Solarstrom</p>
+            <div className="p-4 border rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">PV-Überschussladen</p>
+                  <p className="text-sm text-muted-foreground">Laden priorisiert mit eigenem Solarstrom</p>
+                </div>
+                <Switch checked={energy.pv_surplus_charging} onCheckedChange={(v) => setEnergy({ ...energy, pv_surplus_charging: v })} disabled={!isAdmin} />
               </div>
-              <Switch checked={energy.pv_surplus_charging} onCheckedChange={(v) => setEnergy({ ...energy, pv_surplus_charging: v })} disabled={!isAdmin} />
+              {energy.pv_surplus_charging && (
+                <GroupSolarChargingConfig
+                  groupId={group.id}
+                  isAdmin={isAdmin}
+                  pvSurplusEnabled={energy.pv_surplus_charging}
+                />
+              )}
             </div>
             <div className="p-4 border rounded-lg space-y-3">
               <div className="flex items-center justify-between">
