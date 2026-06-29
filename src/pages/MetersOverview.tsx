@@ -27,6 +27,7 @@ import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors
 import { confirmDialog } from "@/components/ui/confirm-dialog";
 import { SimulationMeterControl } from "@/components/meters/SimulationMeterControl";
 import { useSimulationMeterValue } from "@/hooks/useSimulationMeter";
+import { VirtualBalanceBreakdown } from "@/components/meters/VirtualBalanceBreakdown";
 
 function SimulationLiveValueCell({ meter }: { meter: Meter }) {
   const { value, loaded } = useSimulationMeterValue(meter.id);
@@ -88,6 +89,7 @@ const MetersOverview = () => {
   const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
   const [expandedSim, setExpandedSim] = useState<Set<string>>(new Set());
+  const [expandedVirtual, setExpandedVirtual] = useState<Set<string>>(new Set());
 
   if (authLoading || locationsLoading) {
     return (
