@@ -17,7 +17,10 @@
 // Returns null when nothing recent is available (caller decides whether to
 // treat that as "no data" or as 0).
 
-type Admin = ReturnType<typeof import("https://esm.sh/@supabase/supabase-js@2.45.0").createClient>;
+// Use a loose type: the @supabase/supabase-js client across versions has the
+// same query surface we rely on here. Avoids version-specific type friction.
+// deno-lint-ignore no-explicit-any
+type Admin = any;
 
 const RECENT_WINDOW_MIN = 5;
 
