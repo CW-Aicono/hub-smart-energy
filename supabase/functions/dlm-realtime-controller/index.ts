@@ -86,42 +86,10 @@ function kwToAmps(kw: number): number {
   return Math.max(6, Math.min(32, Math.round((kw * 1000) / (400 * Math.sqrt(3)))));
 }
 
-async function fetchLatestPowerKw(meterId: string): Promise<number | null> {
-  // Testzähler (Simulation) → Wert direkt aus simulation_meter_state
-  const { data: meterRow } = await admin
-    .from("meters")
-    .select("capture_type, sim_unit")
-    .eq("id", meterId)
-    .maybeSingle();
-  if (meterRow?.capture_type === "simulation") {
-    const { data: sim } = await admin
-      .from("simulation_meter_state")
-      .select("current_value")
-      .eq("meter_id", meterId)
-      .maybeSingle();
-    if (!sim) return 0;
-    const raw = Number(sim.current_value);
-    const unit = String(meterRow.sim_unit ?? "kW").toLowerCase();
-    return unit === "w" ? raw / 1000 : raw;
-  }
+import { fetchLatestMeterPowerKw as fetchLatestMeterPowerKwShared } from "../_shared/meterPower.ts";
 
-  const cutoff = new Date(Date.now() - RECENT_WINDOW_S * 1000).toISOString();
-  const { data: agg } = await admin
-    .from("meter_power_readings_5min")
-    .select("power_avg, bucket")
-    .eq("meter_id", meterId)
-    .gte("bucket", cutoff)
-    .order("bucket", { ascending: false })
-    .limit(1);
-  if (agg && agg.length > 0) return Number(agg[0].power_avg);
-  const { data: raw } = await admin
-    .from("meter_power_readings")
-    .select("power_value")
-    .eq("meter_id", meterId)
-    .gte("recorded_at", cutoff)
-    .order("recorded_at", { ascending: false })
-    .limit(1);
-  return raw && raw.length > 0 ? Number(raw[0].power_value) : null;
+async function fetchLatestPowerKw(meterId: string): Promise<number | null> {
+  return fetchLatestMeterPowerKwShared(admin, meterId);
 }
 
 async function processLocation(cfg: any): Promise<any> {
