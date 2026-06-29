@@ -412,6 +412,13 @@ const MetersOverview = () => {
                               </TableCell>
                             </TableRow>
                           )}
+                          {isVirtual && isVirtualExpanded && (
+                            <TableRow key={`${m.id}-vbal`}>
+                              <TableCell colSpan={7} className="bg-muted/30 p-3">
+                                <VirtualBalanceBreakdown meter={m} allMeters={meters} />
+                              </TableCell>
+                            </TableRow>
+                          )}
                         </Fragment>
                       );
                     })}
