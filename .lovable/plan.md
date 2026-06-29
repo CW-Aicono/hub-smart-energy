@@ -1,104 +1,108 @@
-## Ziel
-
-Ein neuer "Testzähler / Simulationszähler" als vierte Erfassungsart neben Manuell, Automatisch und Virtuell. Werte werden ausschließlich im Arbeitsspeicher / via Realtime-Broadcast bereitgestellt — keine Persistenz in `meter_readings`, keine Graphen, keine Aggregation.
-
 ## Konzept
 
-**Erfassungsart:** `simulation` (Label: „Testzähler (Simulation)")
+Deine Idee und meine decken sich — wir setzen sie als **virtuellen Bilanz-Zähler** um, der die bestehende Virtual-Meter-Infrastruktur (`virtual_meter_sources`) nutzt und um „Live-Wallbox-Summe" erweitert.
 
-**Kennzeichnung:**
-
-- Orange/Amber Badge „TEST" überall wo der Zähler auftaucht (Kachel, Liste, Lastmanagement-Auswahl, Automation-Bedingungen)
-- Warnhinweis im Dialog: „Werte werden nicht gespeichert. Nur für Tests."
-- Eigenes Icon (FlaskConical)
-
-**Bedienoberfläche** (neue Detail-Komponente / Sheet auf Messstellen-Seite):
-
-- Großer horizontaler Slider + numerisches Eingabefeld
-- Quick-Buttons: `0`, `25%`, `50%`, `75%`, `100%`, `Min`, `Max`
-- Vorzeichen-Toggle bei bidirektionalen Größen (Bezug/Einspeisung, Laden/Entladen)
-- Anzeige des aktuell gesendeten Werts groß in der Mitte
-- „Stop"-Button → setzt 0 und stoppt Broadcast
-
-## Einheiten & Wertebereiche
-
-Auswahl bei Anlage (gekoppelt an Energieart und Verwendungszweck):
-
-
-| Einheit       | Bereich           | Schritt | Typischer Use-Case                           |
-| ------------- | ----------------- | ------- | -------------------------------------------- |
-| kW            | −500 … +500       | 0,1     | Netzbezug/Einspeisung für DLM-Referenzzähler |
-| A (pro Phase) | 0 … 250           | 1       | Strom pro Phase für Lastmanagement           |
-| W             | −10.000 … +10.000 | 10      | Kleinverbraucher, Sensoren                   |
-| %             | 0 … 100           | 1       | Auslastung, SoC-Simulation                   |
-| °C            | −20 … +60         | 0,1     | Temperatur für Automationen                  |
-| lx            | 0 … 100.000       | 100     | Helligkeit für Automationen                  |
-| bool (0/1)    | 0 / 1             | —       | Schalter/Trigger für Automationen            |
-
-
-Standard: **kW, Bereich −100 … +100**, sinnvoll für DLM-Tests.
-
-## Zuordnung
-
-- **Liegenschaft:** Pflichtfeld wie bei anderen Zählern (für RLS & Filter)
-- **Etage/Raum:** optional
-- **Zählerfunktion:** wählbar (`consumption`, `production`, `grid`, `storage`) — entscheidend für DLM-Referenzzähler-Auswahl
-- **Bidirektional:** togglebar (erlaubt negative Werte als Einspeisung)
-- **device_type:** `meter` oder `sensor` (steuert, ob er im DLM oder in Automation-Bedingungen erscheint)
-- Wird in allen bestehenden Selektoren angeboten:
-  - DLM-Referenzzähler (`useLocationDlmConfig`)
-  - Energy-Flow-Monitor
-  - Automation-Bedingungen (Sensorwert <, >, =)
-  - Widget-Designer (sichtbar, aber mit TEST-Badge)
-
-## Datenfluss (keine Persistenz)
+Formel (pro Liegenschaft):
 
 ```text
-Slider-UI  ──setValue──►  Supabase Realtime Channel
-                          "sim-meter:<meter_id>"
-                                  │
-            ┌─────────────────────┼─────────────────────┐
-            ▼                     ▼                     ▼
-      LiveValues UI         DLM-Scheduler         Automation-Evaluator
-      (Aktuelle Werte)      (liest letzten        (liest letzten
-                             Broadcast statt       Broadcast statt
-                             snapshot)             snapshot)
+Netz = Σ Verbrauch + Σ Wallbox-Ist-Leistung − Σ PV − Speicher-Entladung + Speicher-Ladung
+       (positiv = Bezug, negativ = Einspeisung)
 ```
 
-- Wert lebt in einem Realtime-Broadcast-Channel + im Browser-State der Bedienseite
-- Server-seitig: kleine In-Memory-Map in den Edge-Functions (DLM, Automation) mit Fallback `0` falls > 5 Min kein Update
-- **Keine** Inserts in `meter_readings`, `meter_period_totals_*`, `live_snapshots`
-- DLM/Automation lesen den Wert über eine neue Helper-Funktion `getSimulatedMeterValue(meterId)` die zuerst Realtime-State, sonst 0 nimmt
+Als Quellen sind sowohl **Testzähler** (Slider) als auch **echte Zähler** erlaubt — beliebig mischbar. So kann z. B. PV per Slider simuliert, Hausverbrauch aus echter Messung, Wallboxen aus echten OCPP-MeterValues kommen.
 
-## Sicherheit & UX-Schutz
+## UI
 
-- Simulationszähler werden **nie** für Reporting, CO₂-Bilanz, Abrechnung oder Rechnungen verwendet (Filter in entsprechenden Hooks: `capture_type !== 'simulation'`)
-- Banner im Lastmanagement und in Automationen wenn ein Testzähler als Referenz gewählt ist: „Achtung: Referenzzähler ist ein TEST-Zähler"
-- Auto-Reset auf 0 wenn Bedienseite > 30 Min nicht aktiv (verhindert vergessene Testwerte)
+### 1. Neue Erfassungsart beim Anlegen eines Zählers: „Bilanz-Zähler (virtuell)"
 
-## Umsetzungsschritte (Code-seitig, später)
+Im Anlege-Dialog (`AddMeterDialog`) eine 5. Option zusätzlich zu manuell / automatisch / virtuell / simulation:
 
-1. **DB-Migration:** `meters.capture_type` erlaubt zusätzlich `'simulation'`; neue Felder `sim_min`, `sim_max`, `sim_step`, `sim_unit`, `sim_current_value` (nur Default, kein Verlauf)
-2. **CreateMeterDialog:** neuer Radio „Testzähler (Simulation)" + Konfigurationsfelder (Einheit, Bereich, Schritt, Bidirektional)
-3. **Neue Komponente** `SimulationMeterControl.tsx` (Slider + Quick-Buttons + Broadcast)
-4. **Hook** `useSimulationMeterValue(meterId)` — abonniert Realtime-Channel, liefert Wert
-5. **Anpassungen** in:
-  - `MetersOverview` / Kachel: TEST-Badge + Slider-Inline-Control
-  - `LiveValues`: TEST-Badge + Live-Wert
-  - DLM-Edge-Function: `getSimulatedMeterValue` Fallback
-  - Automation-Evaluator (`packages/automation-core/evaluator.ts`): gleiches Lookup
-  - Reporting/Invoice-Hooks: Simulation ausschließen
-6. **Optional:** Auto-Reset-Timer & „Alle Testzähler stoppen"-Knopf in Settings
+- **Rolle:** standardmäßig `grid` (Netz)
+- **Quellen-Picker** (Mehrfachauswahl, Vorzeichen pro Quelle wählbar):
+  - PV-Erzeugung (`production`) → **negativ** in Bilanz
+  - Hausverbrauch (`consumption`) → **positiv**
+  - Wallbox-Gruppe oder einzelne Wallboxen → **positiv** (Live aus `charge_point_connectors.current_power`)
+  - Speicher (`storage`) → Vorzeichen je nach Lade-/Entladerichtung
+- Jede Quelle darf entweder ein Testzähler (Slider) oder ein echter Zähler sein.
+- TEST-Badge erscheint sobald **mindestens eine** Quelle ein Testzähler ist.
 
-## Offene Punkte
+### 2. Detail-Karte „Simulations-Szenario" auf Messstellen-Seite
 
-Bevor ich die Migration & UI baue, kurz bestätigen:
+Für eine Liegenschaft, in der mindestens ein Bilanz-Zähler mit Testzähler-Quellen existiert, zeigen wir oben eine kompakte Bilanz-Karte:
 
-- Soll der Wert auch **server-seitig** in einer kleinen Tabelle (`simulation_meter_state`, nur 1 Zeile pro Zähler, immer überschrieben) gehalten werden? Vorteil: DLM/Automation in Edge-Functions sehen den Wert sofort, auch ohne aktive Browser-Session. Nachteil: minimaler DB-Write bei jeder Slider-Bewegung (gedrosselt auf 1×/Sekunde). → **Empfehlung: ja**, sonst funktionieren DLM-Tests nur solange ein Browser-Tab offen ist.
-- Sollen Testzähler in der Hauptliste „Messstellen" zusammen angezeigt werden oder in einem eigenen Tab „Testzähler"?  
-  
-Antworten:  
-  
-1. Bitte kleine Tabelle für Test-Zähler einbauen.  
-  
-2. Ja, mit in die Gesamtübersicht. Testzähler sollen hier deutlich sichtbar angezeigt werden. Bitte auch die Option mit integrieren, diese Geräte auch als Sensor für Tests mit Automationen nutzen zu können
+```text
+[TEST] Simulations-Bilanz · Liegenschaft Musterstraße
+─────────────────────────────────────────────────────
+PV (Sim)          15,0 kW   ████████░░
+Hausverbrauch      1,5 kW   █░░░░░░░░░
+Wallbox A (real)   7,4 kW   ████░░░░░░
+Wallbox B (real)   0,0 kW   ░░░░░░░░░░
+─────────────────────────────────────────────────────
+Netz (berechnet) −6,1 kW   ◄ EINSPEISUNG
+```
+
+Die Testzähler-Slider sind direkt in der Karte editierbar (PV, Grundlast, Speicher-Leistung). Wallbox-Zeilen sind read-only und aktualisieren sich realtime.
+
+## Datenfluss
+
+```text
+Slider (PV, Last, Speicher) ─► simulation_meter_state
+                                      │
+charge_point_connectors                │
+  .current_power (realtime) ───────────┤
+                                      ▼
+                       computeVirtualBalance(meterId)
+                       (neuer Helper, Browser + Edge)
+                                      │
+              ┌───────────────────────┼───────────────────────┐
+              ▼                       ▼                       ▼
+       LiveValues-UI            DLM-Scheduler           PV-Überschuss-
+       (Netz-Kachel)            (Referenzzähler)        Scheduler
+```
+
+- Kein neuer Persistenz-Layer für die Bilanz — sie wird on-demand berechnet (billig: max. eine Handvoll Summanden).
+- Realtime-Updates kommen über die existierenden Channels (`simulation_meter_state` + `meter_power_readings` für Wallboxen).
+
+## Beispielablauf (dein Szenario)
+
+| t | PV-Slider | Wallbox A (real) | Wallbox B (real) | Berechneter Netz-Wert | DLM/PV-Scheduler |
+|---|---|---|---|---|---|
+| 0 | 15 kW | 0 | 0 | −15 kW (Einspeisung) | User 1 darf 11 kW starten |
+| 1 | 15 kW | 11 kW | 0 | −4 kW (Einspeisung) | passt, noch Überschuss |
+| 2 | 15 kW | 11 kW | 7 kW | +3 kW (Bezug) | drosselt / pausiert Laden |
+
+Slider bleibt konstant, Regelwert ändert sich automatisch — exakt das gewünschte Verhalten.
+
+## Umsetzung (technisch)
+
+1. **DB-Migration**
+   - `meters.capture_type` erlaubt zusätzlich `'virtual_balance'`.
+   - Erweiterung `virtual_meter_sources` um Spalten `sign smallint` (+1/−1) und `source_kind enum('meter','charge_point','charge_point_group')`, damit auch Wallboxen als Quelle eingetragen werden können.
+   - `simulation_meter_state` bleibt unverändert (PV, Grundlast, Speicher sind jeweils eigene `capture_type='simulation'`-Zähler).
+
+2. **Helper** `computeVirtualBalance(meterId)` in
+   - `src/lib/virtualBalance.ts` (Browser)
+   - `supabase/functions/_shared/virtualBalance.ts` (Edge, gleicher Code)
+   liest Quellen, summiert mit Vorzeichen, ergänzt Wallbox-Ist-Leistungen aus `charge_point_connectors.current_power`.
+
+3. **Hook** `useVirtualBalance(meterId)` für Live-Anzeige (subscribet `simulation_meter_state` + relevante CP-Connectoren).
+
+4. **Edge-Functions**
+   - `dlm-scheduler` & `dlm-realtime-controller`: wenn Referenz-Zähler `capture_type='virtual_balance'`, statt Snapshot/Slider den berechneten Wert nehmen.
+   - `solar-charging-scheduler` (PV-Überschuss): gleiche Behandlung.
+
+5. **UI**
+   - `AddMeterDialog`: neue Option + Quellen-Picker.
+   - `MetersOverview`: neue Komponente `BalanceSimulationCard.tsx` mit Slidern (über `SimulationMeterControl` für die einzelnen Sim-Zähler) und Live-Bilanz.
+   - TEST-Badge auf dem Bilanz-Zähler, sobald eine Quelle simuliert ist.
+
+6. **Schutz**
+   - Bilanz-Zähler mit Test-Quellen werden weiterhin aus Reporting/CO₂/Abrechnung ausgeschlossen.
+   - Banner „Referenz-Zähler enthält Testwerte" in DLM- und PV-Überschuss-Konfiguration.
+
+7. **Auto-Reset** der Slider nach 30 Min Inaktivität bleibt wie heute.
+
+## Was bewusst NICHT geändert wird
+
+- Bestehende einfache Testzähler (Sensor, °C, %, lx) bleiben unverändert — der Bilanz-Zähler ist additiv.
+- Echte Virtual Meter (Summen-/Differenzzähler ohne Testanteil) funktionieren weiter wie bisher; sie bekommen nur die neue Option, Wallboxen als Quelle aufzunehmen.
