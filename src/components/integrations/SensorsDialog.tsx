@@ -295,6 +295,29 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
             </div>
           </DialogHeader>
 
+          {!isPushGateway && meterSensors.length > 0 && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                type="search"
+                placeholder="Suchen nach Name, Raum, Kategorie…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 pr-9"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted text-muted-foreground"
+                  aria-label="Suche leeren"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="flex-1 overflow-auto">
             {isPushGateway ? (
               <div className="text-center py-12 text-muted-foreground space-y-2">
