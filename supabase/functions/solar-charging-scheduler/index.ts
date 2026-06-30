@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { fetchLatestMeterPowerKw } from "../_shared/meterPower.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -41,23 +42,17 @@ Deno.serve(async (req) => {
 
     for (const config of configs) {
       try {
-        // Get latest power reading from the reference meter
-        const { data: readings } = await admin
-          .from("meter_power_readings")
-          .select("power_value, recorded_at")
-          .eq("meter_id", config.reference_meter_id)
-          .order("recorded_at", { ascending: false })
-          .limit(1);
-
-        const latestReading = readings?.[0];
-        if (!latestReading) {
+        // Get latest power (kW) from the reference meter — supports plain,
+        // simulation and virtual meters (with charge-point sources etc.).
+        const latestKw = await fetchLatestMeterPowerKw(admin, config.reference_meter_id);
+        if (latestKw === null) {
           await logExecution(admin, config, 0, 0, 0, "no_data", "Keine aktuellen Messwerte");
           results.push({ group_id: config.group_id, status: "no_data" });
           continue;
         }
 
-        // Negative value = feed-in = surplus
-        const powerW = latestReading.power_value * 1000;
+        // Negative kW = feed-in = surplus
+        const powerW = latestKw * 1000;
         const surplusW = powerW < 0 ? Math.abs(powerW) - config.safety_buffer_w : 0;
         const availableSurplus = Math.max(0, surplusW);
 

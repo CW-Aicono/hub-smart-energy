@@ -27,6 +27,7 @@ import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors
 import { confirmDialog } from "@/components/ui/confirm-dialog";
 import { SimulationMeterControl } from "@/components/meters/SimulationMeterControl";
 import { useSimulationMeterValue } from "@/hooks/useSimulationMeter";
+import { VirtualBalanceBreakdown } from "@/components/meters/VirtualBalanceBreakdown";
 
 function SimulationLiveValueCell({ meter }: { meter: Meter }) {
   const { value, loaded } = useSimulationMeterValue(meter.id);
@@ -88,6 +89,7 @@ const MetersOverview = () => {
   const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
   const [expandedSim, setExpandedSim] = useState<Set<string>>(new Set());
+  const [expandedVirtual, setExpandedVirtual] = useState<Set<string>>(new Set());
 
   if (authLoading || locationsLoading) {
     return (
@@ -233,6 +235,7 @@ const MetersOverview = () => {
                       const isSimulation = m.capture_type === "simulation";
                       const isVirtual = m.capture_type === "virtual";
                       const isExpanded = expandedSim.has(m.id);
+                      const isVirtualExpanded = expandedVirtual.has(m.id);
                       const captureLabel = isSimulation
                         ? "TEST"
                         : isVirtual
@@ -245,19 +248,36 @@ const MetersOverview = () => {
                           <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
                             <TableCell className="font-medium">
                               <span className="inline-flex items-center gap-1.5">
-                                {isSimulation && (
+                                {(isSimulation || isVirtual) && (
                                   <button
                                     type="button"
                                     className="inline-flex"
                                     onClick={() => {
-                                      const next = new Set(expandedSim);
-                                      if (next.has(m.id)) next.delete(m.id);
-                                      else next.add(m.id);
-                                      setExpandedSim(next);
+                                      if (isSimulation) {
+                                        const next = new Set(expandedSim);
+                                        if (next.has(m.id)) next.delete(m.id);
+                                        else next.add(m.id);
+                                        setExpandedSim(next);
+                                      } else {
+                                        const next = new Set(expandedVirtual);
+                                        if (next.has(m.id)) next.delete(m.id);
+                                        else next.add(m.id);
+                                        setExpandedVirtual(next);
+                                      }
                                     }}
-                                    title={isExpanded ? "Slider einklappen" : "Slider öffnen"}
+                                    title={
+                                      (isSimulation ? isExpanded : isVirtualExpanded)
+                                        ? "Einklappen"
+                                        : isVirtual
+                                          ? "Live-Bilanz öffnen"
+                                          : "Slider öffnen"
+                                    }
                                   >
-                                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                    {(isSimulation ? isExpanded : isVirtualExpanded) ? (
+                                      <ChevronDown className="h-4 w-4" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4" />
+                                    )}
                                   </button>
                                 )}
                                 {isSimulation && (
@@ -389,6 +409,13 @@ const MetersOverview = () => {
                             <TableRow key={`${m.id}-sim`}>
                               <TableCell colSpan={7} className="bg-muted/30 p-3">
                                 <SimulationMeterControl meter={m} />
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          {isVirtual && isVirtualExpanded && (
+                            <TableRow key={`${m.id}-vbal`}>
+                              <TableCell colSpan={7} className="bg-muted/30 p-3">
+                                <VirtualBalanceBreakdown meter={m} allMeters={meters} />
                               </TableCell>
                             </TableRow>
                           )}

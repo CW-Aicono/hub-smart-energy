@@ -48,48 +48,10 @@ interface DispatchResult {
   per_cp_amps?: number | null;
 }
 
+import { fetchLatestMeterPowerKw as fetchLatestMeterPowerKwShared } from "../_shared/meterPower.ts";
+
 async function fetchLatestMeterPowerKw(meterId: string): Promise<number | null> {
-  // Simulation/Test meters: read live value from simulation_meter_state.
-  // Values are interpreted as kW when the meter's sim_unit is kW (default).
-  const { data: meterRow } = await admin
-    .from("meters")
-    .select("capture_type, sim_unit")
-    .eq("id", meterId)
-    .maybeSingle();
-  if (meterRow?.capture_type === "simulation") {
-    const { data: sim } = await admin
-      .from("simulation_meter_state")
-      .select("current_value")
-      .eq("meter_id", meterId)
-      .maybeSingle();
-    if (!sim) return 0;
-    const raw = Number(sim.current_value);
-    const unit = String(meterRow.sim_unit ?? "kW").toLowerCase();
-    if (unit === "w") return raw / 1000;
-    // kW or unknown → as-is
-    return raw;
-  }
-
-  // Try 5-min aggregated table first; fall back to raw readings
-  const cutoff = new Date(Date.now() - RECENT_WINDOW_MIN * 60_000).toISOString();
-  const { data: agg } = await admin
-    .from("meter_power_readings_5min")
-    .select("power_avg, bucket")
-    .eq("meter_id", meterId)
-    .gte("bucket", cutoff)
-    .order("bucket", { ascending: false })
-    .limit(1);
-  if (agg && agg.length > 0) return Number(agg[0].power_avg);
-
-  const { data: raw } = await admin
-    .from("meter_power_readings")
-    .select("power_value, recorded_at")
-    .eq("meter_id", meterId)
-    .gte("recorded_at", cutoff)
-    .order("recorded_at", { ascending: false })
-    .limit(1);
-  if (raw && raw.length > 0) return Number(raw[0].power_value);
-  return null;
+  return fetchLatestMeterPowerKwShared(admin, meterId);
 }
 
 async function applyOrClearDlm(
