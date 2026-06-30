@@ -112,6 +112,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   const [error, setError] = useState<string | null>(null);
   const [selectedSensorIds, setSelectedSensorIds] = useState<Set<string>>(new Set());
   const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [search, setSearch] = useState("");
 
   const effectiveLocationId = locationId || locationIntegration?.location_id || "";
   // Fetch ALL meters (no location filter) so we can detect sensor assignments across locations
