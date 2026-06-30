@@ -686,6 +686,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                     Vom Gateway gelieferte Zähler-Geräte – klicken Sie auf einen Eintrag, um die zugehörige Messstelle zu bearbeiten.
                   </p>
                   <DeviceTable
+                    roomNameById={roomNameById}
                     devices={list}
                     type="sensor"
                     meters={meters}
@@ -777,6 +778,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               if (list.length > 0) {
                 return (
                   <DeviceTable
+                    roomNameById={roomNameById}
                     devices={list}
                     type="sensor"
                     meters={meters}
@@ -869,6 +871,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               if (list.length > 0) {
                 return (
                   <DeviceTable
+                    roomNameById={roomNameById}
                     devices={list}
                     type="actuator"
                     meters={meters}
