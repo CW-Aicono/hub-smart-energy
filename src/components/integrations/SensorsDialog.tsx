@@ -368,7 +368,13 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {meterSensors.map((sensor) => {
+                  {displayedSensors.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                        Keine Treffer für „{search}"
+                      </TableCell>
+                    </TableRow>
+                  ) : displayedSensors.map((sensor) => {
                     const assignedMeter = assignedMeterBySensorId.get(sensor.id);
                     const assignedHere = assignedMeter ? isAssignedHere(assignedMeter) : false;
                     const assignedElsewhere = !!assignedMeter && !assignedHere;
