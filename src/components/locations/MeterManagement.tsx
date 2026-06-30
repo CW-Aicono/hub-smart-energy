@@ -325,6 +325,30 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [pendingSensorUuid, setPendingSensorUuid] = useState<string | null>(null);
 
+  // Build map of room_id -> room name for all floors of this location (for "Zugeordneter Raum" column)
+  const { data: roomsData = [] } = useQuery({
+    queryKey: ["meter-management-rooms", locationId],
+    enabled: !!locationId,
+    queryFn: async () => {
+      const { data: floors } = await supabase.from("floors").select("id").eq("location_id", locationId);
+      const floorIds = (floors ?? []).map((f: any) => f.id);
+      if (floorIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("floor_rooms")
+        .select("id, name")
+        .in("floor_id", floorIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
+  const roomNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    (roomsData as any[]).forEach((r) => m.set(r.id, r.name));
+    return m;
+  }, [roomsData]);
+
+
   // Ladeinfrastruktur – Tab nur einblenden, wenn mindestens ein Ladepunkt
   // direkt oder über eine Gruppe dieser Liegenschaft zugeordnet ist.
   const { data: locationChargePoints = [] } = useLocationChargePoints(locationId);
