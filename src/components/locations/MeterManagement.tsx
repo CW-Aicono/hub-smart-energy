@@ -17,7 +17,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network,
   ChevronDown, ChevronRight, Thermometer, ToggleLeft, Lightbulb, DoorOpen,
-  Activity, Server, Zap, Inbox,
+  Activity, Server, Zap, Inbox, ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
