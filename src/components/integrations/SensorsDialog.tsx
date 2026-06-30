@@ -128,6 +128,16 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
 
   const meterSensors = sensors;
 
+  const displayedSensors = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return meterSensors;
+    return meterSensors.filter((s) =>
+      [s.name, s.room, s.category, s.stateName, s.secondaryStateName, s.controlType, s.unit]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    );
+  }, [meterSensors, search]);
+
   // Lookup: location_id -> name
   const locationNameById = useMemo(() => {
     const map = new Map<string, string>();
