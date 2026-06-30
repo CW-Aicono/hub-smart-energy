@@ -17,11 +17,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   Loader2, RefreshCw, AlertCircle, Plus, CheckCircle2,
   Zap, Thermometer, Droplets, Wind, Gauge, Sun, BatteryCharging,
   ToggleLeft, Activity, Lightbulb, Waves, CloudRain, Eye, Radio,
-  ArrowRightLeft,
+  ArrowRightLeft, Search, X,
 } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
