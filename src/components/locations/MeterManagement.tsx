@@ -6,6 +6,8 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useLoxoneSensorsMulti, type LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { GATEWAY_DEFINITIONS } from "@/lib/gatewayRegistry";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +19,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import {
   Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network,
   ChevronDown, ChevronRight, Thermometer, ToggleLeft, Lightbulb, DoorOpen,
-  Activity, Server, Zap, Inbox,
+  Activity, Server, Zap, Inbox, ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -90,10 +92,52 @@ function getUnitIcon(unit: string) {
   return <Gauge className={cls} />;
 }
 
+type DeviceSortKey = "type" | "name" | "room" | "assignedRoom" | "gateway" | "controlType" | "value" | "status";
+
+function parseNumeric(v: unknown): number | null {
+  if (v == null) return null;
+  if (typeof v === "number") return isNaN(v) ? null : v;
+  const s = String(v).trim();
+  if (!s) return null;
+  const cleaned = s.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? null : num;
+}
+
+function SortableHead({
+  label,
+  sortKey,
+  currentKey,
+  direction,
+  onSort,
+  align,
+}: {
+  label: string;
+  sortKey: DeviceSortKey;
+  currentKey: DeviceSortKey | null;
+  direction: "asc" | "desc";
+  onSort: (k: DeviceSortKey) => void;
+  align?: "right";
+}) {
+  const isActive = currentKey === sortKey;
+  const Icon = !isActive ? ArrowUpDown : direction === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      className={`inline-flex items-center gap-1 hover:text-foreground ${align === "right" ? "ml-auto" : ""} ${isActive ? "text-foreground" : ""}`}
+    >
+      {label}
+      <Icon className="h-3 w-3 opacity-60" />
+    </button>
+  );
+}
+
 function DeviceTable({
   devices,
   type,
   meters,
+  roomNameById,
   onEditMeter,
   onCreateAndEdit,
   onArchive,
@@ -104,6 +148,7 @@ function DeviceTable({
   devices: (LoxoneSensor & { _integrationLabel: string; _integrationId: string })[];
   type: "sensor" | "actuator";
   meters: Meter[];
+  roomNameById: Map<string, string>;
   onEditMeter: (meter: Meter) => void;
   onCreateAndEdit: (device: LoxoneSensor & { _integrationId: string }, deviceType: string) => void;
   onArchive?: (meter: Meter, archive: boolean) => void;
@@ -111,6 +156,56 @@ function DeviceTable({
   showArchived?: boolean;
   isAdmin?: boolean;
 }) {
+  const [sortKey, setSortKey] = useState<DeviceSortKey | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const handleSort = (k: DeviceSortKey) => {
+    if (sortKey === k) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(k);
+      setSortDir("asc");
+    }
+  };
+
+  const sensorUuidToMeter = new Map<string, Meter>();
+  meters.forEach((m) => { if (m.sensor_uuid) sensorUuidToMeter.set(m.sensor_uuid, m); });
+
+  const getAssignedRoom = (d: LoxoneSensor): string => {
+    const linked = sensorUuidToMeter.get(d.id);
+    if (linked?.room_id) return roomNameById.get(linked.room_id) || "";
+    return "";
+  };
+
+  const sortedDevices = useMemo(() => {
+    if (!sortKey) return devices;
+    const arr = [...devices];
+    const dir = sortDir === "asc" ? 1 : -1;
+    arr.sort((a, b) => {
+      let av: any; let bv: any;
+      switch (sortKey) {
+        case "type": av = a.unit || a.type; bv = b.unit || b.type; break;
+        case "name": av = a.name; bv = b.name; break;
+        case "room": av = a.room || ""; bv = b.room || ""; break;
+        case "assignedRoom": av = getAssignedRoom(a); bv = getAssignedRoom(b); break;
+        case "gateway": av = a._integrationLabel; bv = b._integrationLabel; break;
+        case "controlType": av = a.controlType; bv = b.controlType; break;
+        case "value": {
+          const an = parseNumeric(a.value); const bn = parseNumeric(b.value);
+          if (an != null && bn != null) return (an - bn) * dir;
+          if (an != null) return -1 * dir;
+          if (bn != null) return 1 * dir;
+          av = String(a.value ?? ""); bv = String(b.value ?? "");
+          break;
+        }
+        case "status": av = a.status; bv = b.status; break;
+      }
+      return String(av ?? "").localeCompare(String(bv ?? ""), "de", { sensitivity: "base", numeric: true }) * dir;
+    });
+    return arr;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devices, sortKey, sortDir, roomNameById, meters]);
+
   if (devices.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-4">
@@ -119,26 +214,41 @@ function DeviceTable({
     );
   }
 
-  const sensorUuidToMeter = new Map<string, Meter>();
-  meters.forEach((m) => { if (m.sensor_uuid) sensorUuidToMeter.set(m.sensor_uuid, m); });
-
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[40px]">Typ</TableHead>
-          <TableHead>Name</TableHead>
-          <TableHead>Raum</TableHead>
-          <TableHead>Gateway</TableHead>
-          <TableHead>Steuerungstyp</TableHead>
-          <TableHead className="text-right">Wert</TableHead>
-          <TableHead>Status</TableHead>
+          <TableHead className="w-[40px]">
+            <SortableHead label="Typ" sortKey="type" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+          </TableHead>
+          <TableHead>
+            <SortableHead label="Name" sortKey="name" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+          </TableHead>
+          <TableHead>
+            <SortableHead label="Raum (Gateway)" sortKey="room" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+          </TableHead>
+          <TableHead>
+            <SortableHead label="Zugeordneter Raum" sortKey="assignedRoom" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+          </TableHead>
+          <TableHead>
+            <SortableHead label="Gateway" sortKey="gateway" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+          </TableHead>
+          <TableHead>
+            <SortableHead label="Steuerungstyp" sortKey="controlType" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+          </TableHead>
+          <TableHead className="text-right">
+            <SortableHead label="Wert" sortKey="value" currentKey={sortKey} direction={sortDir} onSort={handleSort} align="right" />
+          </TableHead>
+          <TableHead>
+            <SortableHead label="Status" sortKey="status" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+          </TableHead>
           {isAdmin && <TableHead className="w-32" />}
         </TableRow>
       </TableHeader>
       <TableBody>
-        {devices.map((d) => {
+        {sortedDevices.map((d) => {
           const linkedMeter = sensorUuidToMeter.get(d.id);
+          const assignedRoom = linkedMeter?.room_id ? roomNameById.get(linkedMeter.room_id) : null;
           return (
             <TableRow key={`${d._integrationLabel}-${d.id}`} className={linkedMeter?.is_archived ? "opacity-60" : ""}>
               <TableCell>
@@ -161,6 +271,7 @@ function DeviceTable({
                 </button>
               </TableCell>
               <TableCell className="text-muted-foreground">{d.room || "–"}</TableCell>
+              <TableCell className="text-muted-foreground">{assignedRoom || "–"}</TableCell>
               <TableCell>
                 <Badge variant="outline" className="text-[10px]">{d._integrationLabel}</Badge>
               </TableCell>
@@ -213,6 +324,30 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const [showArchived, setShowArchived] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [pendingSensorUuid, setPendingSensorUuid] = useState<string | null>(null);
+
+  // Build map of room_id -> room name for all floors of this location (for "Zugeordneter Raum" column)
+  const { data: roomsData = [] } = useQuery({
+    queryKey: ["meter-management-rooms", locationId],
+    enabled: !!locationId,
+    queryFn: async () => {
+      const { data: floors } = await supabase.from("floors").select("id").eq("location_id", locationId);
+      const floorIds = (floors ?? []).map((f: any) => f.id);
+      if (floorIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("floor_rooms")
+        .select("id, name")
+        .in("floor_id", floorIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
+  const roomNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    (roomsData as any[]).forEach((r) => m.set(r.id, r.name));
+    return m;
+  }, [roomsData]);
+
 
   // Ladeinfrastruktur – Tab nur einblenden, wenn mindestens ein Ladepunkt
   // direkt oder über eine Gruppe dieser Liegenschaft zugeordnet ist.
@@ -551,6 +686,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                     Vom Gateway gelieferte Zähler-Geräte – klicken Sie auf einen Eintrag, um die zugehörige Messstelle zu bearbeiten.
                   </p>
                   <DeviceTable
+                    roomNameById={roomNameById}
                     devices={list}
                     type="sensor"
                     meters={meters}
@@ -642,6 +778,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               if (list.length > 0) {
                 return (
                   <DeviceTable
+                    roomNameById={roomNameById}
                     devices={list}
                     type="sensor"
                     meters={meters}
@@ -734,6 +871,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               if (list.length > 0) {
                 return (
                   <DeviceTable
+                    roomNameById={roomNameById}
                     devices={list}
                     type="actuator"
                     meters={meters}

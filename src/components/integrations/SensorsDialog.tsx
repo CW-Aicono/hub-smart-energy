@@ -17,11 +17,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   Loader2, RefreshCw, AlertCircle, Plus, CheckCircle2,
   Zap, Thermometer, Droplets, Wind, Gauge, Sun, BatteryCharging,
   ToggleLeft, Activity, Lightbulb, Waves, CloudRain, Eye, Radio,
-  ArrowRightLeft,
+  ArrowRightLeft, Search, X,
 } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
@@ -111,6 +112,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   const [error, setError] = useState<string | null>(null);
   const [selectedSensorIds, setSelectedSensorIds] = useState<Set<string>>(new Set());
   const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [search, setSearch] = useState("");
 
   const effectiveLocationId = locationId || locationIntegration?.location_id || "";
   // Fetch ALL meters (no location filter) so we can detect sensor assignments across locations
@@ -125,6 +127,16 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
   const isPushGateway = edgeFunctionName === "gateway-ingest";
 
   const meterSensors = sensors;
+
+  const displayedSensors = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return meterSensors;
+    return meterSensors.filter((s) =>
+      [s.name, s.room, s.category, s.stateName, s.secondaryStateName, s.controlType, s.unit]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    );
+  }, [meterSensors, search]);
 
   // Lookup: location_id -> name
   const locationNameById = useMemo(() => {
@@ -283,6 +295,29 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
             </div>
           </DialogHeader>
 
+          {!isPushGateway && meterSensors.length > 0 && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                type="search"
+                placeholder="Suchen nach Name, Raum, Kategorie…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 pr-9"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted text-muted-foreground"
+                  aria-label="Suche leeren"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="flex-1 overflow-auto">
             {isPushGateway ? (
               <div className="text-center py-12 text-muted-foreground space-y-2">
@@ -333,7 +368,13 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {meterSensors.map((sensor) => {
+                  {displayedSensors.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                        Keine Treffer für „{search}"
+                      </TableCell>
+                    </TableRow>
+                  ) : displayedSensors.map((sensor) => {
                     const assignedMeter = assignedMeterBySensorId.get(sensor.id);
                     const assignedHere = assignedMeter ? isAssignedHere(assignedMeter) : false;
                     const assignedElsewhere = !!assignedMeter && !assignedHere;
