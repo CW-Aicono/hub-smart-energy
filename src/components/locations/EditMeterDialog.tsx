@@ -733,8 +733,6 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               <Label>Foto</Label>
               <div className="flex items-center gap-3 mt-1">
 
-              <Label>Foto</Label>
-              <div className="flex items-center gap-3 mt-1">
                 {photoUrl && (
                   <button
                     type="button"
