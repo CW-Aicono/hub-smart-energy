@@ -731,15 +731,8 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             <p className="text-sm font-medium text-muted-foreground">Zusatzinformationen</p>
             <div>
               <Label>Foto</Label>
-              {photoUrl && (
-                <div className="mt-1 mb-2 rounded-lg overflow-hidden border">
-                  <img src={photoUrl} alt="Zählerfoto" className="w-full h-32 object-cover" />
-                </div>
-              )}
-              <div className="flex gap-2 mt-1">
-                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto}>
-                  {uploadingPhoto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            <div>
+              <div className="flex items-center gap-3 mt-1">
+
               <Label>Foto</Label>
               <div className="flex items-center gap-3 mt-1">
                 {photoUrl && (
