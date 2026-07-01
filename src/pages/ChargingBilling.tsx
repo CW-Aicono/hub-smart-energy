@@ -931,17 +931,37 @@ const ChargingBilling = () => {
                           <DialogHeader><DialogTitle>Rechnungen erstellen</DialogTitle></DialogHeader>
                           <div className="space-y-4">
                             <div>
-                              <Label>Abrechnungsmonat</Label>
-                              <Input type="month" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
+                              <Label>Abrechnungszeitraum</Label>
+                              <Tabs value={genMode} onValueChange={(v) => setGenMode(v as "month" | "range")} className="mt-2">
+                                <TabsList className="grid w-full grid-cols-2">
+                                  <TabsTrigger value="month">Ganzer Monat</TabsTrigger>
+                                  <TabsTrigger value="range">Zeitraum (von – bis)</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="month" className="mt-3">
+                                  <Input type="month" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
+                                </TabsContent>
+                                <TabsContent value="range" className="mt-3">
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Von</Label>
+                                      <Input type="date" value={genRangeStart} onChange={(e) => setGenRangeStart(e.target.value)} />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Bis</Label>
+                                      <Input type="date" value={genRangeEnd} onChange={(e) => setGenRangeEnd(e.target.value)} />
+                                    </div>
+                                  </div>
+                                </TabsContent>
+                              </Tabs>
                             </div>
                             <div className="p-3 bg-muted rounded-lg text-sm">
-                              <p>Zeitraum: <strong>{format(new Date(genPeriod.start), "dd.MM.yyyy", { locale: de })}</strong> bis <strong>{format(new Date(genPeriod.end), "dd.MM.yyyy", { locale: de })}</strong></p>
+                              <p>Zeitraum: <strong>{genPeriod.valid ? `${format(new Date(genPeriod.start), "dd.MM.yyyy", { locale: de })} bis ${format(new Date(genPeriod.end), "dd.MM.yyyy", { locale: de })}` : "Ungültig"}</strong></p>
                               <p className="text-muted-foreground mt-1">Es werden Einzelrechnungen pro Nutzer sowie Sammelrechnungen für alle Rechnungsgruppen mit Mitgliedern im Zeitraum erstellt.</p>
                             </div>
                           </div>
                           <DialogFooter>
                             <Button variant="outline" onClick={() => setGenerateOpen(false)}>Abbrechen</Button>
-                            <Button onClick={handleGenerate} disabled={generateInvoices.isPending}>
+                            <Button onClick={handleGenerate} disabled={generateInvoices.isPending || !genPeriod.valid}>
                               {generateInvoices.isPending ? "Wird erstellt…" : "Rechnungen erstellen"}
                             </Button>
                           </DialogFooter>
