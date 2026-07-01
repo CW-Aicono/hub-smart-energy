@@ -291,22 +291,32 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     fetchSensors();
   }, [selectedIntegration, captureType]);
 
+  const [photoFullscreen, setPhotoFullscreen] = useState(false);
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingPhoto(true);
     try {
-      const fileName = `${meter.id}-${Date.now()}.${file.name.split(".").pop()}`;
-      const { data, error } = await supabase.storage.from("meter-photos").upload(fileName, file, { upsert: true });
+      const ext = file.name.split(".").pop() || "jpg";
+      // Path MUST start with `${meter.id}/` to satisfy meter-photos RLS policy
+      const filePath = `${meter.id}/${Date.now()}.${ext}`;
+      const { data, error } = await supabase.storage
+        .from("meter-photos")
+        .upload(filePath, file, { upsert: true, contentType: file.type });
       if (error) throw error;
-      const { data: urlData, error: urlError } = await supabase.storage.from("meter-photos").createSignedUrl(data.path, 3600);
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from("meter-photos")
+        .createSignedUrl(data.path, 3600);
       if (urlError) throw urlError;
-      setPhotoUrl(`${urlData.signedUrl}`);
+      setPhotoUrl(urlData.signedUrl);
       toast.success("Foto hochgeladen");
-    } catch {
-      toast.error("Foto-Upload fehlgeschlagen");
+    } catch (err) {
+      console.error("[EditMeterDialog] photo upload failed", err);
+      toast.error(`Foto-Upload fehlgeschlagen: ${(err as Error).message ?? "Unbekannter Fehler"}`);
     }
     setUploadingPhoto(false);
+    e.target.value = "";
   };
 
   const handleSubmit = async () => {
@@ -721,12 +731,18 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             <p className="text-sm font-medium text-muted-foreground">Zusatzinformationen</p>
             <div>
               <Label>Foto</Label>
-              {photoUrl && (
-                <div className="mt-1 mb-2 rounded-lg overflow-hidden border">
-                  <img src={photoUrl} alt="Zählerfoto" className="w-full h-32 object-cover" />
-                </div>
-              )}
-              <div className="flex gap-2 mt-1">
+              <div className="flex items-center gap-3 mt-1">
+
+                {photoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setPhotoFullscreen(true)}
+                    className="rounded-md overflow-hidden border h-16 w-16 shrink-0 hover:ring-2 hover:ring-primary transition"
+                    title="Foto vergrößern"
+                  >
+                    <img src={photoUrl} alt="Zählerfoto" className="h-full w-full object-cover" />
+                  </button>
+                )}
                 <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto}>
                   {uploadingPhoto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   {photoUrl ? "Foto ändern" : "Foto hochladen"}
@@ -746,6 +762,14 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               <Input value={meterOperator} onChange={(e) => setMeterOperator(e.target.value)} placeholder="z.B. Netzbetreiber GmbH" className="mt-1" />
             </div>
           </div>
+          {photoFullscreen && photoUrl && (
+            <div
+              className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
+              onClick={() => setPhotoFullscreen(false)}
+            >
+              <img src={photoUrl} alt="Zählerfoto" className="max-w-[95vw] max-h-[95vh] object-contain" />
+            </div>
+          )}
           <div>
             <Label>Notizen</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
