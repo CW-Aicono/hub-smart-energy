@@ -54,7 +54,6 @@ const LiveValues = () => {
   };
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
   const [locationScope, setLocationScope] = useState<LocationScope>({ kind: "all" });
   const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
