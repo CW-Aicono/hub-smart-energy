@@ -141,17 +141,37 @@ const ChargingBilling = () => {
 
   // Invoice generation dialog
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [genMode, setGenMode] = useState<"month" | "range">("month");
   const [genMonth, setGenMonth] = useState(() => {
     const last = subMonths(new Date(), 1);
     return format(last, "yyyy-MM");
   });
+  const [genRangeStart, setGenRangeStart] = useState(() => {
+    const last = subMonths(new Date(), 1);
+    return format(startOfMonth(last), "yyyy-MM-dd");
+  });
+  const [genRangeEnd, setGenRangeEnd] = useState(() => {
+    const last = subMonths(new Date(), 1);
+    return format(endOfMonth(last), "yyyy-MM-dd");
+  });
 
   const genPeriod = useMemo(() => {
+    if (genMode === "range") {
+      const start = new Date(genRangeStart);
+      const end = new Date(genRangeEnd);
+      const valid = !isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end;
+      return {
+        start: genRangeStart,
+        end: genRangeEnd,
+        label: valid ? `${format(start, "dd.MM.yyyy")} – ${format(end, "dd.MM.yyyy")}` : "—",
+        valid,
+      };
+    }
     const [y, m] = genMonth.split("-").map(Number);
     const start = new Date(y, m - 1, 1);
     const end = endOfMonth(start);
-    return { start: format(start, "yyyy-MM-dd"), end: format(end, "yyyy-MM-dd"), label: format(start, "MMMM yyyy") };
-  }, [genMonth]);
+    return { start: format(start, "yyyy-MM-dd"), end: format(end, "yyyy-MM-dd"), label: format(start, "MMMM yyyy"), valid: true };
+  }, [genMode, genMonth, genRangeStart, genRangeEnd]);
 
   const weekStartsOn = (tenant?.week_start_day ?? 1) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
   const periodRange = useMemo(() => {
@@ -911,17 +931,37 @@ const ChargingBilling = () => {
                           <DialogHeader><DialogTitle>Rechnungen erstellen</DialogTitle></DialogHeader>
                           <div className="space-y-4">
                             <div>
-                              <Label>Abrechnungsmonat</Label>
-                              <Input type="month" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
+                              <Label>Abrechnungszeitraum</Label>
+                              <Tabs value={genMode} onValueChange={(v) => setGenMode(v as "month" | "range")} className="mt-2">
+                                <TabsList className="grid w-full grid-cols-2">
+                                  <TabsTrigger value="month">Ganzer Monat</TabsTrigger>
+                                  <TabsTrigger value="range">Zeitraum (von – bis)</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="month" className="mt-3">
+                                  <Input type="month" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
+                                </TabsContent>
+                                <TabsContent value="range" className="mt-3">
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Von</Label>
+                                      <Input type="date" value={genRangeStart} onChange={(e) => setGenRangeStart(e.target.value)} />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Bis</Label>
+                                      <Input type="date" value={genRangeEnd} onChange={(e) => setGenRangeEnd(e.target.value)} />
+                                    </div>
+                                  </div>
+                                </TabsContent>
+                              </Tabs>
                             </div>
                             <div className="p-3 bg-muted rounded-lg text-sm">
-                              <p>Zeitraum: <strong>{format(new Date(genPeriod.start), "dd.MM.yyyy", { locale: de })}</strong> bis <strong>{format(new Date(genPeriod.end), "dd.MM.yyyy", { locale: de })}</strong></p>
+                              <p>Zeitraum: <strong>{genPeriod.valid ? `${format(new Date(genPeriod.start), "dd.MM.yyyy", { locale: de })} bis ${format(new Date(genPeriod.end), "dd.MM.yyyy", { locale: de })}` : "Ungültig"}</strong></p>
                               <p className="text-muted-foreground mt-1">Es werden Einzelrechnungen pro Nutzer sowie Sammelrechnungen für alle Rechnungsgruppen mit Mitgliedern im Zeitraum erstellt.</p>
                             </div>
                           </div>
                           <DialogFooter>
                             <Button variant="outline" onClick={() => setGenerateOpen(false)}>Abbrechen</Button>
-                            <Button onClick={handleGenerate} disabled={generateInvoices.isPending}>
+                            <Button onClick={handleGenerate} disabled={generateInvoices.isPending || !genPeriod.valid}>
                               {generateInvoices.isPending ? "Wird erstellt…" : "Rechnungen erstellen"}
                             </Button>
                           </DialogFooter>

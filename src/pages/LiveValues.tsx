@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LocationTreeFilter, type LocationScope } from "@/components/meters/LocationTreeFilter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,7 +54,7 @@ const LiveValues = () => {
   };
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedLocationId, setSelectedLocationId] = useState<string>("all");
+  const [locationScope, setLocationScope] = useState<LocationScope>({ kind: "all" });
   const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
   const [liveValues, setLiveValues] = useState<Map<string, { value: number; unit: string; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string }>>(new Map());
@@ -466,7 +467,16 @@ const LiveValues = () => {
     return meters
       .filter((m) => !m.is_archived)
       .filter((m) => {
-        if (selectedLocationId !== "all" && m.location_id !== selectedLocationId) return false;
+        // Hierarchical location filter
+        if (locationScope.kind === "location" && m.location_id !== locationScope.locationId) return false;
+        if (locationScope.kind === "floor") {
+          if (m.location_id !== locationScope.locationId) return false;
+          if ((m as any).floor_id !== locationScope.floorId) return false;
+        }
+        if (locationScope.kind === "room") {
+          if (m.location_id !== locationScope.locationId) return false;
+          if ((m as any).room_id !== locationScope.roomId) return false;
+        }
         if (selectedEnergyType !== "all" && m.energy_type !== selectedEnergyType) return false;
         if (selectedCaptureType !== "all" && m.capture_type !== selectedCaptureType) return false;
         if (searchQuery) {
@@ -480,7 +490,7 @@ const LiveValues = () => {
         }
         return true;
       });
-  }, [meters, selectedLocationId, selectedEnergyType, selectedCaptureType, searchQuery, locations]);
+  }, [meters, locationScope, selectedEnergyType, selectedCaptureType, searchQuery, locations]);
 
   // Helper to get a source meter's current value (live or manual)
   const getSourceValue = useCallback((meterId: string): number | null => {
@@ -616,17 +626,12 @@ const LiveValues = () => {
                 className="pl-9"
               />
             </div>
-            <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder={t("liveValues.allLocations" as any)} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("liveValues.allLocations" as any)}</SelectItem>
-                {locations.map((loc) => (
-                  <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <LocationTreeFilter
+              locations={locations.map((l) => ({ id: l.id, name: l.name }))}
+              value={locationScope}
+              onChange={setLocationScope}
+              allLabel={t("liveValues.allLocations" as any)}
+            />
             <Select value={selectedEnergyType} onValueChange={setSelectedEnergyType}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder={t("liveValues.allEnergyTypes" as any)} />
