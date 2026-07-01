@@ -291,22 +291,32 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     fetchSensors();
   }, [selectedIntegration, captureType]);
 
+  const [photoFullscreen, setPhotoFullscreen] = useState(false);
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingPhoto(true);
     try {
-      const fileName = `${meter.id}-${Date.now()}.${file.name.split(".").pop()}`;
-      const { data, error } = await supabase.storage.from("meter-photos").upload(fileName, file, { upsert: true });
+      const ext = file.name.split(".").pop() || "jpg";
+      // Path MUST start with `${meter.id}/` to satisfy meter-photos RLS policy
+      const filePath = `${meter.id}/${Date.now()}.${ext}`;
+      const { data, error } = await supabase.storage
+        .from("meter-photos")
+        .upload(filePath, file, { upsert: true, contentType: file.type });
       if (error) throw error;
-      const { data: urlData, error: urlError } = await supabase.storage.from("meter-photos").createSignedUrl(data.path, 3600);
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from("meter-photos")
+        .createSignedUrl(data.path, 3600);
       if (urlError) throw urlError;
-      setPhotoUrl(`${urlData.signedUrl}`);
+      setPhotoUrl(urlData.signedUrl);
       toast.success("Foto hochgeladen");
-    } catch {
-      toast.error("Foto-Upload fehlgeschlagen");
+    } catch (err) {
+      console.error("[EditMeterDialog] photo upload failed", err);
+      toast.error(`Foto-Upload fehlgeschlagen: ${(err as Error).message ?? "Unbekannter Fehler"}`);
     }
     setUploadingPhoto(false);
+    e.target.value = "";
   };
 
   const handleSubmit = async () => {
