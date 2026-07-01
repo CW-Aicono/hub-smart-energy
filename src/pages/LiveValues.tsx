@@ -468,7 +468,16 @@ const LiveValues = () => {
     return meters
       .filter((m) => !m.is_archived)
       .filter((m) => {
-        if (selectedLocationId !== "all" && m.location_id !== selectedLocationId) return false;
+        // Hierarchical location filter
+        if (locationScope.kind === "location" && m.location_id !== locationScope.locationId) return false;
+        if (locationScope.kind === "floor") {
+          if (m.location_id !== locationScope.locationId) return false;
+          if ((m as any).floor_id !== locationScope.floorId) return false;
+        }
+        if (locationScope.kind === "room") {
+          if (m.location_id !== locationScope.locationId) return false;
+          if ((m as any).room_id !== locationScope.roomId) return false;
+        }
         if (selectedEnergyType !== "all" && m.energy_type !== selectedEnergyType) return false;
         if (selectedCaptureType !== "all" && m.capture_type !== selectedCaptureType) return false;
         if (searchQuery) {
@@ -482,7 +491,7 @@ const LiveValues = () => {
         }
         return true;
       });
-  }, [meters, selectedLocationId, selectedEnergyType, selectedCaptureType, searchQuery, locations]);
+  }, [meters, locationScope, selectedEnergyType, selectedCaptureType, searchQuery, locations]);
 
   // Helper to get a source meter's current value (live or manual)
   const getSourceValue = useCallback((meterId: string): number | null => {
