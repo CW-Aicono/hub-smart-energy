@@ -626,17 +626,12 @@ const LiveValues = () => {
                 className="pl-9"
               />
             </div>
-            <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder={t("liveValues.allLocations" as any)} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("liveValues.allLocations" as any)}</SelectItem>
-                {locations.map((loc) => (
-                  <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <LocationTreeFilter
+              locations={locations.map((l) => ({ id: l.id, name: l.name }))}
+              value={locationScope}
+              onChange={setLocationScope}
+              allLabel={t("liveValues.allLocations" as any)}
+            />
             <Select value={selectedEnergyType} onValueChange={setSelectedEnergyType}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder={t("liveValues.allEnergyTypes" as any)} />
