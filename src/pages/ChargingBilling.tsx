@@ -141,17 +141,37 @@ const ChargingBilling = () => {
 
   // Invoice generation dialog
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [genMode, setGenMode] = useState<"month" | "range">("month");
   const [genMonth, setGenMonth] = useState(() => {
     const last = subMonths(new Date(), 1);
     return format(last, "yyyy-MM");
   });
+  const [genRangeStart, setGenRangeStart] = useState(() => {
+    const last = subMonths(new Date(), 1);
+    return format(startOfMonth(last), "yyyy-MM-dd");
+  });
+  const [genRangeEnd, setGenRangeEnd] = useState(() => {
+    const last = subMonths(new Date(), 1);
+    return format(endOfMonth(last), "yyyy-MM-dd");
+  });
 
   const genPeriod = useMemo(() => {
+    if (genMode === "range") {
+      const start = new Date(genRangeStart);
+      const end = new Date(genRangeEnd);
+      const valid = !isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end;
+      return {
+        start: genRangeStart,
+        end: genRangeEnd,
+        label: valid ? `${format(start, "dd.MM.yyyy")} – ${format(end, "dd.MM.yyyy")}` : "—",
+        valid,
+      };
+    }
     const [y, m] = genMonth.split("-").map(Number);
     const start = new Date(y, m - 1, 1);
     const end = endOfMonth(start);
-    return { start: format(start, "yyyy-MM-dd"), end: format(end, "yyyy-MM-dd"), label: format(start, "MMMM yyyy") };
-  }, [genMonth]);
+    return { start: format(start, "yyyy-MM-dd"), end: format(end, "yyyy-MM-dd"), label: format(start, "MMMM yyyy"), valid: true };
+  }, [genMode, genMonth, genRangeStart, genRangeEnd]);
 
   const weekStartsOn = (tenant?.week_start_day ?? 1) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
   const periodRange = useMemo(() => {
