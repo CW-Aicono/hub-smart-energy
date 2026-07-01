@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LocationTreeFilter, type LocationScope } from "@/components/meters/LocationTreeFilter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
