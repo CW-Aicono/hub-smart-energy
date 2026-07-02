@@ -8,6 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DoorOpen, Plus, Trash2, X, Check, Gauge, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { EditMeterDialog } from "./EditMeterDialog";
+
 
 const energyTypeColors: Record<string, string> = {
   strom: "text-amber-600",
