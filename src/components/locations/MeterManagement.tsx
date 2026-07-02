@@ -15,6 +15,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkEditMetersDialog } from "./BulkEditMetersDialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network,
@@ -324,6 +326,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const [showArchived, setShowArchived] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [pendingSensorUuid, setPendingSensorUuid] = useState<string | null>(null);
+  const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+
 
   // Build map of room_id -> room name for all floors of this location (for "Zugeordneter Raum" column)
   const { data: roomsData = [] } = useQuery({
@@ -615,9 +620,89 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 {showArchived ? t("mm.noArchivedMeters" as any) : t("mm.noMeters" as any)}
               </p>
             ) : (
+              <>
+                {isAdmin && selectedMeterIds.size > 0 && (
+                  <div className="flex items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
+                    <span className="font-medium">{selectedMeterIds.size} ausgewählt</span>
+                    <div className="flex-1" />
+                    {!showArchived && (
+                      <Button size="sm" variant="outline" onClick={() => setBulkEditOpen(true)}>
+                        <Pencil className="h-3.5 w-3.5 mr-1" /> Bearbeiten
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        const ids = Array.from(selectedMeterIds);
+                        for (const id of ids) await archiveMeter(id, !showArchived);
+                        setSelectedMeterIds(new Set());
+                      }}
+                    >
+                      {showArchived ? <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> : <Archive className="h-3.5 w-3.5 mr-1" />}
+                      {showArchived ? "Wiederherstellen" : "Archivieren"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const rows = displayedMeters.filter((m) => selectedMeterIds.has(m.id));
+                        const header = ["Name", "Zählernummer", "Erfassung", "Energieart", "Einheit"];
+                        const csv = [header.join(";")]
+                          .concat(
+                            rows.map((r) =>
+                              [r.name, r.meter_number ?? "", r.capture_type ?? "", r.energy_type ?? "", r.unit ?? ""]
+                                .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+                                .join(";"),
+                            ),
+                          )
+                          .join("\n");
+                        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `zaehler-export-${new Date().toISOString().slice(0, 10)}.csv`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      CSV-Export
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={async () => {
+                        const ok = await confirmDialog({
+                          title: `${selectedMeterIds.size} Zähler endgültig löschen?`,
+                          description: "Historische Messwerte bleiben erhalten, sind aber nicht mehr zugeordnet.",
+                          confirmLabel: "Endgültig löschen",
+                        });
+                        if (!ok) return;
+                        const { error } = await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
+                        if (error) return;
+                        setSelectedMeterIds(new Set());
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Löschen
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setSelectedMeterIds(new Set())}>Auswahl leeren</Button>
+                  </div>
+                )}
               <Table>
                 <TableHeader>
                   <TableRow>
+                     {isAdmin && (
+                       <TableHead className="w-8">
+                         <Checkbox
+                           checked={displayedMeters.length > 0 && displayedMeters.every((m) => selectedMeterIds.has(m.id))}
+                           onCheckedChange={(v) => {
+                             if (v) setSelectedMeterIds(new Set(displayedMeters.map((m) => m.id)));
+                             else setSelectedMeterIds(new Set());
+                           }}
+                           aria-label="Alle auswählen"
+                         />
+                       </TableHead>
+                     )}
                      <TableHead>{t("common.name" as any)}</TableHead>
                      <TableHead>{t("mm.meterNumber" as any)}</TableHead>
                      <TableHead>{t("mm.captureType" as any)}</TableHead>
@@ -629,6 +714,22 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <TableBody>
                   {displayedMeters.map((m) => (
                     <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
+                       {isAdmin && (
+                         <TableCell className="w-8">
+                           <Checkbox
+                             checked={selectedMeterIds.has(m.id)}
+                             onCheckedChange={(v) => {
+                               setSelectedMeterIds((prev) => {
+                                 const next = new Set(prev);
+                                 if (v) next.add(m.id);
+                                 else next.delete(m.id);
+                                 return next;
+                               });
+                             }}
+                             aria-label={`${m.name} auswählen`}
+                           />
+                         </TableCell>
+                       )}
                        <TableCell>
                          <button
                            className="font-medium text-left hover:underline text-primary cursor-pointer"
@@ -674,7 +775,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                   ))}
                 </TableBody>
               </Table>
+              </>
             )}
+
 
             {/* Vom User zugeordnete Gateway-Devices vom Typ "Zähler" */}
             {(() => {
@@ -989,6 +1092,13 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             onSave={async (id, updates) => { await updateAlertRule(id, updates as any); setEditingRule(null); }}
           />
         )}
+        <BulkEditMetersDialog
+          open={bulkEditOpen}
+          onOpenChange={setBulkEditOpen}
+          meters={displayedMeters.filter((m) => selectedMeterIds.has(m.id))}
+          locationId={locationId}
+          onDone={() => setSelectedMeterIds(new Set())}
+        />
       </CardContent>
       </CollapsibleContent>
     </Card>
