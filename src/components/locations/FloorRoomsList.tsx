@@ -291,6 +291,16 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
           </Button>
         )
       )}
+
+      {editingMeter && (
+        <EditMeterDialog
+          meter={editingMeter}
+          open={!!editingMeter}
+          onOpenChange={(open) => { if (!open) setEditingMeter(null); }}
+          onSave={async (id, updates) => { await updateMeter(id, updates); }}
+        />
+      )}
     </div>
   );
+
 }
