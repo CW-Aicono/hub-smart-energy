@@ -28,7 +28,7 @@ interface FloorRoomsListProps {
 
 export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
   const { rooms, loading, addRoom, updateRoom, deleteRoom } = useFloorRooms(floorId);
-  const { meters } = useMeters(locationId);
+  const { meters, updateMeter } = useMeters(locationId);
   const { isAdmin } = useUserRole();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
@@ -37,6 +37,8 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
   const [unassignedExpanded, setUnassignedExpanded] = useState(false);
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
+
 
   const floorMeters = useMemo(() =>
     meters.filter(m => !m.is_archived && m.floor_id === floorId),
