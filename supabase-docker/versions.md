@@ -1,5 +1,25 @@
 # Docker Image Versions
 
+## 2026-07-02 (upstream self-hosted v0.5.1, PG bleibt 15)
+- supabase/studio:2026.06.03-sha-0bca601 (prev supabase/studio:2026.03.16-sha-5528817)
+- supabase/gotrue:v2.189.0 (prev supabase/gotrue:v2.186.0)
+- postgrest/postgrest:v14.12 (prev postgrest/postgrest:v14.6)
+- supabase/realtime:v2.102.3 (prev supabase/realtime:v2.76.5)
+- supabase/storage-api:v1.60.4 (prev supabase/storage-api:v1.44.2)
+- supabase/postgres-meta:v0.96.6 (prev supabase/postgres-meta:v0.95.2)
+- supabase/edge-runtime:v1.74.0 (prev supabase/edge-runtime:v1.71.2)
+- supabase/supavisor:2.9.5 (prev supabase/supavisor:2.7.4)
+- supabase/logflare:1.43.1 (prev supabase/logflare:1.31.2)
+
+Config-Änderungen in dieser Runde:
+- Studio: `SUPABASE_PUBLISHABLE_KEY`/`SUPABASE_SECRET_KEY` + `ENABLED_FEATURES_LOGS_ALL` (ersetzt `NEXT_PUBLIC_ENABLE_LOGS`/`NEXT_ANALYTICS_BACKEND_PROVIDER`), Healthcheck `start_period`
+- Auth: `GOTRUE_JWT_ISSUER` (abgeleitet aus `API_EXTERNAL_URL`, kein neuer .env-Wert)
+- PostgREST: Healthcheck + Admin-Server (Port 3001)
+- Edge Runtime: Healthcheck
+- Supavisor: `POSTGRES_HOST` wieder im Environment (von 2.9.x benötigt)
+- Kong (`volumes/api/kong.yml`): Realtime-Admin-Routen `/realtime/v1/api/openapi` und `/realtime/v1/api/tenants` geblockt (Security-Fix aus upstream v0.6.0)
+- Bewusst NICHT übernommen: Postgres 17 (upstream v0.6.0 Default) — separater Migrationsschritt; Logs/Analytics bleiben fest integriert statt `docker-compose.logs.yml`
+
 ## 2025-03-16
 - supabase/studio:2026.03.16-sha-5528817 (prev supabase/studio:2026.02.16-sha-26c615c)
 - kong/kong:3.9.1 (prev kong:2.8.1)
