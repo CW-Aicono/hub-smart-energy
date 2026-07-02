@@ -324,6 +324,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const [showArchived, setShowArchived] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [pendingSensorUuid, setPendingSensorUuid] = useState<string | null>(null);
+  const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+
 
   // Build map of room_id -> room name for all floors of this location (for "Zugeordneter Raum" column)
   const { data: roomsData = [] } = useQuery({
