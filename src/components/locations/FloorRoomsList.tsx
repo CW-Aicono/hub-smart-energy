@@ -8,6 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DoorOpen, Plus, Trash2, X, Check, Gauge, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { EditMeterDialog } from "./EditMeterDialog";
+
 
 const energyTypeColors: Record<string, string> = {
   strom: "text-amber-600",
@@ -26,7 +28,7 @@ interface FloorRoomsListProps {
 
 export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
   const { rooms, loading, addRoom, updateRoom, deleteRoom } = useFloorRooms(floorId);
-  const { meters } = useMeters(locationId);
+  const { meters, updateMeter } = useMeters(locationId);
   const { isAdmin } = useUserRole();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
@@ -35,6 +37,8 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
   const [unassignedExpanded, setUnassignedExpanded] = useState(false);
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
+
 
   const floorMeters = useMemo(() =>
     meters.filter(m => !m.is_archived && m.floor_id === floorId),
@@ -192,13 +196,18 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
             {isExpanded && hasMeters && (
               <div className="ml-8 space-y-1 mt-1">
                 {roomMeters.map(meter => (
-                  <div key={meter.id} className="flex items-center gap-2 text-xs py-1 px-3 rounded bg-muted/20">
+                  <button
+                    key={meter.id}
+                    type="button"
+                    className="w-full flex items-center gap-2 text-xs py-1 px-3 rounded bg-muted/20 hover:bg-muted/50 transition-colors text-left"
+                    onClick={() => setEditingMeter(meter)}
+                  >
                     <Gauge className={cn("h-3 w-3 shrink-0", energyTypeColors[meter.energy_type] || "text-muted-foreground")} />
                     <span className="truncate">{meter.name}</span>
                     {meter.meter_number && (
                       <span className="text-muted-foreground/50">#{meter.meter_number}</span>
                     )}
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -219,29 +228,40 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
             <span>{unassignedMeters.length} Zähler</span>
           </div>
           {unassignedExpanded && unassignedMeters.map(meter => (
-            <div key={meter.id} className="flex items-center gap-2 text-xs py-1 px-3 rounded bg-muted/20">
+            <button
+              key={meter.id}
+              type="button"
+              className="w-full flex items-center gap-2 text-xs py-1 px-3 rounded bg-muted/20 hover:bg-muted/50 transition-colors text-left"
+              onClick={() => setEditingMeter(meter)}
+            >
               <Gauge className={cn("h-3 w-3 shrink-0", energyTypeColors[meter.energy_type] || "text-muted-foreground")} />
               <span className="truncate">{meter.name}</span>
               {meter.meter_number && (
                 <span className="text-muted-foreground/50">#{meter.meter_number}</span>
               )}
-            </div>
+            </button>
           ))}
         </div>
       )}
       {unassignedMeters.length > 0 && rooms.length === 0 && (
         <div className="space-y-1 pt-1">
           {unassignedMeters.map(meter => (
-            <div key={meter.id} className="flex items-center gap-2 text-xs py-1 px-3 rounded bg-muted/20">
+            <button
+              key={meter.id}
+              type="button"
+              className="w-full flex items-center gap-2 text-xs py-1 px-3 rounded bg-muted/20 hover:bg-muted/50 transition-colors text-left"
+              onClick={() => setEditingMeter(meter)}
+            >
               <Gauge className={cn("h-3 w-3 shrink-0", energyTypeColors[meter.energy_type] || "text-muted-foreground")} />
               <span className="truncate">{meter.name}</span>
               {meter.meter_number && (
                 <span className="text-muted-foreground/50">#{meter.meter_number}</span>
               )}
-            </div>
+            </button>
           ))}
         </div>
       )}
+
 
       {adding ? (
         <div className="flex items-center gap-2">
@@ -271,6 +291,16 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
           </Button>
         )
       )}
+
+      {editingMeter && (
+        <EditMeterDialog
+          meter={editingMeter}
+          open={!!editingMeter}
+          onOpenChange={(open) => { if (!open) setEditingMeter(null); }}
+          onSave={async (id, updates) => { await updateMeter(id, updates); }}
+        />
+      )}
     </div>
   );
+
 }
