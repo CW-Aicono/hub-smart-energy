@@ -1092,6 +1092,13 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             onSave={async (id, updates) => { await updateAlertRule(id, updates as any); setEditingRule(null); }}
           />
         )}
+        <BulkEditMetersDialog
+          open={bulkEditOpen}
+          onOpenChange={setBulkEditOpen}
+          meters={displayedMeters.filter((m) => selectedMeterIds.has(m.id))}
+          locationId={locationId}
+          onDone={() => setSelectedMeterIds(new Set())}
+        />
       </CardContent>
       </CollapsibleContent>
     </Card>
