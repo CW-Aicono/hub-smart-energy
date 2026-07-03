@@ -63,7 +63,14 @@ export interface SensorValue {
  */
 export interface SensorProvider {
   getSensorValue(sensorUuid: string, gatewayId?: string): Promise<SensorValue | null>;
+  /**
+   * Optional: return current Hausanschluss headroom in kW for a location.
+   * Used by the `power_headroom` condition type (Phase C bridge to Automation).
+   * If not implemented, `power_headroom` conditions evaluate to false.
+   */
+  getPowerHeadroomKw?(locationId: string): Promise<number | null>;
 }
+
 
 /**
  * Interface for executing actions.
