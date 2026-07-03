@@ -2,13 +2,15 @@ import { useState, useMemo } from "react";
 import { useFloorRooms, FloorRoomInsert } from "@/hooks/useFloorRooms";
 import { useMeters, Meter } from "@/hooks/useMeters";
 import { useUserRole } from "@/hooks/useUserRole";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DoorOpen, Plus, Trash2, X, Check, Gauge, ChevronDown, ChevronRight, Pencil } from "lucide-react";
+import { DoorOpen, Plus, Trash2, X, Check, Gauge, ChevronDown, ChevronRight, Pencil, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { EditMeterDialog } from "./EditMeterDialog";
+
 
 
 const energyTypeColors: Record<string, string> = {
