@@ -42,7 +42,7 @@ function kwToAmps(kw: number): number {
 }
 
 interface DispatchResult {
-  scope: "site" | "group";
+  scope: "group";
   scope_id: string;
   status: "ok" | "no_data" | "no_limit" | "no_charge_points" | "released" | "throttled" | "skipped_offline" | "skipped_unchanged" | "error";
   detail?: string;
