@@ -146,6 +146,9 @@ function DeviceTable({
   onDelete,
   showArchived,
   isAdmin,
+  selectedIds,
+  onToggleId,
+  onToggleAll,
 }: {
   devices: (LoxoneSensor & { _integrationLabel: string; _integrationId: string })[];
   type: "sensor" | "actuator";
@@ -157,7 +160,11 @@ function DeviceTable({
   onDelete?: (meter: Meter) => void;
   showArchived?: boolean;
   isAdmin?: boolean;
+  selectedIds?: Set<string>;
+  onToggleId?: (meterId: string, checked: boolean) => void;
+  onToggleAll?: (meterIds: string[], checked: boolean) => void;
 }) {
+
   const [sortKey, setSortKey] = useState<DeviceSortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
