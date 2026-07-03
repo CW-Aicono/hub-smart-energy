@@ -7,11 +7,14 @@ import type { Database, Json } from "@/integrations/supabase/types";
 export type WidgetSize = "full" | "2/3" | "1/2" | "1/3";
 
 export interface WidgetLayout {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  /** Custom widget height in pixels (drag-resized by the user). */
+  height?: number;
 }
+
 
 export interface DashboardWidget {
   id: string;
