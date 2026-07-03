@@ -146,6 +146,9 @@ function DeviceTable({
   onDelete,
   showArchived,
   isAdmin,
+  selectedIds,
+  onToggleId,
+  onToggleAll,
 }: {
   devices: (LoxoneSensor & { _integrationLabel: string; _integrationId: string })[];
   type: "sensor" | "actuator";
@@ -157,7 +160,11 @@ function DeviceTable({
   onDelete?: (meter: Meter) => void;
   showArchived?: boolean;
   isAdmin?: boolean;
+  selectedIds?: Set<string>;
+  onToggleId?: (meterId: string, checked: boolean) => void;
+  onToggleAll?: (meterIds: string[], checked: boolean) => void;
 }) {
+
   const [sortKey, setSortKey] = useState<DeviceSortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
@@ -220,12 +227,32 @@ function DeviceTable({
     <Table>
       <TableHeader>
         <TableRow>
+          {isAdmin && onToggleAll && (
+            <TableHead className="w-8">
+              <Checkbox
+                checked={(() => {
+                  const linkedIds = sortedDevices
+                    .map((d) => sensorUuidToMeter.get(d.id)?.id)
+                    .filter((id): id is string => !!id);
+                  return linkedIds.length > 0 && linkedIds.every((id) => selectedIds?.has(id));
+                })()}
+                onCheckedChange={(v) => {
+                  const linkedIds = sortedDevices
+                    .map((d) => sensorUuidToMeter.get(d.id)?.id)
+                    .filter((id): id is string => !!id);
+                  onToggleAll(linkedIds, !!v);
+                }}
+                aria-label="Alle auswählen"
+              />
+            </TableHead>
+          )}
           <TableHead className="w-[40px]">
             <SortableHead label="Typ" sortKey="type" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
           </TableHead>
           <TableHead>
             <SortableHead label="Name" sortKey="name" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
           </TableHead>
+
           <TableHead>
             <SortableHead label="Raum (Gateway)" sortKey="room" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
           </TableHead>
@@ -253,11 +280,23 @@ function DeviceTable({
           const assignedRoom = linkedMeter?.room_id ? roomNameById.get(linkedMeter.room_id) : null;
           return (
             <TableRow key={`${d._integrationLabel}-${d.id}`} className={linkedMeter?.is_archived ? "opacity-60" : ""}>
+              {isAdmin && onToggleAll && (
+                <TableCell className="w-8">
+                  {linkedMeter ? (
+                    <Checkbox
+                      checked={selectedIds?.has(linkedMeter.id) ?? false}
+                      onCheckedChange={(v) => onToggleId?.(linkedMeter.id, !!v)}
+                      aria-label={`${d.name} auswählen`}
+                    />
+                  ) : null}
+                </TableCell>
+              )}
               <TableCell>
                 <div className="p-1.5 rounded bg-muted w-fit">
                   {d.unit ? getUnitIcon(d.unit) : getSensorIcon(d.type)}
                 </div>
               </TableCell>
+
               <TableCell>
                 <button
                   className="font-medium text-left hover:underline text-primary cursor-pointer"
@@ -582,6 +621,24 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
     );
   };
 
+  const toggleSelectId = (id: string, checked: boolean) => {
+    setSelectedMeterIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = (ids: string[], checked: boolean) => {
+    setSelectedMeterIds((prev) => {
+      const next = new Set(prev);
+      if (checked) ids.forEach((id) => next.add(id));
+      else ids.forEach((id) => next.delete(id));
+      return next;
+    });
+  };
+
+
+
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
     <Card>
@@ -836,6 +893,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                     onDelete={confirmDelete}
                     showArchived={showArchived}
                     isAdmin={isAdmin}
+                    selectedIds={selectedMeterIds}
+                    onToggleId={toggleSelectId}
+                    onToggleAll={toggleSelectAll}
                   />
                 </div>
               );
@@ -980,6 +1040,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                     onDelete={confirmDelete}
                     showArchived={showArchived}
                     isAdmin={isAdmin}
+                    selectedIds={selectedMeterIds}
+                    onToggleId={toggleSelectId}
+                    onToggleAll={toggleSelectAll}
                   />
                 );
               }
@@ -1125,6 +1188,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                     onDelete={confirmDelete}
                     showArchived={showArchived}
                     isAdmin={isAdmin}
+                    selectedIds={selectedMeterIds}
+                    onToggleId={toggleSelectId}
+                    onToggleAll={toggleSelectAll}
                   />
                 );
               }
