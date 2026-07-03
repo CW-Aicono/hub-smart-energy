@@ -86,13 +86,13 @@ export function DynamicDlmCard({ locationId }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("meter_power_readings_5min")
-        .select("power_kw, bucket_start")
+        .select("power_avg, bucket")
         .eq("meter_id", referenceMeterId)
-        .order("bucket_start", { ascending: false })
+        .order("bucket", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (error) throw error;
-      return data as { power_kw: number | null; bucket_start: string } | null;
+      return data as { power_avg: number | null; bucket: string } | null;
     },
   });
 
