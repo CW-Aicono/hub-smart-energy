@@ -189,7 +189,14 @@ export function DynamicDlmCard({ locationId }: Props) {
         {config && (
           <div className="grid gap-4 sm:grid-cols-3 rounded-md border bg-muted/30 p-4">
             <div>
-              <p className="text-xs text-muted-foreground">Hausanschluss-Last</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-muted-foreground">Hausanschluss-Last</p>
+                {measuredKw != null && (
+                  <Badge variant="outline" className="h-4 px-1.5 text-[10px] leading-none">
+                    {logMeasuredKw != null ? "Live" : "5-Min"}
+                  </Badge>
+                )}
+              </div>
               <p className="text-2xl font-semibold">
                 {measuredKw != null ? `${measuredKw.toLocaleString("de-DE", { maximumFractionDigits: 2 })} kW` : "—"}
               </p>
