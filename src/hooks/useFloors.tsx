@@ -133,6 +133,7 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
         .from("floors")
         .select("*")
         .eq("location_id", locationId)
+        .order("sort_order", { ascending: true })
         .order("floor_number", { ascending: true });
 
       if (fetchError) {
