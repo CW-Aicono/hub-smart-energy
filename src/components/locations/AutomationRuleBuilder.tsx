@@ -741,9 +741,7 @@ export function AutomationRuleBuilder({
     setAddConditionOpen(false);
   };
 
-    setConditions((prev) => [...prev, base]);
-    setAddConditionOpen(false);
-  };
+
 
   const updateCondition = (id: string, updated: AutomationCondition) => {
     setConditions((prev) => prev.map((c) => (c.id === id ? updated : c)));
