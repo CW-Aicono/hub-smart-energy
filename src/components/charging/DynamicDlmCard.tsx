@@ -128,17 +128,32 @@ export function DynamicDlmCard({ locationId }: Props) {
       (m.medium ?? "").toLowerCase() === "electricity",
   );
 
-  const move = (id: string, dir: -1 | 1) => {
-    setPriority((prev) => {
-      const idx = prev.indexOf(id);
-      if (idx < 0) return prev;
-      const next = [...prev];
-      const tgt = idx + dir;
-      if (tgt < 0 || tgt >= next.length) return prev;
-      [next[idx], next[tgt]] = [next[tgt], next[idx]];
-      return next;
-    });
-  };
+  // Aktor-Entitäten des Standorts (für Wärmepumpe/Batterie/Aktor-Auswahl)
+  const actuatorsQuery = useQuery({
+    queryKey: ["dlm-actuator-candidates", tenant?.id, locationId],
+    enabled: !!tenant?.id && !!locationId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data: gateways } = await supabase
+        .from("gateway_devices")
+        .select("id")
+        .eq("tenant_id", tenant!.id)
+        .eq("location_id", locationId);
+      const gwIds = (gateways ?? []).map((g: any) => g.id);
+      if (gwIds.length === 0) return [] as Array<{ id: string; entity_label: string }>;
+      const { data: entities } = await (supabase as any)
+        .from("gateway_device_entities")
+        .select("id, entity_label, entity_kind, actuator_uuid")
+        .in("gateway_device_id", gwIds)
+        .not("actuator_uuid", "is", null);
+      return (entities ?? []) as Array<{ id: string; entity_label: string }>;
+    },
+  });
+  const actuatorCandidates = actuatorsQuery.data ?? [];
+
+  const usedRefIds = useMemo(() => new Set(dlmDevices.map((d) => d.device_ref_id)), [dlmDevices]);
+  const availableChargePoints = cps.filter((c) => !usedRefIds.has(c.id));
+  const availableActuators = actuatorCandidates.filter((a) => !usedRefIds.has(a.id));
 
   const lastLog = log[0];
   const logMeasuredKw = lastLog?.measured_kw != null ? Number(lastLog.measured_kw) : null;
