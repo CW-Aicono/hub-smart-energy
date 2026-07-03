@@ -314,6 +314,7 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
     createFloor,
     updateFloor,
     deleteFloor,
+    reorderFloors,
     uploadFloorPlan,
     upload3DModel,
   };
