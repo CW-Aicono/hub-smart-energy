@@ -107,8 +107,8 @@ export default function ResizableWidget({
         // shrinking below usable content sizes.
         controlled && [
           "[&>[data-lazy]]:!h-auto [&>[data-lazy]]:flex-1 [&>[data-lazy]]:min-h-0",
-          "[&_[data-slot=card]]:h-full [&_[data-slot=card]]:min-h-0 [&_[data-slot=card]]:flex [&_[data-slot=card]]:flex-col [&_[data-slot=card]]:overflow-hidden",
-          "[&_[data-slot=card-content]]:flex-1 [&_[data-slot=card-content]]:min-h-0",
+          "[&>[data-lazy]>[data-slot=card]]:h-full [&>[data-lazy]>[data-slot=card]]:min-h-0 [&>[data-lazy]>[data-slot=card]]:flex [&>[data-lazy]>[data-slot=card]]:flex-col [&>[data-lazy]>[data-slot=card]]:overflow-hidden",
+          "[&>[data-lazy]>[data-slot=card]>[data-slot=card-content]]:flex-1 [&>[data-lazy]>[data-slot=card]>[data-slot=card-content]]:min-h-0",
           "[&_.recharts-responsive-container]:!h-full",
           "[&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full",
         ],
