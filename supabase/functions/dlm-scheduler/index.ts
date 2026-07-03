@@ -1,7 +1,6 @@
-// DLM Scheduler — Dynamic Load Management
-// Two-tier model:
-//   • Site-wide HARD limit  (locations.grid_limit_kw + main meter on the site)
-//   • Per-group SOFT limit  (charge_point_groups.energy_settings.dlm.{enabled,limit_kw,reference_meter_id})
+// DLM Scheduler — Dynamic Load Management (Group-Scope Soft-Limit)
+//
+// Per-group SOFT limit  (charge_point_groups.energy_settings.dlm.{enabled,limit_kw,reference_meter_id})
 //
 // Every minute we read the most recent power reading from each reference meter,
 // compare against the configured limit, and queue a SetChargingProfile (or
@@ -11,6 +10,11 @@
 //
 // When the load drops back below the limit (with hysteresis), we clear our DLM
 // profile so the wallbox falls back to whatever lower-priority profile applies.
+//
+// NOTE (Phase A cleanup): The former site-wide HARD limit path (based on
+// `locations.grid_limit_kw`) has been removed. Hausanschluss-Schutz is now
+// handled exclusively by `dlm-realtime-controller` via `location_dlm_config`,
+// which offers priorisation and ≤60 s reaction time.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
