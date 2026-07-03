@@ -167,9 +167,13 @@ export function DynamicDlmCard({ locationId }: Props) {
   const sensorStale = lastLog?.reason === "fallback_stale_sensor";
 
   // Live-Fallback: wenn kein aktueller Steuerzyklus vorliegt (z. B. DLM gerade eingerichtet
-  // oder inaktiv), Werte direkt aus dem letzten 5-Minuten-Bucket des Referenzzählers ableiten.
-  const liveMeasuredKw = livePowerQuery.data?.power_avg != null ? Number(livePowerQuery.data.power_avg) : null;
+  // oder inaktiv), Werte direkt aus dem Referenzzähler ableiten (Rohwert oder 5-Min-Bucket).
+  const liveMeasuredKw = livePowerQuery.data?.power_kw ?? null;
+  const liveSource: "live" | "5min" | null = livePowerQuery.data?.source ?? null;
   const measuredKw = logMeasuredKw ?? liveMeasuredKw;
+  // Quelle für Badge: dlm_control_log wird alle 60 s aktualisiert → "Live".
+  const measuredSource: "live" | "5min" =
+    logMeasuredKw != null ? "live" : liveSource === "5min" ? "5min" : "live";
   const availableKw =
     logAvailableKw ??
     (measuredKw != null
