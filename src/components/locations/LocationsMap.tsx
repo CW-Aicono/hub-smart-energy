@@ -9,9 +9,10 @@ interface LocationsMapProps {
   onLocationClick?: (location: Location) => void;
   className?: string;
   errorLocationIds?: Set<string>;
+  showZoomControls?: boolean;
 }
 
-export function LocationsMap({ locations, onLocationClick, className, errorLocationIds }: LocationsMapProps) {
+export function LocationsMap({ locations, onLocationClick, className, errorLocationIds, showZoomControls }: LocationsMapProps) {
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -48,6 +49,7 @@ export function LocationsMap({ locations, onLocationClick, className, errorLocat
       onLocationClick={onLocationClick}
       className={className}
       errorLocationIds={errorLocationIds}
+      showZoomControls={showZoomControls}
     />
   );
 }
