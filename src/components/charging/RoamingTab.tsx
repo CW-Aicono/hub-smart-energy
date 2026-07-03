@@ -334,7 +334,7 @@ export default function RoamingTab() {
                     <SortableHead label="Name" sortKey="name" sort={partnerSort} onToggle={partnerToggle} />
                     <SortableHead label="Rolle" sortKey="role" sort={partnerSort} onToggle={partnerToggle} />
                     <SortableHead label="Protokoll" sortKey="protocol" sort={partnerSort} onToggle={partnerToggle} />
-                    <TableHead><SortableHead label="Land / Party-ID" sortKey="id" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
+                    <SortableHead label="Land / Party-ID" sortKey="id" sort={partnerSort} onToggle={partnerToggle} />
                     <SortableHead label="Status" sortKey="status" sort={partnerSort} onToggle={partnerToggle} />
                     <SortableHead label="Letzter Sync" sortKey="sync" sort={partnerSort} onToggle={partnerToggle} />
                     <TableHead className="text-right">Aktionen</TableHead>
