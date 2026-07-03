@@ -326,7 +326,30 @@ class CloudSensorProvider implements SensorProvider {
     }
     return null;
   }
+
+  /**
+   * Reads current Hausanschluss headroom in kW from the latest dlm_control_log entry.
+   * headroom_kw = available_kw - measured_kw (>= 0 means free capacity).
+   * Returns null if no recent (< 10 min) log entry exists.
+   */
+  async getPowerHeadroomKw(locationId: string): Promise<number | null> {
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data, error } = await this.supabase
+      .from("dlm_control_log")
+      .select("measured_kw, available_kw, executed_at")
+      .eq("location_id", locationId)
+      .gte("executed_at", tenMinAgo)
+      .order("executed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    const measured = Number(data.measured_kw);
+    const available = Number(data.available_kw);
+    if (!isFinite(measured) || !isFinite(available)) return null;
+    return available - measured;
+  }
 }
+
 
 // ── Main handler ─────────────────────────────────────────────────────────────
 
