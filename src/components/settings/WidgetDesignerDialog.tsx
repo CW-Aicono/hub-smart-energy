@@ -76,10 +76,46 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
   const [config, setConfig] = useState<CustomWidgetConfig>(defaultConfig);
   const [activeTab, setActiveTab] = useState("basics");
   const [previewPeriod, setPreviewPeriod] = useState<TimePeriod>("day");
+  const [meterSearch, setMeterSearch] = useState("");
+  const [filterLocation, setFilterLocation] = useState<string>("__all__");
+  const [filterFloor, setFilterFloor] = useState<string>("__all__");
+  const [filterRoom, setFilterRoom] = useState<string>("__all__");
 
-  useEffect(() => {
-    if (open) {
-      if (editingWidget) {
+  const { tenant } = useTenant();
+  const { locations } = useLocations();
+
+  const { data: floors = [] } = useQuery({
+    queryKey: ["widget-designer-floors", tenant?.id],
+    queryFn: async () => {
+      const locIds = (locations || []).map((l) => l.id);
+      if (locIds.length === 0) return [] as { id: string; name: string; location_id: string }[];
+      const { data, error } = await supabase
+        .from("floors")
+        .select("id, name, location_id")
+        .in("location_id", locIds);
+      if (error) return [];
+      return data ?? [];
+    },
+    enabled: !!tenant && (locations?.length ?? 0) > 0,
+    staleTime: 60_000,
+  });
+
+  const { data: rooms = [] } = useQuery({
+    queryKey: ["widget-designer-rooms", tenant?.id, floors.map((f) => f.id).join(",")],
+    queryFn: async () => {
+      const floorIds = floors.map((f) => f.id);
+      if (floorIds.length === 0) return [] as { id: string; name: string; floor_id: string }[];
+      const { data, error } = await supabase
+        .from("floor_rooms")
+        .select("id, name, floor_id")
+        .in("floor_id", floorIds);
+      if (error) return [];
+      return data ?? [];
+    },
+    enabled: floors.length > 0,
+    staleTime: 60_000,
+  });
+
         setName(editingWidget.name);
         setChartType(editingWidget.chart_type);
         setColor(editingWidget.color);
