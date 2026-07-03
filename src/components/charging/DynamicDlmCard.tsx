@@ -320,42 +320,143 @@ export function DynamicDlmCard({ locationId }: Props) {
           </div>
         </div>
 
-        {/* Priorisierung */}
+        {/* Priorisierung der steuerbaren Verbraucher */}
         <div className="space-y-2">
-          <Label>Priorisierung der Wallboxen</Label>
+          <Label>Priorisierung der steuerbaren Verbraucher</Label>
           <p className="text-xs text-muted-foreground">
-            Bei Engpass werden Wallboxen weiter unten zuerst gedrosselt oder pausiert.
+            Bei Engpass werden Geräte weiter unten zuerst gedrosselt oder pausiert. Wallboxen werden bereits heute automatisch gesteuert; Wärmepumpen, Batteriespeicher und generische Aktoren erscheinen hier als Vorschau — die tatsächliche Ansteuerung dieser Geräte folgt in einem der nächsten Releases (Phase 2).
           </p>
+
           <div className="space-y-1 rounded-md border">
-            {priority.map((id, idx) => {
-              const cp = cps.find((c) => c.id === id);
-              if (!cp) return null;
+            {dlmDevices.length === 0 && (
+              <div className="p-3 text-xs text-muted-foreground">Noch keine Geräte hinterlegt.</div>
+            )}
+            {dlmDevices.map((d, idx) => {
+              const kindLabel =
+                d.device_kind === "charge_point" ? "Wallbox" :
+                d.device_kind === "heat_pump" ? "Wärmepumpe" :
+                d.device_kind === "battery" ? "Batterie" : "Aktor";
+              const name = d.display_name
+                ?? cps.find((c) => c.id === d.device_ref_id)?.name
+                ?? actuatorCandidates.find((a) => a.id === d.device_ref_id)?.entity_label
+                ?? "—";
+              const moveTo = (dir: -1 | 1) => {
+                const next = [...dlmDevices];
+                const tgt = idx + dir;
+                if (tgt < 0 || tgt >= next.length) return;
+                [next[idx], next[tgt]] = [next[tgt], next[idx]];
+                reorderDevices(next.map((x) => x.id));
+              };
               return (
-                <div key={id} className="flex items-center justify-between gap-2 border-b p-2 last:border-b-0">
-                  <div className="flex items-center gap-2">
+                <div key={d.id} className="flex items-center justify-between gap-2 border-b p-2 last:border-b-0">
+                  <div className="flex items-center gap-2 min-w-0">
                     <span className="w-6 text-center text-sm font-mono text-muted-foreground">{idx + 1}.</span>
-                    <span className="text-sm font-medium">{cp.name}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {cp.max_power_kw.toLocaleString("de-DE")} kW
+                    <Badge
+                      variant={d.device_kind === "charge_point" ? "default" : "secondary"}
+                      className="text-[10px]"
+                    >
+                      {kindLabel}
                     </Badge>
+                    <span className="text-sm font-medium truncate">{name}</span>
+                    <Badge variant="outline" className="text-xs">
+                      {Number(d.max_power_kw).toLocaleString("de-DE")} kW
+                    </Badge>
+                    {d.device_kind !== "charge_point" && (
+                      <Badge variant="outline" className="text-[10px] text-amber-600">
+                        Vorschau
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex gap-1">
-                    <Button size="icon" variant="ghost" disabled={idx === 0} onClick={() => move(id, -1)}>
+                    <Button size="icon" variant="ghost" disabled={idx === 0} onClick={() => moveTo(-1)}>
                       <ArrowUp className="h-4 w-4" />
                     </Button>
                     <Button
                       size="icon"
                       variant="ghost"
-                      disabled={idx === priority.length - 1}
-                      onClick={() => move(id, 1)}
+                      disabled={idx === dlmDevices.length - 1}
+                      onClick={() => moveTo(1)}
                     >
                       <ArrowDown className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => removeDevice(d.id)}>
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
               );
             })}
           </div>
+
+          {/* Gerät hinzufügen */}
+          <div className="flex flex-wrap items-end gap-2 pt-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Gerätetyp</Label>
+              <Select
+                value={addKind}
+                onValueChange={(v) => {
+                  setAddKind(v as DlmDeviceKind);
+                  setAddRefId("");
+                }}
+              >
+                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="charge_point">Wallbox</SelectItem>
+                  <SelectItem value="heat_pump">Wärmepumpe</SelectItem>
+                  <SelectItem value="battery">Batteriespeicher</SelectItem>
+                  <SelectItem value="generic_actuator">Sonstiger Aktor</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1 flex-1 min-w-[180px]">
+              <Label className="text-xs">Gerät</Label>
+              <Select value={addRefId} onValueChange={setAddRefId}>
+                <SelectTrigger><SelectValue placeholder="Bitte wählen…" /></SelectTrigger>
+                <SelectContent>
+                  {addKind === "charge_point"
+                    ? (availableChargePoints.length === 0
+                        ? <SelectItem value="__none__" disabled>Keine Wallbox verfügbar</SelectItem>
+                        : availableChargePoints.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                          )))
+                    : (availableActuators.length === 0
+                        ? <SelectItem value="__none__" disabled>Keine Aktoren verfügbar</SelectItem>
+                        : availableActuators.map((a) => (
+                            <SelectItem key={a.id} value={a.id}>{a.entity_label}</SelectItem>
+                          )))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              size="sm"
+              disabled={!addRefId}
+              onClick={() => {
+                const name =
+                  addKind === "charge_point"
+                    ? cps.find((c) => c.id === addRefId)?.name
+                    : actuatorCandidates.find((a) => a.id === addRefId)?.entity_label;
+                const maxKw =
+                  addKind === "charge_point"
+                    ? Number(cps.find((c) => c.id === addRefId)?.max_power_kw ?? 11)
+                    : 3;
+                addDevice({
+                  device_kind: addKind,
+                  device_ref_id: addRefId,
+                  display_name: name ?? null,
+                  min_power_kw: addKind === "charge_point" ? 1.4 : 0,
+                  max_power_kw: maxKw,
+                });
+                setAddRefId("");
+              }}
+            >
+              <Plus className="mr-1 h-4 w-4" /> Hinzufügen
+            </Button>
+          </div>
+
+          <p className="mt-2 flex items-start gap-1 text-xs text-muted-foreground">
+            <Info className="mt-0.5 h-3 w-3 shrink-0" />
+            Netzdienliche Steuerung nach §14a EnWG ist ein separater, externer Eingriff und wird unterhalb konfiguriert.
+          </p>
         </div>
 
         <div className="flex items-center justify-between gap-2">
@@ -375,13 +476,23 @@ export function DynamicDlmCard({ locationId }: Props) {
                 fallback_kw_per_cp: fallbackKwPerCp,
                 min_charge_kw: minChargeKw,
                 is_active: isActive,
-                priority_order: priority,
+                // priority_order wird nur noch für Backward-Compat mitgeschrieben —
+                // führend ist die Tabelle location_dlm_devices.
+                priority_order: dlmDevices
+                  .filter((d) => d.device_kind === "charge_point")
+                  .map((d) => d.device_ref_id),
               })
             }
           >
-            {saving ? "Speichern…" : config ? "Änderungen speichern" : "DLM einrichten"}
+            {saving ? "Speichern…" : config ? "Änderungen speichern" : "Lastmanagement einrichten"}
           </Button>
         </div>
+      </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
+}
       </CardContent>
         </CollapsibleContent>
       </Card>
