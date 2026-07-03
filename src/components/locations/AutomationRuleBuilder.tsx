@@ -486,10 +486,49 @@ function ConditionCard({
             </div>
           </div>
         )}
+
+        {condition.type === "power_headroom" && (
+          <div className="space-y-3">
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              Freie Leistung am Hausanschluss (Budget minus aktuelle Last). Basis:
+              letzter DLM-Regelkreis-Zyklus (max. 10 Min. alt).
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Operator</Label>
+                <Select
+                  value={condition.operator || "<"}
+                  onValueChange={(val) => onUpdate({ ...condition, operator: val as AutomationCondition["operator"] })}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {OPERATORS.map((op) => (
+                      <SelectItem key={op.value} value={op.value} className="text-xs">{op.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Reserve (kW)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  className="h-9 text-xs"
+                  value={condition.value ?? ""}
+                  onChange={(e) => onUpdate({ ...condition, value: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="z.B. 5"
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
+
 
 function ActionCard({
   action,
