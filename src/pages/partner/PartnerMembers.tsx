@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 type PartnerRole = "partner_admin" | "partner_user";
 
@@ -79,6 +80,16 @@ export default function PartnerMembers() {
 
   const canManage = isPartnerAdmin || permissions.manageMembers;
 
+  const { sorted, sort, toggle } = useSortableData<MemberRow, "name" | "email" | "role" | "created_at">(rows, (r, k) => {
+    switch (k) {
+      case "name": return r.contact_person ?? "";
+      case "email": return r.email ?? "";
+      case "role": return r.partner_role;
+      case "created_at": return r.created_at ? new Date(r.created_at) : null;
+      default: return null;
+    }
+  }, { key: "name", direction: "asc" });
+
   // Invite
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -130,7 +141,6 @@ export default function PartnerMembers() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partnerId]);
 
   const openEdit = (m: MemberRow) => {
@@ -265,21 +275,21 @@ export default function PartnerMembers() {
           <CardContent>
             {loading ? (
               <p className="text-sm text-muted-foreground">Lade…</p>
-            ) : rows.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <p className="text-sm text-muted-foreground">Noch keine Mitglieder.</p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>E-Mail</TableHead>
-                    <TableHead>Rolle &amp; Rechte</TableHead>
-                    <TableHead>Beigetreten</TableHead>
-                    <TableHead className="w-28 text-right">Aktionen</TableHead>
+                    <SortableHead label="Name" sortKey="name" sort={sort} onToggle={toggle} />
+                    <SortableHead label="E-Mail" sortKey="email" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Rolle & Rechte" sortKey="role" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Beigetreten" sortKey="created_at" sort={sort} onToggle={toggle} />
+                    <TableCell className="w-28 text-right">Aktionen</TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((m) => {
+                  {sorted.map((m) => {
                     const grantedCount = PERMISSION_DEFS.filter((d) => (m as any)[d.key]).length;
                     const lastAdmin = isLastAdmin(m);
                     const isSelf = m.user_id === user?.id;
@@ -409,15 +419,15 @@ export default function PartnerMembers() {
                 den Zugriff auf das Partner-Portal. Der Auth-Account bleibt erhalten.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <DialogFooter>
               <AlertDialogCancel>Abbrechen</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => { if (deleteTarget) { handleDelete(deleteTarget); setDeleteTarget(null); } }}
+                onClick={() => deleteTarget && handleDelete(deleteTarget)}
               >
                 Entfernen
               </AlertDialogAction>
-            </AlertDialogFooter>
+            </DialogFooter>
           </AlertDialogContent>
         </AlertDialog>
       </div>
@@ -425,45 +435,39 @@ export default function PartnerMembers() {
   );
 }
 
-function PermissionsEditor({
-  value, onChange, disabled,
-}: {
+function PermissionsEditor({ value, onChange, disabled }: {
   value: PermFlags;
   onChange: (v: PermFlags) => void;
-  disabled?: boolean;
+  disabled: boolean;
 }) {
+  const toggle = (key: keyof PermFlags) => {
+    if (disabled) return;
+    onChange({ ...value, [key]: !value[key] });
+  };
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <Label>Berechtigungen</Label>
-        {disabled && (
-          <span className="text-xs text-muted-foreground">
-            Partner-Admin hat automatisch alle Rechte
-          </span>
-        )}
-      </div>
-      <div className="grid grid-cols-1 gap-2">
-        {PERMISSION_DEFS.map((p) => {
-          const checked = disabled ? true : !!value[p.key];
-          return (
-            <label
-              key={p.key}
-              className="flex items-start gap-3 rounded-md border p-3 hover:bg-accent/40 transition-colors cursor-pointer"
-            >
-              <Checkbox
-                checked={checked}
-                disabled={disabled}
-                onCheckedChange={(c) =>
-                  onChange({ ...value, [p.key]: c === true })
-                }
-              />
-              <div className="space-y-0.5">
-                <div className="text-sm font-medium leading-none">{p.label}</div>
-                <div className="text-xs text-muted-foreground">{p.hint}</div>
-              </div>
-            </label>
-          );
-        })}
+      <Label className={disabled ? "opacity-50" : ""}>Berechtigungen</Label>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {PERMISSION_DEFS.map((def) => (
+          <div key={def.key} className="flex items-start space-x-3">
+            <Checkbox
+              id={`perm-${def.key}`}
+              checked={disabled || value[def.key]}
+              onCheckedChange={() => toggle(def.key)}
+              disabled={disabled}
+            />
+            <div className="grid gap-1.5 leading-none">
+              <label
+                htmlFor={`perm-${def.key}`}
+                className={`text-sm font-medium ${disabled ? "opacity-50" : "cursor-pointer"}`}
+              >
+                {def.label}
+              </label>
+              <p className="text-xs text-muted-foreground">{def.hint}</p>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

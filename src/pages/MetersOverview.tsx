@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Gauge, ClipboardEdit, Filter, QrCode, Pencil, Archive, ArchiveRestore, Trash2, Eye, EyeOff, CheckCircle2, FlaskConical, ChevronDown, ChevronRight } from "lucide-react";
@@ -115,6 +116,19 @@ const MetersOverview = () => {
   const activeMeters = locationFiltered.filter((m) => !m.is_archived);
   const archivedMeters = locationFiltered.filter((m) => m.is_archived);
   const filteredMeters = showArchived ? archivedMeters : activeMeters;
+  type SortKey = "name" | "location" | "meter_number" | "energy_type" | "capture" | "last_reading";
+  const { sorted, sort, toggle } = useSortableData<Meter, SortKey>(filteredMeters, (m, k) => {
+    switch (k) {
+      case "name": return m.name;
+      case "location": return getLocationName(m.location_id);
+      case "meter_number": return m.meter_number || "";
+      case "energy_type": return m.energy_type;
+      case "capture": return m.capture_type;
+      case "last_reading": return getLastReadingForMeter(m.id)?.reading_date || "";
+      default: return null;
+    }
+  });
+
 
   const getLocationName = (locationId: string) =>
     locations.find((l) => l.id === locationId)?.name || "–";
@@ -219,17 +233,17 @@ const MetersOverview = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t("common.name" as any)}</TableHead>
-                      <TableHead>{t("meters.property" as any)}</TableHead>
-                      <TableHead>{t("meters.meterNumber" as any)}</TableHead>
-                      <TableHead>{t("meters.energyType" as any)}</TableHead>
-                      <TableHead>{t("meters.capture" as any)}</TableHead>
-                      <TableHead>{t("meters.lastReading" as any)}</TableHead>
+                      <TableHead><SortableHead label={t("common.name" as any)} sortKey="name" sort={sort} onToggle={toggle} /></TableHead>
+                      <TableHead><SortableHead label={t("meters.property" as any)} sortKey="location" sort={sort} onToggle={toggle} /></TableHead>
+                      <TableHead><SortableHead label={t("meters.meterNumber" as any)} sortKey="meter_number" sort={sort} onToggle={toggle} /></TableHead>
+                      <TableHead><SortableHead label={t("meters.energyType" as any)} sortKey="energy_type" sort={sort} onToggle={toggle} /></TableHead>
+                      <TableHead><SortableHead label={t("meters.capture" as any)} sortKey="capture" sort={sort} onToggle={toggle} /></TableHead>
+                      <TableHead><SortableHead label={t("meters.lastReading" as any)} sortKey="last_reading" sort={sort} onToggle={toggle} /></TableHead>
                       <TableHead className="w-56" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredMeters.map((m) => {
+                    {sorted.map((m) => {
                       const lastReading = getLastReadingForMeter(m.id);
                       const isManual = m.capture_type === "manual";
                       const isSimulation = m.capture_type === "simulation";

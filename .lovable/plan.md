@@ -1,108 +1,111 @@
-## Konzept
+## Ziel
 
-Deine Idee und meine decken sich — wir setzen sie als **virtuellen Bilanz-Zähler** um, der die bestehende Virtual-Meter-Infrastruktur (`virtual_meter_sources`) nutzt und um „Live-Wallbox-Summe" erweitert.
+Alle Tabellen im Projekt sollen sortierbare Spalten via der zentralen `SortableHead`/`useSortableData`-Utility (`src/components/ui/sortable-head.tsx`) nutzen. Aktuell verwenden sie **nur 4 von ~54 Tabellen** — und davon nutzen 3 lokale, inkonsistente Eigenbauten.
 
-Formel (pro Liegenschaft):
+## Ist-Zustand
 
-```text
-Netz = Σ Verbrauch + Σ Wallbox-Ist-Leistung − Σ PV − Speicher-Entladung + Speicher-Ladung
-       (positiv = Bezug, negativ = Einspeisung)
+**Nutzt die zentrale `SortableHead`:**
+
+- `src/components/locations/MeterManagement.tsx` — hat aber eine **lokale Copy** mit anderer API (`currentKey/direction/onSort`)
+
+**Hat eigene lokale SortableHead-Komponenten (müssen migriert werden):**
+
+- `src/pages/SuperAdminBilling.tsx`
+- `src/pages/ChargingBilling.tsx` (3 Tabellen)
+- `src/components/locations/MeterManagement.tsx`
+
+**Keine Sortierung vorhanden (~50 Tabellen ohne SortableHead):**
+
+Standort / Energie:
+
+- `MetersOverview.tsx`, `EnergyPriceManagement.tsx`, `TenantElectricity.tsx`, `InvoicesList.tsx`, `SensorsDialog.tsx`, `NetworkDevicesTable.tsx`, `AiconoHubManager.tsx`
+
+Charging:
+
+- `ChargePointDetail.tsx`, `ChargingPoints.tsx`, `ChargingAppAdmin.tsx`, `ChargingUsersTab.tsx`, `BillingGroupsTab.tsx`, `RoamingTab.tsx`, `OcppLogViewer.tsx`, `ChargingInvoiceBulkDialogs.tsx`
+
+Reports & Analyse:
+
+- `ConsumptionTrendTable.tsx`, `LocationRanking.tsx`, `MeasuresTable.tsx`, `PropertyProfile.tsx`, `WeatherNormalizationWidget.tsx`, `Copilot.tsx`
+
+Energy Sharing:
+
+- `BillingTab.tsx`, `ContractTemplatesTab.tsx`, `DataImportTab.tsx`, `MarketplaceTab.tsx`, `EnergySharing.tsx`
+
+Automation / Betrieb:
+
+- `Automation.tsx`, `PeakShaving.tsx`, `ArbitrageTrading.tsx`, `AuditLogList.tsx`
+
+Admin & Vertrieb:
+
+- `UserManagement.tsx`, `ExternalContactsManager.tsx`, `SalesCatalogManager.tsx`, `SalesRulesManager.tsx`, `Co2FactorSettings.tsx`
+
+Super-Admin:
+
+- `SuperAdminTenants.tsx`, `SuperAdminTenantDetail.tsx`, `SuperAdminUsers.tsx`, `SuperAdminRoles.tsx`, `SuperAdminLicenses.tsx`, `SuperAdminGatewayFleet.tsx`, `SuperAdminSupport.tsx`, `SuperAdminPartners.tsx`, `SuperAdminSimulators.tsx`, `SuperAdminOcppControl.tsx`, `SuperAdminOcppFirmware.tsx`, `SuperAdminOcppIntegrations.tsx`
+
+Partner-Portal:
+
+- `PartnerBilling.tsx`, `PartnerMembers.tsx`, `PartnerTenants.tsx`, `PartnerTenantDetail.tsx`
+
+## Vorgehen
+
+### Phase 0 — Konsolidierung
+
+1. `SortableHead` in `MeterManagement.tsx` entfernen und durch die zentrale Version ersetzen (API-Angleichung: `sort`/`onToggle` statt `currentKey/direction/onSort`).
+2. Lokale `SortableHead` in `SuperAdminBilling.tsx` und `ChargingBilling.tsx` entfernen, ebenfalls auf die zentrale Version umstellen.
+
+### Phase 1 — Standort & Energie (7 Dateien)
+
+Höchste Nutzerpriorität, folgt direkt an das schon migrierte MeterManagement an.
+
+### Phase 2 — Charging (8 Dateien)
+
+### Phase 3 — Reports, Analyse & Energy Sharing (11 Dateien)
+
+### Phase 4 — Admin, Automation & Vertrieb (9 Dateien)
+
+### Phase 5 — Super-Admin & Partner-Portal (16 Dateien)
+
+### Phase 6 — Verifikation
+
+- Build durchlaufen lassen.
+- Stichprobe pro Phase im Preview: Klick auf Spalten-Header prüft ASC/DESC/Neutral.
+- Sicherstellen, dass paginierte/serverseitig gefilterte Tabellen (ChargingUsers, AuditLog) korrekt behandelt werden — dort ggf. serverseitiges Sort statt Client-Sort.
+
+## Technische Details
+
+**Migrations-Muster pro Tabelle:**
+
+```tsx
+type SortKey = "name" | "value" | "created_at";
+
+const { sorted, sort, toggle } = useSortableData<Row, SortKey>(rows, (r, k) => {
+  switch (k) {
+    case "name": return r.name;
+    case "value": return r.value;
+    case "created_at": return new Date(r.created_at);
+  }
+});
+
+// im Header:
+<TableHead>
+  <SortableHead label="Name" sortKey="name" sort={sort} onToggle={toggle} />
+</TableHead>
+
+// im Body: sorted.map(...) statt rows.map(...)
 ```
 
-Als Quellen sind sowohl **Testzähler** (Slider) als auch **echte Zähler** erlaubt — beliebig mischbar. So kann z. B. PV per Slider simuliert, Hausverbrauch aus echter Messung, Wallboxen aus echten OCPP-MeterValues kommen.
+**Edge Cases:**
 
-## UI
+- Tabellen mit serverseitigem Pagination/Filter (z. B. `ChargingUsersTab`, `AuditLogList`, große Super-Admin-Listen): Sort-State an die Query weiterreichen, keine reine Client-Sortierung — sonst sortiert nur die aktuelle Seite. Diese Fälle in der jeweiligen Phase explizit prüfen.
+- Tabellen mit Gruppierungen / Sub-Rows (falls vorhanden): Sortierung auf oberster Gruppen-Ebene.
+- Locale-Sortierung ist bereits deutsch (`localeCompare("de", { numeric: true })`) — passt zur Core-Regel „deutsches Zahlenformat".
 
-### 1. Neue Erfassungsart beim Anlegen eines Zählers: „Bilanz-Zähler (virtuell)"
+**Aufwand:** ~50 Dateien × ~5 min = größerer Diff, aber mechanisch. In 6 Phasen aufteilbar; jede Phase eigenständig deploybar.
 
-Im Anlege-Dialog (`AddMeterDialog`) eine 5. Option zusätzlich zu manuell / automatisch / virtuell / simulation:
+## Frage vor der Umsetzung
 
-- **Rolle:** standardmäßig `grid` (Netz)
-- **Quellen-Picker** (Mehrfachauswahl, Vorzeichen pro Quelle wählbar):
-  - PV-Erzeugung (`production`) → **negativ** in Bilanz
-  - Hausverbrauch (`consumption`) → **positiv**
-  - Wallbox-Gruppe oder einzelne Wallboxen → **positiv** (Live aus `charge_point_connectors.current_power`)
-  - Speicher (`storage`) → Vorzeichen je nach Lade-/Entladerichtung
-- Jede Quelle darf entweder ein Testzähler (Slider) oder ein echter Zähler sein.
-- TEST-Badge erscheint sobald **mindestens eine** Quelle ein Testzähler ist.
-
-### 2. Detail-Karte „Simulations-Szenario" auf Messstellen-Seite
-
-Für eine Liegenschaft, in der mindestens ein Bilanz-Zähler mit Testzähler-Quellen existiert, zeigen wir oben eine kompakte Bilanz-Karte:
-
-```text
-[TEST] Simulations-Bilanz · Liegenschaft Musterstraße
-─────────────────────────────────────────────────────
-PV (Sim)          15,0 kW   ████████░░
-Hausverbrauch      1,5 kW   █░░░░░░░░░
-Wallbox A (real)   7,4 kW   ████░░░░░░
-Wallbox B (real)   0,0 kW   ░░░░░░░░░░
-─────────────────────────────────────────────────────
-Netz (berechnet) −6,1 kW   ◄ EINSPEISUNG
-```
-
-Die Testzähler-Slider sind direkt in der Karte editierbar (PV, Grundlast, Speicher-Leistung). Wallbox-Zeilen sind read-only und aktualisieren sich realtime.
-
-## Datenfluss
-
-```text
-Slider (PV, Last, Speicher) ─► simulation_meter_state
-                                      │
-charge_point_connectors                │
-  .current_power (realtime) ───────────┤
-                                      ▼
-                       computeVirtualBalance(meterId)
-                       (neuer Helper, Browser + Edge)
-                                      │
-              ┌───────────────────────┼───────────────────────┐
-              ▼                       ▼                       ▼
-       LiveValues-UI            DLM-Scheduler           PV-Überschuss-
-       (Netz-Kachel)            (Referenzzähler)        Scheduler
-```
-
-- Kein neuer Persistenz-Layer für die Bilanz — sie wird on-demand berechnet (billig: max. eine Handvoll Summanden).
-- Realtime-Updates kommen über die existierenden Channels (`simulation_meter_state` + `meter_power_readings` für Wallboxen).
-
-## Beispielablauf (dein Szenario)
-
-| t | PV-Slider | Wallbox A (real) | Wallbox B (real) | Berechneter Netz-Wert | DLM/PV-Scheduler |
-|---|---|---|---|---|---|
-| 0 | 15 kW | 0 | 0 | −15 kW (Einspeisung) | User 1 darf 11 kW starten |
-| 1 | 15 kW | 11 kW | 0 | −4 kW (Einspeisung) | passt, noch Überschuss |
-| 2 | 15 kW | 11 kW | 7 kW | +3 kW (Bezug) | drosselt / pausiert Laden |
-
-Slider bleibt konstant, Regelwert ändert sich automatisch — exakt das gewünschte Verhalten.
-
-## Umsetzung (technisch)
-
-1. **DB-Migration**
-   - `meters.capture_type` erlaubt zusätzlich `'virtual_balance'`.
-   - Erweiterung `virtual_meter_sources` um Spalten `sign smallint` (+1/−1) und `source_kind enum('meter','charge_point','charge_point_group')`, damit auch Wallboxen als Quelle eingetragen werden können.
-   - `simulation_meter_state` bleibt unverändert (PV, Grundlast, Speicher sind jeweils eigene `capture_type='simulation'`-Zähler).
-
-2. **Helper** `computeVirtualBalance(meterId)` in
-   - `src/lib/virtualBalance.ts` (Browser)
-   - `supabase/functions/_shared/virtualBalance.ts` (Edge, gleicher Code)
-   liest Quellen, summiert mit Vorzeichen, ergänzt Wallbox-Ist-Leistungen aus `charge_point_connectors.current_power`.
-
-3. **Hook** `useVirtualBalance(meterId)` für Live-Anzeige (subscribet `simulation_meter_state` + relevante CP-Connectoren).
-
-4. **Edge-Functions**
-   - `dlm-scheduler` & `dlm-realtime-controller`: wenn Referenz-Zähler `capture_type='virtual_balance'`, statt Snapshot/Slider den berechneten Wert nehmen.
-   - `solar-charging-scheduler` (PV-Überschuss): gleiche Behandlung.
-
-5. **UI**
-   - `AddMeterDialog`: neue Option + Quellen-Picker.
-   - `MetersOverview`: neue Komponente `BalanceSimulationCard.tsx` mit Slidern (über `SimulationMeterControl` für die einzelnen Sim-Zähler) und Live-Bilanz.
-   - TEST-Badge auf dem Bilanz-Zähler, sobald eine Quelle simuliert ist.
-
-6. **Schutz**
-   - Bilanz-Zähler mit Test-Quellen werden weiterhin aus Reporting/CO₂/Abrechnung ausgeschlossen.
-   - Banner „Referenz-Zähler enthält Testwerte" in DLM- und PV-Überschuss-Konfiguration.
-
-7. **Auto-Reset** der Slider nach 30 Min Inaktivität bleibt wie heute.
-
-## Was bewusst NICHT geändert wird
-
-- Bestehende einfache Testzähler (Sensor, °C, %, lx) bleiben unverändert — der Bilanz-Zähler ist additiv.
-- Echte Virtual Meter (Summen-/Differenzzähler ohne Testanteil) funktionieren weiter wie bisher; sie bekommen nur die neue Option, Wallboxen als Quelle aufzunehmen.
+Sollen wir **alle 6 Phasen in einem Rutsch** umsetzen (großer Diff, ein Turn), oder **phasenweise** mit Zwischen-Reviews (empfohlen, damit du Regressionen pro Bereich prüfen kannst)?  
+  
+Antwort: gerne in einem Rutsch umsetzen. Du schaffst das ;-)

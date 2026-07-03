@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, Pencil } from "lucide-react";
 import { useContractTemplates, type ContractTemplate, TEMPLATE_KIND_LABELS } from "@/hooks/useCommunityContracts";
@@ -48,6 +49,18 @@ export default function ContractTemplatesTab({ communityId }: Props) {
     }
     setOpen(false);
   };
+
+  type SortKey = "name" | "type" | "validity" | "version" | "status";
+  const { sorted, sort, toggle } = useSortableData(templates, (r, k) => {
+    switch (k) {
+      case "name": return r.name;
+      case "type": return r.template_kind;
+      case "validity": return r.community_id ? "c" : "m";
+      case "version": return r.version;
+      case "status": return r.is_active;
+      default: return null;
+    }
+  });
 
   return (
     <Card>
@@ -96,15 +109,15 @@ export default function ContractTemplatesTab({ communityId }: Props) {
         ) : (
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Typ</TableHead>
-              <TableHead>Gültigkeit</TableHead>
-              <TableHead>Version</TableHead>
-              <TableHead>Status</TableHead>
+              <SortableHead sortKey="name" current={sort} onToggle={toggle}>Name</SortableHead>
+              <SortableHead sortKey="type" current={sort} onToggle={toggle}>Typ</SortableHead>
+              <SortableHead sortKey="validity" current={sort} onToggle={toggle}>Gültigkeit</SortableHead>
+              <SortableHead sortKey="version" current={sort} onToggle={toggle}>Version</SortableHead>
+              <SortableHead sortKey="status" current={sort} onToggle={toggle}>Status</SortableHead>
               <TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {templates.map((t) => (
+              {sorted.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell>{t.name}</TableCell>
                   <TableCell>

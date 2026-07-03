@@ -6,7 +6,7 @@ import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -18,6 +18,9 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import TenantLifecycleActions, { TenantStatusBadge } from "@/components/super-admin/TenantLifecycleActions";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+
+type SortKey = "name" | "slug" | "status" | "email" | "created_at";
 
 const SuperAdminTenants = () => {
   const { user, loading: authLoading } = useAuth();
@@ -52,16 +55,27 @@ const SuperAdminTenants = () => {
     },
   });
 
+  const filtered = tenants.filter((tnt) =>
+    tnt.name.toLowerCase().includes(search.toLowerCase()) ||
+    tnt.slug.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(filtered, (r, k) => {
+    switch (k) {
+      case "name": return r.name;
+      case "slug": return r.slug;
+      case "status": return r.status;
+      case "email": return r.contact_email ?? "";
+      case "created_at": return r.created_at ? new Date(r.created_at) : null;
+      default: return null;
+    }
+  }, { key: "name", direction: "asc" });
+
   if (authLoading || roleLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
   }
   if (!user) return <Navigate to="/auth" replace />;
   if (!isSuperAdmin) return <Navigate to="/" replace />;
-
-  const filtered = tenants.filter((tnt) =>
-    tnt.name.toLowerCase().includes(search.toLowerCase()) ||
-    tnt.slug.toLowerCase().includes(search.toLowerCase())
-  );
 
   const slugify = (str: string) =>
     str.toLowerCase().replace(/[äöü]/g, c => ({ ä: "ae", ö: "oe", ü: "ue" }[c] || c))
@@ -79,7 +93,6 @@ const SuperAdminTenants = () => {
     setCreating(true);
 
     try {
-      // 1. Create tenant
       const { data: tenant, error: tenantError } = await supabase
         .from("tenants")
         .insert({
@@ -94,7 +107,6 @@ const SuperAdminTenants = () => {
 
       if (tenantError) throw new Error(tenantError.message);
 
-      // 2. Invite tenant admin via edge function
       const { data: inviteData, error: inviteError } = await supabase.functions.invoke("invite-tenant-admin", {
         body: {
           tenantId: tenant.id,
@@ -104,10 +116,8 @@ const SuperAdminTenants = () => {
         },
       });
 
-      // Parse error from response body if available
       let result = typeof inviteData === "string" ? JSON.parse(inviteData) : inviteData;
       if (inviteError) {
-        // Try to get actual error message from response body
         const bodyText = (inviteError as { context?: { text?: string } })?.context?.text;
         if (bodyText) {
           try { result = JSON.parse(bodyText); } catch { /* ignore */ }
@@ -122,7 +132,6 @@ const SuperAdminTenants = () => {
       });
       setDialogOpen(false);
       resetForm();
-      // Refresh by navigating to the same page
       window.location.reload();
     } catch (err: unknown) {
       toast({
@@ -247,21 +256,21 @@ const SuperAdminTenants = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("common.name")}</TableHead>
-                    <TableHead>Slug</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>{t("common.email")}</TableHead>
-                    <TableHead>{t("common.created")}</TableHead>
-                    <TableHead className="w-48">{t("common.actions")}</TableHead>
+                    <SortableHead label={t("common.name")} sortKey="name" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Slug" sortKey="slug" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
+                    <SortableHead label={t("common.email")} sortKey="email" sort={sort} onToggle={toggle} />
+                    <SortableHead label={t("common.created")} sortKey="created_at" sort={sort} onToggle={toggle} />
+                    <TableCell className="w-48">{t("common.actions")}</TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
-                  ) : filtered.length === 0 ? (
+                  ) : sorted.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("tenants.not_found")}</TableCell></TableRow>
                   ) : (
-                    filtered.map((tenant: any) => (
+                    sorted.map((tenant: any) => (
                       <TableRow key={tenant.id} className="cursor-pointer" onClick={() => navigate(`/super-admin/tenants/${tenant.id}`)}>
                         <TableCell className="font-medium">{tenant.name}</TableCell>
                         <TableCell className="text-muted-foreground">{tenant.slug}</TableCell>

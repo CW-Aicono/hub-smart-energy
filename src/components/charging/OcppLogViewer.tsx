@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RefreshCw, ChevronDown, ChevronRight, ArrowDownUp, Pause, Play, Wifi, WifiOff } from "lucide-react";
 import { format } from "date-fns";
@@ -99,6 +100,18 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
     }
     return true;
   });
+
+  type LogSortKey = "time" | "direction" | "cp" | "type";
+  const { sorted: sortedLogs, sort, toggle } = useSortableData<any, LogSortKey>(filtered, (l, k) => {
+    switch (k) {
+      case "time": return new Date(l.created_at);
+      case "direction": return l.direction || "";
+      case "cp": return chargePoints.find((c: any) => c.id === l.charge_point_id || c.ocpp_id === l.charge_point_id)?.ocpp_id || l.charge_point_id;
+      case "type": return l.message_type || "";
+      default: return null;
+    }
+  }, { key: "time", direction: "desc" });
+
 
   const extractVendorErrorCode = (log: OcppLogEntry): string | null => {
     try {
@@ -205,14 +218,14 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8"></TableHead>
-                  <TableHead className="w-40">Zeitstempel</TableHead>
-                  <TableHead className="w-24">Richtung</TableHead>
-                  {showCpColumn && <TableHead>Ladepunkt</TableHead>}
-                  <TableHead>Nachrichtentyp</TableHead>
+                  <TableHead className="w-40"><SortableHead label="Zeitstempel" sortKey="time" sort={sort} onToggle={toggle} /></TableHead>
+                  <TableHead className="w-24"><SortableHead label="Richtung" sortKey="direction" sort={sort} onToggle={toggle} /></TableHead>
+                  {showCpColumn && <TableHead><SortableHead label="Ladepunkt" sortKey="cp" sort={sort} onToggle={toggle} /></TableHead>}
+                  <TableHead><SortableHead label="Nachrichtentyp" sortKey="type" sort={sort} onToggle={toggle} /></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((log) => (
+                {sortedLogs.map((log) => (
                   <React.Fragment key={log.id}>
                     <TableRow
                       className="cursor-pointer hover:bg-muted/50"

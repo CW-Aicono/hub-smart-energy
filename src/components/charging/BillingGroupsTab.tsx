@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Edit, Trash2, Users, Building2, Mail, Lock } from "lucide-react";
@@ -69,6 +70,18 @@ export default function BillingGroupsTab({ isAdmin }: Props) {
     setEditorOpen(false);
   };
 
+  type GroupSortKey = "name" | "company" | "email" | "members";
+  const { sorted: sortedGroups, sort, toggle } = useSortableData<any, GroupSortKey>(groups, (g, k) => {
+    switch (k) {
+      case "name": return g.name || "";
+      case "company": return g.company_name || "";
+      case "email": return g.billing_email || "";
+      case "members": return g.member_count || 0;
+      default: return null;
+    }
+  });
+
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -95,15 +108,15 @@ export default function BillingGroupsTab({ isAdmin }: Props) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Gruppe</TableHead>
-                <TableHead>Rechnungsempfänger</TableHead>
-                <TableHead>E-Mail</TableHead>
-                <TableHead className="text-center">Mitglieder</TableHead>
+                <TableHead><SortableHead label="Gruppe" sortKey="name" sort={sort} onToggle={toggle} /></TableHead>
+                <TableHead><SortableHead label="Rechnungsempfänger" sortKey="company" sort={sort} onToggle={toggle} /></TableHead>
+                <TableHead><SortableHead label="E-Mail" sortKey="email" sort={sort} onToggle={toggle} /></TableHead>
+                <TableHead className="text-center"><SortableHead label="Mitglieder" sortKey="members" sort={sort} onToggle={toggle} /></TableHead>
                 {isAdmin && <TableHead className="w-40 text-right">Aktionen</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {groups.map((g) => (
+              {sortedGroups.map((g) => (
                 <TableRow key={g.id}>
                   <TableCell className="font-medium">{g.name}</TableCell>
                   <TableCell>

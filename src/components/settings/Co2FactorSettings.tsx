@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { useCo2Factors, Co2Factor } from "@/hooks/useCo2Factors";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +30,15 @@ export function Co2FactorSettings() {
   const { factors, upsertFactor, deleteFactor, loading } = useCo2Factors();
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { sorted, sort, toggle } = useSortableData(factors, (r, k) => {
+    switch (k) {
+      case "type": return r.energy_type;
+      case "factor": return Number(r.factor_kg_per_kwh);
+      case "primary": return Number(r.primary_energy_factor ?? 0);
+      case "source": return r.source || "";
+      default: return null;
+    }
+  });
   const [editing, setEditing] = useState<Record<string, Partial<Co2Factor>>>({});
 
   const handleSave = async (factor: Partial<Co2Factor> & { energy_type: string }) => {
@@ -84,15 +94,15 @@ export function Co2FactorSettings() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{t("co2.energyType" as any) || "Energieträger"}</TableHead>
-              <TableHead>{t("co2.factorKgKwh" as any) || "kg CO₂/kWh"}</TableHead>
-              <TableHead>Primärenergiefaktor</TableHead>
-              <TableHead>{t("co2.source" as any) || "Quelle"}</TableHead>
+              <SortableHead column="type" onSort={toggle} sort={sort}>{t("co2.energyType" as any) || "Energieträger"}</SortableHead>
+              <SortableHead column="factor" onSort={toggle} sort={sort}>{t("co2.factorKgKwh" as any) || "kg CO₂/kWh"}</SortableHead>
+              <SortableHead column="primary" onSort={toggle} sort={sort}>Primärenergiefaktor</SortableHead>
+              <SortableHead column="source" onSort={toggle} sort={sort}>{t("co2.source" as any) || "Quelle"}</SortableHead>
               <TableHead className="w-24" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {factors.map((factor) => (
+            {sorted.map((factor) => (
               <TableRow key={factor.id}>
                 <TableCell className="font-medium capitalize">{factor.energy_type}</TableCell>
                 <TableCell>

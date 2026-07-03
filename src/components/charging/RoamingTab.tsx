@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -161,6 +162,34 @@ export default function RoamingTab() {
     }
   };
 
+  type PartnerSortKey = "name" | "role" | "protocol" | "id" | "status" | "sync";
+  const { sorted: sortedPartners, sort: partnerSort, toggle: partnerToggle } = useSortableData<any, PartnerSortKey>(partners, (p, k) => {
+    switch (k) {
+      case "name": return p.name || "";
+      case "role": return p.role || "";
+      case "protocol": return p.protocol || "";
+      case "id": return [p.country_code, p.party_id].filter(Boolean).join(" / ") || "";
+      case "status": return p.status || "";
+      case "sync": return p.last_sync_at ? new Date(p.last_sync_at) : new Date(0);
+      default: return null;
+    }
+  });
+
+  type SessionSortKey = "direction" | "partner" | "start" | "end" | "energy" | "cost" | "status";
+  const { sorted: sortedSessions, sort: sessionSort, toggle: sessionToggle } = useSortableData<any, SessionSortKey>(sessions, (s, k) => {
+    switch (k) {
+      case "direction": return s.direction || "";
+      case "partner": return partners.find((p: any) => p.id === s.partner_id)?.name || "";
+      case "start": return s.started_at ? new Date(s.started_at) : new Date(0);
+      case "end": return s.ended_at ? new Date(s.ended_at) : new Date(0);
+      case "energy": return Number(s.energy_kwh || 0);
+      case "cost": return Number(s.cost_amount || 0);
+      case "status": return s.status || "";
+      default: return null;
+    }
+  });
+
+
   return (
     <Card>
       <CardHeader>
@@ -302,12 +331,12 @@ export default function RoamingTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Rolle</TableHead>
-                    <TableHead>Protokoll</TableHead>
-                    <TableHead>Land / Party-ID</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Letzter Sync</TableHead>
+                    <TableHead><SortableHead label="Name" sortKey="name" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
+                    <TableHead><SortableHead label="Rolle" sortKey="role" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
+                    <TableHead><SortableHead label="Protokoll" sortKey="protocol" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
+                    <TableHead><SortableHead label="Land / Party-ID" sortKey="id" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
+                    <TableHead><SortableHead label="Status" sortKey="status" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
+                    <TableHead><SortableHead label="Letzter Sync" sortKey="sync" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
                     <TableHead className="text-right">Aktionen</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -362,14 +391,14 @@ export default function RoamingTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Richtung</TableHead>
-                    <TableHead>Partner</TableHead>
+                    <TableHead><SortableHead label="Richtung" sortKey="direction" sort={sessionSort} onToggle={sessionToggle} /></TableHead>
+                    <TableHead><SortableHead label="Partner" sortKey="partner" sort={sessionSort} onToggle={sessionToggle} /></TableHead>
                     <TableHead>Externe Session</TableHead>
-                    <TableHead>Start</TableHead>
-                    <TableHead>Ende</TableHead>
-                    <TableHead className="text-right">Energie (kWh)</TableHead>
-                    <TableHead className="text-right">Kosten</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead><SortableHead label="Start" sortKey="start" sort={sessionSort} onToggle={sessionToggle} /></TableHead>
+                    <TableHead><SortableHead label="Ende" sortKey="end" sort={sessionSort} onToggle={sessionToggle} /></TableHead>
+                    <TableHead className="text-right"><SortableHead label="Energie (kWh)" sortKey="energy" sort={sessionSort} onToggle={sessionToggle} /></TableHead>
+                    <TableHead className="text-right"><SortableHead label="Kosten" sortKey="cost" sort={sessionSort} onToggle={sessionToggle} /></TableHead>
+                    <TableHead><SortableHead label="Status" sortKey="status" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
