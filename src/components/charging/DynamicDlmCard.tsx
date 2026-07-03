@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Activity, AlertTriangle, ArrowDown, ArrowUp, Zap, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Activity, AlertTriangle, ArrowDown, ArrowUp, Zap, Trash2, ChevronDown, ChevronRight, Plus, Info } from "lucide-react";
 import { useLocationDlmConfig } from "@/hooks/useLocationDlmConfig";
 import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
+import { useLocationDlmDevices, type DlmDeviceKind } from "@/hooks/useLocationDlmDevices";
 import { useMeters } from "@/hooks/useMeters";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
