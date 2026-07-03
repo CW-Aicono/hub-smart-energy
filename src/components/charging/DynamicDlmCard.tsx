@@ -188,7 +188,7 @@ export function DynamicDlmCard({ locationId }: Props) {
     const referenceUuid = referenceMeter.sensor_uuid.toLowerCase();
     const uuidFamilyPrefix = getLoxoneUuidFamilyPrefix(referenceUuid);
     const channel = supabase
-      .channel(`dlm-live-${locationId}-${referenceMeterId}`, { config: { broadcast: { self: false } } })
+      .channel(`loxone-live-${tenant.id}`, { config: { broadcast: { self: false } } })
       .on(
         "broadcast",
         { event: "readings" },
