@@ -157,15 +157,28 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
         const roomMeters = metersByRoom.get(room.id) || [];
         const hasMeters = roomMeters.length > 0;
         const isExpanded = expandedRooms.has(room.id);
+        const isDropTarget = dragOverTarget === room.id;
 
         return (
           <div key={room.id}>
             <div
               className={cn(
-                "flex items-center gap-2 text-sm py-1.5 px-3 rounded-md bg-muted/40 group",
-                hasMeters && "cursor-pointer"
+                "flex items-center gap-2 text-sm py-1.5 px-3 rounded-md bg-muted/40 group transition-colors",
+                hasMeters && "cursor-pointer",
+                isDropTarget && "ring-2 ring-primary bg-primary/10"
               )}
               onClick={hasMeters ? () => toggleRoom(room.id) : undefined}
+              onDragOver={(e) => {
+                if (draggingMeterId) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverTarget(room.id); }
+              }}
+              onDragLeave={() => { if (dragOverTarget === room.id) setDragOverTarget(null); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const id = e.dataTransfer.getData("text/meter-id") || draggingMeterId;
+                setDragOverTarget(null);
+                setDraggingMeterId(null);
+                if (id) handleMeterDrop(id, room.id);
+              }}
             >
               {hasMeters && (
                 <button className="p-0.5 hover:bg-muted-foreground/20 rounded shrink-0">
@@ -221,20 +234,7 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
             </div>
             {isExpanded && hasMeters && (
               <div className="ml-8 space-y-1 mt-1">
-                {roomMeters.map(meter => (
-                  <button
-                    key={meter.id}
-                    type="button"
-                    className="w-full flex items-center gap-2 text-xs py-1 px-3 rounded bg-muted/20 hover:bg-muted/50 transition-colors text-left"
-                    onClick={() => setEditingMeter(meter)}
-                  >
-                    <Gauge className={cn("h-3 w-3 shrink-0", energyTypeColors[meter.energy_type] || "text-muted-foreground")} />
-                    <span className="truncate">{meter.name}</span>
-                    {meter.meter_number && (
-                      <span className="text-muted-foreground/50">#{meter.meter_number}</span>
-                    )}
-                  </button>
-                ))}
+                {roomMeters.map(meter => renderMeterRow(meter))}
               </div>
             )}
           </div>
@@ -242,7 +242,23 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
       })}
 
       {unassignedMeters.length > 0 && rooms.length > 0 && (
-        <div className="space-y-1 pt-1">
+        <div
+          className={cn(
+            "space-y-1 pt-1 rounded-md transition-colors",
+            dragOverTarget === "__unassigned__" && "ring-2 ring-primary bg-primary/10"
+          )}
+          onDragOver={(e) => {
+            if (draggingMeterId) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDragOverTarget("__unassigned__"); }
+          }}
+          onDragLeave={() => { if (dragOverTarget === "__unassigned__") setDragOverTarget(null); }}
+          onDrop={(e) => {
+            e.preventDefault();
+            const id = e.dataTransfer.getData("text/meter-id") || draggingMeterId;
+            setDragOverTarget(null);
+            setDraggingMeterId(null);
+            if (id) handleMeterDrop(id, null);
+          }}
+        >
           <div
             className="flex items-center gap-2 text-xs text-muted-foreground/60 px-3 cursor-pointer select-none"
             onClick={() => setUnassignedExpanded(prev => !prev)}
@@ -253,40 +269,16 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
             <span>Ohne Raumzuordnung</span>
             <span>{unassignedMeters.length} Zähler</span>
           </div>
-          {unassignedExpanded && unassignedMeters.map(meter => (
-            <button
-              key={meter.id}
-              type="button"
-              className="w-full flex items-center gap-2 text-xs py-1 px-3 rounded bg-muted/20 hover:bg-muted/50 transition-colors text-left"
-              onClick={() => setEditingMeter(meter)}
-            >
-              <Gauge className={cn("h-3 w-3 shrink-0", energyTypeColors[meter.energy_type] || "text-muted-foreground")} />
-              <span className="truncate">{meter.name}</span>
-              {meter.meter_number && (
-                <span className="text-muted-foreground/50">#{meter.meter_number}</span>
-              )}
-            </button>
-          ))}
+          {unassignedExpanded && unassignedMeters.map(meter => renderMeterRow(meter))}
         </div>
       )}
       {unassignedMeters.length > 0 && rooms.length === 0 && (
         <div className="space-y-1 pt-1">
-          {unassignedMeters.map(meter => (
-            <button
-              key={meter.id}
-              type="button"
-              className="w-full flex items-center gap-2 text-xs py-1 px-3 rounded bg-muted/20 hover:bg-muted/50 transition-colors text-left"
-              onClick={() => setEditingMeter(meter)}
-            >
-              <Gauge className={cn("h-3 w-3 shrink-0", energyTypeColors[meter.energy_type] || "text-muted-foreground")} />
-              <span className="truncate">{meter.name}</span>
-              {meter.meter_number && (
-                <span className="text-muted-foreground/50">#{meter.meter_number}</span>
-              )}
-            </button>
-          ))}
+          {unassignedMeters.map(meter => renderMeterRow(meter))}
         </div>
       )}
+
+
 
 
       {adding ? (
