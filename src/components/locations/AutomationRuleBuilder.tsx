@@ -736,6 +736,11 @@ export function AutomationRuleBuilder({
     if (type === "time_point") { base.time_point = "08:00"; }
     if (type === "time_switch") { base.time_points = ["08:00", "18:00"]; }
     if (type === "status") { base.expected_status = "on"; }
+    if (type === "power_headroom") { base.operator = "<"; base.value = 5; }
+    setConditions((prev) => [...prev, base]);
+    setAddConditionOpen(false);
+  };
+
     setConditions((prev) => [...prev, base]);
     setAddConditionOpen(false);
   };
