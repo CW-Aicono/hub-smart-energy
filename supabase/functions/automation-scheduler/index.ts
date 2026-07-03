@@ -13,7 +13,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 interface AutomationCondition {
   id: string;
-  type: "sensor_value" | "time" | "weekday" | "status" | "time_point" | "time_switch";
+  type: "sensor_value" | "time" | "weekday" | "status" | "time_point" | "time_switch" | "power_headroom";
   sensor_uuid?: string;
   operator?: string;
   value?: number;
@@ -26,6 +26,7 @@ interface AutomationCondition {
   expected_status?: string;
   gateway_id?: string;
 }
+
 
 interface AutomationAction {
   actuator_uuid: string;
