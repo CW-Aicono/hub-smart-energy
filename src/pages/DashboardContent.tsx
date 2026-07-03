@@ -179,7 +179,7 @@ const DashboardContent = () => {
               <div className="animate-pulse text-muted-foreground text-sm">{t("common.loading")}</div>
             </div>
           )}
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-wrap gap-4 items-start">
             {filteredVisibleWidgets.length > 0 ? (
               filteredVisibleWidgets.map((widget) => {
                 const widgetType = widget.widget_type === "location_map"
