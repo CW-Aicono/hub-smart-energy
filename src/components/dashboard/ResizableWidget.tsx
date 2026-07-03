@@ -14,7 +14,7 @@ interface ResizableWidgetProps {
 
 const DEFAULT_MIN = 260;
 const DEFAULT_MAX = 1200;
-const HANDLE_ROW_HEIGHT = 14; // px — reserved row below the card for the drag handle
+const HANDLE_ROW_HEIGHT = 10; // px — compact, consistent row below the card for the drag handle
 
 const clampHeight = (value: number | undefined, min: number, max: number) => {
   if (typeof value !== "number") return undefined;
@@ -109,7 +109,6 @@ export default function ResizableWidget({
           "[&>[data-lazy]]:!h-auto [&>[data-lazy]]:flex-1 [&>[data-lazy]]:min-h-0",
           "[&>[data-lazy]>[data-slot=card]]:h-full [&>[data-lazy]>[data-slot=card]]:min-h-0 [&>[data-lazy]>[data-slot=card]]:flex [&>[data-lazy]>[data-slot=card]]:flex-col [&>[data-lazy]>[data-slot=card]]:overflow-hidden",
           "[&>[data-lazy]>[data-slot=card]>[data-slot=card-content]]:flex-1 [&>[data-lazy]>[data-slot=card]>[data-slot=card-content]]:min-h-0",
-          "[&_.recharts-responsive-container]:!h-full",
           "[&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full",
         ],
         className,
@@ -130,7 +129,7 @@ export default function ResizableWidget({
         onDoubleClick={onDoubleClick}
         style={{ height: `${HANDLE_ROW_HEIGHT}px` }}
         className={cn(
-          "shrink-0 flex items-center justify-center",
+          "shrink-0 flex items-start justify-center pt-1",
           "cursor-ns-resize touch-none select-none",
           "text-muted-foreground/50 hover:text-primary transition-colors",
           dragState.current ? "text-primary" : "",
