@@ -14,7 +14,7 @@ import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
 import { useMeters } from "@/hooks/useMeters";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface Props {
   locationId: string;
@@ -49,17 +49,52 @@ export function DynamicDlmCard({ locationId }: Props) {
     }
   }, [config?.id]);
 
-  // CP-Liste mit aktueller Priorität synchron halten
+  // CP-Liste mit aktueller Priorität synchron halten (dedupliziert)
   useEffect(() => {
     if (cps.length === 0) return;
-    const known = new Set(priority);
-    const missing = cps.map((c) => c.id).filter((id) => !known.has(id));
-    if (missing.length > 0) {
-      setPriority((prev) => [...prev, ...missing]);
-    }
-    setPriority((prev) => prev.filter((id) => cps.some((c) => c.id === id)));
+    setPriority((prev) => {
+      const validIds = new Set(cps.map((c) => c.id));
+      const seen = new Set<string>();
+      const cleaned: string[] = [];
+      for (const id of prev) {
+        if (validIds.has(id) && !seen.has(id)) {
+          seen.add(id);
+          cleaned.push(id);
+        }
+      }
+      for (const c of cps) {
+        if (!seen.has(c.id)) {
+          seen.add(c.id);
+          cleaned.push(c.id);
+        }
+      }
+      // Nur ersetzen, wenn sich wirklich etwas geändert hat
+      if (cleaned.length === prev.length && cleaned.every((id, i) => id === prev[i])) {
+        return prev;
+      }
+      return cleaned;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cps.length]);
+
+  // Live-Messwert vom Referenz-Zähler (Fallback wenn dlm_control_log noch leer ist)
+  const livePowerQuery = useQuery({
+    queryKey: ["dlm-live-power", referenceMeterId],
+    enabled: !!referenceMeterId,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("meter_power_readings_5min")
+        .select("power_avg, bucket")
+        .eq("meter_id", referenceMeterId)
+        .order("bucket", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { power_avg: number | null; bucket: string } | null;
+    },
+  });
 
   // Realtime: Log refresh
   useEffect(() => {
@@ -100,9 +135,19 @@ export function DynamicDlmCard({ locationId }: Props) {
   };
 
   const lastLog = log[0];
-  const measuredKw = lastLog?.measured_kw != null ? Number(lastLog.measured_kw) : null;
-  const availableKw = lastLog?.available_kw != null ? Number(lastLog.available_kw) : null;
+  const logMeasuredKw = lastLog?.measured_kw != null ? Number(lastLog.measured_kw) : null;
+  const logAvailableKw = lastLog?.available_kw != null ? Number(lastLog.available_kw) : null;
   const sensorStale = lastLog?.reason === "fallback_stale_sensor";
+
+  // Live-Fallback: wenn kein aktueller Steuerzyklus vorliegt (z. B. DLM gerade eingerichtet
+  // oder inaktiv), Werte direkt aus dem letzten 5-Minuten-Bucket des Referenzzählers ableiten.
+  const liveMeasuredKw = livePowerQuery.data?.power_avg != null ? Number(livePowerQuery.data.power_avg) : null;
+  const measuredKw = logMeasuredKw ?? liveMeasuredKw;
+  const availableKw =
+    logAvailableKw ??
+    (measuredKw != null
+      ? Math.max(0, gridLimitKw - measuredKw - safetyBufferKw)
+      : null);
 
   if (isLoading) return <Skeleton className="h-64" />;
   if (cps.length === 0) return null;
