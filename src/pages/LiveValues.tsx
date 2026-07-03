@@ -60,6 +60,7 @@ const LiveValues = () => {
   const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
   const [liveValues, setLiveValues] = useState<Map<string, { value: number; unit: string; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string }>>(new Map());
+  useEffect(() => { if (liveValues.size > 0) probeMark("LiveValues:first-value", { once: true }); }, [liveValues.size]); // PERF-PROBE
   const [manualValues, setManualValues] = useState<Map<string, { value: number; date: string }>>(new Map());
   const [manualDailyTotals, setManualDailyTotals] = useState<Map<string, number>>(new Map());
   const [virtualSources, setVirtualSources] = useState<{ virtual_meter_id: string; source_meter_id: string | null; source_charge_point_id: string | null; source_charge_point_group_id: string | null; source_all_charge_points: boolean | null; operator: string; sort_order: number }[]>([]);
