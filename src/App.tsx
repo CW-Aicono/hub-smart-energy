@@ -4,6 +4,7 @@ import { ConfirmDialogHost } from "@/components/ui/confirm-dialog";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools"; // PERF-PROBE (dev only)
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { TenantProvider } from "@/hooks/useTenant";
@@ -332,7 +333,9 @@ const App = () => (
         </AuthProvider>
       </DemoModeDetector>
     </BrowserRouter>
+    {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />}
   </QueryClientProvider>
 );
+
 
 export default App;
