@@ -53,8 +53,11 @@ Die vermutete Redundanz ist:
 - **UI:** `DynamicDlmCard.tsx` bekommt eine erweiterte Geräteliste (Wallbox / Wärmepumpe / Batterie / Aktor) mit Priorisierung; Vorschlagsliste aus vorhandenen Geräten (Klassifizierung via `deviceClassification.ts` + HA `climate`-Domain + Loxone `IRoomController`).
 - **Tests:** `dlmAllocation.ts` bleibt (rein rechnerisch), zusätzlich Integrationstest für gemischte Gerätelisten.
 
-### Phase C — Optional: Empfehlungs-/Automations-Brücke *(später)*
-- Neuer Automation-Trigger-Typ `power_headroom` („WENN Hausanschluss-Reserve < X kW"), damit User zusätzlich zu DLM eigene Regeln bauen können (z. B. „schalte Poolpumpe ab bei knapper Reserve"). So bleibt Automation regelbasiert, DLM bleibt Regelkreis — beide ergänzen sich sauber.
+### Phase C — Automations-Brücke *(umgesetzt)*
+- Neuer Automation-Trigger-Typ `power_headroom` („WENN Hausanschluss-Reserve </>/= X kW") im shared `automation-core` und im `automation-scheduler`.
+- Datenquelle: letzter `dlm_control_log`-Eintrag pro Standort (`available_kw - measured_kw`, max. 10 Min. alt) via neuer optionaler Provider-Methode `getPowerHeadroomKw(locationId)`.
+- UI im `AutomationRuleBuilder` erweitert um Bedingungstyp „Hausanschluss-Reserve" mit Operator + kW-Schwelle. Damit sind ergänzende Regeln möglich (z. B. „schalte Poolpumpe ab bei knapper Reserve"), ohne die Realtime-Regelschleife des DLM zu berühren.
+
 
 ---
 
