@@ -207,6 +207,8 @@ const DashboardContent = () => {
                       key={widget.widget_type}
                       height={widget.layout?.height}
                       widgetSize={widget.widget_size}
+                      minHeight={WIDGET_HEIGHT_LIMITS[widget.widget_type]?.min}
+                      maxHeight={WIDGET_HEIGHT_LIMITS[widget.widget_type]?.max}
                       onHeightChange={(h) => updateWidgetLayout(widget.widget_type, { ...(widget.layout ?? {}), height: h })}
                     >
                       <LazyWidget>
@@ -223,10 +225,13 @@ const DashboardContent = () => {
                     key={widget.widget_type}
                     height={widget.layout?.height}
                     widgetSize={widget.widget_size}
+                    minHeight={WIDGET_HEIGHT_LIMITS[widgetType]?.min}
+                    maxHeight={WIDGET_HEIGHT_LIMITS[widgetType]?.max}
                     onHeightChange={(h) => updateWidgetLayout(widget.widget_type, { ...(widget.layout ?? {}), height: h })}
                   >
 
                     {widget.widget_size !== "full" && widgetType !== "floor_plan_explorer" && (
+
                       <button
                         onClick={() => setExpandedWidget(widgetType)}
                         className="absolute top-3 right-3 z-10 p-1.5 rounded-md bg-background/80 border border-border shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted"
