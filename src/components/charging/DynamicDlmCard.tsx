@@ -73,22 +73,38 @@ export function DynamicDlmCard({ locationId }: Props) {
   }, [config?.id, cps.length, dlmDevices.length]);
 
 
-  // Live-Messwert vom Referenz-Zähler (Fallback wenn dlm_control_log noch leer ist)
+  // Live-Messwert vom Referenz-Zähler.
+  // 1) Bevorzugt: aktuellster Rohwert aus meter_power_readings (< 2 min alt → "Live").
+  // 2) Fallback: letzter 5-Minuten-Bucket ("5-Min").
   const livePowerQuery = useQuery({
     queryKey: ["dlm-live-power", referenceMeterId],
     enabled: !!referenceMeterId,
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const twoMinAgo = new Date(Date.now() - 2 * 60_000).toISOString();
+      const { data: raw } = await supabase
+        .from("meter_power_readings")
+        .select("power_value, timestamp")
+        .eq("meter_id", referenceMeterId)
+        .gte("timestamp", twoMinAgo)
+        .order("timestamp", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (raw && (raw as any).power_value != null) {
+        return { power_kw: Number((raw as any).power_value), source: "live" as const };
+      }
+      const { data: bucket } = await supabase
         .from("meter_power_readings_5min")
         .select("power_avg, bucket")
         .eq("meter_id", referenceMeterId)
         .order("bucket", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (error) throw error;
-      return data as { power_avg: number | null; bucket: string } | null;
+      if (bucket && (bucket as any).power_avg != null) {
+        return { power_kw: Number((bucket as any).power_avg), source: "5min" as const };
+      }
+      return null;
     },
   });
 
