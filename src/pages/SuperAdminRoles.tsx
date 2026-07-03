@@ -44,7 +44,7 @@ const SuperAdminRoles = () => {
     },
   });
 
-  const { sortedAdmins, sortAdmins, toggleAdmins } = useSortableData<any, "name" | "email" | "since">(superAdmins, (r, k) => {
+  const { sorted: sortedAdmins, sort: sortAdmins, toggle: toggleAdmins } = useSortableData<any, "name" | "email" | "since">(superAdmins, (r, k) => {
     switch (k) {
       case "name": return r.name;
       case "email": return r.email;
@@ -62,7 +62,7 @@ const SuperAdminRoles = () => {
     },
   });
 
-  const { sortedRoles, sortRoles, toggleRoles } = useSortableData<any, "role" | "created_at">(customRoles, (r, k) => {
+  const { sorted: sortedRoles, sort: sortRoles, toggle: toggleRoles } = useSortableData<any, "role" | "created_at">(customRoles, (r, k) => {
     switch (k) {
       case "role": return r.name;
       case "created_at": return r.created_at ? new Date(r.created_at) : null;
