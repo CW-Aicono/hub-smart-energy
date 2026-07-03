@@ -223,7 +223,7 @@ export function DynamicDlmCard({ locationId }: Props) {
                 <p className="text-xs text-muted-foreground">Hausanschluss-Last</p>
                 {measuredKw != null && (
                   <Badge variant="outline" className="h-4 px-1.5 text-[10px] leading-none">
-                    {logMeasuredKw != null ? "Live" : "5-Min"}
+                    {measuredSource === "live" ? "Live" : "5-Min"}
                   </Badge>
                 )}
               </div>
