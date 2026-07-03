@@ -38,6 +38,27 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
+  const [draggingMeterId, setDraggingMeterId] = useState<string | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);
+
+  const handleMeterDrop = async (meterId: string, targetRoomId: string | null) => {
+    const meter = floorMeters.find(m => m.id === meterId);
+    if (!meter) return;
+    if ((meter.room_id ?? null) === targetRoomId) return;
+    const { error } = await updateMeter(meterId, { room_id: targetRoomId });
+    if (error) {
+      toast.error("Zähler konnte nicht verschoben werden");
+    } else {
+      const roomName = targetRoomId
+        ? rooms.find(r => r.id === targetRoomId)?.name ?? "Raum"
+        : "Ohne Raumzuordnung";
+      toast.success(`"${meter.name}" → ${roomName}`);
+      if (targetRoomId) {
+        setExpandedRooms(prev => new Set(prev).add(targetRoomId));
+      }
+    }
+  };
+
 
 
   const floorMeters = useMemo(() =>
