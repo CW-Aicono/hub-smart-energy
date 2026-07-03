@@ -272,9 +272,9 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
 
   if (loading) {
     return (
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid h-full gap-4 md:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <Card key={i}><CardContent className="p-6"><Skeleton className="h-16" /></CardContent></Card>
+          <Card key={i} className="h-full min-h-[120px]"><CardContent className="flex h-full items-center p-4"><Skeleton className="h-12 w-full" /></CardContent></Card>
         ))}
       </div>
     );
