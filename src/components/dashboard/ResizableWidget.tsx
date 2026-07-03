@@ -85,9 +85,8 @@ export default function ResizableWidget({
     onHeightChange(undefined);
   }, [onHeightChange]);
 
-  const style: React.CSSProperties = localHeight
-    ? { height: `${localHeight}px` }
-    : {};
+  const controlled = typeof localHeight === "number";
+  const style: React.CSSProperties = controlled ? { height: `${localHeight}px` } : {};
 
   return (
     <div
@@ -95,12 +94,16 @@ export default function ResizableWidget({
       data-widget-size={widgetSize}
       className={cn(
         "w-full min-w-0 relative group flex flex-col",
-        // The card / lazy wrapper fills the space above the handle row
-        "[&>[data-lazy]]:flex-1 [&>[data-lazy]]:min-h-0",
-        "[&_[data-slot=card]]:!h-full [&_[data-slot=card]]:!flex [&_[data-slot=card]]:!flex-col",
-        "[&_[data-slot=card-content]]:!flex-1 [&_[data-slot=card-content]]:!min-h-0",
-        "[&_.recharts-responsive-container]:!h-full",
-        "[&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full",
+        // Cascade "fill the wrapper" only when the user has set an explicit
+        // height. Without this guard `h-full` collapses to 0 when the wrapper
+        // itself has no height yet (e.g. Location-Map widget on first render).
+        controlled && [
+          "[&>[data-lazy]]:flex-1 [&>[data-lazy]]:min-h-0",
+          "[&_[data-slot=card]]:!h-full [&_[data-slot=card]]:!flex [&_[data-slot=card]]:!flex-col",
+          "[&_[data-slot=card-content]]:!flex-1 [&_[data-slot=card-content]]:!min-h-0",
+          "[&_.recharts-responsive-container]:!h-full",
+          "[&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full",
+        ],
         className,
       )}
       style={style}
