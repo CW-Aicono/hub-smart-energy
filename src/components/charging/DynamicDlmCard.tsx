@@ -14,7 +14,7 @@ import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
 import { useMeters } from "@/hooks/useMeters";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface Props {
   locationId: string;
