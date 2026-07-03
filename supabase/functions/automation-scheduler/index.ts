@@ -454,7 +454,7 @@ Deno.serve(async (req) => {
 
       const conditionResults: boolean[] = [];
       for (const condition of conditions) {
-        const result = await evaluateCondition(condition, timeParts, sensorProvider);
+        const result = await evaluateCondition(condition, timeParts, sensorProvider, auto.location_id);
         conditionResults.push(result);
       }
 
