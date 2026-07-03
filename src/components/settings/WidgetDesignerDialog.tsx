@@ -116,6 +116,9 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
     staleTime: 60_000,
   });
 
+  useEffect(() => {
+    if (open) {
+      if (editingWidget) {
         setName(editingWidget.name);
         setChartType(editingWidget.chart_type);
         setColor(editingWidget.color);
