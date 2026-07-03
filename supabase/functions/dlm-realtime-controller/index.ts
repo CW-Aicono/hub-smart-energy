@@ -279,12 +279,13 @@ async function processLocation(cfg: any): Promise<any> {
   }
 
   // Audit
+  const combinedApplied = nonCpSkipped.length > 0 ? [...applied, ...nonCpSkipped] : applied;
   await admin.from("dlm_control_log").insert({
     tenant_id: cfg.tenant_id,
     location_id: cfg.location_id,
     measured_kw: measured,
     available_kw: result.available_kw,
-    applied_profiles: applied,
+    applied_profiles: combinedApplied,
     reason: result.fallback_active ? "fallback_stale_sensor" : "regular",
   });
 
