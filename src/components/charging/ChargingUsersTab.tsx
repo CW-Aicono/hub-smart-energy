@@ -276,13 +276,13 @@ const ChargingUsersTab = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead><SortableHead label={t("common.name" as any)} sortKey="name" sort={userSort} onToggle={userToggle} /></TableHead>
-                      <TableHead><SortableHead label={t("common.email" as any)} sortKey="email" sort={userSort} onToggle={userToggle} /></TableHead>
+                      <SortableHead label={t("common.name" as any)} sortKey="name" sort={userSort} onToggle={userToggle} />
+                      <SortableHead label={t("common.email" as any)} sortKey="email" sort={userSort} onToggle={userToggle} />
                       <TableHead>RFID-Tags</TableHead>
-                      <TableHead><SortableHead label={t("cu.userGroup" as any)} sortKey="group" sort={userSort} onToggle={userToggle} /></TableHead>
-                      <TableHead><SortableHead label="Tarif" sortKey="tariff" sort={userSort} onToggle={userToggle} /></TableHead>
-                      <TableHead><SortableHead label={t("common.status" as any)} sortKey="status" sort={userSort} onToggle={userToggle} /></TableHead>
-                      <TableHead><SortableHead label={t("common.created" as any)} sortKey="created_at" sort={userSort} onToggle={userToggle} /></TableHead>
+                      <SortableHead label={t("cu.userGroup" as any)} sortKey="group" sort={userSort} onToggle={userToggle} />
+                      <SortableHead label="Tarif" sortKey="tariff" sort={userSort} onToggle={userToggle} />
+                      <SortableHead label={t("common.status" as any)} sortKey="status" sort={userSort} onToggle={userToggle} />
+                      <SortableHead label={t("common.created" as any)} sortKey="created_at" sort={userSort} onToggle={userToggle} />
                       {isAdmin && <TableHead className="w-16" />}
                     </TableRow>
                   </TableHeader>
@@ -384,13 +384,13 @@ const ChargingUsersTab = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead><SortableHead label={t("common.name" as any)} sortKey="name" sort={userSort} onToggle={userToggle} /></TableHead>
+                      <SortableHead label={t("common.name" as any)} sortKey="name" sort={userSort} onToggle={userToggle} />
                       <TableHead>{t("common.description" as any)}</TableHead>
-                      <TableHead><SortableHead label="Tarif" sortKey="tariff" sort={userSort} onToggle={userToggle} /></TableHead>
+                      <SortableHead label="Tarif" sortKey="tariff" sort={userSort} onToggle={userToggle} />
                       <TableHead>{t("cu.appUser" as any)}</TableHead>
                       <TableHead>{t("cu.members" as any)}</TableHead>
-                      <TableHead><SortableHead label={t("common.status" as any)} sortKey="status" sort={userSort} onToggle={userToggle} /></TableHead>
-                      <TableHead><SortableHead label={t("common.created" as any)} sortKey="created_at" sort={userSort} onToggle={userToggle} /></TableHead>
+                      <SortableHead label={t("common.status" as any)} sortKey="status" sort={userSort} onToggle={userToggle} />
+                      <SortableHead label={t("common.created" as any)} sortKey="created_at" sort={userSort} onToggle={userToggle} />
                       {isAdmin && <TableHead className="w-16" />}
                     </TableRow>
                   </TableHeader>

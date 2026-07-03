@@ -324,7 +324,20 @@ const ChargingBilling = () => {
     });
   }, [invoices, periodRange, invoiceSearch]);
   type InvSortKey = "invoice_number" | "invoice_date" | "user_name" | "period" | "total_amount" | "status";
+  type TariffSortKey = "name" | "price" | "base_fee" | "idle_fee" | "tax" | "active" | "default";
+  const { sorted: sortedTariffs, sort: tariffSort, toggle: tariffToggle } = useSortableData<any, TariffSortKey>(tariffs, (tf, k) => {
+    switch (k) {
+      case "name": return tf.name?.toLowerCase() ?? "";
+      case "price": return tf.price_per_kwh ?? 0;
+      case "base_fee": return tf.base_fee ?? 0;
+      case "idle_fee": return tf.idle_fee_per_minute ?? 0;
+      case "tax": return tf.tax_rate_percent ?? 0;
+      case "active": return tf.is_active ? 1 : 0;
+      case "default": return tf.is_default ? 1 : 0;
+    }
+  });
   const { sorted: displayedInvoices, sort: invoiceSort, toggle: invoiceToggle } = useSortableData<any, InvSortKey>(filteredInvoices, (inv: any, k) => {
+
     switch (k) {
       case "invoice_number": return inv.invoice_number || "";
       case "invoice_date": return new Date(inv.invoice_date || inv.created_at);
@@ -736,19 +749,20 @@ const ChargingBilling = () => {
                   {tariffsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : tariffs.length === 0 ? <p className="text-muted-foreground">{t("charging.noTariffs" as any)}</p> : (
                     <Table>
                       <TableHeader>
-                        <TableRow>
-                           <TableHead>{t("charging.name" as any)}</TableHead>
-                          <TableHead>{t("charging.priceKwh" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead>
-                          <TableHead>{t("charging.baseFee" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead>
-                          <TableHead>{t("charging.idleFee" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead>
-                          <TableHead>MwSt</TableHead>
-                          <TableHead>{t("charging.active" as any)}</TableHead>
-                          <TableHead>Standard</TableHead>
-                          {isAdmin && <TableHead className="w-24">{t("charging.actions" as any)}</TableHead>}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {tariffs.map((tariff) => (
+                         <TableRow>
+                           <SortableHead label={t("charging.name" as any)} sortKey="name" sort={tariffSort} onToggle={tariffToggle} />
+                           <SortableHead label={<>{t("charging.priceKwh" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></>} sortKey="price" sort={tariffSort} onToggle={tariffToggle} />
+                           <SortableHead label={<>{t("charging.baseFee" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></>} sortKey="base_fee" sort={tariffSort} onToggle={tariffToggle} />
+                           <SortableHead label={<>{t("charging.idleFee" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></>} sortKey="idle_fee" sort={tariffSort} onToggle={tariffToggle} />
+                           <SortableHead label="MwSt" sortKey="tax" sort={tariffSort} onToggle={tariffToggle} />
+                           <SortableHead label={t("charging.active" as any)} sortKey="active" sort={tariffSort} onToggle={tariffToggle} />
+                           <SortableHead label="Standard" sortKey="default" sort={tariffSort} onToggle={tariffToggle} />
+                           {isAdmin && <TableHead className="w-24">{t("charging.actions" as any)}</TableHead>}
+                         </TableRow>
+                       </TableHeader>
+                       <TableBody>
+                         {sortedTariffs.map((tariff) => (
+
                           <TableRow key={tariff.id}>
                             <TableCell className="font-medium">
                               {tariff.name}

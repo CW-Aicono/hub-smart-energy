@@ -331,12 +331,12 @@ export default function RoamingTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead><SortableHead label="Name" sortKey="name" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
-                    <TableHead><SortableHead label="Rolle" sortKey="role" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
-                    <TableHead><SortableHead label="Protokoll" sortKey="protocol" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
-                    <TableHead><SortableHead label="Land / Party-ID" sortKey="id" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
-                    <TableHead><SortableHead label="Status" sortKey="status" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
-                    <TableHead><SortableHead label="Letzter Sync" sortKey="sync" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
+                    <SortableHead label="Name" sortKey="name" sort={partnerSort} onToggle={partnerToggle} />
+                    <SortableHead label="Rolle" sortKey="role" sort={partnerSort} onToggle={partnerToggle} />
+                    <SortableHead label="Protokoll" sortKey="protocol" sort={partnerSort} onToggle={partnerToggle} />
+                    <SortableHead label="Land / Party-ID" sortKey="id" sort={partnerSort} onToggle={partnerToggle} />
+                    <SortableHead label="Status" sortKey="status" sort={partnerSort} onToggle={partnerToggle} />
+                    <SortableHead label="Letzter Sync" sortKey="sync" sort={partnerSort} onToggle={partnerToggle} />
                     <TableHead className="text-right">Aktionen</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -391,14 +391,14 @@ export default function RoamingTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead><SortableHead label="Richtung" sortKey="direction" sort={sessionSort} onToggle={sessionToggle} /></TableHead>
-                    <TableHead><SortableHead label="Partner" sortKey="partner" sort={sessionSort} onToggle={sessionToggle} /></TableHead>
+                    <SortableHead label="Richtung" sortKey="direction" sort={sessionSort} onToggle={sessionToggle} />
+                    <SortableHead label="Partner" sortKey="partner" sort={sessionSort} onToggle={sessionToggle} />
                     <TableHead>Externe Session</TableHead>
-                    <TableHead><SortableHead label="Start" sortKey="start" sort={sessionSort} onToggle={sessionToggle} /></TableHead>
-                    <TableHead><SortableHead label="Ende" sortKey="end" sort={sessionSort} onToggle={sessionToggle} /></TableHead>
-                    <TableHead className="text-right"><SortableHead label="Energie (kWh)" sortKey="energy" sort={sessionSort} onToggle={sessionToggle} /></TableHead>
-                    <TableHead className="text-right"><SortableHead label="Kosten" sortKey="cost" sort={sessionSort} onToggle={sessionToggle} /></TableHead>
-                    <TableHead><SortableHead label="Status" sortKey="status" sort={partnerSort} onToggle={partnerToggle} /></TableHead>
+                    <SortableHead label="Start" sortKey="start" sort={sessionSort} onToggle={sessionToggle} />
+                    <SortableHead label="Ende" sortKey="end" sort={sessionSort} onToggle={sessionToggle} />
+                    <SortableHead label="Energie (kWh)" sortKey="energy" sort={sessionSort} onToggle={sessionToggle} />
+                    <SortableHead label="Kosten" sortKey="cost" sort={sessionSort} onToggle={sessionToggle} />
+                    <SortableHead label="Status" sortKey="status" sort={partnerSort} onToggle={partnerToggle} />
                   </TableRow>
                 </TableHeader>
                 <TableBody>

@@ -8,8 +8,10 @@ interface ResizableWidgetProps {
   minHeight?: number;
   maxHeight?: number;
   className?: string;
+  widgetSize?: string;
   children: React.ReactNode;
 }
+
 
 const DEFAULT_MIN = 200;
 const DEFAULT_MAX = 1200;
@@ -29,8 +31,10 @@ export default function ResizableWidget({
   minHeight = DEFAULT_MIN,
   maxHeight = DEFAULT_MAX,
   className,
+  widgetSize,
   children,
 }: ResizableWidgetProps) {
+
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [localHeight, setLocalHeight] = useState<number | undefined>(height);
   const dragState = useRef<{ startY: number; startHeight: number } | null>(null);
@@ -90,10 +94,9 @@ export default function ResizableWidget({
   return (
     <div
       ref={wrapperRef}
+      data-widget-size={widgetSize}
       className={cn(
         "w-full min-w-0 relative group",
-        // Force the root Card (direct child) + CardContent + Recharts to fill
-        // the wrapper so the drag actually stretches the visible content.
         localHeight
           ? "[&>*:first-child]:!h-full [&>*:first-child]:!flex [&>*:first-child]:!flex-col [&_[data-slot=card-content]]:!flex-1 [&_[data-slot=card-content]]:!min-h-0 [&_.recharts-responsive-container]:!h-full"
           : "",
@@ -101,6 +104,7 @@ export default function ResizableWidget({
       )}
       style={style}
     >
+
       {children}
       <div
         role="separator"

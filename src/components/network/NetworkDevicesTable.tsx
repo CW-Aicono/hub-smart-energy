@@ -122,19 +122,19 @@ export default function NetworkDevicesTable({ devices, onUpdateDevice }: Props) 
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead><SortableHead label="Typ" sortKey="type" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label="Name" sortKey="name" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label="Modell" sortKey="model" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label="IP-Adresse" sortKey="ip" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label="MAC" sortKey="mac" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead className="text-right"><SortableHead label="Clients" sortKey="clients" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead className="text-right"><SortableHead label="PoE (W)" sortKey="poe" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead className="text-right"><SortableHead label="Traffic ↑" sortKey="tx" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead className="text-right"><SortableHead label="Traffic ↓" sortKey="rx" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead className="text-right"><SortableHead label="Rate" sortKey="rate" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead className="text-right"><SortableHead label="Ports" sortKey="ports" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead className="text-right"><SortableHead label="Uptime" sortKey="uptime" sort={sort} onToggle={toggle} /></TableHead>
+                  <SortableHead label="Typ" sortKey="type" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Name" sortKey="name" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Modell" sortKey="model" sort={sort} onToggle={toggle} />
+                  <SortableHead label="IP-Adresse" sortKey="ip" sort={sort} onToggle={toggle} />
+                  <SortableHead label="MAC" sortKey="mac" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Clients" sortKey="clients" sort={sort} onToggle={toggle} />
+                  <SortableHead label="PoE (W)" sortKey="poe" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Traffic ↑" sortKey="tx" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Traffic ↓" sortKey="rx" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Rate" sortKey="rate" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Ports" sortKey="ports" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Uptime" sortKey="uptime" sort={sort} onToggle={toggle} />
                   <TableHead />
                 </TableRow>
               </TableHeader>

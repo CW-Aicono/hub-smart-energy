@@ -194,6 +194,7 @@ const DashboardContent = () => {
                     <ResizableWidget
                       key={widget.widget_type}
                       height={widget.layout?.height}
+                      widgetSize={widget.widget_size}
                       onHeightChange={(h) => updateWidgetLayout(widget.widget_type, { ...(widget.layout ?? {}), height: h })}
                     >
                       <LazyWidget>
@@ -209,8 +210,10 @@ const DashboardContent = () => {
                   <ResizableWidget
                     key={widget.widget_type}
                     height={widget.layout?.height}
+                    widgetSize={widget.widget_size}
                     onHeightChange={(h) => updateWidgetLayout(widget.widget_type, { ...(widget.layout ?? {}), height: h })}
                   >
+
                     {widget.widget_size !== "full" && widgetType !== "floor_plan_explorer" && (
                       <button
                         onClick={() => setExpandedWidget(widgetType)}
