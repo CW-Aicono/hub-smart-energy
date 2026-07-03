@@ -7,7 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Activity, Battery, Calendar, Download, Euro, Plus, Trash2, Zap, TrendingDown, Wifi, WifiOff } from "lucide-react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
@@ -27,18 +26,7 @@ const fmtNum = (n: number, d = 0) => n.toLocaleString("de-DE", { minimumFraction
 const fmtEur = (n: number) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 
 export default function PeakShaving() {
-  
-  const { sorted: sortedEvents, sort: sortEvents, toggle: toggleEvents } = useSortableData(events, (r, k) => {
-    switch (k) {
-      case "start": return r.started_at ? new Date(r.started_at) : null;
-      case "duration": return r.ended_at ? (new Date(r.ended_at).getTime() - new Date(r.started_at).getTime()) : 999999999;
-      case "peak": return Number(r.peak_kw_actual ?? 0);
-      case "baseline": return Number(r.peak_kw_without_shaving ?? 0);
-      case "discharged": return Number(r.kwh_discharged ?? 0);
-      case "savings": return Number(r.eur_saved ?? 0);
-      default: return null;
-    }
-  });
+  const { configs, isLoading, upsert, remove } = usePeakShavingConfigs();
   const { data: events = [] } = usePeakShavingEvents(100);
   const { data: monthly = [] } = usePeakShavingMonthly();
   const { locations } = useLocations();
@@ -56,7 +44,6 @@ export default function PeakShaving() {
   const monthsElapsed = ytd.length || 1;
   const annualForecast = (ytdSaved / monthsElapsed) * 12;
 
-  
   const activeEvent = events.find((e) => !e.ended_at);
 
   return (
@@ -192,18 +179,18 @@ export default function PeakShaving() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <SortableHead column="start" onSort={toggleEvents} sort={sortEvents}>Start</SortableHead>
-                    <SortableHead column="duration" onSort={toggleEvents} sort={sortEvents}>Dauer</SortableHead>
-                    <SortableHead column="peak" onSort={toggleEvents} sort={sortEvents} className="text-right">Spitze (kW)</SortableHead>
-                    <SortableHead column="baseline" onSort={toggleEvents} sort={sortEvents} className="text-right">Ohne Shaving (kW)</SortableHead>
-                    <SortableHead column="discharged" onSort={toggleEvents} sort={sortEvents} className="text-right">Entladen (kWh)</SortableHead>
-                    <SortableHead column="savings" onSort={toggleEvents} sort={sortEvents} className="text-right">Ersparnis</SortableHead>
+                    <TableHead>Start</TableHead>
+                    <TableHead>Dauer</TableHead>
+                    <TableHead className="text-right">Spitze (kW)</TableHead>
+                    <TableHead className="text-right">Ohne Shaving (kW)</TableHead>
+                    <TableHead className="text-right">Entladen (kWh)</TableHead>
+                    <TableHead className="text-right">Ersparnis</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {events.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Noch keine Eingriffe</TableCell></TableRow>
-                  ) : sortedEvents.map((e) => {
+                  ) : events.map((e) => {
                     const dur = e.ended_at
                       ? Math.round((new Date(e.ended_at).getTime() - new Date(e.started_at).getTime()) / 60000)
                       : null;
@@ -512,7 +499,7 @@ function CalendarSection({
             <TableHeader>
               <TableRow>
                 <TableHead>Event</TableHead>
-                <SortableHead column="start" onSort={toggleEvents} sort={sortEvents}>Start</SortableHead>
+                <TableHead>Start</TableHead>
                 <TableHead>Ende</TableHead>
                 <TableHead className="text-right">Erw. Peak (kW)</TableHead>
                 <TableHead className="text-right">Ziel-SoC</TableHead>

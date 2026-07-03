@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Smartphone, Users, ExternalLink, Check, Ban, Archive, Loader2, Copy, Link, QrCode } from "lucide-react";
@@ -43,17 +42,6 @@ const ChargingAppAdmin = () => {
 
   // Only show users that have auth_user_id (= app users)
   const appUsers = users.filter((u) => u.auth_user_id);
-  type AppUserSortKey = "name" | "email" | "group" | "status" | "created_at";
-  const { sorted: sortedAppUsers, sort, toggle } = useSortableData<any, AppUserSortKey>(filtered, (u, k) => {
-    switch (k) {
-      case "name": return u.name || "";
-      case "email": return u.email || "";
-      case "group": return getGroupName(u.group_id);
-      case "status": return u.status || "";
-      case "created_at": return new Date(u.created_at);
-      default: return null;
-    }
-  });
   const filtered = statusFilter === "all" ? appUsers : appUsers.filter((u) => u.status === statusFilter);
 
   const getGroupName = (gid: string | null) => groups.find((g) => g.id === gid)?.name || "—";
@@ -191,15 +179,15 @@ const ChargingAppAdmin = () => {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead><SortableHead label={T("common.name")} sortKey="name" sort={sort} onToggle={toggle} /></TableHead>
-                            <TableHead><SortableHead label={T("common.email")} sortKey="email" sort={sort} onToggle={toggle} /></TableHead>
-                            <TableHead><SortableHead label={T("chargingApp.group")} sortKey="group" sort={sort} onToggle={toggle} /></TableHead>
-                            <TableHead><SortableHead label={T("common.status")} sortKey="status" sort={sort} onToggle={toggle} /></TableHead>
-                            <TableHead><SortableHead label={T("chargingApp.registered")} sortKey="created_at" sort={sort} onToggle={toggle} /></TableHead>
+                            <TableHead>{T("common.name")}</TableHead>
+                            <TableHead>{T("common.email")}</TableHead>
+                            <TableHead>{T("chargingApp.group")}</TableHead>
+                            <TableHead>{T("common.status")}</TableHead>
+                            <TableHead>{T("chargingApp.registered")}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {sortedAppUsers.map((u) => (
+                          {filtered.map((u) => (
                             <TableRow key={u.id}>
                               <TableCell className="font-medium">{u.name}</TableCell>
                               <TableCell className="text-muted-foreground">{u.email || "—"}</TableCell>

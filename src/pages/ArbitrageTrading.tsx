@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -269,19 +268,7 @@ function ArbitrageDashboard() {
 // ── Storages Tab ──
 function StoragesTab() {
   const { t } = useTranslation();
-  
-  const { sorted: sorted, sort: sort, toggle: toggle } = useSortableData(storages, (r, k) => {
-    switch (k) {
-      case "name": return r.name;
-      case "location": return (r as any).locations?.name || '';
-      case "capacity": return Number(r.capacity_kwh);
-      case "power": return Number(r.max_charge_kw);
-      case "efficiency": return Number(r.efficiency_pct);
-      case "status": return r.status;
-      default: return null;
-    }
-  });
-  
+  const { storages, isLoading, createStorage, updateStorage, deleteStorage } = useEnergyStorages();
   const { locations } = useLocations();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -337,9 +324,9 @@ function StoragesTab() {
       </div>
 
       <Table>
-        <TableHeader><TableRow><SortableHead column="name" onSort={toggle} sort={sort}>{t("charging.name" as any)}</SortableHead><SortableHead column="location" onSort={toggle} sort={sort}>{t("charging.location" as any)}</SortableHead><SortableHead column="capacity" onSort={toggle} sort={sort}>{t("arbitrage.capacity" as any)}</SortableHead><SortableHead column="power" onSort={toggle} sort={sort}>{t("arbitrage.chargeDischarge" as any)}</SortableHead><TableHead>η</TableHead><SortableHead column="status" onSort={toggle} sort={sort}>{t("common.status" as any)}</SortableHead><TableHead></TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><TableHead>{t("charging.name" as any)}</TableHead><TableHead>{t("charging.location" as any)}</TableHead><TableHead>{t("arbitrage.capacity" as any)}</TableHead><TableHead>{t("arbitrage.chargeDischarge" as any)}</TableHead><TableHead>η</TableHead><TableHead>{t("common.status" as any)}</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {sorted.map((s) => (
+          {storages.map((s) => (
             <TableRow key={s.id}>
               <TableCell className="font-medium"><Battery className="inline h-4 w-4 mr-1" />{s.name}</TableCell>
               <TableCell>{(s as any).locations?.name || "–"}</TableCell>
@@ -473,7 +460,7 @@ function StrategiesTab() {
       </div>
 
       <Table>
-        <TableHeader><TableRow><SortableHead column="name" onSort={toggle} sort={sort}>{t("charging.name" as any)}</SortableHead><TableHead>{t("arbitrage.storages" as any)}</TableHead><TableHead>{t("arbitrage.buyBelow" as any)}</TableHead><TableHead>{t("arbitrage.sellAbove" as any)}</TableHead><TableHead>{t("common.active" as any)}</TableHead><TableHead></TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><TableHead>{t("charging.name" as any)}</TableHead><TableHead>{t("arbitrage.storages" as any)}</TableHead><TableHead>{t("arbitrage.buyBelow" as any)}</TableHead><TableHead>{t("arbitrage.sellAbove" as any)}</TableHead><TableHead>{t("common.active" as any)}</TableHead><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
           {activeStrategies.map((s) => renderStrategyRow(s))}
           {activeStrategies.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">{t("arbitrage.noStrategies" as any)}</TableCell></TableRow>}
@@ -484,7 +471,7 @@ function StrategiesTab() {
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-1"><Archive className="h-4 w-4" /> {t("arbitrage.archivedStrategies" as any)}</h3>
           <Table>
-            <TableHeader><TableRow><SortableHead column="name" onSort={toggle} sort={sort}>{t("charging.name" as any)}</SortableHead><TableHead>{t("arbitrage.storages" as any)}</TableHead><TableHead>{t("arbitrage.buyBelow" as any)}</TableHead><TableHead>{t("arbitrage.sellAbove" as any)}</TableHead><SortableHead column="status" onSort={toggle} sort={sort}>{t("common.status" as any)}</SortableHead><TableHead></TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>{t("charging.name" as any)}</TableHead><TableHead>{t("arbitrage.storages" as any)}</TableHead><TableHead>{t("arbitrage.buyBelow" as any)}</TableHead><TableHead>{t("arbitrage.sellAbove" as any)}</TableHead><TableHead>{t("common.status" as any)}</TableHead><TableHead></TableHead></TableRow></TableHeader>
             <TableBody>
               {archivedStrategies.map((s) => renderStrategyRow(s, true))}
             </TableBody>

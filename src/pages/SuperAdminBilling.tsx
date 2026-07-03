@@ -4,12 +4,12 @@ import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Download, Send, CheckCircle2, Loader2, Pencil, Euro, AlertTriangle, Clock, FileCheck, RefreshCw, Receipt } from "lucide-react";
+import { Download, Send, CheckCircle2, Loader2, ArrowUpDown, Pencil, Euro, AlertTriangle, Clock, FileCheck, RefreshCw, Receipt } from "lucide-react";
 import { generateSepaDirectDebitXml, downloadXml } from "@/lib/sepaXml";
 import EditInvoiceContent from "@/components/super-admin/EditInvoiceContent";
 import { toast } from "sonner";
@@ -24,9 +24,9 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 type SortKey = "tenant" | "period" | "module" | "support" | "amount" | "payment" | "status" | "lexware";
+type SortDir = "asc" | "desc";
 
 const SuperAdminBilling = () => {
   const { user, loading: authLoading } = useAuth();
@@ -38,6 +38,8 @@ const SuperAdminBilling = () => {
   const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
   const [editInv, setEditInv] = useState<any>(null);
   const [editStatus, setEditStatus] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("tenant");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [syncing, setSyncing] = useState(false);
   const [lexwareSummary, setLexwareSummary] = useState<Record<string, { count: number; totalAmount: number; openAmount: number }> | null>(null);
   const queryClient = useQueryClient();
@@ -89,19 +91,33 @@ const SuperAdminBilling = () => {
     },
   });
 
-  const { sorted, sort, toggle } = useSortableData<any, SortKey>(invoices, (r, k) => {
-    switch (k) {
-      case "tenant": return r.tenants?.name ?? "";
-      case "period": return r.period_start ?? "";
-      case "module": return Number(r.module_total ?? 0);
-      case "support": return Number(r.support_total ?? 0);
-      case "amount": return Number(r.amount ?? 0);
-      case "payment": return r.tenants?.payment_method ?? "";
-      case "status": return r.status ?? "";
-      case "lexware": return r.lexware_invoice_id ? 1 : 0;
-      default: return null;
-    }
-  }, { key: "tenant", direction: "asc" });
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  };
+
+  const sorted = useMemo(() => {
+    const arr = [...invoices];
+    const dir = sortDir === "asc" ? 1 : -1;
+    arr.sort((a: any, b: any) => {
+      switch (sortKey) {
+        case "tenant": return dir * (a.tenants?.name ?? "").localeCompare(b.tenants?.name ?? "");
+        case "period": return dir * ((a.period_start ?? "").localeCompare(b.period_start ?? ""));
+        case "module": return dir * (Number(a.module_total ?? 0) - Number(b.module_total ?? 0));
+        case "support": return dir * (Number(a.support_total ?? 0) - Number(b.support_total ?? 0));
+        case "amount": return dir * (Number(a.amount ?? 0) - Number(b.amount ?? 0));
+        case "payment": return dir * ((a.tenants?.payment_method ?? "").localeCompare(b.tenants?.payment_method ?? ""));
+        case "status": return dir * ((a.status ?? "").localeCompare(b.status ?? ""));
+        case "lexware": {
+          const aVal = a.lexware_invoice_id ? 1 : 0;
+          const bVal = b.lexware_invoice_id ? 1 : 0;
+          return dir * (aVal - bVal);
+        }
+        default: return 0;
+      }
+    });
+    return arr;
+  }, [invoices, sortKey, sortDir]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -186,6 +202,15 @@ const SuperAdminBilling = () => {
     toast.success(`${t("billing.sepa_exported")} (${sepaInvoices.length} Positionen)`);
     setSepaOpen(false);
   };
+
+  const SortableHead = ({ label, sortId }: { label: string; sortId: SortKey }) => (
+    <TableHead>
+      <button onClick={() => toggleSort(sortId)} className="flex items-center gap-1 hover:text-foreground transition-colors">
+        {label}
+        <ArrowUpDown className={`h-3 w-3 ${sortKey === sortId ? "text-foreground" : "text-muted-foreground/50"}`} />
+      </button>
+    </TableHead>
+  );
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -321,28 +346,29 @@ const SuperAdminBilling = () => {
               <CardContent className="p-4 flex items-center gap-4">
                 <div className="rounded-lg bg-primary/10 p-2.5"><FileCheck className="h-5 w-5 text-primary" /></div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Lexware Sync</p>
-                  <p className="text-2xl font-bold">{stats.lexwareCount}</p>
-                  <p className="text-xs text-muted-foreground">von {stats.totalCount} Rechnungen</p>
+                  <p className="text-sm text-muted-foreground">In Lexware</p>
+                  <p className="text-2xl font-bold">{stats.lexwareCount} / {stats.totalCount}</p>
+                  <p className="text-xs text-muted-foreground">synchronisiert</p>
                 </div>
               </CardContent>
             </Card>
           </div>
 
+          {/* Table */}
           <Card>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <SortableHead label="Mandant" sortKey="tenant" sort={sort} onToggle={toggle} />
-                    <SortableHead label="Zeitraum" sortKey="period" sort={sort} onToggle={toggle} />
-                    <SortableHead label="Module" sortKey="module" sort={sort} onToggle={toggle} />
-                    <SortableHead label="Support" sortKey="support" sort={sort} onToggle={toggle} />
-                    <SortableHead label="Gesamt" sortKey="amount" sort={sort} onToggle={toggle} />
-                    <SortableHead label="Zahlung" sortKey="payment" sort={sort} onToggle={toggle} />
-                    <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
-                    <SortableHead label="Lexware" sortKey="lexware" sort={sort} onToggle={toggle} />
-                    <TableCell className="text-right">Aktion</TableCell>
+                    <SortableHead label={t("billing.tenant")} sortId="tenant" />
+                    <SortableHead label={t("billing.period")} sortId="period" />
+                    <SortableHead label="Module" sortId="module" />
+                    <SortableHead label="Support" sortId="support" />
+                    <SortableHead label={t("billing.amount")} sortId="amount" />
+                    <SortableHead label={t("billing.payment_method")} sortId="payment" />
+                    <SortableHead label="Status" sortId="status" />
+                    <TableHead className="text-center">Bearbeiten</TableHead>
+                    <SortableHead label="Lexware" sortId="lexware" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -351,43 +377,38 @@ const SuperAdminBilling = () => {
                   ) : (
                     sorted.map((inv: any) => (
                       <TableRow key={inv.id}>
-                        <TableCell className="font-medium">{inv.tenants?.name}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{inv.period_start} – {inv.period_end}</TableCell>
-                        <TableCell className="text-sm">{inv.module_total?.toLocaleString("de-DE", { minimumFractionDigits: 2 })} €</TableCell>
-                        <TableCell className="text-sm">{inv.support_total?.toLocaleString("de-DE", { minimumFractionDigits: 2 })} €</TableCell>
-                        <TableCell className="font-semibold">{inv.amount?.toLocaleString("de-DE", { minimumFractionDigits: 2 })} €</TableCell>
+                        <TableCell className="font-medium">{inv.tenants?.name ?? "–"}</TableCell>
+                        <TableCell className="text-muted-foreground">{inv.period_start ? new Date(inv.period_start + "T00:00:00").toLocaleDateString("de-DE") : "–"} – {inv.period_end ? new Date(inv.period_end + "T00:00:00").toLocaleDateString("de-DE") : "–"}</TableCell>
+                        <TableCell>{Number(inv.module_total ?? 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</TableCell>
+                        <TableCell>{Number(inv.support_total ?? 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</TableCell>
+                        <TableCell className="font-medium">{Number(inv.amount).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="font-normal uppercase text-[10px]">
-                            {inv.tenants?.payment_method ?? "invoice"}
+                          <Badge variant="outline" className="text-xs">
+                            {inv.tenants?.payment_method === "sepa" ? "SEPA" : "Rechnung"}
                           </Badge>
                         </TableCell>
-                        <TableCell><Badge variant={statusBadgeVariant(inv.status)}>{statusLabel(inv.status)}</Badge></TableCell>
+                        <TableCell>
+                          <Badge variant={statusBadgeVariant(inv.status)} className="text-xs">
+                            {statusLabel(inv.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button size="sm" variant="ghost" onClick={() => { setEditInv(inv); setEditStatus(inv.status); }}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        </TableCell>
                         <TableCell>
                           {inv.lexware_invoice_id ? (
-                            <div className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                              <CheckCircle2 className="h-3 w-3" />
-                              {inv.lexware_invoice_number || "OK"}
-                            </div>
-                          ) : sendingIds.has(inv.id) ? (
-                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                            <Badge variant="default" className="text-xs gap-1">
+                              <CheckCircle2 className="h-3 w-3" />{t("billing.lexware_synced")}
+                            </Badge>
+                          ) : inv.status === "voided" ? (
+                            <Badge variant="outline" className="text-xs text-muted-foreground">—</Badge>
                           ) : (
-                            <span className="text-xs text-muted-foreground italic">offen</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => {
-                              setEditInv(inv);
-                              setEditStatus(inv.status);
-                            }}>
-                              <Pencil className="h-4 w-4" />
+                            <Button size="sm" variant="ghost" disabled={sendingIds.has(inv.id) || lexwareMutation.isPending} onClick={() => lexwareMutation.mutate([inv.id])}>
+                              {sendingIds.has(inv.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                             </Button>
-                            {!inv.lexware_invoice_id && (
-                              <Button variant="ghost" size="icon" disabled={lexwareMutation.isPending} onClick={() => lexwareMutation.mutate([inv.id])}>
-                                {lexwareMutation.isPending && sendingIds.has(inv.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                              </Button>
-                            )}
-                          </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))
@@ -397,29 +418,27 @@ const SuperAdminBilling = () => {
             </CardContent>
           </Card>
         </div>
-      </main>
 
-      <Dialog open={!!editInv} onOpenChange={(o) => !o && setEditInv(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Abrechnung bearbeiten</DialogTitle>
-            <DialogDescription>{editInv?.tenants?.name} | {editInv?.period_start} - {editInv?.period_end}</DialogDescription>
-          </DialogHeader>
-
-          {editInv && (
-            <EditInvoiceContent
+        {/* Edit Invoice Dialog */}
+        <Dialog open={!!editInv} onOpenChange={(o) => { if (!o) setEditInv(null); }}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Abrechnung bearbeiten</DialogTitle>
+              <DialogDescription>{editInv?.tenants?.name} — {editInv?.period_start} – {editInv?.period_end}</DialogDescription>
+            </DialogHeader>
+            {editInv && <EditInvoiceContent
               invoice={editInv}
-              status={editStatus}
-              onStatusChange={setEditStatus}
-              onSave={(updates) => statusMutation.mutate({ id: editInv.id, status: editStatus, ...updates })}
-            />
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditInv(null)}>{t("common.cancel")}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              editStatus={editStatus}
+              setEditStatus={setEditStatus}
+              onSave={(updates) => {
+                statusMutation.mutate({ id: editInv.id, status: editStatus, ...updates });
+              }}
+              onCancel={() => setEditInv(null)}
+              isPending={statusMutation.isPending}
+            />}
+          </DialogContent>
+        </Dialog>
+      </main>
     </div>
   );
 };

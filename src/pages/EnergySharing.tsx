@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -233,19 +232,6 @@ function CommunityDetail({ communityId, communityName }: { communityId: string; 
 
 function MembersTab({ communityId, communityName }: { communityId: string; communityName: string }) {
   const { members, createMember, updateMember, deleteMember } = useCommunityMembers(communityId);
-  type MemberSortKey = "name" | "role" | "class" | "imsys" | "share" | "status";
-  const { sorted: sortedMembers, sort: memberSort, toggle: memberToggle } = useSortableData(members, (r, k) => {
-    switch (k) {
-      case "name": return r.display_name;
-      case "role": return r.role;
-      case "class": return r.customer_class;
-      case "imsys": return r.imsys_status;
-      case "share": return Number(r.share_kw);
-      case "status": return r.status;
-      default: return null;
-    }
-  });
-
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<CommunityMember | null>(null);
   const [signMember, setSignMember] = useState<CommunityMember | null>(null);
@@ -450,12 +436,12 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
         ) : (
           <Table>
             <TableHeader><TableRow>
-              <SortableHead sortKey="name" current={memberSort} onToggle={memberToggle}>Name</SortableHead><SortableHead sortKey="role" current={memberSort} onToggle={memberToggle}>Rolle</SortableHead><SortableHead sortKey="class" current={memberSort} onToggle={memberToggle}>Klasse</SortableHead>
-              <SortableHead sortKey="imsys" current={memberSort} onToggle={memberToggle}>iMSys</SortableHead><SortableHead sortKey="share" current={memberSort} onToggle={memberToggle} className="text-right">Anteil (kW)</SortableHead>
-              <SortableHead sortKey="status" current={memberSort} onToggle={memberToggle}>Status</SortableHead><TableHead></TableHead>
+              <TableHead>Name</TableHead><TableHead>Rolle</TableHead><TableHead>Klasse</TableHead>
+              <TableHead>iMSys</TableHead><TableHead className="text-right">Anteil (kW)</TableHead>
+              <TableHead>Status</TableHead><TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {sortedMembers.map((m) => (
+              {members.map((m) => (
                 <TableRow key={m.id}>
                   <TableCell>
                     <Link to={`/energy-sharing/members/${m.id}`} className="text-primary hover:underline">
@@ -505,19 +491,6 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
 
 function AssetsTab({ communityId }: { communityId: string }) {
   const { assets, createAsset, updateAsset, deleteAsset } = useCommunityAssets(communityId);
-  type AssetSortKey = "type" | "building" | "capacity" | "model" | "imsys" | "renewable";
-  const { sorted: sortedAssets, sort: assetSort, toggle: assetToggle } = useSortableData(assets, (r, k) => {
-    switch (k) {
-      case "type": return r.asset_type;
-      case "building": return r.building_type;
-      case "capacity": return Number(r.capacity_kw);
-      case "model": return r.share_model;
-      case "imsys": return r.imsys_status;
-      case "renewable": return r.renewable_confirmed;
-      default: return null;
-    }
-  });
-
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<CommunityAsset | null>(null);
   const emptyForm = {
@@ -637,13 +610,13 @@ function AssetsTab({ communityId }: { communityId: string }) {
         ) : (
           <Table>
             <TableHeader><TableRow>
-              <SortableHead sortKey="type" current={assetSort} onToggle={assetToggle}>Typ</SortableHead><SortableHead sortKey="building" current={assetSort} onToggle={assetToggle}>Gebäude</SortableHead>
-              <SortableHead sortKey="capacity" current={assetSort} onToggle={assetToggle} className="text-right">Leistung (kW)</SortableHead>
-              <TableHead>Verteilmodell</TableHead><SortableHead sortKey="imsys" current={memberSort} onToggle={memberToggle}>iMSys</SortableHead>
-              <SortableHead sortKey="renewable" current={assetSort} onToggle={assetToggle}>EE</SortableHead><TableHead></TableHead>
+              <TableHead>Typ</TableHead><TableHead>Gebäude</TableHead>
+              <TableHead className="text-right">Leistung (kW)</TableHead>
+              <TableHead>Verteilmodell</TableHead><TableHead>iMSys</TableHead>
+              <TableHead>EE</TableHead><TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {sortedAssets.map((a) => {
+              {assets.map((a) => {
                 const sp = isSmallPlant(Number(a.capacity_kw), a.building_type);
                 return (
                   <TableRow key={a.id}>
@@ -678,17 +651,6 @@ function AssetsTab({ communityId }: { communityId: string }) {
 
 function TariffTab({ communityId }: { communityId: string }) {
   const { tariffs, createTariff, updateTariff, deleteTariff } = useCommunityTariffs(communityId);
-  type TariffSortKey = "from" | "to" | "price" | "feedin";
-  const { sorted: sortedTariffs, sort: tariffSort, toggle: tariffToggle } = useSortableData(tariffs, (r, k) => {
-    switch (k) {
-      case "from": return r.valid_from;
-      case "to": return r.valid_to;
-      case "price": return Number(r.price_ct_kwh);
-      case "feedin": return Number(r.feed_in_ct_kwh);
-      default: return null;
-    }
-  });
-
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<CommunityTariff | null>(null);
   const today = new Date().toISOString().slice(0, 10);
@@ -759,13 +721,13 @@ function TariffTab({ communityId }: { communityId: string }) {
         ) : (
           <Table>
             <TableHeader><TableRow>
-              <SortableHead sortKey="from" current={tariffSort} onToggle={tariffToggle}>Gültig ab</SortableHead><SortableHead sortKey="to" current={tariffSort} onToggle={tariffToggle}>Gültig bis</SortableHead>
-              <SortableHead sortKey="price" current={tariffSort} onToggle={tariffToggle} className="text-right">Preis (ct/kWh)</SortableHead>
-              <SortableHead sortKey="feedin" current={tariffSort} onToggle={tariffToggle} className="text-right">Einspeisung (ct/kWh)</SortableHead>
+              <TableHead>Gültig ab</TableHead><TableHead>Gültig bis</TableHead>
+              <TableHead className="text-right">Preis (ct/kWh)</TableHead>
+              <TableHead className="text-right">Einspeisung (ct/kWh)</TableHead>
               <TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {sortedTariffs.map((t) => (
+              {tariffs.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell>{t.valid_from}</TableCell>
                   <TableCell>{t.valid_to ?? "—"}</TableCell>
