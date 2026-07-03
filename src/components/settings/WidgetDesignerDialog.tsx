@@ -212,13 +212,38 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
     });
   };
 
-  // Group meters by energy type
-  const meterGroups = (meters || []).reduce<Record<string, typeof meters>>((acc, meter) => {
+  // Filter meters by location / floor / room / search, then group by energy type
+  const availableFloors = useMemo(
+    () => (filterLocation === "__all__" ? floors : floors.filter((f) => f.location_id === filterLocation)),
+    [floors, filterLocation],
+  );
+  const availableRooms = useMemo(() => {
+    const floorIds = new Set(availableFloors.map((f) => f.id));
+    const scoped = rooms.filter((r) => floorIds.has(r.floor_id));
+    return filterFloor === "__all__" ? scoped : scoped.filter((r) => r.floor_id === filterFloor);
+  }, [rooms, availableFloors, filterFloor]);
+
+  const filteredMeters = useMemo(() => {
+    const q = meterSearch.trim().toLowerCase();
+    return (meters || []).filter((m: any) => {
+      if (filterLocation !== "__all__" && m.location_id !== filterLocation) return false;
+      if (filterFloor !== "__all__" && m.floor_id !== filterFloor) return false;
+      if (filterRoom !== "__all__" && m.room_id !== filterRoom) return false;
+      if (q) {
+        const hay = `${m.name ?? ""} ${m.meter_number ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [meters, filterLocation, filterFloor, filterRoom, meterSearch]);
+
+  const meterGroups = filteredMeters.reduce<Record<string, typeof meters>>((acc, meter) => {
     const type = (meter as any).energy_type || "Sonstige";
     if (!acc[type]) acc[type] = [];
     acc[type]!.push(meter);
     return acc;
   }, {});
+
 
   const isEnergyFlow = chartType === "energyflow";
   const isValid = name.trim().length > 0 && (isEnergyFlow ? (config.energy_flow_nodes?.length ?? 0) > 0 : config.meter_ids.length > 0);
