@@ -175,9 +175,10 @@ export async function evaluateAutomation(
   const conditionResults: boolean[] = [];
 
   for (const condition of rule.conditions) {
-    const result = await evaluateCondition(condition, timeParts, sensorProvider);
+    const result = await evaluateCondition(condition, timeParts, sensorProvider, rule.location_id);
     conditionResults.push(result);
   }
+
 
   const conditionsMet = rule.logic_operator === "AND"
     ? conditionResults.every(Boolean)
