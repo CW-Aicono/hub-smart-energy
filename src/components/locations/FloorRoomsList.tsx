@@ -30,7 +30,7 @@ interface FloorRoomsListProps {
 
 export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
   const { rooms, loading, addRoom, updateRoom, deleteRoom } = useFloorRooms(floorId);
-  const { meters, updateMeter } = useMeters(locationId);
+  const { meters, updateMeter, refetch: refetchMeters } = useMeters(locationId);
   const { isAdmin } = useUserRole();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
