@@ -227,12 +227,32 @@ function DeviceTable({
     <Table>
       <TableHeader>
         <TableRow>
+          {isAdmin && onToggleAll && (
+            <TableHead className="w-8">
+              <Checkbox
+                checked={(() => {
+                  const linkedIds = sortedDevices
+                    .map((d) => sensorUuidToMeter.get(d.id)?.id)
+                    .filter((id): id is string => !!id);
+                  return linkedIds.length > 0 && linkedIds.every((id) => selectedIds?.has(id));
+                })()}
+                onCheckedChange={(v) => {
+                  const linkedIds = sortedDevices
+                    .map((d) => sensorUuidToMeter.get(d.id)?.id)
+                    .filter((id): id is string => !!id);
+                  onToggleAll(linkedIds, !!v);
+                }}
+                aria-label="Alle auswählen"
+              />
+            </TableHead>
+          )}
           <TableHead className="w-[40px]">
             <SortableHead label="Typ" sortKey="type" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
           </TableHead>
           <TableHead>
             <SortableHead label="Name" sortKey="name" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
           </TableHead>
+
           <TableHead>
             <SortableHead label="Raum (Gateway)" sortKey="room" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
           </TableHead>
