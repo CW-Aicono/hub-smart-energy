@@ -346,10 +346,120 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
                     </div>
                   </div>
                 ))}
+          {/* ── Data sources ── */}
+          <TabsContent value="data" className="space-y-4 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Liegenschaft</Label>
+                <Select
+                  value={filterLocation}
+                  onValueChange={(v) => {
+                    setFilterLocation(v);
+                    setFilterFloor("__all__");
+                    setFilterRoom("__all__");
+                  }}
+                >
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Alle Liegenschaften</SelectItem>
+                    {(locations || []).map((l) => (
+                      <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Etage</Label>
+                <Select
+                  value={filterFloor}
+                  onValueChange={(v) => {
+                    setFilterFloor(v);
+                    setFilterRoom("__all__");
+                  }}
+                  disabled={availableFloors.length === 0}
+                >
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Alle Etagen" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Alle Etagen</SelectItem>
+                    {availableFloors.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Raum</Label>
+                <Select
+                  value={filterRoom}
+                  onValueChange={setFilterRoom}
+                  disabled={availableRooms.length === 0}
+                >
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Alle Räume" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Alle Räume</SelectItem>
+                    {availableRooms.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                value={meterSearch}
+                onChange={(e) => setMeterSearch(e.target.value)}
+                placeholder="Zähler suchen..."
+                className="pl-8 h-9"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Zähler auswählen</Label>
+                <span className="text-xs text-muted-foreground">
+                  {filteredMeters.length} von {(meters || []).length}
+                  {config.meter_ids.length > 0 ? ` · ${config.meter_ids.length} ausgewählt` : ""}
+                </span>
+              </div>
+              <div className="max-h-64 overflow-auto border rounded-lg p-2 space-y-3">
+                {Object.entries(meterGroups).map(([type, groupMeters]) => (
+                  <div key={type}>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">{type}</p>
+                    <div className="space-y-1">
+                      {(groupMeters || []).map((meter: any) => (
+                        <label key={meter.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer">
+                          <Checkbox
+                            checked={config.meter_ids.includes(meter.id)}
+                            onCheckedChange={() => toggleMeter(meter.id)}
+                          />
+                          <span className="text-sm truncate">{meter.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
                 {Object.keys(meterGroups).length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">Keine Zähler verfügbar</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">Keine Zähler gefunden</p>
                 )}
               </div>
+              {(filterLocation !== "__all__" || filterFloor !== "__all__" || filterRoom !== "__all__" || meterSearch) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    setFilterLocation("__all__");
+                    setFilterFloor("__all__");
+                    setFilterRoom("__all__");
+                    setMeterSearch("");
+                  }}
+                >
+                  Filter zurücksetzen
+                </Button>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -364,6 +474,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
               </Select>
             </div>
           </TabsContent>
+
 
           {/* ── Topology (energyflow only) ── */}
           <TabsContent value="topology" className="space-y-4 mt-4">
