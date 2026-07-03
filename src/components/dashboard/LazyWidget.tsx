@@ -68,7 +68,7 @@ export default function LazyWidget({ children, minHeight = 200 }: LazyWidgetProp
   }
 
   return (
-    <div ref={ref} data-lazy="" className="h-full flex flex-col min-h-0">
+    <div ref={ref} data-lazy="" className="h-full flex flex-col min-h-0" style={{ minHeight }}>
       <Suspense fallback={<WidgetPlaceholder minHeight={minHeight} />}>
         {children}
       </Suspense>

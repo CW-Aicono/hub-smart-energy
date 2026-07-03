@@ -16,6 +16,11 @@ const DEFAULT_MIN = 260;
 const DEFAULT_MAX = 1200;
 const HANDLE_ROW_HEIGHT = 14; // px — reserved row below the card for the drag handle
 
+const clampHeight = (value: number | undefined, min: number, max: number) => {
+  if (typeof value !== "number") return undefined;
+  return Math.min(max, Math.max(min, value));
+};
+
 /**
  * Wrapper for dashboard widgets that adds a drag-handle *below* the widget
  * card to resize its height. The handle lives in its own row so widget
@@ -34,12 +39,14 @@ export default function ResizableWidget({
   children,
 }: ResizableWidgetProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [localHeight, setLocalHeight] = useState<number | undefined>(height);
+  const [localHeight, setLocalHeight] = useState<number | undefined>(() =>
+    clampHeight(height, minHeight, maxHeight),
+  );
   const dragState = useRef<{ startY: number; startHeight: number } | null>(null);
 
   useEffect(() => {
-    setLocalHeight(height);
-  }, [height]);
+    setLocalHeight(clampHeight(height, minHeight, maxHeight));
+  }, [height, minHeight, maxHeight]);
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
