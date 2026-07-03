@@ -34,6 +34,7 @@ interface LocationsMapContentProps {
   onLocationClick?: (location: Location) => void;
   className?: string;
   errorLocationIds?: Set<string>;
+  showZoomControls?: boolean;
 }
 
 function MapController({ locations, isTouchDevice }: { locations: Location[]; isTouchDevice: boolean }) {
