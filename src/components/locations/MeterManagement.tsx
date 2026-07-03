@@ -280,11 +280,23 @@ function DeviceTable({
           const assignedRoom = linkedMeter?.room_id ? roomNameById.get(linkedMeter.room_id) : null;
           return (
             <TableRow key={`${d._integrationLabel}-${d.id}`} className={linkedMeter?.is_archived ? "opacity-60" : ""}>
+              {isAdmin && onToggleAll && (
+                <TableCell className="w-8">
+                  {linkedMeter ? (
+                    <Checkbox
+                      checked={selectedIds?.has(linkedMeter.id) ?? false}
+                      onCheckedChange={(v) => onToggleId?.(linkedMeter.id, !!v)}
+                      aria-label={`${d.name} auswählen`}
+                    />
+                  ) : null}
+                </TableCell>
+              )}
               <TableCell>
                 <div className="p-1.5 rounded bg-muted w-fit">
                   {d.unit ? getUnitIcon(d.unit) : getSensorIcon(d.type)}
                 </div>
               </TableCell>
+
               <TableCell>
                 <button
                   className="font-medium text-left hover:underline text-primary cursor-pointer"
