@@ -1,5 +1,4 @@
 import { MultiYearConsumption } from "@/hooks/useLocationYearlyConsumption";
-import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -33,21 +32,6 @@ export function ConsumptionTrendTable({ locationId, consumption, years }: Consum
 
   if (energyTypes.size === 0) return null;
 
-  type SortKey = "type" | "trend" | number;
-  const energyRows = Array.from(energyTypes).map(eType => {
-    const latestVal = consumption[latestYear]?.[locationId]?.[eType] || 0;
-    const prevVal = prevYear ? (consumption[prevYear]?.[locationId]?.[eType] || 0) : 0;
-    const trendPct = prevVal > 0 ? ((latestVal - prevVal) / prevVal) * 100 : 0;
-    return { eType, latestVal, prevVal, trendPct };
-  });
-
-  const { sorted, sort, toggle } = useSortableData(energyRows, (r, k) => {
-    if (k === "type") return ENERGY_LABELS[r.eType] || r.eType;
-    if (k === "trend") return r.prevVal > 0 ? r.trendPct : -999;
-    if (typeof k === "number") return consumption[k]?.[locationId]?.[r.eType] || 0;
-    return null;
-  });
-
   const sortedYears = [...years].sort((a, b) => a - b);
   const latestYear = sortedYears[sortedYears.length - 1];
   const prevYear = sortedYears.length > 1 ? sortedYears[sortedYears.length - 2] : null;
@@ -56,16 +40,19 @@ export function ConsumptionTrendTable({ locationId, consumption, years }: Consum
     <Table>
       <TableHeader>
         <TableRow>
-          <SortableHead sortKey="type" current={sort} onToggle={toggle}>Energieträger</SortableHead>
+          <TableHead>Energieträger</TableHead>
           {sortedYears.map((y) => (
-            <SortableHead key={y} sortKey={y} current={sort} onToggle={toggle} className="text-right">{y}</SortableHead>
+            <TableHead key={y} className="text-right">{y}</TableHead>
           ))}
-          <SortableHead sortKey="trend" current={sort} onToggle={toggle} className="text-right">Trend</SortableHead>
+          <TableHead className="text-right">Trend</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {sorted.map((row) => {
-          const { eType, latestVal, prevVal, trendPct } = row;
+        {Array.from(energyTypes).sort().map((eType) => {
+          const latestVal = consumption[latestYear]?.[locationId]?.[eType] || 0;
+          const prevVal = prevYear ? (consumption[prevYear]?.[locationId]?.[eType] || 0) : 0;
+          const trendPct = prevVal > 0 ? ((latestVal - prevVal) / prevVal) * 100 : 0;
+
           return (
             <TableRow key={eType}>
               <TableCell className="font-medium capitalize">

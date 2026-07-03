@@ -17,7 +17,6 @@ import EditUserLocationsDialog from "./EditUserLocationsDialog";
 import DeleteUserDialog from "./DeleteUserDialog";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 interface UserWithRole {
   id: string;
@@ -43,16 +42,7 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  
-  const { sorted: sorted, sort: sort, toggle: toggle } = useSortableData(users, (r, k) => {
-    switch (k) {
-      case "user": return r.contact_person || r.email || '';
-      case "company": return r.company_name || '';
-      case "role": return r.role;
-      case "status": return r.status === 'invited' ? 'invited' : (r.is_blocked ? 'blocked' : 'active');
-      default: return null;
-    }
-  });
+  const adminCount = users.filter((u) => u.role === "admin").length;
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -137,7 +127,6 @@ const UserManagement = () => {
   useEffect(() => {
     if (tenant?.id) {
       fetchUsers();
-  
     }
   }, [tenant?.id]);
 
@@ -343,15 +332,15 @@ const UserManagement = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <SortableHead column="user" onSort={toggle} sort={sort}>{t("users.user")}</SortableHead>
-                <SortableHead column="company" onSort={toggle} sort={sort}>{t("users.company")}</SortableHead>
-                <SortableHead column="role" onSort={toggle} sort={sort}>{t("users.role")}</SortableHead>
-                <SortableHead column="status" onSort={toggle} sort={sort}>{t("common.status")}</SortableHead>
+                <TableHead>{t("users.user")}</TableHead>
+                <TableHead>{t("users.company")}</TableHead>
+                <TableHead>{t("users.role")}</TableHead>
+                <TableHead>{t("common.status")}</TableHead>
                 <TableHead className="text-right">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sorted.map((user) => {
+              {users.map((user) => {
                 const cannotModify = isLastAdminSelf(user.user_id, user.role);
                 const isInvited = user.status === "invited";
                 

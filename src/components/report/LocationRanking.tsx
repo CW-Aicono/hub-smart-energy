@@ -1,6 +1,5 @@
 import { Location } from "@/hooks/useLocations";
 import { ConsumptionByLocation } from "@/hooks/useLocationYearlyConsumption";
-import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useBenchmarks } from "@/hooks/useBenchmarks";
@@ -25,27 +24,15 @@ function formatDE(n: number): string {
 export function LocationRanking({ locations, consumption, energyType }: LocationRankingProps) {
   const { getRating } = useBenchmarks();
 
-  const baseRanked = locations
+  const ranked = locations
     .filter((l) => l.net_floor_area && l.net_floor_area > 0)
     .map((l) => {
       const kwh = consumption[l.id]?.[energyType] || 0;
       const specific = kwh / l.net_floor_area!;
       const rating = l.usage_type ? getRating(specific, energyType) : null;
       return { location: l, kwh, specific, rating };
-    });
-
-  type SortKey = "name" | "usage_type" | "area" | "specific" | "rating" | "kwh";
-  const { sorted, sort, toggle } = useSortableData(baseRanked, (r, k) => {
-    switch (k) {
-      case "name": return r.location.name;
-      case "usage_type": return r.location.usage_type;
-      case "area": return r.location.net_floor_area;
-      case "specific": return r.specific;
-      case "rating": return r.rating;
-      case "kwh": return r.kwh;
-      default: return null;
-    }
-  }, { key: "specific", direction: "desc" });
+    })
+    .sort((a, b) => b.specific - a.specific);
 
   if (ranked.length === 0) return null;
 
@@ -54,16 +41,16 @@ export function LocationRanking({ locations, consumption, energyType }: Location
       <TableHeader>
         <TableRow>
           <TableHead className="w-12">Rang</TableHead>
-          <SortableHead sortKey="name" current={sort} onToggle={toggle}>Liegenschaft</SortableHead>
-          <SortableHead sortKey="usage_type" current={sort} onToggle={toggle}>Typ</SortableHead>
-          <SortableHead sortKey="area" current={sort} onToggle={toggle} className="text-right">NGF (m²)</SortableHead>
-          <SortableHead sortKey="specific" current={sort} onToggle={toggle} className="text-right">kWh/m²a</SortableHead>
-          <SortableHead sortKey="rating" current={sort} onToggle={toggle} className="text-center">Bewertung</SortableHead>
-          <SortableHead sortKey="kwh" current={sort} onToggle={toggle} className="text-right">Verbrauch (kWh)</SortableHead>
+          <TableHead>Liegenschaft</TableHead>
+          <TableHead>Typ</TableHead>
+          <TableHead className="text-right">NGF (m²)</TableHead>
+          <TableHead className="text-right">kWh/m²a</TableHead>
+          <TableHead className="text-center">Bewertung</TableHead>
+          <TableHead className="text-right">Verbrauch (kWh)</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {sorted.map((r, i) => (
+        {ranked.map((r, i) => (
           <TableRow key={r.location.id}>
             <TableCell className="font-medium">{i + 1}</TableCell>
             <TableCell className="font-medium">{r.location.name}</TableCell>

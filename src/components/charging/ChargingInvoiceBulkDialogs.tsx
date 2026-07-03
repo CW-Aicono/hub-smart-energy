@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmtCurrency } from "@/lib/formatCharging";
 import { format } from "date-fns";
@@ -46,18 +45,6 @@ export function CreatedInvoicesDialog({ open, onOpenChange, invoices, isFinalizi
     await onFinalize(ids);
   };
 
-  type InvSortKey = "number" | "customer" | "amount" | "status";
-  const { sorted: sortedInvoices, sort, toggle } = useSortableData<any, InvSortKey>(invoices, (inv, k) => {
-    switch (k) {
-      case "number": return inv.invoice_number || "";
-      case "customer": return inv.user_name || "";
-      case "amount": return Number(inv.total_amount || 0);
-      case "status": return inv.status || "";
-      default: return null;
-    }
-  });
-
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
@@ -83,14 +70,14 @@ export function CreatedInvoicesDialog({ open, onOpenChange, invoices, isFinalizi
                       aria-label="Alle Entwürfe auswählen"
                     />
                   </TableHead>
-                  <TableHead><SortableHead label="Rechnungsnr." sortKey="number" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label="Kunde" sortKey="customer" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead className="text-right"><SortableHead label="Betrag" sortKey="amount" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} /></TableHead>
+                  <TableHead>Rechnungsnr.</TableHead>
+                  <TableHead>Kunde</TableHead>
+                  <TableHead className="text-right">Betrag</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedInvoices.map(inv => {
+                {invoices.map(inv => {
                   const isDraft = inv.status === "draft";
                   return (
                     <TableRow key={inv.id}>
@@ -228,9 +215,9 @@ export function SendInvoicesDialog({ open, onOpenChange, invoices, isFinalizing,
                         }}
                       />
                     </TableHead>
-                    <TableHead><SortableHead label="Rechnungsnr." sortKey="number" sort={sort} onToggle={toggle} /></TableHead>
-                    <TableHead><SortableHead label="Kunde" sortKey="customer" sort={sort} onToggle={toggle} /></TableHead>
-                    <TableHead className="text-right"><SortableHead label="Betrag" sortKey="amount" sort={sort} onToggle={toggle} /></TableHead>
+                    <TableHead>Rechnungsnr.</TableHead>
+                    <TableHead>Kunde</TableHead>
+                    <TableHead className="text-right">Betrag</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -281,9 +268,9 @@ export function SendInvoicesDialog({ open, onOpenChange, invoices, isFinalizing,
                         }}
                       />
                     </TableHead>
-                    <TableHead><SortableHead label="Rechnungsnr." sortKey="number" sort={sort} onToggle={toggle} /></TableHead>
-                    <TableHead><SortableHead label="Kunde" sortKey="customer" sort={sort} onToggle={toggle} /></TableHead>
-                    <TableHead className="text-right"><SortableHead label="Betrag" sortKey="amount" sort={sort} onToggle={toggle} /></TableHead>
+                    <TableHead>Rechnungsnr.</TableHead>
+                    <TableHead>Kunde</TableHead>
+                    <TableHead className="text-right">Betrag</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

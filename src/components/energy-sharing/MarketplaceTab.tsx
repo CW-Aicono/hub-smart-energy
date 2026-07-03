@@ -29,8 +29,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
-
 import { Plus, Trash2, ExternalLink, Eye, UserPlus, X, Check } from "lucide-react";
 import {
   useMarketplaceListings,
@@ -124,29 +122,6 @@ export default function MarketplaceTab({ communityId }: Props) {
   }
 
   const newRequests = requests.filter((r) => r.status === "new");
-
-  type ListingsSortKey = "title" | "region" | "price" | "status" | "views";
-  const { sorted: sortedListings, sort: listSort, toggle: listToggle } = useSortableData(listings, (r, k) => {
-    switch (k) {
-      case "title": return r.title;
-      case "region": return `${r.region_plz} ${r.region_city}`;
-      case "price": return Number(r.price_ct_kwh);
-      case "status": return r.is_public;
-      case "views": return Number(r.view_count);
-      default: return null;
-    }
-  });
-  type RequestsSortKey = "date" | "name" | "email" | "phone" | "status";
-  const { sorted: sortedRequests, sort: reqSort, toggle: reqToggle } = useSortableData(requests, (r, k) => {
-    switch (k) {
-      case "date": return r.created_at;
-      case "name": return r.name;
-      case "email": return r.email;
-      case "phone": return r.phone;
-      case "status": return r.status;
-      default: return null;
-    }
-  });
 
   return (
     <div className="space-y-6">
@@ -302,16 +277,18 @@ export default function MarketplaceTab({ communityId }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <SortableHead sortKey="title" current={listSort} onToggle={listToggle}>Titel</SortableHead>
-                  <SortableHead sortKey="region" current={listSort} onToggle={listToggle}>Region</SortableHead>
-                  <SortableHead sortKey="price" current={listSort} onToggle={listToggle} className="text-right">Preis</SortableHead>
-                  <SortableHead sortKey="status" current={listSort} onToggle={listToggle}>Status</SortableHead>
-                  <SortableHead sortKey="views" current={listSort} onToggle={listToggle} className="text-right">Aufrufe</SortableHead>
+                  <TableHead>Titel</TableHead>
+                  <TableHead>Region</TableHead>
+                  <TableHead className="text-right">Preis</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">
+                    <Eye className="h-3 w-3 inline" /> Aufrufe
+                  </TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedListings.map((l) => (
+                {listings.map((l) => (
                   <TableRow key={l.id}>
                     <TableCell>
                       <button onClick={() => startEdit(l)} className="text-primary hover:underline">
@@ -378,16 +355,16 @@ export default function MarketplaceTab({ communityId }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <SortableHead sortKey="date" current={reqSort} onToggle={reqToggle}>Datum</SortableHead>
-                  <SortableHead sortKey="name" current={reqSort} onToggle={reqToggle}>Name</SortableHead>
-                  <SortableHead sortKey="email" current={reqSort} onToggle={reqToggle}>E-Mail</SortableHead>
-                  <SortableHead sortKey="phone" current={reqSort} onToggle={reqToggle}>Telefon</SortableHead>
-                  <SortableHead sortKey="status" current={listSort} onToggle={listToggle}>Status</SortableHead>
+                  <TableHead>Datum</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>E-Mail</TableHead>
+                  <TableHead>Telefon</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedRequests.map((r) => (
+                {requests.map((r) => (
                   <JoinRow key={r.id} req={r} onAccept={acceptAsMember} onUpdate={updateStatus} />
                 ))}
               </TableBody>
@@ -415,29 +392,6 @@ function JoinRow({
     accepted: "default",
     rejected: "outline",
   };
-  type ListingsSortKey = "title" | "region" | "price" | "status" | "views";
-  const { sorted: sortedListings, sort: listSort, toggle: listToggle } = useSortableData(listings, (r, k) => {
-    switch (k) {
-      case "title": return r.title;
-      case "region": return `${r.region_plz} ${r.region_city}`;
-      case "price": return Number(r.price_ct_kwh);
-      case "status": return r.is_public;
-      case "views": return Number(r.view_count);
-      default: return null;
-    }
-  });
-  type RequestsSortKey = "date" | "name" | "email" | "phone" | "status";
-  const { sorted: sortedRequests, sort: reqSort, toggle: reqToggle } = useSortableData(requests, (r, k) => {
-    switch (k) {
-      case "date": return r.created_at;
-      case "name": return r.name;
-      case "email": return r.email;
-      case "phone": return r.phone;
-      case "status": return r.status;
-      default: return null;
-    }
-  });
-
   return (
     <TableRow>
       <TableCell className="text-xs">{date}</TableCell>
