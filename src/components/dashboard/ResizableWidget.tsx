@@ -12,18 +12,17 @@ interface ResizableWidgetProps {
   children: React.ReactNode;
 }
 
-
-const DEFAULT_MIN = 200;
+const DEFAULT_MIN = 260;
 const DEFAULT_MAX = 1200;
+const HANDLE_ROW_HEIGHT = 14; // px — reserved row below the card for the drag handle
 
 /**
- * Wrapper for dashboard widgets that adds a bottom drag-handle to resize the
- * widget height in pixels. Double-clicking the handle resets to the widget's
- * intrinsic (default) height.
+ * Wrapper for dashboard widgets that adds a drag-handle *below* the widget
+ * card to resize its height. The handle lives in its own row so widget
+ * content (chart legends, gauges, etc.) never gets covered.
  *
- * Persistence is triggered on pointer-up (not during drag) to avoid DB churn.
- * Internally we force the direct child (Card) and Recharts containers to fill
- * the wrapper so the drag actually changes visible chart height.
+ * `height` is the wrapper's total height including the handle row.
+ * Double-clicking the handle resets to the widget's intrinsic (default) height.
  */
 export default function ResizableWidget({
   height,
@@ -34,7 +33,6 @@ export default function ResizableWidget({
   widgetSize,
   children,
 }: ResizableWidgetProps) {
-
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [localHeight, setLocalHeight] = useState<number | undefined>(height);
   const dragState = useRef<{ startY: number; startHeight: number } | null>(null);
@@ -97,6 +95,7 @@ export default function ResizableWidget({
       data-widget-size={widgetSize}
       className={cn(
         "w-full min-w-0 relative group flex flex-col",
+        // The card / lazy wrapper fills the space above the handle row
         "[&>[data-lazy]]:flex-1 [&>[data-lazy]]:min-h-0",
         "[&_[data-slot=card]]:!h-full [&_[data-slot=card]]:!flex [&_[data-slot=card]]:!flex-col",
         "[&_[data-slot=card-content]]:!flex-1 [&_[data-slot=card-content]]:!min-h-0",
@@ -106,7 +105,6 @@ export default function ResizableWidget({
       )}
       style={style}
     >
-
       {children}
       <div
         role="separator"
@@ -118,16 +116,22 @@ export default function ResizableWidget({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onDoubleClick={onDoubleClick}
+        style={{ height: `${HANDLE_ROW_HEIGHT}px` }}
         className={cn(
-          "absolute bottom-1 left-1/2 -translate-x-1/2 z-30",
-          "flex items-center justify-center",
-          "h-3 w-16 rounded-full cursor-ns-resize touch-none select-none",
-          "bg-border/70 hover:bg-primary/70 transition-colors",
-          "opacity-40 group-hover:opacity-100 hover:!opacity-100",
-          dragState.current ? "!opacity-100 bg-primary" : "",
+          "shrink-0 flex items-center justify-center",
+          "cursor-ns-resize touch-none select-none",
+          "text-muted-foreground/50 hover:text-primary transition-colors",
+          dragState.current ? "text-primary" : "",
         )}
       >
-        <GripHorizontal className="h-3 w-3 text-background pointer-events-none" />
+        <div
+          className={cn(
+            "h-1.5 w-16 rounded-full bg-border/70 group-hover:bg-primary/70 transition-colors flex items-center justify-center",
+            dragState.current ? "!bg-primary" : "",
+          )}
+        >
+          <GripHorizontal className="h-2.5 w-2.5 text-background pointer-events-none" />
+        </div>
       </div>
     </div>
   );
