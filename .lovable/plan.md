@@ -1,60 +1,43 @@
-## Ziel
-
-Drei verbleibende Regressionen im resize-fähigen Dashboard-Layout beheben:
-
-1. **Höhen-Griff beim obersten Widget (Karte) fehlt / nicht bedienbar.**
-2. **Widget-Höhe schlägt beim Karten-Widget nicht durch** – Slider ändert nichts sichtbar.
-3. **Karten-Widget zeigt fremde Bedien-Elemente** – Leaflet `+`/`−` und "Vergrößern"-Tooltip überlagern die Kachel.
-4. **Widgets können sich überlappen.**
-
-(Widget-Breite funktioniert nach Reload – bleibt unangetastet. Ursache war vermutlich fehlender Refresh der `widget_size`-Klassen nach Layout-Update; kein Codefix nötig.)
-
 ## Ursachenanalyse
 
-- `LocationMapWidget` setzt den Kartencontainer hart auf `h-[350px]`. Der `!h-full`-Cascader von `ResizableWidget` greift nur auf `[&>*:first-child]` (die Card) und Recharts-Container – die innere `div` mit fixer Pixelhöhe bleibt bei 350 px, egal wie hoch der Wrapper gezogen wird.
-- Der Drag-Griff sitzt an `absolute -bottom-1` mit `opacity-0 group-hover:opacity-100`. Beim Karten-Widget:
-  - Card hat `overflow-hidden` und Leaflet-Container liegt bündig am unteren Rand → Hover geht auf Leaflet, nicht auf den Wrapper-Bereich um den Griff.
-  - Griff ist zu 100 % transparent, bis exakt der 3 px hohe Streifen getroffen wird – auf der Karte praktisch unmöglich zu finden.
-- Karten-Widget nutzt `LocationsMap` mit Leaflet-Standard-Zoomcontrols (`+`/`−`) inkl. "Vergrößern"-Tooltip. Die gehören nicht ins Dashboard-Kachelbild.
-- Überlappungen entstehen durch den negativ herausragenden Handle (`-bottom-1`) in Kombination mit `flex-wrap gap-4`: der Handle schiebt sich 4 px in den `gap` der Folgezeile und wirkt wie eine Überlappung mit dem darunterliegenden Widget.
+Beim letzten Fix habe ich CSS-Cascader mit den Selektoren `[data-slot=card]` und `[data-slot=card-content]` gesetzt — diese Attribute existieren in `src/components/ui/card.tsx` **gar nicht**. Damit wirkt der `!h-full`-Zwang nur auf `>*:first-child` (LazyWidget-Div bzw. den absolut positionierten ZoomIn-Button) und läuft dann ins Leere:
 
-## Umsetzung
+1. Beim Ziehen wächst nur die Wrapper-Box (und damit der leere Bereich unter dem Handle), die Karte selbst behält ihre Eigenhöhe → **"Hintergrund des +/− ändert sich, aber nicht das Widget"**.
+2. Weil der Wrapper hinter der Karte leer wird und das Handle `bottom-1` des Wrappers referenziert, wandert das Handle vom Kartenrand weg → **"Slider an unterschiedlichen Stellen"**.
+3. LazyWidget rendert `<div ref={ref}>` ohne `h-full` — selbst korrekte Card-Selektoren würden ohne Weiterleitung nicht durchgreifen.
+4. Bei Widgets mit Karten-Inhalt (Map, FloorPlan) kollabiert der Kartenbereich, wenn Wrapper-Höhe steigt aber Card intrinsisch bleibt → **Karteninhalt teilweise unsichtbar**.
 
-### 1. Höhe für Karten-Widget durchreichen (`LocationMapWidget.tsx`)
+## Fix
 
-- Card zu `flex flex-col` machen, `CardContent` bekommt `flex-1 min-h-0 p-0`.
-- Innerer Container von `h-[350px]` → `h-full min-h-[350px]` (fallback bleibt 350 px, wenn keine Höhe gesetzt).
-- Loading-Skeleton analog.
+### 1) `src/components/ui/card.tsx`
+`data-slot="card"` auf `Card` und `data-slot="card-content"` auf `CardContent` ergänzen (rein additive Attribute, keine Verhaltensänderung). Damit greifen die Cascader-Selektoren tatsächlich.
 
-### 2. Cascader in `ResizableWidget.tsx` erweitern
+### 2) `src/components/dashboard/LazyWidget.tsx`
+Beide Return-Zweige des Wrappers auf `className="h-full flex flex-col"` setzen (Placeholder-Zweig behält `minHeight`, aber zusätzlich `h-full flex flex-col`, damit ein gesetzter Wrapper-Rahmen weitergereicht wird). `Suspense`-Fallback und `WidgetPlaceholder` bekommen ebenfalls `h-full` auf der Card, damit auch während des Ladens die Höhe konsistent ist.
 
-- Zusätzlich `[&_.leaflet-container]:!h-full` und `[&_.leaflet-container]:!w-full` in die aktivierten Klassen aufnehmen, damit Leaflet der neuen Wrapper-Höhe folgt.
+### 3) `src/components/dashboard/ResizableWidget.tsx`
+- Wrapper **immer** (nicht nur bei gesetztem `localHeight`) als `flex flex-col` und mit stabilem Kaskader ausstatten, damit Handle-Position und Kartenfüllung **immer** identisch sind:
+  ```
+  "w-full min-w-0 relative group flex flex-col
+   [&>[data-lazy]]:flex-1 [&>[data-lazy]]:min-h-0
+   [&_[data-slot=card]]:!h-full [&_[data-slot=card]]:!flex [&_[data-slot=card]]:!flex-col
+   [&_[data-slot=card-content]]:!flex-1 [&_[data-slot=card-content]]:!min-h-0
+   [&_.recharts-responsive-container]:!h-full
+   [&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full"
+  ```
+- Auf dem LazyWidget-Sentinel wird ein `data-lazy` gesetzt (Punkt 2), damit direkte-Child-Selektoren zuverlässig greifen — der absolut positionierte ZoomIn-Button wird nicht getroffen.
+- Ohne `localHeight`: kein `style.height`, aber Kaskader-Regeln bleiben aktiv → Card = Wrapper-Höhe (auto) = Card-Eigenhöhe. Handle sitzt exakt am unteren Kartenrand.
+- Mit `localHeight`: Wrapper bekommt Pixelhöhe, Card wird per `!h-full` mitgestreckt, CardContent per `flex-1 min-h-0`. Recharts und Leaflet folgen via bereits vorhandener Selektoren.
+- Handle-Stil unverändert (bottom-1, z-30, opacity-40 → 100 bei hover), aber jetzt visuell **immer** direkt am Kartenrand.
 
-### 3. Drag-Griff sichtbar und nicht überlappend (`ResizableWidget.tsx`)
+### 4) `src/components/dashboard/LocationMapWidget.tsx`
+Das innere Wrapper-`<div className="h-full min-h-[350px] overflow-hidden">` behalten, aber `min-h-[350px]` nur wirken lassen, wenn der Widget keine explizite Höhe hat — sonst überschreibt es Reduktionen unter 350 px. Umsetzung: `min-h-[350px]` durch `min-h-0` ersetzen und den 350 px als `defaultHeight`/`minHeight`-Prop von ResizableWidget führen (bereits vorhanden über `minHeight={200}` — ausreichend). Damit skaliert die Karte sauber nach oben und unten.
 
-- Position: `-bottom-1` → `bottom-1` (innerhalb des Wrappers, kein Überhang in die nächste Row).
-- Sichtbarkeit: `opacity-0 group-hover:opacity-100` → `opacity-40 group-hover:opacity-100 hover:opacity-100`. So ist der Griff immer leicht angedeutet und über jedem Widget – auch der Karte – findbar.
-- z-Index: `z-20` → `z-30`, damit er sicher über den Leaflet-Controls liegt.
-
-### 4. Fremde Karten-Controls entfernen (`LocationsMap.tsx`)
-
-- Prop `showZoomControls?: boolean` (default `true`, um bestehende Nutzungen unverändert zu lassen).
-- Beim `MapContainer`: `zoomControl={showZoomControls}`.
-- In `LocationMapWidget` beim Rendern der `LocationsMap` explizit `showZoomControls={false}` setzen. Zoom bleibt via Scroll-/Pinch-Gesten möglich; Tooltip "Vergrößern" verschwindet.
-
-### 5. Überlappungen absichern (`DashboardContent.tsx`)
-
-- Container-Klassen: `flex flex-wrap gap-4` → `flex flex-wrap gap-4 items-start`. Verhindert Stretch-Effekte, wenn ein Widget in derselben Zeile eine explizite Höhe hat und der Nachbar kürzer bleibt.
+### 5) Verifikation
+- `bun run build` (Typecheck läuft automatisch).
+- Playwright-Skript unter `/tmp/browser/resize/`: Dashboard laden, Handle des Map- und des Weather-Widgets je einmal nach oben und unten ziehen, Screenshot vor/nach — prüfen, dass Karten/Chart-Inhalt tatsächlich mitwächst und Handle direkt am Kartenrand sitzt.
 
 ## Technische Notizen
-
-- Betroffene Dateien:
-  - `src/components/dashboard/ResizableWidget.tsx`
-  - `src/components/dashboard/LocationMapWidget.tsx`
-  - `src/components/locations/LocationsMap.tsx`
-  - `src/pages/DashboardContent.tsx`
-- Keine DB-Migration, keine Änderung an `useDashboardWidgets`.
-- Verifikation nach dem Build:
-  1. Karten-Widget: Griff sichtbar (schwach), Ziehen vergrößert Karte, keine `+`/`−` Buttons und kein "Vergrößern"-Tooltip mehr.
-  2. Höhe eines Widgets stark vergrößern → Nachbar-Widgets bleiben in ihrer Row, keine visuelle Überlappung.
-  3. Bestehende Nutzungen von `LocationsMap` außerhalb des Dashboards behalten die Zoom-Controls.
+- Änderung an `card.tsx` ist ein zusätzlicher HTML-Attributname — keine Auswirkungen auf existierende Styles/Tests.
+- Kaskader-Klassen sind Tailwind-Arbitrary-Variants; funktionieren mit vorhandener Tailwind-Version.
+- Keine Backend-/DB-Änderungen. Bereits gespeicherte `layout.height`-Werte bleiben gültig.
