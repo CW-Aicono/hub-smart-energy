@@ -105,6 +105,7 @@ export function DynamicDlmCard({ locationId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.id, cps.length, dlmDevices.length]);
 
+  const referenceMeter = meters.find((m) => m.id === referenceMeterId) ?? null;
 
   // Live-Messwert vom Referenz-Zähler.
   // 1) Bevorzugt: Gateway-Rohwert aus bridge_raw_samples (< 2 min alt → "Live").
@@ -266,7 +267,6 @@ export function DynamicDlmCard({ locationId }: Props) {
   const usedRefIds = useMemo(() => new Set(dlmDevices.map((d) => d.device_ref_id)), [dlmDevices]);
   const availableChargePoints = cps.filter((c) => !usedRefIds.has(c.id));
   const availableActuators = actuatorCandidates.filter((a) => !usedRefIds.has(a.id));
-  const referenceMeter = meters.find((m) => m.id === referenceMeterId) ?? null;
 
   const lastLog = log[0];
   const logMeasuredKw = lastLog?.measured_kw != null ? Number(lastLog.measured_kw) : null;
