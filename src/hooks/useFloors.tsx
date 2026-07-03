@@ -192,6 +192,30 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
     return { error: deleteError as Error | null };
   };
 
+  const reorderFloors = async (orderedIds: string[]) => {
+    // optimistic UI
+    setFloors((prev) => {
+      const map = new Map(prev.map((f) => [f.id, f]));
+      const next: Floor[] = [];
+      orderedIds.forEach((id, idx) => {
+        const f = map.get(id);
+        if (f) next.push({ ...f, sort_order: idx });
+      });
+      prev.forEach((f) => { if (!orderedIds.includes(f.id)) next.push(f); });
+      return next;
+    });
+    const updates = orderedIds.map((id, idx) =>
+      supabase.from("floors").update({ sort_order: idx } as FloorUpdateDB).eq("id", id),
+    );
+    const results = await Promise.all(updates);
+    const firstErr = results.find((r) => r.error)?.error;
+    if (firstErr) {
+      await fetchFloors();
+      return { error: firstErr as unknown as Error };
+    }
+    return { error: null };
+  };
+
   const uploadFloorPlan = async (
     file: File,
     locationId: string,
