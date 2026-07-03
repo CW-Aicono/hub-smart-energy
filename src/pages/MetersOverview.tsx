@@ -233,12 +233,12 @@ const MetersOverview = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead><SortableHead label={t("common.name" as any)} sortKey="name" sort={sort} onToggle={toggle} /></TableHead>
-                      <TableHead><SortableHead label={t("meters.property" as any)} sortKey="location" sort={sort} onToggle={toggle} /></TableHead>
-                      <TableHead><SortableHead label={t("meters.meterNumber" as any)} sortKey="meter_number" sort={sort} onToggle={toggle} /></TableHead>
-                      <TableHead><SortableHead label={t("meters.energyType" as any)} sortKey="energy_type" sort={sort} onToggle={toggle} /></TableHead>
-                      <TableHead><SortableHead label={t("meters.capture" as any)} sortKey="capture" sort={sort} onToggle={toggle} /></TableHead>
-                      <TableHead><SortableHead label={t("meters.lastReading" as any)} sortKey="last_reading" sort={sort} onToggle={toggle} /></TableHead>
+                      <SortableHead label={t("common.name" as any)} sortKey="name" sort={sort} onToggle={toggle} />
+                      <SortableHead label={t("meters.property" as any)} sortKey="location" sort={sort} onToggle={toggle} />
+                      <SortableHead label={t("meters.meterNumber" as any)} sortKey="meter_number" sort={sort} onToggle={toggle} />
+                      <SortableHead label={t("meters.energyType" as any)} sortKey="energy_type" sort={sort} onToggle={toggle} />
+                      <SortableHead label={t("meters.capture" as any)} sortKey="capture" sort={sort} onToggle={toggle} />
+                      <SortableHead label={t("meters.lastReading" as any)} sortKey="last_reading" sort={sort} onToggle={toggle} />
                       <TableHead className="w-56" />
                     </TableRow>
                   </TableHeader>

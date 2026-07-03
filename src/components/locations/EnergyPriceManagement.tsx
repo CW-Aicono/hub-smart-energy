@@ -191,10 +191,10 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead><SortableHead label={T("ep.carrier")} sortKey="energy_type" sort={sort} onToggle={toggle} /></TableHead>
-                      <TableHead><SortableHead label={T("ep.meter")} sortKey="meter" sort={sort} onToggle={toggle} /></TableHead>
-                      <TableHead><SortableHead label={T("ep.price")} sortKey="price" sort={sort} onToggle={toggle} /></TableHead>
-                      <TableHead><SortableHead label={T("ep.validFrom")} sortKey="valid_from" sort={sort} onToggle={toggle} /></TableHead>
+                      <SortableHead label={T("ep.carrier")} sortKey="energy_type" sort={sort} onToggle={toggle} />
+                      <SortableHead label={T("ep.meter")} sortKey="meter" sort={sort} onToggle={toggle} />
+                      <SortableHead label={T("ep.price")} sortKey="price" sort={sort} onToggle={toggle} />
+                      <SortableHead label={T("ep.validFrom")} sortKey="valid_from" sort={sort} onToggle={toggle} />
                       <TableHead className="w-[80px]"></TableHead>
                     </TableRow>
                   </TableHeader>

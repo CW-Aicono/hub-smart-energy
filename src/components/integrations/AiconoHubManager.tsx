@@ -213,12 +213,12 @@ export function AiconoHubManager() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead><SortableHead label={t("aiconoHub.token.colToken")} sortKey="token" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label={t("aiconoHub.token.colLabel")} sortKey="label" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label={t("aiconoHub.token.colLocation")} sortKey="location" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label={t("aiconoHub.token.colStatus")} sortKey="status" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label={t("aiconoHub.token.colExpires")} sortKey="expires" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label={t("aiconoHub.token.colMac")} sortKey="mac" sort={sort} onToggle={toggle} /></TableHead>
+                  <SortableHead label={t("aiconoHub.token.colToken")} sortKey="token" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("aiconoHub.token.colLabel")} sortKey="label" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("aiconoHub.token.colLocation")} sortKey="location" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("aiconoHub.token.colStatus")} sortKey="status" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("aiconoHub.token.colExpires")} sortKey="expires" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("aiconoHub.token.colMac")} sortKey="mac" sort={sort} onToggle={toggle} />
                   <TableHead className="w-[80px]"></TableHead>
                 </TableRow>
               </TableHeader>

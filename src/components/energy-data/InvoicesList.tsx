@@ -145,14 +145,14 @@ export default function InvoicesList() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead><SortableHead label={t("invoices.supplier" as any)} sortKey="supplier" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label={t("invoices.invoiceNumber" as any)} sortKey="invoice_number" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label={t("invoices.location" as any)} sortKey="location" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label={t("invoices.energyType" as any)} sortKey="energy_type" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label={t("invoices.period" as any)} sortKey="period" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead className="text-right"><SortableHead label={t("invoices.consumption" as any)} sortKey="consumption" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead className="text-right"><SortableHead label={t("invoices.totalGross" as any)} sortKey="total_gross" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead><SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} /></TableHead>
+                  <SortableHead label={t("invoices.supplier" as any)} sortKey="supplier" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("invoices.invoiceNumber" as any)} sortKey="invoice_number" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("invoices.location" as any)} sortKey="location" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("invoices.energyType" as any)} sortKey="energy_type" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("invoices.period" as any)} sortKey="period" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("invoices.consumption" as any)} sortKey="consumption" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("invoices.totalGross" as any)} sortKey="total_gross" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
                   <TableHead className="text-right"></TableHead>
                 </TableRow>
               </TableHeader>

@@ -372,13 +372,13 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                         aria-label="Alle auswählen"
                       />
                     </TableHead>
-                    <TableHead className="w-[50px]"><SortableHead label="Typ" sortKey="type" sort={sort} onToggle={toggle} /></TableHead>
-                    <TableHead><SortableHead label="Name" sortKey="name" sort={sort} onToggle={toggle} /></TableHead>
-                    <TableHead><SortableHead label="Raum" sortKey="room" sort={sort} onToggle={toggle} /></TableHead>
-                    <TableHead><SortableHead label="Kategorie" sortKey="category" sort={sort} onToggle={toggle} /></TableHead>
-                    <TableHead><SortableHead label="Messwert" sortKey="value" sort={sort} onToggle={toggle} /></TableHead>
+                    <SortableHead label="Typ" sortKey="type" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Name" sortKey="name" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Raum" sortKey="room" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Kategorie" sortKey="category" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Messwert" sortKey="value" sort={sort} onToggle={toggle} />
                     <TableHead className="text-right">Wert</TableHead>
-                    <TableHead><SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} /></TableHead>
+                    <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
                   </TableRow>
                 </TableHeader>
                 <TableBody>

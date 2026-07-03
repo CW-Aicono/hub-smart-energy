@@ -108,10 +108,10 @@ export default function BillingGroupsTab({ isAdmin }: Props) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead><SortableHead label="Gruppe" sortKey="name" sort={sort} onToggle={toggle} /></TableHead>
-                <TableHead><SortableHead label="Rechnungsempfänger" sortKey="company" sort={sort} onToggle={toggle} /></TableHead>
-                <TableHead><SortableHead label="E-Mail" sortKey="email" sort={sort} onToggle={toggle} /></TableHead>
-                <TableHead className="text-center"><SortableHead label="Mitglieder" sortKey="members" sort={sort} onToggle={toggle} /></TableHead>
+                <SortableHead label="Gruppe" sortKey="name" sort={sort} onToggle={toggle} />
+                <SortableHead label="Rechnungsempfänger" sortKey="company" sort={sort} onToggle={toggle} />
+                <SortableHead label="E-Mail" sortKey="email" sort={sort} onToggle={toggle} />
+                <SortableHead label="Mitglieder" sortKey="members" sort={sort} onToggle={toggle} />
                 {isAdmin && <TableHead className="w-40 text-right">Aktionen</TableHead>}
               </TableRow>
             </TableHeader>

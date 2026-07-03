@@ -218,10 +218,10 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8"></TableHead>
-                  <TableHead className="w-40"><SortableHead label="Zeitstempel" sortKey="time" sort={sort} onToggle={toggle} /></TableHead>
-                  <TableHead className="w-24"><SortableHead label="Richtung" sortKey="direction" sort={sort} onToggle={toggle} /></TableHead>
-                  {showCpColumn && <TableHead><SortableHead label="Ladepunkt" sortKey="cp" sort={sort} onToggle={toggle} /></TableHead>}
-                  <TableHead><SortableHead label="Nachrichtentyp" sortKey="type" sort={sort} onToggle={toggle} /></TableHead>
+                  <SortableHead label="Zeitstempel" sortKey="time" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Richtung" sortKey="direction" sort={sort} onToggle={toggle} />
+                  {showCpColumn && <SortableHead label="Ladepunkt" sortKey="cp" sort={sort} onToggle={toggle} />}
+                  <SortableHead label="Nachrichtentyp" sortKey="type" sort={sort} onToggle={toggle} />
                 </TableRow>
               </TableHeader>
               <TableBody>
