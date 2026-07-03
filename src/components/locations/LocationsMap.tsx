@@ -49,6 +49,7 @@ export function LocationsMap({ locations, onLocationClick, className, errorLocat
       onLocationClick={onLocationClick}
       className={className}
       errorLocationIds={errorLocationIds}
+      showZoomControls={showZoomControls}
     />
   );
 }
