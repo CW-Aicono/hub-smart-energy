@@ -25,6 +25,7 @@ const WIDGET_HEIGHT_LIMITS: Record<string, { min?: number; max?: number }> = {
   sankey: { min: 420 },
   energy_gauge: { min: 380 },
   energy_flow: { min: 420 },
+  location_map: { min: 380 },
 };
 
 
