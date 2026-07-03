@@ -325,28 +325,6 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
             </div>
           </TabsContent>
 
-          {/* ── Data sources ── */}
-          <TabsContent value="data" className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <Label>Zähler auswählen</Label>
-              <div className="max-h-64 overflow-auto border rounded-lg p-2 space-y-3">
-                {Object.entries(meterGroups).map(([type, groupMeters]) => (
-                  <div key={type}>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">{type}</p>
-                    <div className="space-y-1">
-                      {(groupMeters || []).map((meter: any) => (
-                        <label key={meter.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer">
-                          <Checkbox
-                            checked={config.meter_ids.includes(meter.id)}
-                            onCheckedChange={() => toggleMeter(meter.id)}
-                          />
-                          <span className="text-sm truncate">{meter.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-          {/* ── Data sources ── */}
           <TabsContent value="data" className="space-y-4 mt-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div className="space-y-1">
