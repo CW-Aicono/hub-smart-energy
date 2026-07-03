@@ -20,12 +20,26 @@ import { useDashboardPrefetch } from "@/hooks/useDashboardPrefetch";
 // Prevents charts from being stretched past their natural content
 // (energy_chart, spot_price) or shrunk to overflow (sankey, energy_gauge).
 const WIDGET_HEIGHT_LIMITS: Record<string, { min?: number; max?: number }> = {
-  energy_chart: { max: 560 },
-  spot_price: { max: 420 },
-  sankey: { min: 420 },
-  energy_gauge: { min: 380 },
+  cost_overview: { min: 360 },
+  energy_chart: { min: 440, max: 700 },
+  sustainability_kpis: { min: 320 },
+  alerts_list: { min: 320 },
+  weather: { min: 360 },
+  floor_plan: { min: 420 },
+  floor_plan_explorer: { min: 420 },
+  pie_chart: { min: 420 },
+  forecast: { min: 420 },
+  anomaly: { min: 360 },
+  weather_normalization: { min: 520 },
+  spot_price: { min: 390, max: 520 },
+  sankey: { min: 500 },
+  energy_gauge: { min: 420 },
   energy_flow: { min: 420 },
   location_map: { min: 380 },
+  pv_forecast: { min: 520 },
+  arbitrage_ai: { min: 360 },
+  integration_errors: { min: 360 },
+  ppa_fleet: { min: 360 },
 };
 
 

@@ -93,11 +93,7 @@ export default function ResizableWidget({
   }, [onHeightChange]);
 
   const controlled = typeof localHeight === "number";
-  // Use `minHeight` (not fixed `height`) so the user-chosen height acts as a
-  // floor: the wrapper always grows to fit its content, preventing widget
-  // internals (legends, gauges, tables) from spilling out of the card frame
-  // when the drag handle is pulled up.
-  const style: React.CSSProperties = controlled ? { minHeight: `${localHeight}px` } : {};
+  const style: React.CSSProperties = controlled ? { height: `${localHeight}px` } : {};
 
   return (
     <div
@@ -105,11 +101,14 @@ export default function ResizableWidget({
       data-widget-size={widgetSize}
       className={cn(
         "w-full min-w-0 relative group flex flex-col",
-        // Let leaflet / recharts responsive containers fill the wrapper only
-        // when we have an explicit height; keep card content in its natural
-        // flow so intrinsic min-heights (headers, legends) are always honored.
+        // With an explicit widget height, the lazy wrapper gets the remaining
+        // space above the resize handle and the Card stretches with it. Cards
+        // keep overflow contained while per-widget minHeight clamps prevent
+        // shrinking below usable content sizes.
         controlled && [
-          "[&>[data-lazy]]:flex-1 [&>[data-lazy]]:min-h-0",
+          "[&>[data-lazy]]:!h-auto [&>[data-lazy]]:flex-1 [&>[data-lazy]]:min-h-0",
+          "[&_[data-slot=card]]:h-full [&_[data-slot=card]]:min-h-0 [&_[data-slot=card]]:flex [&_[data-slot=card]]:flex-col [&_[data-slot=card]]:overflow-hidden",
+          "[&_[data-slot=card-content]]:flex-1 [&_[data-slot=card-content]]:min-h-0",
           "[&_.recharts-responsive-container]:!h-full",
           "[&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full",
         ],
