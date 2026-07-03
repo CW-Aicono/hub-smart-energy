@@ -5985,6 +5985,66 @@ export type Database = {
           },
         ]
       }
+      location_dlm_devices: {
+        Row: {
+          created_at: string
+          device_kind: Database["public"]["Enums"]["dlm_device_kind"]
+          device_ref_id: string
+          display_name: string | null
+          id: string
+          location_id: string
+          max_power_kw: number
+          min_power_kw: number
+          notes: string | null
+          priority: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          device_kind: Database["public"]["Enums"]["dlm_device_kind"]
+          device_ref_id: string
+          display_name?: string | null
+          id?: string
+          location_id: string
+          max_power_kw?: number
+          min_power_kw?: number
+          notes?: string | null
+          priority?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          device_kind?: Database["public"]["Enums"]["dlm_device_kind"]
+          device_ref_id?: string
+          display_name?: string | null
+          id?: string
+          location_id?: string
+          max_power_kw?: number
+          min_power_kw?: number
+          notes?: string | null
+          priority?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_dlm_devices_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_dlm_devices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       location_energy_sources: {
         Row: {
           created_at: string
@@ -12499,6 +12559,11 @@ export type Database = {
         | "cable"
         | "accessory"
         | "misc"
+      dlm_device_kind:
+        | "charge_point"
+        | "heat_pump"
+        | "battery"
+        | "generic_actuator"
       energy_type: "strom" | "gas" | "waerme" | "wasser"
       location_type: "einzelgebaeude" | "gebaeudekomplex" | "sonstiges"
       location_usage_type:
@@ -12661,6 +12726,12 @@ export const Constants = {
         "cable",
         "accessory",
         "misc",
+      ],
+      dlm_device_kind: [
+        "charge_point",
+        "heat_pump",
+        "battery",
+        "generic_actuator",
       ],
       energy_type: ["strom", "gas", "waerme", "wasser"],
       location_type: ["einzelgebaeude", "gebaeudekomplex", "sonstiges"],
