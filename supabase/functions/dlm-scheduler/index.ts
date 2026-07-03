@@ -177,16 +177,6 @@ async function processGroup(group: any): Promise<DispatchResult> {
 async function run() {
   const results: DispatchResult[] = [];
 
-  // Site-level (hard limit)
-  const { data: locs } = await admin
-    .from("locations")
-    .select("id, grid_limit_kw")
-    .not("grid_limit_kw", "is", null);
-  for (const loc of locs ?? []) {
-    try { results.push(await processSite(loc)); }
-    catch (e) { results.push({ scope: "site", scope_id: loc.id, status: "error", detail: (e as Error).message }); }
-  }
-
   // Group-level (soft limit)
   const { data: groups } = await admin
     .from("charge_point_groups")
