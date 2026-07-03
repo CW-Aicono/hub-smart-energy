@@ -24,6 +24,35 @@ type Admin = any;
 
 const RECENT_WINDOW_MIN = 5;
 
+type BridgePowerSample = {
+  uuid: string;
+  value: number;
+  received_at: string;
+};
+
+function getLoxoneUuidFamilyPrefix(uuid: string | null | undefined): string | null {
+  if (!uuid) return null;
+  const parts = uuid.toLowerCase().split("-");
+  return parts.length >= 3 ? `${parts[0]}-${parts[1]}-` : null;
+}
+
+function isPlausiblePowerKw(value: number): boolean {
+  return Number.isFinite(value) && Math.abs(value) <= 500;
+}
+
+function pickBridgePowerSample(
+  rows: BridgePowerSample[],
+  exactUuid: string | null | undefined,
+): BridgePowerSample | null {
+  const normalizedExact = exactUuid?.toLowerCase() ?? null;
+  const sorted = [...rows].sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime());
+  const exact = sorted.find(
+    (row) => row.uuid.toLowerCase() === normalizedExact && isPlausiblePowerKw(Number(row.value)),
+  );
+  if (exact) return exact;
+  return sorted.find((row) => isPlausiblePowerKw(Number(row.value))) ?? null;
+}
+
 async function readCpLivePowerKw(
   admin: Admin,
   chargePointIds: string[],
@@ -69,8 +98,50 @@ async function readSimulationKw(
   return unit === "w" ? raw / 1000 : raw;
 }
 
-async function readPlainMeterKw(admin: Admin, meterId: string): Promise<number | null> {
+async function readPlainMeterKw(
+  admin: Admin,
+  meterId: string,
+  sensorUuid: string | null,
+  tenantId: string | null,
+): Promise<number | null> {
   const cutoff = new Date(Date.now() - RECENT_WINDOW_MIN * 60_000).toISOString();
+
+  // Prefer gateway raw samples. Loxone exposes related State-UUIDs for live power,
+  // energy counters, and reset/max values. Older meter mappings may point at the
+  // base/counter UUID while live power arrives on a neighbouring State-UUID.
+  // We therefore try exact UUID first, then plausible samples from the same
+  // Loxone UUID family and drop counter-like implausible values.
+  if (sensorUuid) {
+    const familyPrefix = getLoxoneUuidFamilyPrefix(sensorUuid);
+    let bridgeRows: BridgePowerSample[] = [];
+    if (familyPrefix) {
+      let query = admin
+        .from("bridge_raw_samples")
+        .select("uuid, value, received_at")
+        .ilike("uuid", `${familyPrefix}%`)
+        .gte("received_at", cutoff)
+        .order("received_at", { ascending: false })
+        .limit(120);
+      if (tenantId) query = query.eq("tenant_id", tenantId);
+      const { data } = await query;
+      bridgeRows = (data ?? []) as BridgePowerSample[];
+    }
+    if (bridgeRows.length === 0) {
+      let query = admin
+        .from("bridge_raw_samples")
+        .select("uuid, value, received_at")
+        .eq("uuid", sensorUuid.toLowerCase())
+        .gte("received_at", cutoff)
+        .order("received_at", { ascending: false })
+        .limit(20);
+      if (tenantId) query = query.eq("tenant_id", tenantId);
+      const { data } = await query;
+      bridgeRows = (data ?? []) as BridgePowerSample[];
+    }
+    const bridge = pickBridgePowerSample(bridgeRows, sensorUuid);
+    if (bridge) return Number(bridge.value);
+  }
+
   const { data: agg } = await admin
     .from("meter_power_readings_5min")
     .select("power_avg")
@@ -99,7 +170,7 @@ export async function fetchLatestMeterPowerKw(
 
   const { data: meter } = await admin
     .from("meters")
-    .select("id, capture_type, sim_unit, location_id")
+    .select("id, capture_type, sim_unit, location_id, sensor_uuid, tenant_id")
     .eq("id", meterId)
     .maybeSingle();
   if (!meter) return null;
@@ -167,5 +238,5 @@ export async function fetchLatestMeterPowerKw(
     return anyResolved ? total : null;
   }
 
-  return readPlainMeterKw(admin, meterId);
+  return readPlainMeterKw(admin, meterId, meter.sensor_uuid as string | null, meter.tenant_id as string | null);
 }

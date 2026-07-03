@@ -21,6 +21,39 @@ interface Props {
   locationId: string;
 }
 
+type LivePowerSource = "live" | "5min";
+
+type BridgePowerSample = {
+  uuid: string;
+  value: number;
+  received_at: string;
+};
+
+function getLoxoneUuidFamilyPrefix(uuid: string | null | undefined): string | null {
+  if (!uuid) return null;
+  const parts = uuid.toLowerCase().split("-");
+  return parts.length >= 3 ? `${parts[0]}-${parts[1]}-` : null;
+}
+
+function isPlausiblePowerKw(value: number, gridLimitKw: number): boolean {
+  const maxExpected = Math.max(Math.abs(gridLimitKw) * 3, 500);
+  return Number.isFinite(value) && Math.abs(value) <= maxExpected;
+}
+
+function pickBridgePowerSample(
+  rows: BridgePowerSample[],
+  exactUuid: string | null | undefined,
+  gridLimitKw: number,
+): BridgePowerSample | null {
+  const normalizedExact = exactUuid?.toLowerCase() ?? null;
+  const sorted = [...rows].sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime());
+  const exact = sorted.find(
+    (row) => row.uuid.toLowerCase() === normalizedExact && isPlausiblePowerKw(Number(row.value), gridLimitKw),
+  );
+  if (exact) return exact;
+  return sorted.find((row) => isPlausiblePowerKw(Number(row.value), gridLimitKw)) ?? null;
+}
+
 export function DynamicDlmCard({ locationId }: Props) {
   const { config, log, isLoading, save, saving, remove } = useLocationDlmConfig(locationId);
   const { data: cps = [] } = useLocationChargePoints(locationId);
@@ -72,17 +105,57 @@ export function DynamicDlmCard({ locationId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.id, cps.length, dlmDevices.length]);
 
+  const referenceMeter = meters.find((m) => m.id === referenceMeterId) ?? null;
 
   // Live-Messwert vom Referenz-Zähler.
-  // 1) Bevorzugt: aktuellster Rohwert aus meter_power_readings (< 2 min alt → "Live").
-  // 2) Fallback: letzter 5-Minuten-Bucket ("5-Min").
+  // 1) Bevorzugt: Gateway-Rohwert aus bridge_raw_samples (< 2 min alt → "Live").
+  //    Wichtig bei Loxone: Live-Power-States können zur gespeicherten Zähler-UUID
+  //    versetzte State-UUIDs haben; deshalb erst exakte UUID, dann plausible UUID
+  //    derselben Loxone-Familie.
+  // 2) Danach: aktuellster Rohwert aus meter_power_readings (< 2 min alt → "Live").
+  // 3) Fallback: letzter 5-Minuten-Bucket ("5-Min").
   const livePowerQuery = useQuery({
-    queryKey: ["dlm-live-power", referenceMeterId],
-    enabled: !!referenceMeterId,
+    queryKey: ["dlm-live-power", referenceMeterId, referenceMeter?.sensor_uuid, gridLimitKw],
+    enabled: !!referenceMeterId && !!tenant?.id,
     refetchInterval: 15_000,
     staleTime: 10_000,
     queryFn: async () => {
       const twoMinAgo = new Date(Date.now() - 2 * 60_000).toISOString();
+      const referenceUuid = referenceMeter?.sensor_uuid?.toLowerCase() ?? null;
+      const uuidFamilyPrefix = getLoxoneUuidFamilyPrefix(referenceUuid);
+
+      if (referenceUuid) {
+        let bridgeRows: BridgePowerSample[] = [];
+        if (uuidFamilyPrefix) {
+          const { data } = await (supabase as any)
+            .from("bridge_raw_samples")
+            .select("uuid, value, received_at")
+            .eq("tenant_id", tenant?.id)
+            .ilike("uuid", `${uuidFamilyPrefix}%`)
+            .gte("received_at", twoMinAgo)
+            .order("received_at", { ascending: false })
+            .limit(120);
+          bridgeRows = (data ?? []) as BridgePowerSample[];
+        }
+
+        if (bridgeRows.length === 0) {
+          const { data } = await (supabase as any)
+            .from("bridge_raw_samples")
+            .select("uuid, value, received_at")
+            .eq("tenant_id", tenant?.id)
+            .eq("uuid", referenceUuid)
+            .gte("received_at", twoMinAgo)
+            .order("received_at", { ascending: false })
+            .limit(20);
+          bridgeRows = (data ?? []) as BridgePowerSample[];
+        }
+
+        const bridge = pickBridgePowerSample(bridgeRows, referenceUuid, gridLimitKw);
+        if (bridge) {
+          return { power_kw: Number(bridge.value), source: "live" as const satisfies LivePowerSource };
+        }
+      }
+
       const { data: raw } = await supabase
         .from("meter_power_readings")
         .select("power_value, recorded_at")
@@ -92,7 +165,7 @@ export function DynamicDlmCard({ locationId }: Props) {
         .limit(1)
         .maybeSingle();
       if (raw && (raw as any).power_value != null) {
-        return { power_kw: Number((raw as any).power_value), source: "live" as const };
+        return { power_kw: Number((raw as any).power_value), source: "live" as const satisfies LivePowerSource };
       }
       const { data: bucket } = await supabase
         .from("meter_power_readings_5min")
@@ -102,11 +175,45 @@ export function DynamicDlmCard({ locationId }: Props) {
         .limit(1)
         .maybeSingle();
       if (bucket && (bucket as any).power_avg != null) {
-        return { power_kw: Number((bucket as any).power_avg), source: "5min" as const };
+        return { power_kw: Number((bucket as any).power_avg), source: "5min" as const satisfies LivePowerSource };
       }
       return null;
     },
   });
+
+  // Zusätzlich den Realtime-Broadcast direkt abonnieren: dadurch aktualisiert sich
+  // die Hausanschluss-Last ohne auf DB-Polling oder 5-Min-Aggregation zu warten.
+  useEffect(() => {
+    if (!tenant?.id || !referenceMeterId || !referenceMeter?.sensor_uuid) return;
+    const referenceUuid = referenceMeter.sensor_uuid.toLowerCase();
+    const uuidFamilyPrefix = getLoxoneUuidFamilyPrefix(referenceUuid);
+    const channel = supabase
+      .channel(`loxone-live-${tenant.id}`, { config: { broadcast: { self: false } } })
+      .on(
+        "broadcast",
+        { event: "readings" },
+        (msg: { payload: { events?: Array<{ uuid: string; value: number; at: string; role?: string }> } }) => {
+          const events = msg.payload?.events ?? [];
+          const powerEvents = events
+            .filter((ev) => (ev.role ?? "pwr") === "pwr")
+            .filter((ev) => {
+              const uuid = ev.uuid.toLowerCase();
+              return uuid === referenceUuid || (!!uuidFamilyPrefix && uuid.startsWith(uuidFamilyPrefix));
+            })
+            .map((ev) => ({ uuid: ev.uuid, value: Number(ev.value), received_at: ev.at }));
+          const sample = pickBridgePowerSample(powerEvents, referenceUuid, gridLimitKw);
+          if (!sample) return;
+          qc.setQueryData(["dlm-live-power", referenceMeterId, referenceMeter.sensor_uuid, gridLimitKw], {
+            power_kw: Number(sample.value),
+            source: "live" as const satisfies LivePowerSource,
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tenant?.id, locationId, referenceMeterId, referenceMeter?.sensor_uuid, gridLimitKw, qc]);
 
   // Realtime: Log refresh
   useEffect(() => {
@@ -167,7 +274,7 @@ export function DynamicDlmCard({ locationId }: Props) {
   const sensorStale = lastLog?.reason === "fallback_stale_sensor";
 
   // Live-Fallback: wenn kein aktueller Steuerzyklus vorliegt (z. B. DLM gerade eingerichtet
-  // oder inaktiv), Werte direkt aus dem Referenzzähler ableiten (Rohwert oder 5-Min-Bucket).
+  // oder inaktiv), Werte direkt aus dem Referenzzähler ableiten (Gateway-Broadcast/Rohwert/5-Min-Bucket).
   const liveMeasuredKw = livePowerQuery.data?.power_kw ?? null;
   const liveSource: "live" | "5min" | null = livePowerQuery.data?.source ?? null;
   const measuredKw = logMeasuredKw ?? liveMeasuredKw;
