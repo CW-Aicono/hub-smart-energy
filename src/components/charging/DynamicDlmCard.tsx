@@ -73,22 +73,38 @@ export function DynamicDlmCard({ locationId }: Props) {
   }, [config?.id, cps.length, dlmDevices.length]);
 
 
-  // Live-Messwert vom Referenz-Zähler (Fallback wenn dlm_control_log noch leer ist)
+  // Live-Messwert vom Referenz-Zähler.
+  // 1) Bevorzugt: aktuellster Rohwert aus meter_power_readings (< 2 min alt → "Live").
+  // 2) Fallback: letzter 5-Minuten-Bucket ("5-Min").
   const livePowerQuery = useQuery({
     queryKey: ["dlm-live-power", referenceMeterId],
     enabled: !!referenceMeterId,
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const twoMinAgo = new Date(Date.now() - 2 * 60_000).toISOString();
+      const { data: raw } = await supabase
+        .from("meter_power_readings")
+        .select("power_value, timestamp")
+        .eq("meter_id", referenceMeterId)
+        .gte("timestamp", twoMinAgo)
+        .order("timestamp", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (raw && (raw as any).power_value != null) {
+        return { power_kw: Number((raw as any).power_value), source: "live" as const };
+      }
+      const { data: bucket } = await supabase
         .from("meter_power_readings_5min")
         .select("power_avg, bucket")
         .eq("meter_id", referenceMeterId)
         .order("bucket", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (error) throw error;
-      return data as { power_avg: number | null; bucket: string } | null;
+      if (bucket && (bucket as any).power_avg != null) {
+        return { power_kw: Number((bucket as any).power_avg), source: "5min" as const };
+      }
+      return null;
     },
   });
 
@@ -151,9 +167,13 @@ export function DynamicDlmCard({ locationId }: Props) {
   const sensorStale = lastLog?.reason === "fallback_stale_sensor";
 
   // Live-Fallback: wenn kein aktueller Steuerzyklus vorliegt (z. B. DLM gerade eingerichtet
-  // oder inaktiv), Werte direkt aus dem letzten 5-Minuten-Bucket des Referenzzählers ableiten.
-  const liveMeasuredKw = livePowerQuery.data?.power_avg != null ? Number(livePowerQuery.data.power_avg) : null;
+  // oder inaktiv), Werte direkt aus dem Referenzzähler ableiten (Rohwert oder 5-Min-Bucket).
+  const liveMeasuredKw = livePowerQuery.data?.power_kw ?? null;
+  const liveSource: "live" | "5min" | null = livePowerQuery.data?.source ?? null;
   const measuredKw = logMeasuredKw ?? liveMeasuredKw;
+  // Quelle für Badge: dlm_control_log wird alle 60 s aktualisiert → "Live".
+  const measuredSource: "live" | "5min" =
+    logMeasuredKw != null ? "live" : liveSource === "5min" ? "5min" : "live";
   const availableKw =
     logAvailableKw ??
     (measuredKw != null
@@ -171,9 +191,9 @@ export function DynamicDlmCard({ locationId }: Props) {
             <button className="group flex w-full items-start justify-between gap-2 text-left hover:opacity-90">
               <div className="flex items-start gap-2">
                 {isOpen ? (
-                  <ChevronDown className="mt-1 h-5 w-5 shrink-0 text-muted-foreground transition-transform" />
+                  <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform" />
                 ) : (
-                  <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                  <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                 )}
                 <div>
                   <CardTitle className="flex items-center gap-2">
@@ -203,7 +223,7 @@ export function DynamicDlmCard({ locationId }: Props) {
                 <p className="text-xs text-muted-foreground">Hausanschluss-Last</p>
                 {measuredKw != null && (
                   <Badge variant="outline" className="h-4 px-1.5 text-[10px] leading-none">
-                    {logMeasuredKw != null ? "Live" : "5-Min"}
+                    {measuredSource === "live" ? "Live" : "5-Min"}
                   </Badge>
                 )}
               </div>
