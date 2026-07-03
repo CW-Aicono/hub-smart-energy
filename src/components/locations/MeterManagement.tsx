@@ -893,6 +893,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                     onDelete={confirmDelete}
                     showArchived={showArchived}
                     isAdmin={isAdmin}
+                    selectedIds={selectedMeterIds}
+                    onToggleId={toggleSelectId}
+                    onToggleAll={toggleSelectAll}
                   />
                 </div>
               );
@@ -1037,6 +1040,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                     onDelete={confirmDelete}
                     showArchived={showArchived}
                     isAdmin={isAdmin}
+                    selectedIds={selectedMeterIds}
+                    onToggleId={toggleSelectId}
+                    onToggleAll={toggleSelectAll}
                   />
                 );
               }
@@ -1182,6 +1188,9 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                     onDelete={confirmDelete}
                     showArchived={showArchived}
                     isAdmin={isAdmin}
+                    selectedIds={selectedMeterIds}
+                    onToggleId={toggleSelectId}
+                    onToggleAll={toggleSelectAll}
                   />
                 );
               }
