@@ -168,12 +168,12 @@ export function DynamicDlmCard({ locationId }: Props) {
       <Card>
         <CardHeader>
           <CollapsibleTrigger asChild>
-            <button className="flex w-full items-start justify-between gap-2 text-left">
+            <button className="group flex w-full items-start justify-between gap-2 text-left hover:opacity-90">
               <div className="flex items-start gap-2">
                 {isOpen ? (
-                  <ChevronDown className="mt-1 h-4 w-4 text-muted-foreground" />
+                  <ChevronDown className="mt-1 h-5 w-5 shrink-0 text-muted-foreground transition-transform" />
                 ) : (
-                  <ChevronRight className="mt-1 h-4 w-4 text-muted-foreground" />
+                  <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                 )}
                 <div>
                   <CardTitle className="flex items-center gap-2">
@@ -181,7 +181,7 @@ export function DynamicDlmCard({ locationId }: Props) {
                     Hausanschluss-Lastmanagement
                   </CardTitle>
                   <CardDescription>
-                    Schützt den gesamten Hausanschluss, indem angeschlossene Wallboxen automatisch gedrosselt werden, sobald der Messwert sich der Grenzleistung nähert. Reaktion ≤ 60 s. Für Unterkreise (einzelne Ladepunkt-Gruppe) siehe „Gruppen-Lastbegrenzung" im Ladepunkt-Gruppen-Dialog.
+                    Schützt den gesamten Hausanschluss, indem angeschlossene steuerbare Verbraucher (z. B. Wallboxen, Wärmepumpen, Batteriespeicher) automatisch gedrosselt oder pausiert werden, sobald der Messwert sich der Grenzleistung nähert. Reaktion ≤ 60 s. Für Unterkreise (einzelne Ladepunkt-Gruppe) siehe „Gruppen-Lastbegrenzung" im Ladepunkt-Gruppen-Dialog.
                   </CardDescription>
                 </div>
               </div>
