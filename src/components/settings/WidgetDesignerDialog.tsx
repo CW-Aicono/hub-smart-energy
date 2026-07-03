@@ -1,4 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/hooks/useTenant";
+import { useLocations } from "@/hooks/useLocations";
 import { useCustomWidgetDefinitions, CustomWidgetDefinition, CustomWidgetConfig, ChartType, AggregationType, ChartTypePerPeriod, TimePeriod, EnergyFlowNode, EnergyFlowConnection } from "@/hooks/useCustomWidgetDefinitions";
 import { useMeters } from "@/hooks/useMeters";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -11,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WidgetPreview } from "./WidgetPreview";
 import { EnergyFlowDesigner } from "./EnergyFlowDesigner";
-import { BarChart3, LineChart, Gauge, Activity, Table2, Plus, X, GitBranch } from "lucide-react";
+import { BarChart3, LineChart, Gauge, Activity, Table2, Plus, X, GitBranch, Search } from "lucide-react";
 
 const CHART_TYPES: { value: ChartType; label: string; icon: React.ReactNode }[] = [
   { value: "line", label: "Liniendiagramm", icon: <LineChart className="h-5 w-5" /> },
