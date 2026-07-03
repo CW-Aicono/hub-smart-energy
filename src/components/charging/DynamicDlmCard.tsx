@@ -167,11 +167,10 @@ export function DynamicDlmCard({ locationId }: Props) {
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Zap className="h-5 w-5" />
-                    Dynamisches Lastmanagement (DLM)
+                    Hausanschluss-Lastmanagement
                   </CardTitle>
                   <CardDescription>
-                    Drosselt Wallboxen automatisch, wenn der Hausanschluss-Messwert sich der Grenzleistung nähert.
-                    Reaktion ≤ 60 s.
+                    Schützt den gesamten Hausanschluss, indem angeschlossene Wallboxen automatisch gedrosselt werden, sobald der Messwert sich der Grenzleistung nähert. Reaktion ≤ 60 s. Für Unterkreise (einzelne Ladepunkt-Gruppe) siehe „Gruppen-Lastbegrenzung" im Ladepunkt-Gruppen-Dialog.
                   </CardDescription>
                 </div>
               </div>
