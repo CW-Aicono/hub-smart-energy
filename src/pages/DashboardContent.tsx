@@ -12,6 +12,8 @@ import DashboardCustomizer from "@/components/dashboard/DashboardCustomizer";
 import { LocationFilter } from "@/components/dashboard/LocationFilter";
 import WidgetErrorBoundary from "@/components/dashboard/WidgetErrorBoundary";
 import LazyWidget from "@/components/dashboard/LazyWidget";
+import ResizableWidget from "@/components/dashboard/ResizableWidget";
+
 import { useDashboardPrefetch } from "@/hooks/useDashboardPrefetch";
 
 // Lazy-load all widget components – each resolves to its own chunk
@@ -94,7 +96,7 @@ const getLocationWidget = (_locationId: string | null): string => {
 };
 
 const DashboardContent = () => {
-  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize } = useDashboardWidgets();
+  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize, updateWidgetLayout } = useDashboardWidgets();
   const { definitions: customWidgetDefs } = useCustomWidgetDefinitions();
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null);
   const { t, language } = useTranslation();
