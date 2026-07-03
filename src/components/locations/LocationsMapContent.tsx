@@ -97,12 +97,12 @@ function LocationsMapContent({ locations, onLocationClick, className, errorLocat
       <MapContainer
         center={defaultCenter}
         zoom={locations.length === 1 ? 14 : 6}
-        className="h-full w-full"
+        className="h-full min-h-[350px] w-full"
         scrollWheelZoom={false}
         dragging={!isTouchDevice}
         touchZoom={true}
         zoomControl={showZoomControls}
-        style={{ height: "100%", width: "100%" }}
+        style={{ height: "100%", minHeight: "350px", width: "100%" }}
         whenReady={() => setMapReady(true)}
       >
         <TileLayer
