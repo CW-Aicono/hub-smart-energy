@@ -493,9 +493,3 @@ export function DynamicDlmCard({ locationId }: Props) {
     </Collapsible>
   );
 }
-      </CardContent>
-        </CollapsibleContent>
-      </Card>
-    </Collapsible>
-  );
-}
