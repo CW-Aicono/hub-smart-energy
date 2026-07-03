@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
 import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TableHead } from "@/components/ui/table";
+
 
 export type SortDirection = "asc" | "desc";
 
@@ -78,19 +80,20 @@ export function SortableHead<K extends string>({
   const Icon = !isActive ? ArrowUpDown : state.direction === "asc" ? ArrowUp : ArrowDown;
 
   return (
-    <button
-      type="button"
-      onClick={() => toggle(key)}
-      className={cn(
-        "inline-flex items-center gap-1 hover:text-foreground",
-        align === "right" && "ml-auto",
-        isActive && "text-foreground",
-        className,
-      )}
-    >
-      {content}
-      <Icon className="h-3 w-3 opacity-60" />
-    </button>
+    <TableHead className={cn(align === "right" && "text-right", className)}>
+      <button
+        type="button"
+        onClick={() => toggle(key)}
+        className={cn(
+          "inline-flex items-center gap-1 hover:text-foreground",
+          isActive && "text-foreground",
+        )}
+      >
+        {content}
+        <Icon className="h-3 w-3 opacity-60" />
+      </button>
+    </TableHead>
   );
 }
+
 
