@@ -16,6 +16,7 @@ import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer }
 import { supabase } from "@/integrations/supabase/client";
 import { formatEnergy, formatGasDual } from "@/lib/formatEnergy";
 import { cn } from "@/lib/utils";
+import { probeMark } from "@/lib/perfProbe"; // PERF-PROBE
 
 interface MeterLiveValue {
   meterId: string;
@@ -45,6 +46,7 @@ const LiveValues = () => {
   const { locations, loading: locationsLoading } = useLocations();
   const { meters, loading: metersLoading } = useMeters();
   const { t, language } = useTranslation();
+  useEffect(() => { probeMark("LiveValues:mounted", { once: true }); }, []); // PERF-PROBE
 
   const ENERGY_TYPE_CONFIG: Record<string, { label: string; icon: typeof Zap; colorClass: string }> = {
     strom: { label: t("liveValues.strom" as any), icon: Zap, colorClass: "text-[hsl(var(--energy-strom))]" },
