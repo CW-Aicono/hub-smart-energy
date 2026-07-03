@@ -49,7 +49,9 @@ interface SensorValue {
 
 interface SensorProvider {
   getSensorValue(sensorUuid: string, gatewayId?: string): Promise<SensorValue | null>;
+  getPowerHeadroomKw?(locationId: string): Promise<number | null>;
 }
+
 
 const DEBOUNCE_MINUTES = 5;
 
