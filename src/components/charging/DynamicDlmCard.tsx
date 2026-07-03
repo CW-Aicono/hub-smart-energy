@@ -49,17 +49,52 @@ export function DynamicDlmCard({ locationId }: Props) {
     }
   }, [config?.id]);
 
-  // CP-Liste mit aktueller Priorität synchron halten
+  // CP-Liste mit aktueller Priorität synchron halten (dedupliziert)
   useEffect(() => {
     if (cps.length === 0) return;
-    const known = new Set(priority);
-    const missing = cps.map((c) => c.id).filter((id) => !known.has(id));
-    if (missing.length > 0) {
-      setPriority((prev) => [...prev, ...missing]);
-    }
-    setPriority((prev) => prev.filter((id) => cps.some((c) => c.id === id)));
+    setPriority((prev) => {
+      const validIds = new Set(cps.map((c) => c.id));
+      const seen = new Set<string>();
+      const cleaned: string[] = [];
+      for (const id of prev) {
+        if (validIds.has(id) && !seen.has(id)) {
+          seen.add(id);
+          cleaned.push(id);
+        }
+      }
+      for (const c of cps) {
+        if (!seen.has(c.id)) {
+          seen.add(c.id);
+          cleaned.push(c.id);
+        }
+      }
+      // Nur ersetzen, wenn sich wirklich etwas geändert hat
+      if (cleaned.length === prev.length && cleaned.every((id, i) => id === prev[i])) {
+        return prev;
+      }
+      return cleaned;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cps.length]);
+
+  // Live-Messwert vom Referenz-Zähler (Fallback wenn dlm_control_log noch leer ist)
+  const livePowerQuery = useQuery({
+    queryKey: ["dlm-live-power", referenceMeterId],
+    enabled: !!referenceMeterId,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("meter_power_readings_5min")
+        .select("power_kw, bucket_start")
+        .eq("meter_id", referenceMeterId)
+        .order("bucket_start", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { power_kw: number | null; bucket_start: string } | null;
+    },
+  });
 
   // Realtime: Log refresh
   useEffect(() => {
