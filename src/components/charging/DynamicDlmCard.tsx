@@ -21,6 +21,39 @@ interface Props {
   locationId: string;
 }
 
+type LivePowerSource = "live" | "5min";
+
+type BridgePowerSample = {
+  uuid: string;
+  value: number;
+  received_at: string;
+};
+
+function getLoxoneUuidFamilyPrefix(uuid: string | null | undefined): string | null {
+  if (!uuid) return null;
+  const parts = uuid.toLowerCase().split("-");
+  return parts.length >= 3 ? `${parts[0]}-${parts[1]}-` : null;
+}
+
+function isPlausiblePowerKw(value: number, gridLimitKw: number): boolean {
+  const maxExpected = Math.max(Math.abs(gridLimitKw) * 3, 500);
+  return Number.isFinite(value) && Math.abs(value) <= maxExpected;
+}
+
+function pickBridgePowerSample(
+  rows: BridgePowerSample[],
+  exactUuid: string | null | undefined,
+  gridLimitKw: number,
+): BridgePowerSample | null {
+  const normalizedExact = exactUuid?.toLowerCase() ?? null;
+  const sorted = [...rows].sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime());
+  const exact = sorted.find(
+    (row) => row.uuid.toLowerCase() === normalizedExact && isPlausiblePowerKw(Number(row.value), gridLimitKw),
+  );
+  if (exact) return exact;
+  return sorted.find((row) => isPlausiblePowerKw(Number(row.value), gridLimitKw)) ?? null;
+}
+
 export function DynamicDlmCard({ locationId }: Props) {
   const { config, log, isLoading, save, saving, remove } = useLocationDlmConfig(locationId);
   const { data: cps = [] } = useLocationChargePoints(locationId);
@@ -160,6 +193,7 @@ export function DynamicDlmCard({ locationId }: Props) {
   const usedRefIds = useMemo(() => new Set(dlmDevices.map((d) => d.device_ref_id)), [dlmDevices]);
   const availableChargePoints = cps.filter((c) => !usedRefIds.has(c.id));
   const availableActuators = actuatorCandidates.filter((a) => !usedRefIds.has(a.id));
+  const referenceMeter = meters.find((m) => m.id === referenceMeterId) ?? null;
 
   const lastLog = log[0];
   const logMeasuredKw = lastLog?.measured_kw != null ? Number(lastLog.measured_kw) : null;
@@ -167,7 +201,7 @@ export function DynamicDlmCard({ locationId }: Props) {
   const sensorStale = lastLog?.reason === "fallback_stale_sensor";
 
   // Live-Fallback: wenn kein aktueller Steuerzyklus vorliegt (z. B. DLM gerade eingerichtet
-  // oder inaktiv), Werte direkt aus dem Referenzzähler ableiten (Rohwert oder 5-Min-Bucket).
+  // oder inaktiv), Werte direkt aus dem Referenzzähler ableiten (Gateway-Broadcast/Rohwert/5-Min-Bucket).
   const liveMeasuredKw = livePowerQuery.data?.power_kw ?? null;
   const liveSource: "live" | "5min" | null = livePowerQuery.data?.source ?? null;
   const measuredKw = logMeasuredKw ?? liveMeasuredKw;
