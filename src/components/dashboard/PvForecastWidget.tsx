@@ -128,7 +128,6 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const refDateStr = toLocalDateStr(refDate);
   const isDay = selectedPeriod === "day";
   const canGoForward = isDay ? offset < 1 : offset < 0;
-  const isDay = selectedPeriod === "day";
   const isToday = offset === 0 && isDay;
   const fromDateStr = format(rangeStart, "yyyy-MM-dd");
   const toDateStr = format(rangeEnd, "yyyy-MM-dd");
