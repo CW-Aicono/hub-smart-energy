@@ -1,111 +1,44 @@
-## Ziel
+## Plan: Einstellbare Widget-Höhe per Drag-Resize
 
-Alle Tabellen im Projekt sollen sortierbare Spalten via der zentralen `SortableHead`/`useSortableData`-Utility (`src/components/ui/sortable-head.tsx`) nutzen. Aktuell verwenden sie **nur 4 von ~54 Tabellen** — und davon nutzen 3 lokale, inkonsistente Eigenbauten.
+### Was der User bekommt
+- Jedes Dashboard-Widget zeigt am unteren Rand einen **Resize-Griff** (dünner Bar, sichtbar bei Hover). Ziehen mit der Maus verändert die Höhe in Echtzeit.
+- Die eingestellte Höhe wird pro Widget in `dashboard_widgets.config.layout.height` gespeichert (Feld existiert bereits als `WidgetLayout`, wird bislang nicht benutzt).
+- Minimalhöhe 200 px, Maximalhöhe 1200 px. Bei Doppelklick auf den Griff: zurück zur Widget-Standardhöhe.
+- Der bestehende **Dashboard-Customizer**-Reset ("Layout zurücksetzen") setzt zusätzlich alle Höhen zurück.
 
-## Ist-Zustand
+### Umfang der Widgets
+Einheitlich für **alle** Dashboard-Widgets aus `WIDGET_COMPONENTS` inkl. Custom-Widgets. Grundriss (`floor_plan_explorer`) verhält sich identisch — profitiert am stärksten, weil PDFs/SVGs unterschiedliche Seitenverhältnisse haben.
 
-**Nutzt die zentrale `SortableHead`:**
+### Technische Umsetzung
 
-- `src/components/locations/MeterManagement.tsx` — hat aber eine **lokale Copy** mit anderer API (`currentKey/direction/onSort`)
+**1. Speicherung** (`src/hooks/useDashboardWidgets.tsx`)
+- `WidgetLayout` um `height?: number` (Pixel) erweitern (Feld existiert vermutlich schon als leerer Typ — verifizieren).
+- Neue Convenience-Funktion `updateWidgetHeight(widgetType, height)`, die intern `updateWidgetLayout` mit `{ ...layout, height }` aufruft.
+- Debounced Persist (300 ms) während des Drags, damit nicht bei jedem Mousemove ein DB-Update geht.
 
-**Hat eigene lokale SortableHead-Komponenten (müssen migriert werden):**
+**2. Resize-Wrapper** (neue Komponente `src/components/dashboard/ResizableWidget.tsx`)
+- Wrapper mit `style={{ height: heightPx }}` oder `minHeight` als Fallback.
+- Griff (`div` absolut unten, `h-2 w-full cursor-ns-resize`, sichtbar via `opacity-0 group-hover:opacity-100`).
+- Pointer-Events: `onPointerDown` → `setPointerCapture`, `onPointerMove` berechnet neue Höhe (`startHeight + (clientY − startY)`), clamped auf `[200, 1200]`.
+- `onPointerUp` → Persistierung via Callback + `releasePointerCapture`.
+- Doppelklick → `onResetHeight()` (setzt `height` auf `undefined`, Widget nutzt Default).
 
-- `src/pages/SuperAdminBilling.tsx`
-- `src/pages/ChargingBilling.tsx` (3 Tabellen)
-- `src/components/locations/MeterManagement.tsx`
+**3. Einbindung** (`src/pages/DashboardContent.tsx`, `src/pages/Demo.tsx`)
+- Die beiden bestehenden `<div className="w-full min-w-0 relative group">`-Wrapper (Custom- & Standard-Widget) durch `<ResizableWidget>` ersetzen, das `height={widget.layout?.height}` und `onHeightChange={(h) => updateWidgetLayout(widget.widget_type, { ...widget.layout, height: h })}` bekommt.
+- Der bestehende Zoom-Button und Expand-Dialog bleiben unverändert.
 
-**Keine Sortierung vorhanden (~50 Tabellen ohne SortableHead):**
+**4. Charts füllen die neue Höhe** (nur wo nötig)
+- Widgets, die aktuell `ResponsiveContainer height={300}` hart setzen (`EnergyChart`, `PieChartWidget`, `SankeyWidget`, `ForecastWidget`, `SpotPriceWidget`, `PvForecastWidget`, `WeatherNormalizationWidget`), bekommen `height="100%"` und das umschließende `CardContent` erhält `h-full`.
+- `FloorPlanDashboardWidget`: der PDF-/Iframe-Container skaliert auf `100%` der verfügbaren Höhe.
+- Widgets ohne feste Höhe (KPIs, AlertsList, etc.) bleiben unverändert — die Karte wächst automatisch mit.
 
-Standort / Energie:
+**5. Reset im Customizer**
+- Vorhandenes „Layout zurücksetzen" erweitern: iteriert `updateWidgetLayout(w.widget_type, { ...w.layout, height: undefined })`.
 
-- `MetersOverview.tsx`, `EnergyPriceManagement.tsx`, `TenantElectricity.tsx`, `InvoicesList.tsx`, `SensorsDialog.tsx`, `NetworkDevicesTable.tsx`, `AiconoHubManager.tsx`
+### Nicht enthalten
+- Kein Breiten-Resize (Widget-Breite bleibt über bestehende `WidgetSize` "full/2/3/1/2/1/3" steuerbar).
+- Kein Ratio-Preset-Dropdown — nur der direkte Drag-Griff.
+- Keine Migration nötig, `config` ist bereits `jsonb`.
 
-Charging:
-
-- `ChargePointDetail.tsx`, `ChargingPoints.tsx`, `ChargingAppAdmin.tsx`, `ChargingUsersTab.tsx`, `BillingGroupsTab.tsx`, `RoamingTab.tsx`, `OcppLogViewer.tsx`, `ChargingInvoiceBulkDialogs.tsx`
-
-Reports & Analyse:
-
-- `ConsumptionTrendTable.tsx`, `LocationRanking.tsx`, `MeasuresTable.tsx`, `PropertyProfile.tsx`, `WeatherNormalizationWidget.tsx`, `Copilot.tsx`
-
-Energy Sharing:
-
-- `BillingTab.tsx`, `ContractTemplatesTab.tsx`, `DataImportTab.tsx`, `MarketplaceTab.tsx`, `EnergySharing.tsx`
-
-Automation / Betrieb:
-
-- `Automation.tsx`, `PeakShaving.tsx`, `ArbitrageTrading.tsx`, `AuditLogList.tsx`
-
-Admin & Vertrieb:
-
-- `UserManagement.tsx`, `ExternalContactsManager.tsx`, `SalesCatalogManager.tsx`, `SalesRulesManager.tsx`, `Co2FactorSettings.tsx`
-
-Super-Admin:
-
-- `SuperAdminTenants.tsx`, `SuperAdminTenantDetail.tsx`, `SuperAdminUsers.tsx`, `SuperAdminRoles.tsx`, `SuperAdminLicenses.tsx`, `SuperAdminGatewayFleet.tsx`, `SuperAdminSupport.tsx`, `SuperAdminPartners.tsx`, `SuperAdminSimulators.tsx`, `SuperAdminOcppControl.tsx`, `SuperAdminOcppFirmware.tsx`, `SuperAdminOcppIntegrations.tsx`
-
-Partner-Portal:
-
-- `PartnerBilling.tsx`, `PartnerMembers.tsx`, `PartnerTenants.tsx`, `PartnerTenantDetail.tsx`
-
-## Vorgehen
-
-### Phase 0 — Konsolidierung
-
-1. `SortableHead` in `MeterManagement.tsx` entfernen und durch die zentrale Version ersetzen (API-Angleichung: `sort`/`onToggle` statt `currentKey/direction/onSort`).
-2. Lokale `SortableHead` in `SuperAdminBilling.tsx` und `ChargingBilling.tsx` entfernen, ebenfalls auf die zentrale Version umstellen.
-
-### Phase 1 — Standort & Energie (7 Dateien)
-
-Höchste Nutzerpriorität, folgt direkt an das schon migrierte MeterManagement an.
-
-### Phase 2 — Charging (8 Dateien)
-
-### Phase 3 — Reports, Analyse & Energy Sharing (11 Dateien)
-
-### Phase 4 — Admin, Automation & Vertrieb (9 Dateien)
-
-### Phase 5 — Super-Admin & Partner-Portal (16 Dateien)
-
-### Phase 6 — Verifikation
-
-- Build durchlaufen lassen.
-- Stichprobe pro Phase im Preview: Klick auf Spalten-Header prüft ASC/DESC/Neutral.
-- Sicherstellen, dass paginierte/serverseitig gefilterte Tabellen (ChargingUsers, AuditLog) korrekt behandelt werden — dort ggf. serverseitiges Sort statt Client-Sort.
-
-## Technische Details
-
-**Migrations-Muster pro Tabelle:**
-
-```tsx
-type SortKey = "name" | "value" | "created_at";
-
-const { sorted, sort, toggle } = useSortableData<Row, SortKey>(rows, (r, k) => {
-  switch (k) {
-    case "name": return r.name;
-    case "value": return r.value;
-    case "created_at": return new Date(r.created_at);
-  }
-});
-
-// im Header:
-<TableHead>
-  <SortableHead label="Name" sortKey="name" sort={sort} onToggle={toggle} />
-</TableHead>
-
-// im Body: sorted.map(...) statt rows.map(...)
-```
-
-**Edge Cases:**
-
-- Tabellen mit serverseitigem Pagination/Filter (z. B. `ChargingUsersTab`, `AuditLogList`, große Super-Admin-Listen): Sort-State an die Query weiterreichen, keine reine Client-Sortierung — sonst sortiert nur die aktuelle Seite. Diese Fälle in der jeweiligen Phase explizit prüfen.
-- Tabellen mit Gruppierungen / Sub-Rows (falls vorhanden): Sortierung auf oberster Gruppen-Ebene.
-- Locale-Sortierung ist bereits deutsch (`localeCompare("de", { numeric: true })`) — passt zur Core-Regel „deutsches Zahlenformat".
-
-**Aufwand:** ~50 Dateien × ~5 min = größerer Diff, aber mechanisch. In 6 Phasen aufteilbar; jede Phase eigenständig deploybar.
-
-## Frage vor der Umsetzung
-
-Sollen wir **alle 6 Phasen in einem Rutsch** umsetzen (großer Diff, ein Turn), oder **phasenweise** mit Zwischen-Reviews (empfohlen, damit du Regressionen pro Bereich prüfen kannst)?  
-  
-Antwort: gerne in einem Rutsch umsetzen. Du schaffst das ;-)
+### Preview-Frage
+Die interne Preview zeigt `/auth` — die Session in der Sandbox ist abgelaufen. Bitte in der Preview neu einloggen; die externe Preview funktioniert deshalb, weil dort noch eine gültige Session im Browser liegt. Kein Codefix nötig.
