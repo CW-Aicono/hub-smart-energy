@@ -71,8 +71,10 @@ export async function evaluateCondition(
   condition: AutomationCondition,
   timeParts: TimeParts,
   sensorProvider: SensorProvider,
+  locationId?: string,
 ): Promise<boolean> {
   switch (condition.type) {
+
     case "time": {
       if (condition.time_from && condition.time_to) {
         return isTimeInRange(timeParts.timeStr, condition.time_from, condition.time_to);
