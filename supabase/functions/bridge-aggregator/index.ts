@@ -129,7 +129,6 @@ async function run(): Promise<{
   }
 
   // 2) UUID → Meter-Mapping holen (einmal, pro Lauf gecached)
-  const uuids = [...new Set(raw.map((r: RawSample) => r.uuid))];
   const tenantIds = [...new Set(raw.map((r: RawSample) => r.tenant_id).filter(Boolean) as string[])];
   const { data: meters, error: meterErr } = await supabase
     .from('meters')
