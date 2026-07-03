@@ -313,6 +313,43 @@ function DeviceTable({
   );
 }
 
+function BulkToolbar({
+  count,
+  showArchived,
+  onBulkEdit,
+  onArchive,
+  onDelete,
+  onClear,
+}: {
+  count: number;
+  showArchived: boolean;
+  onBulkEdit: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 mb-2">
+      <span className="text-sm font-medium">{count} ausgewählt</span>
+      <div className="ml-auto flex gap-2">
+        <Button size="sm" variant="outline" onClick={onBulkEdit}>
+          <Pencil className="h-4 w-4 mr-1" /> Bearbeiten
+        </Button>
+        <Button size="sm" variant="outline" onClick={onArchive}>
+          {showArchived ? <ArchiveRestore className="h-4 w-4 mr-1" /> : <Archive className="h-4 w-4 mr-1" />}
+          {showArchived ? "Wiederherstellen" : "Archivieren"}
+        </Button>
+        <Button size="sm" variant="destructive" onClick={onDelete}>
+          <Trash2 className="h-4 w-4 mr-1" /> Löschen
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onClear}>
+          Aufheben
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const { meters, loading: metersLoading, addMeter, deleteMeter, updateMeter, archiveMeter, updateMeterParent, refetch } = useMeters(locationId);
   const { t } = useTranslation();
