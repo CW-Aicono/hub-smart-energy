@@ -93,7 +93,11 @@ export default function ResizableWidget({
   }, [onHeightChange]);
 
   const controlled = typeof localHeight === "number";
-  const style: React.CSSProperties = controlled ? { height: `${localHeight}px` } : {};
+  // Use `minHeight` (not fixed `height`) so the user-chosen height acts as a
+  // floor: the wrapper always grows to fit its content, preventing widget
+  // internals (legends, gauges, tables) from spilling out of the card frame
+  // when the drag handle is pulled up.
+  const style: React.CSSProperties = controlled ? { minHeight: `${localHeight}px` } : {};
 
   return (
     <div
@@ -101,13 +105,11 @@ export default function ResizableWidget({
       data-widget-size={widgetSize}
       className={cn(
         "w-full min-w-0 relative group flex flex-col",
-        // Cascade "fill the wrapper" only when the user has set an explicit
-        // height. Without this guard `h-full` collapses to 0 when the wrapper
-        // itself has no height yet (e.g. Location-Map widget on first render).
+        // Let leaflet / recharts responsive containers fill the wrapper only
+        // when we have an explicit height; keep card content in its natural
+        // flow so intrinsic min-heights (headers, legends) are always honored.
         controlled && [
           "[&>[data-lazy]]:flex-1 [&>[data-lazy]]:min-h-0",
-          "[&_[data-slot=card]]:!h-full [&_[data-slot=card]]:!flex [&_[data-slot=card]]:!flex-col",
-          "[&_[data-slot=card-content]]:!flex-1 [&_[data-slot=card-content]]:!min-h-0",
           "[&_.recharts-responsive-container]:!h-full",
           "[&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full",
         ],
@@ -115,6 +117,7 @@ export default function ResizableWidget({
       )}
       style={style}
     >
+
       {children}
       <div
         role="separator"
