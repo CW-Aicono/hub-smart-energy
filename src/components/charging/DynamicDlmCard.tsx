@@ -85,10 +85,10 @@ export function DynamicDlmCard({ locationId }: Props) {
       const twoMinAgo = new Date(Date.now() - 2 * 60_000).toISOString();
       const { data: raw } = await supabase
         .from("meter_power_readings")
-        .select("power_value, timestamp")
+        .select("power_value, recorded_at")
         .eq("meter_id", referenceMeterId)
-        .gte("timestamp", twoMinAgo)
-        .order("timestamp", { ascending: false })
+        .gte("recorded_at", twoMinAgo)
+        .order("recorded_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (raw && (raw as any).power_value != null) {
