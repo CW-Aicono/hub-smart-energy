@@ -45,7 +45,10 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
     const meter = floorMeters.find(m => m.id === meterId);
     if (!meter) return;
     if ((meter.room_id ?? null) === targetRoomId) return;
-    const { error } = await updateMeter(meterId, { room_id: targetRoomId });
+    const { error } = await supabase
+      .from("meters")
+      .update({ room_id: targetRoomId })
+      .eq("id", meterId);
     if (error) {
       toast.error("Zähler konnte nicht verschoben werden");
     } else {
@@ -53,11 +56,11 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
         ? rooms.find(r => r.id === targetRoomId)?.name ?? "Raum"
         : "Ohne Raumzuordnung";
       toast.success(`"${meter.name}" → ${roomName}`);
-      if (targetRoomId) {
-        setExpandedRooms(prev => new Set(prev).add(targetRoomId));
-      }
+      if (targetRoomId) setExpandedRooms(prev => new Set(prev).add(targetRoomId));
+      refetchMeters();
     }
   };
+
 
 
 
