@@ -108,6 +108,7 @@ interface UseFloorsReturn {
   createFloor: (floor: FloorInsert) => Promise<{ data: Floor | null; error: Error | null }>;
   updateFloor: (id: string, updates: Partial<Floor>) => Promise<{ error: Error | null }>;
   deleteFloor: (id: string) => Promise<{ error: Error | null }>;
+  reorderFloors: (orderedIds: string[]) => Promise<{ error: Error | null }>;
   uploadFloorPlan: (file: File, locationId: string, floorId: string, onProgress?: ProgressCallback) => Promise<{ url: string | null; error: Error | null }>;
   upload3DModel: (files: { main: File; mtl?: File }, locationId: string, floorId: string, onProgress?: ProgressCallback) => Promise<{ error: Error | null }>;
 }
