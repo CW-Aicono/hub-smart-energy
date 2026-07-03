@@ -21,6 +21,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -49,8 +50,9 @@ import {
   RefreshCw,
   Loader2,
   AlertTriangle,
+  ScrollText,
 } from "lucide-react";
-import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+import { format } from "date-fns";
 
 const isTemporaryEdgeError = (error: unknown) => {
   const message = error instanceof Error ? error.message : JSON.stringify(error);
@@ -99,8 +101,6 @@ const statusVariant = (
   return "outline";
 };
 
-type SortKey = "tenant" | "ocpp_id" | "status" | "power" | "meter" | "idTag" | "started";
-
 const SuperAdminSimulators = () => {
   const { user, loading } = useAuth();
   const { tenants } = useTenants();
@@ -117,6 +117,7 @@ const SuperAdminSimulators = () => {
   const [logInstanceId, setLogInstanceId] = useState<string | null>(null);
   const [logOcppId, setLogOcppId] = useState<string | undefined>(undefined);
 
+  // Lade-User des gewählten Tenants laden (nur wenn Dialog offen)
   const { data: chargingUsers = [] } = useQuery({
     queryKey: ["sim-charging-users", tenantId],
     enabled: openStart && !!tenantId,
@@ -138,7 +139,7 @@ const SuperAdminSimulators = () => {
     return u?.rfid_tag || u?.app_tag || "SIM-IDTAG";
   }, [idTagSelect, chargingUsers]);
 
-  const { data = [], isFetching, refetch, error: statusError } = useQuery({
+  const { data, isFetching, refetch, error: statusError } = useQuery({
     queryKey: ["simulator-instances"],
     queryFn: async () => {
       const { data, error } = await invokeWithRetry(
@@ -164,23 +165,6 @@ const SuperAdminSimulators = () => {
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
     throwOnError: false,
   });
-
-  const tenantName = (id: string) =>
-    tenants.find((t) => t.id === id)?.name || id.slice(0, 8);
-
-  const { sorted, sort, toggle } = useSortableData<SimulatorRow, SortKey>(data, (r, k) => {
-    switch (k) {
-      case "tenant": return tenantName(r.tenant_id);
-      case "ocpp_id": return r.ocpp_id;
-      case "status": return r.live_status ?? r.status;
-      case "power": return r.live_power_kw ?? r.power_kw ?? 11;
-      case "meter": return r.live_meter_wh ?? 0;
-      case "idTag": return r.id_tag ?? "";
-      case "started": return r.started_at ? new Date(r.started_at) : null;
-      default: return null;
-    }
-  }, { key: "started", direction: "desc" });
-
   const showTemporaryStatusError = !!statusError && isTemporaryEdgeError(statusError);
 
   const friendlyError = (e: unknown): string => {
@@ -274,6 +258,9 @@ const SuperAdminSimulators = () => {
 
   if (loading) return null;
   if (!user) return <Navigate to="/auth" replace />;
+
+  const tenantName = (id: string) =>
+    tenants.find((t) => t.id === id)?.name || id.slice(0, 8);
 
   const openLogs = (row: SimulatorRow) => {
     setLogInstanceId(row.id);
@@ -453,18 +440,18 @@ const SuperAdminSimulators = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <SortableHead label="Tenant" sortKey="tenant" sort={sort} onToggle={toggle} />
-                      <SortableHead label="OCPP-ID" sortKey="ocpp_id" sort={sort} onToggle={toggle} />
-                      <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
-                      <SortableHead label="Leistung" sortKey="power" sort={sort} onToggle={toggle} className="text-right" />
-                      <SortableHead label="Zähler (kWh)" sortKey="meter" sort={sort} onToggle={toggle} className="text-right" />
-                      <SortableHead label="idTag" sortKey="idTag" sort={sort} onToggle={toggle} />
-                      <SortableHead label="Gestartet" sortKey="started" sort={sort} onToggle={toggle} />
-                      <TableCell className="text-right">Aktionen</TableCell>
+                      <TableHead>Tenant</TableHead>
+                      <TableHead>OCPP-ID</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Leistung</TableHead>
+                      <TableHead className="text-right">Zähler (kWh)</TableHead>
+                      <TableHead>idTag</TableHead>
+                      <TableHead>Gestartet</TableHead>
+                      <TableHead className="text-right">Aktionen</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sorted.map((row) => {
+                    {data.map((row) => {
                       const live = row.live_status ?? row.status;
                       const livePower = row.live_power_kw ?? row.power_kw ?? 11;
                       const livePaused = !!row.live_paused;
@@ -479,42 +466,72 @@ const SuperAdminSimulators = () => {
                           <TableCell>
                             <Badge variant={statusVariant(live)}>{live}</Badge>
                             {livePaused && (
-                              <Badge variant="outline" className="ml-1 animate-pulse">
-                                Paused
-                              </Badge>
+                              <Badge variant="outline" className="ml-1">paused</Badge>
+                            )}
+                            {row.live_last_error && (
+                              <p className="text-xs text-destructive mt-1">{row.live_last_error}</p>
                             )}
                           </TableCell>
                           <TableCell className="text-right font-mono text-xs">
-                            {livePower} kW
+                            {livePower.toFixed(1)} kW
                           </TableCell>
-                          <TableCell className="text-right font-mono text-xs">
-                            {( (row.live_meter_wh ?? 0) / 1000 ).toFixed(2)}
+                          <TableCell className="text-right font-mono">
+                            {row.live_meter_wh != null
+                              ? (row.live_meter_wh / 1000).toFixed(2)
+                              : "—"}
                           </TableCell>
-                          <TableCell className="text-xs font-mono">
-                            {row.id_tag || "—"}
+                          <TableCell className="font-mono text-xs">
+                            {row.id_tag ?? "—"}
                           </TableCell>
-                          <TableCell className="text-muted-foreground text-xs">
+                          <TableCell className="text-xs text-muted-foreground">
                             {format(new Date(row.started_at), "dd.MM. HH:mm")}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <SimulatorRowActions
-                                row={row}
-                                pending={pending}
-                                onAction={(action, value) =>
-                                  actionMut.mutate({ instanceId: row.id, action, value })
-                                }
-                                onStop={() => stopMut.mutate(row.id)}
-                                onDelete={() => deleteMut.mutate(row.id)}
-                              />
+                            <div className="flex items-center justify-end gap-1">
                               <Button
+                                size="sm"
                                 variant="ghost"
-                                size="icon"
                                 onClick={() => openLogs(row)}
-                                title="Simulator-Protokoll"
+                                title="OCPP-Logs anzeigen"
                               >
                                 <ScrollText className="h-4 w-4" />
                               </Button>
+                              <SimulatorRowActions
+                                liveStatus={live}
+                                powerKw={livePower}
+                                paused={livePaused}
+                                pending={pending}
+                                onStartTx={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "startTx" })
+                                }
+                                onStopTx={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "stopTx" })
+                                }
+                                onSetPower={(kw) =>
+                                  actionMut.mutate({ instanceId: row.id, action: "setPower", value: kw })
+                                }
+                                onPause={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "pause" })
+                                }
+                                onResume={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "resume" })
+                                }
+                                onUnplug={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "unplug" })
+                                }
+                                onFault={(code) =>
+                                  actionMut.mutate({ instanceId: row.id, action: "fault", value: code })
+                                }
+                                onClearFault={() =>
+                                  actionMut.mutate({ instanceId: row.id, action: "clearFault" })
+                                }
+                                onStop={() => stopMut.mutate(row.id)}
+                                onDelete={() => {
+                                  if (confirm("Eintrag dauerhaft löschen?")) {
+                                    deleteMut.mutate(row.id);
+                                  }
+                                }}
+                              />
                             </div>
                           </TableCell>
                         </TableRow>
@@ -531,7 +548,8 @@ const SuperAdminSimulators = () => {
       <SimulatorLogSheet
         instanceId={logInstanceId}
         ocppId={logOcppId}
-        onClose={() => setLogInstanceId(null)}
+        open={!!logInstanceId}
+        onOpenChange={(o) => { if (!o) setLogInstanceId(null); }}
       />
     </div>
   );
