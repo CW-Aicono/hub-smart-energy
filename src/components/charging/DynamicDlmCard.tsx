@@ -116,7 +116,7 @@ export function DynamicDlmCard({ locationId }: Props) {
   // 3) Fallback: letzter 5-Minuten-Bucket ("5-Min").
   const livePowerQuery = useQuery({
     queryKey: ["dlm-live-power", referenceMeterId, referenceMeter?.sensor_uuid, gridLimitKw],
-    enabled: !!referenceMeterId,
+    enabled: !!referenceMeterId && !!tenant?.id,
     refetchInterval: 15_000,
     staleTime: 10_000,
     queryFn: async () => {
