@@ -96,16 +96,56 @@ async function processLocation(cfg: any): Promise<any> {
   const limit = Number(cfg.grid_limit_kw);
   if (!cfg.is_active || !limit) return { location_id: cfg.location_id, status: "inactive" };
 
-  // CPs am Standort
-  const { data: cps } = await admin
+  // 1. Neue Gerätequelle: location_dlm_devices (kann gemischte Typen enthalten)
+  const { data: dlmDevices } = await admin
+    .from("location_dlm_devices")
+    .select("device_kind, device_ref_id, min_power_kw, max_power_kw, priority, display_name")
+    .eq("location_id", cfg.location_id)
+    .order("priority", { ascending: true });
+
+  const nonCpSkipped: any[] = [];
+  let chargePointIds: string[] = [];
+  const cpMaxOverride = new Map<string, number>();
+
+  if (dlmDevices && dlmDevices.length > 0) {
+    for (const d of dlmDevices) {
+      if (d.device_kind === "charge_point") {
+        chargePointIds.push(d.device_ref_id);
+        if (d.max_power_kw) cpMaxOverride.set(d.device_ref_id, Number(d.max_power_kw));
+      } else {
+        // Phase 2: Wärmepumpe / Batterie / Aktor via automation-core.
+        nonCpSkipped.push({
+          device_kind: d.device_kind,
+          device_ref_id: d.device_ref_id,
+          name: d.display_name ?? null,
+          skipped: "not_implemented_phase2",
+        });
+      }
+    }
+  }
+
+  // CPs am Standort — bevorzugt gefiltert auf DLM-Device-IDs, sonst alle CPs.
+  let cpsQuery = admin
     .from("charge_points")
     .select("id, ocpp_id, ws_connected, supports_charging_profile, max_power_kw")
     .eq("location_id", cfg.location_id);
-  if (!cps || cps.length === 0) return { location_id: cfg.location_id, status: "no_cps" };
+  if (chargePointIds.length > 0) cpsQuery = cpsQuery.in("id", chargePointIds);
+  const { data: cps } = await cpsQuery;
+  if (!cps || cps.length === 0) {
+    return { location_id: cfg.location_id, status: "no_cps", non_cp_skipped: nonCpSkipped };
+  }
 
-  // Reihenfolge nach priority_order (Rest am Ende)
-  const order: string[] = Array.isArray(cfg.priority_order) ? cfg.priority_order : [];
-  const orderIdx = new Map(order.map((id, i) => [id, i]));
+  // Reihenfolge: (1) location_dlm_devices.priority, (2) fallback priority_order, (3) unbekannt ans Ende
+  const orderIdx = new Map<string, number>();
+  if (dlmDevices && dlmDevices.length > 0) {
+    let rank = 0;
+    for (const d of dlmDevices) {
+      if (d.device_kind === "charge_point") orderIdx.set(d.device_ref_id, rank++);
+    }
+  } else {
+    const legacy: string[] = Array.isArray(cfg.priority_order) ? cfg.priority_order : [];
+    legacy.forEach((id, i) => orderIdx.set(id, i));
+  }
   const orderedCps = [...cps].sort((a, b) => {
     const ai = orderIdx.has(a.id) ? orderIdx.get(a.id)! : 999;
     const bi = orderIdx.has(b.id) ? orderIdx.get(b.id)! : 999;
@@ -122,7 +162,7 @@ async function processLocation(cfg: any): Promise<any> {
 
   const allocCps: Cp[] = orderedCps.map((cp) => ({
     id: cp.id,
-    max_kw: Number(cp.max_power_kw ?? 22),
+    max_kw: cpMaxOverride.get(cp.id) ?? Number(cp.max_power_kw ?? 22),
   }));
 
   const result = allocate(
@@ -239,12 +279,13 @@ async function processLocation(cfg: any): Promise<any> {
   }
 
   // Audit
+  const combinedApplied = nonCpSkipped.length > 0 ? [...applied, ...nonCpSkipped] : applied;
   await admin.from("dlm_control_log").insert({
     tenant_id: cfg.tenant_id,
     location_id: cfg.location_id,
     measured_kw: measured,
     available_kw: result.available_kw,
-    applied_profiles: applied,
+    applied_profiles: combinedApplied,
     reason: result.fallback_active ? "fallback_stale_sensor" : "regular",
   });
 

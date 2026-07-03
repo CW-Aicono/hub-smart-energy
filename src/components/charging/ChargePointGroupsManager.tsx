@@ -345,8 +345,8 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, locat
             <div className="p-4 border rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">Dynamisches Lastmanagement (Soft-Limit)</p>
-                  <p className="text-sm text-muted-foreground">Drosselt die Ladepunkte dieser Gruppe, sobald der Referenzzähler das Limit überschreitet.</p>
+                  <p className="font-medium">Gruppen-Lastbegrenzung (Soft-Limit)</p>
+                  <p className="text-sm text-muted-foreground">Drosselt nur die Ladepunkte dieser Gruppe, sobald der Referenzzähler des Stromkreises das Limit überschreitet.</p>
                 </div>
                 <Switch
                   checked={dlm.enabled}
@@ -387,7 +387,7 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, locat
                     </Select>
                   </div>
                   <p className="text-xs text-muted-foreground md:col-span-2 flex items-center gap-1">
-                    <Info className="h-3 w-3" /> Der Referenzzähler misst die Last des Stromkreises, an dem die Gruppe hängt (z.B. Unterverteilung). Hardlimit am Hausanschluss wird zusätzlich am Standort konfiguriert.
+                    <Info className="h-3 w-3" /> Nur für einen Unterkreis (z. B. Parkdeck-Unterverteilung). Der Schutz des gesamten Hausanschlusses erfolgt separat unter „Hausanschluss-Lastmanagement" auf der Standort-Seite.
                   </p>
                 </div>
               )}
