@@ -1,43 +1,77 @@
-## Ursachenanalyse
 
-Beim letzten Fix habe ich CSS-Cascader mit den Selektoren `[data-slot=card]` und `[data-slot=card-content]` gesetzt — diese Attribute existieren in `src/components/ui/card.tsx` **gar nicht**. Damit wirkt der `!h-full`-Zwang nur auf `>*:first-child` (LazyWidget-Div bzw. den absolut positionierten ZoomIn-Button) und läuft dann ins Leere:
+## Ziel
 
-1. Beim Ziehen wächst nur die Wrapper-Box (und damit der leere Bereich unter dem Handle), die Karte selbst behält ihre Eigenhöhe → **"Hintergrund des +/− ändert sich, aber nicht das Widget"**.
-2. Weil der Wrapper hinter der Karte leer wird und das Handle `bottom-1` des Wrappers referenziert, wandert das Handle vom Kartenrand weg → **"Slider an unterschiedlichen Stellen"**.
-3. LazyWidget rendert `<div ref={ref}>` ohne `h-full` — selbst korrekte Card-Selektoren würden ohne Weiterleitung nicht durchgreifen.
-4. Bei Widgets mit Karten-Inhalt (Map, FloorPlan) kollabiert der Kartenbereich, wenn Wrapper-Höhe steigt aber Card intrinsisch bleibt → **Karteninhalt teilweise unsichtbar**.
+Zwei separate Baustellen, beide **erst diagnostizieren, dann fixen**:
 
-## Fix
+1. **Preview lädt im Lovable-Iframe nicht** — tritt laut dir nur in diesem Projekt auf, also liegt es *irgendwo* im App-Code oder in einer Init-Kette, nicht am Lovable-Editor. Ursache ist noch unbekannt und ich will nichts raten (Core-Regel).
+2. **Erst-Load des Dashboards ist langsam**, besonders Live-Leistung/Gauges. Auch hier: erst messen, dann handeln.
 
-### 1) `src/components/ui/card.tsx`
-`data-slot="card"` auf `Card` und `data-slot="card-content"` auf `CardContent` ergänzen (rein additive Attribute, keine Verhaltensänderung). Damit greifen die Cascader-Selektoren tatsächlich.
+Es werden in diesem Schritt **keine Optimierungen** an Widgets, Queries, Bundles oder Realtime vorgenommen — nur Diagnose-Instrumentierung, die nach Auswertung wieder rausgeht.
 
-### 2) `src/components/dashboard/LazyWidget.tsx`
-Beide Return-Zweige des Wrappers auf `className="h-full flex flex-col"` setzen (Placeholder-Zweig behält `minHeight`, aber zusätzlich `h-full flex flex-col`, damit ein gesetzter Wrapper-Rahmen weitergereicht wird). `Suspense`-Fallback und `WidgetPlaceholder` bekommen ebenfalls `h-full` auf der Card, damit auch während des Ladens die Höhe konsistent ist.
+---
 
-### 3) `src/components/dashboard/ResizableWidget.tsx`
-- Wrapper **immer** (nicht nur bei gesetztem `localHeight`) als `flex flex-col` und mit stabilem Kaskader ausstatten, damit Handle-Position und Kartenfüllung **immer** identisch sind:
-  ```
-  "w-full min-w-0 relative group flex flex-col
-   [&>[data-lazy]]:flex-1 [&>[data-lazy]]:min-h-0
-   [&_[data-slot=card]]:!h-full [&_[data-slot=card]]:!flex [&_[data-slot=card]]:!flex-col
-   [&_[data-slot=card-content]]:!flex-1 [&_[data-slot=card-content]]:!min-h-0
-   [&_.recharts-responsive-container]:!h-full
-   [&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full"
-  ```
-- Auf dem LazyWidget-Sentinel wird ein `data-lazy` gesetzt (Punkt 2), damit direkte-Child-Selektoren zuverlässig greifen — der absolut positionierte ZoomIn-Button wird nicht getroffen.
-- Ohne `localHeight`: kein `style.height`, aber Kaskader-Regeln bleiben aktiv → Card = Wrapper-Höhe (auto) = Card-Eigenhöhe. Handle sitzt exakt am unteren Kartenrand.
-- Mit `localHeight`: Wrapper bekommt Pixelhöhe, Card wird per `!h-full` mitgestreckt, CardContent per `flex-1 min-h-0`. Recharts und Leaflet folgen via bereits vorhandener Selektoren.
-- Handle-Stil unverändert (bottom-1, z-30, opacity-40 → 100 bei hover), aber jetzt visuell **immer** direkt am Kartenrand.
+## Was ich schon weiß (ohne raten)
 
-### 4) `src/components/dashboard/LocationMapWidget.tsx`
-Das innere Wrapper-`<div className="h-full min-h-[350px] overflow-hidden">` behalten, aber `min-h-[350px]` nur wirken lassen, wenn der Widget keine explizite Höhe hat — sonst überschreibt es Reduktionen unter 350 px. Umsetzung: `min-h-[350px]` durch `min-h-0` ersetzen und den 350 px als `defaultHeight`/`minHeight`-Prop von ResizableWidget führen (bereits vorhanden über `minHeight={200}` — ausreichend). Damit skaliert die Karte sauber nach oben und unten.
+- Vite-Dev-Server läuft sauber, keine HMR-/Compile-Fehler in den letzten Stunden.
+- Es gibt **keinen `serviceWorker.register(...)`** in `src/main.tsx` oder `index.html`. `useUpdateCheck.tsx` liest nur `navigator.serviceWorker.ready` und `.controller`, registriert selbst nichts. Ein Service Worker, der die Preview kapert, ist damit **unwahrscheinlich, aber nicht ausgeschlossen** (Manifeste unter `/public/manifest-*.json` und `icon-*.png` existieren — reine Metadaten, keine SW-Datei).
+- Es gibt viele parallele Provider (`AuthProvider`, `DashboardFilterProvider`, `useDashboardPrefetch` mit `useMeters/useLocations/useEnergyData/useAlertRules/useEnergyPrices` + Realtime-Invalidation) — plausibler Kandidat für langen TTFB des Dashboards, aber ohne Messung nur Vermutung.
 
-### 5) Verifikation
-- `bun run build` (Typecheck läuft automatisch).
-- Playwright-Skript unter `/tmp/browser/resize/`: Dashboard laden, Handle des Map- und des Weather-Widgets je einmal nach oben und unten ziehen, Screenshot vor/nach — prüfen, dass Karten/Chart-Inhalt tatsächlich mitwächst und Handle direkt am Kartenrand sitzt.
+---
 
-## Technische Notizen
-- Änderung an `card.tsx` ist ein zusätzlicher HTML-Attributname — keine Auswirkungen auf existierende Styles/Tests.
-- Kaskader-Klassen sind Tailwind-Arbitrary-Variants; funktionieren mit vorhandener Tailwind-Version.
-- Keine Backend-/DB-Änderungen. Bereits gespeicherte `layout.height`-Werte bleiben gültig.
+## Vorgehen
+
+### Teil A — Preview-Loader-Diagnose
+
+A1. **Repo-Scan (statisch, keine Codeänderung)**
+- Prüfen, ob irgendein Provider im Render-Pfad synchron blockiert (Endlos-Loop, `while` in Effect, throw in Provider ohne Boundary).
+- Prüfen, ob eine der `manifest-*.json` mit `display: standalone` + `start_url` einen SW impliziert und ob irgendwo doch `register(...)` steht (auch in Sub-Apps `ChargingApp`, `TenantEnergyApp`, Board/Sales/Sharing-Hosts).
+- Prüfen, ob `ChunkErrorBoundary` / `UpdateBanner` beim ersten Load in eine Reload-Schleife läuft.
+
+A2. **Iframe-Diagnose-Log (temporär)**
+- In `src/main.tsx` einmalige, mit `console.info("[preview-probe] …")`-Marken versehene Zeitstempel für: `boot`, `providers-mounted`, `first-route-rendered`, `first-query-settled`. Nur Konsolen-Ausgabe, kein UI, kein Netzwerk.
+- Zusätzlich einmaliger Check: läuft die App in einem Iframe, ist ein SW registriert, welche Origin? → nur Log, keine Aktion.
+- Grund: Beim nächsten Auftreten sehen wir sofort in den Konsolen-Logs (die Lovable mir mit der nächsten Nachricht durchreicht), *wo genau* die Kette hängt.
+
+A3. **Kill-Switch bereitlegen (nicht scharf)**
+- Skill „pwa/existing-broken-PWA" beschreibt einen Kill-Switch-SW. Wird **nur** gebaut, falls A1/A2 einen SW oder cached HTML als Ursache identifiziert. Vorher nicht.
+
+### Teil B — Performance-Messung Dashboard/Live
+
+B1. **React-Query-Devtools-Panel** (nur Dev, nur wenn nicht schon aktiv) — zeigt Query-Anzahl, Zeitpunkte, Cache-Treffer/Miss. Read-only.
+
+B2. **Perf-Marker in `useDashboardPrefetch`** — pro Sub-Hook (`useMeters`, `useLocations`, `useEnergyData`, `useAlertRules`, `useEnergyPrices`) Start/Ende + Dauer via `performance.mark/measure`, ausgegeben als kompakte Tabelle in der Konsole nach dem ersten Settle.
+
+B3. **Perf-Marker im Live-Werte-Pfad** (`src/pages/LiveValues.tsx` + zugehörige Realtime-Subscriptions) — Zeit bis erste Anzeige, Zeit bis erste Reconcile-Iteration, Anzahl Rerenders pro Minute.
+
+B4. **Netzwerk-Snapshot beim Erst-Load** — kein Code, sondern eine kurze Anleitung, wie ich beim nächsten Turn deine `network_requests` / `console_logs` auswerte (Wasserfall, Anzahl paralleler Supabase-Calls, langsamste Edge-Function).
+
+### Teil C — Abschluss (späterer Turn, nicht jetzt)
+
+Nach der Messung: kurzer Auswertungs-Report + gezielte Fix-Vorschläge (z. B. Prefetch-Reihenfolge, `staleTime`, Query-Bündelung, Realtime-Debounce). **Fix-Turn erst nach deiner Freigabe.** Alle in A2/B1–B3 hinzugefügten Diagnose-Zeilen werden nach Abschluss wieder entfernt.
+
+---
+
+## Was **nicht** passiert
+
+- Kein Ändern von Widget-Komponenten, Recharts-Configs, Sankey-Daten, Karten-Init.
+- Kein Anfassen von Realtime-Subscribes / Invalidation-Logik.
+- Kein Instance-Upgrade-Vorschlag (verboten laut Core-Regel, bevor Playbook durch ist).
+- Keine SW-Registrierung, kein Cache-Clearing im Blindflug.
+
+---
+
+## Technische Details
+
+Hinzuzufügende Dateien (nur temporär, klar markiert `// PERF-PROBE – remove after diagnosis`):
+
+- `src/lib/perfProbe.ts` — kleine Helferbibliothek (mark/measure/log-tabelle).
+- Punktueller Import in `src/main.tsx`, `src/hooks/useDashboardPrefetch.tsx`, `src/pages/LiveValues.tsx`.
+- React-Query-Devtools nur unter `import.meta.env.DEV`.
+
+Keine Migrations, keine Edge-Function-Änderungen, keine Style-Änderungen.
+
+---
+
+## Ergebnis dieses Turns
+
+Nach Umsetzung: du reloadest die Preview einmal (ggf. wieder mit Re-Login), machst danach einen weiteren Reload auf `/` und schickst mir kurz „gemessen" — ich lese Konsole + Netzwerk aus und schlage im nächsten Turn die tatsächlich zutreffenden Fixes vor.
