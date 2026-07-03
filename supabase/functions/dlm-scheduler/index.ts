@@ -141,44 +141,9 @@ async function applyOrClearDlm(
   return { throttled, cleared, skipped_offline: skippedOffline, skipped_unchanged: skippedUnchanged };
 }
 
-async function processSite(loc: any): Promise<DispatchResult> {
-  const limitKw = Number(loc.grid_limit_kw);
-  if (!loc.grid_limit_kw || !Number.isFinite(limitKw) || limitKw <= 0) {
-    return { scope: "site", scope_id: loc.id, status: "no_limit" };
-  }
+// Site-scope handling moved to `dlm-realtime-controller` (Phase A cleanup).
 
-  const { data: mainMeter } = await admin
-    .rpc("get_location_main_meter", { p_location_id: loc.id })
-    .single();
-  const mainMeterId = mainMeter as unknown as string | null;
-  if (!mainMeterId) return { scope: "site", scope_id: loc.id, status: "no_data", detail: "no main meter" };
 
-  const readingKw = await fetchLatestMeterPowerKw(mainMeterId);
-  if (readingKw === null) return { scope: "site", scope_id: loc.id, status: "no_data", detail: "stale/missing meter" };
-
-  // CPs at this location
-  const { data: cps } = await admin
-    .from("charge_points")
-    .select("id, ocpp_id, ws_connected, supports_charging_profile, max_power_kw")
-    .eq("location_id", loc.id);
-  if (!cps || cps.length === 0) return { scope: "site", scope_id: loc.id, status: "no_charge_points" };
-
-  // The main-meter reading already includes the current charging draw, so we
-  // compute "headroom" relative to the limit and divide it across CPs.
-  // Released when reading < HYSTERESIS * limit.
-  if (readingKw < limitKw * HYSTERESIS_FACTOR) {
-    const r = await applyOrClearDlm(cps, null);
-    return { scope: "site", scope_id: loc.id, status: "released", reading_kw: readingKw, limit_kw: limitKw, charge_points: cps.length, ...r };
-  }
-
-  // Over (or near) limit: cap each CP at headroom / N (min 0). Headroom can
-  // be negative when we're already over → fall back to MINIMAL (1.4 kW) to
-  // start backing off without fully shutting off.
-  const headroomKw = Math.max(0, limitKw - readingKw);
-  const perCpKw = Math.max(1.4, headroomKw / cps.length);
-  const r = await applyOrClearDlm(cps, perCpKw);
-  return { scope: "site", scope_id: loc.id, status: "throttled", reading_kw: readingKw, limit_kw: limitKw, charge_points: cps.length, per_cp_amps: kwToAmps(perCpKw), ...r };
-}
 
 async function processGroup(group: any): Promise<DispatchResult> {
   const dlm = (group.energy_settings ?? {}).dlm ?? {};
