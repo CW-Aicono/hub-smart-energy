@@ -239,7 +239,7 @@ const FloorPlanDashboardWidget = ({ locationId, onExpand, onCollapse }: FloorPla
           )}
         </div>
       </div>
-      <CardContent className="relative flex-1 p-0 min-h-0 overflow-hidden" style={{ minHeight: 400, height: 400 }}>
+      <CardContent className="relative flex-1 p-0 min-h-0 overflow-hidden" style={{ minHeight: 400 }}>
         {selectedFloor && viewMode === "2d" && selectedFloor.floor_plan_url ? (
           <div className="relative w-full h-full">
             <TransformWrapper ref={transformRef} initialScale={1} minScale={0.5} maxScale={4} centerOnInit wheel={{ disabled: true }} pinch={{ disabled: true }}>
@@ -310,7 +310,7 @@ const FloorPlanDashboardWidget = ({ locationId, onExpand, onCollapse }: FloorPla
             </TransformWrapper>
           </div>
         ) : selectedFloor && viewMode === "3d" ? (
-          <div style={{ width: "100%", height: 400 }}>
+          <div style={{ width: "100%", height: "100%", minHeight: 400 }}>
             <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
               <FloorPlan3DViewer
                 key={selectedFloor.id}
