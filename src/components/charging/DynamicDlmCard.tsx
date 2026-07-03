@@ -24,9 +24,14 @@ interface Props {
 export function DynamicDlmCard({ locationId }: Props) {
   const { config, log, isLoading, save, saving, remove } = useLocationDlmConfig(locationId);
   const { data: cps = [] } = useLocationChargePoints(locationId);
+  const { devices: dlmDevices, add: addDevice, remove: removeDevice, reorder: reorderDevices } =
+    useLocationDlmDevices(locationId);
   const { meters } = useMeters(locationId);
   const { tenant } = useTenant();
   const qc = useQueryClient();
+
+  const [addKind, setAddKind] = useState<DlmDeviceKind>("charge_point");
+  const [addRefId, setAddRefId] = useState<string>("");
 
   const [isOpen, setIsOpen] = useState(false);
   const [isActive, setIsActive] = useState(false);
