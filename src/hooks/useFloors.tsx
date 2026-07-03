@@ -16,11 +16,12 @@ export interface Floor {
   model_3d_url: string | null;
   model_3d_mtl_url: string | null;
   model_3d_rotation: number | null;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }
 
-export type FloorInsert = Omit<Floor, "id" | "created_at" | "updated_at" | "model_3d_url" | "model_3d_mtl_url" | "model_3d_rotation">;
+export type FloorInsert = Omit<Floor, "id" | "created_at" | "updated_at" | "model_3d_url" | "model_3d_mtl_url" | "model_3d_rotation" | "sort_order"> & { sort_order?: number };
 
 type ProgressCallback = (progress: number) => void;
 
