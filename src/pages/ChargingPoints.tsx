@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode, Settings, Shield, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Globe } from "lucide-react";
 import PublicStatusLinkDialog from "@/components/charging/PublicStatusLinkDialog";
 import { toast } from "@/hooks/use-toast";
@@ -220,6 +221,17 @@ const ChargingPoints = () => {
     ? chargePoints.filter((cp) => getEffectiveStatus(cp) === statusFilter)
     : chargePoints;
   const effectiveChargePoints = chargePoints.map((cp) => ({ ...cp, status: getEffectiveStatus(cp) }));
+  type CpSortKey = "name" | "address" | "connectors" | "power" | "status";
+  const { sorted: sortedCPs, sort: cpSort, toggle: cpToggle } = useSortableData<any, CpSortKey>(effectiveFilteredChargePoints, (cp, k) => {
+    switch (k) {
+      case "name": return cp.name || "";
+      case "address": return cp.address || "";
+      case "connectors": return cp.connector_count || 0;
+      case "power": return cp.max_power_kw || 0;
+      case "status": return cp.status || "";
+      default: return null;
+    }
+  });
   const effectiveFilteredChargePoints = filteredChargePoints.map((cp) => ({ ...cp, status: getEffectiveStatus(cp) }));
 
   if (authLoading) return null;

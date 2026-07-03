@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { useExternalContacts, ExternalContact } from "@/hooks/useExternalContacts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -71,6 +72,18 @@ const ExternalContactsManager = () => {
       c.company?.toLowerCase().includes(q);
   });
 
+  const { sorted, sort, toggle } = useSortableData(filtered, (r, k) => {
+    switch (k) {
+      case "name": return r.name;
+      case "company": return r.company || "";
+      case "email": return r.email || "";
+      case "phone": return r.phone || "";
+      case "notes": return r.notes || "";
+      default: return null;
+    }
+  });
+
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
@@ -115,11 +128,11 @@ const ExternalContactsManager = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Firma</TableHead>
-                <TableHead>E-Mail</TableHead>
-                <TableHead>Telefon</TableHead>
-                <TableHead>Notizen</TableHead>
+                <SortableHead column="name" onSort={toggle} sort={sort}>Name</SortableHead>
+                <SortableHead column="company" onSort={toggle} sort={sort}>Firma</SortableHead>
+                <SortableHead column="email" onSort={toggle} sort={sort}>E-Mail</SortableHead>
+                <SortableHead column="phone" onSort={toggle} sort={sort}>Telefon</SortableHead>
+                <SortableHead column="notes" onSort={toggle} sort={sort}>Notizen</SortableHead>
                 <TableHead className="w-24">Aktionen</TableHead>
               </TableRow>
             </TableHeader>
@@ -131,7 +144,7 @@ const ExternalContactsManager = () => {
                   {search ? "Keine Kontakte gefunden" : "Noch keine externen Kontakte angelegt"}
                 </TableCell></TableRow>
               ) : (
-                filtered.map((c) => (
+                sorted.map((c) => (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">{c.name}</TableCell>
                     <TableCell>

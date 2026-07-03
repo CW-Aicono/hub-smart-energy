@@ -1,4 +1,5 @@
 import { EnergyMeasure } from "@/hooks/useEnergyMeasures";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,19 @@ function formatDE(n: number | null): string {
 }
 
 export function MeasuresTable({ measures, onDelete, readOnly }: MeasuresTableProps) {
+  type SortKey = "title" | "category" | "status" | "cost" | "savings_kwh" | "savings_eur";
+  const { sorted, sort, toggle } = useSortableData(measures, (r, k) => {
+    switch (k) {
+      case "title": return r.title;
+      case "category": return r.category;
+      case "status": return r.status;
+      case "cost": return r.investment_cost ?? 0;
+      case "savings_kwh": return r.estimated_annual_savings_kwh ?? 0;
+      case "savings_eur": return r.estimated_annual_savings_eur ?? 0;
+      default: return null;
+    }
+  });
+
   if (measures.length === 0) {
     return (
       <p className="text-sm text-muted-foreground text-center py-6">
@@ -34,17 +48,17 @@ export function MeasuresTable({ measures, onDelete, readOnly }: MeasuresTablePro
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Maßnahme</TableHead>
-          <TableHead>Kategorie</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Investition (€)</TableHead>
-          <TableHead className="text-right">Einsparung (kWh/a)</TableHead>
-          <TableHead className="text-right">Einsparung (€/a)</TableHead>
+          <SortableHead sortKey="title" current={sort} onToggle={toggle}>Maßnahme</SortableHead>
+          <SortableHead sortKey="category" current={sort} onToggle={toggle}>Kategorie</SortableHead>
+          <SortableHead sortKey="status" current={sort} onToggle={toggle}>Status</SortableHead>
+          <SortableHead sortKey="cost" current={sort} onToggle={toggle} className="text-right">Investition (€)</SortableHead>
+          <SortableHead sortKey="savings_kwh" current={sort} onToggle={toggle} className="text-right">Einsparung (kWh/a)</SortableHead>
+          <SortableHead sortKey="savings_eur" current={sort} onToggle={toggle} className="text-right">Einsparung (€/a)</SortableHead>
           {!readOnly && <TableHead className="w-12" />}
         </TableRow>
       </TableHeader>
       <TableBody>
-        {measures.map((m) => {
+        {sorted.map((m) => {
           const status = STATUS_LABELS[m.status] || STATUS_LABELS.planned;
           return (
             <TableRow key={m.id}>

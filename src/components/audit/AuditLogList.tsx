@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useAuditLogs, type AuditLogRow } from "@/hooks/useAuditLogs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
+  TableHead,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,6 +72,17 @@ export function AuditLogList({ tenantId, partnerId, title = "Aktivitätslog" }: 
     limit: 300,
   });
 
+  // Sortiert die aktuelle Seite
+  const { sorted, sort, toggle } = useSortableData(data ?? [], (r, k) => {
+    switch (k) {
+      case "time": return r.created_at ? new Date(r.created_at) : null;
+      case "actor": return r.actor_email ?? "";
+      case "action": return r.action;
+      case "object": return r.entity_label ?? r.entity_type;
+      default: return null;
+    }
+  });
+
   const distinctActions = Array.from(
     new Set((data ?? []).map((r) => r.action)),
   ).sort();
@@ -125,15 +137,15 @@ export function AuditLogList({ tenantId, partnerId, title = "Aktivitätslog" }: 
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Zeitpunkt</TableHead>
-                  <TableHead>Actor</TableHead>
-                  <TableHead>Aktion</TableHead>
-                  <TableHead>Objekt</TableHead>
+                  <SortableHead column="time" onSort={toggle} sort={sort}>Zeitpunkt</SortableHead>
+                  <SortableHead column="actor" onSort={toggle} sort={sort}>Actor</SortableHead>
+                  <SortableHead column="action" onSort={toggle} sort={sort}>Aktion</SortableHead>
+                  <SortableHead column="object" onSort={toggle} sort={sort}>Objekt</SortableHead>
                   <TableHead className="text-right">Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.map((row) => (
+                {sorted.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="whitespace-nowrap text-xs">
                       {formatTs(row.created_at)}

@@ -4,13 +4,14 @@ import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Shield, Crown, Users, CheckCircle2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import CreateSAPermissionRoleDialog from "@/components/super-admin/CreateSAPermissionRoleDialog";
 import EditSARoleDialog from "@/components/super-admin/EditSARoleDialog";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 const SuperAdminRoles = () => {
   const { user, loading: authLoading } = useAuth();
@@ -43,6 +44,15 @@ const SuperAdminRoles = () => {
     },
   });
 
+  const { sortedAdmins, sortAdmins, toggleAdmins } = useSortableData<any, "name" | "email" | "since">(superAdmins, (r, k) => {
+    switch (k) {
+      case "name": return r.name;
+      case "email": return r.email;
+      case "since": return r.since ? new Date(r.since) : null;
+      default: return null;
+    }
+  }, { key: "name", direction: "asc" });
+
   const { data: customRoles = [] } = useQuery({
     queryKey: ["sa-custom-roles"],
     queryFn: async () => {
@@ -51,6 +61,14 @@ const SuperAdminRoles = () => {
       return data ?? [];
     },
   });
+
+  const { sortedRoles, sortRoles, toggleRoles } = useSortableData<any, "role" | "created_at">(customRoles, (r, k) => {
+    switch (k) {
+      case "role": return r.name;
+      case "created_at": return r.created_at ? new Date(r.created_at) : null;
+      default: return null;
+    }
+  }, { key: "role", direction: "asc" });
 
   if (authLoading || roleLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
@@ -108,19 +126,19 @@ const SuperAdminRoles = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("common.name")}</TableHead>
-                    <TableHead>{t("common.email")}</TableHead>
-                    <TableHead>{t("users.role")}</TableHead>
-                    <TableHead>{t("roles.since")}</TableHead>
+                    <SortableHead label={t("common.name")} sortKey="name" sort={sortAdmins} onToggle={toggleAdmins} />
+                    <SortableHead label={t("common.email")} sortKey="email" sort={sortAdmins} onToggle={toggleAdmins} />
+                    <TableCell>{t("users.role")}</TableCell>
+                    <SortableHead label={t("roles.since")} sortKey="since" sort={sortAdmins} onToggle={toggleAdmins} />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {adminsLoading ? (
                     <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
-                  ) : superAdmins.length === 0 ? (
+                  ) : sortedAdmins.length === 0 ? (
                     <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t("roles.no_sa_found")}</TableCell></TableRow>
                   ) : (
-                    superAdmins.map((sa) => (
+                    sortedAdmins.map((sa: any) => (
                       <TableRow key={sa.user_id}>
                         <TableCell className="font-medium">{sa.name}</TableCell>
                         <TableCell className="text-muted-foreground">{sa.email}</TableCell>
@@ -134,12 +152,12 @@ const SuperAdminRoles = () => {
             </CardContent>
           </Card>
 
-          {customRoles.length > 0 && (
+          {sortedRoles.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Shield className="h-5 w-5" />
-                  {t("roles.custom_roles")} ({customRoles.length})
+                  {t("roles.custom_roles")} ({sortedRoles.length})
                 </CardTitle>
                 <CardDescription>{t("roles.custom_roles_desc")}</CardDescription>
               </CardHeader>
@@ -147,15 +165,15 @@ const SuperAdminRoles = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t("users.role")}</TableHead>
-                      <TableHead>{t("roles.description")}</TableHead>
-                      <TableHead>{t("roles.permissions")}</TableHead>
-                      <TableHead>{t("common.created")}</TableHead>
-                      <TableHead className="w-16">{t("common.actions")}</TableHead>
+                      <SortableHead label={t("users.role")} sortKey="role" sort={sortRoles} onToggle={toggleRoles} />
+                      <TableCell>{t("roles.description")}</TableCell>
+                      <TableCell>{t("roles.permissions")}</TableCell>
+                      <SortableHead label={t("common.created")} sortKey="created_at" sort={sortRoles} onToggle={toggleRoles} />
+                      <TableCell className="w-16">{t("common.actions")}</TableCell>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {customRoles.map((role: any) => (
+                    {sortedRoles.map((role: any) => (
                       <TableRow key={role.id}>
                         <TableCell className="font-medium">{role.name}</TableCell>
                         <TableCell className="text-muted-foreground text-sm">{role.description || "–"}</TableCell>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -136,6 +137,7 @@ export function SalesRulesManager({ scope, partnerId, canManage = true }: SalesR
 
   useEffect(() => {
     load();
+  
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, partnerId]);
 
@@ -153,6 +155,17 @@ export function SalesRulesManager({ scope, partnerId, canManage = true }: SalesR
   const visibleRules = scope === "partner"
     ? rules.filter((r) => r.owner_scope === "partner" && r.partner_id === partnerId)
     : rules;
+
+  const { sorted, sort, toggle } = useSortableData(visibleRules, (r, k) => {
+    switch (k) {
+      case "prio": return Number(r.prio);
+      case "name": return r.name;
+      case "device": return deviceLabel(r.device_catalog_id);
+      case "status": return r.is_active ? 1 : 0;
+      default: return null;
+    }
+  });
+
 
   // Allowed target devices: own partner artikel + globale
   const selectableDevices = scope === "partner"
@@ -332,16 +345,16 @@ export function SalesRulesManager({ scope, partnerId, canManage = true }: SalesR
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-16">Prio</TableHead>
-                  <TableHead>Name</TableHead>
+                  <SortableHead column="prio" onSort={toggle} sort={sort} className="w-16">Prio</SortableHead>
+                  <SortableHead column="name" onSort={toggle} sort={sort}>Name</SortableHead>
                   <TableHead>Bedingung</TableHead>
-                  <TableHead>→ Gerät</TableHead>
-                  <TableHead>Status</TableHead>
+                  <SortableHead column="device" onSort={toggle} sort={sort}>→ Gerät</SortableHead>
+                  <SortableHead column="status" onSort={toggle} sort={sort}>Status</SortableHead>
                   <TableHead className="w-24"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visibleRules.map((r) => {
+                {sorted.map((r) => {
                   const b = r.bedingung || {};
                   return (
                     <TableRow key={r.id}>

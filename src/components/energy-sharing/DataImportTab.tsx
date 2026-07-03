@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Upload } from "lucide-react";
 import { useMsconsImports } from "@/hooks/useCommunityOperations";
@@ -10,6 +11,19 @@ export default function DataImportTab({ communityId }: { communityId: string }) 
   const { imports, uploadFile } = useMsconsImports(communityId);
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+
+  type SortKey = "file" | "status" | "intervals" | "imported" | "skipped" | "date";
+  const { sorted, sort, toggle } = useSortableData(imports, (r, k) => {
+    switch (k) {
+      case "file": return r.file_name;
+      case "status": return r.status;
+      case "intervals": return Number(r.parsed_intervals ?? 0);
+      case "imported": return Number(r.rows_imported ?? 0);
+      case "skipped": return Number(r.rows_skipped ?? 0);
+      case "date": return r.created_at;
+      default: return null;
+    }
+  });
 
   return (
     <Card>
@@ -40,14 +54,14 @@ export default function DataImportTab({ communityId }: { communityId: string }) 
         ) : (
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Datei</TableHead><TableHead>Status</TableHead>
-              <TableHead className="text-right">Werte</TableHead>
-              <TableHead className="text-right">Importiert</TableHead>
-              <TableHead className="text-right">Übersprungen</TableHead>
-              <TableHead>Zeitpunkt</TableHead>
+              <SortableHead sortKey="file" current={sort} onToggle={toggle}>Datei</SortableHead><SortableHead sortKey="status" current={sort} onToggle={toggle}>Status</SortableHead>
+              <SortableHead sortKey="intervals" current={sort} onToggle={toggle} className="text-right">Werte</SortableHead>
+              <SortableHead sortKey="imported" current={sort} onToggle={toggle} className="text-right">Importiert</SortableHead>
+              <SortableHead sortKey="skipped" current={sort} onToggle={toggle} className="text-right">Übersprungen</SortableHead>
+              <SortableHead sortKey="date" current={sort} onToggle={toggle}>Zeitpunkt</SortableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {imports.map((i: any) => (
+              {sorted.map((i: any) => (
                 <TableRow key={i.id}>
                   <TableCell className="font-mono text-xs">{i.file_name}</TableCell>
                   <TableCell>

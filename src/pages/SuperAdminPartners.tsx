@@ -9,7 +9,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -17,6 +17,7 @@ import { Briefcase, Loader2, Plus, Mail, Users, AlertCircle, CheckCircle2, Send 
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { AuditLogList } from "@/components/audit/AuditLogList";
 import { writeAuditLog } from "@/lib/auditLog";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 interface Partner {
   id: string;
@@ -38,6 +39,7 @@ interface Partner {
   created_at: string;
 }
 
+type SortKey = "name" | "slug" | "active" | "created_at";
 
 const normalizeSlug = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/-{2,}/g, "-").slice(0, 50);
@@ -114,6 +116,16 @@ export default function SuperAdminPartners() {
       return (data ?? []) as Partner[];
     },
   });
+
+  const { sorted, sort, toggle } = useSortableData<Partner, SortKey>(partners, (r, k) => {
+    switch (k) {
+      case "name": return r.name;
+      case "slug": return r.slug;
+      case "active": return r.is_active ? 1 : 0;
+      case "created_at": return r.created_at ? new Date(r.created_at) : null;
+      default: return null;
+    }
+  }, { key: "name", direction: "asc" });
 
   const { data: memberCounts = {} } = useQuery({
     queryKey: ["super-admin-partner-member-counts"],
@@ -425,474 +437,297 @@ export default function SuperAdminPartners() {
                       <Loader2 className="h-3 w-3 animate-spin" /> Prüfe Verfügbarkeit…
                     </span>
                   )}
-                  {slugStatus.kind === "available" && (
-                    <span className="text-primary flex items-center gap-1">
-                      <CheckCircle2 className="h-3 w-3" /> Slug ist verfügbar.
-                    </span>
-                  )}
-                  {slugStatus.kind === "taken" && (
-                    <span className="text-destructive flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3" /> Slug ist bereits vergeben.
-                    </span>
-                  )}
-                  {slugStatus.kind === "invalid" && (
-                    <span className="text-destructive flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3" /> {slugStatus.message}
-                    </span>
-                  )}
-                  {slugStatus.kind === "idle" && (
-                    <span className="text-muted-foreground">a–z, 0–9 und Bindestriche, 2–50 Zeichen.</span>
-                  )}
+                  {slugStatus.kind === "available" && <span className="text-green-600 font-medium">✓ Kürzel verfügbar</span>}
+                  {slugStatus.kind === "taken" && <span className="text-destructive font-medium">✗ Kürzel bereits vergeben</span>}
+                  {slugStatus.kind === "invalid" && <span className="text-destructive font-medium">{slugStatus.message}</span>}
                 </div>
               </div>
+
+              <div className="border-t my-2" />
+              <p className="text-[11px] font-bold uppercase text-muted-foreground">Partner-Administrator (Optional)</p>
+
               <div className="space-y-1.5">
-                <Label htmlFor="p-admin-email">E-Mail Partner-Admin (optional)</Label>
+                <Label htmlFor="p-admin-email">E-Mail</Label>
                 <Input
                   id="p-admin-email"
                   type="email"
                   value={adminEmail}
                   onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="admin@mustermann-elektro.de"
+                  placeholder="admin@partner.de"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Wenn angegeben, wird sofort eine Einladung versendet.
-                </p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="p-admin-name">Name Partner-Admin (optional)</Label>
-                <Input id="p-admin-name" value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Max Mustermann" />
+                <Label htmlFor="p-admin-name">Name</Label>
+                <Input
+                  id="p-admin-name"
+                  value={adminName}
+                  onChange={(e) => setAdminName(e.target.value)}
+                  placeholder="Max Mustermann"
+                />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Abbrechen</Button>
+              <Button variant="outline" onClick={() => setOpen(false)}>Abbrechen</Button>
               <Button onClick={handleCreate} disabled={createDisabled}>
-                {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Mail className="h-4 w-4 mr-2" />}
-                {adminEmail.trim() ? "Anlegen & Einladen" : "Anlegen"}
+                {saving ? "Wird angelegt…" : adminEmail ? "Anlegen & Einladen" : "Anlegen"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </header>
 
-      <div className="border rounded-lg overflow-x-auto bg-card">
-        {isLoading ? (
-          <div className="p-8 text-center text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin inline mr-2" /> Lade Partner …
-          </div>
-        ) : partners.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">Noch keine Partner angelegt.</div>
-        ) : (
+      <Card>
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Slug</TableHead>
-                <TableHead>Kontakt</TableHead>
-                <TableHead className="text-center"><Users className="h-4 w-4 inline" /></TableHead>
-                <TableHead>Modell</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Aktion</TableHead>
+                <SortableHead label="Firma" sortKey="name" sort={sort} onToggle={toggle} />
+                <SortableHead label="Slug" sortKey="slug" sort={sort} onToggle={toggle} />
+                <TableCell>Mitglieder</TableCell>
+                <TableCell>Abrechnung</TableCell>
+                <SortableHead label="Aktiv" sortKey="active" sort={sort} onToggle={toggle} />
+                <SortableHead label="Angelegt" sortKey="created_at" sort={sort} onToggle={toggle} />
+                <TableCell className="w-10"></TableCell>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {partners.map((p) => {
-                const count = memberCounts[p.id] ?? 0;
-                const needsInvite = count === 0;
-                return (
-                  <TableRow key={p.id}>
+              {isLoading ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" /> Lade Partner…</TableCell></TableRow>
+              ) : sorted.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">Keine Partner gefunden.</TableCell></TableRow>
+              ) : (
+                sorted.map((p) => (
+                  <TableRow key={p.id} className="group">
                     <TableCell className="font-medium">
-                      <button
-                        className="text-left hover:underline text-foreground hover:text-primary transition-colors"
-                        onClick={() => openEditDialog(p)}
-                        title="Bearbeiten"
-                      >
-                        {p.name}
-                      </button>
+                      <button onClick={() => openEditDialog(p)} className="hover:underline text-left">{p.name}</button>
                     </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{p.slug}</TableCell>
-                    <TableCell className="text-sm">{p.contact_email ?? "–"}</TableCell>
-                    <TableCell className="text-center">{count}</TableCell>
-                    <TableCell className="text-xs">{p.billing_mode}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{p.slug}</TableCell>
                     <TableCell>
-                      <Badge variant={p.is_active ? "default" : "secondary"}>
-                        {p.is_active ? "aktiv" : "inaktiv"}
+                      <div className="flex items-center gap-1.5">
+                        <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-sm font-medium">{memberCounts[p.id] ?? 0}</span>
+                        {(memberCounts[p.id] ?? 0) === 0 && (
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]" onClick={() => openInviteDialog(p, "new")}>
+                            <Send className="h-3 w-3 mr-1" /> Einladen
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-[10px] uppercase font-normal">
+                        {p.billing_mode === "wholesale" ? "Wiederverkauf" : `Provision (${p.commission_pct ?? 20}%)`}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right space-x-1 whitespace-nowrap">
-                      {needsInvite ? (
-                        <Button variant="outline" size="sm" onClick={() => openInviteDialog(p, "new")}>
-                          <Mail className="h-3.5 w-3.5 mr-1" /> Einladen
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openInviteDialog(p, "resend")}
-                          title="Einladungs-Mail erneut senden (z. B. nach Ablauf des Links)"
-                        >
-                          <Send className="h-3.5 w-3.5 mr-1" /> Erneut einladen
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleActive.mutate(p)}
-                        disabled={toggleActive.isPending}
-                      >
-                        {p.is_active ? "Deaktivieren" : "Aktivieren"}
+                    <TableCell>
+                      <button onClick={() => toggleActive.mutate(p)} disabled={toggleActive.isPending}>
+                        <Badge variant={p.is_active ? "default" : "secondary"} className="cursor-pointer">
+                          {p.is_active ? "Aktiv" : "Inaktiv"}
+                        </Badge>
+                      </button>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {new Date(p.created_at).toLocaleDateString("de-DE")}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(p)} className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Briefcase className="h-4 w-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
-                );
-              })}
+                ))
+              )}
             </TableBody>
           </Table>
-        )}
+        </CardContent>
+      </Card>
+
+      {/* Audit Log (Partner Lifecycle) */}
+      <div className="pt-6">
+        <h2 className="text-lg font-bold mb-4">Partner-Aktivitäten</h2>
+        <Card>
+          <CardContent className="p-0">
+            <AuditLogList
+              filters={{ entity_type: "partner" }}
+              compact
+              limit={20}
+            />
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Invite-Dialog */}
-      <Dialog
-        open={inviteOpen}
-        onOpenChange={(o) => {
-          setInviteOpen(o);
-          if (!o) { setInvitePartner(null); setInviteEmail(""); setInviteName(""); }
-        }}
-      >
-        <DialogContent>
+      {/* Edit Dialog (White Label etc) */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Partner-Admin einladen</DialogTitle>
-            <DialogDescription>
-              {invitePartner
-                ? `Einladungs-Mail mit neuem Passwort-Setz-Link an den Partner-Admin von ${invitePartner.name} senden. Vorherige Links werden ungültig.`
-                : ""}
-            </DialogDescription>
+            <DialogTitle>Partner bearbeiten: {editPartner?.name}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="inv-email">E-Mail Partner-Admin *</Label>
-              <Input
-                id="inv-email"
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="admin@firma.de"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="inv-name">Name (optional)</Label>
-              <Input id="inv-name" value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="Max Mustermann" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setInviteOpen(false)} disabled={inviteSaving}>Abbrechen</Button>
-            <Button onClick={handleSendInvite} disabled={inviteSaving || !inviteEmail.includes("@")}>
-              {inviteSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Mail className="h-4 w-4 mr-2" />}
-              Einladung senden
+
+          <Tabs defaultValue="general" className="mt-2">
+            <TabsList className="grid grid-cols-2">
+              <TabsTrigger value="general">Allgemein & Abrechnung</TabsTrigger>
+              <TabsTrigger value="branding">White-Label & Branding</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="general" className="space-y-4 pt-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Firmenname</Label>
+                  <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Kürzel (Slug)</Label>
+                  <Input value={editSlug} onChange={(e) => setEditSlug(normalizeSlug(e.target.value))} />
+                  <div className="text-[10px] mt-1">
+                    {editSlugStatus.kind === "checking" && <span className="text-muted-foreground">Prüfe…</span>}
+                    {editSlugStatus.kind === "available" && <span className="text-green-600">✓ verfügbar</span>}
+                    {editSlugStatus.kind === "taken" && <span className="text-destructive">✗ vergeben</span>}
+                    {editSlugStatus.kind === "invalid" && <span className="text-destructive">{editSlugStatus.message}</span>}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Kontakt-E-Mail</Label>
+                  <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="zentrale@partner.de" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Abrechnungsmodell</Label>
+                  <Select value={editBillingMode} onValueChange={(v: any) => setEditBillingMode(v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="wholesale">Wiederverkauf (Wholesale)</SelectItem>
+                      <SelectItem value="commission">Provisionsmodell</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {editBillingMode === "commission" && (
+                  <div className="space-y-1.5">
+                    <Label>Provisionssatz (%)</Label>
+                    <Input type="number" value={editCommissionPct} onChange={(e) => setEditCommissionPct(e.target.value)} />
+                  </div>
+                )}
+                <div className="flex items-center gap-2 pt-6">
+                  <Label>Partner aktiv</Label>
+                  <button onClick={() => setEditActive(!editActive)}>
+                    <Badge variant={editActive ? "default" : "secondary"}>{editActive ? "Ja" : "Nein"}</Badge>
+                  </button>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="branding" className="space-y-4 pt-4">
+              <div className="flex items-center gap-2 mb-4 p-3 bg-accent/20 rounded-lg">
+                <AlertCircle className="h-4 w-4 text-primary" />
+                <div className="flex-1">
+                  <p className="text-xs font-bold">White-Labeling (Stage 7)</p>
+                  <p className="text-[10px] text-muted-foreground">Ermöglicht eigene Subdomain, Logo und Farben im Portal.</p>
+                </div>
+                <button onClick={() => setEditWhiteLabel(!editWhiteLabel)}>
+                  <Badge variant={editWhiteLabel ? "default" : "outline"}>{editWhiteLabel ? "Aktiviert" : "Deaktiviert"}</Badge>
+                </button>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4 opacity-100 data-[disabled=true]:opacity-50 pointer-events-auto data-[disabled=true]:pointer-events-none" data-disabled={!editWhiteLabel}>
+                <div className="space-y-1.5">
+                  <Label>Angezeigter Brand-Name</Label>
+                  <Input value={editBrandDisplayName} onChange={(e) => setEditBrandDisplayName(e.target.value)} placeholder="Mustermann Cloud" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Eigene Subdomain (EMS Pro)</Label>
+                  <div className="flex items-center gap-1">
+                    <Input value={editSubdomain} onChange={(e) => setEditSubdomain(normalizeSlug(e.target.value))} placeholder="mustermann" />
+                    <span className="text-xs text-muted-foreground">.aicono.org</span>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Eigene Domain (optional)</Label>
+                  <Input value={editCustomDomain} onChange={(e) => setEditCustomDomain(e.target.value)} placeholder="ems.partner-firma.de" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Support-E-Mail (Branded)</Label>
+                  <Input type="email" value={editSupportEmail} onChange={(e) => setEditSupportEmail(e.target.value)} placeholder="support@partner.de" />
+                </div>
+
+                <div className="md:col-span-2 grid grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Primärfarbe</Label>
+                    <div className="flex gap-2">
+                      <Input type="color" value={editPrimaryColor || "#0ea5e9"} onChange={(e) => setEditPrimaryColor(e.target.value)} className="w-10 p-1 h-9" />
+                      <Input value={editPrimaryColor} onChange={(e) => setEditPrimaryColor(e.target.value)} placeholder="#0ea5e9" className="flex-1" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Sekundärfarbe</Label>
+                    <div className="flex gap-2">
+                      <Input type="color" value={editSecondaryColor || "#f4f4f5"} onChange={(e) => setEditSecondaryColor(e.target.value)} className="w-10 p-1 h-9" />
+                      <Input value={editSecondaryColor} onChange={(e) => setEditSecondaryColor(e.target.value)} placeholder="#f4f4f5" className="flex-1" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Akzentfarbe</Label>
+                    <div className="flex gap-2">
+                      <Input type="color" value={editAccentColor || "#f59e0b"} onChange={(e) => setEditAccentColor(e.target.value)} className="w-10 p-1 h-9" />
+                      <Input value={editAccentColor} onChange={(e) => setEditAccentColor(e.target.value)} placeholder="#f59e0b" className="flex-1" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="md:col-span-2 space-y-2">
+                  <Label>Partner-Logo</Label>
+                  <div className="flex items-center gap-4 border p-4 rounded-lg bg-muted/20">
+                    <div className="h-16 w-32 bg-background border rounded flex items-center justify-center overflow-hidden">
+                      {editLogoUrl ? <img src={editLogoUrl} alt="Logo" className="max-h-full max-w-full object-contain" /> : <span className="text-[10px] text-muted-foreground uppercase font-bold">Kein Logo</span>}
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <Input type="file" accept="image/*" onChange={handleLogoUpload} disabled={logoUploading} className="text-xs" />
+                      <p className="text-[10px] text-muted-foreground">Empfohlen: PNG oder SVG, max. 512px Breite.</p>
+                    </div>
+                    {logoUploading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Abbrechen</Button>
+            <Button onClick={handleSaveEdit} disabled={editSaving}>
+              {editSaving ? "Wird gespeichert…" : "Änderungen speichern"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit-Dialog */}
-      <Dialog
-        open={editOpen}
-        onOpenChange={(o) => { setEditOpen(o); if (!o) setEditPartner(null); }}
-      >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-
+      {/* Generic Invite Dialog */}
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Partner bearbeiten</DialogTitle>
+            <DialogTitle>Partner-Administrator einladen</DialogTitle>
             <DialogDescription>
-              Stammdaten des Partners anpassen.
+              Für Partner: <strong>{invitePartner?.name}</strong>.
             </DialogDescription>
           </DialogHeader>
-          <Tabs defaultValue="basic" className="py-2">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="basic">Basis</TabsTrigger>
-              <TabsTrigger value="billing">Billing</TabsTrigger>
-              <TabsTrigger value="branding">Branding</TabsTrigger>
-              <TabsTrigger value="audit">Aktivität</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="basic" className="space-y-3 pt-3">
+          <div className="space-y-3 py-2">
             <div className="space-y-1.5">
-              <Label htmlFor="e-name">Firmenname *</Label>
-              <Input id="e-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="e-slug">Kürzel (Slug) *</Label>
+              <Label>E-Mail-Adresse *</Label>
               <Input
-                id="e-slug"
-                value={editSlug}
-                onChange={(e) => setEditSlug(normalizeSlug(e.target.value))}
-                onBlur={(e) => setEditSlug(e.target.value.replace(/^-+|-+$/g, "").slice(0, 50))}
-              />
-              <div className="text-xs min-h-[1rem]">
-                {editSlugStatus.kind === "checking" && (
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    <Loader2 className="h-3 w-3 animate-spin" /> Prüfe Verfügbarkeit…
-                  </span>
-                )}
-                {editSlugStatus.kind === "available" && (
-                  <span className="text-primary flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" /> Slug ist verfügbar.
-                  </span>
-                )}
-                {editSlugStatus.kind === "taken" && (
-                  <span className="text-destructive flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" /> Slug ist bereits vergeben.
-                  </span>
-                )}
-                {editSlugStatus.kind === "invalid" && (
-                  <span className="text-destructive flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" /> {editSlugStatus.message}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="e-email">Kontakt-E-Mail</Label>
-              <Input
-                id="e-email"
                 type="email"
-                value={editEmail}
-                onChange={(e) => setEditEmail(e.target.value)}
-                placeholder="kontakt@firma.de"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="chef@partner.de"
               />
-              <p className="text-xs text-muted-foreground">
-                Wird für „Erneut einladen" als Standard-Empfänger vorgeschlagen.
-              </p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="e-subdomain">Subdomain (optional)</Label>
+              <Label>Name des Administrators</Label>
               <Input
-                id="e-subdomain"
-                value={editSubdomain}
-                onChange={(e) => setEditSubdomain(e.target.value.toLowerCase().trim())}
-                placeholder="z. B. partner-name (für partner-name.aicono.org)"
+                value={inviteName}
+                onChange={(e) => setInviteName(e.target.value)}
+                placeholder="Anna Beispiel"
               />
             </div>
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                id="e-active"
-                type="checkbox"
-                checked={editActive}
-                onChange={(e) => setEditActive(e.target.checked)}
-                className="h-4 w-4"
-              />
-              <Label htmlFor="e-active" className="cursor-pointer">Partner aktiv</Label>
-            </div>
-            </TabsContent>
-
-            <TabsContent value="billing" className="space-y-2 pt-3">
-              <Label>Abrechnungsmodell</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEditBillingMode("wholesale")}
-                  className={`rounded-md border px-3 py-2 text-sm text-left transition-colors ${
-                    editBillingMode === "wholesale" ? "border-primary bg-primary/10" : "border-input"
-                  }`}
-                >
-                  <div className="font-medium">Wiederverkauf</div>
-                  <div className="text-xs text-muted-foreground">Partner kauft bei AICONO ein und verkauft mit Marge an Tenants.</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditBillingMode("commission")}
-                  className={`rounded-md border px-3 py-2 text-sm text-left transition-colors ${
-                    editBillingMode === "commission" ? "border-primary bg-primary/10" : "border-input"
-                  }`}
-                >
-                  <div className="font-medium">Provision</div>
-                  <div className="text-xs text-muted-foreground">AICONO rechnet mit den Tenants ab, Partner erhält Provision.</div>
-                </button>
-              </div>
-              {editBillingMode === "commission" && (
-                <div className="space-y-1.5 pt-1">
-                  <Label htmlFor="e-commission">Provisionssatz (%)</Label>
-                  <Input
-                    id="e-commission"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="0.1"
-                    value={editCommissionPct}
-                    onChange={(e) => setEditCommissionPct(e.target.value)}
-                    placeholder="20"
-                  />
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="branding" className="space-y-3 pt-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-base">White-Label</Label>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="e-wl"
-                    type="checkbox"
-                    checked={editWhiteLabel}
-                    onChange={(e) => setEditWhiteLabel(e.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  <Label htmlFor="e-wl" className="cursor-pointer text-sm">aktiv</Label>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground -mt-1">
-                Bei Aktivierung wird das Partner-Branding (Logo + Farbe) für alle Tenants dieses Partners
-                und auf der Login-Seite der eigenen Domain angezeigt.
-              </p>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="e-brand-name">Marken-Anzeigename (optional)</Label>
-                <Input
-                  id="e-brand-name"
-                  value={editBrandDisplayName}
-                  onChange={(e) => setEditBrandDisplayName(e.target.value)}
-                  placeholder={editName || "z. B. Mustermann Energie"}
-                  disabled={!editWhiteLabel}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="e-custom-domain">Custom Domain</Label>
-                <Input
-                  id="e-custom-domain"
-                  value={editCustomDomain}
-                  onChange={(e) => setEditCustomDomain(e.target.value)}
-                  placeholder="energie.mustermann.de"
-                  disabled={!editWhiteLabel}
-                />
-                <p className="text-xs text-muted-foreground">
-                  DNS-CNAME auf die AICONO-Hetzner-Infrastruktur muss eingerichtet sein.
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Logo</Label>
-                <div className="flex items-center gap-3">
-                  {editLogoUrl ? (
-                    <img src={editLogoUrl} alt="Logo" className="h-12 w-12 object-contain rounded border bg-white p-1" />
-                  ) : (
-                    <div className="h-12 w-12 rounded border bg-muted flex items-center justify-center text-xs text-muted-foreground">
-                      kein Logo
-                    </div>
-                  )}
-                  <Input
-                    type="file"
-                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                    onChange={handleLogoUpload}
-                    disabled={!editWhiteLabel || logoUploading}
-                    className="text-xs"
-                  />
-                  {editLogoUrl && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditLogoUrl(null)}
-                      disabled={!editWhiteLabel}
-                    >
-                      Entfernen
-                    </Button>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">PNG/JPG/SVG/WebP, max. 2 MB.</p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="e-primary">Primärfarbe</Label>
-                  <div className="flex items-center gap-1">
-                    <Input
-                      id="e-primary"
-                      type="color"
-                      value={editPrimaryColor || "#1a365d"}
-                      onChange={(e) => setEditPrimaryColor(e.target.value)}
-                      disabled={!editWhiteLabel}
-                      className="h-9 w-12 p-1"
-                    />
-                    <Input
-                      value={editPrimaryColor}
-                      onChange={(e) => setEditPrimaryColor(e.target.value)}
-                      disabled={!editWhiteLabel}
-                      placeholder="#1a365d"
-                      className="text-xs"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="e-secondary">Sekundär</Label>
-                  <div className="flex items-center gap-1">
-                    <Input
-                      id="e-secondary"
-                      type="color"
-                      value={editSecondaryColor || "#2d8a6e"}
-                      onChange={(e) => setEditSecondaryColor(e.target.value)}
-                      disabled={!editWhiteLabel}
-                      className="h-9 w-12 p-1"
-                    />
-                    <Input
-                      value={editSecondaryColor}
-                      onChange={(e) => setEditSecondaryColor(e.target.value)}
-                      disabled={!editWhiteLabel}
-                      placeholder="#2d8a6e"
-                      className="text-xs"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="e-accent">Akzent</Label>
-                  <div className="flex items-center gap-1">
-                    <Input
-                      id="e-accent"
-                      type="color"
-                      value={editAccentColor || "#f59e0b"}
-                      onChange={(e) => setEditAccentColor(e.target.value)}
-                      disabled={!editWhiteLabel}
-                      className="h-9 w-12 p-1"
-                    />
-                    <Input
-                      value={editAccentColor}
-                      onChange={(e) => setEditAccentColor(e.target.value)}
-                      disabled={!editWhiteLabel}
-                      placeholder="#f59e0b"
-                      className="text-xs"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="e-support">Support-E-Mail (optional)</Label>
-                <Input
-                  id="e-support"
-                  type="email"
-                  value={editSupportEmail}
-                  onChange={(e) => setEditSupportEmail(e.target.value)}
-                  placeholder="support@mustermann.de"
-                  disabled={!editWhiteLabel}
-                />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="audit" className="pt-3">
-              {editPartner && (
-                <AuditLogList partnerId={editPartner.id} title="Aktivität dieses Partners" />
-              )}
-            </TabsContent>
-          </Tabs>
-
-
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>Abbrechen</Button>
-            <Button
-              onClick={handleSaveEdit}
-              disabled={editSaving || !editName.trim() || editSlugStatus.kind === "taken" || editSlugStatus.kind === "invalid" || editSlugStatus.kind === "checking"}
-            >
-              {editSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Speichern
+            <Button variant="outline" onClick={() => setInviteOpen(false)}>Abbrechen</Button>
+            <Button onClick={handleSendInvite} disabled={inviteSaving || !inviteEmail}>
+              {inviteSaving ? "Wird gesendet…" : "Einladung senden"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useMeters, Meter } from "@/hooks/useMeters";
+import { SortableHead as SortableHeadUI } from "@/components/ui/sortable-head";
 import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { useAlertRules, AlertRule } from "@/hooks/useAlertRules";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -106,34 +107,8 @@ function parseNumeric(v: unknown): number | null {
   return isNaN(num) ? null : num;
 }
 
-function SortableHead({
-  label,
-  sortKey,
-  currentKey,
-  direction,
-  onSort,
-  align,
-}: {
-  label: string;
-  sortKey: DeviceSortKey;
-  currentKey: DeviceSortKey | null;
-  direction: "asc" | "desc";
-  onSort: (k: DeviceSortKey) => void;
-  align?: "right";
-}) {
-  const isActive = currentKey === sortKey;
-  const Icon = !isActive ? ArrowUpDown : direction === "asc" ? ArrowUp : ArrowDown;
-  return (
-    <button
-      type="button"
-      onClick={() => onSort(sortKey)}
-      className={`inline-flex items-center gap-1 hover:text-foreground ${align === "right" ? "ml-auto" : ""} ${isActive ? "text-foreground" : ""}`}
-    >
-      {label}
-      <Icon className="h-3 w-3 opacity-60" />
-    </button>
-  );
-}
+// SortableHead — jetzt zentral aus @/components/ui/sortable-head importiert
+
 
 function DeviceTable({
   devices,
@@ -247,29 +222,29 @@ function DeviceTable({
             </TableHead>
           )}
           <TableHead className="w-[40px]">
-            <SortableHead label="Typ" sortKey="type" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+            <SortableHeadUI label="Typ" sortKey="type" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
           </TableHead>
           <TableHead>
-            <SortableHead label="Name" sortKey="name" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+            <SortableHeadUI label="Name" sortKey="name" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
           </TableHead>
 
           <TableHead>
-            <SortableHead label="Raum (Gateway)" sortKey="room" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+            <SortableHeadUI label="Raum (Gateway)" sortKey="room" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
           </TableHead>
           <TableHead>
-            <SortableHead label="Zugeordneter Raum" sortKey="assignedRoom" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+            <SortableHeadUI label="Zugeordneter Raum" sortKey="assignedRoom" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
           </TableHead>
           <TableHead>
-            <SortableHead label="Gateway" sortKey="gateway" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+            <SortableHeadUI label="Gateway" sortKey="gateway" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
           </TableHead>
           <TableHead>
-            <SortableHead label="Steuerungstyp" sortKey="controlType" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+            <SortableHeadUI label="Steuerungstyp" sortKey="controlType" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
           </TableHead>
           <TableHead className="text-right">
-            <SortableHead label="Wert" sortKey="value" currentKey={sortKey} direction={sortDir} onSort={handleSort} align="right" />
+            <SortableHeadUI label="Wert" sortKey="value" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} align="right" />
           </TableHead>
           <TableHead>
-            <SortableHead label="Status" sortKey="status" currentKey={sortKey} direction={sortDir} onSort={handleSort} />
+            <SortableHeadUI label="Status" sortKey="status" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
           </TableHead>
           {isAdmin && <TableHead className="w-32" />}
         </TableRow>

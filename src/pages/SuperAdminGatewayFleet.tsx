@@ -5,7 +5,7 @@ import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -21,6 +21,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 interface FleetDevice {
   id: string;
@@ -119,9 +120,7 @@ interface UnifiedRow {
 }
 
 const LOOKBACK_MS = 24 * 60 * 60 * 1000;
-// Loxone worker heartbeat = 5 min; threshold 6 min so display stays green between beats.
 const LOXONE_FRESH_HEARTBEAT_MS = 360_000;
-// AICONO gateway heartbeat threshold (3 min — see status-monitoring-logic memory).
 const AICONO_FRESH_HEARTBEAT_MS = 180_000;
 
 async function callControl(action: string, payload: Record<string, unknown> = {}) {
@@ -405,7 +404,6 @@ const SuperAdminGatewayFleet = () => {
     },
   });
 
-
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const toggleExpand = (id: string) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
@@ -426,24 +424,29 @@ const SuperAdminGatewayFleet = () => {
 
   const unifiedRows: UnifiedRow[] = useMemo(() => {
     const aicono = (fleet ?? []).map((d) => aiconoToUnifiedRow(d, tenantNameMap));
-    const all = [...aicono, ...loxoneRows];
-    all.sort((a, b) => {
-      const aActive = a.status === "active" ? 0 : 1;
-      const bActive = b.status === "active" ? 0 : 1;
-      if (aActive !== bActive) return aActive - bActive;
-      return a.locationName.localeCompare(b.locationName);
-    });
-    return all;
+    return [...aicono, ...loxoneRows];
   }, [fleet, loxoneRows, tenantNameMap]);
 
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const deviceTypes = Array.from(new Set(unifiedRows.map((r) => r.type)));
-  const statusOptions = Array.from(new Set(unifiedRows.map((r) => r.status)));
-  const filteredRows = unifiedRows.filter((r) =>
-    (typeFilter === "all" || r.type === typeFilter) &&
-    (statusFilter === "all" || r.status === statusFilter)
-  );
+
+  const filteredRows = useMemo(() => {
+    return unifiedRows.filter((r) =>
+      (typeFilter === "all" || r.type === typeFilter) &&
+      (statusFilter === "all" || r.status === statusFilter)
+    );
+  }, [unifiedRows, typeFilter, statusFilter]);
+
+  const { sorted, sort, toggle } = useSortableData<UnifiedRow, "type" | "tenant" | "location" | "status" | "heartbeat">(filteredRows, (r, k) => {
+    switch (k) {
+      case "type": return r.type;
+      case "tenant": return r.tenantName;
+      case "location": return r.locationName;
+      case "status": return r.statusLabel;
+      case "heartbeat": return r.lastHeartbeat ? new Date(r.lastHeartbeat) : null;
+      default: return null;
+    }
+  }, { key: "location", direction: "asc" });
 
   const { data: channels = [], refetch: refetchChannels } = useQuery({
     queryKey: ["sa-gateway-channels"],
@@ -457,63 +460,11 @@ const SuperAdminGatewayFleet = () => {
   const { data: jobs = [], refetch: refetchJobs } = useQuery({
     queryKey: ["sa-gateway-jobs"],
     queryFn: async () => {
-      const r = await callControl("jobs_list", { limit: 100 });
+      const r = await callControl("jobs_list");
       return (r?.jobs ?? []) as UpdateJob[];
     },
     enabled: !!isSuperAdmin,
-    refetchInterval: 15_000,
-  });
-
-  // Realtime: live job updates
-  useEffect(() => {
-    if (!isSuperAdmin) return;
-    const ch = supabase.channel("sa-gateway-update-jobs")
-      .on("postgres_changes", { event: "*", schema: "public", table: "gateway_update_jobs" }, () => {
-        refetchJobs();
-        refetchFleet();
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [isSuperAdmin, refetchJobs, refetchFleet]);
-
-  const queueMutation = useMutation({
-    mutationFn: async (vars: { deviceId: string; channel: string }) =>
-      callControl("queue_update", { gateway_device_id: vars.deviceId, channel: vars.channel }),
-    onSuccess: () => {
-      toast.success("Update-Job in die Warteschlange gestellt");
-      qc.invalidateQueries({ queryKey: ["sa-gateway-jobs"] });
-    },
-    onError: (e: any) => toast.error(e.message || "Fehler"),
-  });
-
-  const cancelMutation = useMutation({
-    mutationFn: async (jobId: string) => callControl("cancel_update", { job_id: jobId }),
-    onSuccess: () => {
-      toast.success("Job abgebrochen");
-      qc.invalidateQueries({ queryKey: ["sa-gateway-jobs"] });
-    },
-    onError: (e: any) => toast.error(e.message || "Fehler"),
-  });
-
-  const setAutoMutation = useMutation({
-    mutationFn: async (vars: { deviceId: string; enabled: boolean; channel?: string }) =>
-      callControl("set_auto_update", {
-        gateway_device_id: vars.deviceId,
-        auto_update_enabled: vars.enabled,
-        update_channel: vars.channel,
-      }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sa-gateway-fleet"] }),
-    onError: (e: any) => toast.error(e.message || "Fehler"),
-  });
-
-  const setLatestMutation = useMutation({
-    mutationFn: async (vars: { channel: string; version: string }) =>
-      callControl("channel_set_latest", vars),
-    onSuccess: () => {
-      toast.success("Latest-Version aktualisiert");
-      qc.invalidateQueries({ queryKey: ["sa-gateway-channels"] });
-    },
-    onError: (e: any) => toast.error(e.message || "Fehler"),
+    refetchInterval: 10_000,
   });
 
   if (authLoading || roleLoading) {
@@ -522,324 +473,191 @@ const SuperAdminGatewayFleet = () => {
   if (!user) return <Navigate to="/auth" replace />;
   if (!isSuperAdmin) return <Navigate to="/" replace />;
 
-  const formatTime = (ts: string | null) =>
-    ts ? formatDistanceToNow(new Date(ts), { addSuffix: true, locale: de }) : "—";
-
   return (
     <div className="flex min-h-screen bg-background">
       <SuperAdminSidebar />
       <main className="flex-1 overflow-auto">
-        <header className="border-b p-6 flex items-center justify-between">
+        <header className="border-b p-6 flex items-center justify-between flex-wrap gap-4">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Cpu className="h-6 w-6" /> Gateway-Flotte & Updates
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Remote- und Auto-Software-Updates für AICONO EMS Gateways
-            </p>
+            <h1 className="text-2xl font-bold">Gateway-Fleet</h1>
+            <p className="text-sm text-muted-foreground mt-1">Status & Updates der lokalen Steuereinheiten.</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => { refetchFleet(); refetchJobs(); refetchChannels(); refetchLoxone(); }}>
-            <RefreshCw className="h-4 w-4 mr-2" /> Aktualisieren
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => { refetchFleet(); refetchLoxone(); refetchJobs(); refetchChannels(); }}>
+              <RefreshCw className="h-4 w-4 mr-2" />Aktualisieren
+            </Button>
+            <PublishVersionDialog onPublished={refetchChannels} />
+          </div>
         </header>
 
-        <div className="p-6">
+        <div className="p-6 space-y-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
-              <TabsTrigger value="fleet">Flotte ({filteredRows.length})</TabsTrigger>
-              <TabsTrigger value="jobs">Update-Jobs</TabsTrigger>
-              <TabsTrigger value="channels">Release-Channels</TabsTrigger>
-              <TabsTrigger value="workers">Worker-Steuerung</TabsTrigger>
+              <TabsTrigger value="fleet" className="gap-2"><Activity className="h-4 w-4" />Status-Monitor</TabsTrigger>
+              <TabsTrigger value="updates" className="gap-2"><RocketIcon className="h-4 w-4" />Updates & Kanäle</TabsTrigger>
+              <TabsTrigger value="workers" className="gap-2"><Cpu className="h-4 w-4" />Worker-Pool</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="fleet" className="mt-4 space-y-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="text-sm text-muted-foreground">Gateway-Typ:</label>
-                <Select value={typeFilter} onValueChange={setTypeFilter}>
-                  <SelectTrigger className="h-8 w-56"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Alle Typen</SelectItem>
-                    {deviceTypes.map((t) => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <label className="text-sm text-muted-foreground ml-2">Status:</label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Alle Status</SelectItem>
-                    {statusOptions.includes("active") && <SelectItem value="active">Aktiv</SelectItem>}
-                    {statusOptions.includes("stale") && <SelectItem value="stale">Stale</SelectItem>}
-                    {statusOptions.includes("disconnected") && <SelectItem value="disconnected">Getrennt</SelectItem>}
-                    {statusOptions.includes("offline") && <SelectItem value="offline">Offline</SelectItem>}
-                    {statusOptions.includes("online") && <SelectItem value="online">Online</SelectItem>}
-                    {statusOptions.includes("unknown") && <SelectItem value="unknown">Unbekannt</SelectItem>}
-                  </SelectContent>
-                </Select>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  Aktuelle Sitzung + Statistik der letzten 24 h
-                </span>
+            <TabsContent value="fleet" className="space-y-4 pt-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="w-48">
+                  <label className="text-[10px] uppercase font-bold text-muted-foreground mb-1 block">Typ</label>
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Alle Typen</SelectItem>
+                      <SelectItem value="AICONO EMS">AICONO EMS</SelectItem>
+                      <SelectItem value="Loxone Miniserver">Loxone Miniserver</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-48">
+                  <label className="text-[10px] uppercase font-bold text-muted-foreground mb-1 block">Status</label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Alle Status</SelectItem>
+                      <SelectItem value="active">Aktiv</SelectItem>
+                      <SelectItem value="stale">Stale / Warnung</SelectItem>
+                      <SelectItem value="offline">Offline / Disconnected</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+
               <Card>
-                <CardContent className="p-0 overflow-x-auto">
+                <CardContent className="p-0">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-8"></TableHead>
-                        <TableHead>Tenant</TableHead>
-                        <TableHead>Liegenschaft</TableHead>
-                        <TableHead>Typ</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Verbunden seit</TableHead>
-                        <TableHead>Letzter Heartbeat</TableHead>
-                        <TableHead className="text-right">Events 24 h</TableHead>
-                        <TableHead className="text-right">Reconnects 24 h</TableHead>
-                        <TableHead className="text-right">Uptime 24 h</TableHead>
-                        <TableHead className="text-right">Sitzungen 24 h</TableHead>
-                        <TableHead>Worker</TableHead>
-                        <TableHead>Letzter Disconnect</TableHead>
+                        <TableCell className="w-10"></TableCell>
+                        <SortableHead label="Typ" sortKey="type" sort={sort} onToggle={toggle} />
+                        <SortableHead label="Mandant" sortKey="tenant" sort={sort} onToggle={toggle} />
+                        <SortableHead label="Standort" sortKey="location" sort={sort} onToggle={toggle} />
+                        <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
+                        <SortableHead label="Letzter Kontakt" sortKey="heartbeat" sort={sort} onToggle={toggle} />
+                        <TableCell className="text-right">Aktion</TableCell>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredRows.length === 0 && (
-                        <TableRow><TableCell colSpan={13} className="text-center text-sm text-muted-foreground py-8">Keine Gateways registriert.</TableCell></TableRow>
-                      )}
-                      {filteredRows.map((r) => {
-                        const d = r.device;
-                        const lx = r.loxone;
-                        const canExpand = !!d || !!lx;
-                        const isOpen = canExpand && !!expanded[r.key];
-                        return (
+                      {sorted.length === 0 ? (
+                        <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">Keine Gateways gefunden</TableCell></TableRow>
+                      ) : (
+                        sorted.map((r) => (
                           <Fragment key={r.key}>
-                            <TableRow className="hover:bg-muted/40">
-                              <TableCell className="p-2">
-                                {canExpand ? (
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleExpand(r.key)}>
-                                    {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                  </Button>
-                                ) : null}
+                            <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => toggleExpand(r.key)}>
+                              <TableCell>
+                                {expanded[r.key] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                               </TableCell>
-                              <TableCell className="font-medium">{r.tenantName}</TableCell>
-                              <TableCell>{r.locationName}</TableCell>
-                              <TableCell><Badge variant="outline" className="text-xs">{r.type}</Badge></TableCell>
+                              <TableCell className="font-medium text-xs">{r.type}</TableCell>
+                              <TableCell className="text-xs">{r.tenantName}</TableCell>
+                              <TableCell className="font-medium">{r.locationName}</TableCell>
                               <TableCell><UnifiedStatusBadge status={r.status} label={r.statusLabel} /></TableCell>
                               <TableCell className="text-xs text-muted-foreground">
-                                {r.connectedSince ? formatDistanceToNow(new Date(r.connectedSince), { addSuffix: false, locale: de }) : "—"}
+                                {r.lastHeartbeat ? formatDistanceToNow(new Date(r.lastHeartbeat), { addSuffix: true, locale: de }) : "—"}
                               </TableCell>
-                              <TableCell className="text-xs text-muted-foreground">
-                                {r.heartbeatAgeMs != null ? `vor ${Math.round(r.heartbeatAgeMs / 1000)} s` : "—"}
+                              <TableCell className="text-right">
+                                {r.device && (
+                                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); callControl("device_update_trigger", { device_id: r.device!.id }).then(() => toast.success("Update getriggert")).catch(err => toast.error(err.message)); }}>
+                                    <RocketIcon className="h-3.5 w-3.5 mr-1" />Update
+                                  </Button>
+                                )}
                               </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {r.eventsLast24h != null ? (
-                                  <span className="inline-flex items-center gap-1">
-                                    <Activity className="h-3 w-3 text-muted-foreground" />
-                                    {r.eventsLast24h.toLocaleString("de-DE")}
-                                  </span>
-                                ) : "—"}
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {r.reconnectsLast24h != null ? (
-                                  <span className="inline-flex items-center gap-1">
-                                    <RefreshCw className="h-3 w-3 text-muted-foreground" />
-                                    {r.reconnectsLast24h.toLocaleString("de-DE")}
-                                  </span>
-                                ) : "—"}
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {r.uptimeRatio24h != null
-                                  ? `${(r.uptimeRatio24h * 100).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`
-                                  : "—"}
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {r.sessionsLast24h != null ? r.sessionsLast24h.toLocaleString("de-DE") : "—"}
-                              </TableCell>
-                              <TableCell className="text-xs text-muted-foreground">{r.worker ?? "—"}</TableCell>
-                              <TableCell className="text-xs text-muted-foreground">{r.lastDisconnect ?? "—"}</TableCell>
                             </TableRow>
-                            {isOpen && d && (
-                              <TableRow className="bg-muted/30 hover:bg-muted/30">
-                                <TableCell></TableCell>
-                                <TableCell colSpan={12} className="py-4">
-                                  <div className="space-y-4">
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
-                                      <div><div className="text-muted-foreground">Gateway-Name</div><div className="font-medium">{d.device_name}</div></div>
-                                      <div><div className="text-muted-foreground">Version</div><div className="font-mono">{d.addon_version ?? "—"}</div></div>
-                                      <div><div className="text-muted-foreground">HA-Version</div><div className="font-mono">{d.ha_version ?? "—"}</div></div>
-                                      <div><div className="text-muted-foreground">Lokale IP</div><div className="font-mono">{d.local_ip ?? "—"}</div></div>
-                                      <div><div className="text-muted-foreground">MAC-Adresse</div><div className="font-mono">{d.mac_address ?? "—"}</div></div>
-                                      <div><div className="text-muted-foreground">Lokale Zeit</div><div className="font-mono">{d.local_time ?? "—"}</div></div>
-                                      <div><div className="text-muted-foreground">Offline-Buffer</div><div className="font-medium">{(d.offline_buffer_count ?? 0).toLocaleString("de-DE")} Events</div></div>
-                                      <div><div className="text-muted-foreground">Letzter Update-Versuch</div><div className="font-medium">{formatTime(d.last_update_attempt_at)}</div></div>
-                                      <div><div className="text-muted-foreground">Registriert</div><div className="font-medium">{formatTime(d.created_at)}</div></div>
-                                      <div><div className="text-muted-foreground">Device-ID</div><div className="font-mono truncate" title={d.id}>{d.id.slice(0, 8)}…</div></div>
-                                      {d.last_update_error && (
-                                        <div className="col-span-2 md:col-span-4">
-                                          <div className="text-muted-foreground">Letzter Update-Fehler</div>
-                                          <div className="text-destructive font-mono whitespace-pre-wrap">{d.last_update_error}</div>
+                            {expanded[r.key] && (
+                              <TableRow className="bg-muted/30">
+                                <TableCell colSpan={7} className="p-4 border-t border-muted">
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                                    <div className="space-y-1.5">
+                                      <h4 className="font-bold text-[10px] uppercase text-muted-foreground tracking-wider mb-2">System Info</h4>
+                                      {r.device ? (
+                                        <>
+                                          <p><span className="text-muted-foreground">Addon:</span> {r.device.addon_version || "—"}</p>
+                                          <p><span className="text-muted-foreground">OS/HA:</span> {r.device.ha_version || "—"}</p>
+                                          <p><span className="text-muted-foreground">Channel:</span> {r.device.update_channel}</p>
+                                          <p><span className="text-muted-foreground">IP/MAC:</span> {r.device.local_ip || "—"} / {r.device.mac_address || "—"}</p>
+                                        </>
+                                      ) : r.loxone ? (
+                                        <>
+                                          <p><span className="text-muted-foreground">Worker Host:</span> {r.worker || "—"}</p>
+                                          <p><span className="text-muted-foreground">Integration:</span> {r.loxone.integrationId.slice(0, 8)}...</p>
+                                          <p><span className="text-muted-foreground">Verbunden seit:</span> {r.connectedSince ? format(new Date(r.connectedSince), "dd.MM.yyyy HH:mm:ss") : "—"}</p>
+                                        </>
+                                      ) : null}
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      <h4 className="font-bold text-[10px] uppercase text-muted-foreground tracking-wider mb-2">Metrics (24h)</h4>
+                                      <p><span className="text-muted-foreground">Uptime:</span> {r.uptimeRatio24h !== null ? `${(r.uptimeRatio24h * 100).toFixed(1)}%` : "—"}</p>
+                                      <p><span className="text-muted-foreground">Events:</span> {r.eventsLast24h?.toLocaleString() ?? "—"}</p>
+                                      <p><span className="text-muted-foreground">Reconnects:</span> {r.reconnectsLast24h ?? "—"}</p>
+                                      <p><span className="text-muted-foreground">Sessions:</span> {r.sessionsLast24h ?? "—"}</p>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                      <h4 className="font-bold text-[10px] uppercase text-muted-foreground tracking-wider mb-2">Status / Logs</h4>
+                                      <p><span className="text-muted-foreground">Internal Key:</span> <code className="text-[10px]">{r.key}</code></p>
+                                      {r.lastDisconnect && (
+                                        <div className="mt-2 p-2 rounded bg-destructive/10 text-destructive text-xs border border-destructive/20">
+                                          <span className="font-bold uppercase text-[9px] block mb-0.5">Letzter Fehler/Grund:</span>
+                                          {r.lastDisconnect}
                                         </div>
                                       )}
                                     </div>
-                                    <div className="flex flex-wrap items-center gap-3 pt-2 border-t">
-                                      <div className="flex items-center gap-2 text-xs">
-                                        <span className="text-muted-foreground">Channel:</span>
-                                        <Select
-                                          value={d.update_channel}
-                                          onValueChange={(v) => setAutoMutation.mutate({ deviceId: d.id, enabled: d.auto_update_enabled, channel: v })}
-                                        >
-                                          <SelectTrigger className="h-8 w-24"><SelectValue /></SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="stable">stable</SelectItem>
-                                            <SelectItem value="beta">beta</SelectItem>
-                                            <SelectItem value="dev">dev</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-                                      <div className="flex items-center gap-2 text-xs">
-                                        <span className="text-muted-foreground">Auto-Update:</span>
-                                        <Switch
-                                          checked={d.auto_update_enabled}
-                                          onCheckedChange={(v) => setAutoMutation.mutate({ deviceId: d.id, enabled: v })}
-                                        />
-                                      </div>
-                                      <Button
-                                        size="sm" variant="outline"
-                                        onClick={() => queueMutation.mutate({ deviceId: d.id, channel: d.update_channel })}
-                                        disabled={queueMutation.isPending || d.status !== "online"}
-                                      >
-                                        Update jetzt
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            )}
-                            {isOpen && !d && lx && (
-                              <TableRow className="bg-muted/30 hover:bg-muted/30">
-                                <TableCell></TableCell>
-                                <TableCell colSpan={12} className="py-4">
-                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
-                                    <div><div className="text-muted-foreground">Gateway-Typ</div><div className="font-medium">Loxone Miniserver</div></div>
-                                    <div><div className="text-muted-foreground">Worker</div><div className="font-mono">{lx ? (r.worker ?? "—") : "—"}</div></div>
-                                    <div><div className="text-muted-foreground">Sitzungs-Start</div><div className="font-mono">{new Date(lx.startedAt).toLocaleString("de-DE")}</div></div>
-                                    <div><div className="text-muted-foreground">Letztes Update</div><div className="font-mono">{new Date(lx.updatedAt).toLocaleString("de-DE")}</div></div>
-                                    <div><div className="text-muted-foreground">Events (Sitzung)</div><div className="font-medium">{(lx.eventsReceived ?? 0).toLocaleString("de-DE")}</div></div>
-                                    <div><div className="text-muted-foreground">Reconnects (Sitzung)</div><div className="font-medium">{(lx.reconnectCount ?? 0).toLocaleString("de-DE")}</div></div>
-                                    <div><div className="text-muted-foreground">Sitzungs-Ende</div><div className="font-mono">{lx.endedAt ? new Date(lx.endedAt).toLocaleString("de-DE") : "—"}</div></div>
-                                    <div><div className="text-muted-foreground">Disconnect-Grund</div><div className="font-medium">{lx.disconnectReason ?? "—"}</div></div>
-                                    <div className="col-span-2"><div className="text-muted-foreground">Integration-ID</div><div className="font-mono truncate" title={lx.integrationId}>{lx.integrationId.slice(0, 8)}…</div></div>
-                                    <div className="col-span-2"><div className="text-muted-foreground">Session-ID</div><div className="font-mono truncate" title={lx.sessionId}>{lx.sessionId.slice(0, 8)}…</div></div>
                                   </div>
                                 </TableCell>
                               </TableRow>
                             )}
                           </Fragment>
-                        );
-                      })}
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </CardContent>
               </Card>
             </TabsContent>
 
-            <TabsContent value="jobs" className="mt-4">
-              <Card>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Gateway</TableHead>
-                        <TableHead>Version</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Trigger</TableHead>
-                        <TableHead>Erstellt</TableHead>
-                        <TableHead>Beendet</TableHead>
-                        <TableHead className="text-right">Aktion</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {jobs.length === 0 && (
-                        <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">Noch keine Update-Jobs.</TableCell></TableRow>
-                      )}
-                      {jobs.map((j) => {
-                        const dev = fleet.find((f) => f.id === j.gateway_device_id);
-                        const open = ["queued", "dispatched", "running"].includes(j.status);
-                        return (
-                          <TableRow key={j.id}>
-                            <TableCell>{dev?.device_name ?? j.gateway_device_id.slice(0, 8)}</TableCell>
-                            <TableCell className="font-mono text-xs">{j.target_version}</TableCell>
-                            <TableCell><StatusBadge status={j.status} /></TableCell>
-                            <TableCell className="text-xs">{j.triggered_by}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{formatTime(j.created_at)}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{formatTime(j.finished_at)}</TableCell>
-                            <TableCell className="text-right">
-                              {open && (
-                                <Button size="sm" variant="ghost" onClick={() => cancelMutation.mutate(j.id)}>Abbrechen</Button>
-                              )}
-                              {j.error_message && (
-                                <span className="text-xs text-destructive ml-2" title={j.error_message}>⚠</span>
-                              )}
-                            </TableCell>
+            <TabsContent value="updates" className="space-y-6 pt-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><RocketIcon className="h-4 w-4" />Aktive Update-Kanäle</CardTitle></CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader><TableRow><TableHead>Channel</TableHead><TableHead>Version</TableHead><TableHead>Veröffentlicht</TableHead><TableHead className="text-right">Status</TableHead></TableRow></TableHeader>
+                      <TableBody>
+                        {channels.map((c) => (
+                          <TableRow key={c.id}>
+                            <TableCell className="font-bold">{c.channel}</TableCell>
+                            <TableCell>{c.version}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{format(new Date(c.released_at), "dd.MM.yy HH:mm")}</TableCell>
+                            <TableCell className="text-right">{c.is_latest ? <Badge>latest</Badge> : <Badge variant="outline">archived</Badge>}</TableCell>
                           </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><Clock className="h-4 w-4" />Letzte Update-Jobs</CardTitle></CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader><TableRow><TableHead>Zeit</TableHead><TableHead>Gateway</TableHead><TableHead>Ziel</TableHead><TableHead className="text-right">Status</TableHead></TableRow></TableHeader>
+                      <TableBody>
+                        {jobs.slice(0, 10).map((j) => (
+                          <TableRow key={j.id}>
+                            <TableCell className="text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(j.created_at), { addSuffix: true, locale: de })}</TableCell>
+                            <TableCell className="text-xs truncate max-w-[100px]">{j.gateway_device_id.slice(0, 8)}</TableCell>
+                            <TableCell className="text-xs">{j.target_version}</TableCell>
+                            <TableCell className="text-right"><StatusBadge status={j.status} /></TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
-            <TabsContent value="channels" className="mt-4">
-              <Card>
-                <CardHeader className="flex-row items-center justify-between">
-                  <CardTitle>Release-Channels</CardTitle>
-                  <PublishVersionDialog onPublished={refetchChannels} />
-                </CardHeader>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Channel</TableHead>
-                        <TableHead>Version</TableHead>
-                        <TableHead>Image</TableHead>
-                        <TableHead>Veröffentlicht</TableHead>
-                        <TableHead>Latest</TableHead>
-                        <TableHead className="text-right">Aktion</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {channels.length === 0 && (
-                        <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">Noch keine Versionen veröffentlicht.</TableCell></TableRow>
-                      )}
-                      {channels.map((c) => (
-                        <TableRow key={c.id}>
-                          <TableCell><Badge variant="outline">{c.channel}</Badge></TableCell>
-                          <TableCell className="font-mono">{c.version}</TableCell>
-                          <TableCell className="font-mono text-xs truncate max-w-[300px]">{c.image_ref}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{formatTime(c.released_at)}</TableCell>
-                          <TableCell>
-                            {c.is_latest
-                              ? <Badge className="bg-green-500/15 text-green-600 border-green-500/30">latest</Badge>
-                              : <span className="text-xs text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {!c.is_latest && (
-                              <Button size="sm" variant="ghost"
-                                onClick={() => setLatestMutation.mutate({ channel: c.channel, version: c.version })}>
-                                Als latest setzen
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-
-            <TabsContent value="workers" className="mt-4">
+            <TabsContent value="workers" className="pt-4">
               <WorkerControlsPanel />
             </TabsContent>
           </Tabs>

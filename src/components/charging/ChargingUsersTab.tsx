@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -75,6 +76,31 @@ const ChargingUsersTab = () => {
       const q = groupSearchQuery.toLowerCase().trim();
       return g.name?.toLowerCase().includes(q) || (g.description?.toLowerCase().includes(q) ?? false);
     });
+
+  type UserSortKey = "name" | "email" | "group" | "tariff" | "status" | "created_at";
+  const { sorted: sortedUsers, sort: userSort, toggle: userToggle } = useSortableData<any, UserSortKey>(filteredUsers, (u, k) => {
+    switch (k) {
+      case "name": return u.name || "";
+      case "email": return u.email || "";
+      case "group": return getGroupName(u.group_id);
+      case "tariff": return getEffectiveTariff(u);
+      case "status": return u.status || "";
+      case "created_at": return new Date(u.created_at);
+      default: return null;
+    }
+  });
+
+  type GroupSortKey = "name" | "is_app" | "tariff" | "status";
+  const { sorted: sortedGroups, sort: groupSort, toggle: groupToggle } = useSortableData<any, GroupSortKey>(filteredGroups, (g, k) => {
+    switch (k) {
+      case "name": return g.name || "";
+      case "is_app": return g.is_app_user ? 1 : 0;
+      case "tariff": return getTariffName(g.tariff_id) || "";
+      case "status": return g.status || "active";
+      default: return null;
+    }
+  });
+
 
   const getGroupName = (gid: string | null) => groups.find((g) => g.id === gid)?.name || "—";
   const getTariffName = (tid: string | null) => tariffs.find((t) => t.id === tid)?.name || null;
@@ -250,18 +276,18 @@ const ChargingUsersTab = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t("common.name" as any)}</TableHead>
-                      <TableHead>{t("common.email" as any)}</TableHead>
+                      <TableHead><SortableHead label={t("common.name" as any)} sortKey="name" sort={userSort} onToggle={userToggle} /></TableHead>
+                      <TableHead><SortableHead label={t("common.email" as any)} sortKey="email" sort={userSort} onToggle={userToggle} /></TableHead>
                       <TableHead>RFID-Tags</TableHead>
-                      <TableHead>{t("cu.userGroup" as any)}</TableHead>
-                      <TableHead>Tarif</TableHead>
-                      <TableHead>{t("common.status" as any)}</TableHead>
-                      <TableHead>{t("common.created" as any)}</TableHead>
+                      <TableHead><SortableHead label={t("cu.userGroup" as any)} sortKey="group" sort={userSort} onToggle={userToggle} /></TableHead>
+                      <TableHead><SortableHead label="Tarif" sortKey="tariff" sort={userSort} onToggle={userToggle} /></TableHead>
+                      <TableHead><SortableHead label={t("common.status" as any)} sortKey="status" sort={userSort} onToggle={userToggle} /></TableHead>
+                      <TableHead><SortableHead label={t("common.created" as any)} sortKey="created_at" sort={userSort} onToggle={userToggle} /></TableHead>
                       {isAdmin && <TableHead className="w-16" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredUsers.map((u) => {
+                    {sortedUsers.map((u) => {
                       const tagList = (u.tags ?? []).length > 0
                         ? u.tags
                         : (u.rfid_tag ? [{ tag: u.rfid_tag, label: u.rfid_label }] as any[] : []);
@@ -358,13 +384,13 @@ const ChargingUsersTab = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t("common.name" as any)}</TableHead>
+                      <TableHead><SortableHead label={t("common.name" as any)} sortKey="name" sort={userSort} onToggle={userToggle} /></TableHead>
                       <TableHead>{t("common.description" as any)}</TableHead>
-                      <TableHead>Tarif</TableHead>
+                      <TableHead><SortableHead label="Tarif" sortKey="tariff" sort={userSort} onToggle={userToggle} /></TableHead>
                       <TableHead>{t("cu.appUser" as any)}</TableHead>
                       <TableHead>{t("cu.members" as any)}</TableHead>
-                      <TableHead>{t("common.status" as any)}</TableHead>
-                      <TableHead>{t("common.created" as any)}</TableHead>
+                      <TableHead><SortableHead label={t("common.status" as any)} sortKey="status" sort={userSort} onToggle={userToggle} /></TableHead>
+                      <TableHead><SortableHead label={t("common.created" as any)} sortKey="created_at" sort={userSort} onToggle={userToggle} /></TableHead>
                       {isAdmin && <TableHead className="w-16" />}
                     </TableRow>
                   </TableHeader>

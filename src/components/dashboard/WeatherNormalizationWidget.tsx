@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from "recharts";
 import { Tooltip as ShadTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -108,7 +109,20 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
     : 0;
 
   if (loading) {
-    return (
+    type SortKey = "month" | "degreeDays" | "temp" | "actual" | "norm" | "dev";
+  const { sorted: sortedTableData, sort: tableSort, toggle: tableToggle } = useSortableData(filteredData, (r, k) => {
+    switch (k) {
+      case "month": return r.month;
+      case "degreeDays": return r.degreeDays;
+      case "temp": return r.avgTemperature;
+      case "actual": return r.actualConsumption;
+      case "norm": return r.normalizedConsumption;
+      case "dev": return r.deviationPercent;
+      default: return null;
+    }
+  });
+
+  return (
       <Card>
         <CardContent className="p-6">
           <Skeleton className="h-[400px]" />
@@ -116,6 +130,19 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
       </Card>
     );
   }
+
+  type SortKey = "month" | "degreeDays" | "temp" | "actual" | "norm" | "dev";
+  const { sorted: sortedTableData, sort: tableSort, toggle: tableToggle } = useSortableData(filteredData, (r, k) => {
+    switch (k) {
+      case "month": return r.month;
+      case "degreeDays": return r.degreeDays;
+      case "temp": return r.avgTemperature;
+      case "actual": return r.actualConsumption;
+      case "norm": return r.normalizedConsumption;
+      case "dev": return r.deviationPercent;
+      default: return null;
+    }
+  });
 
   return (
     <Card>
@@ -287,16 +314,16 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{T("wn.monthCol")}</TableHead>
-                        <TableHead className="text-right">{T("wn.degreeDays")}</TableHead>
-                        <TableHead className="text-right">{T("wn.avgTemp")}</TableHead>
-                        <TableHead className="text-right">{T("wn.actualShort")}</TableHead>
-                        <TableHead className="text-right">{T("wn.normalized")}</TableHead>
-                        <TableHead className="text-right">{T("wn.devShort")}</TableHead>
+                        <SortableHead sortKey="month" current={tableSort} onToggle={tableToggle}>{T("wn.monthCol")}</SortableHead>
+                        <SortableHead sortKey="degreeDays" current={tableSort} onToggle={tableToggle} className="text-right">{T("wn.degreeDays")}</SortableHead>
+                        <SortableHead sortKey="temp" current={tableSort} onToggle={tableToggle} className="text-right">{T("wn.avgTemp")}</SortableHead>
+                        <SortableHead sortKey="actual" current={tableSort} onToggle={tableToggle} className="text-right">{T("wn.actualShort")}</SortableHead>
+                        <SortableHead sortKey="norm" current={tableSort} onToggle={tableToggle} className="text-right">{T("wn.normalized")}</SortableHead>
+                        <SortableHead sortKey="dev" current={tableSort} onToggle={tableToggle} className="text-right">{T("wn.devShort")}</SortableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredData.map((row) => (
+                      {sortedTableData.map((row) => (
                         <TableRow key={row.month}>
                           <TableCell className="font-medium">{row.monthLabel}</TableCell>
                           <TableCell className="text-right">{row.degreeDays.toFixed(1)}</TableCell>

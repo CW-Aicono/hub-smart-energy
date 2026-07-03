@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Upload, FileText, Download, Pencil, Trash2, CornerDownRight, Plus } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -51,6 +52,21 @@ export default function InvoicesList() {
     if (filterStatus !== "all" && inv.status !== filterStatus) return false;
     return true;
   });
+  type SortKey = "supplier" | "invoice_number" | "location" | "energy_type" | "period" | "consumption" | "total_gross" | "status";
+  const { sorted, sort, toggle } = useSortableData<SupplierInvoice, SortKey>(filtered, (inv, k) => {
+    switch (k) {
+      case "supplier": return inv.supplier_name || "";
+      case "invoice_number": return inv.invoice_number || "";
+      case "location": return (inv as any).locations?.name || locations.find((l) => l.id === inv.location_id)?.name || "";
+      case "energy_type": return inv.energy_type;
+      case "period": return inv.period_start || "";
+      case "consumption": return getCorrections(inv.id).length > 0 ? getNetConsumption(inv) : inv.consumption_kwh;
+      case "total_gross": return getCorrections(inv.id).length > 0 ? getNetAmount(inv) : inv.total_gross;
+      case "status": return inv.status;
+      default: return null;
+    }
+  });
+
 
   const handleDownload = async (filePath: string | null) => {
     if (!filePath) return;
@@ -129,19 +145,19 @@ export default function InvoicesList() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t("invoices.supplier" as any)}</TableHead>
-                  <TableHead>{t("invoices.invoiceNumber" as any)}</TableHead>
-                  <TableHead>{t("invoices.location" as any)}</TableHead>
-                  <TableHead>{t("invoices.energyType" as any)}</TableHead>
-                  <TableHead>{t("invoices.period" as any)}</TableHead>
-                  <TableHead className="text-right">{t("invoices.consumption" as any)}</TableHead>
-                  <TableHead className="text-right">{t("invoices.totalGross" as any)}</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead><SortableHead label={t("invoices.supplier" as any)} sortKey="supplier" sort={sort} onToggle={toggle} /></TableHead>
+                  <TableHead><SortableHead label={t("invoices.invoiceNumber" as any)} sortKey="invoice_number" sort={sort} onToggle={toggle} /></TableHead>
+                  <TableHead><SortableHead label={t("invoices.location" as any)} sortKey="location" sort={sort} onToggle={toggle} /></TableHead>
+                  <TableHead><SortableHead label={t("invoices.energyType" as any)} sortKey="energy_type" sort={sort} onToggle={toggle} /></TableHead>
+                  <TableHead><SortableHead label={t("invoices.period" as any)} sortKey="period" sort={sort} onToggle={toggle} /></TableHead>
+                  <TableHead className="text-right"><SortableHead label={t("invoices.consumption" as any)} sortKey="consumption" sort={sort} onToggle={toggle} /></TableHead>
+                  <TableHead className="text-right"><SortableHead label={t("invoices.totalGross" as any)} sortKey="total_gross" sort={sort} onToggle={toggle} /></TableHead>
+                  <TableHead><SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} /></TableHead>
                   <TableHead className="text-right"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((inv) => {
+                {sorted.map((inv) => {
                   const corrections = getCorrections(inv.id);
                   const hasCorrections = corrections.length > 0;
                   const locName =

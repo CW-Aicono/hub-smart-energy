@@ -23,6 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutoRebootSettings } from "@/components/charging/AutoRebootSettings";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   ArrowLeft, Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Camera,
@@ -256,6 +257,23 @@ const ChargePointDetail = () => {
           source_label: cp.name,
         });
       });
+  type SessionSortKey = "start" | "end" | "duration" | "energy" | "rfid" | "status" | "reason";
+  const { sorted: sortedSessions, sort, toggle } = useSortableData<any, SessionSortKey>(sessions, (s, k) => {
+    switch (k) {
+      case "start": return new Date(s.start_time);
+      case "end": return s.stop_time ? new Date(s.stop_time) : new Date(0);
+      case "duration": {
+        const start = new Date(s.start_time);
+        const end = s.stop_time ? new Date(s.stop_time) : new Date();
+        return end.getTime() - start.getTime();
+      }
+      case "energy": return s.energy_kwh || 0;
+      case "rfid": return resolveTag(s.id_tag) || s.id_tag || "";
+      case "status": return s.status;
+      case "reason": return s.stop_reason || "";
+      default: return null;
+    }
+  }, { key: "start", direction: "desc" });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cp?.status, cp?.id, tenant?.id]);
 
@@ -1046,18 +1064,18 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Start</TableHead>
-                          <TableHead>Ende</TableHead>
-                          <TableHead>Dauer</TableHead>
-                          <TableHead>Energie</TableHead>
-                          <TableHead>RFID</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Grund</TableHead>
+                          <TableHead><SortableHead label="Start" sortKey="start" sort={sort} onToggle={toggle} /></TableHead>
+                          <TableHead><SortableHead label="Ende" sortKey="end" sort={sort} onToggle={toggle} /></TableHead>
+                          <TableHead><SortableHead label="Dauer" sortKey="duration" sort={sort} onToggle={toggle} /></TableHead>
+                          <TableHead><SortableHead label="Energie" sortKey="energy" sort={sort} onToggle={toggle} /></TableHead>
+                          <TableHead><SortableHead label="RFID" sortKey="rfid" sort={sort} onToggle={toggle} /></TableHead>
+                          <TableHead><SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} /></TableHead>
+                          <TableHead><SortableHead label="Grund" sortKey="reason" sort={sort} onToggle={toggle} /></TableHead>
                           <TableHead>Beleg</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sessions.map((s) => {
+                        {sortedSessions.map((s) => {
                           const start = new Date(s.start_time);
                           const end = s.stop_time ? new Date(s.stop_time) : null;
                           const durationMs = end ? end.getTime() - start.getTime() : Date.now() - start.getTime();

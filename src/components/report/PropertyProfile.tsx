@@ -13,6 +13,7 @@ import { getActivePrice, calculateEnergyCost, formatCurrency } from "@/lib/costC
 import { useTranslation } from "@/hooks/useTranslation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Building2, Calendar, Ruler, Flame, MapPin, User, Zap, Droplets, Leaf } from "lucide-react";
 
@@ -48,6 +49,29 @@ export function PropertyProfile({
   const { t } = useTranslation();
   const loc = location;
   const hasConsumption = consumption && Object.keys(consumption).length > 0;
+  const consumptionList = useMemo(() => {
+    if (!consumption) return [];
+    return Object.entries(consumption).map(([eType, kwh]) => {
+      const co2 = calculateCo2(kwh, eType, factors);
+      const specific = loc.net_floor_area ? kwh / loc.net_floor_area : null;
+      const price = prices ? getActivePrice(prices, loc.id, eType, reportYear) : 0;
+      const cost = price > 0 ? calculateEnergyCost(kwh, price) : null;
+      return { eType, kwh, co2, specific, cost };
+    });
+  }, [consumption, factors, loc.id, loc.net_floor_area, prices, reportYear]);
+
+  type ConsumptionSortKey = "type" | "kwh" | "specific" | "co2" | "cost";
+  const { sorted, sort, toggle } = useSortableData(consumptionList, (r, k) => {
+    switch (k) {
+      case "type": return ENERGY_LABELS[r.eType] || r.eType;
+      case "kwh": return r.kwh;
+      case "specific": return r.specific ?? 0;
+      case "co2": return r.co2 ?? 0;
+      case "cost": return r.cost ?? 0;
+      default: return null;
+    }
+  });
+
 
   return (
     <Card>
@@ -140,20 +164,16 @@ export function PropertyProfile({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Energieträger</TableHead>
-                  <TableHead className="text-right">Verbrauch</TableHead>
-                  {loc.net_floor_area && <TableHead className="text-right">kWh/m²a</TableHead>}
-                  <TableHead className="text-right">CO₂</TableHead>
-                  {prices && prices.length > 0 && <TableHead className="text-right">Kosten</TableHead>}
+                  <SortableHead sortKey="type" current={sort} onToggle={toggle}>Energieträger</SortableHead>
+                  <SortableHead sortKey="kwh" current={sort} onToggle={toggle} className="text-right">Verbrauch</SortableHead>
+                  {loc.net_floor_area && <SortableHead sortKey="specific" current={sort} onToggle={toggle} className="text-right">kWh/m²a</SortableHead>}
+                  <SortableHead sortKey="co2" current={sort} onToggle={toggle} className="text-right">CO₂</SortableHead>
+                  {prices && prices.length > 0 && <SortableHead sortKey="cost" current={sort} onToggle={toggle} className="text-right">Kosten</SortableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {Object.entries(consumption!).map(([eType, kwh]) => {
-                  const co2 = calculateCo2(kwh, eType, factors);
-                  const specific = loc.net_floor_area ? kwh / loc.net_floor_area : null;
-                  const price = prices ? getActivePrice(prices, loc.id, eType, reportYear) : 0;
-                  const cost = price > 0 ? calculateEnergyCost(kwh, price) : null;
-
+                {sorted.map((row) => {
+                  const { eType, kwh, co2, specific, cost } = row;
                   return (
                     <TableRow key={eType}>
                       <TableCell className="font-medium capitalize">{ENERGY_LABELS[eType] || eType}</TableCell>

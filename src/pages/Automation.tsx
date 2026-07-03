@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AiDisclaimer } from "@/components/ui/ai-disclaimer";
 import { toast } from "sonner";
@@ -234,6 +235,7 @@ const Automation = () => {
       toast.success(T("automation.updated"));
     } else {
       toast.info("Bitte erstellen Sie neue Regeln über die Standort-Detailseite.");
+  
     }
   };
 
@@ -633,15 +635,15 @@ const Automation = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{T("automation.logTime")}</TableHead>
-                        <TableHead>{T("automation.logRule")}</TableHead>
-                        <TableHead>{T("automation.logTrigger")}</TableHead>
-                        <TableHead>{T("automation.logStatus")}</TableHead>
-                        <TableHead className="text-right">{T("automation.logDuration")}</TableHead>
+                        <SortableHead column="time" onSort={toggleLog} sort={sortLog}>{T("automation.logTime")}</SortableHead>
+                        <SortableHead column="rule" onSort={toggleLog} sort={sortLog}>{T("automation.logRule")}</SortableHead>
+                        <SortableHead column="trigger" onSort={toggleLog} sort={sortLog}>{T("automation.logTrigger")}</SortableHead>
+                        <SortableHead column="status" onSort={toggleLog} sort={sortLog}>{T("automation.logStatus")}</SortableHead>
+                        <SortableHead column="duration" onSort={toggleLog} sort={sortLog} className="text-right">{T("automation.logDuration")}</SortableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {executionLog.map((log) => (
+                      {sortedLog.map((log) => (
                         <TableRow key={log.id}>
                           <TableCell className="text-xs whitespace-nowrap">
                             {format(new Date(log.executed_at), "dd.MM.yy HH:mm:ss")}

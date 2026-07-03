@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -151,6 +152,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
 
   useEffect(() => {
     load();
+  
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, partnerId]);
 
@@ -169,7 +171,22 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
   const ownItems = items.filter((i) => i.owner_scope === "partner" && i.partner_id === partnerId);
   const globalItems = items.filter((i) => i.owner_scope === "global");
   const baseList = scope === "partner" ? (tab === "own" ? ownItems : globalItems) : items;
-  const filtered = classFilter === "all" ? baseList : baseList.filter((i) => i.geraete_klasse === classFilter);
+  
+  const { sorted: sorted, sort: sort, toggle: toggle } = useSortableData(filtered, (r, k) => {
+    switch (k) {
+      case "class": return r.geraete_klasse;
+      case "model": return `${r.hersteller} ${r.modell}`;
+      case "unit": return r.einheit;
+      case "ek": return Number(r.ek_preis);
+      case "vk": return Number(r.vk_preis);
+      case "install": return Number(r.installations_pauschale);
+      case "status": return r.is_active ? 1 : 0;
+      case "global_vk": return Number(r.vk_preis);
+      case "own_vk": return Number(overrides[r.id]?.vk_preis ?? r.vk_preis);
+      case "own_install": return Number(overrides[r.id]?.installations_pauschale ?? r.installations_pauschale);
+      default: return null;
+    }
+  });
   const classCounts = DEVICE_CLASSES.map((c) => ({
     ...c,
     count: baseList.filter((i) => i.geraete_klasse === c.value).length,
@@ -368,16 +385,16 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Klasse</TableHead>
-                  <TableHead>Hersteller / Modell</TableHead>
-                  <TableHead className="text-right">VK € (global)</TableHead>
-                  <TableHead className="text-right">Eigener VK €</TableHead>
-                  <TableHead className="text-right">Eigene Installation €</TableHead>
+                  <SortableHead column="class" onSort={toggle} sort={sort}>Klasse</SortableHead>
+                  <SortableHead column="model" onSort={toggle} sort={sort}>Hersteller / Modell</SortableHead>
+                  <SortableHead column="global_vk" onSort={toggle} sort={sort} className="text-right">VK € (global)</SortableHead>
+                  <SortableHead column="own_vk" onSort={toggle} sort={sort} className="text-right">Eigener VK €</SortableHead>
+                  <SortableHead column="own_install" onSort={toggle} sort={sort} className="text-right">Eigene Installation €</SortableHead>
                   <TableHead className="w-16"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((it) => (
+                {sorted.map((it) => (
                   <OverrideRow
                     key={it.id}
                     item={it}
@@ -392,18 +409,18 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Klasse</TableHead>
-                  <TableHead>Hersteller / Modell</TableHead>
-                  <TableHead>Einheit</TableHead>
-                  <TableHead className="text-right">EK €</TableHead>
-                  <TableHead className="text-right">VK €</TableHead>
-                  <TableHead className="text-right">Installation €</TableHead>
-                  <TableHead>Status</TableHead>
+                  <SortableHead column="class" onSort={toggle} sort={sort}>Klasse</SortableHead>
+                  <SortableHead column="model" onSort={toggle} sort={sort}>Hersteller / Modell</SortableHead>
+                  <SortableHead column="unit" onSort={toggle} sort={sort}>Einheit</SortableHead>
+                  <SortableHead column="ek" onSort={toggle} sort={sort} className="text-right">EK €</SortableHead>
+                  <SortableHead column="vk" onSort={toggle} sort={sort} className="text-right">VK €</SortableHead>
+                  <SortableHead column="install" onSort={toggle} sort={sort} className="text-right">Installation €</SortableHead>
+                  <SortableHead column="status" onSort={toggle} sort={sort}>Status</SortableHead>
                   <TableHead className="w-24"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((it) => (
+                {sorted.map((it) => (
                   <TableRow key={it.id}>
                     <TableCell><ClassBadge klasse={it.geraete_klasse} /></TableCell>
                     <TableCell>

@@ -46,28 +46,41 @@ export function useSortableData<T, K extends string>(
   return { sorted, sort, toggle };
 }
 
-/** Clickable table-header button with sort indicator. */
+/** Clickable table-header button with sort indicator. Backwards-compatible props. */
 export function SortableHead<K extends string>({
   label,
+  children,
   sortKey,
+  column,
   sort,
+  current,
   onToggle,
+  onSort,
   align,
   className,
 }: {
-  label: React.ReactNode;
-  sortKey: K;
-  sort: SortState<K>;
-  onToggle: (k: K) => void;
+  label?: React.ReactNode;
+  children?: React.ReactNode;
+  sortKey?: K;
+  column?: K;
+  sort?: SortState<K>;
+  current?: SortState<K>;
+  onToggle?: (k: K) => void;
+  onSort?: (k: K) => void;
   align?: "left" | "right";
   className?: string;
 }) {
-  const isActive = sort.key === sortKey;
-  const Icon = !isActive ? ArrowUpDown : sort.direction === "asc" ? ArrowUp : ArrowDown;
+  const key = (sortKey ?? column) as K;
+  const toggle = onToggle ?? onSort ?? (() => {});
+  const content = label ?? children;
+  const state = (sort ?? current ?? { key: null, direction: "asc" }) as SortState<K>;
+  const isActive = state.key === key;
+  const Icon = !isActive ? ArrowUpDown : state.direction === "asc" ? ArrowUp : ArrowDown;
+
   return (
     <button
       type="button"
-      onClick={() => onToggle(sortKey)}
+      onClick={() => toggle(key)}
       className={cn(
         "inline-flex items-center gap-1 hover:text-foreground",
         align === "right" && "ml-auto",
@@ -75,8 +88,9 @@ export function SortableHead<K extends string>({
         className,
       )}
     >
-      {label}
+      {content}
       <Icon className="h-3 w-3 opacity-60" />
     </button>
   );
 }
+
