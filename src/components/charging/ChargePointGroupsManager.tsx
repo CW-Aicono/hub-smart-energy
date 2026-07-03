@@ -345,8 +345,8 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, locat
             <div className="p-4 border rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">Dynamisches Lastmanagement (Soft-Limit)</p>
-                  <p className="text-sm text-muted-foreground">Drosselt die Ladepunkte dieser Gruppe, sobald der Referenzzähler das Limit überschreitet.</p>
+                  <p className="font-medium">Gruppen-Lastbegrenzung (Soft-Limit)</p>
+                  <p className="text-sm text-muted-foreground">Drosselt nur die Ladepunkte dieser Gruppe, sobald der Referenzzähler des Stromkreises das Limit überschreitet.</p>
                 </div>
                 <Switch
                   checked={dlm.enabled}
