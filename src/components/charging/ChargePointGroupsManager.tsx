@@ -387,7 +387,7 @@ function ChargePointGroupDetail({ group, open, onOpenChange, chargePoints, locat
                     </Select>
                   </div>
                   <p className="text-xs text-muted-foreground md:col-span-2 flex items-center gap-1">
-                    <Info className="h-3 w-3" /> Der Referenzzähler misst die Last des Stromkreises, an dem die Gruppe hängt (z.B. Unterverteilung). Hardlimit am Hausanschluss wird zusätzlich am Standort konfiguriert.
+                    <Info className="h-3 w-3" /> Nur für einen Unterkreis (z. B. Parkdeck-Unterverteilung). Der Schutz des gesamten Hausanschlusses erfolgt separat unter „Hausanschluss-Lastmanagement" auf der Standort-Seite.
                   </p>
                 </div>
               )}
