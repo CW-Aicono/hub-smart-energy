@@ -272,9 +272,9 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
 
   if (loading) {
     return (
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid h-full gap-4 md:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <Card key={i}><CardContent className="p-6"><Skeleton className="h-16" /></CardContent></Card>
+          <Card key={i} className="h-full min-h-[120px]"><CardContent className="flex h-full items-center p-4"><Skeleton className="h-12 w-full" /></CardContent></Card>
         ))}
       </div>
     );
@@ -317,14 +317,14 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-4">
+    <div className="grid h-full gap-4 md:grid-cols-4">
       {kpis.map((kpi) => (
-        <Card key={kpi.label}>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <Card key={kpi.label} className="h-full min-h-[120px]">
+          <CardHeader className="flex flex-row items-center justify-between p-4 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{kpi.label}</CardTitle>
             <kpi.icon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-4">
             <div className="text-2xl font-display font-bold">{kpi.value}</div>
             <p className={`text-xs mt-1 ${kpi.positive ? "text-accent" : "text-muted-foreground"}`}>
               {kpi.positive && <ArrowDownRight className="inline h-3 w-3 mr-1" />}
