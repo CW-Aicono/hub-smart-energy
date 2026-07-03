@@ -4652,6 +4652,7 @@ export type Database = {
           model_3d_rotation: number | null
           model_3d_url: string | null
           name: string
+          sort_order: number
           updated_at: string
         }
         Insert: {
@@ -4666,6 +4667,7 @@ export type Database = {
           model_3d_rotation?: number | null
           model_3d_url?: string | null
           name: string
+          sort_order?: number
           updated_at?: string
         }
         Update: {
@@ -4680,6 +4682,7 @@ export type Database = {
           model_3d_rotation?: number | null
           model_3d_url?: string | null
           name?: string
+          sort_order?: number
           updated_at?: string
         }
         Relationships: [
