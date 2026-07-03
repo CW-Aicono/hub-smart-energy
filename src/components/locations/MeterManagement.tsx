@@ -961,56 +961,108 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               </div>
             )}
             {displayedActuators.length > 0 && (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("common.name" as any)}</TableHead>
-                    <TableHead>{t("mm.captureType" as any)}</TableHead>
-                    <TableHead>Notizen</TableHead>
-                    {isAdmin && <TableHead className="w-32" />}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {displayedActuators.map((m) => (
-                    <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
-                      <TableCell>
-                        <button className="font-medium text-left hover:underline text-primary cursor-pointer" onClick={() => setEditingMeter(m)}>
-                          {m.name}
-                        </button>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={m.capture_type === "automatic" ? "default" : "secondary"}>
-                          {m.capture_type === "automatic" ? t("mm.captureAutomatic" as any) : t("mm.captureManual" as any)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{m.notes || "–"}</TableCell>
+              <>
+                {isAdmin && selectedMeterIds.size > 0 && (
+                  <BulkToolbar
+                    count={selectedMeterIds.size}
+                    showArchived={showArchived}
+                    onBulkEdit={() => setBulkEditOpen(true)}
+                    onArchive={async () => {
+                      for (const id of Array.from(selectedMeterIds)) await archiveMeter(id, !showArchived);
+                      setSelectedMeterIds(new Set());
+                    }}
+                    onDelete={async () => {
+                      const ok = await confirmDialog({
+                        title: `${selectedMeterIds.size} Aktoren endgültig löschen?`,
+                        description: "Diese Aktion kann nicht rückgängig gemacht werden.",
+                        confirmLabel: "Endgültig löschen",
+                      });
+                      if (!ok) return;
+                      await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
+                      setSelectedMeterIds(new Set());
+                    }}
+                    onClear={() => setSelectedMeterIds(new Set())}
+                  />
+                )}
+                <Table>
+                  <TableHeader>
+                    <TableRow>
                       {isAdmin && (
-                        <TableCell className="flex gap-1">
-                          {!m.is_archived && (
-                            <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {m.is_archived ? (
-                            <>
-                              <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, false)} title="Wiederherstellen">
-                                <ArchiveRestore className="h-4 w-4 text-primary" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => confirmDelete(m)} title="Endgültig löschen">
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </>
-                          ) : (
-                            <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, true)} title="Archivieren">
-                              <Archive className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </TableCell>
+                        <TableHead className="w-8">
+                          <Checkbox
+                            checked={displayedActuators.length > 0 && displayedActuators.every((m) => selectedMeterIds.has(m.id))}
+                            onCheckedChange={(v) => {
+                              if (v) setSelectedMeterIds(new Set(displayedActuators.map((m) => m.id)));
+                              else setSelectedMeterIds(new Set());
+                            }}
+                            aria-label="Alle auswählen"
+                          />
+                        </TableHead>
                       )}
+                      <TableHead>{t("common.name" as any)}</TableHead>
+                      <TableHead>{t("mm.captureType" as any)}</TableHead>
+                      <TableHead>Notizen</TableHead>
+                      {isAdmin && <TableHead className="w-32" />}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {displayedActuators.map((m) => (
+                      <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
+                        {isAdmin && (
+                          <TableCell className="w-8">
+                            <Checkbox
+                              checked={selectedMeterIds.has(m.id)}
+                              onCheckedChange={(v) => {
+                                setSelectedMeterIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (v) next.add(m.id);
+                                  else next.delete(m.id);
+                                  return next;
+                                });
+                              }}
+                              aria-label={`${m.name} auswählen`}
+                            />
+                          </TableCell>
+                        )}
+                        <TableCell>
+                          <button className="font-medium text-left hover:underline text-primary cursor-pointer" onClick={() => setEditingMeter(m)}>
+                            {m.name}
+                          </button>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={m.capture_type === "automatic" ? "default" : "secondary"}>
+                            {m.capture_type === "automatic" ? t("mm.captureAutomatic" as any) : t("mm.captureManual" as any)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{m.notes || "–"}</TableCell>
+                        {isAdmin && (
+                          <TableCell className="flex gap-1">
+                            {!m.is_archived && (
+                              <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {m.is_archived ? (
+                              <>
+                                <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, false)} title="Wiederherstellen">
+                                  <ArchiveRestore className="h-4 w-4 text-primary" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => confirmDelete(m)} title="Endgültig löschen">
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </>
+                            ) : (
+                              <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, true)} title="Archivieren">
+                                <Archive className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
             )}
             {sensorsLoading || intLoading ? (
               <div className="space-y-2">
