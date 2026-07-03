@@ -137,10 +137,31 @@ export async function evaluateCondition(
       }
     }
 
+    case "power_headroom": {
+      if (!locationId || !sensorProvider.getPowerHeadroomKw) return false;
+      try {
+        const headroom = await sensorProvider.getPowerHeadroomKw(locationId);
+        if (headroom == null || !isFinite(headroom)) return false;
+        const threshold = condition.value ?? 0;
+        switch (condition.operator) {
+          case ">": return headroom > threshold;
+          case "<": return headroom < threshold;
+          case "=": return Math.abs(headroom - threshold) < 0.001;
+          case ">=": return headroom >= threshold;
+          case "<=": return headroom <= threshold;
+          default: return false;
+        }
+      } catch (e) {
+        console.error(`[evaluator] Power headroom fetch error for location ${locationId}:`, e);
+        return false;
+      }
+    }
+
     default:
       return false;
   }
 }
+
 
 /**
  * Evaluate all conditions for an automation rule.
