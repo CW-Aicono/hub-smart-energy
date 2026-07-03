@@ -621,6 +621,24 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
     );
   };
 
+  const toggleSelectId = (id: string, checked: boolean) => {
+    setSelectedMeterIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = (ids: string[], checked: boolean) => {
+    setSelectedMeterIds((prev) => {
+      const next = new Set(prev);
+      if (checked) ids.forEach((id) => next.add(id));
+      else ids.forEach((id) => next.delete(id));
+      return next;
+    });
+  };
+
+
+
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
     <Card>
