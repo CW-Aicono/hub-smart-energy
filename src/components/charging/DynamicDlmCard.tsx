@@ -135,9 +135,19 @@ export function DynamicDlmCard({ locationId }: Props) {
   };
 
   const lastLog = log[0];
-  const measuredKw = lastLog?.measured_kw != null ? Number(lastLog.measured_kw) : null;
-  const availableKw = lastLog?.available_kw != null ? Number(lastLog.available_kw) : null;
+  const logMeasuredKw = lastLog?.measured_kw != null ? Number(lastLog.measured_kw) : null;
+  const logAvailableKw = lastLog?.available_kw != null ? Number(lastLog.available_kw) : null;
   const sensorStale = lastLog?.reason === "fallback_stale_sensor";
+
+  // Live-Fallback: wenn kein aktueller Steuerzyklus vorliegt (z. B. DLM gerade eingerichtet
+  // oder inaktiv), Werte direkt aus dem letzten 5-Minuten-Bucket des Referenzzählers ableiten.
+  const liveMeasuredKw = livePowerQuery.data?.power_avg != null ? Number(livePowerQuery.data.power_avg) : null;
+  const measuredKw = logMeasuredKw ?? liveMeasuredKw;
+  const availableKw =
+    logAvailableKw ??
+    (measuredKw != null
+      ? Math.max(0, gridLimitKw - measuredKw - safetyBufferKw)
+      : null);
 
   if (isLoading) return <Skeleton className="h-64" />;
   if (cps.length === 0) return null;
