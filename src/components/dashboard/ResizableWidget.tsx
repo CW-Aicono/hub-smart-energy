@@ -98,7 +98,7 @@ export default function ResizableWidget({
       className={cn(
         "w-full min-w-0 relative group",
         localHeight
-          ? "[&>*:first-child]:!h-full [&>*:first-child]:!flex [&>*:first-child]:!flex-col [&_[data-slot=card-content]]:!flex-1 [&_[data-slot=card-content]]:!min-h-0 [&_.recharts-responsive-container]:!h-full"
+          ? "[&>*:first-child]:!h-full [&>*:first-child]:!flex [&>*:first-child]:!flex-col [&_[data-slot=card-content]]:!flex-1 [&_[data-slot=card-content]]:!min-h-0 [&_.recharts-responsive-container]:!h-full [&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full"
           : "",
         className,
       )}
@@ -117,12 +117,12 @@ export default function ResizableWidget({
         onPointerCancel={onPointerUp}
         onDoubleClick={onDoubleClick}
         className={cn(
-          "absolute -bottom-1 left-1/2 -translate-x-1/2 z-20",
+          "absolute bottom-1 left-1/2 -translate-x-1/2 z-30",
           "flex items-center justify-center",
           "h-3 w-16 rounded-full cursor-ns-resize touch-none select-none",
           "bg-border/70 hover:bg-primary/70 transition-colors",
-          "opacity-0 group-hover:opacity-100",
-          dragState.current ? "opacity-100 bg-primary" : "",
+          "opacity-40 group-hover:opacity-100 hover:!opacity-100",
+          dragState.current ? "!opacity-100 bg-primary" : "",
         )}
       >
         <GripHorizontal className="h-3 w-3 text-background pointer-events-none" />
