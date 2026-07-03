@@ -29,9 +29,9 @@ const LocationMapWidget = ({ locationId }: LocationMapWidgetProps) => {
     <Card className="overflow-hidden h-full flex flex-col">
       <CardContent className="p-0 flex-1 min-h-0">
         {loading ? (
-          <div className="h-full min-h-[350px] bg-muted/50 animate-pulse" />
+          <div className="h-full min-h-0 bg-muted/50 animate-pulse" />
         ) : (
-          <div className="h-full min-h-[350px] overflow-hidden">
+          <div className="h-full min-h-0 overflow-hidden">
             <LocationsMap
               locations={mapLocations}
               onLocationClick={handleLocationClick}

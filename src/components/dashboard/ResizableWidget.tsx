@@ -96,10 +96,12 @@ export default function ResizableWidget({
       ref={wrapperRef}
       data-widget-size={widgetSize}
       className={cn(
-        "w-full min-w-0 relative group",
-        localHeight
-          ? "[&>*:first-child]:!h-full [&>*:first-child]:!flex [&>*:first-child]:!flex-col [&_[data-slot=card-content]]:!flex-1 [&_[data-slot=card-content]]:!min-h-0 [&_.recharts-responsive-container]:!h-full [&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full"
-          : "",
+        "w-full min-w-0 relative group flex flex-col",
+        "[&>[data-lazy]]:flex-1 [&>[data-lazy]]:min-h-0",
+        "[&_[data-slot=card]]:!h-full [&_[data-slot=card]]:!flex [&_[data-slot=card]]:!flex-col",
+        "[&_[data-slot=card-content]]:!flex-1 [&_[data-slot=card-content]]:!min-h-0",
+        "[&_.recharts-responsive-container]:!h-full",
+        "[&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full",
         className,
       )}
       style={style}
