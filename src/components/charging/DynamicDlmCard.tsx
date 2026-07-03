@@ -191,9 +191,9 @@ export function DynamicDlmCard({ locationId }: Props) {
             <button className="group flex w-full items-start justify-between gap-2 text-left hover:opacity-90">
               <div className="flex items-start gap-2">
                 {isOpen ? (
-                  <ChevronDown className="mt-1 h-5 w-5 shrink-0 text-muted-foreground transition-transform" />
+                  <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform" />
                 ) : (
-                  <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                  <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                 )}
                 <div>
                   <CardTitle className="flex items-center gap-2">
