@@ -40,7 +40,6 @@ export function DynamicDlmCard({ locationId }: Props) {
   const [safetyBufferKw, setSafetyBufferKw] = useState<number>(2);
   const [fallbackKwPerCp, setFallbackKwPerCp] = useState<number>(4.2);
   const [minChargeKw, setMinChargeKw] = useState<number>(1.4);
-  const [priority, setPriority] = useState<string[]>([]);
 
   // Initial / Re-Sync from server config
   useEffect(() => {
@@ -51,37 +50,28 @@ export function DynamicDlmCard({ locationId }: Props) {
       setSafetyBufferKw(Number(config.safety_buffer_kw));
       setFallbackKwPerCp(Number(config.fallback_kw_per_cp));
       setMinChargeKw(Number(config.min_charge_kw));
-      setPriority(Array.isArray(config.priority_order) ? config.priority_order : []);
     }
   }, [config?.id]);
 
-  // CP-Liste mit aktueller Priorität synchron halten (dedupliziert)
+  // Wallboxen, die noch nicht als DLM-Gerät hinterlegt sind → einmalig
+  // automatisch als charge_point-Einträge aufnehmen (Bestandsdaten-Ergänzung).
   useEffect(() => {
-    if (cps.length === 0) return;
-    setPriority((prev) => {
-      const validIds = new Set(cps.map((c) => c.id));
-      const seen = new Set<string>();
-      const cleaned: string[] = [];
-      for (const id of prev) {
-        if (validIds.has(id) && !seen.has(id)) {
-          seen.add(id);
-          cleaned.push(id);
-        }
-      }
-      for (const c of cps) {
-        if (!seen.has(c.id)) {
-          seen.add(c.id);
-          cleaned.push(c.id);
-        }
-      }
-      // Nur ersetzen, wenn sich wirklich etwas geändert hat
-      if (cleaned.length === prev.length && cleaned.every((id, i) => id === prev[i])) {
-        return prev;
-      }
-      return cleaned;
-    });
+    if (!config || cps.length === 0) return;
+    const knownRefs = new Set(dlmDevices.map((d) => d.device_ref_id));
+    const missing = cps.filter((c) => !knownRefs.has(c.id));
+    if (missing.length === 0) return;
+    for (const cp of missing) {
+      addDevice({
+        device_kind: "charge_point",
+        device_ref_id: cp.id,
+        display_name: cp.name,
+        min_power_kw: 1.4,
+        max_power_kw: Number(cp.max_power_kw ?? 11),
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cps.length]);
+  }, [config?.id, cps.length, dlmDevices.length]);
+
 
   // Live-Messwert vom Referenz-Zähler (Fallback wenn dlm_control_log noch leer ist)
   const livePowerQuery = useQuery({
