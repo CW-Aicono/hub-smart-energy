@@ -156,7 +156,9 @@ const CONDITION_TYPES = [
   { value: "time_switch", label: "Zeitschaltuhr", icon: Timer, desc: "Zu mehreren Zeitpunkten auslösen" },
   { value: "weekday", label: "Wochentage", icon: CalendarDays, desc: "Nur an bestimmten Wochentagen aktiv" },
   { value: "status", label: "Aktor-Status", icon: ToggleLeft, desc: "Wenn ein anderer Aktor einen bestimmten Zustand hat" },
+  { value: "power_headroom", label: "Hausanschluss-Reserve", icon: Zap, desc: "Wenn die freie Leistung am Hausanschluss über/unter einem Wert (kW) liegt" },
 ];
+
 
 function getSensorIcon(type: string) {
   switch (type) {
