@@ -16,6 +16,18 @@ import ResizableWidget from "@/components/dashboard/ResizableWidget";
 
 import { useDashboardPrefetch } from "@/hooks/useDashboardPrefetch";
 
+// Per-widget height constraints (px, wrapper incl. drag-handle row).
+// Prevents charts from being stretched past their natural content
+// (energy_chart, spot_price) or shrunk to overflow (sankey, energy_gauge).
+const WIDGET_HEIGHT_LIMITS: Record<string, { min?: number; max?: number }> = {
+  energy_chart: { max: 560 },
+  spot_price: { max: 420 },
+  sankey: { min: 420 },
+  energy_gauge: { min: 380 },
+  energy_flow: { min: 420 },
+};
+
+
 // Lazy-load all widget components – each resolves to its own chunk
 const EnergyChart = lazy(() => import("@/components/dashboard/EnergyChart"));
 const CostOverview = lazy(() => import("@/components/dashboard/CostOverview"));
