@@ -147,6 +147,39 @@ export function FloorRoomsList({ floorId, locationId }: FloorRoomsListProps) {
     return <Skeleton className="h-8 w-full" />;
   }
 
+  const renderMeterRow = (meter: Meter) => {
+    const canDrag = isAdmin;
+    return (
+      <div
+        key={meter.id}
+        draggable={canDrag}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/meter-id", meter.id);
+          e.dataTransfer.effectAllowed = "move";
+          setDraggingMeterId(meter.id);
+        }}
+        onDragEnd={() => { setDraggingMeterId(null); setDragOverTarget(null); }}
+        className={cn(
+          "w-full flex items-center gap-2 text-xs py-1 px-2 rounded bg-muted/20 hover:bg-muted/50 transition-colors text-left cursor-pointer",
+          canDrag && "cursor-grab active:cursor-grabbing",
+          draggingMeterId === meter.id && "opacity-40"
+        )}
+        onClick={() => setEditingMeter(meter)}
+        role="button"
+        tabIndex={0}
+      >
+        {canDrag && <GripVertical className="h-3 w-3 shrink-0 text-muted-foreground/60" />}
+        <Gauge className={cn("h-3 w-3 shrink-0", energyTypeColors[meter.energy_type] || "text-muted-foreground")} />
+        <span className="truncate">{meter.name}</span>
+        {meter.meter_number && (
+          <span className="text-muted-foreground/50">#{meter.meter_number}</span>
+        )}
+      </div>
+    );
+  };
+
+
+
   return (
     <div className="pl-16 pr-4 pb-3 space-y-2">
       {rooms.length === 0 && unassignedMeters.length === 0 && !adding && (
