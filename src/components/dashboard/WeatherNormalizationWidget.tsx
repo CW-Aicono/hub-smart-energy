@@ -13,7 +13,7 @@ import { useWeatherNormalization } from "@/hooks/useWeatherNormalization";
 import { formatEnergy } from "@/lib/formatEnergy";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
-import { isHeatType } from "@/lib/report/weatherCorrection";
+
 
 
 interface WeatherNormalizationWidgetProps {
@@ -42,6 +42,8 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
   const [refTemp, setRefTemp] = useState(15);
 
   const availableTypesSet = useLocationEnergyTypesSet(locationId);
+  // Für Heizung nutzbare Energieträger (Strom z.B. via Wärmepumpe/Heizstab)
+  const HEATING_CAPABLE = new Set(["gas", "waerme", "oel", "fernwaerme", "pellets", "holz", "strom"]);
   const ENERGY_TYPES = [
     { value: "gas", label: T("energy.gas") },
     { value: "waerme", label: T("energy.waerme") },
@@ -49,7 +51,8 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
     { value: "fernwaerme", label: T("energy.fernwaerme") },
     { value: "pellets", label: T("energy.pellets") },
     { value: "holz", label: T("energy.holz") },
-  ].filter((e) => isHeatType(e.value) && availableTypesSet.has(e.value));
+    { value: "strom", label: T("energy.strom") },
+  ].filter((e) => HEATING_CAPABLE.has(e.value) && availableTypesSet.has(e.value));
 
   // Falls die aktuell gewählte Energiequelle nicht mehr verfügbar ist, auf erste verfügbare wechseln
   useEffect(() => {
