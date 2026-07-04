@@ -15,8 +15,10 @@ import { useHeatingDegreeDays } from "@/hooks/useHeatingDegreeDays";
 import {
   REFERENCE_HDD_GERMANY,
   isHeatType,
-  normalizeHeatConsumption,
+  normalizeHeatConsumptionWithBaseline,
+  estimateHotWaterBaselineKwhPerMonth,
 } from "@/lib/report/weatherCorrection";
+
 import type { Location } from "@/hooks/useLocations";
 
 interface WeatherCorrectionSectionProps {
