@@ -6163,8 +6163,11 @@ export type Database = {
           grid_limit_kw: number | null
           gross_floor_area: number | null
           heating_type: string | null
+          hot_water_energy_type: string | null
           hot_water_gas_kwh_year: number | null
           hot_water_gas_share_pct: number | null
+          hot_water_kwh_year: number | null
+          hot_water_share_pct: number | null
           hot_water_via_gas: boolean
           id: string
           is_archived: boolean
@@ -6199,8 +6202,11 @@ export type Database = {
           grid_limit_kw?: number | null
           gross_floor_area?: number | null
           heating_type?: string | null
+          hot_water_energy_type?: string | null
           hot_water_gas_kwh_year?: number | null
           hot_water_gas_share_pct?: number | null
+          hot_water_kwh_year?: number | null
+          hot_water_share_pct?: number | null
           hot_water_via_gas?: boolean
           id?: string
           is_archived?: boolean
@@ -6235,8 +6241,11 @@ export type Database = {
           grid_limit_kw?: number | null
           gross_floor_area?: number | null
           heating_type?: string | null
+          hot_water_energy_type?: string | null
           hot_water_gas_kwh_year?: number | null
           hot_water_gas_share_pct?: number | null
+          hot_water_kwh_year?: number | null
+          hot_water_share_pct?: number | null
           hot_water_via_gas?: boolean
           id?: string
           is_archived?: boolean
