@@ -1,80 +1,65 @@
-## Ausgangslage
+# Witterungsbereinigung: Warmwasser-Anteil korrekt behandeln
 
-Die Analyse zeigt: es existieren aktuell **drei** Lastmanagement-Pfade, nicht zwei.
+## Problem
+Der komplette Gas-/Wärmeverbrauch fließt aktuell in die Formel `Q_norm = Q_ist · HDD_ref / HDD_ist`. In Sommermonaten sind die HDD nahe null, der WW-Sockel wird dadurch mit einem sehr großen Faktor hochskaliert und erzeugt die im Screenshot sichtbaren, unplausibel hohen "Bereinigt"-Werte (z. B. Juni mit fast keiner Heizung, aber ~18 MWh bereinigt).
 
-| # | Wo | Steuert | Zweck |
-|---|---|---|---|
-| 1 | Ladepunkt-Gruppe → „Energiemanagement" (`charge_point_groups.energy_settings.dlm`, Edge `dlm-scheduler` Group-Scope) | Wallboxen einer Gruppe, gleichmäßig, ~5 min | **Soft-Limit** für eine Unterverteilung/einen Stromkreis |
-| 2 | Liegenschaft → „Dynamisches Lastmanagement" (`location_dlm_config`, Edge `dlm-realtime-controller`) | Wallboxen am Standort, priorisiert, ≤60 s | **Hard-Limit** am Hausanschluss |
-| 2b | (Versteckt) `dlm-scheduler` Site-Scope über `locations.grid_limit_kw` | Wallboxen am Standort, gleichmäßig, ~5 min | Legacy-Duplikat zu (2) |
-| 3 | Liegenschaft → „§14a" (`grid_connections`, `steuve_devices`, `grid_curtailment_events`, Edge `grid-curtailment-apply`) | externer DSO-Eingriff, alle SteuVE-Geräte | Netzdienliche Steuerung |
+## Lösungsansatz (gemäß Ihrer Auswahl)
+**Kombiniert: Sommer-Baseline automatisch, manuelle Override-Möglichkeit je Standort.**
 
-Die vermutete Redundanz ist:
-- **Echt** zwischen (2) und (2b): identische Aufgabe, unterschiedliche Tabelle.
-- **Konzeptionell nicht** zwischen (1) und (2): (1) schützt einen Unterkreis (z. B. Parkdeck-UV), (2) den Gesamtanschluss. Der aktuelle Hilfetext in der Gruppen-UI sagt das bereits sinngemäß, wird aber optisch als „doppelt" wahrgenommen, weil beide Karten nur Wallboxen betreffen.
+Formel neu:
+```text
+WW_monat        = Warmwasser-Sockel pro Monat (temperaturunabhängig)
+Q_heiz_ist      = Q_ist − WW_monat
+Q_heiz_norm     = Q_heiz_ist · HDD_ref / HDD_ist       (nur wenn HDD > 0)
+Q_norm_gesamt   = Q_heiz_norm + WW_monat
+```
 
-## Empfehlung
+### Bestimmung des WW-Sockels
+1. **Manueller Override** am Standort (Vorrang, falls gesetzt):
+   - `hot_water_via_gas` (bool)
+   - `hot_water_gas_kwh_year` (kWh/a) **oder** `hot_water_gas_share_pct` (% des Jahresverbrauchs)
+2. **Sommer-Baseline (Default)**: dynamisch alle Monate mit `HDD_monat < 50 Kd/Monat` sammeln, deren Mittelwert = `WW_monat`. Fällt keine Basis an (< 2 Monate), Fallback = 12 % des Jahresverbrauchs (grober Erfahrungswert für Gas-Kombitherme).
 
-1. **Liegenschafts-DLM bleibt am Standort, nicht unter „Automation"**  
-   Ein Realtime-Feedback-Loop (Messen → Budget → Drosseln → Verifizieren) ist etwas anderes als das regelbasierte Automation-Modul („WENN Sensor > X DANN Aktor Y"). Beides zu verschmelzen würde beide Systeme verwässern. Andere EMS-Produkte (SMA Sunny Home Manager, E3/DC, openWB, gridX) halten diese Trennung ebenfalls konsequent.
+Sockel wird pro Standort und Jahr berechnet, dann monatlich abgezogen (nie mehr als der tatsächliche Verbrauch des jeweiligen Monats).
 
-2. **Liegenschafts-DLM wird vom „Wallbox-Schutz" zum echten „Hausanschluss-Schutz"**  
-   Genau der Punkt, den du ansprichst. Statt nur Wallboxen zu drosseln, wird die Karte zum Ort, an dem **alle drosselbaren Verbraucher am Standort** priorisiert werden (Wallboxen via OCPP, Wärmepumpen/Batterien/große Aktoren via Gateway-Command). So verschwindet der „doppelt gemoppelt"-Eindruck, weil (1) klar Wallbox-Gruppen-Ebene und (2) klar Gesamtstandort-Ebene mit gemischten Geräten bedient.  
-   Das Datenmodell aus §14a (`steuve_devices` mit `device_type: charge_point | heat_pump | battery`) wird als Vorlage übernommen.
+## Umsetzung
 
-3. **Legacy-Redundanz (2b) entfernen**  
-   Der Site-Scope-Pfad in `dlm-scheduler` (`locations.grid_limit_kw`) wird abgeschaltet — er ist funktional gedoppelt zu `dlm-realtime-controller`, langsamer und ohne Priorisierung/Fallback.
+### 1. Datenbank (Migration)
+Spalten in `public.locations` hinzufügen:
+- `hot_water_via_gas boolean default false`
+- `hot_water_gas_share_pct numeric` (0–100, nullable)
+- `hot_water_gas_kwh_year numeric` (nullable)
 
-4. **§14a bleibt separat** — ist ein externer Zwangs-Eingriff (StackLevel 5), gehört nicht in normale Optimierung. Deine Einschätzung ist korrekt.
+### 2. Kern-Logik
+`src/lib/report/weatherCorrection.ts`:
+- `estimateHotWaterBaselineKwhPerMonth(monthly: {kwh:number, hdd:number}[], {hddThreshold=50, fallbackShare=0.12})`
+- `normalizeHeatConsumptionWithBaseline(actualKwh, hdd, wwBaselineKwh, hddRef)`
 
-5. **Umbenennung zur Klarheit in der UI:**  
-   - Gruppen-DLM → „Gruppen-Lastbegrenzung (Soft-Limit)" (klarer Scope)  
-   - Standort-DLM → „Hausanschluss-Lastmanagement" (klarer Scope, nicht „Dynamisches Lastmanagement" – das klingt generisch)  
-   - §14a → bleibt „Netzdienliche Steuerung (§14a EnWG)"
+Analoge Anwendung im Backend nicht nötig (wird clientseitig gerechnet).
 
----
+### 3. Hook-Anpassung
+`src/hooks/useWeatherNormalization.tsx`:
+- Standort-Overrides mitladen.
+- Für jeden Standort separat WW-Sockel bestimmen, monatlich subtrahieren, normalisieren, addieren.
+- Ergebnis pro Monat aufsummieren.
+- Zusätzliche Rückgabewerte: `hotWaterBaselineKwhPerMonth`, `hotWaterSourcePerLocation` (`"manual" | "summer-baseline" | "fallback"`).
 
-## Vorgeschlagenes Vorgehen (drei Phasen, unabhängig deploybar)
+`src/components/report/WeatherCorrectionSection.tsx` (Jahres-Aggregat im Report):
+- Nutzt neuen Helper analog; bei nur-Jahres-Auflösung kommt der Fallback (12 %) zum Tragen bzw. der Override.
 
-### Phase A — Aufräumen & Umbenennen *(klein, sofort)*
-- **Entfernen** des Site-Scope-Zweigs in `supabase/functions/dlm-scheduler/index.ts` (bleibt reines Group-Soft-Limit).
-- **Umbenennen** in der UI:
-  - `ChargePointGroupsManager.tsx`: „Dynamisches Lastmanagement (Soft-Limit)" → „Gruppen-Lastbegrenzung (Soft-Limit)"
-  - `DynamicDlmCard.tsx`: Titel „Dynamisches Lastmanagement (DLM)" → „Hausanschluss-Lastmanagement", Beschreibung anpassen; Hinweis-Chip „schützt Gesamtanschluss".
-- **Cross-Link:** In beiden Karten eine kleine Info-Zeile („Diese Einstellung schützt X. Für Y siehe Z."), damit die Trennung sichtbar ist.
-- Keine DB-Migration nötig.
+### 4. UI
+- **Widget** `WeatherNormalizationWidget.tsx`: dritte KPI-Karte "Warmwasser (geschätzt)" mit kWh/a und Quelle (Badge: *Sommer-Baseline* / *Manuell* / *Fallback*). Info-Tooltip an der Überschrift ergänzen ("WW-Sockel wird vor der Bereinigung abgezogen …").
+- **Standort-Formular**: neuer Abschnitt "Warmwasserbereitung":
+  - Toggle "Warmwasser über Gas"
+  - bei aktiv: zwei sich gegenseitig ausschließende Felder "Jahresverbrauch WW (kWh)" oder "Anteil am Gasverbrauch (%)".
 
-### Phase B — Liegenschafts-DLM auf beliebige Verbraucher erweitern *(mittel)*
-- **Datenmodell:** Neue Kind-Tabelle `location_dlm_devices` mit `location_id, device_kind ('charge_point'|'heat_pump'|'battery'|'generic_actuator'), device_ref_id, min_power_kw, max_power_kw, priority` (angelehnt an `steuve_devices`, aber für den EMS-Fall).  
-  `location_dlm_config.priority_order` (heute nur CP-IDs) wird durch die neue Tabelle abgelöst; Migration behält bestehende Wallbox-Prioritäten.
-- **Steuerlogik:** `dlm-realtime-controller` bekommt zwei Ausführungspfade:
-  1. `charge_point` → wie bisher `SetChargingProfile`/`pending_ocpp_commands`
-  2. sonstige → Gateway-Command über bestehende Infrastruktur (`gateway_commands` bzw. Aktor-Domain via `automation-core`/`executor.ts`)
-- **UI:** `DynamicDlmCard.tsx` bekommt eine erweiterte Geräteliste (Wallbox / Wärmepumpe / Batterie / Aktor) mit Priorisierung; Vorschlagsliste aus vorhandenen Geräten (Klassifizierung via `deviceClassification.ts` + HA `climate`-Domain + Loxone `IRoomController`).
-- **Tests:** `dlmAllocation.ts` bleibt (rein rechnerisch), zusätzlich Integrationstest für gemischte Gerätelisten.
+### 5. Tests
+Neue Unit-Tests in `src/lib/__tests__/weatherCorrection.test.ts`:
+- Baseline aus 3 Sommermonaten korrekt gemittelt.
+- Manueller Override hat Vorrang.
+- Fallback greift, wenn zu wenig Sommer-Monate.
+- Normalisierung im HDD=0-Monat = tatsächlicher Verbrauch (Sanity-Check).
 
-### Phase C — Automations-Brücke *(umgesetzt)*
-- Neuer Automation-Trigger-Typ `power_headroom` („WENN Hausanschluss-Reserve </>/= X kW") im shared `automation-core` und im `automation-scheduler`.
-- Datenquelle: letzter `dlm_control_log`-Eintrag pro Standort (`available_kw - measured_kw`, max. 10 Min. alt) via neuer optionaler Provider-Methode `getPowerHeadroomKw(locationId)`.
-- UI im `AutomationRuleBuilder` erweitert um Bedingungstyp „Hausanschluss-Reserve" mit Operator + kW-Schwelle. Damit sind ergänzende Regeln möglich (z. B. „schalte Poolpumpe ab bei knapper Reserve"), ohne die Realtime-Regelschleife des DLM zu berühren.
-
-
----
-
-## Details / Technischer Anhang
-
-- **Betroffene Dateien Phase A:**  
-  `supabase/functions/dlm-scheduler/index.ts` (Site-Scope-Block entfernen),  
-  `src/components/charging/DynamicDlmCard.tsx` (Titel/Beschreibung/Cross-Link),  
-  `src/components/charging/ChargePointGroupsManager.tsx` (Titel/Cross-Link).
-- **Betroffene Dateien Phase B:**  
-  Migration `location_dlm_devices` (mit GRANTs + RLS + `service_role`),  
-  `useLocationDlmConfig.tsx` (neue Query für Geräte),  
-  `DynamicDlmCard.tsx` (erweiterte Liste),  
-  `supabase/functions/dlm-realtime-controller/index.ts` (zweiter Command-Pfad),  
-  `packages/automation-core/executor.ts` (Wiederverwendung Aktor-Dispatch).
-- **Nicht betroffen:** §14a-Pipeline (`grid_curtailment_*`, `GridComplianceCard`, `steuve_devices`) — bleibt unverändert.
-
-## Nächster Schritt
-
-Wenn du Phase A + B freigibst, starte ich mit **Phase A** (kleiner, sichtbarer Aufräumschritt: Redundanz raus, Umbenennung, Cross-Links) und lege danach die Migration für **Phase B** vor. Phase C nur, wenn gewünscht.
+## Nicht Teil dieses Plans
+- Automatische WW-Anteils-Ermittlung aus Zirkulationszähler o. ä.
+- Änderung des Heizöl/Pellets-Verhaltens über den Fallback hinaus (gleiche Logik greift, kann aber ohne Override abweichen — bewusst konservativ).
