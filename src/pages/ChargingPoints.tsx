@@ -657,9 +657,13 @@ const ChargingPoints = () => {
                             >
                               <span className="inline-flex items-center gap-1">
                                 {label}
-                                <span className="text-xs opacity-60">
-                                  {sortKey === key ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
-                                </span>
+                                {sortKey === key ? (
+                                  sortDir === "asc"
+                                    ? <ArrowUp className="h-3 w-3" />
+                                    : <ArrowDown className="h-3 w-3" />
+                                ) : (
+                                  <ArrowUpDown className="h-3 w-3 text-muted-foreground/50" />
+                                )}
                               </span>
                             </TableHead>
                           ))}
