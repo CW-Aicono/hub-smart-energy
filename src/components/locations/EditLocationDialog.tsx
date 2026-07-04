@@ -192,15 +192,16 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       heating_type: rest.heating_type || null,
       grid_limit_kw: typeof rest.grid_limit_kw === "number" ? rest.grid_limit_kw : null,
       federal_state: rest.federal_state ? rest.federal_state : null,
-      hot_water_via_gas: !!rest.hot_water_via_gas,
-      hot_water_gas_kwh_year:
-        rest.hot_water_via_gas && typeof rest.hot_water_gas_kwh_year === "number"
-          ? rest.hot_water_gas_kwh_year
+      hot_water_energy_type: rest.hot_water_energy_type ? rest.hot_water_energy_type : null,
+      hot_water_kwh_year:
+        rest.hot_water_energy_type && typeof rest.hot_water_kwh_year === "number"
+          ? rest.hot_water_kwh_year
           : null,
-      hot_water_gas_share_pct:
-        rest.hot_water_via_gas && typeof rest.hot_water_gas_share_pct === "number"
-          ? rest.hot_water_gas_share_pct
+      hot_water_share_pct:
+        rest.hot_water_energy_type && typeof rest.hot_water_share_pct === "number"
+          ? rest.hot_water_share_pct
           : null,
+
     } as any;
 
 
