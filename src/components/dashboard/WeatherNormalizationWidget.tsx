@@ -107,9 +107,21 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
 
   const filteredTotalActual = filteredData.reduce((s, d) => s + d.actualConsumption, 0);
   const filteredTotalNormalized = filteredData.reduce((s, d) => s + d.normalizedConsumption, 0);
+  const filteredTotalHotWater = filteredData.reduce((s, d) => s + (d.hotWaterConsumption || 0), 0);
   const filteredTotalDeviation = filteredTotalActual > 0
     ? Math.round(((filteredTotalNormalized - filteredTotalActual) / filteredTotalActual) * 10000) / 100
     : 0;
+
+  const hotWaterSourceLabel =
+    hotWaterSource === "manual"
+      ? "manuell"
+      : hotWaterSource === "summer-baseline"
+        ? "Sommer-Baseline"
+        : hotWaterSource === "fallback"
+          ? "Fallback 12 %"
+          : "–";
+  const showHotWaterCard = energyType !== "strom" && filteredTotalHotWater > 0;
+
 
   if (loading) {
     type SortKey = "month" | "degreeDays" | "temp" | "actual" | "norm" | "dev";
