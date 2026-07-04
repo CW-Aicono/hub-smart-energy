@@ -642,12 +642,27 @@ const ChargingPoints = () => {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>{t("charging.name" as any)}</TableHead>
-                          <TableHead>{t("charging.connectorTypes" as any)}</TableHead>
-                          <TableHead>{t("common.status" as any)}</TableHead>
-                          <TableHead>{t("charging.location" as any)}</TableHead>
-                          <TableHead>{t("charging.power" as any)}</TableHead>
-                          <TableHead>{t("charging.lastHeartbeat" as any)}</TableHead>
+                          {([
+                            ["name", t("charging.name" as any)],
+                            ["connector_type", t("charging.connectorTypes" as any)],
+                            ["status", t("common.status" as any)],
+                            ["address", t("charging.location" as any)],
+                            ["max_power_kw", t("charging.power" as any)],
+                            ["last_heartbeat", t("charging.lastHeartbeat" as any)],
+                          ] as const).map(([key, label]) => (
+                            <TableHead
+                              key={key}
+                              onClick={() => toggleSort(key as any)}
+                              className="cursor-pointer select-none hover:text-foreground"
+                            >
+                              <span className="inline-flex items-center gap-1">
+                                {label}
+                                <span className="text-xs opacity-60">
+                                  {sortKey === key ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
+                                </span>
+                              </span>
+                            </TableHead>
+                          ))}
                           <TableHead className="w-12">QR</TableHead>
                           {isAdmin && <TableHead className="w-16"></TableHead>}
                         </TableRow>
