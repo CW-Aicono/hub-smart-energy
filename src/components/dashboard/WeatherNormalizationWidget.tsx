@@ -41,11 +41,24 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
   const [selectedQuarter, setSelectedQuarter] = useState(Math.floor(currentMonth / 3));
   const [refTemp, setRefTemp] = useState(15);
 
+  const availableTypesSet = useLocationEnergyTypesSet(locationId);
   const ENERGY_TYPES = [
     { value: "gas", label: T("energy.gas") },
     { value: "waerme", label: T("energy.waerme") },
-    { value: "strom", label: T("energy.strom") },
-  ];
+    { value: "oel", label: T("energy.oel") },
+    { value: "fernwaerme", label: T("energy.fernwaerme") },
+    { value: "pellets", label: T("energy.pellets") },
+    { value: "holz", label: T("energy.holz") },
+  ].filter((e) => isHeatType(e.value) && availableTypesSet.has(e.value));
+
+  // Falls die aktuell gewählte Energiequelle nicht mehr verfügbar ist, auf erste verfügbare wechseln
+  useEffect(() => {
+    if (ENERGY_TYPES.length === 0) return;
+    if (!ENERGY_TYPES.some((e) => e.value === energyType)) {
+      setEnergyType(ENERGY_TYPES[0].value);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ENERGY_TYPES.map((e) => e.value).join(","), energyType]);
 
   const PERIOD_OPTIONS = [
     { value: "month", label: T("chart.periodMonth") },
