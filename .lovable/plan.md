@@ -1,65 +1,84 @@
-# Witterungsbereinigung: Warmwasser-Anteil korrekt behandeln
 
-## Problem
-Der komplette Gas-/Wärmeverbrauch fließt aktuell in die Formel `Q_norm = Q_ist · HDD_ref / HDD_ist`. In Sommermonaten sind die HDD nahe null, der WW-Sockel wird dadurch mit einem sehr großen Faktor hochskaliert und erzeugt die im Screenshot sichtbaren, unplausibel hohen "Bereinigt"-Werte (z. B. Juni mit fast keiner Heizung, aber ~18 MWh bereinigt).
+## Befund (verifiziert im Code)
 
-## Lösungsansatz (gemäß Ihrer Auswahl)
-**Kombiniert: Sommer-Baseline automatisch, manuelle Override-Möglichkeit je Standort.**
+**Ja, es ist ein Bug.** In `src/lib/report/weatherCorrection.ts` (`estimateHotWaterBaselineKwhPerMonth`) wird der Toggle `hot_water_via_gas` nur genutzt, um einen **manuellen Override** zu erlauben. Ist der Toggle **aus**, fällt die Funktion trotzdem in Schritt 2 (Sommer-Baseline) bzw. Schritt 3 (12 %‑Fallback) — es wird also **immer** ein WW-Sockel abgezogen, auch wenn der Nutzer ausdrücklich sagt "kein WW über Gas".
 
-Formel neu:
-```text
-WW_monat        = Warmwasser-Sockel pro Monat (temperaturunabhängig)
-Q_heiz_ist      = Q_ist − WW_monat
-Q_heiz_norm     = Q_heiz_ist · HDD_ref / HDD_ist       (nur wenn HDD > 0)
-Q_norm_gesamt   = Q_heiz_norm + WW_monat
-```
+Deshalb siehst du in der Grafik "Warmwasser (geschätzt) 5,48 MWh · Fallback 12 %", obwohl in keiner Liegenschaft der Toggle aktiv ist. Der Toggle steuert aktuell nur *woher* der Wert kommt, nicht *ob* er abgezogen wird.
 
-### Bestimmung des WW-Sockels
-1. **Manueller Override** am Standort (Vorrang, falls gesetzt):
-   - `hot_water_via_gas` (bool)
-   - `hot_water_gas_kwh_year` (kWh/a) **oder** `hot_water_gas_share_pct` (% des Jahresverbrauchs)
-2. **Sommer-Baseline (Default)**: dynamisch alle Monate mit `HDD_monat < 50 Kd/Monat` sammeln, deren Mittelwert = `WW_monat`. Fällt keine Basis an (< 2 Monate), Fallback = 12 % des Jahresverbrauchs (grober Erfahrungswert für Gas-Kombitherme).
+Zweitens: Das Datenmodell kennt nur "Warmwasser über **Gas**". Realität: WW kann auch über Strom (Boiler/Durchlauferhitzer/Wärmepumpe), Pellets, Öl, Fernwärme oder eine Solarthermie erzeugt werden. Wir brauchen eine generische Quelle.
 
-Sockel wird pro Standort und Jahr berechnet, dann monatlich abgezogen (nie mehr als der tatsächliche Verbrauch des jeweiligen Monats).
+## Ziel
+
+1. WW-Sockel wird **nur** abgezogen, wenn der Nutzer aktiv eine WW-Quelle konfiguriert hat.
+2. Die WW-Quelle ist **frei wählbar** aus den Energiequellen der Liegenschaft (nicht mehr auf Gas festgenagelt).
+3. Der Sockel wirkt sich **nur auf die passende Energieart** in der Witterungsbereinigung aus (WW über Strom ⇒ kein Abzug beim Gas, und umgekehrt).
+4. Ohne Konfiguration = altes Verhalten vor dem WW-Feature (voller Gasverbrauch wird als Heizung bereinigt).
 
 ## Umsetzung
 
-### 1. Datenbank (Migration)
-Spalten in `public.locations` hinzufügen:
-- `hot_water_via_gas boolean default false`
-- `hot_water_gas_share_pct numeric` (0–100, nullable)
-- `hot_water_gas_kwh_year numeric` (nullable)
+### 1. Datenmodell (Migration)
 
-### 2. Kern-Logik
-`src/lib/report/weatherCorrection.ts`:
-- `estimateHotWaterBaselineKwhPerMonth(monthly: {kwh:number, hdd:number}[], {hddThreshold=50, fallbackShare=0.12})`
-- `normalizeHeatConsumptionWithBaseline(actualKwh, hdd, wwBaselineKwh, hddRef)`
+Neue generische Felder auf `locations`:
 
-Analoge Anwendung im Backend nicht nötig (wird clientseitig gerechnet).
+| Feld | Typ | Zweck |
+|---|---|---|
+| `hot_water_energy_type` | `text NULL` | z. B. `gas`, `strom`, `pellets`, `oel`, `fernwaerme`, `waerme`. `NULL` = nicht konfiguriert = kein Abzug. |
+| `hot_water_kwh_year` | `numeric NULL` | Manuell bekannter Jahreswert (kWh). |
+| `hot_water_share_pct` | `numeric NULL` | Alternativ: Anteil am Jahresverbrauch der WW-Quelle (%). |
 
-### 3. Hook-Anpassung
-`src/hooks/useWeatherNormalization.tsx`:
-- Standort-Overrides mitladen.
-- Für jeden Standort separat WW-Sockel bestimmen, monatlich subtrahieren, normalisieren, addieren.
-- Ergebnis pro Monat aufsummieren.
-- Zusätzliche Rückgabewerte: `hotWaterBaselineKwhPerMonth`, `hotWaterSourcePerLocation` (`"manual" | "summer-baseline" | "fallback"`).
+Backfill in derselben Migration:
+- Wo `hot_water_via_gas = true` → `hot_water_energy_type = 'gas'`, kWh/% aus alten Feldern übernehmen.
+- Alte Felder (`hot_water_via_gas`, `hot_water_gas_kwh_year`, `hot_water_gas_share_pct`) **bleiben zunächst bestehen**, werden aber nicht mehr gelesen. Aufräumen in späterer Migration.
 
-`src/components/report/WeatherCorrectionSection.tsx` (Jahres-Aggregat im Report):
-- Nutzt neuen Helper analog; bei nur-Jahres-Auflösung kommt der Fallback (12 %) zum Tragen bzw. der Override.
+### 2. Core-Logik (`src/lib/report/weatherCorrection.ts`)
 
-### 4. UI
-- **Widget** `WeatherNormalizationWidget.tsx`: dritte KPI-Karte "Warmwasser (geschätzt)" mit kWh/a und Quelle (Badge: *Sommer-Baseline* / *Manuell* / *Fallback*). Info-Tooltip an der Überschrift ergänzen ("WW-Sockel wird vor der Bereinigung abgezogen …").
-- **Standort-Formular**: neuer Abschnitt "Warmwasserbereitung":
-  - Toggle "Warmwasser über Gas"
-  - bei aktiv: zwei sich gegenseitig ausschließende Felder "Jahresverbrauch WW (kWh)" oder "Anteil am Gasverbrauch (%)".
+`estimateHotWaterBaselineKwhPerMonth` wird umgebaut:
 
-### 5. Tests
-Neue Unit-Tests in `src/lib/__tests__/weatherCorrection.test.ts`:
-- Baseline aus 3 Sommermonaten korrekt gemittelt.
-- Manueller Override hat Vorrang.
-- Fallback greift, wenn zu wenig Sommer-Monate.
-- Normalisierung im HDD=0-Monat = tatsächlicher Verbrauch (Sanity-Check).
+```text
+Input: monthly[], override { hotWaterEnergyType, kwhYear, sharePct }, currentEnergyType
 
-## Nicht Teil dieses Plans
-- Automatische WW-Anteils-Ermittlung aus Zirkulationszähler o. ä.
-- Änderung des Heizöl/Pellets-Verhaltens über den Fallback hinaus (gleiche Logik greift, kann aber ohne Override abweichen — bewusst konservativ).
+Regeln:
+- Wenn override.hotWaterEnergyType leer/NULL           → source: "none", perMonthKwh: 0
+- Wenn override.hotWaterEnergyType !== currentEnergyType → source: "none", perMonthKwh: 0
+- Sonst: manual (kwhYear) → manual (sharePct) → summer-baseline → fallback 12 %
+```
+
+Damit: kein Konfig = kein Abzug. Konfig für Strom, Analyse zeigt Gas = kein Abzug beim Gas.
+
+### 3. Hook (`src/hooks/useWeatherNormalization.tsx`)
+
+- Selectliste um die neuen Felder erweitern, alte Felder rausnehmen.
+- Beim Aufruf der Estimator-Funktion den aktuell gewählten `energyType` mitgeben.
+- KPI-Karte "Warmwasser (geschätzt)" zeigt `0 kWh` und "nicht konfiguriert", wenn keine Location für die aktuelle Energieart eine WW-Quelle hinterlegt hat.
+
+### 4. UI (`EditLocationDialog.tsx`)
+
+Section "Warmwasserbereitung" (bereits direkt unter Heizungsart platziert) wird umgebaut:
+
+- **Dropdown "Warmwasser über"** — Optionen: `Nicht konfiguriert (Standard)` + alle Energiequellen der Liegenschaft (aus `energy_sources`, gleiche Logik wie beim Heizungsart-Dropdown), gefiltert auf Wärmeträger-fähige Typen (`gas`, `strom`, `pellets`, `oel`, `fernwaerme`, `waerme`, `solar`).
+- Zwei optionale Felder darunter (nur sichtbar, wenn eine Quelle gewählt ist): **WW-Jahresverbrauch (kWh)** und **Anteil an der WW-Quelle (%)**. Label wird generisch ("Anteil am Verbrauch der WW-Quelle") statt "Anteil am Gasverbrauch".
+- Hilfetext: "Bleibt beides leer → automatische Sommer-Baseline, sonst Fallback 12 %."
+
+### 5. KPI-/Anzeige-Feinschliff
+
+- KPI-Karte "Warmwasser (geschätzt)" bekommt den Zusatz "Quelle: Gas / Strom / …" statt nur "Fallback 12 %", damit klar ist, auf welchen Träger sich der Sockel bezieht.
+- In der Widget-Ansicht (`WeatherNormalizationWidget`) wird bei `hotWaterSource === "none"` die KPI-Karte auf `—` gesetzt (nicht 0 MWh, um Verwechslung zu vermeiden).
+
+### 6. Tests (`src/lib/__tests__/weatherCorrection.test.ts`)
+
+Ergänzen:
+- `hotWaterEnergyType = null` → 0, source `none`.
+- `hotWaterEnergyType = 'strom'`, currentEnergyType `gas` → 0, source `none`.
+- `hotWaterEnergyType = 'gas'`, currentEnergyType `gas`, manuell → korrekter Wert.
+- Bestehende Tests auf neue Signatur migrieren.
+
+## Nicht-Ziele
+
+- Kein automatisches Erraten der WW-Quelle. Ohne Nutzereingabe = kein Abzug (bewusst konservativ, um falsche Bereinigungen wie aktuell zu vermeiden).
+- Kein Split "Heizung teilweise WW" mit Gewichtung — für einen späteren Schritt.
+- Keine Änderung an den Gradtagen / HDD-Berechnung.
+
+## Erwartetes Ergebnis nach dem Fix
+
+- Aktueller Zustand deiner Daten (kein Toggle gesetzt): "Warmwasser (geschätzt)" = `—`, "Ist-Verbrauch" = "Bereinigt"-Basis wie vor dem WW-Feature. Deine Beispielgrafik zeigt dann wieder die alten Werte.
+- Sobald ein Standort z. B. "Warmwasser über Gas, 3 500 kWh/Jahr" gesetzt bekommt, wird nur dort und nur beim Gas-Verbrauch abgezogen.
