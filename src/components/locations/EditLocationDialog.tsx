@@ -544,39 +544,69 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
                   <h5 className="text-sm font-medium">Warmwasserbereitung</h5>
                   <FormField
                     control={form.control}
-                    name="hot_water_via_gas"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                        <div className="space-y-0.5 pr-4">
-                          <FormLabel className="text-base">Warmwasser über Gas</FormLabel>
+                    name="hot_water_energy_type"
+                    render={({ field }) => {
+                      const energySources = form.watch("energy_sources") || [];
+                      // WW-Quelle darf aus jeder hinterlegten Energiequelle gewählt werden.
+                      const sourceOptions = energySources
+                        .map((s: any) => ({
+                          value: (s.energy_type || "").trim().toLowerCase(),
+                          label: (s.custom_name || s.energy_type || "").trim(),
+                        }))
+                        .filter((o) => o.value.length > 0 && o.label.length > 0);
+                      const seen = new Set<string>();
+                      const uniqueOptions = sourceOptions.filter((o) => {
+                        if (seen.has(o.value)) return false;
+                        seen.add(o.value);
+                        return true;
+                      });
+                      const NONE_VALUE = "__none__";
+                      const currentValue = (field.value as string) || "";
+                      return (
+                        <FormItem>
+                          <FormLabel>Warmwasser über</FormLabel>
+                          <Select
+                            value={currentValue ? currentValue : NONE_VALUE}
+                            onValueChange={(v) => field.onChange(v === NONE_VALUE ? "" : v)}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value={NONE_VALUE}>Nicht konfiguriert (kein Sockelabzug)</SelectItem>
+                              {uniqueOptions.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormDescription>
-                            Wird das Trinkwarmwasser (mit) über den Gasverbrauch bereitet?
-                            Der Sockel wird dann vor der Witterungsbereinigung abgezogen.
+                            Legt fest, über welche Energiequelle das Trinkwarmwasser bereitet wird.
+                            Der Sockel wird bei der Witterungsbereinigung nur beim gewählten Träger abgezogen.
                           </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                      </FormItem>
-                    )}
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
                   />
-                  {form.watch("hot_water_via_gas") && (
+                  {(form.watch("hot_water_energy_type") as string) && (
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <FormField control={form.control} name="hot_water_gas_kwh_year" render={({ field }) => (
+                      <FormField control={form.control} name="hot_water_kwh_year" render={({ field }) => (
                         <FormItem>
                           <FormLabel>WW-Jahresverbrauch (kWh)</FormLabel>
                           <FormControl>
-                            <Input type="number" step="any" min={0} placeholder="z.B. 3500" {...field} value={field.value ?? ""} />
+                            <Input type="number" step="any" min={0} placeholder="z.B. 3500" {...field} value={(field.value as any) ?? ""} />
                           </FormControl>
                           <FormDescription>Genauer Wert falls bekannt.</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )} />
-                      <FormField control={form.control} name="hot_water_gas_share_pct" render={({ field }) => (
+                      <FormField control={form.control} name="hot_water_share_pct" render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Anteil am Gasverbrauch (%)</FormLabel>
+                          <FormLabel>Anteil am Verbrauch der WW-Quelle (%)</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.1" min={0} max={100} placeholder="z.B. 15" {...field} value={field.value ?? ""} />
+                            <Input type="number" step="0.1" min={0} max={100} placeholder="z.B. 15" {...field} value={(field.value as any) ?? ""} />
                           </FormControl>
                           <FormDescription>
                             Wird nur genutzt, wenn kein kWh-Wert gesetzt ist.
@@ -588,6 +618,7 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
                     </div>
                   )}
                 </div>
+
               </div>
 
               {/* DLM Hardlimit (Hausanschluss) */}
