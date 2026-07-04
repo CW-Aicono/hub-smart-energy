@@ -766,6 +766,24 @@ export const translations = {
     es: "Pellets",
     nl: "Pellets",
   },
+  "energy.oel": {
+    de: "Heizöl",
+    en: "Heating Oil",
+    es: "Gasóleo",
+    nl: "Stookolie",
+  },
+  "energy.fernwaerme": {
+    de: "Fernwärme",
+    en: "District Heating",
+    es: "Calefacción urbana",
+    nl: "Stadsverwarming",
+  },
+  "energy.holz": {
+    de: "Holz",
+    en: "Wood",
+    es: "Madera",
+    nl: "Hout",
+  },
   "energy.otherGeneration": {
     de: "Sonstige Erzeugung",
     en: "Other Generation",
