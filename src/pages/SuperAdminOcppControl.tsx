@@ -12,9 +12,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Activity, ScrollText, Building2 } from "lucide-react";
 import { format } from "date-fns";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+
+type SortKey = "tenant" | "charge_point" | "start" | "end" | "energy" | "idTag" | "status" | "stopReason";
 
 const SuperAdminOcppControl = () => {
   const { user, loading } = useAuth();
@@ -26,8 +29,15 @@ const SuperAdminOcppControl = () => {
   const [logTenantId, setLogTenantId] = useState<string>("");
   const [logChargePointId, setLogChargePointId] = useState<string>("");
 
-  if (loading) return null;
-  if (!user) return <Navigate to="/auth" replace />;
+  const getTenantName = (tenantId: string) => {
+    return tenants.find(t => t.id === tenantId)?.name || tenantId.slice(0, 8);
+  };
+
+  const getCPName = (cpId: string | null) => {
+    if (!cpId) return "—";
+    const cp = chargePoints.find(c => c.id === cpId);
+    return cp ? cp.name : cpId.slice(0, 8);
+  };
 
   // Filter charge points by tenant
   const filteredCPs = tenantFilter === "all"
@@ -41,18 +51,22 @@ const SuperAdminOcppControl = () => {
     ? sessions
     : sessions.filter(s => s.charge_point_id && filteredCPIds.has(s.charge_point_id));
 
-  // For OCPP log: filter by charge point ocpp_ids
-  const filteredOcppIds = new Set(filteredCPs.map(cp => cp.ocpp_id));
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(filteredSessions, (r, k) => {
+    switch (k) {
+      case "tenant": return getTenantName(r.tenant_id);
+      case "charge_point": return getCPName(r.charge_point_id);
+      case "start": return r.start_time ? new Date(r.start_time) : null;
+      case "end": return r.stop_time ? new Date(r.stop_time) : null;
+      case "energy": return r.energy_kwh;
+      case "idTag": return r.id_tag ?? "";
+      case "status": return r.status;
+      case "stopReason": return r.stop_reason ?? "";
+      default: return null;
+    }
+  }, { key: "start", direction: "desc" });
 
-  const getTenantName = (tenantId: string) => {
-    return tenants.find(t => t.id === tenantId)?.name || tenantId.slice(0, 8);
-  };
-
-  const getCPName = (cpId: string | null) => {
-    if (!cpId) return "—";
-    const cp = chargePoints.find(c => c.id === cpId);
-    return cp ? cp.name : cpId.slice(0, 8);
-  };
+  if (loading) return null;
+  if (!user) return <Navigate to="/auth" replace />;
 
   const statusBadge = (status: string) => {
     const colors: Record<string, string> = {
@@ -115,25 +129,25 @@ const SuperAdminOcppControl = () => {
                 <CardContent>
                   {sessionsLoading ? (
                     <p style={{ color: `hsl(var(--sa-muted-foreground))` }}>Laden...</p>
-                  ) : filteredSessions.length === 0 ? (
+                  ) : sorted.length === 0 ? (
                     <p style={{ color: `hsl(var(--sa-muted-foreground))` }}>Keine Ladevorgänge vorhanden.</p>
                   ) : (
                     <div className="max-h-[600px] overflow-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Mandant</TableHead>
-                            <TableHead>Ladepunkt</TableHead>
-                            <TableHead>Start</TableHead>
-                            <TableHead>Ende</TableHead>
-                            <TableHead>Energie</TableHead>
-                            <TableHead>ID-Tag</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Stoppgrund</TableHead>
+                            <SortableHead label="Mandant" sortKey="tenant" sort={sort} onToggle={toggle} />
+                            <SortableHead label="Ladepunkt" sortKey="charge_point" sort={sort} onToggle={toggle} />
+                            <SortableHead label="Start" sortKey="start" sort={sort} onToggle={toggle} />
+                            <SortableHead label="Ende" sortKey="end" sort={sort} onToggle={toggle} />
+                            <SortableHead label="Energie" sortKey="energy" sort={sort} onToggle={toggle} />
+                            <SortableHead label="ID-Tag" sortKey="idTag" sort={sort} onToggle={toggle} />
+                            <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
+                            <SortableHead label="Stoppgrund" sortKey="stopReason" sort={sort} onToggle={toggle} />
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredSessions.slice(0, 200).map(s => (
+                          {sorted.slice(0, 200).map((s: any) => (
                             <TableRow key={s.id}>
                               <TableCell className="text-xs">{getTenantName(s.tenant_id)}</TableCell>
                               <TableCell className="text-xs font-medium">{getCPName(s.charge_point_id)}</TableCell>

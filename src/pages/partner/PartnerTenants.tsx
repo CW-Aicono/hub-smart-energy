@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
 import { useToast } from "@/hooks/use-toast";
 import { beginImpersonation } from "@/lib/supportView";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 interface Row {
   id: string;
@@ -21,6 +22,8 @@ interface Row {
   contact_email: string | null;
   created_at: string;
 }
+
+type SortKey = "name" | "slug" | "contact" | "created_at";
 
 const slugify = (s: string) =>
   s.toLowerCase()
@@ -38,6 +41,21 @@ export default function PartnerTenants() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+
+  const filtered = rows.filter((r) =>
+    (r.name ?? "").toLowerCase().includes(search.toLowerCase()) ||
+    r.slug.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const { sorted, sort, toggle } = useSortableData<Row, SortKey>(filtered, (r, k) => {
+    switch (k) {
+      case "name": return r.name ?? "";
+      case "slug": return r.slug;
+      case "contact": return r.contact_email ?? "";
+      case "created_at": return r.created_at ? new Date(r.created_at) : null;
+      default: return null;
+    }
+  }, { key: "name", direction: "asc" });
 
   // Create dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -67,13 +85,7 @@ export default function PartnerTenants() {
   };
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      await load();
-      if (cancelled) return;
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    load();
   }, [partnerId]);
 
   const resetForm = () => {
@@ -90,7 +102,6 @@ export default function PartnerTenants() {
       const res: any = typeof data === "string" ? JSON.parse(data) : data;
       if (error || !res?.success) throw new Error(res?.error || error?.message || "Anlage fehlgeschlagen");
 
-      // Optional: Tenant-Admin einladen
       if (adminEmail) {
         const { data: invD, error: invE } = await supabase.functions.invoke("invite-tenant-admin", {
           body: {
@@ -102,7 +113,6 @@ export default function PartnerTenants() {
         });
         const invRes: any = typeof invD === "string" ? JSON.parse(invD) : invD;
         if (invE || !invRes?.success) {
-          // Tenant ist angelegt; nur Einladung scheiterte → klare Meldung
           throw new Error(invRes?.error || invE?.message || "Einladung fehlgeschlagen");
         }
       }
@@ -155,11 +165,6 @@ export default function PartnerTenants() {
       setStartingSupportFor(null);
     }
   };
-
-  const filtered = rows.filter((r) =>
-    (r.name ?? "").toLowerCase().includes(search.toLowerCase()) ||
-    r.slug.toLowerCase().includes(search.toLowerCase()),
-  );
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -234,7 +239,7 @@ export default function PartnerTenants() {
           />
           {loading ? (
             <p className="text-sm text-muted-foreground">Lade…</p>
-          ) : filtered.length === 0 ? (
+          ) : sorted.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Keine Tenants gefunden.
             </p>
@@ -242,15 +247,15 @@ export default function PartnerTenants() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Slug</TableHead>
-                  <TableHead>Kontakt</TableHead>
-                  <TableHead>Erstellt</TableHead>
-                  <TableHead className="w-40 text-right">Aktionen</TableHead>
+                  <SortableHead label="Name" sortKey="name" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Slug" sortKey="slug" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Kontakt" sortKey="contact" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Erstellt" sortKey="created_at" sort={sort} onToggle={toggle} />
+                  <TableCell className="w-40 text-right">Aktionen</TableCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((r) => (
+                {sorted.map((r) => (
                   <TableRow
                     key={r.id}
                     className="cursor-pointer hover:bg-muted/40"

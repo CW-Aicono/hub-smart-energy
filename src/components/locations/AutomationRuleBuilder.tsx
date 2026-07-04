@@ -45,7 +45,7 @@ import { toast } from "sonner";
 
 export interface AutomationCondition {
   id: string;
-  type: "sensor_value" | "time" | "weekday" | "status" | "time_point" | "time_switch";
+  type: "sensor_value" | "time" | "weekday" | "status" | "time_point" | "time_switch" | "power_headroom";
   connector?: "AND" | "OR";
   sensor_uuid?: string;
   sensor_name?: string;
@@ -65,6 +65,7 @@ export interface AutomationCondition {
   /** MLA: which gateway this condition's sensor belongs to */
   gateway_id?: string;
 }
+
 
 export interface AutomationAction {
   id: string;
@@ -155,7 +156,9 @@ const CONDITION_TYPES = [
   { value: "time_switch", label: "Zeitschaltuhr", icon: Timer, desc: "Zu mehreren Zeitpunkten auslösen" },
   { value: "weekday", label: "Wochentage", icon: CalendarDays, desc: "Nur an bestimmten Wochentagen aktiv" },
   { value: "status", label: "Aktor-Status", icon: ToggleLeft, desc: "Wenn ein anderer Aktor einen bestimmten Zustand hat" },
+  { value: "power_headroom", label: "Hausanschluss-Reserve", icon: Zap, desc: "Wenn die freie Leistung am Hausanschluss über/unter einem Wert (kW) liegt" },
 ];
+
 
 function getSensorIcon(type: string) {
   switch (type) {
@@ -483,10 +486,49 @@ function ConditionCard({
             </div>
           </div>
         )}
+
+        {condition.type === "power_headroom" && (
+          <div className="space-y-3">
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              Freie Leistung am Hausanschluss (Budget minus aktuelle Last). Basis:
+              letzter DLM-Regelkreis-Zyklus (max. 10 Min. alt).
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Operator</Label>
+                <Select
+                  value={condition.operator || "<"}
+                  onValueChange={(val) => onUpdate({ ...condition, operator: val as AutomationCondition["operator"] })}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {OPERATORS.map((op) => (
+                      <SelectItem key={op.value} value={op.value} className="text-xs">{op.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Reserve (kW)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  className="h-9 text-xs"
+                  value={condition.value ?? ""}
+                  onChange={(e) => onUpdate({ ...condition, value: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="z.B. 5"
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
+
 
 function ActionCard({
   action,
@@ -694,9 +736,12 @@ export function AutomationRuleBuilder({
     if (type === "time_point") { base.time_point = "08:00"; }
     if (type === "time_switch") { base.time_points = ["08:00", "18:00"]; }
     if (type === "status") { base.expected_status = "on"; }
+    if (type === "power_headroom") { base.operator = "<"; base.value = 5; }
     setConditions((prev) => [...prev, base]);
     setAddConditionOpen(false);
   };
+
+
 
   const updateCondition = (id: string, updated: AutomationCondition) => {
     setConditions((prev) => prev.map((c) => (c.id === id ? updated : c)));

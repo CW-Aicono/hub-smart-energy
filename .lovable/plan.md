@@ -1,108 +1,84 @@
-## Konzept
 
-Deine Idee und meine decken sich — wir setzen sie als **virtuellen Bilanz-Zähler** um, der die bestehende Virtual-Meter-Infrastruktur (`virtual_meter_sources`) nutzt und um „Live-Wallbox-Summe" erweitert.
+## Befund (verifiziert im Code)
 
-Formel (pro Liegenschaft):
+**Ja, es ist ein Bug.** In `src/lib/report/weatherCorrection.ts` (`estimateHotWaterBaselineKwhPerMonth`) wird der Toggle `hot_water_via_gas` nur genutzt, um einen **manuellen Override** zu erlauben. Ist der Toggle **aus**, fällt die Funktion trotzdem in Schritt 2 (Sommer-Baseline) bzw. Schritt 3 (12 %‑Fallback) — es wird also **immer** ein WW-Sockel abgezogen, auch wenn der Nutzer ausdrücklich sagt "kein WW über Gas".
 
-```text
-Netz = Σ Verbrauch + Σ Wallbox-Ist-Leistung − Σ PV − Speicher-Entladung + Speicher-Ladung
-       (positiv = Bezug, negativ = Einspeisung)
-```
+Deshalb siehst du in der Grafik "Warmwasser (geschätzt) 5,48 MWh · Fallback 12 %", obwohl in keiner Liegenschaft der Toggle aktiv ist. Der Toggle steuert aktuell nur *woher* der Wert kommt, nicht *ob* er abgezogen wird.
 
-Als Quellen sind sowohl **Testzähler** (Slider) als auch **echte Zähler** erlaubt — beliebig mischbar. So kann z. B. PV per Slider simuliert, Hausverbrauch aus echter Messung, Wallboxen aus echten OCPP-MeterValues kommen.
+Zweitens: Das Datenmodell kennt nur "Warmwasser über **Gas**". Realität: WW kann auch über Strom (Boiler/Durchlauferhitzer/Wärmepumpe), Pellets, Öl, Fernwärme oder eine Solarthermie erzeugt werden. Wir brauchen eine generische Quelle.
 
-## UI
+## Ziel
 
-### 1. Neue Erfassungsart beim Anlegen eines Zählers: „Bilanz-Zähler (virtuell)"
+1. WW-Sockel wird **nur** abgezogen, wenn der Nutzer aktiv eine WW-Quelle konfiguriert hat.
+2. Die WW-Quelle ist **frei wählbar** aus den Energiequellen der Liegenschaft (nicht mehr auf Gas festgenagelt).
+3. Der Sockel wirkt sich **nur auf die passende Energieart** in der Witterungsbereinigung aus (WW über Strom ⇒ kein Abzug beim Gas, und umgekehrt).
+4. Ohne Konfiguration = altes Verhalten vor dem WW-Feature (voller Gasverbrauch wird als Heizung bereinigt).
 
-Im Anlege-Dialog (`AddMeterDialog`) eine 5. Option zusätzlich zu manuell / automatisch / virtuell / simulation:
+## Umsetzung
 
-- **Rolle:** standardmäßig `grid` (Netz)
-- **Quellen-Picker** (Mehrfachauswahl, Vorzeichen pro Quelle wählbar):
-  - PV-Erzeugung (`production`) → **negativ** in Bilanz
-  - Hausverbrauch (`consumption`) → **positiv**
-  - Wallbox-Gruppe oder einzelne Wallboxen → **positiv** (Live aus `charge_point_connectors.current_power`)
-  - Speicher (`storage`) → Vorzeichen je nach Lade-/Entladerichtung
-- Jede Quelle darf entweder ein Testzähler (Slider) oder ein echter Zähler sein.
-- TEST-Badge erscheint sobald **mindestens eine** Quelle ein Testzähler ist.
+### 1. Datenmodell (Migration)
 
-### 2. Detail-Karte „Simulations-Szenario" auf Messstellen-Seite
+Neue generische Felder auf `locations`:
 
-Für eine Liegenschaft, in der mindestens ein Bilanz-Zähler mit Testzähler-Quellen existiert, zeigen wir oben eine kompakte Bilanz-Karte:
+| Feld | Typ | Zweck |
+|---|---|---|
+| `hot_water_energy_type` | `text NULL` | z. B. `gas`, `strom`, `pellets`, `oel`, `fernwaerme`, `waerme`. `NULL` = nicht konfiguriert = kein Abzug. |
+| `hot_water_kwh_year` | `numeric NULL` | Manuell bekannter Jahreswert (kWh). |
+| `hot_water_share_pct` | `numeric NULL` | Alternativ: Anteil am Jahresverbrauch der WW-Quelle (%). |
 
-```text
-[TEST] Simulations-Bilanz · Liegenschaft Musterstraße
-─────────────────────────────────────────────────────
-PV (Sim)          15,0 kW   ████████░░
-Hausverbrauch      1,5 kW   █░░░░░░░░░
-Wallbox A (real)   7,4 kW   ████░░░░░░
-Wallbox B (real)   0,0 kW   ░░░░░░░░░░
-─────────────────────────────────────────────────────
-Netz (berechnet) −6,1 kW   ◄ EINSPEISUNG
-```
+Backfill in derselben Migration:
+- Wo `hot_water_via_gas = true` → `hot_water_energy_type = 'gas'`, kWh/% aus alten Feldern übernehmen.
+- Alte Felder (`hot_water_via_gas`, `hot_water_gas_kwh_year`, `hot_water_gas_share_pct`) **bleiben zunächst bestehen**, werden aber nicht mehr gelesen. Aufräumen in späterer Migration.
 
-Die Testzähler-Slider sind direkt in der Karte editierbar (PV, Grundlast, Speicher-Leistung). Wallbox-Zeilen sind read-only und aktualisieren sich realtime.
+### 2. Core-Logik (`src/lib/report/weatherCorrection.ts`)
 
-## Datenfluss
+`estimateHotWaterBaselineKwhPerMonth` wird umgebaut:
 
 ```text
-Slider (PV, Last, Speicher) ─► simulation_meter_state
-                                      │
-charge_point_connectors                │
-  .current_power (realtime) ───────────┤
-                                      ▼
-                       computeVirtualBalance(meterId)
-                       (neuer Helper, Browser + Edge)
-                                      │
-              ┌───────────────────────┼───────────────────────┐
-              ▼                       ▼                       ▼
-       LiveValues-UI            DLM-Scheduler           PV-Überschuss-
-       (Netz-Kachel)            (Referenzzähler)        Scheduler
+Input: monthly[], override { hotWaterEnergyType, kwhYear, sharePct }, currentEnergyType
+
+Regeln:
+- Wenn override.hotWaterEnergyType leer/NULL           → source: "none", perMonthKwh: 0
+- Wenn override.hotWaterEnergyType !== currentEnergyType → source: "none", perMonthKwh: 0
+- Sonst: manual (kwhYear) → manual (sharePct) → summer-baseline → fallback 12 %
 ```
 
-- Kein neuer Persistenz-Layer für die Bilanz — sie wird on-demand berechnet (billig: max. eine Handvoll Summanden).
-- Realtime-Updates kommen über die existierenden Channels (`simulation_meter_state` + `meter_power_readings` für Wallboxen).
+Damit: kein Konfig = kein Abzug. Konfig für Strom, Analyse zeigt Gas = kein Abzug beim Gas.
 
-## Beispielablauf (dein Szenario)
+### 3. Hook (`src/hooks/useWeatherNormalization.tsx`)
 
-| t | PV-Slider | Wallbox A (real) | Wallbox B (real) | Berechneter Netz-Wert | DLM/PV-Scheduler |
-|---|---|---|---|---|---|
-| 0 | 15 kW | 0 | 0 | −15 kW (Einspeisung) | User 1 darf 11 kW starten |
-| 1 | 15 kW | 11 kW | 0 | −4 kW (Einspeisung) | passt, noch Überschuss |
-| 2 | 15 kW | 11 kW | 7 kW | +3 kW (Bezug) | drosselt / pausiert Laden |
+- Selectliste um die neuen Felder erweitern, alte Felder rausnehmen.
+- Beim Aufruf der Estimator-Funktion den aktuell gewählten `energyType` mitgeben.
+- KPI-Karte "Warmwasser (geschätzt)" zeigt `0 kWh` und "nicht konfiguriert", wenn keine Location für die aktuelle Energieart eine WW-Quelle hinterlegt hat.
 
-Slider bleibt konstant, Regelwert ändert sich automatisch — exakt das gewünschte Verhalten.
+### 4. UI (`EditLocationDialog.tsx`)
 
-## Umsetzung (technisch)
+Section "Warmwasserbereitung" (bereits direkt unter Heizungsart platziert) wird umgebaut:
 
-1. **DB-Migration**
-   - `meters.capture_type` erlaubt zusätzlich `'virtual_balance'`.
-   - Erweiterung `virtual_meter_sources` um Spalten `sign smallint` (+1/−1) und `source_kind enum('meter','charge_point','charge_point_group')`, damit auch Wallboxen als Quelle eingetragen werden können.
-   - `simulation_meter_state` bleibt unverändert (PV, Grundlast, Speicher sind jeweils eigene `capture_type='simulation'`-Zähler).
+- **Dropdown "Warmwasser über"** — Optionen: `Nicht konfiguriert (Standard)` + alle Energiequellen der Liegenschaft (aus `energy_sources`, gleiche Logik wie beim Heizungsart-Dropdown), gefiltert auf Wärmeträger-fähige Typen (`gas`, `strom`, `pellets`, `oel`, `fernwaerme`, `waerme`, `solar`).
+- Zwei optionale Felder darunter (nur sichtbar, wenn eine Quelle gewählt ist): **WW-Jahresverbrauch (kWh)** und **Anteil an der WW-Quelle (%)**. Label wird generisch ("Anteil am Verbrauch der WW-Quelle") statt "Anteil am Gasverbrauch".
+- Hilfetext: "Bleibt beides leer → automatische Sommer-Baseline, sonst Fallback 12 %."
 
-2. **Helper** `computeVirtualBalance(meterId)` in
-   - `src/lib/virtualBalance.ts` (Browser)
-   - `supabase/functions/_shared/virtualBalance.ts` (Edge, gleicher Code)
-   liest Quellen, summiert mit Vorzeichen, ergänzt Wallbox-Ist-Leistungen aus `charge_point_connectors.current_power`.
+### 5. KPI-/Anzeige-Feinschliff
 
-3. **Hook** `useVirtualBalance(meterId)` für Live-Anzeige (subscribet `simulation_meter_state` + relevante CP-Connectoren).
+- KPI-Karte "Warmwasser (geschätzt)" bekommt den Zusatz "Quelle: Gas / Strom / …" statt nur "Fallback 12 %", damit klar ist, auf welchen Träger sich der Sockel bezieht.
+- In der Widget-Ansicht (`WeatherNormalizationWidget`) wird bei `hotWaterSource === "none"` die KPI-Karte auf `—` gesetzt (nicht 0 MWh, um Verwechslung zu vermeiden).
 
-4. **Edge-Functions**
-   - `dlm-scheduler` & `dlm-realtime-controller`: wenn Referenz-Zähler `capture_type='virtual_balance'`, statt Snapshot/Slider den berechneten Wert nehmen.
-   - `solar-charging-scheduler` (PV-Überschuss): gleiche Behandlung.
+### 6. Tests (`src/lib/__tests__/weatherCorrection.test.ts`)
 
-5. **UI**
-   - `AddMeterDialog`: neue Option + Quellen-Picker.
-   - `MetersOverview`: neue Komponente `BalanceSimulationCard.tsx` mit Slidern (über `SimulationMeterControl` für die einzelnen Sim-Zähler) und Live-Bilanz.
-   - TEST-Badge auf dem Bilanz-Zähler, sobald eine Quelle simuliert ist.
+Ergänzen:
+- `hotWaterEnergyType = null` → 0, source `none`.
+- `hotWaterEnergyType = 'strom'`, currentEnergyType `gas` → 0, source `none`.
+- `hotWaterEnergyType = 'gas'`, currentEnergyType `gas`, manuell → korrekter Wert.
+- Bestehende Tests auf neue Signatur migrieren.
 
-6. **Schutz**
-   - Bilanz-Zähler mit Test-Quellen werden weiterhin aus Reporting/CO₂/Abrechnung ausgeschlossen.
-   - Banner „Referenz-Zähler enthält Testwerte" in DLM- und PV-Überschuss-Konfiguration.
+## Nicht-Ziele
 
-7. **Auto-Reset** der Slider nach 30 Min Inaktivität bleibt wie heute.
+- Kein automatisches Erraten der WW-Quelle. Ohne Nutzereingabe = kein Abzug (bewusst konservativ, um falsche Bereinigungen wie aktuell zu vermeiden).
+- Kein Split "Heizung teilweise WW" mit Gewichtung — für einen späteren Schritt.
+- Keine Änderung an den Gradtagen / HDD-Berechnung.
 
-## Was bewusst NICHT geändert wird
+## Erwartetes Ergebnis nach dem Fix
 
-- Bestehende einfache Testzähler (Sensor, °C, %, lx) bleiben unverändert — der Bilanz-Zähler ist additiv.
-- Echte Virtual Meter (Summen-/Differenzzähler ohne Testanteil) funktionieren weiter wie bisher; sie bekommen nur die neue Option, Wallboxen als Quelle aufzunehmen.
+- Aktueller Zustand deiner Daten (kein Toggle gesetzt): "Warmwasser (geschätzt)" = `—`, "Ist-Verbrauch" = "Bereinigt"-Basis wie vor dem WW-Feature. Deine Beispielgrafik zeigt dann wieder die alten Werte.
+- Sobald ein Standort z. B. "Warmwasser über Gas, 3 500 kWh/Jahr" gesetzt bekommt, wird nur dort und nur beim Gas-Verbrauch abgezogen.

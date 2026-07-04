@@ -115,23 +115,51 @@ const ALL_ENERGY_TYPES = ["strom", "gas", "waerme", "wasser"] as const;
 
 /**
  * Backward-compatible hook: returns a Set<string> of energy types for filtering.
- * Falls back to the locations.energy_sources array if no DB sources exist yet.
+ * - locationId set: returns types configured for that location (falls back to
+ *   the legacy locations.energy_sources array, then to ALL_ENERGY_TYPES).
+ * - locationId null ("Alle Liegenschaften"): returns the UNION of energy types
+ *   across all tenant locations (both from location_energy_sources and the
+ *   legacy locations.energy_sources array). Energy types that are not active
+ *   at any location are excluded.
  */
 export function useLocationEnergyTypesSet(locationId: string | null): Set<string> {
+  const { tenant } = useTenant();
   const { sources } = useLocationEnergySources(locationId);
   const { locations } = useLocations();
 
+  const { data: tenantSources = [] } = useQuery({
+    queryKey: ["location_energy_sources", "tenant", tenant?.id ?? "none"],
+    queryFn: async () => {
+      if (!tenant) return [] as { energy_type: string }[];
+      const { data, error } = await supabase
+        .from("location_energy_sources")
+        .select("energy_type")
+        .eq("tenant_id", tenant.id);
+      if (error) throw error;
+      return (data ?? []) as { energy_type: string }[];
+    },
+    enabled: !locationId && !!tenant,
+    staleTime: 30_000,
+  });
+
   return useMemo(() => {
-    // If we have sources from the new table, use them
-    if (sources.length > 0) {
-      return new Set(sources.map((s) => s.energy_type));
+    if (locationId) {
+      if (sources.length > 0) return new Set(sources.map((s) => s.energy_type));
+      const loc = locations.find((l) => l.id === locationId);
+      if (!loc || !loc.energy_sources || loc.energy_sources.length === 0) {
+        return new Set(ALL_ENERGY_TYPES);
+      }
+      return new Set(loc.energy_sources);
     }
-    // Fallback to old array on location
-    if (!locationId) return new Set(ALL_ENERGY_TYPES);
-    const loc = locations.find((l) => l.id === locationId);
-    if (!loc || !loc.energy_sources || loc.energy_sources.length === 0) {
-      return new Set(ALL_ENERGY_TYPES);
+    // Alle Liegenschaften: Union über alle Locations
+    const union = new Set<string>();
+    for (const s of tenantSources) if (s.energy_type) union.add(s.energy_type);
+    for (const loc of locations) {
+      for (const t of loc.energy_sources ?? []) if (t) union.add(t);
     }
-    return new Set(loc.energy_sources);
-  }, [sources, locationId, locations]);
+    // Fallback: wenn nichts konfiguriert ist, zeige Standard-Set
+    if (union.size === 0) return new Set(ALL_ENERGY_TYPES);
+    return union;
+  }, [locationId, sources, locations, tenantSources]);
 }
+

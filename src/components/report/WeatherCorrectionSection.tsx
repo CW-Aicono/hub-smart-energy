@@ -15,8 +15,10 @@ import { useHeatingDegreeDays } from "@/hooks/useHeatingDegreeDays";
 import {
   REFERENCE_HDD_GERMANY,
   isHeatType,
-  normalizeHeatConsumption,
+  normalizeHeatConsumptionWithBaseline,
+  estimateHotWaterBaselineKwhPerMonth,
 } from "@/lib/report/weatherCorrection";
+
 import type { Location } from "@/hooks/useLocations";
 
 interface WeatherCorrectionSectionProps {
@@ -47,12 +49,28 @@ export function WeatherCorrectionSection({
       const hdd = hddMap?.[loc.id]?.[y]?.hdd ?? REFERENCE_HDD_GERMANY;
       hddSum += hdd;
       hddCount++;
+      const anyLoc = loc as any;
       for (const [eType, kwh] of Object.entries(cons)) {
         if (!isHeatType(eType)) continue;
+        // Nur Jahres-Aggregat verfügbar → Sommer-Baseline nicht möglich.
+        // Nur wenn der Standort explizit eine WW-Quelle konfiguriert hat und
+        // diese der aktuellen Energieart entspricht, wird ein Sockel abgezogen.
+        const est = estimateHotWaterBaselineKwhPerMonth(
+          [{ kwh, hdd }],
+          {
+            hotWaterEnergyType: anyLoc.hot_water_energy_type,
+            hotWaterKwhYear: anyLoc.hot_water_kwh_year,
+            hotWaterSharePct: anyLoc.hot_water_share_pct,
+          },
+          eType,
+        );
+        const wwYearKwh = est.perMonthKwh * 12;
+
         measured += kwh;
-        normalized += normalizeHeatConsumption(kwh, hdd);
+        normalized += normalizeHeatConsumptionWithBaseline(kwh, hdd, wwYearKwh);
       }
     }
+
     return {
       year: String(y),
       Ist: Math.round(measured),

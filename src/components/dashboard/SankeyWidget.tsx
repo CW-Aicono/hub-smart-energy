@@ -418,9 +418,9 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   const vbW = 900;
   const maxNodes = Math.max(sourceNames.length, targetNames.length);
   const nodeSlot = 56;
-  const bottomMargin = 30; // space for label text below the last node
+  const bottomMargin = 64; // space for label text below the last node
   const topMargin = 10;
-  const vbH = Math.max(260, maxNodes * nodeSlot + bottomMargin + topMargin + 10);
+  const vbH = Math.max(300, maxNodes * nodeSlot + bottomMargin + topMargin + 10);
   const nodeW = 14;
   const srcX = 130;
   const tgtX = vbW - 180 - nodeW;
@@ -543,7 +543,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
   });
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -582,8 +582,8 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="px-2 pb-2">
-        <div className="w-full relative" style={{ minHeight: 200 }}>
+      <CardContent className="flex flex-1 min-h-0 px-2 pb-4">
+        <div className="w-full min-h-[260px] flex-1 relative">
           <svg ref={svgRef} viewBox={`0 0 ${vbW} ${vbH}`} className="w-full" preserveAspectRatio="xMidYMid meet">
             {linkElements}
 

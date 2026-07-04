@@ -1,4 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/hooks/useTenant";
+import { useLocations } from "@/hooks/useLocations";
 import { useCustomWidgetDefinitions, CustomWidgetDefinition, CustomWidgetConfig, ChartType, AggregationType, ChartTypePerPeriod, TimePeriod, EnergyFlowNode, EnergyFlowConnection } from "@/hooks/useCustomWidgetDefinitions";
 import { useMeters } from "@/hooks/useMeters";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -11,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WidgetPreview } from "./WidgetPreview";
 import { EnergyFlowDesigner } from "./EnergyFlowDesigner";
-import { BarChart3, LineChart, Gauge, Activity, Table2, Plus, X, GitBranch } from "lucide-react";
+import { BarChart3, LineChart, Gauge, Activity, Table2, Plus, X, GitBranch, Search } from "lucide-react";
 
 const CHART_TYPES: { value: ChartType; label: string; icon: React.ReactNode }[] = [
   { value: "line", label: "Liniendiagramm", icon: <LineChart className="h-5 w-5" /> },
@@ -72,6 +76,45 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
   const [config, setConfig] = useState<CustomWidgetConfig>(defaultConfig);
   const [activeTab, setActiveTab] = useState("basics");
   const [previewPeriod, setPreviewPeriod] = useState<TimePeriod>("day");
+  const [meterSearch, setMeterSearch] = useState("");
+  const [filterLocation, setFilterLocation] = useState<string>("__all__");
+  const [filterFloor, setFilterFloor] = useState<string>("__all__");
+  const [filterRoom, setFilterRoom] = useState<string>("__all__");
+
+  const { tenant } = useTenant();
+  const { locations } = useLocations();
+
+  const { data: floors = [] } = useQuery({
+    queryKey: ["widget-designer-floors", tenant?.id],
+    queryFn: async () => {
+      const locIds = (locations || []).map((l) => l.id);
+      if (locIds.length === 0) return [] as { id: string; name: string; location_id: string }[];
+      const { data, error } = await supabase
+        .from("floors")
+        .select("id, name, location_id")
+        .in("location_id", locIds);
+      if (error) return [];
+      return data ?? [];
+    },
+    enabled: !!tenant && (locations?.length ?? 0) > 0,
+    staleTime: 60_000,
+  });
+
+  const { data: rooms = [] } = useQuery({
+    queryKey: ["widget-designer-rooms", tenant?.id, floors.map((f) => f.id).join(",")],
+    queryFn: async () => {
+      const floorIds = floors.map((f) => f.id);
+      if (floorIds.length === 0) return [] as { id: string; name: string; floor_id: string }[];
+      const { data, error } = await supabase
+        .from("floor_rooms")
+        .select("id, name, floor_id")
+        .in("floor_id", floorIds);
+      if (error) return [];
+      return data ?? [];
+    },
+    enabled: floors.length > 0,
+    staleTime: 60_000,
+  });
 
   useEffect(() => {
     if (open) {
@@ -169,13 +212,38 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
     });
   };
 
-  // Group meters by energy type
-  const meterGroups = (meters || []).reduce<Record<string, typeof meters>>((acc, meter) => {
+  // Filter meters by location / floor / room / search, then group by energy type
+  const availableFloors = useMemo(
+    () => (filterLocation === "__all__" ? floors : floors.filter((f) => f.location_id === filterLocation)),
+    [floors, filterLocation],
+  );
+  const availableRooms = useMemo(() => {
+    const floorIds = new Set(availableFloors.map((f) => f.id));
+    const scoped = rooms.filter((r) => floorIds.has(r.floor_id));
+    return filterFloor === "__all__" ? scoped : scoped.filter((r) => r.floor_id === filterFloor);
+  }, [rooms, availableFloors, filterFloor]);
+
+  const filteredMeters = useMemo(() => {
+    const q = meterSearch.trim().toLowerCase();
+    return (meters || []).filter((m: any) => {
+      if (filterLocation !== "__all__" && m.location_id !== filterLocation) return false;
+      if (filterFloor !== "__all__" && m.floor_id !== filterFloor) return false;
+      if (filterRoom !== "__all__" && m.room_id !== filterRoom) return false;
+      if (q) {
+        const hay = `${m.name ?? ""} ${m.meter_number ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [meters, filterLocation, filterFloor, filterRoom, meterSearch]);
+
+  const meterGroups = filteredMeters.reduce<Record<string, typeof meters>>((acc, meter) => {
     const type = (meter as any).energy_type || "Sonstige";
     if (!acc[type]) acc[type] = [];
     acc[type]!.push(meter);
     return acc;
   }, {});
+
 
   const isEnergyFlow = chartType === "energyflow";
   const isValid = name.trim().length > 0 && (isEnergyFlow ? (config.energy_flow_nodes?.length ?? 0) > 0 : config.meter_ids.length > 0);
@@ -257,10 +325,82 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
             </div>
           </TabsContent>
 
-          {/* ── Data sources ── */}
           <TabsContent value="data" className="space-y-4 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Liegenschaft</Label>
+                <Select
+                  value={filterLocation}
+                  onValueChange={(v) => {
+                    setFilterLocation(v);
+                    setFilterFloor("__all__");
+                    setFilterRoom("__all__");
+                  }}
+                >
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Alle Liegenschaften</SelectItem>
+                    {(locations || []).map((l) => (
+                      <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Etage</Label>
+                <Select
+                  value={filterFloor}
+                  onValueChange={(v) => {
+                    setFilterFloor(v);
+                    setFilterRoom("__all__");
+                  }}
+                  disabled={availableFloors.length === 0}
+                >
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Alle Etagen" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Alle Etagen</SelectItem>
+                    {availableFloors.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Raum</Label>
+                <Select
+                  value={filterRoom}
+                  onValueChange={setFilterRoom}
+                  disabled={availableRooms.length === 0}
+                >
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Alle Räume" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Alle Räume</SelectItem>
+                    {availableRooms.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                value={meterSearch}
+                onChange={(e) => setMeterSearch(e.target.value)}
+                placeholder="Zähler suchen..."
+                className="pl-8 h-9"
+              />
+            </div>
+
             <div className="space-y-2">
-              <Label>Zähler auswählen</Label>
+              <div className="flex items-center justify-between">
+                <Label>Zähler auswählen</Label>
+                <span className="text-xs text-muted-foreground">
+                  {filteredMeters.length} von {(meters || []).length}
+                  {config.meter_ids.length > 0 ? ` · ${config.meter_ids.length} ausgewählt` : ""}
+                </span>
+              </div>
               <div className="max-h-64 overflow-auto border rounded-lg p-2 space-y-3">
                 {Object.entries(meterGroups).map(([type, groupMeters]) => (
                   <div key={type}>
@@ -279,9 +419,25 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
                   </div>
                 ))}
                 {Object.keys(meterGroups).length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">Keine Zähler verfügbar</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">Keine Zähler gefunden</p>
                 )}
               </div>
+              {(filterLocation !== "__all__" || filterFloor !== "__all__" || filterRoom !== "__all__" || meterSearch) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    setFilterLocation("__all__");
+                    setFilterFloor("__all__");
+                    setFilterRoom("__all__");
+                    setMeterSearch("");
+                  }}
+                >
+                  Filter zurücksetzen
+                </Button>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -296,6 +452,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
               </Select>
             </div>
           </TabsContent>
+
 
           {/* ── Topology (energyflow only) ── */}
           <TabsContent value="topology" className="space-y-4 mt-4">

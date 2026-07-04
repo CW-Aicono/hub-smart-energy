@@ -5,7 +5,7 @@ import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +23,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Ban } from "lucide-react";
 import LicenseDialog from "@/components/super-admin/LicenseDialog";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+
+type SortKey = "tenant" | "plan" | "price" | "cycle" | "status";
 
 const SuperAdminLicenses = () => {
   const { user, loading: authLoading } = useAuth();
@@ -42,6 +45,17 @@ const SuperAdminLicenses = () => {
       return data;
     },
   });
+
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(licenses, (r, k) => {
+    switch (k) {
+      case "tenant": return r.tenants?.name ?? "";
+      case "plan": return r.plan_name;
+      case "price": return Number(r.price_monthly ?? 0);
+      case "cycle": return r.billing_cycle;
+      case "status": return r.status;
+      default: return null;
+    }
+  }, { key: "tenant", direction: "asc" });
 
   if (authLoading || roleLoading) {
     return (
@@ -86,23 +100,23 @@ const SuperAdminLicenses = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("billing.tenant")}</TableHead>
-                    <TableHead>{t("billing.plan")}</TableHead>
-                    <TableHead>{t("billing.price_month")}</TableHead>
-                    <TableHead>{t("billing.cycle")}</TableHead>
-                    <TableHead>{t("common.status")}</TableHead>
-                    <TableHead className="w-32 text-right">{t("common.actions")}</TableHead>
+                    <SortableHead label={t("billing.tenant")} sortKey="tenant" sort={sort} onToggle={toggle} />
+                    <SortableHead label={t("billing.plan")} sortKey="plan" sort={sort} onToggle={toggle} />
+                    <SortableHead label={t("billing.price_month")} sortKey="price" sort={sort} onToggle={toggle} />
+                    <SortableHead label={t("billing.cycle")} sortKey="cycle" sort={sort} onToggle={toggle} />
+                    <SortableHead label={t("common.status")} sortKey="status" sort={sort} onToggle={toggle} />
+                    <TableCell className="w-32 text-right">{t("common.actions")}</TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {licenses.length === 0 ? (
+                  {sorted.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         {t("billing.no_licenses")}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    licenses.map((lic: any) => (
+                    sorted.map((lic: any) => (
                       <TableRow key={lic.id}>
                         <TableCell className="font-medium">{lic.tenants?.name ?? "–"}</TableCell>
                         <TableCell>{lic.plan_name}</TableCell>

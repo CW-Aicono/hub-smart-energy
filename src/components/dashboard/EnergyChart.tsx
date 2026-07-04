@@ -712,7 +712,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="font-display text-lg">
@@ -742,14 +742,15 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-1 min-h-0 flex-col">
         {!hasData ? (
-          <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">
+          <div className="flex min-h-[300px] flex-1 items-center justify-center text-muted-foreground text-sm">
             {t("chart.noData" as any)}
           </div>
         ) : (
           <>
-            <ResponsiveContainer width="100%" height={300}>
+            <div className="min-h-[300px] flex-1 min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
               {isLineChart ? (
                 <LineChart data={filteredChartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
@@ -819,7 +820,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                 </BarChart>
               )}
             </ResponsiveContainer>
-            <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+            </div>
+            <div className="flex shrink-0 items-center justify-center gap-2 mt-3 flex-wrap pb-1">
               {visibleEnergyKeys.flatMap((key) => {
                 if (bidirectionalTypes.has(key)) {
                   return [

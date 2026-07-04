@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calculator, Play, FileDown } from "lucide-react";
@@ -15,6 +16,7 @@ import { toast } from "@/hooks/use-toast";
 function euro(ct: number) {
   return (ct / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 }
+
 
 export default function BillingTab({ communityId }: { communityId: string }) {
   const { invoices, runBilling, setStatus } = useMemberInvoices(communityId);
@@ -68,6 +70,29 @@ export default function BillingTab({ communityId }: { communityId: string }) {
     pending: "ausstehend",
   } as Record<string, string>)[s] ?? s;
 
+  type RunsSortKey = "period" | "status" | "generated" | "allocated" | "surplus";
+  const { sorted: sortedRuns, sort: runsSort, toggle: runsToggle } = useSortableData(runs, (r, k) => {
+    switch (k) {
+      case "period": return r.period_start;
+      case "status": return r.status;
+      case "generated": return Number(r.total_generated_kwh ?? 0);
+      case "allocated": return Number(r.total_allocated_kwh ?? 0);
+      case "surplus": return Number(r.total_surplus_kwh ?? 0);
+      default: return null;
+    }
+  });
+  type InvoicesSortKey = "period" | "member" | "kwh" | "amount" | "status";
+  const { sorted: sortedInvoices, sort: invSort, toggle: invToggle } = useSortableData(invoices, (r, k) => {
+    switch (k) {
+      case "period": return r.period_start;
+      case "member": return r.community_members?.display_name;
+      case "kwh": return Number(r.allocated_kwh);
+      case "amount": return Number(r.total_ct);
+      case "status": return r.status;
+      default: return null;
+    }
+  });
+
   return (
     <div className="space-y-4">
       <Card>
@@ -88,13 +113,13 @@ export default function BillingTab({ communityId }: { communityId: string }) {
           {runs.length > 0 && (
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Zeitraum</TableHead><TableHead>Status</TableHead>
-                <TableHead className="text-right">kWh erzeugt</TableHead>
-                <TableHead className="text-right">kWh zugeteilt</TableHead>
-                <TableHead className="text-right">Überschuss kWh</TableHead>
+                <SortableHead sortKey="period" current={runsSort} onToggle={runsToggle}>Zeitraum</SortableHead><SortableHead sortKey="status" current={runsSort} onToggle={runsToggle}>Status</SortableHead>
+                <SortableHead sortKey="generated" current={runsSort} onToggle={runsToggle} className="text-right">kWh erzeugt</SortableHead>
+                <SortableHead sortKey="allocated" current={runsSort} onToggle={runsToggle} className="text-right">kWh zugeteilt</SortableHead>
+                <SortableHead sortKey="surplus" current={runsSort} onToggle={runsToggle} className="text-right">Überschuss kWh</SortableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {runs.slice(0, 6).map((r: any) => (
+                {sortedRuns.map((r: any) => (
                   <TableRow key={r.id}>
                     <TableCell className="text-xs">{new Date(r.period_start).toLocaleDateString("de-DE")} – {new Date(r.period_end).toLocaleDateString("de-DE")}</TableCell>
                     <TableCell><Badge variant={r.status === "completed" ? "default" : r.status === "failed" ? "destructive" : "secondary"}>{runStatusLabel(r.status)}</Badge></TableCell>
@@ -118,13 +143,13 @@ export default function BillingTab({ communityId }: { communityId: string }) {
           ) : (
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Zeitraum</TableHead><TableHead>Mitglied</TableHead>
-                <TableHead className="text-right">kWh</TableHead>
-                <TableHead className="text-right">Betrag</TableHead>
-                <TableHead>Status</TableHead><TableHead></TableHead>
+                <SortableHead sortKey="period" current={runsSort} onToggle={runsToggle}>Zeitraum</SortableHead><TableHead>Mitglied</TableHead>
+                <SortableHead sortKey="kwh" current={invSort} onToggle={invToggle} className="text-right">kWh</SortableHead>
+                <SortableHead sortKey="amount" current={invSort} onToggle={invToggle} className="text-right">Betrag</SortableHead>
+                <SortableHead sortKey="status" current={runsSort} onToggle={runsToggle}>Status</SortableHead><TableHead></TableHead>
               </TableRow></TableHeader>
               <TableBody>
-                {invoices.map((inv: any) => (
+                {sortedInvoices.map((inv: any) => (
                   <TableRow key={inv.id}>
                     <TableCell className="text-xs">{new Date(inv.period_start).toLocaleDateString("de-DE")} – {new Date(inv.period_end).toLocaleDateString("de-DE")}</TableCell>
                     <TableCell>{inv.community_members?.display_name ?? "—"}</TableCell>

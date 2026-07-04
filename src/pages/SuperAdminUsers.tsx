@@ -5,7 +5,7 @@ import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import SuperAdminInviteDialog from "@/components/super-admin/SuperAdminInviteDialog";
 import EditSAUserDialog from "@/components/super-admin/EditSAUserDialog";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 interface PlatformUser {
   id: string;
@@ -26,6 +27,8 @@ interface PlatformUser {
   created_at: string;
   role: "admin" | "user" | "super_admin";
 }
+
+type SortKey = "username" | "role" | "status" | "created_at";
 
 const SuperAdminUsers = () => {
   const { user, loading: authLoading } = useAuth();
@@ -38,9 +41,6 @@ const SuperAdminUsers = () => {
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["super-admin-users"],
     queryFn: async () => {
-      // STRIKTE TRENNUNG: Super-Admin-Bereich zeigt ausschließlich Plattform-User
-      // (Profile OHNE tenant_id). Tenant-User werden ausschließlich in der
-      // Tenant-Benutzerverwaltung angezeigt und verwaltet.
       const { data: profiles, error: pErr } = await supabase
         .from("profiles")
         .select("*")
@@ -54,6 +54,21 @@ const SuperAdminUsers = () => {
       });
     },
   });
+
+  const filtered = users.filter((u) =>
+    (u.email?.toLowerCase() || "").includes(search.toLowerCase()) ||
+    (u.contact_person?.toLowerCase() || "").includes(search.toLowerCase())
+  );
+
+  const { sorted, sort, toggle } = useSortableData<PlatformUser, SortKey>(filtered, (r, k) => {
+    switch (k) {
+      case "username": return r.contact_person ?? r.email ?? "";
+      case "role": return r.role;
+      case "status": return r.is_blocked ? "blocked" : "active";
+      case "created_at": return r.created_at ? new Date(r.created_at) : null;
+      default: return null;
+    }
+  }, { key: "username", direction: "asc" });
 
   const toggleBlock = useMutation({
     mutationFn: async ({ userId, blocked }: { userId: string; blocked: boolean }) => {
@@ -79,11 +94,6 @@ const SuperAdminUsers = () => {
   if (!user) return <Navigate to="/auth" replace />;
   if (!isSuperAdmin) return <Navigate to="/" replace />;
 
-  const filtered = users.filter((u) =>
-    (u.email?.toLowerCase() || "").includes(search.toLowerCase()) ||
-    (u.contact_person?.toLowerCase() || "").includes(search.toLowerCase())
-  );
-
   return (
     <div className="flex min-h-screen bg-background">
       <SuperAdminSidebar />
@@ -107,20 +117,20 @@ const SuperAdminUsers = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("users.username")}</TableHead>
-                    <TableHead>{t("users.role")}</TableHead>
-                    <TableHead>{t("common.status")}</TableHead>
-                    <TableHead>{t("common.created")}</TableHead>
-                    <TableHead className="w-32">{t("common.actions")}</TableHead>
+                    <SortableHead label={t("users.username")} sortKey="username" sort={sort} onToggle={toggle} />
+                    <SortableHead label={t("users.role")} sortKey="role" sort={sort} onToggle={toggle} />
+                    <SortableHead label={t("common.status")} sortKey="status" sort={sort} onToggle={toggle} />
+                    <SortableHead label={t("common.created")} sortKey="created_at" sort={sort} onToggle={toggle} />
+                    <TableCell className="w-32">{t("common.actions")}</TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
-                  ) : filtered.length === 0 ? (
+                  ) : sorted.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("users.not_found")}</TableCell></TableRow>
                   ) : (
-                    filtered.map((u) => (
+                    sorted.map((u) => (
                       <TableRow key={u.id}>
                         <TableCell>
                           <div>

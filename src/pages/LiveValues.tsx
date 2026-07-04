@@ -16,6 +16,7 @@ import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer }
 import { supabase } from "@/integrations/supabase/client";
 import { formatEnergy, formatGasDual } from "@/lib/formatEnergy";
 import { cn } from "@/lib/utils";
+import { probeMark } from "@/lib/perfProbe"; // PERF-PROBE
 
 interface MeterLiveValue {
   meterId: string;
@@ -45,6 +46,7 @@ const LiveValues = () => {
   const { locations, loading: locationsLoading } = useLocations();
   const { meters, loading: metersLoading } = useMeters();
   const { t, language } = useTranslation();
+  useEffect(() => { probeMark("LiveValues:mounted", { once: true }); }, []); // PERF-PROBE
 
   const ENERGY_TYPE_CONFIG: Record<string, { label: string; icon: typeof Zap; colorClass: string }> = {
     strom: { label: t("liveValues.strom" as any), icon: Zap, colorClass: "text-[hsl(var(--energy-strom))]" },
@@ -58,6 +60,7 @@ const LiveValues = () => {
   const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
   const [liveValues, setLiveValues] = useState<Map<string, { value: number; unit: string; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string }>>(new Map());
+  useEffect(() => { if (liveValues.size > 0) probeMark("LiveValues:first-value", { once: true }); }, [liveValues.size]); // PERF-PROBE
   const [manualValues, setManualValues] = useState<Map<string, { value: number; date: string }>>(new Map());
   const [manualDailyTotals, setManualDailyTotals] = useState<Map<string, number>>(new Map());
   const [virtualSources, setVirtualSources] = useState<{ virtual_meter_id: string; source_meter_id: string | null; source_charge_point_id: string | null; source_charge_point_group_id: string | null; source_all_charge_points: boolean | null; operator: string; sort_order: number }[]>([]);

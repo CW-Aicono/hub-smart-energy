@@ -3803,6 +3803,7 @@ export const translations = {
   "dashboard.forecastTotal": { de: "Hochrechnung: ~{value} Gesamtjahr", en: "Forecast: ~{value} full year", es: "Proyección: ~{value} año completo", nl: "Prognose: ~{value} volledig jaar" },
   "dashboard.forecastActual": { de: "Ist-Verbrauch", en: "Actual", es: "Real", nl: "Werkelijk" },
   "dashboard.forecastForecast": { de: "Prognose", en: "Forecast", es: "Pronóstico", nl: "Prognose" },
+  "dashboard.forecastHddNote": { de: "witterungsbereinigte Hochrechnung", en: "weather-adjusted forecast", es: "proyección ajustada al clima", nl: "weergecorrigeerde prognose" },
   "dashboard.currentValues": { de: "Aktuelle Momentanwerte", en: "Current instantaneous values", es: "Valores instantáneos actuales", nl: "Huidige momentane waarden" },
   "dashboard.dailyPeak": { de: "Tageshöchstwert", en: "Daily peak", es: "Pico diario", nl: "Dagpiek" },
   "dashboard.noActiveMeters": { de: "Keine aktiven automatischen Hauptzähler vorhanden", en: "No active automatic main meters available", es: "No hay contadores principales automáticos activos", nl: "Geen actieve automatische hoofdmeters beschikbaar" },

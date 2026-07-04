@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -137,6 +138,19 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
         .some((v) => String(v).toLowerCase().includes(q))
     );
   }, [meterSensors, search]);
+  type SortKey = "type" | "name" | "room" | "category" | "value" | "status";
+  const { sorted, sort, toggle } = useSortableData<Sensor, SortKey>(displayedSensors, (s, k) => {
+    switch (k) {
+      case "type": return s.type || s.controlType || "";
+      case "name": return s.name;
+      case "room": return s.room || "";
+      case "category": return s.category || "";
+      case "value": return s.value ? parseFloat(s.value.replace(/[^0-9.-]/g, "")) : 0;
+      case "status": return s.status;
+      default: return null;
+    }
+  });
+
 
   // Lookup: location_id -> name
   const locationNameById = useMemo(() => {
@@ -358,13 +372,13 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                         aria-label="Alle auswählen"
                       />
                     </TableHead>
-                    <TableHead className="w-[50px]">Typ</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Raum</TableHead>
-                    <TableHead>Kategorie</TableHead>
-                    <TableHead>Messwert</TableHead>
+                    <SortableHead label="Typ" sortKey="type" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Name" sortKey="name" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Raum" sortKey="room" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Kategorie" sortKey="category" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Messwert" sortKey="value" sort={sort} onToggle={toggle} />
                     <TableHead className="text-right">Wert</TableHead>
-                    <TableHead>Status</TableHead>
+                    <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -374,7 +388,7 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                         Keine Treffer für „{search}"
                       </TableCell>
                     </TableRow>
-                  ) : displayedSensors.map((sensor) => {
+                  ) : sorted.map((sensor) => {
                     const assignedMeter = assignedMeterBySensorId.get(sensor.id);
                     const assignedHere = assignedMeter ? isAssignedHere(assignedMeter) : false;
                     const assignedElsewhere = !!assignedMeter && !assignedHere;

@@ -34,6 +34,7 @@ interface LocationsMapContentProps {
   onLocationClick?: (location: Location) => void;
   className?: string;
   errorLocationIds?: Set<string>;
+  showZoomControls?: boolean;
 }
 
 function MapController({ locations, isTouchDevice }: { locations: Location[]; isTouchDevice: boolean }) {
@@ -72,7 +73,7 @@ function MapController({ locations, isTouchDevice }: { locations: Location[]; is
   return null;
 }
 
-function LocationsMapContent({ locations, onLocationClick, className, errorLocationIds }: LocationsMapContentProps) {
+function LocationsMapContent({ locations, onLocationClick, className, errorLocationIds, showZoomControls = true }: LocationsMapContentProps) {
   const { t } = useTranslation();
   const [mapReady, setMapReady] = useState(false);
   const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
@@ -87,7 +88,7 @@ function LocationsMapContent({ locations, onLocationClick, className, errorLocat
   }, [locations]);
 
   const containerClass = useMemo(
-    () => cn("h-[400px] w-full rounded-lg overflow-hidden border relative z-0", className),
+    () => cn("h-full min-h-[350px] w-full rounded-lg overflow-hidden border relative z-0", className),
     [className]
   );
 
@@ -96,11 +97,12 @@ function LocationsMapContent({ locations, onLocationClick, className, errorLocat
       <MapContainer
         center={defaultCenter}
         zoom={locations.length === 1 ? 14 : 6}
-        className="h-full w-full"
+        className="h-full min-h-[350px] w-full"
         scrollWheelZoom={false}
         dragging={!isTouchDevice}
         touchZoom={true}
-        style={{ height: "100%", width: "100%" }}
+        zoomControl={showZoomControls}
+        style={{ height: "100%", minHeight: "350px", width: "100%" }}
         whenReady={() => setMapReady(true)}
       >
         <TileLayer

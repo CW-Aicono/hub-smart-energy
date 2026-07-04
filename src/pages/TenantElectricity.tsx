@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -179,6 +180,19 @@ function TenantsTab() {
   };
 
   const displayedTenants = showArchived ? archivedTenants : activeTenants;
+  type SortKey = "name" | "unit" | "email" | "move_in" | "move_out" | "status";
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(displayedTenants, (te, k) => {
+    switch (k) {
+      case "name": return te.name;
+      case "unit": return te.unit_label || "";
+      case "email": return te.email || "";
+      case "move_in": return te.move_in_date || "";
+      case "move_out": return te.move_out_date || "";
+      case "status": return te.status;
+      default: return null;
+    }
+  });
+
 
   const MeterSelector = ({ selectedIds, isEdit, locationId }: { selectedIds: string[]; isEdit: boolean; locationId: string }) => {
     const filteredMeters = locationId ? meters.filter((m) => m.location_id === locationId) : [];
@@ -283,9 +297,9 @@ function TenantsTab() {
       </Dialog>
 
       <Table>
-        <TableHeader><TableRow><TableHead>{t("common.name" as any)}</TableHead><TableHead>{T(t, "te.unitLabel")}</TableHead><TableHead>{t("common.email" as any)}</TableHead><TableHead>{T(t, "te.meters")}</TableHead><TableHead>{T(t, "te.moveIn")}</TableHead>{showArchived && <TableHead>{T(t, "te.moveOut")}</TableHead>}<TableHead>{t("common.status" as any)}</TableHead><TableHead></TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><SortableHead label={t("common.name" as any)} sortKey="name" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.unitLabel")} sortKey="unit" sort={sort} onToggle={toggle} /><SortableHead label={t("common.email" as any)} sortKey="email" sort={sort} onToggle={toggle} /><TableHead>{T(t, "te.meters")}</TableHead><SortableHead label={T(t, "te.moveIn")} sortKey="move_in" sort={sort} onToggle={toggle} />{showArchived && <SortableHead label={T(t, "te.moveOut")} sortKey="move_out" sort={sort} onToggle={toggle} />}TEMP_STATUS_HEAD<TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {displayedTenants.map((te) => (
+          {sorted.map((te) => (
             <TableRow key={te.id} className={te.status === "archived" ? "opacity-60" : ""}>
               <TableCell className="font-medium"><button className="hover:underline text-left cursor-pointer text-primary" onClick={() => openEdit(te)}>{te.name}</button></TableCell>
               <TableCell>{te.unit_label || "–"}</TableCell>
@@ -356,6 +370,20 @@ function TenantsTab() {
 function TariffsTab() {
   const { t } = useTranslation();
   const { tariffs, createTariff, updateTariff, deleteTariff } = useTenantElectricityTariffs();
+  type SortKey = "name" | "location" | "local" | "grid" | "base_fee" | "valid_from" | "valid_until";
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(tariffs, (tariff, k) => {
+    switch (k) {
+      case "name": return tariff.name;
+      case "location": return tariff.locations?.name || "";
+      case "local": return Number(tariff.price_per_kwh_local);
+      case "grid": return Number(tariff.price_per_kwh_grid);
+      case "base_fee": return Number(tariff.base_fee_monthly);
+      case "valid_from": return tariff.valid_from;
+      case "valid_until": return tariff.valid_until || "9999-12-31";
+      default: return null;
+    }
+  });
+
   const { locations } = useLocations();
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -454,9 +482,9 @@ function TariffsTab() {
       </Card>
 
       <Table>
-        <TableHeader><TableRow><TableHead>{t("common.name" as any)}</TableHead><TableHead>{t("common.location" as any)}</TableHead><TableHead>{T(t, "te.local")} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead><TableHead>{T(t, "te.grid")} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead><TableHead>{T(t, "te.baseFee")} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead><TableHead>{T(t, "te.validFrom")}</TableHead><TableHead>{T(t, "te.validUntilOpt")}</TableHead><TableHead></TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><SortableHead label={t("common.name" as any)} sortKey="name" sort={sort} onToggle={toggle} /><SortableHead label={t("common.location" as any)} sortKey="location" sort={sort} onToggle={toggle} /><SortableHead label={<>{T(t, "te.local")} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></>} sortKey="local" sort={sort} onToggle={toggle} /><SortableHead label={<>{T(t, "te.grid")} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></>} sortKey="grid" sort={sort} onToggle={toggle} /><SortableHead label={<>{T(t, "te.baseFee")} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></>} sortKey="base_fee" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.validFrom")} sortKey="valid_from" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.validUntilOpt")} sortKey="valid_until" sort={sort} onToggle={toggle} /><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {tariffs.map((tariff: any) => (
+          {sorted.map((tariff: any) => (
             <TableRow key={tariff.id}>
               <TableCell className="font-medium"><button className="hover:underline text-left cursor-pointer text-primary" onClick={() => openEdit(tariff)}>{tariff.name}</button></TableCell>
               <TableCell>{tariff.locations?.name || "–"}</TableCell>
@@ -479,6 +507,20 @@ function TariffsTab() {
 function InvoicesTab() {
   const { t } = useTranslation();
   const { invoices, createInvoice, updateInvoice } = useTenantElectricityInvoices();
+  type SortKey = "tenant" | "period" | "local" | "grid" | "total" | "amount" | "status";
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(invoices, (inv, k) => {
+    switch (k) {
+      case "tenant": return (inv as any).tenant_electricity_tenants?.name || "";
+      case "period": return inv.period_start;
+      case "local": return Number(inv.local_kwh);
+      case "grid": return Number(inv.grid_kwh);
+      case "total": return Number(inv.total_kwh);
+      case "amount": return Number(inv.total_amount);
+      case "status": return inv.status;
+      default: return null;
+    }
+  });
+
   const { activeTenants } = useTenantElectricityTenants();
   const { tariffs, getActiveTariffForLocation } = useTenantElectricityTariffs();
   const [open, setOpen] = useState(false);
@@ -546,9 +588,9 @@ function InvoicesTab() {
       </div>
 
       <Table>
-        <TableHeader><TableRow><TableHead>{T(t, "te.tenant")}</TableHead><TableHead>{T(t, "te.period")}</TableHead><TableHead>{T(t, "te.localCalc")}</TableHead><TableHead>{T(t, "te.gridCalc")}</TableHead><TableHead>{T(t, "te.total")}</TableHead><TableHead>{T(t, "te.amount")}</TableHead><TableHead>{t("common.status" as any)}</TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><SortableHead label={T(t, "te.tenant")} sortKey="tenant" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.period")} sortKey="period" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.localCalc")} sortKey="local" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.gridCalc")} sortKey="grid" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.total")} sortKey="total" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.amount")} sortKey="amount" sort={sort} onToggle={toggle} />TEMP_STATUS_HEAD</TableRow></TableHeader>
         <TableBody>
-          {invoices.map((inv) => (
+          {sorted.map((inv) => (
             <TableRow key={inv.id}>
               <TableCell className="font-medium">{(inv as any).tenant_electricity_tenants?.name || "–"} {(inv as any).tenant_electricity_tenants?.unit_label ? `(${(inv as any).tenant_electricity_tenants.unit_label})` : ""}</TableCell>
               <TableCell>{format(new Date(inv.period_start), "dd.MM.")} – {format(new Date(inv.period_end), "dd.MM.yyyy")}</TableCell>

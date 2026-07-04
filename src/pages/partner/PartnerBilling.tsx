@@ -6,24 +6,24 @@ import { useModulePrices } from "@/hooks/useModulePrices";
 import { ALL_MODULES } from "@/hooks/useTenantModules";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Receipt, TrendingUp, Percent, Building2, Factory } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "@/hooks/use-toast";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 const editableModules = ALL_MODULES.filter((m) => !("alwaysOn" in m));
 const fmtEur = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 const fmtPct = (v: number) => v.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " %";
 
 export default function PartnerBilling() {
-  const { partnerId, loading, isPartnerAdmin, permissions } = usePartnerAccess();
+  const { partnerId, loading, permissions } = usePartnerAccess();
   const canEditPrices = permissions.viewBilling;
   const qc = useQueryClient();
   const [sector, setSector] = useState<"kommune" | "industrie">("kommune");
 
-  // 1. Partner info (billing_mode + commission_pct)
   const { data: partner } = useQuery({
     queryKey: ["partner-billing-info", partnerId],
     enabled: !!partnerId,
@@ -38,10 +38,8 @@ export default function PartnerBilling() {
     },
   });
 
-  // 2. Module prices (global)
   const { prices: modulePrices } = useModulePrices();
 
-  // 3. Partner-specific sale-price overrides
   const { data: partnerOverrides = [] } = useQuery({
     queryKey: ["partner-module-prices", partnerId],
     enabled: !!partnerId,
@@ -59,7 +57,6 @@ export default function PartnerBilling() {
     },
   });
 
-  // 4. Tenants of this partner + their active modules
   const { data: tenants = [] } = useQuery({
     queryKey: ["partner-billing-tenants", partnerId],
     enabled: !!partnerId,
@@ -86,7 +83,6 @@ export default function PartnerBilling() {
     },
   });
 
-  // helpers
   const overrideFor = (code: string) => partnerOverrides.find((o) => o.module_code === code);
 
   const recommendedSale = (code: string, isKommune: boolean) => {
@@ -134,7 +130,6 @@ export default function PartnerBilling() {
       toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
-  // Compute per-tenant totals
   const tenantTotals = useMemo(() => {
     return tenants.map((t) => {
       let purchase = 0;
@@ -150,14 +145,42 @@ export default function PartnerBilling() {
     });
   }, [tenants, modulePrices, partnerOverrides, partner]);
 
+  const { sorted: sortedTotals, sort: sortTotals, toggle: toggleTotals } = useSortableData<any, "name" | "sector" | "purchase" | "sale" | "margin" | "commission">(tenantTotals, (r, k) => {
+    switch (k) {
+      case "name": return r.name;
+      case "sector": return r.is_kommune ? "kommune" : "industrie";
+      case "purchase": return r.purchase;
+      case "sale": return r.sale;
+      case "margin": return r.margin;
+      case "commission": return r.commission;
+      default: return null;
+    }
+  }, { key: "name", direction: "asc" });
+
+  const { sorted: sortedModules, sort: sortModules, toggle: toggleModules } = useSortableData<any, "label" | "purchase" | "recommended" | "sale" | "margin">(editableModules, (mod, k) => {
+    const isKommune = sector === "kommune";
+    const purchase = purchasePrice(mod.code, isKommune);
+    const recommended = recommendedSale(mod.code, isKommune);
+    const sale = effectiveSale(mod.code, isKommune);
+    const margin = sale - purchase;
+    switch (k) {
+      case "label": return mod.label;
+      case "purchase": return purchase;
+      case "recommended": return recommended;
+      case "sale": return sale;
+      case "margin": return margin;
+      default: return null;
+    }
+  }, { key: "label", direction: "asc" });
+
   if (loading) return <div className="p-6 text-muted-foreground">Lädt…</div>;
   if (!partnerId || !partner) return <div className="p-6 text-muted-foreground">Kein Partner-Kontext.</div>;
 
   const isCommission = partner.billing_mode === "commission";
-  const sumPurchase = tenantTotals.reduce((s, t) => s + t.purchase, 0);
   const sumSale = tenantTotals.reduce((s, t) => s + t.sale, 0);
-  const sumMargin = tenantTotals.reduce((s, t) => s + t.margin, 0);
   const sumCommission = tenantTotals.reduce((s, t) => s + t.commission, 0);
+  const sumPurchase = tenantTotals.reduce((s, t) => s + t.purchase, 0);
+  const sumMargin = tenantTotals.reduce((s, t) => s + t.margin, 0);
 
   return (
     <div className="p-3 md:p-6 space-y-4">
@@ -183,20 +206,20 @@ export default function PartnerBilling() {
             <CardTitle className="text-base">Provisionsübersicht je Tenant (Monatsbasis)</CardTitle>
           </CardHeader>
           <CardContent>
-            {tenantTotals.length === 0 ? (
+            {sortedTotals.length === 0 ? (
               <p className="text-sm text-muted-foreground">Noch keine Tenants zugeordnet.</p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Tenant</TableHead>
-                    <TableHead>Bereich</TableHead>
-                    <TableHead className="text-right">Endkunden-Verkauf (empf.)</TableHead>
-                    <TableHead className="text-right">Provision ({fmtPct(Number(partner.commission_pct ?? 0))})</TableHead>
+                    <SortableHead label="Tenant" sortKey="name" sort={sortTotals} onToggle={toggleTotals} />
+                    <SortableHead label="Bereich" sortKey="sector" sort={sortTotals} onToggle={toggleTotals} />
+                    <SortableHead label="Endkunden-Verkauf (empf.)" sortKey="sale" sort={sortTotals} onToggle={toggleTotals} className="text-right" />
+                    <SortableHead label={`Provision (${fmtPct(Number(partner.commission_pct ?? 0))})`} sortKey="commission" sort={sortTotals} onToggle={toggleTotals} className="text-right" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {tenantTotals.map((t) => (
+                  {sortedTotals.map((t) => (
                     <TableRow key={t.id}>
                       <TableCell className="font-medium">{t.name}</TableCell>
                       <TableCell>
@@ -252,15 +275,15 @@ export default function PartnerBilling() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Modul</TableHead>
-                      <TableHead className="text-right">Einkauf (AICONO)</TableHead>
-                      <TableHead className="text-right">Empf. Verkaufspreis</TableHead>
-                      <TableHead className="text-right">Dein Verkaufspreis</TableHead>
-                      <TableHead className="text-right">Marge</TableHead>
+                      <SortableHead label="Modul" sortKey="label" sort={sortModules} onToggle={toggleModules} />
+                      <SortableHead label="Einkauf (AICONO)" sortKey="purchase" sort={sortModules} onToggle={toggleModules} className="text-right" />
+                      <SortableHead label="Empf. Verkaufspreis" sortKey="recommended" sort={sortModules} onToggle={toggleModules} className="text-right" />
+                      <SortableHead label="Dein Verkaufspreis" sortKey="sale" sort={sortModules} onToggle={toggleModules} className="text-right" />
+                      <SortableHead label="Marge" sortKey="margin" sort={sortModules} onToggle={toggleModules} className="text-right" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {editableModules.map((mod) => {
+                    {sortedModules.map((mod: any) => {
                       const isKommune = sector === "kommune";
                       const purchase = purchasePrice(mod.code, isKommune);
                       const recommended = recommendedSale(mod.code, isKommune);
@@ -283,11 +306,6 @@ export default function PartnerBilling() {
                     })}
                   </TableBody>
                 </Table>
-                <p className="text-xs text-muted-foreground mt-4">
-                  <strong>Einkauf</strong>: vereinbarter Partner-Einstandspreis bei AICONO.{" "}
-                  <strong>Empf. Verkaufspreis</strong>: empfohlener Endkundenpreis (auch Default für deinen Verkaufspreis).{" "}
-                  {canEditPrices ? "Du kannst deinen Verkaufspreis frei festlegen." : 'Nur Mitglieder mit Berechtigung „Abrechnung" können Preise ändern.'}
-                </p>
               </CardContent>
             </Card>
           </TabsContent>
@@ -298,21 +316,21 @@ export default function PartnerBilling() {
                 <CardTitle className="text-base">Margenübersicht je Tenant (Monatsbasis)</CardTitle>
               </CardHeader>
               <CardContent>
-                {tenantTotals.length === 0 ? (
+                {sortedTotals.length === 0 ? (
                   <p className="text-sm text-muted-foreground">Noch keine Tenants zugeordnet.</p>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Tenant</TableHead>
-                        <TableHead>Bereich</TableHead>
-                        <TableHead className="text-right">Einkauf</TableHead>
-                        <TableHead className="text-right">Verkauf</TableHead>
-                        <TableHead className="text-right">Marge</TableHead>
+                        <SortableHead label="Tenant" sortKey="name" sort={sortTotals} onToggle={toggleTotals} />
+                        <SortableHead label="Bereich" sortKey="sector" sort={sortTotals} onToggle={toggleTotals} />
+                        <SortableHead label="Einkauf" sortKey="purchase" sort={sortTotals} onToggle={toggleTotals} className="text-right" />
+                        <SortableHead label="Verkauf" sortKey="sale" sort={sortTotals} onToggle={toggleTotals} className="text-right" />
+                        <SortableHead label="Marge" sortKey="margin" sort={sortTotals} onToggle={toggleTotals} className="text-right" />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {tenantTotals.map((t) => (
+                      {sortedTotals.map((t) => (
                         <TableRow key={t.id}>
                           <TableCell className="font-medium">{t.name}</TableCell>
                           <TableCell>
@@ -333,9 +351,6 @@ export default function PartnerBilling() {
                     </TableBody>
                   </Table>
                 )}
-                <p className="text-xs text-muted-foreground mt-4">
-                  Read-only Vorschau. Die offizielle Abrechnung erfolgt monatlich durch AICONO.
-                </p>
               </CardContent>
             </Card>
           </TabsContent>
@@ -357,7 +372,6 @@ interface SalePriceRowProps {
 
 function SalePriceRow({ label, purchase, recommended, sale, margin, disabled, onSave }: SalePriceRowProps) {
   const [value, setValue] = useState(String(sale.toFixed(2)));
-  // sync when sale prop changes
   useMemo(() => setValue(String(sale.toFixed(2))), [sale]);
 
   return (

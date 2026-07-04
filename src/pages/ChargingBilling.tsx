@@ -1,3 +1,4 @@
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { useState, useMemo, useEffect } from "react";
 import {
   startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear,
@@ -46,48 +47,6 @@ import { generateChargingInvoicePdf, downloadBlob } from "@/lib/generateCharging
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
-// Sortable table header (generic)
-function SortableHead({
-  column,
-  label,
-  sortColumn,
-  sortDirection,
-  onSort,
-  onDir,
-  className,
-}: {
-  column: string;
-  label: string;
-  sortColumn: string | null;
-  sortDirection: "asc" | "desc";
-  onSort: (c: any) => void;
-  onDir: (d: "asc" | "desc") => void;
-  className?: string;
-}) {
-  const active = sortColumn === column;
-  return (
-    <TableHead
-      className={"cursor-pointer select-none " + (className || "")}
-      onClick={() => {
-        if (active) {
-          onDir(sortDirection === "asc" ? "desc" : "asc");
-        } else {
-          onSort(column);
-          onDir("asc");
-        }
-      }}
-    >
-      <span className="inline-flex items-center gap-1">
-        {label}
-        {active ? (
-          sortDirection === "asc" ? <ArrowUp className="h-3.5 w-3.5 text-primary" /> : <ArrowDown className="h-3.5 w-3.5 text-primary" />
-        ) : (
-          <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
-        )}
-      </span>
-    </TableHead>
-  );
-}
 
 
 
@@ -220,20 +179,9 @@ const ChargingBilling = () => {
   const [sessionSearch, setSessionSearch] = useState("");
   const [invoiceSearch, setInvoiceSearch] = useState("");
 
-  // Session sorting state
-  const [sortColumn, setSortColumn] = useState<"charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag" | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-
-  // Invoice sorting state
-  const [invSortColumn, setInvSortColumn] = useState<"invoice_number" | "invoice_date" | "user_name" | "period" | "total_amount" | "status" | null>("invoice_date");
-  const [invSortDirection, setInvSortDirection] = useState<"asc" | "desc">("desc");
-
   // Sessions view mode: by individual users (rows = sessions) vs by billing groups (aggregated)
   const [sessionView, setSessionView] = useState<"users" | "groups">("users");
 
-  // Group aggregation sort
-  const [groupSortColumn, setGroupSortColumn] = useState<"group_name" | "user_count" | "session_count" | "energy" | null>("energy");
-  const [groupSortDirection, setGroupSortDirection] = useState<"asc" | "desc">("desc");
 
   // Charging users (to resolve session id_tag -> user_id)
   const { users: chargingUsers } = useChargingUsers();
@@ -273,41 +221,19 @@ const ChargingBilling = () => {
     });
   }, [sessions, periodRange, sessionSearch, chargePoints, resolveTag]);
 
+  type SessionSortKey = "charge_point" | "start_time" | "stop_time" | "energy" | "status" | "id_tag";
+  const { sorted: displayedSessions, sort: sessionSort, toggle: sessionToggle } = useSortableData<any, SessionSortKey>(filteredSessions, (s, k) => {
+    switch (k) {
+      case "charge_point": return getCpName(s.charge_point_id);
+      case "start_time": return new Date(s.start_time);
+      case "stop_time": return s.stop_time ? new Date(s.stop_time) : new Date(0);
+      case "energy": return s.energy_kwh;
+      case "status": return s.status;
+      case "id_tag": return resolveTag(s.id_tag) || s.id_tag || "";
+      default: return null;
+    }
+  }, { key: "start_time", direction: "desc" });
 
-  const displayedSessions = useMemo(() => {
-    if (!sortColumn) return filteredSessions;
-    const dir = sortDirection === "asc" ? 1 : -1;
-    return [...filteredSessions].sort((a, b) => {
-      let cmp = 0;
-      switch (sortColumn) {
-        case "charge_point":
-          cmp = getCpName(a.charge_point_id).localeCompare(getCpName(b.charge_point_id));
-          break;
-        case "start_time":
-          cmp = new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
-          break;
-        case "stop_time": {
-          const aStop = a.stop_time ? new Date(a.stop_time).getTime() : 0;
-          const bStop = b.stop_time ? new Date(b.stop_time).getTime() : 0;
-          cmp = aStop - bStop;
-          break;
-        }
-        case "energy":
-          cmp = a.energy_kwh - b.energy_kwh;
-          break;
-        case "status":
-          cmp = a.status.localeCompare(b.status);
-          break;
-        case "id_tag": {
-          const aTag = resolveTag(a.id_tag) || a.id_tag || "";
-          const bTag = resolveTag(b.id_tag) || b.id_tag || "";
-          cmp = aTag.localeCompare(bTag);
-          break;
-        }
-      }
-      return cmp * dir;
-    });
-  }, [filteredSessions, sortColumn, sortDirection, chargePoints, resolveTag]);
 
   // ---- Aggregation by billing group ----
   // Map RFID tag (uppercase, no spaces) -> charging user id
@@ -342,8 +268,7 @@ const ChargingBilling = () => {
 
 
   const NO_GROUP_KEY = "__no_group__";
-
-  const groupedSessionRows = useMemo(() => {
+  const groupedSessionList = useMemo(() => {
     type Row = { key: string; group_name: string; user_ids: Set<string>; session_count: number; energy_kwh: number };
     const rows = new Map<string, Row>();
     for (const s of filteredSessions) {
@@ -362,27 +287,23 @@ const ChargingBilling = () => {
       if (userId) row.user_ids.add(userId);
       else if (s.id_tag) row.user_ids.add(`tag:${s.id_tag}`);
     }
-    // Search filter
     const q = sessionSearch.trim().toLowerCase();
-    const list = Array.from(rows.values())
+    return Array.from(rows.values())
       .map((r) => ({ ...r, user_count: r.user_ids.size }))
       .filter((r) => !q || r.group_name.toLowerCase().includes(q));
+  }, [filteredSessions, tagToUserId, userIdToBillingGroup, groupNameById, sessionSearch]);
 
-    // Sort
-    const dir = groupSortDirection === "asc" ? 1 : -1;
-    list.sort((a, b) => {
-      let cmp = 0;
-      switch (groupSortColumn) {
-        case "group_name": cmp = a.group_name.localeCompare(b.group_name); break;
-        case "user_count": cmp = a.user_count - b.user_count; break;
-        case "session_count": cmp = a.session_count - b.session_count; break;
-        case "energy":
-        default: cmp = a.energy_kwh - b.energy_kwh; break;
-      }
-      return cmp * dir;
-    });
-    return list;
-  }, [filteredSessions, tagToUserId, userIdToBillingGroup, groupNameById, sessionSearch, groupSortColumn, groupSortDirection]);
+  type GroupSortKey = "group_name" | "user_count" | "session_count" | "energy";
+  const { sorted: groupedSessionRows, sort: groupSort, toggle: groupToggle } = useSortableData<any, GroupSortKey>(groupedSessionList, (r, k) => {
+    switch (k) {
+      case "group_name": return r.group_name;
+      case "user_count": return r.user_count;
+      case "session_count": return r.session_count;
+      case "energy": return r.energy_kwh;
+      default: return null;
+    }
+  }, { key: "energy", direction: "desc" });
+
 
 
 
@@ -402,42 +323,33 @@ const ChargingBilling = () => {
       return fields.some((f) => String(f || "").toLowerCase().includes(q));
     });
   }, [invoices, periodRange, invoiceSearch]);
+  type InvSortKey = "invoice_number" | "invoice_date" | "user_name" | "period" | "total_amount" | "status";
+  type TariffSortKey = "name" | "price" | "base_fee" | "idle_fee" | "tax" | "active" | "default";
+  const { sorted: sortedTariffs, sort: tariffSort, toggle: tariffToggle } = useSortableData<any, TariffSortKey>(tariffs, (tf, k) => {
+    switch (k) {
+      case "name": return tf.name?.toLowerCase() ?? "";
+      case "price": return tf.price_per_kwh ?? 0;
+      case "base_fee": return tf.base_fee ?? 0;
+      case "idle_fee": return tf.idle_fee_per_minute ?? 0;
+      case "tax": return tf.tax_rate_percent ?? 0;
+      case "active": return tf.is_active ? 1 : 0;
+      case "default": return tf.is_default ? 1 : 0;
+    }
+  });
+  const { sorted: displayedInvoices, sort: invoiceSort, toggle: invoiceToggle } = useSortableData<any, InvSortKey>(filteredInvoices, (inv: any, k) => {
+
+    switch (k) {
+      case "invoice_number": return inv.invoice_number || "";
+      case "invoice_date": return new Date(inv.invoice_date || inv.created_at);
+      case "user_name": return inv.user_name || "";
+      case "period": return inv.period_start ? new Date(inv.period_start) : new Date(0);
+      case "total_amount": return Number(inv.total_amount || 0);
+      case "status": return inv.status || "";
+      default: return null;
+    }
+  }, { key: "invoice_date", direction: "desc" });
 
 
-  const displayedInvoices = useMemo(() => {
-    if (!invSortColumn) return filteredInvoices;
-    const dir = invSortDirection === "asc" ? 1 : -1;
-    return [...filteredInvoices].sort((a: any, b: any) => {
-      let cmp = 0;
-      switch (invSortColumn) {
-        case "invoice_number":
-          cmp = String(a.invoice_number || "").localeCompare(String(b.invoice_number || ""));
-          break;
-        case "invoice_date": {
-          const ad = new Date(a.invoice_date || a.created_at).getTime();
-          const bd = new Date(b.invoice_date || b.created_at).getTime();
-          cmp = ad - bd;
-          break;
-        }
-        case "user_name":
-          cmp = String(a.user_name || "").localeCompare(String(b.user_name || ""));
-          break;
-        case "period": {
-          const ap = a.period_start ? new Date(a.period_start).getTime() : 0;
-          const bp = b.period_start ? new Date(b.period_start).getTime() : 0;
-          cmp = ap - bp;
-          break;
-        }
-        case "total_amount":
-          cmp = Number(a.total_amount || 0) - Number(b.total_amount || 0);
-          break;
-        case "status":
-          cmp = String(a.status || "").localeCompare(String(b.status || ""));
-          break;
-      }
-      return cmp * dir;
-    });
-  }, [filteredInvoices, invSortColumn, invSortDirection]);
 
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
@@ -735,12 +647,12 @@ const ChargingBilling = () => {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <SortableHead column="charge_point" label={t("charging.chargePoint" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                              <SortableHead column="start_time" label={t("charging.start" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                              <SortableHead column="stop_time" label={t("charging.end" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                              <SortableHead column="energy" label={t("charging.energy" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                              <SortableHead column="status" label={t("common.status" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
-                              <SortableHead column="id_tag" label={t("charging.idTag" as any)} sortColumn={sortColumn} sortDirection={sortDirection} onSort={setSortColumn} onDir={setSortDirection} />
+                              <SortableHead label={t("charging.chargePoint" as any)} sortKey="charge_point" sort={sessionSort} onToggle={sessionToggle} />
+                              <SortableHead label={t("charging.start" as any)} sortKey="start_time" sort={sessionSort} onToggle={sessionToggle} />
+                              <SortableHead label={t("charging.end" as any)} sortKey="stop_time" sort={sessionSort} onToggle={sessionToggle} />
+                              <SortableHead label={t("charging.energy" as any)} sortKey="energy" sort={sessionSort} onToggle={sessionToggle} />
+                              <SortableHead label={t("common.status" as any)} sortKey="status" sort={sessionSort} onToggle={sessionToggle} />
+                              <SortableHead label={t("charging.idTag" as any)} sortKey="id_tag" sort={sessionSort} onToggle={sessionToggle} />
                               <TableHead className="w-20 text-right">Beleg</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -776,10 +688,10 @@ const ChargingBilling = () => {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <SortableHead column="group_name" label="Abrechnungsgruppe" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
-                              <SortableHead column="user_count" label="Nutzer" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
-                              <SortableHead column="session_count" label="Ladevorgänge" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
-                              <SortableHead column="energy" label="Energie" sortColumn={groupSortColumn} sortDirection={groupSortDirection} onSort={setGroupSortColumn} onDir={setGroupSortDirection} />
+                              <SortableHead label="Abrechnungsgruppe" sortKey="group_name" sort={groupSort} onToggle={groupToggle} />
+                              <SortableHead label="Nutzer" sortKey="user_count" sort={groupSort} onToggle={groupToggle} />
+                              <SortableHead label="Ladevorgänge" sortKey="session_count" sort={groupSort} onToggle={groupToggle} />
+                              <SortableHead label="Energie" sortKey="energy" sort={groupSort} onToggle={groupToggle} />
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -837,19 +749,20 @@ const ChargingBilling = () => {
                   {tariffsLoading ? <p className="text-muted-foreground">{t("charging.loading" as any)}</p> : tariffs.length === 0 ? <p className="text-muted-foreground">{t("charging.noTariffs" as any)}</p> : (
                     <Table>
                       <TableHeader>
-                        <TableRow>
-                           <TableHead>{t("charging.name" as any)}</TableHead>
-                          <TableHead>{t("charging.priceKwh" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead>
-                          <TableHead>{t("charging.baseFee" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead>
-                          <TableHead>{t("charging.idleFee" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></TableHead>
-                          <TableHead>MwSt</TableHead>
-                          <TableHead>{t("charging.active" as any)}</TableHead>
-                          <TableHead>Standard</TableHead>
-                          {isAdmin && <TableHead className="w-24">{t("charging.actions" as any)}</TableHead>}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {tariffs.map((tariff) => (
+                         <TableRow>
+                           <SortableHead label={t("charging.name" as any)} sortKey="name" sort={tariffSort} onToggle={tariffToggle} />
+                           <SortableHead label={<>{t("charging.priceKwh" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></>} sortKey="price" sort={tariffSort} onToggle={tariffToggle} />
+                           <SortableHead label={<>{t("charging.baseFee" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></>} sortKey="base_fee" sort={tariffSort} onToggle={tariffToggle} />
+                           <SortableHead label={<>{t("charging.idleFee" as any)} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></>} sortKey="idle_fee" sort={tariffSort} onToggle={tariffToggle} />
+                           <SortableHead label="MwSt" sortKey="tax" sort={tariffSort} onToggle={tariffToggle} />
+                           <SortableHead label={t("charging.active" as any)} sortKey="active" sort={tariffSort} onToggle={tariffToggle} />
+                           <SortableHead label="Standard" sortKey="default" sort={tariffSort} onToggle={tariffToggle} />
+                           {isAdmin && <TableHead className="w-24">{t("charging.actions" as any)}</TableHead>}
+                         </TableRow>
+                       </TableHeader>
+                       <TableBody>
+                         {sortedTariffs.map((tariff) => (
+
                           <TableRow key={tariff.id}>
                             <TableCell className="font-medium">
                               {tariff.name}
@@ -986,12 +899,12 @@ const ChargingBilling = () => {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <SortableHead column="invoice_number" label={t("charging.invoiceNo" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                            <SortableHead column="invoice_date" label="Rechnungsdatum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                            <SortableHead column="user_name" label="Kunde" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                            <SortableHead column="period" label="Zeitraum" sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                            <SortableHead column="total_amount" label={t("charging.totalAmount" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
-                            <SortableHead column="status" label={t("common.status" as any)} sortColumn={invSortColumn} sortDirection={invSortDirection} onSort={setInvSortColumn} onDir={setInvSortDirection} />
+                            <SortableHead label={t("charging.invoiceNo" as any)} sortKey="invoice_number" sort={invoiceSort} onToggle={invoiceToggle} />
+                            <SortableHead label="Rechnungsdatum" sortKey="invoice_date" sort={invoiceSort} onToggle={invoiceToggle} />
+                            <SortableHead label="Kunde" sortKey="user_name" sort={invoiceSort} onToggle={invoiceToggle} />
+                            <SortableHead label="Zeitraum" sortKey="period" sort={invoiceSort} onToggle={invoiceToggle} />
+                            <SortableHead label={t("charging.totalAmount" as any)} sortKey="total_amount" sort={invoiceSort} onToggle={invoiceToggle} />
+                            <SortableHead label={t("common.status" as any)} sortKey="status" sort={invoiceSort} onToggle={invoiceToggle} />
                             <TableHead>Versendet</TableHead>
                             {isAdmin && <TableHead className="w-12"></TableHead>}
                           </TableRow>

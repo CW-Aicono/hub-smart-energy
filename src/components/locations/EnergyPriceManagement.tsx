@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ChevronDown, ChevronRight, Euro, Plus, Pencil, Trash2, Zap, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
@@ -43,6 +44,17 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPrice, setEditingPrice] = useState<EnergyPrice | null>(null);
   const { prices, loading, addPrice, updatePrice, deletePrice } = useEnergyPrices(locationId);
+  type SortKey = "energy_type" | "meter" | "price" | "valid_from";
+  const { sorted, sort, toggle } = useSortableData<EnergyPrice, SortKey>(prices, (p, k) => {
+    switch (k) {
+      case "energy_type": return T(ENERGY_TYPE_KEYS[p.energy_type] || `ep.${p.energy_type}`);
+      case "meter": return getMeterName(p.meter_id) || "";
+      case "price": return p.is_dynamic ? Number(p.spot_markup_per_unit) : Number(p.price_per_unit);
+      case "valid_from": return new Date(p.valid_from).getTime();
+      default: return null;
+    }
+  });
+
   const { meters } = useMeters(locationId);
   const { tenant } = useTenant();
   const { currentPrice: currentSpotPrice } = useSpotPrices();
@@ -179,15 +191,15 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{T("ep.carrier")}</TableHead>
-                      <TableHead>{T("ep.meter")}</TableHead>
-                      <TableHead>{T("ep.price")}</TableHead>
-                      <TableHead>{T("ep.validFrom")}</TableHead>
+                      <SortableHead label={T("ep.carrier")} sortKey="energy_type" sort={sort} onToggle={toggle} />
+                      <SortableHead label={T("ep.meter")} sortKey="meter" sort={sort} onToggle={toggle} />
+                      <SortableHead label={T("ep.price")} sortKey="price" sort={sort} onToggle={toggle} />
+                      <SortableHead label={T("ep.validFrom")} sortKey="valid_from" sort={sort} onToggle={toggle} />
                       <TableHead className="w-[80px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {prices.map((p) => (
+                    {sorted.map((p) => (
                       <TableRow key={p.id}>
                         <TableCell>
                           <div className="flex items-center gap-1.5">

@@ -25,6 +25,11 @@ export default defineConfig(({ mode }) => ({
       // This prevents stale bundles (e.g. old 3D viewer code) from being served.
       selfDestroying: true,
       registerType: "autoUpdate",
+      // We register from src/lib/pwaRegister.ts with a guard that refuses to
+      // register inside the Lovable editor preview iframe (that unguarded
+      // registration was causing "preview lädt nicht" until a full re-login).
+      injectRegister: null,
+      devOptions: { enabled: false },
       includeAssets: ["favicon.ico", "icon-192.png", "icon-512.png"],
       manifest: false, // We use our own manifest.json in public/
       workbox: {

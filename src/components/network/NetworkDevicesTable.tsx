@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Wifi, Router, Cable, Search, Pencil, ArrowUp, ArrowDown } from "lucide-react";
@@ -46,6 +47,26 @@ export default function NetworkDevicesTable({ devices, onUpdateDevice }: Props) 
     const matchType = typeFilter === "all" || d.type === typeFilter;
     return matchSearch && matchType;
   });
+  type SortKey = "type" | "name" | "model" | "ip" | "mac" | "status" | "clients" | "poe" | "tx" | "rx" | "rate" | "ports" | "uptime";
+  const { sorted, sort, toggle } = useSortableData<NetworkDevice, SortKey>(filtered, (d, k) => {
+    switch (k) {
+      case "type": return d.type;
+      case "name": return d.name;
+      case "model": return d.model;
+      case "ip": return d.ip;
+      case "mac": return d.mac;
+      case "status": return d.status;
+      case "clients": return d.clients ?? 0;
+      case "poe": return d.poeConsumption ?? 0;
+      case "tx": return d.traffic?.txBytes ?? 0;
+      case "rx": return d.traffic?.rxBytes ?? 0;
+      case "rate": return (d.traffic?.txRate ?? 0) + (d.traffic?.rxRate ?? 0);
+      case "ports": return d.ports ?? 0;
+      case "uptime": return d.uptime;
+      default: return null;
+    }
+  });
+
 
   const openEdit = (device: NetworkDevice) => {
     setEditDevice(device);
@@ -101,24 +122,24 @@ export default function NetworkDevicesTable({ devices, onUpdateDevice }: Props) 
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Typ</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Modell</TableHead>
-                  <TableHead>IP-Adresse</TableHead>
-                  <TableHead>MAC</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Clients</TableHead>
-                  <TableHead className="text-right">PoE (W)</TableHead>
-                  <TableHead className="text-right">Traffic ↑</TableHead>
-                  <TableHead className="text-right">Traffic ↓</TableHead>
-                  <TableHead className="text-right">Rate</TableHead>
-                  <TableHead className="text-right">Ports</TableHead>
-                  <TableHead className="text-right">Uptime</TableHead>
+                  <SortableHead label="Typ" sortKey="type" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Name" sortKey="name" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Modell" sortKey="model" sort={sort} onToggle={toggle} />
+                  <SortableHead label="IP-Adresse" sortKey="ip" sort={sort} onToggle={toggle} />
+                  <SortableHead label="MAC" sortKey="mac" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Clients" sortKey="clients" sort={sort} onToggle={toggle} />
+                  <SortableHead label="PoE (W)" sortKey="poe" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Traffic ↑" sortKey="tx" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Traffic ↓" sortKey="rx" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Rate" sortKey="rate" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Ports" sortKey="ports" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Uptime" sortKey="uptime" sort={sort} onToggle={toggle} />
                   <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((d) => (
+                {sorted.map((d) => (
                   <TableRow key={d.id}>
                     <TableCell>{typeIcon(d.type)}</TableCell>
                     <TableCell className="font-medium">{d.name}</TableCell>

@@ -13,7 +13,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 interface AutomationCondition {
   id: string;
-  type: "sensor_value" | "time" | "weekday" | "status" | "time_point" | "time_switch";
+  type: "sensor_value" | "time" | "weekday" | "status" | "time_point" | "time_switch" | "power_headroom";
   sensor_uuid?: string;
   operator?: string;
   value?: number;
@@ -26,6 +26,7 @@ interface AutomationCondition {
   expected_status?: string;
   gateway_id?: string;
 }
+
 
 interface AutomationAction {
   actuator_uuid: string;
@@ -48,7 +49,9 @@ interface SensorValue {
 
 interface SensorProvider {
   getSensorValue(sensorUuid: string, gatewayId?: string): Promise<SensorValue | null>;
+  getPowerHeadroomKw?(locationId: string): Promise<number | null>;
 }
+
 
 const DEBOUNCE_MINUTES = 5;
 
@@ -123,8 +126,10 @@ async function evaluateCondition(
   condition: AutomationCondition,
   timeParts: TimeParts,
   sensorProvider: SensorProvider,
+  locationId?: string,
 ): Promise<boolean> {
   switch (condition.type) {
+
     case "time": {
       if (condition.time_from && condition.time_to) {
         return isTimeInRange(timeParts.timeStr, condition.time_from, condition.time_to);
@@ -181,10 +186,30 @@ async function evaluateCondition(
         return false;
       }
     }
+    case "power_headroom": {
+      if (!locationId || !sensorProvider.getPowerHeadroomKw) return false;
+      try {
+        const headroom = await sensorProvider.getPowerHeadroomKw(locationId);
+        if (headroom == null || !isFinite(headroom)) return false;
+        const threshold = condition.value ?? 0;
+        switch (condition.operator) {
+          case ">": return headroom > threshold;
+          case "<": return headroom < threshold;
+          case "=": return Math.abs(headroom - threshold) < 0.001;
+          case ">=": return headroom >= threshold;
+          case "<=": return headroom <= threshold;
+          default: return false;
+        }
+      } catch (e) {
+        console.error(`[evaluator] Power headroom fetch error for location ${locationId}:`, e);
+        return false;
+      }
+    }
     default:
       return false;
   }
 }
+
 
 function resolveActions(auto: Record<string, unknown>): AutomationAction[] {
   const actions = auto.actions as AutomationAction[] | undefined;
@@ -301,7 +326,30 @@ class CloudSensorProvider implements SensorProvider {
     }
     return null;
   }
+
+  /**
+   * Reads current Hausanschluss headroom in kW from the latest dlm_control_log entry.
+   * headroom_kw = available_kw - measured_kw (>= 0 means free capacity).
+   * Returns null if no recent (< 10 min) log entry exists.
+   */
+  async getPowerHeadroomKw(locationId: string): Promise<number | null> {
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data, error } = await this.supabase
+      .from("dlm_control_log")
+      .select("measured_kw, available_kw, executed_at")
+      .eq("location_id", locationId)
+      .gte("executed_at", tenMinAgo)
+      .order("executed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    const measured = Number(data.measured_kw);
+    const available = Number(data.available_kw);
+    if (!isFinite(measured) || !isFinite(available)) return null;
+    return available - measured;
+  }
 }
+
 
 // ── Main handler ─────────────────────────────────────────────────────────────
 
@@ -406,7 +454,7 @@ Deno.serve(async (req) => {
 
       const conditionResults: boolean[] = [];
       for (const condition of conditions) {
-        const result = await evaluateCondition(condition, timeParts, sensorProvider);
+        const result = await evaluateCondition(condition, timeParts, sensorProvider, auto.location_id);
         conditionResults.push(result);
       }
 

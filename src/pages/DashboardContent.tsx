@@ -12,7 +12,36 @@ import DashboardCustomizer from "@/components/dashboard/DashboardCustomizer";
 import { LocationFilter } from "@/components/dashboard/LocationFilter";
 import WidgetErrorBoundary from "@/components/dashboard/WidgetErrorBoundary";
 import LazyWidget from "@/components/dashboard/LazyWidget";
+import ResizableWidget from "@/components/dashboard/ResizableWidget";
+
 import { useDashboardPrefetch } from "@/hooks/useDashboardPrefetch";
+
+// Per-widget height constraints (px, wrapper incl. drag-handle row).
+// Prevents charts from being stretched past their natural content
+// (energy_chart, spot_price) or shrunk to overflow (sankey, energy_gauge).
+const WIDGET_HEIGHT_LIMITS: Record<string, { min?: number; max?: number }> = {
+  cost_overview: { min: 145, max: 175 },
+  energy_chart: { min: 470, max: 760 },
+  sustainability_kpis: { min: 320 },
+  alerts_list: { min: 320 },
+  weather: { min: 185, max: 220 },
+  floor_plan: { min: 420 },
+  floor_plan_explorer: { min: 420 },
+  pie_chart: { min: 420 },
+  forecast: { min: 420 },
+  anomaly: { min: 360 },
+  weather_normalization: { min: 520 },
+  spot_price: { min: 390, max: 520 },
+  sankey: { min: 540 },
+  energy_gauge: { min: 420 },
+  energy_flow: { min: 420 },
+  location_map: { min: 380 },
+  pv_forecast: { min: 520 },
+  arbitrage_ai: { min: 360 },
+  integration_errors: { min: 360 },
+  ppa_fleet: { min: 360 },
+};
+
 
 // Lazy-load all widget components – each resolves to its own chunk
 const EnergyChart = lazy(() => import("@/components/dashboard/EnergyChart"));
@@ -94,7 +123,7 @@ const getLocationWidget = (_locationId: string | null): string => {
 };
 
 const DashboardContent = () => {
-  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize } = useDashboardWidgets();
+  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize, updateWidgetLayout } = useDashboardWidgets();
   const { definitions: customWidgetDefs } = useCustomWidgetDefinitions();
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null);
   const { t, language } = useTranslation();
@@ -161,9 +190,13 @@ const DashboardContent = () => {
                     if (w.widget_size !== "full") {
                       updateWidgetSize(w.widget_type, "full");
                     }
+                    if (w.layout?.height !== undefined) {
+                      updateWidgetLayout(w.widget_type, { ...w.layout, height: undefined });
+                    }
                   });
                 }}
               />
+
             </div>
           </div>
         </header>
@@ -173,7 +206,7 @@ const DashboardContent = () => {
               <div className="animate-pulse text-muted-foreground text-sm">{t("common.loading")}</div>
             </div>
           )}
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-wrap gap-4 items-start">
             {filteredVisibleWidgets.length > 0 ? (
               filteredVisibleWidgets.map((widget) => {
                 const widgetType = widget.widget_type === "location_map"
@@ -185,23 +218,35 @@ const DashboardContent = () => {
                 // Render custom widget
                 if (customDef) {
                   return (
-                    <div key={widget.widget_type} className="w-full min-w-0 relative group" data-widget-size={widget.widget_size}>
+                    <ResizableWidget
+                      key={widget.widget_type}
+                      height={widget.layout?.height}
+                      widgetSize={widget.widget_size}
+                      minHeight={WIDGET_HEIGHT_LIMITS[widget.widget_type]?.min}
+                      maxHeight={WIDGET_HEIGHT_LIMITS[widget.widget_type]?.max}
+                      onHeightChange={(h) => updateWidgetLayout(widget.widget_type, { ...(widget.layout ?? {}), height: h })}
+                    >
                       <LazyWidget>
                         <WidgetErrorBoundary widgetName={customDef.name}>
                           <CustomWidgetComponent definition={customDef} locationId={selectedLocationId} />
                         </WidgetErrorBoundary>
                       </LazyWidget>
-                    </div>
+                    </ResizableWidget>
                   );
                 }
 
                 return Component ? (
-                  <div
+                  <ResizableWidget
                     key={widget.widget_type}
-                    className="w-full min-w-0 relative group"
-                    data-widget-size={widget.widget_size}
+                    height={widget.layout?.height}
+                    widgetSize={widget.widget_size}
+                    minHeight={WIDGET_HEIGHT_LIMITS[widgetType]?.min}
+                    maxHeight={WIDGET_HEIGHT_LIMITS[widgetType]?.max}
+                    onHeightChange={(h) => updateWidgetLayout(widget.widget_type, { ...(widget.layout ?? {}), height: h })}
                   >
+
                     {widget.widget_size !== "full" && widgetType !== "floor_plan_explorer" && (
+
                       <button
                         onClick={() => setExpandedWidget(widgetType)}
                         className="absolute top-3 right-3 z-10 p-1.5 rounded-md bg-background/80 border border-border shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted"
@@ -215,8 +260,9 @@ const DashboardContent = () => {
                         <Component locationId={selectedLocationId} onExpand={widget.widget_size !== "full" ? () => setExpandedWidget(widgetType) : undefined} />
                       </WidgetErrorBoundary>
                     </LazyWidget>
-                  </div>
+                  </ResizableWidget>
                 ) : null;
+
               })
             ) : (
               <div className="text-center py-12 text-muted-foreground w-full">

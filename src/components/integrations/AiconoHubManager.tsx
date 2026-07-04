@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import {
   Dialog,
   DialogContent,
@@ -165,6 +166,19 @@ export function AiconoHubManager() {
   }
 
   const tokens = tokensQuery.data || [];
+  type SortKey = "token" | "label" | "location" | "status" | "expires" | "mac";
+  const { sorted, sort, toggle } = useSortableData<PairingToken, SortKey>(tokens, (tok, k) => {
+    switch (k) {
+      case "token": return tok.token;
+      case "label": return tok.label || "";
+      case "location": return locations.find((l) => l.id === tok.location_id)?.name ?? "";
+      case "status": return tok.used_at ? 2 : (new Date(tok.expires_at).getTime() < Date.now() ? 0 : 1);
+      case "expires": return tok.expires_at;
+      case "mac": return tok.bound_to_mac || "";
+      default: return null;
+    }
+  });
+
   const openTokens = tokens.filter((tok) => !tok.used_at && new Date(tok.expires_at).getTime() >= Date.now());
 
   return (
@@ -199,17 +213,17 @@ export function AiconoHubManager() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t("aiconoHub.token.colToken")}</TableHead>
-                  <TableHead>{t("aiconoHub.token.colLabel")}</TableHead>
-                  <TableHead>{t("aiconoHub.token.colLocation")}</TableHead>
-                  <TableHead>{t("aiconoHub.token.colStatus")}</TableHead>
-                  <TableHead>{t("aiconoHub.token.colExpires")}</TableHead>
-                  <TableHead>{t("aiconoHub.token.colMac")}</TableHead>
+                  <SortableHead label={t("aiconoHub.token.colToken")} sortKey="token" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("aiconoHub.token.colLabel")} sortKey="label" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("aiconoHub.token.colLocation")} sortKey="location" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("aiconoHub.token.colStatus")} sortKey="status" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("aiconoHub.token.colExpires")} sortKey="expires" sort={sort} onToggle={toggle} />
+                  <SortableHead label={t("aiconoHub.token.colMac")} sortKey="mac" sort={sort} onToggle={toggle} />
                   <TableHead className="w-[80px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tokens.map((tok) => {
+                {sorted.map((tok) => {
                   const status = tokenStatus(tok);
                   const StatusIcon = status.icon;
                   const locationName = locations.find((l) => l.id === tok.location_id)?.name ?? "—";
