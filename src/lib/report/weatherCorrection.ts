@@ -135,43 +135,70 @@ export interface HotWaterBaselineResult {
 }
 
 export interface HotWaterOverride {
-  hotWaterViaGas?: boolean | null;
-  hotWaterGasKwhYear?: number | null;
-  hotWaterGasSharePct?: number | null;
+  /**
+   * Energieträger, über den das Warmwasser bereitet wird (z. B. "gas", "strom",
+   * "pellets", "oel", "fernwaerme", "waerme"). NULL/leer = nicht konfiguriert,
+   * es findet KEIN Sockelabzug statt (Bereinigung wie ohne WW-Feature).
+   */
+  hotWaterEnergyType?: string | null;
+  /** Optionaler Jahres-Warmwasserverbrauch in kWh. */
+  hotWaterKwhYear?: number | null;
+  /** Optionaler Anteil am Verbrauch der WW-Quelle in %. */
+  hotWaterSharePct?: number | null;
 }
 
 /**
- * Schätzt den monatlichen Warmwasser-Sockel.
- * Reihenfolge: manueller Override → Sommer-Baseline → Fallback (Anteil vom Jahr).
+ * Schätzt den monatlichen Warmwasser-Sockel für den aktuell analysierten
+ * Energieträger. Wenn der Nutzer keine WW-Quelle konfiguriert hat oder die
+ * konfigurierte Quelle nicht dem aktuell analysierten Energieträger
+ * entspricht, wird KEIN Sockel abgezogen (source: "none").
+ *
+ * Reihenfolge bei passender Quelle:
+ *   1) manueller kWh/Jahr-Wert
+ *   2) manueller Anteil (%) am Jahresverbrauch der Quelle
+ *   3) Sommer-Baseline (Monate mit HDD < Schwelle)
+ *   4) Fallback (12 % vom Jahresverbrauch)
  */
 export function estimateHotWaterBaselineKwhPerMonth(
   monthly: { kwh: number; hdd: number }[],
-  override?: HotWaterOverride,
+  override: HotWaterOverride | undefined,
+  currentEnergyType: string,
   opts?: { hddThreshold?: number; fallbackShare?: number },
 ): HotWaterBaselineResult {
+  const configured = (override?.hotWaterEnergyType || "").trim().toLowerCase();
+  const current = (currentEnergyType || "").trim().toLowerCase();
+
+  // Keine Konfiguration ODER Konfiguration betrifft eine andere Energieart:
+  // kein Sockelabzug – Bereinigung wie ohne WW-Feature.
+  if (!configured || configured !== current) {
+    return { perMonthKwh: 0, source: "none", monthsUsed: 0 };
+  }
+
   const yearTotal = monthly.reduce((s, m) => s + (m.kwh || 0), 0);
 
-  // 1) Manueller Override (nur wenn ausdrücklich aktiviert)
-  if (override?.hotWaterViaGas) {
-    let kwhYear: number | null = null;
-    if (typeof override.hotWaterGasKwhYear === "number" && override.hotWaterGasKwhYear > 0) {
-      kwhYear = override.hotWaterGasKwhYear;
-    } else if (
-      typeof override.hotWaterGasSharePct === "number" &&
-      override.hotWaterGasSharePct > 0
-    ) {
-      kwhYear = yearTotal * (override.hotWaterGasSharePct / 100);
-    }
-    if (kwhYear !== null) {
-      return { perMonthKwh: kwhYear / 12, source: "manual", monthsUsed: 12 };
-    }
+  // 1) Manueller kWh-Jahreswert
+  if (typeof override?.hotWaterKwhYear === "number" && override.hotWaterKwhYear > 0) {
+    return { perMonthKwh: override.hotWaterKwhYear / 12, source: "manual", monthsUsed: 12 };
+  }
+
+  // 2) Manueller Anteil in %
+  if (
+    typeof override?.hotWaterSharePct === "number" &&
+    override.hotWaterSharePct > 0 &&
+    yearTotal > 0
+  ) {
+    return {
+      perMonthKwh: (yearTotal * (override.hotWaterSharePct / 100)) / 12,
+      source: "manual",
+      monthsUsed: 12,
+    };
   }
 
   if (yearTotal <= 0) {
     return { perMonthKwh: 0, source: "none", monthsUsed: 0 };
   }
 
-  // 2) Sommer-Baseline: alle Monate mit HDD < Schwelle mitteln
+  // 3) Sommer-Baseline: alle Monate mit HDD < Schwelle mitteln
   const threshold = opts?.hddThreshold ?? HOT_WATER_BASELINE_HDD_THRESHOLD;
   const baselineMonths = monthly.filter(
     (m) => (m.hdd ?? 0) < threshold && (m.kwh ?? 0) >= 0,
@@ -182,7 +209,7 @@ export function estimateHotWaterBaselineKwhPerMonth(
     return { perMonthKwh: mean, source: "summer-baseline", monthsUsed: baselineMonths.length };
   }
 
-  // 3) Fallback: fester Anteil vom Jahresverbrauch
+  // 4) Fallback: fester Anteil vom Jahresverbrauch
   const share = opts?.fallbackShare ?? HOT_WATER_FALLBACK_SHARE;
   return {
     perMonthKwh: (yearTotal * share) / 12,
@@ -190,6 +217,7 @@ export function estimateHotWaterBaselineKwhPerMonth(
     monthsUsed: 0,
   };
 }
+
 
 /**
  * Witterungsbereinigung mit WW-Sockel: Sockel wird vor der HDD-Skalierung
