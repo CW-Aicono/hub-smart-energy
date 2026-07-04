@@ -275,11 +275,15 @@ export function useWeatherNormalization({
           kwh: (perLoc[loc.id]?.[dd.month] || 0) / 1000, // Wh → kWh
           hdd: dd.heating_degree_days,
         }));
-        const est = estimateHotWaterBaselineKwhPerMonth(monthly, {
-          hotWaterViaGas: loc.hot_water_via_gas,
-          hotWaterGasKwhYear: loc.hot_water_gas_kwh_year,
-          hotWaterGasSharePct: loc.hot_water_gas_share_pct,
-        });
+        const est = estimateHotWaterBaselineKwhPerMonth(
+          monthly,
+          {
+            hotWaterEnergyType: loc.hot_water_energy_type,
+            hotWaterKwhYear: loc.hot_water_kwh_year,
+            hotWaterSharePct: loc.hot_water_share_pct,
+          },
+          energyType,
+        );
         wwPerLoc[loc.id] = { perMonthWh: est.perMonthKwh * 1000, source: est.source };
         wwInfoList.push({
           locationId: loc.id,
@@ -287,6 +291,7 @@ export function useWeatherNormalization({
           perMonthKwh: est.perMonthKwh,
         });
       }
+
       setHotWaterInfo(wwInfoList);
 
       const referenceHDDPerMonth = DEFAULT_REFERENCE_HDD_YEAR / 12;
