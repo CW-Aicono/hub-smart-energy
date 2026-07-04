@@ -77,9 +77,10 @@ const locationSchema = z.object({
   heating_type: z.string().trim().max(100).optional(),
   grid_limit_kw: z.coerce.number().min(0).max(10000).optional().or(z.literal("")),
   federal_state: z.string().trim().max(2).optional().or(z.literal("")),
-  hot_water_via_gas: z.boolean().default(false),
-  hot_water_gas_kwh_year: z.coerce.number().min(0).optional().or(z.literal("")),
-  hot_water_gas_share_pct: z.coerce.number().min(0).max(100).optional().or(z.literal("")),
+  hot_water_energy_type: z.string().trim().optional().or(z.literal("")),
+  hot_water_kwh_year: z.coerce.number().min(0).optional().or(z.literal("")),
+  hot_water_share_pct: z.coerce.number().min(0).max(100).optional().or(z.literal("")),
+
 });
 
 
