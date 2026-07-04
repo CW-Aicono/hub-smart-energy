@@ -58,12 +58,15 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
     loading,
     error,
     hasData,
+    totalHotWater,
+    hotWaterSource,
   } = useWeatherNormalization({
     locationId,
     energyType,
     referenceTemperature: refTemp,
     year,
   });
+
 
   const FULL_MONTHS = Array.from({ length: 12 }, (_, i) => T(`month.${i}`));
 
