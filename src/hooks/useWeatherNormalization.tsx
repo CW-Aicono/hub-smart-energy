@@ -368,12 +368,15 @@ export function useWeatherNormalization({
   return {
     data,
     loading,
-
     error,
     totalActual,
     totalNormalized,
+    totalHotWater,
     totalDeviation,
+    hotWaterInfo,
+    hotWaterSource: overallHotWaterSource,
     refetch: fetchData,
     hasData: data.some((d) => d.actualConsumption > 0),
   };
 }
+
