@@ -160,9 +160,10 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       heating_type: location.heating_type || "",
       grid_limit_kw: (location as any).grid_limit_kw ?? "",
       federal_state: (location as any).federal_state ?? "",
-      hot_water_via_gas: (location as any).hot_water_via_gas ?? false,
-      hot_water_gas_kwh_year: (location as any).hot_water_gas_kwh_year ?? "",
-      hot_water_gas_share_pct: (location as any).hot_water_gas_share_pct ?? "",
+      hot_water_energy_type: (location as any).hot_water_energy_type ?? "",
+      hot_water_kwh_year: (location as any).hot_water_kwh_year ?? "",
+      hot_water_share_pct: (location as any).hot_water_share_pct ?? "",
+
     });
     setOpen(true);
   };
