@@ -78,14 +78,14 @@ export function useWeatherNormalization({
         id: string;
         latitude: number;
         longitude: number;
-        hot_water_via_gas: boolean | null;
-        hot_water_gas_kwh_year: number | null;
-        hot_water_gas_share_pct: number | null;
+        hot_water_energy_type: string | null;
+        hot_water_kwh_year: number | null;
+        hot_water_share_pct: number | null;
       };
       let locations: LocRow[] = [];
 
       const locationSelect =
-        "id, latitude, longitude, hot_water_via_gas, hot_water_gas_kwh_year, hot_water_gas_share_pct";
+        "id, latitude, longitude, hot_water_energy_type, hot_water_kwh_year, hot_water_share_pct";
 
       if (locationId) {
         const { data: loc } = await supabase
@@ -106,6 +106,7 @@ export function useWeatherNormalization({
           .not("longitude", "is", null);
         locations = ((locs || []) as LocRow[]).filter((l) => l.latitude && l.longitude);
       }
+
 
       if (locations.length === 0) {
         setError("Keine Standorte mit Koordinaten vorhanden");
