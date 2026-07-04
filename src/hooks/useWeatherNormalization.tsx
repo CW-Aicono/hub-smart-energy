@@ -27,6 +27,13 @@ export interface NormalizedConsumption {
   avgTemperature: number;
   normalizedConsumption: number;
   deviationPercent: number;
+  hotWaterConsumption: number;
+}
+
+export interface LocationHotWaterInfo {
+  locationId: string;
+  source: HotWaterSource;
+  perMonthKwh: number;
 }
 
 interface UseWeatherNormalizationOptions {
@@ -35,6 +42,8 @@ interface UseWeatherNormalizationOptions {
   referenceTemperature?: number;
   year?: number;
 }
+
+
 
 const DEFAULT_REFERENCE_HDD_YEAR = 3200;
 const MONTH_LABELS = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
