@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode, Settings, Shield, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Globe } from "lucide-react";
+import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode, Settings, Shield, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Globe, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import PublicStatusLinkDialog from "@/components/charging/PublicStatusLinkDialog";
 import { toast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -657,9 +657,13 @@ const ChargingPoints = () => {
                             >
                               <span className="inline-flex items-center gap-1">
                                 {label}
-                                <span className="text-xs opacity-60">
-                                  {sortKey === key ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
-                                </span>
+                                {sortKey === key ? (
+                                  sortDir === "asc"
+                                    ? <ArrowUp className="h-3 w-3" />
+                                    : <ArrowDown className="h-3 w-3" />
+                                ) : (
+                                  <ArrowUpDown className="h-3 w-3 text-muted-foreground/50" />
+                                )}
                               </span>
                             </TableHead>
                           ))}
