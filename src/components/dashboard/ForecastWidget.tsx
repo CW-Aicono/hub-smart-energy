@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
@@ -9,6 +9,9 @@ import { TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatEnergy } from "@/lib/formatEnergy";
 import { useDemoMode } from "@/contexts/DemoMode";
+import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
+import { useWeatherNormalization } from "@/hooks/useWeatherNormalization";
+import { isHeatType } from "@/lib/report/weatherCorrection";
 
 interface ForecastWidgetProps {
   locationId: string | null;
@@ -31,12 +34,49 @@ const ENERGY_UNITS: Record<string, "kWh" | "m³"> = {
   wasser: "m³",
 };
 
+/**
+ * Typische monatliche HDD-Verteilung Deutschland (DWD 1991–2020, Basis 15 °C).
+ * Summe = 1.0. Wird für die Prognose zukünftiger Monate herangezogen, sodass
+ * die Hochrechnung witterungsabhängig statt als flacher Monatsmittelwert
+ * erfolgt.
+ */
+const TYPICAL_HDD_MONTH_SHARE = [
+  0.170, 0.145, 0.120, 0.080, 0.040, 0.010,
+  0.005, 0.005, 0.030, 0.080, 0.140, 0.175,
+];
+const REFERENCE_HDD_YEAR = 3200;
+
+const SUPPORTED_TYPES = ["strom", "gas", "waerme", "wasser"] as const;
+
 const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
   const isDemo = useDemoMode();
   const { t } = useTranslation();
-  const [energyType, setEnergyType] = useState<string>("strom");
+  const tenantTypes = useLocationEnergyTypesSet(locationId);
+
+  const availableTypes = useMemo(() => {
+    // Nur Energiequellen, die im Tenant/Standort tatsächlich hinterlegt sind.
+    // Im Demo-Modus alle unterstützten Typen zeigen, damit die Beispieldaten
+    // sichtbar bleiben.
+    if (isDemo) return [...SUPPORTED_TYPES] as string[];
+    return SUPPORTED_TYPES.filter((t) => tenantTypes.has(t));
+  }, [tenantTypes, isDemo]);
+
+  const [energyType, setEnergyType] = useState<string>(availableTypes[0] ?? "strom");
+
+  useEffect(() => {
+    if (availableTypes.length === 0) return;
+    if (!availableTypes.includes(energyType)) {
+      setEnergyType(availableTypes[0]);
+    }
+  }, [availableTypes, energyType]);
 
   const { data: monthly, isLoading } = useMonthlyConsumptionByType({
+    locationId,
+    energyType,
+  });
+
+  const applyHdd = isHeatType(energyType);
+  const { data: normData, hasData: hasNormData } = useWeatherNormalization({
     locationId,
     energyType,
   });
@@ -46,7 +86,7 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
     { value: "gas", label: t("energy.gas" as any) },
     { value: "waerme", label: t("energy.waerme" as any) },
     { value: "wasser", label: t("energy.wasser" as any) },
-  ];
+  ].filter((et) => availableTypes.includes(et.value));
 
   // monthlyValues = array of 12 numbers (Wh)
   const monthlyValues = useMemo(() => {
@@ -103,18 +143,20 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
           {t("dashboard.annualForecast" as any)}
           <HelpTooltip text={t("tooltip.forecast" as any)} />
         </CardTitle>
-        <Select value={energyType} onValueChange={setEnergyType}>
-          <SelectTrigger className="h-8 w-[110px] text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ENERGY_TYPES.map((et) => (
-              <SelectItem key={et.value} value={et.value} className="text-xs">
-                {et.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {ENERGY_TYPES.length > 0 && (
+          <Select value={energyType} onValueChange={setEnergyType}>
+            <SelectTrigger className="h-8 w-[110px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ENERGY_TYPES.map((et) => (
+                <SelectItem key={et.value} value={et.value} className="text-xs">
+                  {et.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
     </CardHeader>
   );
@@ -132,18 +174,65 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
     );
   }
 
-  // Forecast = average of months with data, projected over remaining months
+  // -----------------------------------------------------------------------
+  // Prognose je Restmonat
+  //  - Heizenergie (isHeatType): witterungsabhängig
+  //      forecast_m = avgWW + heatingPerHdd * expected_hdd_m
+  //      expected_hdd_m = TYPICAL_HDD_MONTH_SHARE[m] * REFERENCE_HDD_YEAR
+  //    heatingPerHdd wird aus den bisherigen Monaten mit HDD>0 berechnet
+  //    (actual - Warmwasser-Sockel).
+  //  - Sonst: flacher Mittelwert der bisherigen Monate.
+  // -----------------------------------------------------------------------
   const actualSlice = monthlyValues.slice(0, lastIdx + 1);
   const totalActual = actualSlice.reduce((s, v) => s + v, 0);
   const avgPerMonth = totalActual / actualSlice.length;
-  const forecastRemaining = Math.round(avgPerMonth) * (12 - actualSlice.length);
+
+  let forecastPerMonth: number[] = new Array(12).fill(0);
+
+  if (applyHdd && hasNormData && normData.length > 0) {
+    // Aggregierte Warmwasser-/Heizanteile über bisherige Monate (Wh)
+    let sumHeatingWh = 0;
+    let sumHdd = 0;
+    let wwMonths = 0;
+    let wwSum = 0;
+    for (let i = 0; i <= lastIdx; i++) {
+      const nd = normData[i];
+      if (!nd) continue;
+      const actualWh = nd.actualConsumption; // Wh
+      const wwWh = Math.min(nd.hotWaterConsumption || 0, actualWh);
+      const heatingWh = Math.max(0, actualWh - wwWh);
+      if ((nd.degreeDays || 0) > 0 && heatingWh > 0) {
+        sumHeatingWh += heatingWh;
+        sumHdd += nd.degreeDays;
+      }
+      if (actualWh > 0) {
+        wwMonths += 1;
+        wwSum += wwWh;
+      }
+    }
+    const heatingPerHdd = sumHdd > 0 ? sumHeatingWh / sumHdd : 0;
+    const avgWwPerMonth = wwMonths > 0 ? wwSum / wwMonths : 0;
+
+    for (let i = lastIdx + 1; i < 12; i++) {
+      const expectedHdd = TYPICAL_HDD_MONTH_SHARE[i] * REFERENCE_HDD_YEAR;
+      forecastPerMonth[i] = Math.round(avgWwPerMonth + heatingPerHdd * expectedHdd);
+    }
+  } else {
+    for (let i = lastIdx + 1; i < 12; i++) {
+      forecastPerMonth[i] = Math.round(avgPerMonth);
+    }
+  }
+
+  const forecastRemaining = forecastPerMonth
+    .slice(lastIdx + 1)
+    .reduce((s, v) => s + v, 0);
   const totalForecast = totalActual + forecastRemaining;
 
   const chartData = monthlyValues.map((v, i) => {
     const label = localizedMonths[i] || MONTH_KEYS[i];
     if (i < lastIdx) return { month: label, ist: v, prognose: null as number | null };
     if (i === lastIdx) return { month: label, ist: v, prognose: v }; // bridge point
-    return { month: label, ist: null as number | null, prognose: Math.round(avgPerMonth) };
+    return { month: label, ist: null as number | null, prognose: forecastPerMonth[i] };
   });
 
   const actualLabel = t("dashboard.forecastActual" as any);
@@ -155,6 +244,7 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
       <CardHeader className="pt-0">
         <p className="text-sm text-muted-foreground">
           {t("dashboard.forecastTotal" as any).replace("{value}", formatValueByType(totalForecast))}
+          {applyHdd && hasNormData ? ` · ${t("dashboard.forecastHddNote" as any) || "witterungsbereinigte Hochrechnung"}` : ""}
         </p>
       </CardHeader>
       <CardContent>
