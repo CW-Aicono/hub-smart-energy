@@ -124,8 +124,12 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       heating_type: location.heating_type || "",
       grid_limit_kw: (location as any).grid_limit_kw ?? "",
       federal_state: (location as any).federal_state ?? "",
+      hot_water_via_gas: (location as any).hot_water_via_gas ?? false,
+      hot_water_gas_kwh_year: (location as any).hot_water_gas_kwh_year ?? "",
+      hot_water_gas_share_pct: (location as any).hot_water_gas_share_pct ?? "",
     },
   });
+
 
   const watchedIsMain = form.watch("is_main_location");
   const currentMainLocation = locations.find(loc => loc.is_main_location && loc.id !== location.id);
