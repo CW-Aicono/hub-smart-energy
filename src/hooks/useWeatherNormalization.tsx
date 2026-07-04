@@ -3,6 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { gasM3ToKWh } from "@/lib/formatEnergy";
 import { useTenant } from "./useTenant";
+import {
+  estimateHotWaterBaselineKwhPerMonth,
+  normalizeHeatConsumptionWithBaseline,
+  isHeatType,
+  type HotWaterSource,
+} from "@/lib/report/weatherCorrection";
+
 
 export interface DegreeDayData {
   month: string;
