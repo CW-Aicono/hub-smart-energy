@@ -53,19 +53,19 @@ export function WeatherCorrectionSection({
       for (const [eType, kwh] of Object.entries(cons)) {
         if (!isHeatType(eType)) continue;
         // Nur Jahres-Aggregat verfügbar → Sommer-Baseline nicht möglich.
-        // Für Gas mit manuellem Override diesen anwenden, sonst Fallback-Anteil.
-        let wwYearKwh = 0;
-        if (eType.toLowerCase() === "gas") {
-          const est = estimateHotWaterBaselineKwhPerMonth(
-            [{ kwh, hdd }],
-            {
-              hotWaterViaGas: anyLoc.hot_water_via_gas,
-              hotWaterGasKwhYear: anyLoc.hot_water_gas_kwh_year,
-              hotWaterGasSharePct: anyLoc.hot_water_gas_share_pct,
-            },
-          );
-          wwYearKwh = est.perMonthKwh * 12;
-        }
+        // Nur wenn der Standort explizit eine WW-Quelle konfiguriert hat und
+        // diese der aktuellen Energieart entspricht, wird ein Sockel abgezogen.
+        const est = estimateHotWaterBaselineKwhPerMonth(
+          [{ kwh, hdd }],
+          {
+            hotWaterEnergyType: anyLoc.hot_water_energy_type,
+            hotWaterKwhYear: anyLoc.hot_water_kwh_year,
+            hotWaterSharePct: anyLoc.hot_water_share_pct,
+          },
+          eType,
+        );
+        const wwYearKwh = est.perMonthKwh * 12;
+
         measured += kwh;
         normalized += normalizeHeatConsumptionWithBaseline(kwh, hdd, wwYearKwh);
       }
