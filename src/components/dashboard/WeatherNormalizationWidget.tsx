@@ -14,7 +14,7 @@ import { formatEnergy } from "@/lib/formatEnergy";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
 import { isHeatType } from "@/lib/report/weatherCorrection";
-import { useEffect } from "react";
+
 
 interface WeatherNormalizationWidgetProps {
   locationId: string | null;
