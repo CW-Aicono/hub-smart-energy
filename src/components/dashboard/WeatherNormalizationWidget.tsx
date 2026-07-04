@@ -58,12 +58,15 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
     loading,
     error,
     hasData,
+    totalHotWater,
+    hotWaterSource,
   } = useWeatherNormalization({
     locationId,
     energyType,
     referenceTemperature: refTemp,
     year,
   });
+
 
   const FULL_MONTHS = Array.from({ length: 12 }, (_, i) => T(`month.${i}`));
 
@@ -104,9 +107,21 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
 
   const filteredTotalActual = filteredData.reduce((s, d) => s + d.actualConsumption, 0);
   const filteredTotalNormalized = filteredData.reduce((s, d) => s + d.normalizedConsumption, 0);
+  const filteredTotalHotWater = filteredData.reduce((s, d) => s + (d.hotWaterConsumption || 0), 0);
   const filteredTotalDeviation = filteredTotalActual > 0
     ? Math.round(((filteredTotalNormalized - filteredTotalActual) / filteredTotalActual) * 10000) / 100
     : 0;
+
+  const hotWaterSourceLabel =
+    hotWaterSource === "manual"
+      ? "manuell"
+      : hotWaterSource === "summer-baseline"
+        ? "Sommer-Baseline"
+        : hotWaterSource === "fallback"
+          ? "Fallback 12 %"
+          : "–";
+  const showHotWaterCard = energyType !== "strom" && filteredTotalHotWater > 0;
+
 
   if (loading) {
     type SortKey = "month" | "degreeDays" | "temp" | "actual" | "norm" | "dev";
@@ -252,11 +267,36 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
         ) : (
           <>
             {/* KPI Cards */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className={`grid ${showHotWaterCard ? "grid-cols-4" : "grid-cols-3"} gap-3 mb-4`}>
               <div className="rounded-lg bg-muted/50 p-3 text-center">
                 <p className="text-xs text-muted-foreground">{T("wn.actual")}</p>
                 <p className="text-lg font-semibold">{formatEnergy(filteredTotalActual)}</p>
               </div>
+              {showHotWaterCard && (
+                <div className="rounded-lg bg-muted/50 p-3 text-center">
+                  <ShadTooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <p className="text-xs text-muted-foreground cursor-help">
+                          Warmwasser (geschätzt)
+                        </p>
+                        <p className="text-lg font-semibold">
+                          {formatEnergy(filteredTotalHotWater)}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          {hotWaterSourceLabel}
+                        </p>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-[280px] text-xs">
+                      Warmwasser-Sockel wird vor der Witterungsbereinigung abgezogen
+                      und danach unverändert wieder addiert (temperaturunabhängig).
+                      Quelle: {hotWaterSourceLabel}. Manuellen Wert im Standort
+                      hinterlegen für höhere Genauigkeit.
+                    </TooltipContent>
+                  </ShadTooltip>
+                </div>
+              )}
               <div className="rounded-lg bg-muted/50 p-3 text-center">
                 <p className="text-xs text-muted-foreground">{T("wn.normalized")}</p>
                 <p className="text-lg font-semibold">{formatEnergy(filteredTotalNormalized)}</p>
@@ -269,6 +309,7 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
                 </p>
               </div>
             </div>
+
 
             <Tabs defaultValue="chart">
               <TabsList className="mb-3">

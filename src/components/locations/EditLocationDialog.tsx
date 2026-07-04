@@ -77,7 +77,11 @@ const locationSchema = z.object({
   heating_type: z.string().trim().max(100).optional(),
   grid_limit_kw: z.coerce.number().min(0).max(10000).optional().or(z.literal("")),
   federal_state: z.string().trim().max(2).optional().or(z.literal("")),
+  hot_water_via_gas: z.boolean().default(false),
+  hot_water_gas_kwh_year: z.coerce.number().min(0).optional().or(z.literal("")),
+  hot_water_gas_share_pct: z.coerce.number().min(0).max(100).optional().or(z.literal("")),
 });
+
 
 type LocationFormData = z.infer<typeof locationSchema>;
 
@@ -120,8 +124,12 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       heating_type: location.heating_type || "",
       grid_limit_kw: (location as any).grid_limit_kw ?? "",
       federal_state: (location as any).federal_state ?? "",
+      hot_water_via_gas: (location as any).hot_water_via_gas ?? false,
+      hot_water_gas_kwh_year: (location as any).hot_water_gas_kwh_year ?? "",
+      hot_water_gas_share_pct: (location as any).hot_water_gas_share_pct ?? "",
     },
   });
+
 
   const watchedIsMain = form.watch("is_main_location");
   const currentMainLocation = locations.find(loc => loc.is_main_location && loc.id !== location.id);
@@ -150,9 +158,13 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       heating_type: location.heating_type || "",
       grid_limit_kw: (location as any).grid_limit_kw ?? "",
       federal_state: (location as any).federal_state ?? "",
+      hot_water_via_gas: (location as any).hot_water_via_gas ?? false,
+      hot_water_gas_kwh_year: (location as any).hot_water_gas_kwh_year ?? "",
+      hot_water_gas_share_pct: (location as any).hot_water_gas_share_pct ?? "",
     });
     setOpen(true);
   };
+
 
   const onSubmit = async (data: LocationFormData) => {
     const { energy_sources: energySourceItems, ...rest } = data;
@@ -179,7 +191,17 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       heating_type: rest.heating_type || null,
       grid_limit_kw: typeof rest.grid_limit_kw === "number" ? rest.grid_limit_kw : null,
       federal_state: rest.federal_state ? rest.federal_state : null,
+      hot_water_via_gas: !!rest.hot_water_via_gas,
+      hot_water_gas_kwh_year:
+        rest.hot_water_via_gas && typeof rest.hot_water_gas_kwh_year === "number"
+          ? rest.hot_water_gas_kwh_year
+          : null,
+      hot_water_gas_share_pct:
+        rest.hot_water_via_gas && typeof rest.hot_water_gas_share_pct === "number"
+          ? rest.hot_water_gas_share_pct
+          : null,
     } as any;
+
 
     const { error } = await updateLocation(location.id, updates);
 
@@ -509,6 +531,57 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
                   </FormItem>
                 )} />
               </div>
+
+              {/* Warmwasserbereitung */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium">Warmwasserbereitung</h4>
+                <FormField
+                  control={form.control}
+                  name="hot_water_via_gas"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5 pr-4">
+                        <FormLabel className="text-base">Warmwasser über Gas</FormLabel>
+                        <FormDescription>
+                          Wird das Trinkwarmwasser (mit) über den Gasverbrauch bereitet?
+                          Der Sockel wird dann vor der Witterungsbereinigung abgezogen.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                {form.watch("hot_water_via_gas") && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField control={form.control} name="hot_water_gas_kwh_year" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>WW-Jahresverbrauch (kWh)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="any" min={0} placeholder="z.B. 3500" {...field} value={field.value ?? ""} />
+                        </FormControl>
+                        <FormDescription>Genauer Wert falls bekannt.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="hot_water_gas_share_pct" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Anteil am Gasverbrauch (%)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.1" min={0} max={100} placeholder="z.B. 15" {...field} value={field.value ?? ""} />
+                        </FormControl>
+                        <FormDescription>
+                          Wird nur genutzt, wenn kein kWh-Wert gesetzt ist.
+                          Bleibt beides leer, wird automatisch die Sommer-Baseline verwendet.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-medium">{t("locations.coordinates")}</h4>
