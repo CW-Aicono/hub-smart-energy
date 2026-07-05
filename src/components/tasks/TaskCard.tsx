@@ -53,7 +53,8 @@ interface TaskCardProps {
 }
 
 export const TaskCard = ({ task, duplicateCount, duplicateIds, selectable, selected, onToggleSelect }: TaskCardProps) => {
-  const { updateTask, deleteTask, bulkUpdateStatus } = useTasks();
+  const { updateTask, deleteTask, bulkUpdateStatus, ignoreTasks, reactivateTasks } = useTasks();
+  const isIgnored = !!task.ignored_at;
   const [detailOpen, setDetailOpen] = useState(false);
 
   const StatusIcon = STATUS_CONFIG[task.status]?.icon ?? Circle;
