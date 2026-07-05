@@ -132,18 +132,37 @@ export const TaskCard = ({ task, duplicateCount, duplicateIds, selectable, selec
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {(["open", "in_progress", "done", "cancelled"] as TaskStatus[]).map((s) =>
-                      s !== task.status && (
-                        <DropdownMenuItem key={s} onClick={() => handleStatusChange(s)}>
-                          Als „{STATUS_CONFIG[s].label}" markieren
-                        </DropdownMenuItem>
+                    {isIgnored ? (
+                      <DropdownMenuItem onClick={() => {
+                        const allIds = duplicateIds && duplicateIds.length > 0 ? duplicateIds : [task.id];
+                        reactivateTasks.mutate(allIds);
+                      }}>
+                        <RotateCcw className="h-4 w-4 mr-2" /> Wieder aktivieren
+                      </DropdownMenuItem>
+                    ) : (
+                      (["open", "in_progress", "done", "cancelled"] as TaskStatus[]).map((s) =>
+                        s !== task.status && (
+                          <DropdownMenuItem key={s} onClick={() => handleStatusChange(s)}>
+                            Als „{STATUS_CONFIG[s].label}" markieren
+                          </DropdownMenuItem>
+                        )
                       )
                     )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setDetailOpen(true)}>
-                      <ArrowLeftRight className="h-4 w-4 mr-2" /> Übergeben / Bearbeiten
-                    </DropdownMenuItem>
-                    {(task.status === "open" || task.status === "done" || task.status === "cancelled") && (
+                    {!isIgnored && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setDetailOpen(true)}>
+                          <ArrowLeftRight className="h-4 w-4 mr-2" /> Übergeben / Bearbeiten
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => {
+                          const allIds = duplicateIds && duplicateIds.length > 0 ? duplicateIds : [task.id];
+                          ignoreTasks.mutate(allIds);
+                        }}>
+                          <BellOff className="h-4 w-4 mr-2" /> Dauerhaft ignorieren
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    {(task.status === "open" || task.status === "done" || task.status === "cancelled" || isIgnored) && (
                       <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => {
