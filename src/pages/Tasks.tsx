@@ -143,6 +143,13 @@ const Tasks = () => {
                   <Badge variant="secondary" className="text-xs ml-1">{countArchived}</Badge>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="ignored" className="gap-1.5">
+                <BellOff className="h-4 w-4" />
+                Ignoriert
+                {countIgnored > 0 && (
+                  <Badge variant="secondary" className="text-xs ml-1">{countIgnored}</Badge>
+                )}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="active" className="space-y-6 mt-4">
