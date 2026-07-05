@@ -242,8 +242,23 @@ const Tasks = () => {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {ignoredTasks.map((task) => (
-                    <TaskCard key={task.id} task={task} />
+                  {Array.from(
+                    ignoredTasks.reduce((acc, tk) => {
+                      const key = `${tk.title}||${tk.source_type}`;
+                      const existing = acc.get(key);
+                      if (!existing) {
+                        acc.set(key, { task: tk, count: 1, allIds: [tk.id] });
+                      } else {
+                        existing.allIds.push(tk.id);
+                        existing.count++;
+                        if (new Date(tk.created_at) > new Date(existing.task.created_at)) {
+                          existing.task = tk;
+                        }
+                      }
+                      return acc;
+                    }, new Map<string, { task: typeof ignoredTasks[0]; count: number; allIds: string[] }>()).values()
+                  ).map(({ task, count, allIds }) => (
+                    <TaskCard key={task.id} task={task} duplicateCount={count} duplicateIds={allIds} />
                   ))}
                 </div>
               )}
