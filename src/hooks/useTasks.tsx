@@ -356,7 +356,78 @@ export const useTasks = () => {
     },
   });
 
-  return { tasks, isLoading, tenantUsers, createTask, updateTask, bulkUpdateStatus, bulkUpdateFields, deleteTask, addComment, deleteAllArchived };
+  const ignoreTasks = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const nowIso = new Date().toISOString();
+      const { error } = await supabase
+        .from("tasks")
+        .update({ ignored_at: nowIso, status: "cancelled" } as any)
+        .in("id", ids)
+        .eq("tenant_id", tenant!.id);
+      if (error) throw error;
+      // Mark linked integration_errors as permanently ignored so sync jobs don't recreate them
+      await supabase
+        .from("integration_errors")
+        .update({ is_ignored: true, is_resolved: true, resolved_at: nowIso })
+        .in("task_id", ids)
+        .eq("tenant_id", tenant!.id);
+      await supabase.from("task_history").insert(
+        ids.map((id) => ({
+          task_id: id,
+          tenant_id: tenant!.id,
+          actor_id: user?.id ?? null,
+          actor_name: user?.email ?? null,
+          action: "ignored",
+        }))
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["integration-errors"] });
+      queryClient.invalidateQueries({ queryKey: ["task-history"] });
+      toast({ title: "Dauerhaft ignoriert" });
+    },
+    onError: () => {
+      toast({ title: "Fehler beim Ignorieren", variant: "destructive" });
+    },
+  });
+
+  const reactivateTasks = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ ignored_at: null, status: "open", completed_at: null } as any)
+        .in("id", ids)
+        .eq("tenant_id", tenant!.id);
+      if (error) throw error;
+      // Reopen linked integration_errors so sync jobs can raise them again
+      await supabase
+        .from("integration_errors")
+        .update({ is_ignored: false })
+        .in("task_id", ids)
+        .eq("tenant_id", tenant!.id);
+      await supabase.from("task_history").insert(
+        ids.map((id) => ({
+          task_id: id,
+          tenant_id: tenant!.id,
+          actor_id: user?.id ?? null,
+          actor_name: user?.email ?? null,
+          action: "reactivated",
+        }))
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenant?.id] });
+      queryClient.invalidateQueries({ queryKey: ["integration-errors"] });
+      queryClient.invalidateQueries({ queryKey: ["task-history"] });
+      toast({ title: "Wieder aktiviert" });
+    },
+    onError: () => {
+      toast({ title: "Fehler beim Reaktivieren", variant: "destructive" });
+    },
+  });
+
+  return { tasks, isLoading, tenantUsers, createTask, updateTask, bulkUpdateStatus, bulkUpdateFields, deleteTask, addComment, deleteAllArchived, ignoreTasks, reactivateTasks };
 };
 
 export const useTaskHistory = (taskId: string) => {
