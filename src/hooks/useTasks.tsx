@@ -39,7 +39,7 @@ export interface Task {
   recurrence_rule: string | null;
   recurrence_parent_id: string | null;
   checklist: ChecklistItem[];
-  ignored_at: string | null;
+  ignored_at?: string | null;
 }
 
 export interface TaskHistory {
