@@ -105,6 +105,7 @@ const Tasks = () => {
   const countInProgress = activeTasks.filter((tk) => tk.status === "in_progress").length;
   const countArchived = archivedTasks.length;
   const countIgnored = ignoredTasks.length;
+  const countCritical = activeTasks.filter((tk) => tk.priority === "critical").length;
   const countOverdue = activeTasks.filter((tk) => tk.due_date && new Date(tk.due_date) < new Date()).length;
   const countExternal = activeTasks.filter((tk) => !!tk.external_contact_name).length;
 
