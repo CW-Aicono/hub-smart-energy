@@ -56,9 +56,10 @@ const Tasks = () => {
   const toggleOverdue = () => { setStatusFilter("all"); setPriorityFilter("all"); setExternalFilter(false); setOverdueFilter((prev) => !prev); };
   const toggleExternal = () => { setStatusFilter("all"); setPriorityFilter("all"); setOverdueFilter(false); setExternalFilter((prev) => !prev); };
 
-  // Split tasks into active (open, in_progress) and archived (done, cancelled)
-  const activeTasks = useMemo(() => tasks.filter((tk) => !tk.archived_at), [tasks]);
-  const archivedTasks = useMemo(() => tasks.filter((tk) => !!tk.archived_at), [tasks]);
+  // Split tasks into active (open/in_progress), archived (done/cancelled) and permanently ignored
+  const activeTasks = useMemo(() => tasks.filter((tk) => !tk.archived_at && !tk.ignored_at), [tasks]);
+  const archivedTasks = useMemo(() => tasks.filter((tk) => !!tk.archived_at && !tk.ignored_at), [tasks]);
+  const ignoredTasks = useMemo(() => tasks.filter((tk) => !!tk.ignored_at), [tasks]);
 
   // Deduplicate: group by title + source_type, keep newest, count duplicates
   const filtered = useMemo(() => {
