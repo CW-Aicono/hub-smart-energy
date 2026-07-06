@@ -9,7 +9,7 @@ import { TaskDetailSheet } from "@/components/tasks/TaskDetailSheet";
 import {
   MoreHorizontal, User, ExternalLink, Zap, AlertTriangle, PlugZap,
   Clock, CheckCircle2, Circle, ArrowRight, XCircle, CalendarDays, Trash2,
-  ArrowLeftRight, Repeat, ListChecks,
+  ArrowLeftRight, Repeat, ListChecks, BellOff, RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -53,7 +53,8 @@ interface TaskCardProps {
 }
 
 export const TaskCard = ({ task, duplicateCount, duplicateIds, selectable, selected, onToggleSelect }: TaskCardProps) => {
-  const { updateTask, deleteTask, bulkUpdateStatus } = useTasks();
+  const { updateTask, deleteTask, bulkUpdateStatus, ignoreTasks, reactivateTasks } = useTasks();
+  const isIgnored = !!task.ignored_at;
   const [detailOpen, setDetailOpen] = useState(false);
 
   const StatusIcon = STATUS_CONFIG[task.status]?.icon ?? Circle;
@@ -131,18 +132,37 @@ export const TaskCard = ({ task, duplicateCount, duplicateIds, selectable, selec
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    {(["open", "in_progress", "done", "cancelled"] as TaskStatus[]).map((s) =>
-                      s !== task.status && (
-                        <DropdownMenuItem key={s} onClick={() => handleStatusChange(s)}>
-                          Als „{STATUS_CONFIG[s].label}" markieren
-                        </DropdownMenuItem>
+                    {isIgnored ? (
+                      <DropdownMenuItem onClick={() => {
+                        const allIds = duplicateIds && duplicateIds.length > 0 ? duplicateIds : [task.id];
+                        reactivateTasks.mutate(allIds);
+                      }}>
+                        <RotateCcw className="h-4 w-4 mr-2" /> Wieder aktivieren
+                      </DropdownMenuItem>
+                    ) : (
+                      (["open", "in_progress", "done", "cancelled"] as TaskStatus[]).map((s) =>
+                        s !== task.status && (
+                          <DropdownMenuItem key={s} onClick={() => handleStatusChange(s)}>
+                            Als „{STATUS_CONFIG[s].label}" markieren
+                          </DropdownMenuItem>
+                        )
                       )
                     )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setDetailOpen(true)}>
-                      <ArrowLeftRight className="h-4 w-4 mr-2" /> Übergeben / Bearbeiten
-                    </DropdownMenuItem>
-                    {(task.status === "open" || task.status === "done" || task.status === "cancelled") && (
+                    {!isIgnored && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setDetailOpen(true)}>
+                          <ArrowLeftRight className="h-4 w-4 mr-2" /> Übergeben / Bearbeiten
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => {
+                          const allIds = duplicateIds && duplicateIds.length > 0 ? duplicateIds : [task.id];
+                          ignoreTasks.mutate(allIds);
+                        }}>
+                          <BellOff className="h-4 w-4 mr-2" /> Dauerhaft ignorieren
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    {(task.status === "open" || task.status === "done" || task.status === "cancelled" || isIgnored) && (
                       <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => {

@@ -10770,6 +10770,7 @@ export type Database = {
           external_contact_name: string | null
           external_contact_phone: string | null
           id: string
+          ignored_at: string | null
           priority: string
           recurrence_parent_id: string | null
           recurrence_rule: string | null
@@ -10796,6 +10797,7 @@ export type Database = {
           external_contact_name?: string | null
           external_contact_phone?: string | null
           id?: string
+          ignored_at?: string | null
           priority?: string
           recurrence_parent_id?: string | null
           recurrence_rule?: string | null
@@ -10822,6 +10824,7 @@ export type Database = {
           external_contact_name?: string | null
           external_contact_phone?: string | null
           id?: string
+          ignored_at?: string | null
           priority?: string
           recurrence_parent_id?: string | null
           recurrence_rule?: string | null

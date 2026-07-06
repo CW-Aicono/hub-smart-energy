@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode, Settings, Shield, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Globe } from "lucide-react";
+import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode, Settings, Shield, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Globe, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import PublicStatusLinkDialog from "@/components/charging/PublicStatusLinkDialog";
 import { toast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -216,9 +216,37 @@ const ChargingPoints = () => {
     }, 0);
 
 
-  const filteredChargePoints = statusFilter
-    ? chargePoints.filter((cp) => getEffectiveStatus(cp) === statusFilter)
-    : chargePoints;
+  const [sortKey, setSortKey] = useState<"name" | "connector_type" | "status" | "address" | "max_power_kw" | "last_heartbeat">("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const toggleSort = (key: typeof sortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  };
+
+  const filteredChargePoints = useMemo(() => {
+    const base = statusFilter
+      ? chargePoints.filter((cp) => getEffectiveStatus(cp) === statusFilter)
+      : chargePoints;
+    const dir = sortDir === "asc" ? 1 : -1;
+    const getVal = (cp: ChargePoint): string | number => {
+      switch (sortKey) {
+        case "name": return (cp.name ?? "").toLowerCase();
+        case "connector_type": return (cp.connector_type ?? "").toLowerCase();
+        case "status": return getEffectiveStatus(cp);
+        case "address": return (cp.address ?? "").toLowerCase();
+        case "max_power_kw": return Number(cp.max_power_kw ?? 0);
+        case "last_heartbeat": return cp.last_heartbeat ? new Date(cp.last_heartbeat).getTime() : 0;
+      }
+    };
+    return [...base].sort((a, b) => {
+      const av = getVal(a); const bv = getVal(b);
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chargePoints, statusFilter, sortKey, sortDir, connectorsByChargePoint]);
+
   const effectiveChargePoints = chargePoints.map((cp) => ({ ...cp, status: getEffectiveStatus(cp) }));
   const effectiveFilteredChargePoints = filteredChargePoints.map((cp) => ({ ...cp, status: getEffectiveStatus(cp) }));
 
@@ -614,12 +642,31 @@ const ChargingPoints = () => {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>{t("charging.name" as any)}</TableHead>
-                          <TableHead>{t("charging.connectorTypes" as any)}</TableHead>
-                          <TableHead>{t("common.status" as any)}</TableHead>
-                          <TableHead>{t("charging.location" as any)}</TableHead>
-                          <TableHead>{t("charging.power" as any)}</TableHead>
-                          <TableHead>{t("charging.lastHeartbeat" as any)}</TableHead>
+                          {([
+                            ["name", t("charging.name" as any)],
+                            ["connector_type", t("charging.connectorTypes" as any)],
+                            ["status", t("common.status" as any)],
+                            ["address", t("charging.location" as any)],
+                            ["max_power_kw", t("charging.power" as any)],
+                            ["last_heartbeat", t("charging.lastHeartbeat" as any)],
+                          ] as const).map(([key, label]) => (
+                            <TableHead
+                              key={key}
+                              onClick={() => toggleSort(key as any)}
+                              className="cursor-pointer select-none hover:text-foreground"
+                            >
+                              <span className="inline-flex items-center gap-1">
+                                {label}
+                                {sortKey === key ? (
+                                  sortDir === "asc"
+                                    ? <ArrowUp className="h-3 w-3" />
+                                    : <ArrowDown className="h-3 w-3" />
+                                ) : (
+                                  <ArrowUpDown className="h-3 w-3 text-muted-foreground/50" />
+                                )}
+                              </span>
+                            </TableHead>
+                          ))}
                           <TableHead className="w-12">QR</TableHead>
                           {isAdmin && <TableHead className="w-16"></TableHead>}
                         </TableRow>

@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, CheckCircle2, Circle, ArrowRight, AlertTriangle, ListChecks, Zap, PlugZap, ExternalLink, Archive } from "lucide-react";
+import { Plus, Search, CheckCircle2, Circle, ArrowRight, AlertTriangle, ListChecks, Zap, PlugZap, ExternalLink, Archive, BellOff } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const Tasks = () => {
@@ -56,9 +56,10 @@ const Tasks = () => {
   const toggleOverdue = () => { setStatusFilter("all"); setPriorityFilter("all"); setExternalFilter(false); setOverdueFilter((prev) => !prev); };
   const toggleExternal = () => { setStatusFilter("all"); setPriorityFilter("all"); setOverdueFilter(false); setExternalFilter((prev) => !prev); };
 
-  // Split tasks into active (open, in_progress) and archived (done, cancelled)
-  const activeTasks = useMemo(() => tasks.filter((tk) => !tk.archived_at), [tasks]);
-  const archivedTasks = useMemo(() => tasks.filter((tk) => !!tk.archived_at), [tasks]);
+  // Split tasks into active (open/in_progress), archived (done/cancelled) and permanently ignored
+  const activeTasks = useMemo(() => tasks.filter((tk) => !tk.archived_at && !tk.ignored_at), [tasks]);
+  const archivedTasks = useMemo(() => tasks.filter((tk) => !!tk.archived_at && !tk.ignored_at), [tasks]);
+  const ignoredTasks = useMemo(() => tasks.filter((tk) => !!tk.ignored_at), [tasks]);
 
   // Deduplicate: group by title + source_type, keep newest, count duplicates
   const filtered = useMemo(() => {
@@ -103,6 +104,7 @@ const Tasks = () => {
   const countOpen = activeTasks.filter((tk) => tk.status === "open").length;
   const countInProgress = activeTasks.filter((tk) => tk.status === "in_progress").length;
   const countArchived = archivedTasks.length;
+  const countIgnored = ignoredTasks.length;
   const countCritical = activeTasks.filter((tk) => tk.priority === "critical").length;
   const countOverdue = activeTasks.filter((tk) => tk.due_date && new Date(tk.due_date) < new Date()).length;
   const countExternal = activeTasks.filter((tk) => !!tk.external_contact_name).length;
@@ -139,6 +141,13 @@ const Tasks = () => {
                 Archiv
                 {countArchived > 0 && (
                   <Badge variant="secondary" className="text-xs ml-1">{countArchived}</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="ignored" className="gap-1.5">
+                <BellOff className="h-4 w-4" />
+                Ignoriert
+                {countIgnored > 0 && (
+                  <Badge variant="secondary" className="text-xs ml-1">{countIgnored}</Badge>
                 )}
               </TabsTrigger>
             </TabsList>
@@ -217,6 +226,41 @@ const Tasks = () => {
                 <div className="space-y-3">{[...Array(3)].map((_, i) => (<Skeleton key={i} className="h-20 w-full rounded-lg" />))}</div>
               ) : (
                 <TaskArchive tasks={archivedTasks} />
+              )}
+            </TabsContent>
+
+            <TabsContent value="ignored" className="mt-4">
+              {isLoading ? (
+                <div className="space-y-3">{[...Array(3)].map((_, i) => (<Skeleton key={i} className="h-20 w-full rounded-lg" />))}</div>
+              ) : ignoredTasks.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <BellOff className="h-12 w-12 text-muted-foreground/30 mb-4" />
+                  <h3 className="font-semibold">Keine ignorierten Meldungen</h3>
+                  <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                    Dauerhaft ignorierte Aufgaben werden hier gesammelt und können bei Bedarf wieder aktiviert werden.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {Array.from(
+                    ignoredTasks.reduce((acc, tk) => {
+                      const key = `${tk.title}||${tk.source_type}`;
+                      const existing = acc.get(key);
+                      if (!existing) {
+                        acc.set(key, { task: tk, count: 1, allIds: [tk.id] });
+                      } else {
+                        existing.allIds.push(tk.id);
+                        existing.count++;
+                        if (new Date(tk.created_at) > new Date(existing.task.created_at)) {
+                          existing.task = tk;
+                        }
+                      }
+                      return acc;
+                    }, new Map<string, { task: typeof ignoredTasks[0]; count: number; allIds: string[] }>()).values()
+                  ).map(({ task, count, allIds }) => (
+                    <TaskCard key={task.id} task={task} duplicateCount={count} duplicateIds={allIds} />
+                  ))}
+                </div>
               )}
             </TabsContent>
           </Tabs>
