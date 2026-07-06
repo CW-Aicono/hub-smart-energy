@@ -32,10 +32,12 @@ export const FloorPlanImage = forwardRef<HTMLImageElement, FloorPlanRendererProp
           src={`${src}#toolbar=0&navpanes=0&scrollbar=0`}
           title={alt}
           className={className}
-          style={{ ...style, minHeight: "400px", width: "100%", height: "100%", border: "none" }}
+          onLoad={onLoad}
+          style={{ ...style, minHeight: "400px", width: "100%", height: "100%", border: "none", pointerEvents: "none" }}
         />
       );
     }
+
 
     return (
       <img
