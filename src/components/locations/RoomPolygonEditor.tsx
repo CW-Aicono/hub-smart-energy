@@ -6,7 +6,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { DoorOpen, Plus, Trash2, Pencil, Check, X, Undo2, Crosshair } from "lucide-react";
 import { toast } from "sonner";
 import { RoomOverlay2D } from "./RoomOverlay2D";
-import { FloorPlanImage } from "./FloorPlanRenderer";
+import { FloorPlanImage, isPdfUrl } from "./FloorPlanRenderer";
+
 import { useTranslation } from "@/hooks/useTranslation";
 
 interface PolygonPoint {
@@ -38,19 +39,32 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
   const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const isPdf = isPdfUrl(floorPlanUrl);
+
   // Calculate the actual rendered image area within the object-contain container
   const updateOverlayStyle = useCallback(() => {
-    if (!imageRef.current) return;
-    const img = imageRef.current;
-    const container = img.parentElement;
+    const container = containerRef.current;
     if (!container) return;
-    
     const containerRect = container.getBoundingClientRect();
+
+    // For PDFs (or if image dimensions aren't available yet), use the full container
+    const img = imageRef.current;
+    if (isPdf || !img || !img.naturalWidth || !img.naturalHeight) {
+      setOverlayStyle({
+        position: 'absolute',
+        left: '0px',
+        top: '0px',
+        width: `${containerRect.width}px`,
+        height: `${containerRect.height}px`,
+      });
+      return;
+    }
+
     const imgRatio = img.naturalWidth / img.naturalHeight;
     const containerRatio = containerRect.width / containerRect.height;
-    
+
     let renderWidth: number, renderHeight: number, offsetX: number, offsetY: number;
-    
+
     if (imgRatio > containerRatio) {
       renderWidth = containerRect.width;
       renderHeight = containerRect.width / imgRatio;
@@ -62,7 +76,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
       offsetX = (containerRect.width - renderWidth) / 2;
       offsetY = 0;
     }
-    
+
     setOverlayStyle({
       position: 'absolute',
       left: `${offsetX}px`,
@@ -70,7 +84,8 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
       width: `${renderWidth}px`,
       height: `${renderHeight}px`,
     });
-  }, []);
+  }, [isPdf]);
+
 
   useEffect(() => {
     if (imgLoaded) updateOverlayStyle();
