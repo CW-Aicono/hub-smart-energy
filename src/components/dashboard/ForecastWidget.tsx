@@ -237,6 +237,22 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
 
   const actualLabel = t("dashboard.forecastActual" as any);
   const forecastLabel = t("dashboard.forecastForecast" as any);
+  const maxChartValue = Math.max(
+    0,
+    ...chartData.flatMap((point) => [point.ist ?? 0, point.prognose ?? 0]),
+  );
+  const yAxisWidth = Math.min(
+    150,
+    Math.max(
+      96,
+      Math.max(
+        formatValueByType(0).length,
+        formatValueByType(maxChartValue).length,
+        formatValueByType(maxChartValue / 2).length,
+        formatValueByType(maxChartValue * 1.25).length,
+      ) * 8 + 24,
+    ),
+  );
 
   return (
     <Card>
@@ -249,13 +265,14 @@ const ForecastWidget = ({ locationId }: ForecastWidgetProps) => {
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+          <LineChart data={chartData} margin={{ left: 18, right: 14, top: 5, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
             <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))" }} />
             <YAxis
               tick={{ fill: "hsl(var(--muted-foreground))" }}
+              tickMargin={10}
               tickFormatter={(value: number) => formatValueByType(value)}
-              width={72}
+              width={yAxisWidth}
             />
             <Tooltip
               contentStyle={{
