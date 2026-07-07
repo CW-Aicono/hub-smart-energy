@@ -441,6 +441,8 @@ function Scene({
   onCameraUpdate: (pos: { x: number; z: number }, rotY: number) => void;
 }) {
   const [isDraggingMeter, setIsDraggingMeter] = useState(false);
+  // Shared floor-wide percent→meter scale so the 2D layout drives 3D positions.
+  const floorScale = useMemo(() => computeFloorScale(rooms, floor), [rooms, floor]);
   // Calculate scene bounds based on rooms
   const sceneBounds = useMemo(() => {
     if (rooms.length === 0) {
@@ -450,7 +452,7 @@ function Scene({
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     
     rooms.forEach((room, index) => {
-      const bounds = deriveRoomBounds(room, index, rooms.length);
+      const bounds = deriveRoomBounds(room, index, rooms.length, floorScale);
       minX = Math.min(minX, bounds.minX);
       maxX = Math.max(maxX, bounds.maxX);
       minZ = Math.min(minZ, bounds.minZ);
@@ -462,7 +464,8 @@ function Scene({
       centerX: (minX + maxX) / 2,
       centerZ: (minZ + maxZ) / 2,
     };
-  }, [rooms]);
+  }, [rooms, floorScale]);
+
 
   return (
     <>
