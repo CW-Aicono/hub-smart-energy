@@ -10,6 +10,7 @@ import { FloorSensorPosition, useFloorSensorPositions } from "@/hooks/useFloorSe
 import { useMeters, Meter } from "@/hooks/useMeters";
 import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { Room3D } from "./Room3D";
+import { computeFloorScale, polyToWorld, type FloorScale } from "./floorScale";
 import { Floor3DControls } from "./Floor3DControls";
 import { Sensor3DLabel } from "./Sensor3DLabel";
 import { DraggableMeter3D } from "./DraggableMeter3D";
