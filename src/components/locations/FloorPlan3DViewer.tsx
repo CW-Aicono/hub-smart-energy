@@ -502,12 +502,12 @@ function Scene({
         <>
           {/* Rooms - render with polygon shapes */}
           {rooms.map((room) => (
-            <Room3D key={room.id} room={room} showCeiling={showCeiling} />
+            <Room3D key={room.id} room={room} showCeiling={showCeiling} floorScale={floorScale} />
           ))}
           
           {/* Room labels at centroid */}
           {rooms.map((room, index) => {
-            const center = deriveRoomCenter(room, index, rooms.length);
+            const center = deriveRoomCenter(room, index, rooms.length, floorScale);
             return (
               <Html
                 key={`label-${room.id}`}
