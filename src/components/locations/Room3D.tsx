@@ -1,20 +1,15 @@
 import { useMemo } from "react";
 import { FloorRoom } from "@/hooks/useFloorRooms";
 import * as THREE from "three";
+import type { FloorScale } from "./floorScale";
 
 interface Room3DProps {
   room: FloorRoom;
   showCeiling?: boolean;
+  floorScale: FloorScale;
 }
 
 const WALL_THICKNESS = 0.12;
-const WORLD_SCALE = 0.3; // 100% of floor plan ≈ 30 world units
-const WORLD_OFFSET = 15; // center around 0
-
-// Convert polygon percentage coords to world XZ coords
-function toWorld(p: { x: number; y: number }): [number, number] {
-  return [p.x * WORLD_SCALE - WORLD_OFFSET, p.y * WORLD_SCALE - WORLD_OFFSET];
-}
 
 // Deterministic pseudo-random from room id
 function hashCode(str: string): number {
