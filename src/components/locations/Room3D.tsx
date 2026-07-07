@@ -1,20 +1,15 @@
 import { useMemo } from "react";
 import { FloorRoom } from "@/hooks/useFloorRooms";
 import * as THREE from "three";
+import type { FloorScale } from "./floorScale";
 
 interface Room3DProps {
   room: FloorRoom;
   showCeiling?: boolean;
+  floorScale: FloorScale;
 }
 
 const WALL_THICKNESS = 0.12;
-const WORLD_SCALE = 0.3; // 100% of floor plan ≈ 30 world units
-const WORLD_OFFSET = 15; // center around 0
-
-// Convert polygon percentage coords to world XZ coords
-function toWorld(p: { x: number; y: number }): [number, number] {
-  return [p.x * WORLD_SCALE - WORLD_OFFSET, p.y * WORLD_SCALE - WORLD_OFFSET];
-}
 
 // Deterministic pseudo-random from room id
 function hashCode(str: string): number {
@@ -180,19 +175,24 @@ function CeilingLight({ height, position }: { height: number; position: [number,
 
 const DEFAULT_WALL_HEIGHT = 2.8;
 
-export function Room3D({ room, showCeiling = true }: Room3DProps) {
-  const wall_height = DEFAULT_WALL_HEIGHT;
+export function Room3D({ room, showCeiling = true, floorScale }: Room3DProps) {
+  const wall_height = room.wall_height || DEFAULT_WALL_HEIGHT;
   const { color, id, polygon_points } = room;
   const hash = useMemo(() => hashCode(id), [id]);
   const wallColor = color || "#f0f0f0";
   const floorColorBase = "#c8b99a";
 
-  // Use polygon points if available, otherwise fall back to rectangle
+  // Build room in world meters.
+  // - Polygon rooms: use ONE shared floor-wide percent→meter scale so the 2D
+  //   arrangement (relative position + shape) is preserved 1:1 in 3D.
+  // - Rectangular fallback: use position_x/position_y + width/depth (already meters).
   const worldPts = useMemo(() => {
     if (polygon_points && Array.isArray(polygon_points) && polygon_points.length >= 3) {
-      return polygon_points.map(p => toWorld(p));
+      const { sx, sz, cxPct, czPct } = floorScale;
+      return polygon_points.map(
+        (p) => [(p.x - cxPct) * sx, (p.y - czPct) * sz] as [number, number],
+      );
     }
-    // Fallback: rectangular room from position/width/depth
     const { position_x: px, position_y: py, width: w, depth: d } = room;
     return [
       [px - w / 2, py - d / 2],
@@ -200,7 +200,8 @@ export function Room3D({ room, showCeiling = true }: Room3DProps) {
       [px + w / 2, py + d / 2],
       [px - w / 2, py + d / 2],
     ] as [number, number][];
-  }, [polygon_points, room]);
+  }, [polygon_points, room, floorScale]);
+
 
   // Centroid for light placement
   const centroid = useMemo(() => {
