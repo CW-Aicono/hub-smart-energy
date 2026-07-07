@@ -364,20 +364,19 @@ function ModelViewer({ floor, rotationDeg }: { floor: Floor; rotationDeg: number
 
 /**
  * Derive centroid position for labels and scene bounds when room uses polygon_points.
- * Room3D now handles polygon→3D conversion internally.
+ * Uses the shared floor-wide scale so labels align with the Room3D geometry.
  */
-function deriveRoomCenter(room: FloorRoom, index: number, totalRooms: number): { cx: number; cz: number } {
+function deriveRoomCenter(room: FloorRoom, index: number, totalRooms: number, scale: FloorScale): { cx: number; cz: number } {
   const pts = room.polygon_points;
-  const SCALE = 0.3;
-  const OFFSET = 15;
 
   if (pts && Array.isArray(pts) && pts.length >= 3) {
-    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length * SCALE - OFFSET;
-    const cz = pts.reduce((s, p) => s + p.y, 0) / pts.length * SCALE - OFFSET;
+    const world = pts.map((p) => polyToWorld(p, scale));
+    const cx = world.reduce((s, p) => s + p[0], 0) / world.length;
+    const cz = world.reduce((s, p) => s + p[1], 0) / world.length;
     return { cx, cz };
   }
 
-  // Rooms with explicit position
+  // Rooms with explicit position (rectangular fallback, already in meters)
   if (room.position_x !== 0 || room.position_y !== 0) {
     return { cx: room.position_x, cz: room.position_y };
   }
@@ -391,22 +390,22 @@ function deriveRoomCenter(room: FloorRoom, index: number, totalRooms: number): {
 }
 
 /** Derive scene bounds from rooms (polygon or position-based) */
-function deriveRoomBounds(room: FloorRoom, index: number, totalRooms: number): { minX: number; maxX: number; minZ: number; maxZ: number } {
+function deriveRoomBounds(room: FloorRoom, index: number, totalRooms: number, scale: FloorScale): { minX: number; maxX: number; minZ: number; maxZ: number } {
   const pts = room.polygon_points;
-  const SCALE = 0.3;
-  const OFFSET = 15;
 
   if (pts && Array.isArray(pts) && pts.length >= 3) {
-    const xs = pts.map(p => p.x * SCALE - OFFSET);
-    const zs = pts.map(p => p.y * SCALE - OFFSET);
+    const world = pts.map((p) => polyToWorld(p, scale));
+    const xs = world.map((p) => p[0]);
+    const zs = world.map((p) => p[1]);
     return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
   }
 
-  const center = deriveRoomCenter(room, index, totalRooms);
+  const center = deriveRoomCenter(room, index, totalRooms, scale);
   const hw = room.width / 2 || 2;
   const hd = room.depth / 2 || 2;
   return { minX: center.cx - hw, maxX: center.cx + hw, minZ: center.cz - hd, maxZ: center.cz + hd };
 }
+
 
 function Scene({ 
   floor,
