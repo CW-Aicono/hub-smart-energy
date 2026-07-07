@@ -74,12 +74,13 @@ Deno.serve(async (req) => {
     // Same for partner white-label logos.
     if (!allowed) {
       const { data: partnerLogo } = await admin
-        .from("partner_branding")
-        .select("partner_id")
+        .from("partners")
+        .select("id")
         .eq("logo_url", path)
         .maybeSingle();
       if (partnerLogo) allowed = true;
     }
+
   }
 
 
