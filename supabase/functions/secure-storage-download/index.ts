@@ -57,7 +57,31 @@ Deno.serve(async (req) => {
       .eq("tenant_id", tenantId)
       .maybeSingle();
     allowed = !!data;
+
+    // Tenant logos are branding assets shown across partner/white-label contexts.
+    // Allow any authenticated user to fetch a path that is actually registered
+    // as a tenant's logo_url (prevents 403 when the viewer belongs to a
+    // different tenant but the UI legitimately shows the branding logo).
+    if (!allowed) {
+      const { data: tenantLogo } = await admin
+        .from("tenants")
+        .select("id")
+        .eq("logo_url", path)
+        .maybeSingle();
+      if (tenantLogo) allowed = true;
+    }
+
+    // Same for partner white-label logos.
+    if (!allowed) {
+      const { data: partnerLogo } = await admin
+        .from("partner_branding")
+        .select("partner_id")
+        .eq("logo_url", path)
+        .maybeSingle();
+      if (partnerLogo) allowed = true;
+    }
   }
+
 
   if (!allowed && bucket === "meter-photos") {
     const chargePointId = getChargePointId(path);
