@@ -1,9 +1,11 @@
 import { ReactNode, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Briefcase, ArrowLeft, LogOut, Plus } from "lucide-react";
+import { Briefcase, ArrowLeft, LogOut, Plus, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useSalesPartner } from "@/hooks/useSalesPartner";
+import { usePartnerAccess } from "@/hooks/usePartnerAccess";
+import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface SalesLayoutProps {
