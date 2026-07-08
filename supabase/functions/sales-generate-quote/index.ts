@@ -93,13 +93,14 @@ Deno.serve(async (req) => {
     const { data: devices } = deviceIds.length
       ? await supabase
           .from("device_catalog")
-          .select("id, hersteller, modell, vk_preis, installations_pauschale, geraete_klasse, einheit")
+          .select("id, hersteller, modell, artikelnummer, ean, vk_preis, installations_pauschale, geraete_klasse, einheit")
           .in("id", deviceIds)
       : { data: [] };
     const devMap = new Map((devices ?? []).map((d: any) => [d.id, d]));
 
     interface Row {
-      name: string; menge: number; ek: number; inst: number;
+      name: string; artikelnummer: string; ean: string;
+      menge: number; ek: number; inst: number;
       einheit: string; klasse: string; isChild: boolean; scope: string;
     }
     const grouped = new Map<string, Row[]>();
@@ -117,6 +118,8 @@ Deno.serve(async (req) => {
       const arr = grouped.get(klasse) ?? [];
       arr.push({
         name: `${d.hersteller} ${d.modell}`,
+        artikelnummer: d.artikelnummer ?? "",
+        ean: d.ean ?? "",
         menge: r.menge,
         ek: Number(d.vk_preis),
         inst: Number(d.installations_pauschale),
