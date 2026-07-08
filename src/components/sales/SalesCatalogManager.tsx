@@ -195,6 +195,8 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
     setForm({
       hersteller: item.hersteller,
       modell: item.modell,
+      artikelnummer: item.artikelnummer ?? "",
+      ean: item.ean ?? "",
       ek_preis: String(item.ek_preis),
       vk_preis: String(item.vk_preis),
       installations_pauschale: String(item.installations_pauschale),
