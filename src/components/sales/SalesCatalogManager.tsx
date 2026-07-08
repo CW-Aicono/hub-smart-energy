@@ -38,7 +38,10 @@ const DEVICE_CLASSES = [
   { value: "cable", label: "Kabel" },
   { value: "accessory", label: "Zubehör" },
   { value: "misc", label: "Sonstige" },
+  { value: "none", label: "Ohne" },
 ];
+// Sentinel für "keine Geräteklasse" im Select (leere Strings sind in Radix Select verboten)
+const NO_CLASS = "none";
 
 const EINHEITEN = ["Stück", "Meter", "Pauschal"];
 
@@ -102,7 +105,7 @@ const emptyForm: FormData = {
   datasheet_url: "",
   bild_url: "",
   is_active: true,
-  geraete_klasse: "meter",
+  geraete_klasse: NO_CLASS,
   einheit: "Stück",
   phasen: "3",
   max_strom_a: "63",
@@ -178,10 +181,18 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
   const ownItems = items.filter((i) => i.owner_scope === "partner" && i.partner_id === partnerId);
   const globalItems = items.filter((i) => i.owner_scope === "global");
   const baseList = scope === "partner" ? (tab === "own" ? ownItems : globalItems) : items;
-  const filtered = classFilter === "all" ? baseList : baseList.filter((i) => i.geraete_klasse === classFilter);
+  const filtered =
+    classFilter === "all"
+      ? baseList
+      : classFilter === NO_CLASS
+        ? baseList.filter((i) => !i.geraete_klasse)
+        : baseList.filter((i) => i.geraete_klasse === classFilter);
   const classCounts = DEVICE_CLASSES.map((c) => ({
     ...c,
-    count: baseList.filter((i) => i.geraete_klasse === c.value).length,
+    count:
+      c.value === NO_CLASS
+        ? baseList.filter((i) => !i.geraete_klasse).length
+        : baseList.filter((i) => i.geraete_klasse === c.value).length,
   }));
 
   const openNew = () => {
@@ -205,7 +216,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
       datasheet_url: item.datasheet_url || "",
       bild_url: item.bild_url || "",
       is_active: item.is_active,
-      geraete_klasse: item.geraete_klasse || "meter",
+      geraete_klasse: item.geraete_klasse || NO_CLASS,
       einheit: item.einheit || "Stück",
       phasen: Array.isArray(k.phasen) ? k.phasen.join(",") : (k.phasen ? String(k.phasen) : ""),
       max_strom_a: k.max_strom_a ? String(k.max_strom_a) : "",
@@ -242,7 +253,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
       datasheet_url: form.datasheet_url.trim() || null,
       bild_url: form.bild_url.trim() || null,
       is_active: form.is_active,
-      geraete_klasse: form.geraete_klasse as any,
+      geraete_klasse: form.geraete_klasse && form.geraete_klasse !== NO_CLASS ? (form.geraete_klasse as any) : null,
       einheit: form.einheit || "Stück",
       kompatibilitaet,
     };
@@ -512,7 +523,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
             <TabsContent value="basis" className="space-y-4 py-2">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Geräteklasse *</Label>
+                  <Label>Geräteklasse</Label>
                   <Select value={form.geraete_klasse} onValueChange={(v) => setForm({ ...form, geraete_klasse: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>

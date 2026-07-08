@@ -3596,7 +3596,7 @@ export type Database = {
           ean: string | null
           einheit: string
           ek_preis: number
-          geraete_klasse: Database["public"]["Enums"]["device_class"]
+          geraete_klasse: Database["public"]["Enums"]["device_class"] | null
           hersteller: string
           id: string
           installations_pauschale: number
@@ -3620,7 +3620,7 @@ export type Database = {
           ean?: string | null
           einheit?: string
           ek_preis?: number
-          geraete_klasse?: Database["public"]["Enums"]["device_class"]
+          geraete_klasse?: Database["public"]["Enums"]["device_class"] | null
           hersteller: string
           id?: string
           installations_pauschale?: number
@@ -3644,7 +3644,7 @@ export type Database = {
           ean?: string | null
           einheit?: string
           ek_preis?: number
-          geraete_klasse?: Database["public"]["Enums"]["device_class"]
+          geraete_klasse?: Database["public"]["Enums"]["device_class"] | null
           hersteller?: string
           id?: string
           installations_pauschale?: number
