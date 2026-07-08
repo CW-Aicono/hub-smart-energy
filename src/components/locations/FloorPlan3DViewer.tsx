@@ -10,7 +10,6 @@ import { FloorSensorPosition, useFloorSensorPositions } from "@/hooks/useFloorSe
 import { useMeters, Meter } from "@/hooks/useMeters";
 import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { Room3D } from "./Room3D";
-import { computeFloorScale, polyToWorld, type FloorScale } from "./floorScale";
 import { Floor3DControls } from "./Floor3DControls";
 import { Sensor3DLabel } from "./Sensor3DLabel";
 import { DraggableMeter3D } from "./DraggableMeter3D";
@@ -364,19 +363,20 @@ function ModelViewer({ floor, rotationDeg }: { floor: Floor; rotationDeg: number
 
 /**
  * Derive centroid position for labels and scene bounds when room uses polygon_points.
- * Uses the shared floor-wide scale so labels align with the Room3D geometry.
+ * Room3D now handles polygon→3D conversion internally.
  */
-function deriveRoomCenter(room: FloorRoom, index: number, totalRooms: number, scale: FloorScale): { cx: number; cz: number } {
+function deriveRoomCenter(room: FloorRoom, index: number, totalRooms: number): { cx: number; cz: number } {
   const pts = room.polygon_points;
+  const SCALE = 0.3;
+  const OFFSET = 15;
 
   if (pts && Array.isArray(pts) && pts.length >= 3) {
-    const world = pts.map((p) => polyToWorld(p, scale));
-    const cx = world.reduce((s, p) => s + p[0], 0) / world.length;
-    const cz = world.reduce((s, p) => s + p[1], 0) / world.length;
+    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length * SCALE - OFFSET;
+    const cz = pts.reduce((s, p) => s + p.y, 0) / pts.length * SCALE - OFFSET;
     return { cx, cz };
   }
 
-  // Rooms with explicit position (rectangular fallback, already in meters)
+  // Rooms with explicit position
   if (room.position_x !== 0 || room.position_y !== 0) {
     return { cx: room.position_x, cz: room.position_y };
   }
@@ -390,22 +390,22 @@ function deriveRoomCenter(room: FloorRoom, index: number, totalRooms: number, sc
 }
 
 /** Derive scene bounds from rooms (polygon or position-based) */
-function deriveRoomBounds(room: FloorRoom, index: number, totalRooms: number, scale: FloorScale): { minX: number; maxX: number; minZ: number; maxZ: number } {
+function deriveRoomBounds(room: FloorRoom, index: number, totalRooms: number): { minX: number; maxX: number; minZ: number; maxZ: number } {
   const pts = room.polygon_points;
+  const SCALE = 0.3;
+  const OFFSET = 15;
 
   if (pts && Array.isArray(pts) && pts.length >= 3) {
-    const world = pts.map((p) => polyToWorld(p, scale));
-    const xs = world.map((p) => p[0]);
-    const zs = world.map((p) => p[1]);
+    const xs = pts.map(p => p.x * SCALE - OFFSET);
+    const zs = pts.map(p => p.y * SCALE - OFFSET);
     return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
   }
 
-  const center = deriveRoomCenter(room, index, totalRooms, scale);
+  const center = deriveRoomCenter(room, index, totalRooms);
   const hw = room.width / 2 || 2;
   const hd = room.depth / 2 || 2;
   return { minX: center.cx - hw, maxX: center.cx + hw, minZ: center.cz - hd, maxZ: center.cz + hd };
 }
-
 
 function Scene({ 
   floor,
@@ -441,8 +441,6 @@ function Scene({
   onCameraUpdate: (pos: { x: number; z: number }, rotY: number) => void;
 }) {
   const [isDraggingMeter, setIsDraggingMeter] = useState(false);
-  // Shared floor-wide percent→meter scale so the 2D layout drives 3D positions.
-  const floorScale = useMemo(() => computeFloorScale(rooms, floor), [rooms, floor]);
   // Calculate scene bounds based on rooms
   const sceneBounds = useMemo(() => {
     if (rooms.length === 0) {
@@ -452,7 +450,7 @@ function Scene({
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     
     rooms.forEach((room, index) => {
-      const bounds = deriveRoomBounds(room, index, rooms.length, floorScale);
+      const bounds = deriveRoomBounds(room, index, rooms.length);
       minX = Math.min(minX, bounds.minX);
       maxX = Math.max(maxX, bounds.maxX);
       minZ = Math.min(minZ, bounds.minZ);
@@ -464,8 +462,7 @@ function Scene({
       centerX: (minX + maxX) / 2,
       centerZ: (minZ + maxZ) / 2,
     };
-  }, [rooms, floorScale]);
-
+  }, [rooms]);
 
   return (
     <>
@@ -502,12 +499,12 @@ function Scene({
         <>
           {/* Rooms - render with polygon shapes */}
           {rooms.map((room) => (
-            <Room3D key={room.id} room={room} showCeiling={showCeiling} floorScale={floorScale} />
+            <Room3D key={room.id} room={room} showCeiling={showCeiling} />
           ))}
           
           {/* Room labels at centroid */}
           {rooms.map((room, index) => {
-            const center = deriveRoomCenter(room, index, rooms.length, floorScale);
+            const center = deriveRoomCenter(room, index, rooms.length);
             return (
               <Html
                 key={`label-${room.id}`}

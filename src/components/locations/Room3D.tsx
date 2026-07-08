@@ -1,15 +1,20 @@
 import { useMemo } from "react";
 import { FloorRoom } from "@/hooks/useFloorRooms";
 import * as THREE from "three";
-import type { FloorScale } from "./floorScale";
 
 interface Room3DProps {
   room: FloorRoom;
   showCeiling?: boolean;
-  floorScale: FloorScale;
 }
 
 const WALL_THICKNESS = 0.12;
+const WORLD_SCALE = 0.3; // 100% of floor plan ≈ 30 world units
+const WORLD_OFFSET = 15; // center around 0
+
+// Convert polygon percentage coords to world XZ coords
+function toWorld(p: { x: number; y: number }): [number, number] {
+  return [p.x * WORLD_SCALE - WORLD_OFFSET, p.y * WORLD_SCALE - WORLD_OFFSET];
+}
 
 // Deterministic pseudo-random from room id
 function hashCode(str: string): number {
@@ -175,33 +180,46 @@ function CeilingLight({ height, position }: { height: number; position: [number,
 
 const DEFAULT_WALL_HEIGHT = 2.8;
 
-export function Room3D({ room, showCeiling = true, floorScale }: Room3DProps) {
+export function Room3D({ room, showCeiling = true }: Room3DProps) {
   const wall_height = room.wall_height || DEFAULT_WALL_HEIGHT;
   const { color, id, polygon_points } = room;
   const hash = useMemo(() => hashCode(id), [id]);
   const wallColor = color || "#f0f0f0";
   const floorColorBase = "#c8b99a";
 
-  // Build room in world meters.
-  // - Polygon rooms: use ONE shared floor-wide percent→meter scale so the 2D
-  //   arrangement (relative position + shape) is preserved 1:1 in 3D.
-  // - Rectangular fallback: use position_x/position_y + width/depth (already meters).
+  // Build room in real meters, centered around (position_x, position_y).
+  // Polygon points are percent-based (0..100) on the floor plan image and have
+  // no inherent metric scale, so we normalize them to the room's width/depth in meters.
   const worldPts = useMemo(() => {
-    if (polygon_points && Array.isArray(polygon_points) && polygon_points.length >= 3) {
-      const { sx, sz, cxPct, czPct } = floorScale;
-      return polygon_points.map(
-        (p) => [(p.x - cxPct) * sx, (p.y - czPct) * sz] as [number, number],
-      );
-    }
     const { position_x: px, position_y: py, width: w, depth: d } = room;
-    return [
-      [px - w / 2, py - d / 2],
-      [px + w / 2, py - d / 2],
-      [px + w / 2, py + d / 2],
-      [px - w / 2, py + d / 2],
-    ] as [number, number][];
-  }, [polygon_points, room, floorScale]);
+    const cx = px - WORLD_OFFSET;
+    const cz = py - WORLD_OFFSET;
 
+    if (polygon_points && Array.isArray(polygon_points) && polygon_points.length >= 3) {
+      const xs = polygon_points.map(p => p.x);
+      const ys = polygon_points.map(p => p.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const bw = Math.max(0.0001, maxX - minX);
+      const bd = Math.max(0.0001, maxY - minY);
+      const sx = w / bw;
+      const sz = d / bd;
+      const mxX = (minX + maxX) / 2;
+      const mxY = (minY + maxY) / 2;
+      // Scale polygon so bounding box == width x depth (meters), centered on (cx, cz)
+      return polygon_points.map(p => [
+        (p.x - mxX) * sx + cx,
+        (p.y - mxY) * sz + cz,
+      ] as [number, number]);
+    }
+    // Fallback: rectangular room from position/width/depth (already in meters)
+    return [
+      [cx - w / 2, cz - d / 2],
+      [cx + w / 2, cz - d / 2],
+      [cx + w / 2, cz + d / 2],
+      [cx - w / 2, cz + d / 2],
+    ] as [number, number][];
+  }, [polygon_points, room]);
 
   // Centroid for light placement
   const centroid = useMemo(() => {
