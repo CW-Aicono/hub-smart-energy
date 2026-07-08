@@ -1,9 +1,11 @@
 import { ReactNode, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Briefcase, ArrowLeft, LogOut, Plus } from "lucide-react";
+import { Briefcase, ArrowLeft, LogOut, Plus, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useSalesPartner } from "@/hooks/useSalesPartner";
+import { usePartnerAccess } from "@/hooks/usePartnerAccess";
+import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface SalesLayoutProps {
@@ -18,6 +20,8 @@ export function SalesLayout({ children, title = "Sales Scout", showBack, backTo,
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { hasAccess, loading } = useSalesPartner();
+  const { isPartnerMember } = usePartnerAccess();
+  const { isSuperAdmin } = useSuperAdmin();
 
   // Set PWA manifest & Apple meta for the Sales Scout PWA (Add-to-Homescreen)
   useEffect(() => {
@@ -106,6 +110,28 @@ export function SalesLayout({ children, title = "Sales Scout", showBack, backTo,
           </div>
           <div className="flex items-center gap-1">
             {action}
+            {isPartnerMember && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/partner")}
+                title="Zum Partner-Dashboard"
+                aria-label="Zum Partner-Dashboard"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+              </Button>
+            )}
+            {isSuperAdmin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/super-admin")}
+                title="Zum Super-Admin"
+                aria-label="Zum Super-Admin"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" onClick={() => signOut()}>
               <LogOut className="h-4 w-4" />
             </Button>
