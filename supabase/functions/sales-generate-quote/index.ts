@@ -251,7 +251,20 @@ Deno.serve(async (req) => {
         const sum = (r.ek + r.inst) * r.menge;
         groupSum += sum;
         doc.text(`${sum.toFixed(2)} €`, 180, y);
-        y += 5;
+        y += 4;
+        const meta: string[] = [];
+        if (r.artikelnummer) meta.push(`Art.-Nr.: ${r.artikelnummer}`);
+        if (r.ean) meta.push(`EAN: ${r.ean}`);
+        if (meta.length) {
+          doc.setFontSize(7);
+          doc.setTextColor(120);
+          doc.text(meta.join("  ·  "), 16 + indent, y);
+          doc.setTextColor(0);
+          doc.setFontSize(9);
+          y += 4;
+        } else {
+          y += 1;
+        }
       }
       doc.setFont(undefined, "bold");
       doc.text(`Zwischensumme ${CLASS_LABELS[klasse] ?? klasse}: ${groupSum.toFixed(2)} €`, 110, y);
