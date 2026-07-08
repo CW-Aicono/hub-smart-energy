@@ -253,7 +253,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
       datasheet_url: form.datasheet_url.trim() || null,
       bild_url: form.bild_url.trim() || null,
       is_active: form.is_active,
-      geraete_klasse: form.geraete_klasse as any,
+      geraete_klasse: form.geraete_klasse && form.geraete_klasse !== NO_CLASS ? (form.geraete_klasse as any) : null,
       einheit: form.einheit || "Stück",
       kompatibilitaet,
     };
