@@ -46,6 +46,8 @@ interface Suggestion {
 
 interface DeviceLine {
   name: string;
+  artikelnummer: string | null;
+  ean: string | null;
   menge: number;
   vk: number;
   inst: number;
