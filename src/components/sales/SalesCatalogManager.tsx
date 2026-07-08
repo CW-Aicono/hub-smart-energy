@@ -105,7 +105,7 @@ const emptyForm: FormData = {
   datasheet_url: "",
   bild_url: "",
   is_active: true,
-  geraete_klasse: "meter",
+  geraete_klasse: NO_CLASS,
   einheit: "Stück",
   phasen: "3",
   max_strom_a: "63",
