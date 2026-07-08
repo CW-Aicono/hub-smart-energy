@@ -68,10 +68,10 @@ for attempt in 1 2 3 4 5; do
   sleep 5
 done
 
-# Aeltere Backups aufraeumen, letzte 10 behalten
+# Aeltere Backups aufraeumen, letzte 2 behalten
 find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.sql' -print0 \
   | xargs -0 ls -1t \
-  | tail -n +11 \
+  | tail -n +3 \
   | xargs -r rm -f
 
 log "Deploy $SHA erfolgreich abgeschlossen."
