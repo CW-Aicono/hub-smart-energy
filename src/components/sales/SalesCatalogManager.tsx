@@ -458,11 +458,18 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
                     <TableCell>
                       <div className="font-medium">{it.hersteller}</div>
                       <div className="text-xs text-muted-foreground">{it.modell}</div>
+                      {(it.artikelnummer || it.ean) && (
+                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                          {it.artikelnummer && <span>Art.-Nr. {it.artikelnummer}</span>}
+                          {it.artikelnummer && it.ean && <span> · </span>}
+                          {it.ean && <span>EAN {it.ean}</span>}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell><span className="text-xs">{it.einheit}</span></TableCell>
-                    <TableCell className="text-right">{Number(it.ek_preis).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right">{Number(it.vk_preis).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right">{Number(it.installations_pauschale).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatEur2(it.ek_preis)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatEur2(it.vk_preis)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatEur2(it.installations_pauschale)}</TableCell>
                     <TableCell>
                       {it.is_active ? <Badge>aktiv</Badge> : <Badge variant="outline">inaktiv</Badge>}
                     </TableCell>
