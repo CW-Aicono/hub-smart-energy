@@ -76,6 +76,7 @@ export function CatalogImportDialog({ open, onOpenChange, partnerId, onImported 
     try {
       const payload = rows.map((r) => ({
         ...r,
+        geraete_klasse: r.geraete_klasse as any,
         owner_scope: "partner" as const,
         partner_id: partnerId,
         kompatibilitaet: {},
