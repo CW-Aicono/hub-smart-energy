@@ -38,7 +38,10 @@ const DEVICE_CLASSES = [
   { value: "cable", label: "Kabel" },
   { value: "accessory", label: "Zubehör" },
   { value: "misc", label: "Sonstige" },
+  { value: "none", label: "Ohne" },
 ];
+// Sentinel für "keine Geräteklasse" im Select (leere Strings sind in Radix Select verboten)
+const NO_CLASS = "none";
 
 const EINHEITEN = ["Stück", "Meter", "Pauschal"];
 
