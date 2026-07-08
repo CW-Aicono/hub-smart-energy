@@ -130,6 +130,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
   const [classFilter, setClassFilter] = useState<string>("all");
   // Partner: Tab zwischen eigenen Artikeln und globalen Artikeln mit Override
   const [tab, setTab] = useState<"own" | "global">("own");
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
