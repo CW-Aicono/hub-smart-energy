@@ -5,6 +5,8 @@ export type BomFilter = "all" | "hardware" | "licenses";
 
 interface BomRow {
   kategorie: string;
+  artikelnummer: string;
+  ean: string;
   bezeichnung: string;
   beschreibung: string;
   menge: number;
