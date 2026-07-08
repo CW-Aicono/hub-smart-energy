@@ -286,12 +286,40 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
   const saveOverride = async (deviceId: string, patch: Partial<PriceOverride>) => {
     if (!partnerId) return;
     const existing = overrides[deviceId];
+    // Use property-presence semantics: `undefined` in patch = keep existing value,
+    // an explicit `null` in patch = user cleared the field, so we drop back to the default.
+    const pick = (key: keyof PriceOverride): number | null => {
+      if (key in patch) return (patch as any)[key] ?? null;
+      return (existing?.[key] as number | null | undefined) ?? null;
+    };
+    const ek = pick("ek_preis");
+    const vk = pick("vk_preis");
+    const inst = pick("installations_pauschale");
+
+    // Wenn kein Override mehr gesetzt ist: Zeile ganz entfernen, damit der globale Default gilt.
+    if (ek === null && vk === null && inst === null) {
+      if (existing) {
+        const { error } = await supabase
+          .from("device_catalog_partner_pricing")
+          .delete()
+          .eq("device_catalog_id", deviceId)
+          .eq("partner_id", partnerId);
+        if (error) {
+          toast({ title: "Fehler", description: error.message, variant: "destructive" });
+          return;
+        }
+      }
+      toast({ title: "Eigener Preis zurückgesetzt" });
+      load();
+      return;
+    }
+
     const payload = {
       device_catalog_id: deviceId,
       partner_id: partnerId,
-      ek_preis: patch.ek_preis ?? existing?.ek_preis ?? null,
-      vk_preis: patch.vk_preis ?? existing?.vk_preis ?? null,
-      installations_pauschale: patch.installations_pauschale ?? existing?.installations_pauschale ?? null,
+      ek_preis: ek,
+      vk_preis: vk,
+      installations_pauschale: inst,
     };
     const { error } = await supabase
       .from("device_catalog_partner_pricing")
