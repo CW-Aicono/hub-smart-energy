@@ -537,6 +537,25 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Artikelnummer (optional)</Label>
+                  <Input
+                    value={form.artikelnummer}
+                    onChange={(e) => setForm({ ...form, artikelnummer: e.target.value })}
+                    placeholder="z. B. SH-PRO-3EM"
+                  />
+                </div>
+                <div>
+                  <Label>EAN / GTIN (optional)</Label>
+                  <Input
+                    value={form.ean}
+                    onChange={(e) => setForm({ ...form, ean: e.target.value })}
+                    placeholder="z. B. 3800235268421"
+                  />
+                </div>
+              </div>
+
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <Label>EK-Preis €</Label>
