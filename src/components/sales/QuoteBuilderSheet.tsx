@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Loader2, Sparkles, FileDown, Package, Pencil } from "lucide-react";
 import { ClassBadge } from "./ClassBadge";
 import { CompletenessCheck } from "./CompletenessCheck";
+import { moduleTitle, moduleDescription } from "@/lib/salesModuleLabels";
 
 const CLASS_LABELS: Record<string, string> = {
   meter: "Zähler",
