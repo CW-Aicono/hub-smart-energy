@@ -72,7 +72,7 @@ export async function buildQuoteBom(quoteId: string, filter: BomFilter): Promise
       if (ids.length > 0) {
         const { data: cat } = await supabase
           .from("device_catalog")
-          .select("id, hersteller, modell, vk_preis, installations_pauschale, einheit, geraete_klasse")
+          .select("id, hersteller, modell, artikelnummer, ean, vk_preis, installations_pauschale, einheit, geraete_klasse")
           .in("id", ids);
         const catMap = new Map((cat ?? []).map((c: any) => [c.id, c]));
 
@@ -82,6 +82,8 @@ export async function buildQuoteBom(quoteId: string, filter: BomFilter): Promise
           const einzel = Number(c.vk_preis) + Number(c.installations_pauschale);
           rows.push({
             kategorie: `Hardware / ${c.geraete_klasse ?? r.geraete_klasse ?? "misc"}`,
+            artikelnummer: c.artikelnummer ?? "",
+            ean: c.ean ?? "",
             bezeichnung: `${c.hersteller} ${c.modell}`,
             beschreibung: "",
             menge: Number(r.menge),
