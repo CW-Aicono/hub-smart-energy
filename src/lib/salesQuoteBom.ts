@@ -108,6 +108,8 @@ export async function buildQuoteBom(quoteId: string, filter: BomFilter): Promise
       const preis = Number((m as any).preis_monatlich);
       rows.push({
         kategorie: "AICONO-Lizenz",
+        artikelnummer: "",
+        ean: "",
         bezeichnung: moduleTitle(code),
         beschreibung: moduleDescription(code) || code,
         menge: 1,
