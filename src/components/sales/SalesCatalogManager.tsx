@@ -625,9 +625,19 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {scope === "partner" && partnerId && (
+        <CatalogImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          partnerId={partnerId}
+          onImported={() => load()}
+        />
+      )}
     </div>
   );
 }
+
 
 function OverrideRow({
   item,
