@@ -21,10 +21,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Pencil, Trash2, Cpu, Link2, Globe2, Save } from "lucide-react";
+import { Plus, Pencil, Trash2, Cpu, Link2, Globe2, Save, Upload } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { CompatibilityEditor } from "@/components/super-admin/CompatibilityEditor";
 import { ClassBadge } from "@/components/sales/ClassBadge";
+import { CatalogImportDialog } from "@/components/sales/CatalogImportDialog";
+import { parseDeNumber, formatEur2, round2 } from "@/lib/salesNumberFormat";
 
 const DEVICE_CLASSES = [
   { value: "meter", label: "Zähler" },
