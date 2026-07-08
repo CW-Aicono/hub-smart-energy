@@ -300,6 +300,13 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
                                   {d.isChild && <span className="text-muted-foreground mr-1">↳</span>}
                                   {d.name}
                                 </div>
+                                {(d.artikelnummer || d.ean) && (
+                                  <div className="text-[10px] text-muted-foreground font-mono">
+                                    {d.artikelnummer && <>Art.-Nr. {d.artikelnummer}</>}
+                                    {d.artikelnummer && d.ean && " · "}
+                                    {d.ean && <>EAN {d.ean}</>}
+                                  </div>
+                                )}
                                 <div className="text-xs text-muted-foreground">
                                   {d.menge} {d.einheit} · {d.vk.toFixed(2)} € + {d.inst.toFixed(2)} € Inst.
                                 </div>
