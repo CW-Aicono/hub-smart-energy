@@ -110,6 +110,28 @@ export function SalesLayout({ children, title = "Sales Scout", showBack, backTo,
           </div>
           <div className="flex items-center gap-1">
             {action}
+            {isPartnerMember && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/partner")}
+                title="Zum Partner-Dashboard"
+                aria-label="Zum Partner-Dashboard"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+              </Button>
+            )}
+            {isSuperAdmin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/super-admin")}
+                title="Zum Super-Admin"
+                aria-label="Zum Super-Admin"
+              >
+                <LayoutDashboard className="h-4 w-4" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" onClick={() => signOut()}>
               <LogOut className="h-4 w-4" />
             </Button>
