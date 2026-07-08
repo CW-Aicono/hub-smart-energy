@@ -352,15 +352,18 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium">{code}</span>
+                          <span className="text-sm font-medium">{moduleTitle(code)}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">{code}</span>
                           {sugg && (
                             <Badge variant="secondary" className="text-[10px] h-4 px-1">
                               KI
                             </Badge>
                           )}
                         </div>
-                        {sugg?.reason && (
-                          <p className="text-xs text-muted-foreground mt-0.5">{sugg.reason}</p>
+                        {(sugg?.reason || moduleDescription(code)) && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {sugg?.reason || moduleDescription(code)}
+                          </p>
                         )}
                       </div>
                       <div className="text-sm tabular-nums font-medium shrink-0">
