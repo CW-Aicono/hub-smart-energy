@@ -523,7 +523,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
             <TabsContent value="basis" className="space-y-4 py-2">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Geräteklasse *</Label>
+                  <Label>Geräteklasse</Label>
                   <Select value={form.geraete_klasse} onValueChange={(v) => setForm({ ...form, geraete_klasse: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
