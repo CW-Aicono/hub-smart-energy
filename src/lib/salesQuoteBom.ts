@@ -134,6 +134,8 @@ function escapeCsv(value: unknown): string {
 export function bomToCsv(rows: BomRow[]): string {
   const header = [
     "Kategorie",
+    "Artikelnummer",
+    "EAN",
     "Bezeichnung",
     "Beschreibung",
     "Menge",
@@ -147,6 +149,8 @@ export function bomToCsv(rows: BomRow[]): string {
     lines.push(
       [
         r.kategorie,
+        r.artikelnummer,
+        r.ean,
         r.bezeichnung,
         r.beschreibung,
         r.menge.toLocaleString("de-DE"),
