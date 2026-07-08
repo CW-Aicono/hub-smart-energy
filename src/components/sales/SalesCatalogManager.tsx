@@ -46,6 +46,8 @@ interface DeviceCatalog {
   id: string;
   hersteller: string;
   modell: string;
+  artikelnummer: string | null;
+  ean: string | null;
   ek_preis: number;
   vk_preis: number;
   installations_pauschale: number;
@@ -71,6 +73,8 @@ interface PriceOverride {
 interface FormData {
   hersteller: string;
   modell: string;
+  artikelnummer: string;
+  ean: string;
   ek_preis: string;
   vk_preis: string;
   installations_pauschale: string;
@@ -89,6 +93,8 @@ interface FormData {
 const emptyForm: FormData = {
   hersteller: "",
   modell: "",
+  artikelnummer: "",
+  ean: "",
   ek_preis: "0",
   vk_preis: "0",
   installations_pauschale: "0",
