@@ -676,18 +676,22 @@ function OverrideRow({
   canManage: boolean;
   onSave: (patch: Partial<PriceOverride>) => void;
 }) {
-  const [vk, setVk] = useState<string>(
-    override?.vk_preis != null ? String(override.vk_preis) : "",
-  );
-  const [inst, setInst] = useState<string>(
-    override?.installations_pauschale != null ? String(override.installations_pauschale) : "",
-  );
+  const initialVk =
+    override?.vk_preis != null ? formatEur2(override.vk_preis) : "";
+  const initialInst =
+    override?.installations_pauschale != null ? formatEur2(override.installations_pauschale) : "";
+  const [vk, setVk] = useState<string>(initialVk);
+  const [inst, setInst] = useState<string>(initialInst);
 
   const dirty = useMemo(() => {
-    const curVk = override?.vk_preis != null ? String(override.vk_preis) : "";
-    const curInst = override?.installations_pauschale != null ? String(override.installations_pauschale) : "";
-    return vk !== curVk || inst !== curInst;
-  }, [vk, inst, override]);
+    return vk !== initialVk || inst !== initialInst;
+  }, [vk, inst, initialVk, initialInst]);
+
+  const toPayload = (raw: string): number | null => {
+    if (raw.trim() === "") return null;
+    const n = parseDeNumber(raw);
+    return Number.isFinite(n) ? round2(n) : null;
+  };
 
   return (
     <TableRow>
@@ -696,29 +700,37 @@ function OverrideRow({
         <div className="font-medium">{item.hersteller}</div>
         <div className="text-xs text-muted-foreground">{item.modell}</div>
       </TableCell>
-      <TableCell className="text-right text-muted-foreground">
-        {Number(item.vk_preis).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      <TableCell className="text-right text-muted-foreground tabular-nums">
+        {formatEur2(item.vk_preis)}
       </TableCell>
       <TableCell className="text-right">
         <Input
-          type="number"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
           value={vk}
           disabled={!canManage}
           onChange={(e) => setVk(e.target.value)}
-          placeholder={Number(item.vk_preis).toFixed(2)}
-          className="h-8 text-right ml-auto w-28"
+          onBlur={() => {
+            const n = parseDeNumber(vk);
+            if (Number.isFinite(n)) setVk(formatEur2(n));
+          }}
+          placeholder={formatEur2(item.vk_preis)}
+          className="h-8 text-right ml-auto w-28 tabular-nums"
         />
       </TableCell>
       <TableCell className="text-right">
         <Input
-          type="number"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
           value={inst}
           disabled={!canManage}
           onChange={(e) => setInst(e.target.value)}
-          placeholder={Number(item.installations_pauschale).toFixed(2)}
-          className="h-8 text-right ml-auto w-28"
+          onBlur={() => {
+            const n = parseDeNumber(inst);
+            if (Number.isFinite(n)) setInst(formatEur2(n));
+          }}
+          placeholder={formatEur2(item.installations_pauschale)}
+          className="h-8 text-right ml-auto w-28 tabular-nums"
         />
       </TableCell>
       <TableCell className="text-right">
@@ -728,8 +740,8 @@ function OverrideRow({
           disabled={!canManage || !dirty}
           onClick={() =>
             onSave({
-              vk_preis: vk === "" ? null : parseFloat(vk),
-              installations_pauschale: inst === "" ? null : parseFloat(inst),
+              vk_preis: toPayload(vk),
+              installations_pauschale: toPayload(inst),
             })
           }
           aria-label="Speichern"
