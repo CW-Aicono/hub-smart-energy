@@ -5,6 +5,8 @@ export type BomFilter = "all" | "hardware" | "licenses";
 
 interface BomRow {
   kategorie: string;
+  artikelnummer: string;
+  ean: string;
   bezeichnung: string;
   beschreibung: string;
   menge: number;
@@ -70,7 +72,7 @@ export async function buildQuoteBom(quoteId: string, filter: BomFilter): Promise
       if (ids.length > 0) {
         const { data: cat } = await supabase
           .from("device_catalog")
-          .select("id, hersteller, modell, vk_preis, installations_pauschale, einheit, geraete_klasse")
+          .select("id, hersteller, modell, artikelnummer, ean, vk_preis, installations_pauschale, einheit, geraete_klasse")
           .in("id", ids);
         const catMap = new Map((cat ?? []).map((c: any) => [c.id, c]));
 
@@ -80,6 +82,8 @@ export async function buildQuoteBom(quoteId: string, filter: BomFilter): Promise
           const einzel = Number(c.vk_preis) + Number(c.installations_pauschale);
           rows.push({
             kategorie: `Hardware / ${c.geraete_klasse ?? r.geraete_klasse ?? "misc"}`,
+            artikelnummer: c.artikelnummer ?? "",
+            ean: c.ean ?? "",
             bezeichnung: `${c.hersteller} ${c.modell}`,
             beschreibung: "",
             menge: Number(r.menge),
@@ -104,6 +108,8 @@ export async function buildQuoteBom(quoteId: string, filter: BomFilter): Promise
       const preis = Number((m as any).preis_monatlich);
       rows.push({
         kategorie: "AICONO-Lizenz",
+        artikelnummer: "",
+        ean: "",
         bezeichnung: moduleTitle(code),
         beschreibung: moduleDescription(code) || code,
         menge: 1,
@@ -128,6 +134,8 @@ function escapeCsv(value: unknown): string {
 export function bomToCsv(rows: BomRow[]): string {
   const header = [
     "Kategorie",
+    "Artikelnummer",
+    "EAN",
     "Bezeichnung",
     "Beschreibung",
     "Menge",
@@ -141,6 +149,8 @@ export function bomToCsv(rows: BomRow[]): string {
     lines.push(
       [
         r.kategorie,
+        r.artikelnummer,
+        r.ean,
         r.bezeichnung,
         r.beschreibung,
         r.menge.toLocaleString("de-DE"),

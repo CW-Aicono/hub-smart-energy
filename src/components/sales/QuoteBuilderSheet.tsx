@@ -46,6 +46,8 @@ interface Suggestion {
 
 interface DeviceLine {
   name: string;
+  artikelnummer: string | null;
+  ean: string | null;
   menge: number;
   vk: number;
   inst: number;
@@ -144,7 +146,7 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
           } else {
             const { data: cat } = await supabase
               .from("device_catalog")
-              .select("id, hersteller, modell, vk_preis, installations_pauschale, geraete_klasse, einheit")
+              .select("id, hersteller, modell, artikelnummer, ean, vk_preis, installations_pauschale, geraete_klasse, einheit")
               .in("id", ids);
             const catMap = new Map((cat ?? []).map((c) => [c.id, c]));
             const lines: DeviceLine[] = [];
@@ -153,6 +155,8 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
               if (!c) continue;
               lines.push({
                 name: `${c.hersteller} ${c.modell}`,
+                artikelnummer: c.artikelnummer ?? null,
+                ean: c.ean ?? null,
                 menge: r.menge,
                 vk: Number(c.vk_preis),
                 inst: Number(c.installations_pauschale),
@@ -296,6 +300,13 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
                                   {d.isChild && <span className="text-muted-foreground mr-1">↳</span>}
                                   {d.name}
                                 </div>
+                                {(d.artikelnummer || d.ean) && (
+                                  <div className="text-[10px] text-muted-foreground font-mono">
+                                    {d.artikelnummer && <>Art.-Nr. {d.artikelnummer}</>}
+                                    {d.artikelnummer && d.ean && " · "}
+                                    {d.ean && <>EAN {d.ean}</>}
+                                  </div>
+                                )}
                                 <div className="text-xs text-muted-foreground">
                                   {d.menge} {d.einheit} · {d.vk.toFixed(2)} € + {d.inst.toFixed(2)} € Inst.
                                 </div>

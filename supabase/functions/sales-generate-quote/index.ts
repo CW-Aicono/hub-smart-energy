@@ -93,13 +93,14 @@ Deno.serve(async (req) => {
     const { data: devices } = deviceIds.length
       ? await supabase
           .from("device_catalog")
-          .select("id, hersteller, modell, vk_preis, installations_pauschale, geraete_klasse, einheit")
+          .select("id, hersteller, modell, artikelnummer, ean, vk_preis, installations_pauschale, geraete_klasse, einheit")
           .in("id", deviceIds)
       : { data: [] };
     const devMap = new Map((devices ?? []).map((d: any) => [d.id, d]));
 
     interface Row {
-      name: string; menge: number; ek: number; inst: number;
+      name: string; artikelnummer: string; ean: string;
+      menge: number; ek: number; inst: number;
       einheit: string; klasse: string; isChild: boolean; scope: string;
     }
     const grouped = new Map<string, Row[]>();
@@ -117,6 +118,8 @@ Deno.serve(async (req) => {
       const arr = grouped.get(klasse) ?? [];
       arr.push({
         name: `${d.hersteller} ${d.modell}`,
+        artikelnummer: d.artikelnummer ?? "",
+        ean: d.ean ?? "",
         menge: r.menge,
         ek: Number(d.vk_preis),
         inst: Number(d.installations_pauschale),
@@ -248,7 +251,20 @@ Deno.serve(async (req) => {
         const sum = (r.ek + r.inst) * r.menge;
         groupSum += sum;
         doc.text(`${sum.toFixed(2)} €`, 180, y);
-        y += 5;
+        y += 4;
+        const meta: string[] = [];
+        if (r.artikelnummer) meta.push(`Art.-Nr.: ${r.artikelnummer}`);
+        if (r.ean) meta.push(`EAN: ${r.ean}`);
+        if (meta.length) {
+          doc.setFontSize(7);
+          doc.setTextColor(120);
+          doc.text(meta.join("  ·  "), 16 + indent, y);
+          doc.setTextColor(0);
+          doc.setFontSize(9);
+          y += 4;
+        } else {
+          y += 1;
+        }
       }
       doc.setFont(undefined, "bold");
       doc.text(`Zwischensumme ${CLASS_LABELS[klasse] ?? klasse}: ${groupSum.toFixed(2)} €`, 110, y);
