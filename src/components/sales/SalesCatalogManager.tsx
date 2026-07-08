@@ -216,7 +216,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
       datasheet_url: item.datasheet_url || "",
       bild_url: item.bild_url || "",
       is_active: item.is_active,
-      geraete_klasse: item.geraete_klasse || "meter",
+      geraete_klasse: item.geraete_klasse || NO_CLASS,
       einheit: item.einheit || "Stück",
       phasen: Array.isArray(k.phasen) ? k.phasen.join(",") : (k.phasen ? String(k.phasen) : ""),
       max_strom_a: k.max_strom_a ? String(k.max_strom_a) : "",
