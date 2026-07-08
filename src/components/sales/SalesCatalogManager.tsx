@@ -21,10 +21,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Pencil, Trash2, Cpu, Link2, Globe2, Save } from "lucide-react";
+import { Plus, Pencil, Trash2, Cpu, Link2, Globe2, Save, Upload } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { CompatibilityEditor } from "@/components/super-admin/CompatibilityEditor";
 import { ClassBadge } from "@/components/sales/ClassBadge";
+import { CatalogImportDialog } from "@/components/sales/CatalogImportDialog";
+import { parseDeNumber, formatEur2, round2 } from "@/lib/salesNumberFormat";
 
 const DEVICE_CLASSES = [
   { value: "meter", label: "Zähler" },
@@ -36,7 +38,10 @@ const DEVICE_CLASSES = [
   { value: "cable", label: "Kabel" },
   { value: "accessory", label: "Zubehör" },
   { value: "misc", label: "Sonstige" },
+  { value: "none", label: "Ohne" },
 ];
+// Sentinel für "keine Geräteklasse" im Select (leere Strings sind in Radix Select verboten)
+const NO_CLASS = "none";
 
 const EINHEITEN = ["Stück", "Meter", "Pauschal"];
 
@@ -44,6 +49,8 @@ interface DeviceCatalog {
   id: string;
   hersteller: string;
   modell: string;
+  artikelnummer: string | null;
+  ean: string | null;
   ek_preis: number;
   vk_preis: number;
   installations_pauschale: number;
@@ -69,6 +76,8 @@ interface PriceOverride {
 interface FormData {
   hersteller: string;
   modell: string;
+  artikelnummer: string;
+  ean: string;
   ek_preis: string;
   vk_preis: string;
   installations_pauschale: string;
@@ -87,6 +96,8 @@ interface FormData {
 const emptyForm: FormData = {
   hersteller: "",
   modell: "",
+  artikelnummer: "",
+  ean: "",
   ek_preis: "0",
   vk_preis: "0",
   installations_pauschale: "0",
@@ -94,7 +105,7 @@ const emptyForm: FormData = {
   datasheet_url: "",
   bild_url: "",
   is_active: true,
-  geraete_klasse: "meter",
+  geraete_klasse: NO_CLASS,
   einheit: "Stück",
   phasen: "3",
   max_strom_a: "63",
@@ -122,6 +133,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
   const [classFilter, setClassFilter] = useState<string>("all");
   // Partner: Tab zwischen eigenen Artikeln und globalen Artikeln mit Override
   const [tab, setTab] = useState<"own" | "global">("own");
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -169,10 +181,18 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
   const ownItems = items.filter((i) => i.owner_scope === "partner" && i.partner_id === partnerId);
   const globalItems = items.filter((i) => i.owner_scope === "global");
   const baseList = scope === "partner" ? (tab === "own" ? ownItems : globalItems) : items;
-  const filtered = classFilter === "all" ? baseList : baseList.filter((i) => i.geraete_klasse === classFilter);
+  const filtered =
+    classFilter === "all"
+      ? baseList
+      : classFilter === NO_CLASS
+        ? baseList.filter((i) => !i.geraete_klasse)
+        : baseList.filter((i) => i.geraete_klasse === classFilter);
   const classCounts = DEVICE_CLASSES.map((c) => ({
     ...c,
-    count: baseList.filter((i) => i.geraete_klasse === c.value).length,
+    count:
+      c.value === NO_CLASS
+        ? baseList.filter((i) => !i.geraete_klasse).length
+        : baseList.filter((i) => i.geraete_klasse === c.value).length,
   }));
 
   const openNew = () => {
@@ -187,6 +207,8 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
     setForm({
       hersteller: item.hersteller,
       modell: item.modell,
+      artikelnummer: item.artikelnummer ?? "",
+      ean: item.ean ?? "",
       ek_preis: String(item.ek_preis),
       vk_preis: String(item.vk_preis),
       installations_pauschale: String(item.installations_pauschale),
@@ -194,7 +216,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
       datasheet_url: item.datasheet_url || "",
       bild_url: item.bild_url || "",
       is_active: item.is_active,
-      geraete_klasse: item.geraete_klasse || "meter",
+      geraete_klasse: item.geraete_klasse || NO_CLASS,
       einheit: item.einheit || "Stück",
       phasen: Array.isArray(k.phasen) ? k.phasen.join(",") : (k.phasen ? String(k.phasen) : ""),
       max_strom_a: k.max_strom_a ? String(k.max_strom_a) : "",
@@ -222,14 +244,16 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
     const payload: any = {
       hersteller: form.hersteller.trim(),
       modell: form.modell.trim(),
-      ek_preis: parseFloat(form.ek_preis) || 0,
-      vk_preis: parseFloat(form.vk_preis) || 0,
-      installations_pauschale: parseFloat(form.installations_pauschale) || 0,
+      artikelnummer: form.artikelnummer.trim() || null,
+      ean: form.ean.trim() || null,
+      ek_preis: round2(parseDeNumber(form.ek_preis) || 0),
+      vk_preis: round2(parseDeNumber(form.vk_preis) || 0),
+      installations_pauschale: round2(parseDeNumber(form.installations_pauschale) || 0),
       beschreibung: form.beschreibung.trim() || null,
       datasheet_url: form.datasheet_url.trim() || null,
       bild_url: form.bild_url.trim() || null,
       is_active: form.is_active,
-      geraete_klasse: form.geraete_klasse as any,
+      geraete_klasse: form.geraete_klasse && form.geraete_klasse !== NO_CLASS ? (form.geraete_klasse as any) : null,
       einheit: form.einheit || "Stück",
       kompatibilitaet,
     };
@@ -273,12 +297,40 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
   const saveOverride = async (deviceId: string, patch: Partial<PriceOverride>) => {
     if (!partnerId) return;
     const existing = overrides[deviceId];
+    // Use property-presence semantics: `undefined` in patch = keep existing value,
+    // an explicit `null` in patch = user cleared the field, so we drop back to the default.
+    const pick = (key: keyof PriceOverride): number | null => {
+      if (key in patch) return (patch as any)[key] ?? null;
+      return (existing?.[key] as number | null | undefined) ?? null;
+    };
+    const ek = pick("ek_preis");
+    const vk = pick("vk_preis");
+    const inst = pick("installations_pauschale");
+
+    // Wenn kein Override mehr gesetzt ist: Zeile ganz entfernen, damit der globale Default gilt.
+    if (ek === null && vk === null && inst === null) {
+      if (existing) {
+        const { error } = await supabase
+          .from("device_catalog_partner_pricing")
+          .delete()
+          .eq("device_catalog_id", deviceId)
+          .eq("partner_id", partnerId);
+        if (error) {
+          toast({ title: "Fehler", description: error.message, variant: "destructive" });
+          return;
+        }
+      }
+      toast({ title: "Eigener Preis zurückgesetzt" });
+      load();
+      return;
+    }
+
     const payload = {
       device_catalog_id: deviceId,
       partner_id: partnerId,
-      ek_preis: patch.ek_preis ?? existing?.ek_preis ?? null,
-      vk_preis: patch.vk_preis ?? existing?.vk_preis ?? null,
-      installations_pauschale: patch.installations_pauschale ?? existing?.installations_pauschale ?? null,
+      ek_preis: ek,
+      vk_preis: vk,
+      installations_pauschale: inst,
     };
     const { error } = await supabase
       .from("device_catalog_partner_pricing")
@@ -311,10 +363,18 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
           </div>
         </div>
         {canManage && (scope === "global" || tab === "own") && (
-          <Button onClick={openNew}>
-            <Plus className="mr-2 h-4 w-4" />
-            Gerät hinzufügen
-          </Button>
+          <div className="flex gap-2">
+            {scope === "partner" && tab === "own" && partnerId && (
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <Upload className="mr-2 h-4 w-4" />
+                CSV / Excel importieren
+              </Button>
+            )}
+            <Button onClick={openNew}>
+              <Plus className="mr-2 h-4 w-4" />
+              Gerät hinzufügen
+            </Button>
+          </div>
         )}
       </div>
 
@@ -409,11 +469,18 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
                     <TableCell>
                       <div className="font-medium">{it.hersteller}</div>
                       <div className="text-xs text-muted-foreground">{it.modell}</div>
+                      {(it.artikelnummer || it.ean) && (
+                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                          {it.artikelnummer && <span>Art.-Nr. {it.artikelnummer}</span>}
+                          {it.artikelnummer && it.ean && <span> · </span>}
+                          {it.ean && <span>EAN {it.ean}</span>}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell><span className="text-xs">{it.einheit}</span></TableCell>
-                    <TableCell className="text-right">{Number(it.ek_preis).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right">{Number(it.vk_preis).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right">{Number(it.installations_pauschale).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatEur2(it.ek_preis)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatEur2(it.vk_preis)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatEur2(it.installations_pauschale)}</TableCell>
                     <TableCell>
                       {it.is_active ? <Badge>aktiv</Badge> : <Badge variant="outline">inaktiv</Badge>}
                     </TableCell>
@@ -456,7 +523,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
             <TabsContent value="basis" className="space-y-4 py-2">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Geräteklasse *</Label>
+                  <Label>Geräteklasse</Label>
                   <Select value={form.geraete_klasse} onValueChange={(v) => setForm({ ...form, geraete_klasse: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -485,6 +552,25 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
                 <div>
                   <Label>Modell *</Label>
                   <Input value={form.modell} onChange={(e) => setForm({ ...form, modell: e.target.value })} placeholder="z. B. Pro 3EM" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Artikelnummer (optional)</Label>
+                  <Input
+                    value={form.artikelnummer}
+                    onChange={(e) => setForm({ ...form, artikelnummer: e.target.value })}
+                    placeholder="z. B. SH-PRO-3EM"
+                  />
+                </div>
+                <div>
+                  <Label>EAN / GTIN (optional)</Label>
+                  <Input
+                    value={form.ean}
+                    onChange={(e) => setForm({ ...form, ean: e.target.value })}
+                    placeholder="z. B. 3800235268421"
+                  />
                 </div>
               </div>
 
@@ -576,9 +662,19 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {scope === "partner" && partnerId && (
+        <CatalogImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          partnerId={partnerId}
+          onImported={() => load()}
+        />
+      )}
     </div>
   );
 }
+
 
 function OverrideRow({
   item,
@@ -591,18 +687,22 @@ function OverrideRow({
   canManage: boolean;
   onSave: (patch: Partial<PriceOverride>) => void;
 }) {
-  const [vk, setVk] = useState<string>(
-    override?.vk_preis != null ? String(override.vk_preis) : "",
-  );
-  const [inst, setInst] = useState<string>(
-    override?.installations_pauschale != null ? String(override.installations_pauschale) : "",
-  );
+  const initialVk =
+    override?.vk_preis != null ? formatEur2(override.vk_preis) : "";
+  const initialInst =
+    override?.installations_pauschale != null ? formatEur2(override.installations_pauschale) : "";
+  const [vk, setVk] = useState<string>(initialVk);
+  const [inst, setInst] = useState<string>(initialInst);
 
   const dirty = useMemo(() => {
-    const curVk = override?.vk_preis != null ? String(override.vk_preis) : "";
-    const curInst = override?.installations_pauschale != null ? String(override.installations_pauschale) : "";
-    return vk !== curVk || inst !== curInst;
-  }, [vk, inst, override]);
+    return vk !== initialVk || inst !== initialInst;
+  }, [vk, inst, initialVk, initialInst]);
+
+  const toPayload = (raw: string): number | null => {
+    if (raw.trim() === "") return null;
+    const n = parseDeNumber(raw);
+    return Number.isFinite(n) ? round2(n) : null;
+  };
 
   return (
     <TableRow>
@@ -611,29 +711,37 @@ function OverrideRow({
         <div className="font-medium">{item.hersteller}</div>
         <div className="text-xs text-muted-foreground">{item.modell}</div>
       </TableCell>
-      <TableCell className="text-right text-muted-foreground">
-        {Number(item.vk_preis).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      <TableCell className="text-right text-muted-foreground tabular-nums">
+        {formatEur2(item.vk_preis)}
       </TableCell>
       <TableCell className="text-right">
         <Input
-          type="number"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
           value={vk}
           disabled={!canManage}
           onChange={(e) => setVk(e.target.value)}
-          placeholder={Number(item.vk_preis).toFixed(2)}
-          className="h-8 text-right ml-auto w-28"
+          onBlur={() => {
+            const n = parseDeNumber(vk);
+            if (Number.isFinite(n)) setVk(formatEur2(n));
+          }}
+          placeholder={formatEur2(item.vk_preis)}
+          className="h-8 text-right ml-auto w-28 tabular-nums"
         />
       </TableCell>
       <TableCell className="text-right">
         <Input
-          type="number"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
           value={inst}
           disabled={!canManage}
           onChange={(e) => setInst(e.target.value)}
-          placeholder={Number(item.installations_pauschale).toFixed(2)}
-          className="h-8 text-right ml-auto w-28"
+          onBlur={() => {
+            const n = parseDeNumber(inst);
+            if (Number.isFinite(n)) setInst(formatEur2(n));
+          }}
+          placeholder={formatEur2(item.installations_pauschale)}
+          className="h-8 text-right ml-auto w-28 tabular-nums"
         />
       </TableCell>
       <TableCell className="text-right">
@@ -643,8 +751,8 @@ function OverrideRow({
           disabled={!canManage || !dirty}
           onClick={() =>
             onSave({
-              vk_preis: vk === "" ? null : parseFloat(vk),
-              installations_pauschale: inst === "" ? null : parseFloat(inst),
+              vk_preis: toPayload(vk),
+              installations_pauschale: toPayload(inst),
             })
           }
           aria-label="Speichern"

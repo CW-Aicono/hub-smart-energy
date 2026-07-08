@@ -1,27 +1,40 @@
-## Ursache
+## Problem
 
-In `src/components/locations/Room3D.tsx` werden Räume mit inkonsistenten Einheiten gezeichnet:
+Aktuell werden die Räume im 3D-Modus jeweils einzeln normalisiert: Jedes Polygon wird auf seine eigene `width × depth` (Meter) skaliert und um `(position_x, position_y)` zentriert. Damit geht die relative Lage aus dem 2D-Grundriss verloren — zwei nebeneinander gezeichnete Räume landen im 3D übereinander, weil `position_x/position_y` typischerweise `0` sind.
 
-1. **Polygon-Punkte werden in Prozent interpretiert, nicht in Metern.**
-   Wenn ein Raum per Polygon-Editor gezeichnet wurde (was bei "Raum 1" der Fall ist – erkennbar an der grünen Wandfarbe #10b981), liegen die `polygon_points` in Prozent-Koordinaten des Grundriss-Bildes (0–100). Room3D multipliziert sie einfach mit `WORLD_SCALE = 0.3` und ignoriert die eingegebenen Werte für Breite (4 m) und Tiefe (4 m) komplett. Ergebnis: die Grundfläche hat keinerlei Bezug zu den gespeicherten Metern – ein klein gezeichnetes Polygon wird zu einem kleinen 3D-Raum, während die Wandhöhe in echten Metern steht → wirkt zu hoch/schmal.
+Der 2D-Grundriss (Prozent-Koordinaten des hinterlegten Bildes/PDFs) ist bereits die beste Quelle für die relative Anordnung — er muss nur einmal konsistent von Prozent → Meter umgerechnet werden, statt pro Raum getrennt.
 
-2. **`wall_height` aus der DB wird ignoriert.**
-   Room3D setzt `const wall_height = DEFAULT_WALL_HEIGHT` (2,8) hart und liest `room.wall_height` nie aus. Änderungen im Editor bleiben ohne Wirkung.
+## Lösung
 
-3. **Rechteck-Fallback stimmt zufällig fast.**
-   Der Fallback ohne Polygon nutzt `width`/`depth` direkt als Welteinheiten (≈ Meter) – nur dieser Pfad liefert korrekte 4×4×2,8-Proportionen. Sobald ein Polygon existiert, wird er nicht mehr verwendet.
+**Ein einziger, gemeinsamer Prozent→Meter-Faktor pro Etage**, angewendet auf alle Polygone. Die 2D-Anordnung wird dadurch 1:1 in 3D übernommen.
 
-## Lösung (nur `Room3D.tsx`)
+### Skalen-Ermittlung (Reihenfolge, erster Treffer gewinnt)
 
-1. **Polygon in Meter umrechnen statt in Prozent-Welt-Einheiten.**
-   Bounding-Box des Polygons berechnen, dann die Punkte so skalieren/verschieben, dass die Bounding-Box exakt `room.width` × `room.depth` (Meter) groß ist und um `(position_x, position_y)` zentriert ist. Damit entspricht die 3D-Grundfläche 1:1 den im Editor angezeigten Metern, unabhängig davon wie groß das Polygon auf dem Grundriss gezeichnet wurde.
+1. **Aus vorhandenen Räumen ableiten:** Für jeden Raum mit Polygon **und** gesetzter `width`/`depth` (> 0) den lokalen Faktor `sx = width / bboxWidth%` und `sz = depth / bboxHeight%` berechnen. Über alle solchen Räume mitteln (getrennt für x/z, damit auch nicht-quadratische Grundrisse stimmen). Das ist die genaueste Quelle, weil der Nutzer die Raummaße explizit gepflegt hat.
+2. **Aus `floor.area_sqm` ableiten:** Falls kein Raum brauchbare Maße hat, aber die Etagenfläche gesetzt ist, den Faktor so wählen, dass die Summe der Polygonflächen (nach Umrechnung) ≈ `area_sqm` ergibt (isotrop, `sx = sz`).
+3. **Fallback:** `sx = sz = 0.1` m/% (entspricht 10 m × 10 m Grundriss) — nur wenn weder Raum-Maße noch Etagen-Fläche vorhanden sind.
 
-2. **Echte Wandhöhe verwenden:** `const wall_height = room.wall_height || DEFAULT_WALL_HEIGHT;`
+### Anwendung in `Room3D.tsx`
 
-3. **Rechteck-Fallback unverändert lassen** (arbeitet bereits in Metern).
+- Polygonpunkte werden mit dem **etagenweiten** Faktor umgerechnet: `worldX = (p.x - imageCenterX%) * sx`, `worldZ = (p.y - imageCenterY%) * sz`. Kein Zentrieren pro Raum mehr, kein Verwenden von `position_x/position_y` als Verschiebung, wenn ein Polygon existiert (die Position steckt bereits im Polygon).
+- `room.width`/`room.depth` werden bei Polygon-Räumen nicht mehr zum Reskalieren benutzt — sie bleiben nur informativ (Anzeige im Editor). Damit stimmt endlich die relative Lage, und die Proportionen sind so, wie der Nutzer sie im 2D-Editor gezeichnet hat.
+- Rechteck-Fallback (kein Polygon) bleibt unverändert: `position_x/position_y` + `width/depth` in Metern.
+- `wall_height` weiterhin aus `room.wall_height`.
 
-4. **`WORLD_OFFSET`/`WORLD_SCALE` bleiben nur noch als Kamera-/Szene-Kontext relevant** – nach der Umrechnung liegen alle Räume in echten Meterkoordinaten um ihren `position_x/position_y`-Mittelpunkt. Kein weiterer Aufrufer wird berührt.
+### Konsequenzen für `FloorPlan3DViewer.tsx`
+
+- `deriveRoomCenter` und `deriveRoomBounds` müssen denselben etagenweiten Faktor verwenden statt der alten `SCALE = 0.3`-Konstante. Ich zentralisiere die Faktor-Berechnung in einem kleinen Helper (`computeFloorScale(rooms, floor)`), den sowohl `Scene` (für `sceneBounds`, Labels) als auch `Room3D` (via Prop) nutzen.
+- Kamera, Grid und Minimap richten sich weiterhin nach `sceneBounds.center*` — durch die konsistente Skala liegen alle Räume jetzt korrekt zueinander, und die Kamera zentriert sich auf den gesamten Grundriss.
+
+### Optional (nicht in diesem Schritt)
+
+Das hinterlegte 2D-Bild als Textur auf den Boden zu legen wäre möglich, ist aber Scope-Erweiterung. Für diese Aufgabe reicht die korrekte relative Anordnung der Räume.
+
+## Betroffene Dateien
+
+- `src/components/locations/Room3D.tsx` — Polygon-Umrechnung auf etagenweiten Faktor, Prop `floorScale` entgegennehmen.
+- `src/components/locations/FloorPlan3DViewer.tsx` — Helper `computeFloorScale`, an `Room3D`/`deriveRoomCenter`/`deriveRoomBounds` durchreichen.
 
 ## Verifikation
 
-Per Playwright den 3D-Begehung-Tab von "Ost EG" öffnen, Screenshot machen und prüfen, dass "Raum 1" (4×4×2,8 m) sichtbar breiter/tiefer als hoch ist und die Proportionen etwa Faktor 4:4:2,8 entsprechen.
+Playwright: 3D-Begehung der Etage „DG – Grundriss" öffnen, Screenshot machen. Erwartung: „Schlafzimmer" (grün) und „Zimmer 1" (blau) stehen **nebeneinander** wie im 2D-Plan, nicht mehr übereinander; ihre Proportionen entsprechen den im 2D gezeichneten Formen.

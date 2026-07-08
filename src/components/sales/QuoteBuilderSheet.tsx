@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Loader2, Sparkles, FileDown, Package, Pencil } from "lucide-react";
 import { ClassBadge } from "./ClassBadge";
 import { CompletenessCheck } from "./CompletenessCheck";
+import { moduleTitle, moduleDescription } from "@/lib/salesModuleLabels";
 
 const CLASS_LABELS: Record<string, string> = {
   meter: "Zähler",
@@ -45,6 +46,8 @@ interface Suggestion {
 
 interface DeviceLine {
   name: string;
+  artikelnummer: string | null;
+  ean: string | null;
   menge: number;
   vk: number;
   inst: number;
@@ -143,7 +146,7 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
           } else {
             const { data: cat } = await supabase
               .from("device_catalog")
-              .select("id, hersteller, modell, vk_preis, installations_pauschale, geraete_klasse, einheit")
+              .select("id, hersteller, modell, artikelnummer, ean, vk_preis, installations_pauschale, geraete_klasse, einheit")
               .in("id", ids);
             const catMap = new Map((cat ?? []).map((c) => [c.id, c]));
             const lines: DeviceLine[] = [];
@@ -152,6 +155,8 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
               if (!c) continue;
               lines.push({
                 name: `${c.hersteller} ${c.modell}`,
+                artikelnummer: c.artikelnummer ?? null,
+                ean: c.ean ?? null,
                 menge: r.menge,
                 vk: Number(c.vk_preis),
                 inst: Number(c.installations_pauschale),
@@ -295,6 +300,13 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
                                   {d.isChild && <span className="text-muted-foreground mr-1">↳</span>}
                                   {d.name}
                                 </div>
+                                {(d.artikelnummer || d.ean) && (
+                                  <div className="text-[10px] text-muted-foreground font-mono">
+                                    {d.artikelnummer && <>Art.-Nr. {d.artikelnummer}</>}
+                                    {d.artikelnummer && d.ean && " · "}
+                                    {d.ean && <>EAN {d.ean}</>}
+                                  </div>
+                                )}
                                 <div className="text-xs text-muted-foreground">
                                   {d.menge} {d.einheit} · {d.vk.toFixed(2)} € + {d.inst.toFixed(2)} € Inst.
                                 </div>
@@ -351,15 +363,18 @@ export function QuoteBuilderSheet({ open, onOpenChange, projectId, kundeTyp, onG
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium">{code}</span>
+                          <span className="text-sm font-medium">{moduleTitle(code)}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">{code}</span>
                           {sugg && (
                             <Badge variant="secondary" className="text-[10px] h-4 px-1">
                               KI
                             </Badge>
                           )}
                         </div>
-                        {sugg?.reason && (
-                          <p className="text-xs text-muted-foreground mt-0.5">{sugg.reason}</p>
+                        {(sugg?.reason || moduleDescription(code)) && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {sugg?.reason || moduleDescription(code)}
+                          </p>
                         )}
                       </div>
                       <div className="text-sm tabular-nums font-medium shrink-0">
