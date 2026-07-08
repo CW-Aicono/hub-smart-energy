@@ -20,6 +20,8 @@ export function SalesLayout({ children, title = "Sales Scout", showBack, backTo,
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { hasAccess, loading } = useSalesPartner();
+  const { isPartnerMember } = usePartnerAccess();
+  const { isSuperAdmin } = useSuperAdmin();
 
   // Set PWA manifest & Apple meta for the Sales Scout PWA (Add-to-Homescreen)
   useEffect(() => {
