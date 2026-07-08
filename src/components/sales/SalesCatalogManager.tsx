@@ -352,10 +352,18 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
           </div>
         </div>
         {canManage && (scope === "global" || tab === "own") && (
-          <Button onClick={openNew}>
-            <Plus className="mr-2 h-4 w-4" />
-            Gerät hinzufügen
-          </Button>
+          <div className="flex gap-2">
+            {scope === "partner" && tab === "own" && partnerId && (
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <Upload className="mr-2 h-4 w-4" />
+                CSV / Excel importieren
+              </Button>
+            )}
+            <Button onClick={openNew}>
+              <Plus className="mr-2 h-4 w-4" />
+              Gerät hinzufügen
+            </Button>
+          </div>
         )}
       </div>
 
