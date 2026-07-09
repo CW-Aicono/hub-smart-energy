@@ -1,40 +1,84 @@
-## Problem
+## Ziel
 
-Aktuell werden die Räume im 3D-Modus jeweils einzeln normalisiert: Jedes Polygon wird auf seine eigene `width × depth` (Meter) skaliert und um `(position_x, position_y)` zentriert. Damit geht die relative Lage aus dem 2D-Grundriss verloren — zwei nebeneinander gezeichnete Räume landen im 3D übereinander, weil `position_x/position_y` typischerweise `0` sind.
+Im Sales Scout sollen beim Anlegen/Bearbeiten eines Projekts optional bereits alle strukturellen Daten erfasst werden können, die später bei der Konvertierung in einen Mandanten automatisch übernommen werden — statt dass der neue Mandant „leer" startet und alles nochmal angelegt werden muss.
 
-Der 2D-Grundriss (Prozent-Koordinaten des hinterlegten Bildes/PDFs) ist bereits die beste Quelle für die relative Anordnung — er muss nur einmal konsistent von Prozent → Meter umgerechnet werden, statt pro Raum getrennt.
+## Was aktuell schon existiert
 
-## Lösung
+- `sales_projects` — Kunde, Kontakt, Adresse, Notizen
+- `sales_distributions` + `sales_measurement_points` + `sales_recommended_devices` — Elektro-Verteiler, Messstellen (Energieart, Phasen, A, V …) und daraus abgeleitete Hardware-Empfehlungen
+- Konverter (`sales-convert-to-tenant`) legt heute an: Tenant + Module + **eine** Haupt-Location (nur Name + Adresse). Alles andere (Etagen, Räume, Zähler, Energiearten) muss der Kunde/Partner danach im Mandanten manuell nachpflegen.
 
-**Ein einziger, gemeinsamer Prozent→Meter-Faktor pro Etage**, angewendet auf alle Polygone. Die 2D-Anordnung wird dadurch 1:1 in 3D übernommen.
+## Was auf Mandanten-Seite existiert (Zielstruktur)
 
-### Skalen-Ermittlung (Reihenfolge, erster Treffer gewinnt)
+- `locations` — Liegenschaft (Adresse, Bauart, Baujahr, Fläche, Heizungsart, Warmwasser, Bundesland, Netzanschluss-kW …)
+- `location_energy_sources` — welche Energiearten die Liegenschaft nutzt (Strom, Gas, PV, Wärmepumpe, Fernwärme …)
+- `floors` — Etagen (Nr., Name, Fläche)
+- `floor_rooms` — Räume (Name, Maße, Höhe)
+- `meters` — Zähler / Sensoren (Name, Zählernummer, Energieart, Einheit, Hauptzähler ja/nein, Parent-Zähler)
 
-1. **Aus vorhandenen Räumen ableiten:** Für jeden Raum mit Polygon **und** gesetzter `width`/`depth` (> 0) den lokalen Faktor `sx = width / bboxWidth%` und `sz = depth / bboxHeight%` berechnen. Über alle solchen Räume mitteln (getrennt für x/z, damit auch nicht-quadratische Grundrisse stimmen). Das ist die genaueste Quelle, weil der Nutzer die Raummaße explizit gepflegt hat.
-2. **Aus `floor.area_sqm` ableiten:** Falls kein Raum brauchbare Maße hat, aber die Etagenfläche gesetzt ist, den Faktor so wählen, dass die Summe der Polygonflächen (nach Umrechnung) ≈ `area_sqm` ergibt (isotrop, `sx = sz`).
-3. **Fallback:** `sx = sz = 0.1` m/% (entspricht 10 m × 10 m Grundriss) — nur wenn weder Raum-Maße noch Etagen-Fläche vorhanden sind.
+## Empfohlener Ansatz
 
-### Anwendung in `Room3D.tsx`
+**Sales-seitig eine schlanke, mandanten-parallele Struktur einführen** und beim Convert 1:1 übertragen. Bewusst *nicht* alles in `sales_projects`-JSON, weil (a) mehrere Liegenschaften pro Projekt möglich sein sollen und (b) Etagen/Räume/Zähler bereits n:m sind und im UI editierbar sein müssen.
 
-- Polygonpunkte werden mit dem **etagenweiten** Faktor umgerechnet: `worldX = (p.x - imageCenterX%) * sx`, `worldZ = (p.y - imageCenterY%) * sz`. Kein Zentrieren pro Raum mehr, kein Verwenden von `position_x/position_y` als Verschiebung, wenn ein Polygon existiert (die Position steckt bereits im Polygon).
-- `room.width`/`room.depth` werden bei Polygon-Räumen nicht mehr zum Reskalieren benutzt — sie bleiben nur informativ (Anzeige im Editor). Damit stimmt endlich die relative Lage, und die Proportionen sind so, wie der Nutzer sie im 2D-Editor gezeichnet hat.
-- Rechteck-Fallback (kein Polygon) bleibt unverändert: `position_x/position_y` + `width/depth` in Metern.
-- `wall_height` weiterhin aus `room.wall_height`.
+### Neue Tabellen
 
-### Konsequenzen für `FloorPlan3DViewer.tsx`
+1. `**sales_locations**` — Liegenschaften des Projekts
+  Felder: `project_id`, `name`, `adresse`, `usage_type`, `net_floor_area`, `construction_year`, `renovation_year`, `heating_type`, `federal_state`, `grid_limit_kw`, `hot_water_energy_type`, `is_main`, `notizen`
+2. `**sales_location_energy_sources**` — pro Liegenschaft aktive Energiearten (`energy_type`, `custom_name`)
+3. `**sales_floors**` — `location_id (sales)`, `name`, `floor_number`, `area_sqm`
+4. `**sales_rooms**` — `floor_id (sales)`, `name`, Maße (optional)
+5. `**sales_meters**` — `location_id (sales)`, optional `floor_id`/`room_id`, `parent_sales_meter_id`, `name`, `meter_number`, `energy_type`, `unit`, `is_main_meter`, `medium`, `notes`
 
-- `deriveRoomCenter` und `deriveRoomBounds` müssen denselben etagenweiten Faktor verwenden statt der alten `SCALE = 0.3`-Konstante. Ich zentralisiere die Faktor-Berechnung in einem kleinen Helper (`computeFloorScale(rooms, floor)`), den sowohl `Scene` (für `sceneBounds`, Labels) als auch `Room3D` (via Prop) nutzen.
-- Kamera, Grid und Minimap richten sich weiterhin nach `sceneBounds.center*` — durch die konsistente Skala liegen alle Räume jetzt korrekt zueinander, und die Kamera zentriert sich auf den gesamten Grundriss.
+Alle mit `ON DELETE CASCADE` an `project_id`, RLS analog zu `sales_distributions` (Partner sieht eigene Projekte, Super-Admin alles), GRANTs für `authenticated` + `service_role`.
 
-### Optional (nicht in diesem Schritt)
+Bezug zu bestehenden Sales-Tabellen: `sales_distributions.location_id` (neu, optional) und `sales_measurement_points.room_id` (neu, optional) erlauben die spätere Zuordnung Verteiler↔Liegenschaft und Messstelle↔Raum. Für Bestandsprojekte bleibt beides `NULL` — keine Migration von Bestandsdaten nötig.
 
-Das hinterlegte 2D-Bild als Textur auf den Boden zu legen wäre möglich, ist aber Scope-Erweiterung. Für diese Aufgabe reicht die korrekte relative Anordnung der Räume.
+### UI-Erweiterungen (`/sales/:id/edit` und Projekt-Detail)
 
-## Betroffene Dateien
+Neuer Reiter **„Liegenschaft & Struktur"** mit ausklappbaren, komplett optionalen Blöcken:
 
-- `src/components/locations/Room3D.tsx` — Polygon-Umrechnung auf etagenweiten Faktor, Prop `floorScale` entgegennehmen.
-- `src/components/locations/FloorPlan3DViewer.tsx` — Helper `computeFloorScale`, an `Room3D`/`deriveRoomCenter`/`deriveRoomBounds` durchreichen.
+- **Liegenschaften** (n) — Karte pro Liegenschaft: Adresse, Nutzungsart, Fläche, Baujahr, Heizung, Warmwasser, Bundesland, Netzanschluss
+  - **Energiearten** als Chip-Multi-Select (Strom, Gas, Wärme, Wasser, PV, Wärmepumpe, EV, Speicher …)
+  - **Etagen** — kompakte Liste (Nr., Name, Fläche); pro Etage
+    - **Räume** — Liste (Name, optional B×T×H)
+  - **Zählerstruktur** — Baum-View mit Hauptzähler → Unterzähler (Name, Zählernummer, Energieart, Einheit), Zuordnung zu Etage/Raum optional
 
-## Verifikation
+Alles bleibt optional; bestehendes „Kunde/Kontakt/Adresse"-Formular bleibt unverändert und wird beim Convert auf die **Haupt-Liegenschaft** gemappt, falls keine `sales_locations` erfasst wurden (Backwards-Compat).
 
-Playwright: 3D-Begehung der Etage „DG – Grundriss" öffnen, Screenshot machen. Erwartung: „Schlafzimmer" (grün) und „Zimmer 1" (blau) stehen **nebeneinander** wie im 2D-Plan, nicht mehr übereinander; ihre Proportionen entsprechen den im 2D gezeichneten Formen.
+### Convert-Erweiterung (`sales-convert-to-tenant`)
+
+Nach Tenant-Anlage:
+
+1. Wenn `sales_locations` vorhanden → für jede eine `locations`-Zeile anlegen (Haupt = `is_main_location`); sonst wie bisher eine Default-Location aus Projekt-Adresse.
+2. Für jede Sales-Location: `location_energy_sources`, dann `floors`, dann `floor_rooms`, dann `meters` (Reihenfolge wichtig wegen `parent_meter_id` — Hauptzähler zuerst, dann Kinder mit gemappter Parent-ID).
+3. ID-Mapping (`sales_meter_id → meter_id` etc.) in-memory halten, damit `parent_meter_id`, `location_id`, `room_id` korrekt gesetzt werden.
+4. Optional: falls `sales_distributions.location_id` gesetzt ist, kann später eine ähnliche Konvertierung in ein Verteiler-Modell erfolgen — **out of scope für diesen Schritt**.
+
+### Sicherheitsnetz
+
+- Vor dem Convert: Warnung im `ConvertProjectDialog`, wenn keinerlei Struktur erfasst wurde (heutiges Verhalten) — nur Hinweis, kein Block.
+- Convert bleibt idempotent-geschützt über `converted_tenant_id`.
+
+## Nicht Teil dieses Plans (bewusst)
+
+- Import aus Photo/KI der Verteiler in die Zähler-Struktur — bleibt manuell.
+- Übertragen von Tarifen, Preisen, Nutzern, Gateway-Config in den Mandanten.
+- Rückrichtung Mandant → Sales.
+
+## Umsetzungs-Schritte
+
+1. Migration: fünf neue Tabellen + RLS + GRANTs + `updated_at`-Trigger; zusätzlich `sales_distributions.location_id` und `sales_measurement_points.room_id` als optionale FKs.
+2. Neuer Tab „Liegenschaft & Struktur" in `SalesProjectForm` (aufgeteilt in Sub-Komponenten `SalesLocationCard`, `SalesFloorsEditor`, `SalesMetersTree`).
+3. Hooks/Utils analog zu bestehenden Sales-Komponenten (Query, Mutations, optimistic UI nicht nötig).
+4. `sales-convert-to-tenant` erweitern (siehe oben) inkl. Reihenfolge & ID-Mapping.
+5. `ConvertProjectDialog` um Struktur-Zusammenfassung + Hinweis ergänzen.
+6. Kurzer Vitest für den ID-Mapping-Helper (Parent-Meter-Auflösung).
+
+## Offene Rückfragen
+
+- Sollen **mehrere Liegenschaften pro Projekt** erlaubt sein (Empfehlung: ja, wie beschrieben) oder bewusst nur genau eine?
+- Sollen die im Sales erfassten **Verteiler/Messstellen** beim Convert zusätzlich als Zähler/Sensoren in `meters` angelegt werden, oder bleibt das bewusst getrennt (Sales = Angebot, Zählerstruktur = tatsächlicher Betrieb)?  
+  
+Antworten:  
+1. Ja, es sollen mehrere Liegenschaften für enen Mandanten/Projekt erlaubt sein  
+2. Messstellen/Sensoren/Geräte können erst nach Erfassung durch Gateway separat hinterlegt werden
