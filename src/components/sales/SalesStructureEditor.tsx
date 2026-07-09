@@ -329,14 +329,26 @@ function LocationCard({
           <div className="flex flex-wrap gap-1.5">
             {ENERGY_TYPES.map((t) => {
               const active = energySourceCodes.includes(t.value);
+              const label =
+                ({
+                  strom: "Strom",
+                  gas: "Gas",
+                  waerme: "Fernwärme",
+                  solar: "Solar",
+                  wasser: "Wasser",
+                  oel: "Öl",
+                  pellets: "Pellets",
+                  sonstige_erzeugung: "Sonstige Erzeugung",
+                  sonstiges: "Sonstiger Verbrauch",
+                } as Record<string, string>)[t.value] ?? t.value;
               return (
                 <Badge
                   key={t.value}
                   variant={active ? "default" : "outline"}
-                  className="cursor-pointer capitalize"
+                  className="cursor-pointer"
                   onClick={() => toggleEnergyType(t.value)}
                 >
-                  {t.value}
+                  {label}
                 </Badge>
               );
             })}
