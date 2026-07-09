@@ -283,6 +283,18 @@ export default function SalesProjectDetail() {
         <ProjectAttachments projectId={id!} />
 
         <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              Liegenschaft & Struktur
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SalesStructureEditor projectId={id!} />
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Boxes className="h-4 w-4" />
