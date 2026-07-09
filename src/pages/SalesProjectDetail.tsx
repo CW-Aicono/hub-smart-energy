@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Plus, Zap, Boxes, FileText, Trash2, MapPin, ChevronRight, Box, Camera, Pencil } from "lucide-react";
+import { Plus, Zap, Boxes, FileText, Trash2, MapPin, ChevronRight, Box, Camera, Pencil, Building2 } from "lucide-react";
+import { SalesStructureEditor } from "@/components/sales/SalesStructureEditor";
 import { DistributionSheet } from "@/components/sales/DistributionSheet";
 import { ProjectAttachments } from "@/components/sales/ProjectAttachments";
 import { DistributionPhotoThumb } from "@/components/sales/DistributionPhotoThumb";
@@ -281,6 +282,18 @@ export default function SalesProjectDetail() {
         </Card>
 
         <ProjectAttachments projectId={id!} />
+
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              Liegenschaft & Struktur
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SalesStructureEditor projectId={id!} />
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
