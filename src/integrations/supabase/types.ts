@@ -9634,6 +9634,153 @@ export type Database = {
           },
         ]
       }
+      sales_floors: {
+        Row: {
+          area_sqm: number | null
+          created_at: string
+          description: string | null
+          floor_number: number
+          id: string
+          name: string
+          sales_location_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          area_sqm?: number | null
+          created_at?: string
+          description?: string | null
+          floor_number?: number
+          id?: string
+          name: string
+          sales_location_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          area_sqm?: number | null
+          created_at?: string
+          description?: string | null
+          floor_number?: number
+          id?: string
+          name?: string
+          sales_location_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_floors_sales_location_id_fkey"
+            columns: ["sales_location_id"]
+            isOneToOne: false
+            referencedRelation: "sales_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_location_energy_sources: {
+        Row: {
+          created_at: string
+          custom_name: string | null
+          energy_type: string
+          id: string
+          sales_location_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          custom_name?: string | null
+          energy_type: string
+          id?: string
+          sales_location_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          custom_name?: string | null
+          energy_type?: string
+          id?: string
+          sales_location_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_location_energy_sources_sales_location_id_fkey"
+            columns: ["sales_location_id"]
+            isOneToOne: false
+            referencedRelation: "sales_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_locations: {
+        Row: {
+          adresse: string | null
+          construction_year: number | null
+          created_at: string
+          federal_state: string | null
+          grid_limit_kw: number | null
+          heating_type: string | null
+          hot_water_energy_type: string | null
+          id: string
+          is_main: boolean
+          name: string
+          net_floor_area: number | null
+          notizen: string | null
+          project_id: string
+          renovation_year: number | null
+          sort_order: number
+          updated_at: string
+          usage_type: string | null
+        }
+        Insert: {
+          adresse?: string | null
+          construction_year?: number | null
+          created_at?: string
+          federal_state?: string | null
+          grid_limit_kw?: number | null
+          heating_type?: string | null
+          hot_water_energy_type?: string | null
+          id?: string
+          is_main?: boolean
+          name: string
+          net_floor_area?: number | null
+          notizen?: string | null
+          project_id: string
+          renovation_year?: number | null
+          sort_order?: number
+          updated_at?: string
+          usage_type?: string | null
+        }
+        Update: {
+          adresse?: string | null
+          construction_year?: number | null
+          created_at?: string
+          federal_state?: string | null
+          grid_limit_kw?: number | null
+          heating_type?: string | null
+          hot_water_energy_type?: string | null
+          id?: string
+          is_main?: boolean
+          name?: string
+          net_floor_area?: number | null
+          notizen?: string | null
+          project_id?: string
+          renovation_year?: number | null
+          sort_order?: number
+          updated_at?: string
+          usage_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_locations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "sales_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_measurement_points: {
         Row: {
           anwendungsfall: string | null
@@ -10041,6 +10188,50 @@ export type Database = {
             columns: ["parent_recommendation_id"]
             isOneToOne: false
             referencedRelation: "sales_recommended_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_rooms: {
+        Row: {
+          created_at: string
+          depth: number | null
+          id: string
+          name: string
+          sales_floor_id: string
+          sort_order: number
+          updated_at: string
+          wall_height: number | null
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          depth?: number | null
+          id?: string
+          name: string
+          sales_floor_id: string
+          sort_order?: number
+          updated_at?: string
+          wall_height?: number | null
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          depth?: number | null
+          id?: string
+          name?: string
+          sales_floor_id?: string
+          sort_order?: number
+          updated_at?: string
+          wall_height?: number | null
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_rooms_sales_floor_id_fkey"
+            columns: ["sales_floor_id"]
+            isOneToOne: false
+            referencedRelation: "sales_floors"
             referencedColumns: ["id"]
           },
         ]
