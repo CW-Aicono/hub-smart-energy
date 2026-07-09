@@ -447,6 +447,16 @@ function FloorRow({
               <Plus className="h-3 w-3 mr-1" /> Raum
             </Button>
           </div>
+          {rooms.length > 0 && (
+            <div className="grid grid-cols-[1fr_72px_72px_72px_auto_auto] gap-1.5 items-center px-0.5">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Name</span>
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground text-center">Breite (m)</span>
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground text-center">Tiefe (m)</span>
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground text-center">Höhe (m)</span>
+              <span />
+              <span />
+            </div>
+          )}
           {rooms.map((r) => (
             <RoomRow key={r.id} room={r} onChange={onChange} />
           ))}
