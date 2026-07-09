@@ -499,13 +499,13 @@ function RoomRow({
   };
 
   return (
-    <div className="grid grid-cols-[1fr_72px_72px_72px_auto_auto] gap-1.5 items-center">
+    <div className="grid grid-cols-[1fr_72px_72px_72px_44px_32px] gap-1.5 items-center">
       <Input value={name} onChange={(e) => setName(e.target.value)} className="h-7 text-xs" placeholder="Raumname" />
       <Input value={w} onChange={(e) => setW(e.target.value)} placeholder="Breite" title="Breite in Meter" type="number" step="0.1" className="h-7 text-xs" />
       <Input value={d} onChange={(e) => setD(e.target.value)} placeholder="Tiefe" title="Tiefe in Meter" type="number" step="0.1" className="h-7 text-xs" />
       <Input value={h} onChange={(e) => setH(e.target.value)} placeholder="Höhe" title="Wandhöhe in Meter" type="number" step="0.1" className="h-7 text-xs" />
-      <Button size="sm" variant="ghost" onClick={save} className="h-7 text-xs">OK</Button>
-      <Button size="sm" variant="ghost" onClick={remove} className="h-7 text-destructive">
+      <Button size="sm" variant="ghost" onClick={save} className="h-7 text-xs px-2">OK</Button>
+      <Button size="sm" variant="ghost" onClick={remove} className="h-7 w-8 p-0 text-destructive">
         <Trash2 className="h-3 w-3" />
       </Button>
     </div>
