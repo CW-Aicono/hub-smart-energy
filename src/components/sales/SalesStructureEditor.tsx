@@ -448,7 +448,7 @@ function FloorRow({
             </Button>
           </div>
           {rooms.length > 0 && (
-            <div className="grid grid-cols-[1fr_72px_72px_72px_auto_auto] gap-1.5 items-center px-0.5">
+            <div className="grid grid-cols-[1fr_72px_72px_72px_44px_32px] gap-1.5 items-center px-0.5">
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Name</span>
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground text-center">Breite (m)</span>
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground text-center">Tiefe (m)</span>
