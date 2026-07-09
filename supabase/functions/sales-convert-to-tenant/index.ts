@@ -39,11 +39,14 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Verify partner / super_admin
-    const { data: roles } = await admin
-      .from("user_roles").select("role").eq("user_id", userData.user.id);
-    const isAllowed = (roles ?? []).some((r) =>
-      r.role === "super_admin" || r.role === "sales_partner");
+    // Verify super_admin OR partner member
+    const [{ data: roles }, { data: memberships }] = await Promise.all([
+      admin.from("user_roles").select("role").eq("user_id", userData.user.id),
+      admin.from("partner_members").select("id").eq("user_id", userData.user.id).limit(1),
+    ]);
+    const isAllowed =
+      (roles ?? []).some((r) => r.role === "super_admin" || r.role === "sales_partner") ||
+      (memberships ?? []).length > 0;
     if (!isAllowed) {
       return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403, headers: { ...cors, "Content-Type": "application/json" },
