@@ -93,6 +93,18 @@ Deno.serve(async (req) => {
       slug = `${baseSlug}-${n}`;
     }
 
+    // Resolve partner ownership: prefer the project's partner_org_id, else the caller's first partner_members row
+    let partnerId: string | null = (project as any).partner_org_id ?? null;
+    if (!partnerId) {
+      const { data: pm } = await admin
+        .from("partner_members")
+        .select("partner_id")
+        .eq("user_id", userData.user.id)
+        .limit(1)
+        .maybeSingle();
+      partnerId = pm?.partner_id ?? null;
+    }
+
     // Create tenant
     const { data: tenant, error: tErr } = await admin
       .from("tenants").insert({
@@ -103,6 +115,8 @@ Deno.serve(async (req) => {
         contact_person: project.kontakt_name,
         address: project.adresse,
         is_kommune: project.kunde_typ !== "industry",
+        partner_id: partnerId,
+        support_owner: partnerId ? "partner" : "platform",
       }).select("id, slug").single();
     if (tErr) throw tErr;
 
