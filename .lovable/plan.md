@@ -1,84 +1,54 @@
+# Tenant-Transfer (Partner ↔ Partner ↔ Super-Admin)
+
 ## Ziel
+Super-Admin kann einen Tenant von einem Partner auf einen anderen Partner übertragen — oder in die direkte Super-Admin-Verwaltung („Platform") zurückholen. Vorgang inkl. Audit-Log, Wechsel des Remote-Support-Zugriffs und optionaler Benachrichtigung.
 
-Im Sales Scout sollen beim Anlegen/Bearbeiten eines Projekts optional bereits alle strukturellen Daten erfasst werden können, die später bei der Konvertierung in einen Mandanten automatisch übernommen werden — statt dass der neue Mandant „leer" startet und alles nochmal angelegt werden muss.
+## Scope
+- Nur Super-Admin darf transferieren (keine Partner-Selbstbedienung).
+- Betroffene Felder auf `tenants`: `partner_id` (kann NULL = Platform), `support_owner` (`partner` | `platform`).
+- Historische Zuordnung wird in einem neuen Audit-Table protokolliert.
 
-## Was aktuell schon existiert
+## Umsetzung
 
-- `sales_projects` — Kunde, Kontakt, Adresse, Notizen
-- `sales_distributions` + `sales_measurement_points` + `sales_recommended_devices` — Elektro-Verteiler, Messstellen (Energieart, Phasen, A, V …) und daraus abgeleitete Hardware-Empfehlungen
-- Konverter (`sales-convert-to-tenant`) legt heute an: Tenant + Module + **eine** Haupt-Location (nur Name + Adresse). Alles andere (Etagen, Räume, Zähler, Energiearten) muss der Kunde/Partner danach im Mandanten manuell nachpflegen.
+### 1. Datenmodell
+Neue Tabelle `tenant_partner_transfers` (Audit/Historie):
+- `tenant_id`, `from_partner_id` (nullable), `to_partner_id` (nullable), `from_support_owner`, `to_support_owner`, `reason` (text), `performed_by` (auth user), `created_at`.
+- RLS: nur `super_admin` darf SELECT/INSERT; `service_role` all.
 
-## Was auf Mandanten-Seite existiert (Zielstruktur)
+### 2. Edge Function `super-admin-transfer-tenant`
+Input: `{ tenant_id, target_partner_id | null, reason }`
+Ablauf:
+1. JWT prüfen, `has_role(user, 'super_admin')` erzwingen.
+2. Alten `partner_id` / `support_owner` lesen.
+3. `tenants` updaten:
+   - `partner_id = target_partner_id` (oder NULL)
+   - `support_owner = target_partner_id ? 'partner' : 'platform'`
+4. Zeile in `tenant_partner_transfers` schreiben.
+5. `audit_logs` Eintrag (`action = 'tenant.partner_transfer'`).
+6. Ergebnis zurückgeben.
 
-- `locations` — Liegenschaft (Adresse, Bauart, Baujahr, Fläche, Heizungsart, Warmwasser, Bundesland, Netzanschluss-kW …)
-- `location_energy_sources` — welche Energiearten die Liegenschaft nutzt (Strom, Gas, PV, Wärmepumpe, Fernwärme …)
-- `floors` — Etagen (Nr., Name, Fläche)
-- `floor_rooms` — Räume (Name, Maße, Höhe)
-- `meters` — Zähler / Sensoren (Name, Zählernummer, Energieart, Einheit, Hauptzähler ja/nein, Parent-Zähler)
+Kein Löschen von Daten des Tenants; nur Ownership-Wechsel. Bestehende Partner-Members verlieren dadurch automatisch Zugriff (RLS läuft über `tenants.partner_id`).
 
-## Empfohlener Ansatz
+### 3. UI im Super-Admin
+Auf der Super-Admin Tenant-Detailseite (bzw. Tenants-Liste, Zeilen-Aktion) neuer Button „Partner wechseln":
+- Dialog mit:
+  - Aktueller Partner (readonly).
+  - Ziel: Dropdown aller aktiven Partner + Option „Direkt Super-Admin (Platform)".
+  - Grund (Pflicht-Textfeld, min. 5 Zeichen).
+  - Warnhinweis: alter Partner verliert sofort Zugriff & Remote-Support.
+- Bestätigen ruft die Edge Function auf, invalidiert Tenant-Queries.
 
-**Sales-seitig eine schlanke, mandanten-parallele Struktur einführen** und beim Convert 1:1 übertragen. Bewusst *nicht* alles in `sales_projects`-JSON, weil (a) mehrere Liegenschaften pro Projekt möglich sein sollen und (b) Etagen/Räume/Zähler bereits n:m sind und im UI editierbar sein müssen.
+### 4. Historie-Ansicht
+Im Tenant-Detail (Super-Admin) neuer Abschnitt „Partner-Historie": Liste aller Einträge aus `tenant_partner_transfers` (Von → Nach, Grund, Datum, Ausführender).
 
-### Neue Tabellen
+### 5. Nicht enthalten (bewusst)
+- Kein Zustimmungs-Workflow des neuen Partners (Super-Admin-Aktion).
+- Kein automatisches E-Mail-Versenden (kann in Folge-Story ergänzt werden).
+- Partner-Selfservice („Tenant abgeben") ausdrücklich ausgeschlossen.
 
-1. `**sales_locations**` — Liegenschaften des Projekts
-  Felder: `project_id`, `name`, `adresse`, `usage_type`, `net_floor_area`, `construction_year`, `renovation_year`, `heating_type`, `federal_state`, `grid_limit_kw`, `hot_water_energy_type`, `is_main`, `notizen`
-2. `**sales_location_energy_sources**` — pro Liegenschaft aktive Energiearten (`energy_type`, `custom_name`)
-3. `**sales_floors**` — `location_id (sales)`, `name`, `floor_number`, `area_sqm`
-4. `**sales_rooms**` — `floor_id (sales)`, `name`, Maße (optional)
-5. `**sales_meters**` — `location_id (sales)`, optional `floor_id`/`room_id`, `parent_sales_meter_id`, `name`, `meter_number`, `energy_type`, `unit`, `is_main_meter`, `medium`, `notes`
-
-Alle mit `ON DELETE CASCADE` an `project_id`, RLS analog zu `sales_distributions` (Partner sieht eigene Projekte, Super-Admin alles), GRANTs für `authenticated` + `service_role`.
-
-Bezug zu bestehenden Sales-Tabellen: `sales_distributions.location_id` (neu, optional) und `sales_measurement_points.room_id` (neu, optional) erlauben die spätere Zuordnung Verteiler↔Liegenschaft und Messstelle↔Raum. Für Bestandsprojekte bleibt beides `NULL` — keine Migration von Bestandsdaten nötig.
-
-### UI-Erweiterungen (`/sales/:id/edit` und Projekt-Detail)
-
-Neuer Reiter **„Liegenschaft & Struktur"** mit ausklappbaren, komplett optionalen Blöcken:
-
-- **Liegenschaften** (n) — Karte pro Liegenschaft: Adresse, Nutzungsart, Fläche, Baujahr, Heizung, Warmwasser, Bundesland, Netzanschluss
-  - **Energiearten** als Chip-Multi-Select (Strom, Gas, Wärme, Wasser, PV, Wärmepumpe, EV, Speicher …)
-  - **Etagen** — kompakte Liste (Nr., Name, Fläche); pro Etage
-    - **Räume** — Liste (Name, optional B×T×H)
-  - **Zählerstruktur** — Baum-View mit Hauptzähler → Unterzähler (Name, Zählernummer, Energieart, Einheit), Zuordnung zu Etage/Raum optional
-
-Alles bleibt optional; bestehendes „Kunde/Kontakt/Adresse"-Formular bleibt unverändert und wird beim Convert auf die **Haupt-Liegenschaft** gemappt, falls keine `sales_locations` erfasst wurden (Backwards-Compat).
-
-### Convert-Erweiterung (`sales-convert-to-tenant`)
-
-Nach Tenant-Anlage:
-
-1. Wenn `sales_locations` vorhanden → für jede eine `locations`-Zeile anlegen (Haupt = `is_main_location`); sonst wie bisher eine Default-Location aus Projekt-Adresse.
-2. Für jede Sales-Location: `location_energy_sources`, dann `floors`, dann `floor_rooms`, dann `meters` (Reihenfolge wichtig wegen `parent_meter_id` — Hauptzähler zuerst, dann Kinder mit gemappter Parent-ID).
-3. ID-Mapping (`sales_meter_id → meter_id` etc.) in-memory halten, damit `parent_meter_id`, `location_id`, `room_id` korrekt gesetzt werden.
-4. Optional: falls `sales_distributions.location_id` gesetzt ist, kann später eine ähnliche Konvertierung in ein Verteiler-Modell erfolgen — **out of scope für diesen Schritt**.
-
-### Sicherheitsnetz
-
-- Vor dem Convert: Warnung im `ConvertProjectDialog`, wenn keinerlei Struktur erfasst wurde (heutiges Verhalten) — nur Hinweis, kein Block.
-- Convert bleibt idempotent-geschützt über `converted_tenant_id`.
-
-## Nicht Teil dieses Plans (bewusst)
-
-- Import aus Photo/KI der Verteiler in die Zähler-Struktur — bleibt manuell.
-- Übertragen von Tarifen, Preisen, Nutzern, Gateway-Config in den Mandanten.
-- Rückrichtung Mandant → Sales.
-
-## Umsetzungs-Schritte
-
-1. Migration: fünf neue Tabellen + RLS + GRANTs + `updated_at`-Trigger; zusätzlich `sales_distributions.location_id` und `sales_measurement_points.room_id` als optionale FKs.
-2. Neuer Tab „Liegenschaft & Struktur" in `SalesProjectForm` (aufgeteilt in Sub-Komponenten `SalesLocationCard`, `SalesFloorsEditor`, `SalesMetersTree`).
-3. Hooks/Utils analog zu bestehenden Sales-Komponenten (Query, Mutations, optimistic UI nicht nötig).
-4. `sales-convert-to-tenant` erweitern (siehe oben) inkl. Reihenfolge & ID-Mapping.
-5. `ConvertProjectDialog` um Struktur-Zusammenfassung + Hinweis ergänzen.
-6. Kurzer Vitest für den ID-Mapping-Helper (Parent-Meter-Auflösung).
-
-## Offene Rückfragen
-
-- Sollen **mehrere Liegenschaften pro Projekt** erlaubt sein (Empfehlung: ja, wie beschrieben) oder bewusst nur genau eine?
-- Sollen die im Sales erfassten **Verteiler/Messstellen** beim Convert zusätzlich als Zähler/Sensoren in `meters` angelegt werden, oder bleibt das bewusst getrennt (Sales = Angebot, Zählerstruktur = tatsächlicher Betrieb)?  
-  
-Antworten:  
-1. Ja, es sollen mehrere Liegenschaften für enen Mandanten/Projekt erlaubt sein  
-2. Messstellen/Sensoren/Geräte können erst nach Erfassung durch Gateway separat hinterlegt werden
+## Betroffene Dateien (geplant)
+- Migration: neue Tabelle `tenant_partner_transfers` + RLS + GRANTs.
+- Neu: `supabase/functions/super-admin-transfer-tenant/index.ts`.
+- Neu: `src/components/super-admin/TransferTenantDialog.tsx`.
+- Neu: `src/components/super-admin/TenantPartnerHistory.tsx`.
+- Edit: Super-Admin Tenant-Detail/Listen-Seite (Aktion einbinden).
