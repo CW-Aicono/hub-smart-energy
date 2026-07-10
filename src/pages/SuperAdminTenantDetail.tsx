@@ -32,6 +32,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
+import TenantPartnerTransferCard from "@/components/super-admin/TenantPartnerTransferCard";
 
 interface InviteTenantAdminDialogProps {
   tenantId: string;
@@ -795,6 +796,14 @@ const SuperAdminTenantDetail = () => {
                   )}
                 </CardContent>
               </Card>
+
+              {tenant && (
+                <TenantPartnerTransferCard
+                  tenantId={(tenant as any).id}
+                  tenantName={(tenant as any).name}
+                  currentPartnerId={(tenant as any).partner_id ?? null}
+                />
+              )}
             </TabsContent>
 
             <TabsContent value="modules" className="mt-6 space-y-6">
