@@ -796,6 +796,14 @@ const SuperAdminTenantDetail = () => {
                   )}
                 </CardContent>
               </Card>
+
+              {tenant && (
+                <TenantPartnerTransferCard
+                  tenantId={(tenant as any).id}
+                  tenantName={(tenant as any).name}
+                  currentPartnerId={(tenant as any).partner_id ?? null}
+                />
+              )}
             </TabsContent>
 
             <TabsContent value="modules" className="mt-6 space-y-6">
