@@ -11595,6 +11595,64 @@ export type Database = {
           },
         ]
       }
+      tenant_partner_transfers: {
+        Row: {
+          created_at: string
+          from_partner_id: string | null
+          from_support_owner: string | null
+          id: string
+          performed_by: string | null
+          reason: string
+          tenant_id: string
+          to_partner_id: string | null
+          to_support_owner: string | null
+        }
+        Insert: {
+          created_at?: string
+          from_partner_id?: string | null
+          from_support_owner?: string | null
+          id?: string
+          performed_by?: string | null
+          reason: string
+          tenant_id: string
+          to_partner_id?: string | null
+          to_support_owner?: string | null
+        }
+        Update: {
+          created_at?: string
+          from_partner_id?: string | null
+          from_support_owner?: string | null
+          id?: string
+          performed_by?: string | null
+          reason?: string
+          tenant_id?: string
+          to_partner_id?: string | null
+          to_support_owner?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_partner_transfers_from_partner_id_fkey"
+            columns: ["from_partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_partner_transfers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_partner_transfers_to_partner_id_fkey"
+            columns: ["to_partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_self_tariffs: {
         Row: {
           base_fee_monthly: number
