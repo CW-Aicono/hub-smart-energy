@@ -85,6 +85,30 @@ export default function SuperAdminSavingsShare() {
 
   const rows = query.data ?? [];
 
+  const [search, setSearch] = useState("");
+  const filteredRows = search.trim()
+    ? rows.filter((r) => {
+        const q = search.toLowerCase();
+        return (
+          r.tenant_name.toLowerCase().includes(q) ||
+          (r.status ?? "").toLowerCase().includes(q) ||
+          (r.latest_status ?? "").toLowerCase().includes(q)
+        );
+      })
+    : rows;
+  const { sorted, sort, toggle } = useSortableData<Row, SortKey>(filteredRows, (r, k) => {
+    switch (k) {
+      case "tenant": return r.tenant_name;
+      case "status": return r.status;
+      case "baseline": return r.baseline_year;
+      case "share": return r.aicono_share_pct;
+      case "latest_year": return r.latest_year ?? 0;
+      case "savings": return r.total_savings_eur;
+      case "aicono": return r.aicono_amount_eur;
+      default: return null;
+    }
+  }, { key: "tenant", direction: "asc" });
+
   const kpis = useMemo(() => {
     const active = rows.filter(r => r.status === "active").length;
     const totalSavings = rows.reduce((s, r) => s + r.total_savings_eur, 0);
