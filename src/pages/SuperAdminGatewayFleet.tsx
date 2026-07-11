@@ -825,20 +825,20 @@ const SuperAdminGatewayFleet = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Gateway</TableHead>
-                        <TableHead>Version</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Trigger</TableHead>
-                        <TableHead>Erstellt</TableHead>
-                        <TableHead>Beendet</TableHead>
+                        <SortableHead sortKey="gateway" sort={jobsSort} onToggle={toggleJobsSort}>Gateway</SortableHead>
+                        <SortableHead sortKey="version" sort={jobsSort} onToggle={toggleJobsSort}>Version</SortableHead>
+                        <SortableHead sortKey="status" sort={jobsSort} onToggle={toggleJobsSort}>Status</SortableHead>
+                        <SortableHead sortKey="trigger" sort={jobsSort} onToggle={toggleJobsSort}>Trigger</SortableHead>
+                        <SortableHead sortKey="created" sort={jobsSort} onToggle={toggleJobsSort}>Erstellt</SortableHead>
+                        <SortableHead sortKey="finished" sort={jobsSort} onToggle={toggleJobsSort}>Beendet</SortableHead>
                         <TableHead className="text-right">Aktion</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {jobs.length === 0 && (
+                      {sortedJobs.length === 0 && (
                         <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">Noch keine Update-Jobs.</TableCell></TableRow>
                       )}
-                      {jobs.map((j) => {
+                      {sortedJobs.map((j) => {
                         const dev = fleet.find((f) => f.id === j.gateway_device_id);
                         const open = ["queued", "dispatched", "running"].includes(j.status);
                         return (
