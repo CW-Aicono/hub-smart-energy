@@ -439,11 +439,44 @@ const SuperAdminGatewayFleet = () => {
 
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [fleetSearch, setFleetSearch] = useState("");
   const deviceTypes = Array.from(new Set(unifiedRows.map((r) => r.type)));
   const statusOptions = Array.from(new Set(unifiedRows.map((r) => r.status)));
-  const filteredRows = unifiedRows.filter((r) =>
+  const filteredRowsPre = unifiedRows.filter((r) =>
     (typeFilter === "all" || r.type === typeFilter) &&
     (statusFilter === "all" || r.status === statusFilter)
+  );
+  const filteredRowsSearched = fleetSearch.trim()
+    ? filteredRowsPre.filter((r) => {
+        const q = fleetSearch.toLowerCase();
+        return (
+          (r.tenantName ?? "").toLowerCase().includes(q) ||
+          (r.locationName ?? "").toLowerCase().includes(q) ||
+          (r.type ?? "").toLowerCase().includes(q) ||
+          (r.statusLabel ?? r.status ?? "").toLowerCase().includes(q) ||
+          (r.worker ?? "").toLowerCase().includes(q)
+        );
+      })
+    : filteredRowsPre;
+  const { sorted: filteredRows, sort: fleetSort, toggle: toggleFleetSort } = useSortableData<any, "tenant" | "location" | "type" | "status" | "connected" | "heartbeat" | "events" | "reconnects" | "uptime" | "sessions" | "worker">(
+    filteredRowsSearched,
+    (r, k) => {
+      switch (k) {
+        case "tenant": return r.tenantName ?? "";
+        case "location": return r.locationName ?? "";
+        case "type": return r.type ?? "";
+        case "status": return r.statusLabel ?? r.status ?? "";
+        case "connected": return r.connectedSince ? new Date(r.connectedSince) : null;
+        case "heartbeat": return r.heartbeatAgeMs ?? Number.MAX_SAFE_INTEGER;
+        case "events": return r.eventsLast24h ?? -1;
+        case "reconnects": return r.reconnectsLast24h ?? -1;
+        case "uptime": return r.uptimeRatio24h ?? -1;
+        case "sessions": return r.sessionsLast24h ?? -1;
+        case "worker": return r.worker ?? "";
+        default: return null;
+      }
+    },
+    { key: "tenant", direction: "asc" },
   );
 
   const { data: channels = [], refetch: refetchChannels } = useQuery({
