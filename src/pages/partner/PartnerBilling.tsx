@@ -165,7 +165,12 @@ export default function PartnerBilling() {
     }
   }, { key: "name", direction: "asc" });
 
-  const { sorted: sortedModules, sort: sortModules, toggle: toggleModules } = useSortableData<any, "label" | "purchase" | "recommended" | "sale" | "margin">(editableModules, (mod, k) => {
+  const [moduleSearch, setModuleSearch] = useState("");
+  const filteredEditableModules = moduleSearch.trim()
+    ? editableModules.filter((m: any) => (m.label ?? "").toLowerCase().includes(moduleSearch.toLowerCase()))
+    : editableModules;
+
+  const { sorted: sortedModules, sort: sortModules, toggle: toggleModules } = useSortableData<any, "label" | "purchase" | "recommended" | "sale" | "margin">(filteredEditableModules, (mod, k) => {
     const isKommune = sector === "kommune";
     const purchase = purchasePrice(mod.code, isKommune);
     const recommended = recommendedSale(mod.code, isKommune);
@@ -288,7 +293,19 @@ export default function PartnerBilling() {
                   </ToggleGroup>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                <div className="relative max-w-sm">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Modul suchen…"
+                    value={moduleSearch}
+                    onChange={(e) => setModuleSearch(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+                {sortedModules.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Keine Treffer für „{moduleSearch}".</p>
+                ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -323,6 +340,7 @@ export default function PartnerBilling() {
                     })}
                   </TableBody>
                 </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
