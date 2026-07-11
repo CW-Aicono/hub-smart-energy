@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { useTenantSavingsContract, SavingsContract, SavingsBaseline, BaselineDiagnostic } from "@/hooks/useTenantSavingsContract";
 import { useTenantSavingsSettlements, SavingsSettlement } from "@/hooks/useTenantSavingsSettlements";
 import { Calculator, Save, PlayCircle, PauseCircle, CheckCircle2, Pencil, AlertTriangle, Plus, FileText } from "lucide-react";
+import { formatEnergyType } from "@/lib/energyTypeLabels";
 
 const fmt = (n: number | null | undefined, digits = 2) =>
   n == null ? "–" : Number(n).toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -254,7 +255,7 @@ function BaselineCard({ contract, baselines, recalc, override, createManual, dia
                 const details = b.calculation_details ?? {};
                 return (
                   <TableRow key={b.id}>
-                    <TableCell className="font-medium">{b.energy_type}</TableCell>
+                    <TableCell className="font-medium">{formatEnergyType(b.energy_type)}</TableCell>
                     <TableCell className="text-right">{fmtInt(b.baseline_kwh_raw)}</TableCell>
                     <TableCell className="text-right">{fmtInt(b.baseline_kwh_normalized)}</TableCell>
                     <TableCell className="text-right">{b.baseline_hdd ? fmt(b.baseline_hdd, 0) : "–"}</TableCell>
@@ -265,7 +266,7 @@ function BaselineCard({ contract, baselines, recalc, override, createManual, dia
                       <Dialog open={dialogOpen === b.id} onOpenChange={(o) => { setDialogOpen(o ? b.id : null); if (o) { setOverrideVal(String(b.baseline_kwh_normalized)); setReason(b.override_reason ?? ""); } }}>
                         <DialogTrigger asChild><Button size="sm" variant="ghost"><Pencil className="w-4 h-4" /></Button></DialogTrigger>
                         <DialogContent>
-                          <DialogHeader><DialogTitle>Baseline überschreiben – {b.energy_type}</DialogTitle></DialogHeader>
+                          <DialogHeader><DialogTitle>Baseline überschreiben – {formatEnergyType(b.energy_type)}</DialogTitle></DialogHeader>
                           <div className="space-y-3">
                             <div><Label>Bereinigter Verbrauch (kWh)</Label><Input type="number" value={overrideVal} onChange={e => setOverrideVal(e.target.value)} /></div>
                             <div><Label>Begründung</Label><Textarea value={reason} onChange={e => setReason(e.target.value)} /></div>
@@ -357,7 +358,7 @@ function SettlementsCard({ contract, baselines }: { contract: SavingsContract; b
                   <TableBody>
                     {(detail.per_energy_type ?? []).map((r, i) => (
                       <TableRow key={i}>
-                        <TableCell>{r.energy_type}<div className="text-xs text-muted-foreground">Baseline: {QUALITY_LABEL[r.baseline_quality ?? "unknown"] ?? r.baseline_quality}</div></TableCell>
+                        <TableCell>{formatEnergyType(r.energy_type)}<div className="text-xs text-muted-foreground">Baseline: {QUALITY_LABEL[r.baseline_quality ?? "unknown"] ?? r.baseline_quality}</div></TableCell>
                         <TableCell className="text-right">{fmtInt(r.baseline_kwh)}</TableCell>
                         <TableCell className="text-right">{fmtInt(r.actual_kwh)}</TableCell>
                         <TableCell className="text-right">{r.actual_coverage_months ?? 0}/12</TableCell>
