@@ -332,9 +332,18 @@ export default function PartnerBilling() {
               <CardHeader>
                 <CardTitle className="text-base">Margenübersicht je Tenant (Monatsbasis)</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                <div className="relative max-w-sm">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Tenant suchen…"
+                    value={tenantSearch}
+                    onChange={(e) => setTenantSearch(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
                 {sortedTotals.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Noch keine Tenants zugeordnet.</p>
+                  <p className="text-sm text-muted-foreground">{tenantSearch.trim() ? `Keine Treffer für „${tenantSearch}".` : "Noch keine Tenants zugeordnet."}</p>
                 ) : (
                   <Table>
                     <TableHeader>
