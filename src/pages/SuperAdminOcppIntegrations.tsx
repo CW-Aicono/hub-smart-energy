@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Edit, Trash2, PlugZap } from "lucide-react";
+import { Plus, Edit, Trash2, PlugZap, Search } from "lucide-react";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
