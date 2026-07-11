@@ -63,6 +63,7 @@ const SuperAdminTenantDetail = lazy(() => import("./pages/SuperAdminTenantDetail
 const SuperAdminStatistics = lazy(() => import("./pages/SuperAdminStatistics"));
 const SuperAdminBilling = lazy(() => import("./pages/SuperAdminBilling"));
 const SuperAdminLicenses = lazy(() => import("./pages/SuperAdminLicenses"));
+const SuperAdminSavingsShare = lazy(() => import("./pages/SuperAdminSavingsShare"));
 const SuperAdminSupport = lazy(() => import("./pages/SuperAdminSupport"));
 const SuperAdminModulePricing = lazy(() => import("./pages/SuperAdminModulePricing"));
 const SuperAdminBundles = lazy(() => import("./pages/SuperAdminBundles"));
@@ -236,6 +237,7 @@ const App = () => (
                       <Route path="/super-admin/board" element={<SA><SuperAdminBoard /></SA>} />
                       <Route path="/super-admin/billing" element={<SA><SuperAdminBilling /></SA>} />
                       <Route path="/super-admin/licenses" element={<SA><SuperAdminLicenses /></SA>} />
+                      <Route path="/super-admin/savings-share" element={<SA><SuperAdminSavingsShare /></SA>} />
                       <Route path="/super-admin/module-pricing" element={<SA><SuperAdminModulePricing /></SA>} />
                       <Route path="/super-admin/bundles" element={<SA><SuperAdminBundles /></SA>} />
                       <Route path="/super-admin/support" element={<SA><SuperAdminSupport /></SA>} />
