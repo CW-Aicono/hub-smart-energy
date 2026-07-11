@@ -217,11 +217,14 @@ export default function PartnerTenantDetail() {
               ) : (
                 <Table>
                   <TableHeader><TableRow>
-                    <TableHead>Plan</TableHead><TableHead>Preis/Monat</TableHead><TableHead>Status</TableHead>
-                    <TableHead>Gültig ab</TableHead><TableHead>Gültig bis</TableHead>
+                    <SortableHead sortKey="plan" sort={licSort} onToggle={toggleLicSort}>Plan</SortableHead>
+                    <SortableHead sortKey="price" sort={licSort} onToggle={toggleLicSort}>Preis/Monat</SortableHead>
+                    <SortableHead sortKey="status" sort={licSort} onToggle={toggleLicSort}>Status</SortableHead>
+                    <SortableHead sortKey="from" sort={licSort} onToggle={toggleLicSort}>Gültig ab</SortableHead>
+                    <SortableHead sortKey="until" sort={licSort} onToggle={toggleLicSort}>Gültig bis</SortableHead>
                   </TableRow></TableHeader>
                   <TableBody>
-                    {licenses.map((l) => (
+                    {sortedLicenses.map((l) => (
                       <TableRow key={l.id}>
                         <TableCell className="font-medium">{l.plan_name}</TableCell>
                         <TableCell>{fmtEur(Number(l.price_monthly))}</TableCell>
