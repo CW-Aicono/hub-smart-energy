@@ -611,6 +611,15 @@ const SuperAdminGatewayFleet = () => {
                     {statusOptions.includes("unknown") && <SelectItem value="unknown">Unbekannt</SelectItem>}
                   </SelectContent>
                 </Select>
+                <div className="relative ml-2">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Suchen (Tenant, Liegenschaft, Typ, Worker)…"
+                    value={fleetSearch}
+                    onChange={(e) => setFleetSearch(e.target.value)}
+                    className="pl-8 h-9 w-72"
+                  />
+                </div>
                 <span className="ml-auto text-xs text-muted-foreground">
                   Aktuelle Sitzung + Statistik der letzten 24 h
                 </span>
@@ -621,17 +630,17 @@ const SuperAdminGatewayFleet = () => {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-8"></TableHead>
-                        <TableHead>Tenant</TableHead>
-                        <TableHead>Liegenschaft</TableHead>
-                        <TableHead>Typ</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Verbunden seit</TableHead>
-                        <TableHead>Letzter Heartbeat</TableHead>
-                        <TableHead className="text-right">Events 24 h</TableHead>
-                        <TableHead className="text-right">Reconnects 24 h</TableHead>
-                        <TableHead className="text-right">Uptime 24 h</TableHead>
-                        <TableHead className="text-right">Sitzungen 24 h</TableHead>
-                        <TableHead>Worker</TableHead>
+                        <SortableHead sortKey="tenant" sort={fleetSort} onToggle={toggleFleetSort}>Tenant</SortableHead>
+                        <SortableHead sortKey="location" sort={fleetSort} onToggle={toggleFleetSort}>Liegenschaft</SortableHead>
+                        <SortableHead sortKey="type" sort={fleetSort} onToggle={toggleFleetSort}>Typ</SortableHead>
+                        <SortableHead sortKey="status" sort={fleetSort} onToggle={toggleFleetSort}>Status</SortableHead>
+                        <SortableHead sortKey="connected" sort={fleetSort} onToggle={toggleFleetSort}>Verbunden seit</SortableHead>
+                        <SortableHead sortKey="heartbeat" sort={fleetSort} onToggle={toggleFleetSort}>Letzter Heartbeat</SortableHead>
+                        <SortableHead sortKey="events" sort={fleetSort} onToggle={toggleFleetSort} align="right">Events 24 h</SortableHead>
+                        <SortableHead sortKey="reconnects" sort={fleetSort} onToggle={toggleFleetSort} align="right">Reconnects 24 h</SortableHead>
+                        <SortableHead sortKey="uptime" sort={fleetSort} onToggle={toggleFleetSort} align="right">Uptime 24 h</SortableHead>
+                        <SortableHead sortKey="sessions" sort={fleetSort} onToggle={toggleFleetSort} align="right">Sitzungen 24 h</SortableHead>
+                        <SortableHead sortKey="worker" sort={fleetSort} onToggle={toggleFleetSort}>Worker</SortableHead>
                         <TableHead>Letzter Disconnect</TableHead>
                       </TableRow>
                     </TableHeader>
