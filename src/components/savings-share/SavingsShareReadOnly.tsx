@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FileText } from "lucide-react";
+import { formatEnergyType } from "@/lib/energyTypeLabels";
 import type { SavingsBaseline, SavingsContract } from "@/hooks/useTenantSavingsContract";
 import type { SavingsSettlement } from "@/hooks/useTenantSavingsSettlements";
 
