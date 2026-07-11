@@ -218,6 +218,21 @@ function BaselineCard({ contract, baselines, recalc, override, createManual, dia
   const avgCoverage = baselines.length > 0 ? baselines.reduce((s, b) => s + Number(b.coverage_months ?? 0), 0) / baselines.length : 0;
   const calculatedDates = baselines.map(b => b.updated_at).sort();
   const lastCalculated = calculatedDates.length > 0 ? calculatedDates[calculatedDates.length - 1] : undefined;
+  const { sorted: sortedBaselines, sort: baselineSort, toggle: toggleBaselineSort } = useSortableData<SavingsBaseline, "energy" | "raw" | "normalized" | "hdd" | "quality" | "source">(
+    baselines,
+    (b, k) => {
+      switch (k) {
+        case "energy": return formatEnergyType(b.energy_type);
+        case "raw": return Number(b.baseline_kwh_raw ?? 0);
+        case "normalized": return Number(b.baseline_kwh_normalized ?? 0);
+        case "hdd": return Number(b.baseline_hdd ?? 0);
+        case "quality": return b.data_quality ?? "";
+        case "source": return b.baseline_source ?? "";
+        default: return null;
+      }
+    },
+    { key: "energy", direction: "asc" },
+  );
 
   return (
     <Card>
