@@ -1,103 +1,95 @@
+## Befund
+
+- In der Datenbank existiert aktuell **1 Gain-Sharing-Vertrag** für den Tenant **Stadt Steinfurt**.
+- Das Modul `gain_sharing` ist für diesen Tenant aktiv.
+- In `tenant_savings_baselines` stehen aktuell **0 Baseline-Zeilen**. Deshalb zeigt die UI korrekt weiter: „Noch keine Baseline berechnet.“
+- Der Vertrag nutzt derzeit **Baseline-Jahr 2026**. Für den Tenant liegen 2026 zwar aggregierte Zählerwerte vor, aber die Baseline-Funktion schreibt offenbar keine Zeilen oder liefert ein leeres Ergebnis ohne erkennbare Diagnose in der Oberfläche.
+- Die Edge-Function-Logs enthalten nur Boot/Shutdown, aber keine fachlichen Logs. Dadurch ist für Admins und Tenant nicht nachvollziehbar, ob keine Zähler gefunden wurden, keine Werte vorhanden sind, falsche Energiearten verwendet werden oder der Upsert fehlschlägt.
+
 ## Ziel
-Prozentuale Beteiligung von AICONO (und optional Partner) an den jährlichen **Energiekosten-Einsparungen** eines Tenants. Baseline = historisches Referenzjahr, witterungsbereinigt. Ein Vertrag pro Tenant, umfasst alle Liegenschaften & Energiearten.
 
-**Aktivierung:** Gain-Sharing ist ein eigenständiges, pro Tenant schaltbares Modul (analog zu Ladeinfrastruktur, Aufgabenverwaltung, Mieterstrom).
+Das Gain-Sharing-Modul soll nicht nur rechnen, sondern für Super-Admin und Tenant nachvollziehbar zeigen:
 
-## Phasen
+- welche Datenbasis verwendet wurde,
+- welche Zähler/Energiearten einbezogen wurden,
+- warum ggf. keine Baseline erzeugt wurde,
+- welche Werte berechnet wurden,
+- ob die Baseline vollständig genug für eine spätere Abrechnung ist.
 
-### Phase 0 — Modul-Registrierung
-- Neuer Modul-Code `gain_sharing` in `ALL_MODULES` (`src/hooks/useTenantModules.tsx`), Label „Gain-Sharing (Einsparbeteiligung)".
-- Eintrag in `SALES_MODULE_LABELS` (`src/lib/salesModuleLabels.ts`) für Sales-Scout/Angebote.
-- Route-Mapping in `ROUTE_MODULE_MAP` und `NAV_MODULE_MAP` (`src/hooks/useModuleGuard.tsx`) für `/super-admin/savings-share` bzw. Tenant-Ansicht.
-- Optional: Eintrag in `module_prices` als Migrationsseed (Standardpreis 0 €, konfigurierbar durch Super-Admin).
-- Super-Admin Tenant-Modul-Dialog (`TenantModulesDialog`) erhält Schalter automatisch via `ALL_MODULES`.
-- Regeln:
-  - Nur wenn `gain_sharing` für Tenant aktiv: Tab „Einsparbeteiligung" im Super-Admin Tenant-Detail sichtbar, Tenant erscheint in `/super-admin/savings-share`-Übersicht, Partner-Read-View filtert entsprechend.
-  - Deaktivierung sperrt UI (readonly-Hinweis), löscht **keine** bestehenden Verträge/Baselines/Settlements — Reaktivierung ist verlustfrei.
+## Umsetzungsplan
 
-### Phase 1 — Datenmodell & Vertrag (Super-Admin only)
-Neue Tabellen im `public`-Schema (mit GRANTs + RLS `has_role(auth.uid(),'super_admin')`):
+### 1. Baseline-Berechnung robust machen
 
-**`tenant_savings_contracts`** — genau 1 aktiver Vertrag pro Tenant
-- `tenant_id` (FK), `status` (`draft|active|paused|terminated`)
-- `baseline_year` (int), `start_year` (int, ab wann Beteiligung abgerechnet wird)
-- `aicono_share_pct` (numeric 0–100)
-- `partner_share_pct_of_aicono` (numeric 0–100, default 0)
-- `weather_normalize` (bool, default true)
-- `price_basis` (`current_year_avg` | `contract_fixed`), `fixed_price_eur_per_kwh` (JSON je Energieart)
-- `notes`, `created_by`, Timestamps
-- Partial Unique Index: nur ein `status='active'` je `tenant_id`
+- Die Baseline-Funktion soll nicht mehr still mit `success: true` enden, wenn keine Baseline-Zeilen geschrieben wurden.
+- Wenn keine geeigneten Zähler gefunden werden, soll sie eine klare Meldung zurückgeben, z. B.:
+  - „Keine Verbrauchszähler für diesen Tenant gefunden.“
+  - „Zähler vorhanden, aber keine Periodenwerte im Baseline-Jahr.“
+  - „Nur Erzeugungs-/Exportzähler gefunden, diese werden nicht berücksichtigt.“
+- Energiearten wie `none` sollen ausgeschlossen werden, damit technische Sensoren nicht in Gain-Sharing einfließen.
+- Archivierte Zähler sollen standardmäßig ausgeschlossen werden.
+- Die Funktion soll pro Energieart auf Monats- oder Tageswerte zurückfallen, je nachdem welche Daten verfügbar sind.
+- Fehler aus `get_meter_period_sums` und Upserts sollen explizit behandelt und in der UI angezeigt werden.
 
-**`tenant_savings_baselines`** — Baseline je Energieart (Aggregat über alle Liegenschaften)
-- `contract_id`, `energy_type`
-- `baseline_kwh_raw`, `baseline_hdd` (nullable, nur Heizenergien)
-- `baseline_kwh_normalized`, `baseline_source` (`auto_from_meters | manual_override | invoice_based`)
-- `override_reason` (nullable)
-- Unique (`contract_id`, `energy_type`)
+### 2. Diagnose-/Audit-Daten in der Antwort zurückgeben
 
-**`tenant_savings_settlements`** — Jahresabschluss
-- `contract_id`, `period_year`, `status` (`draft|approved|invoiced|paid|void`)
-- JSON `per_energy_type` (Snapshot: baseline_kwh, actual_kwh, hdd_factor, avg_price, savings_kwh, savings_eur)
-- `total_savings_eur`, `aicono_amount_eur`, `partner_amount_eur`, `tenant_retained_eur`
-- `approved_by`, `approved_at`, `invoice_ref` (Lexware später)
-- Unique (`contract_id`, `period_year`)
+Die Baseline-Funktion soll zusätzlich zu den berechneten Ergebnissen eine nachvollziehbare Diagnose zurückgeben:
 
-### Phase 2 — Berechnungslogik (Edge Functions)
-**`savings-share-baseline`** — Erstberechnung / Neuberechnung Baseline
-- Historische Daten via `get_meter_period_sums_with_fallback` für `baseline_year`, aggregiert je Energieart über alle Tenant-Meter (Verbrauchsseite).
-- Holt HDD für alle Liegenschaften des Tenants → gewichtetes HDD.
-- Speichert `baseline_kwh_raw` + `baseline_kwh_normalized`. Manueller Override via UI.
+- Anzahl aller Tenant-Zähler
+- Anzahl berücksichtigter Verbrauchszähler
+- ausgeschlossene Zähler nach Grund
+- Datenabdeckung je Energieart
+- Zeitraum der verwendeten Werte
+- Anzahl geschriebener Baseline-Zeilen
+- Warnungen, z. B. „Baseline-Jahr ist laufendes Jahr“ oder „nur Teildaten vorhanden“
 
-**`savings-share-calculate`** — Settlement für ein Jahr
-1. Ist-Verbrauch je Energieart (Aggregat) für `period_year`.
-2. Witterungsbereinigung Heizenergien: `actual_norm = actual * (baseline_hdd / period_hdd)`.
-3. Preis-Ermittlung: Jahresmittel aus `energy_prices` gewichtet nach Verbrauch, oder Vertrags-Fixpreis.
-4. `savings_kwh = baseline_norm - actual_norm`; `savings_eur = savings_kwh * price`. Negative Werte = 0.
-5. `aicono_amount = total_savings * aicono_share_pct/100`; `partner_amount = aicono_amount * partner_share_pct_of_aicono/100`; `tenant_retained = total - aicono_amount`.
-6. Snapshot als `draft` speichern.
+### 3. Oberfläche erweitern: Baseline-Status statt leerer Meldung
 
-Beide Functions: JWT-Check auf `super_admin` **und** Modulcheck (`gain_sharing` für Tenant aktiv) — sonst 403.
+Im Gain-Sharing-Tab soll die Baseline-Karte erweitert werden:
 
-### Phase 3 — Super-Admin UI
-**Neuer Tab „Einsparbeteiligung" in `SuperAdminTenantDetail`** (nur wenn Modul aktiv):
-- Karte: Vertragsstatus, Kern-Parameter, Buttons „Bearbeiten" / „Aktivieren" / „Pausieren".
-- Karte „Baseline": Tabelle je Energieart (raw, normalized, HDD, Quelle), Actions „Neu berechnen" + „Manuell überschreiben" (Dialog mit Begründung).
-- Karte „Abrechnungen": Liste aller Jahre, Status-Badge, Summe, Aufteilung. Buttons: „Für Jahr X berechnen", „Freigeben", „Auf gezahlt setzen", „Details" (Drilldown).
+- Nach einer Berechnung werden Warnungen/Diagnosen sichtbar angezeigt.
+- Wenn keine Baseline geschrieben wurde, erscheint nicht nur „Noch keine Baseline berechnet“, sondern der konkrete Grund.
+- Neben der Tabelle sollen KPI-Zusammenfassungen erscheinen:
+  - Anzahl Energiearten
+  - Gesamtverbrauch kWh
+  - Datenabdeckung
+  - letzte Berechnung
+- Pro Energieart soll sichtbar sein:
+  - Verbrauch roh
+  - normalisierter Verbrauch
+  - Quelle
+  - verwendeter Zeitraum
+  - Datenqualität / Warnung
 
-Bei inaktivem Modul: Hinweis-Karte „Modul Gain-Sharing für diesen Tenant nicht aktiv" mit Direktlink zum Modul-Dialog.
+### 4. Tenant-Nachvollziehbarkeit ergänzen
 
-**Neue Übersichtsseite `/super-admin/savings-share`** (via `ModuleGuard` an `gain_sharing` gebunden, filtert auf Tenants mit aktivem Modul):
-- KPI-Kacheln: aktive Verträge, Gesamt-Einsparung laufendes Jahr, offene Settlements, ausstehendes AICONO-Volumen.
-- Tabelle aller Tenants mit aktivem Vertrag, Link → Tenant-Detail-Tab.
+Für Tenant-Admins und Partner soll die Einsparbeteiligung lesbar, aber nicht administrativ veränderbar sein:
 
-Alle Zahlen im deutschen Format (`toLocaleString("de-DE")`).
+- Vertrag anzeigen: Baseline-Jahr, Startjahr, Anteil AICONO, Partneranteil, Witterungsbereinigung, Preisbasis.
+- Baseline anzeigen: Energiearten, Werte, Quelle, letzte Berechnung, manuelle Overrides inkl. Begründung.
+- Abrechnungen anzeigen: nur freigegebene/abgerechnete/bezahlte Abrechnungen gemäß bestehender Rechte.
+- Keine Bearbeiten-/Berechnen-Buttons außerhalb Super-Admin.
 
-### Phase 4 — Partner-Sichtbarkeit (read-only)
-- Im Partner-Portal neuer Menüpunkt „Einsparbeteiligung": Liste eigener Tenants **mit aktivem `gain_sharing`-Modul**, freigegebene Settlements + Partner-Anteil. Kein Edit, keine Rohdaten-Baseline.
+### 5. Fehlende fachliche Funktionen für ein vollständiges Modell ergänzen
 
-## Bewusst NICHT in diesem Plan
-- Automatischer Rechnungsversand / Lexware-Buchung → separate Story, nutzt `invoice_ref`.
-- Beteiligung pro Liegenschaft (Datenmodell erweiterbar).
-- CO2- oder PV-Erlös-Beteiligung.
-- Tenant-Self-Service-Ansicht.
-- Automatische Jahres-Trigger (pg_cron) — vorerst manuell.
+- Manuelle Baseline-Anlage, falls keine verwertbaren Messwerte existieren.
+- Pflicht-Begründung für manuelle Overrides.
+- Festpreise pro Energieart editierbar machen, wenn `contract_fixed` gewählt ist.
+- Datenqualitätsstatus einführen:
+  - `vollständig`
+  - `teilweise`
+  - `keine Daten`
+  - `manuell`
+- Warnung, wenn Baseline-Jahr noch nicht abgeschlossen ist.
+- Abrechnung erst zulassen, wenn mindestens eine gültige Baseline existiert.
+- Details zur Abrechnung tenantverständlich anzeigen: Baseline, Ist-Verbrauch, Preis, Einsparung, AICONO-Anteil, verbleibende Tenant-Einsparung.
 
-## Betroffene Dateien (geplant)
-- Migration: 3 neue Tabellen + GRANTs + RLS + Trigger + Partial-Unique-Index; optional Seed `module_prices`.
-- Edit: `src/hooks/useTenantModules.tsx` (Modul-Code `gain_sharing`).
-- Edit: `src/hooks/useModuleGuard.tsx` (Route-Mapping).
-- Edit: `src/lib/salesModuleLabels.ts` (Sales-Label).
-- Neu: `supabase/functions/savings-share-baseline/index.ts`, `savings-share-calculate/index.ts`
-- Neu: `src/hooks/useTenantSavingsContract.ts`, `useTenantSavingsSettlements.ts`
-- Neu: `src/components/super-admin/savings-share/` (ContractCard, BaselineTable, SettlementsTable, SettlementDetailDialog, ManualOverrideDialog)
-- Neu: `src/pages/SuperAdminSavingsShare.tsx` + Route (mit `ModuleGuard`)
-- Edit: `src/pages/SuperAdminTenantDetail.tsx` (neuer Tab, modul-gated).
-- Edit: `src/components/super-admin/SuperAdminSidebar.tsx` (Menüpunkt).
-- Phase 4: `src/pages/PartnerSavingsShare.tsx` + Partner-Sidebar-Eintrag.
+### 6. Technische Absicherung
 
-## Reihenfolge der Umsetzung
-1. Modul-Registrierung (`gain_sharing`) + Migration Tabellen
-2. Baseline-Edge-Function + Vertrags-CRUD-UI + Baseline-UI (modul-gated)
-3. Calculate-Edge-Function + Settlements-UI + Freigabe-Workflow
-4. Übersichtsseite `/super-admin/savings-share`
-5. Partner-Read-View
+- Edge Functions mit fachlichen Logs versehen, ohne sensible Daten auszugeben.
+- Baseline- und Calculate-Funktion konsistent machen: gleiche Zählerfilter, gleiche Energiearten, gleiche Datenquellen.
+- Frontend-Invalidierung nach Berechnung härten, damit die Baseline-Liste sicher neu geladen wird.
+- Optional: kleine Datenbank-Erweiterung für Baseline-Metadaten wie `coverage_months`, `data_quality`, `calculation_details`, damit die Nachvollziehbarkeit dauerhaft gespeichert wird.
+
+## Erwartetes Ergebnis
+
+Nach Umsetzung sieht der Super-Admin direkt, ob die Baseline erfolgreich erzeugt wurde oder warum nicht. Der Tenant kann später transparent nachvollziehen, auf welcher Datenbasis die Einsparbeteiligung basiert, ohne administrative Rechte zu erhalten.
