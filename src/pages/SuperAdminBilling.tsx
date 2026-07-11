@@ -366,6 +366,17 @@ const SuperAdminBilling = () => {
             </Card>
           </div>
 
+          {/* Search */}
+          <div className="relative max-w-sm mb-4">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Rechnung suchen (Mandant, Nr., Status)…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+
           {/* Table */}
           <Card>
             <CardContent className="p-0">
