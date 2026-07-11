@@ -22,7 +22,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Ban } from "lucide-react";
+import { Ban, Search } from "lucide-react";
 import LicenseDialog from "@/components/super-admin/LicenseDialog";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
