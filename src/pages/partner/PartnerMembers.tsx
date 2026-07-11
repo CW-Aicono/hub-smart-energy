@@ -283,11 +283,20 @@ export default function PartnerMembers() {
 
         <Card>
           <CardHeader><CardTitle>Mitglieder</CardTitle></CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <div className="relative max-w-sm">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Suchen (Name, Email, Rolle)…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8"
+              />
+            </div>
             {loading ? (
               <p className="text-sm text-muted-foreground">Lade…</p>
             ) : sorted.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Noch keine Mitglieder.</p>
+              <p className="text-sm text-muted-foreground">{search.trim() ? `Keine Treffer für „${search}".` : "Noch keine Mitglieder."}</p>
             ) : (
               <Table>
                 <TableHeader>
