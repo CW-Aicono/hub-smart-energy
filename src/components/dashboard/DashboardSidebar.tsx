@@ -8,7 +8,7 @@ import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { useDemoMode, useDemoPath } from "@/contexts/DemoMode";
 import { Button } from "@/components/ui/button";
 import { MobileHeader } from "@/components/dashboard/MobileSidebar";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText, Sparkles, Sun, Share2, FileSignature } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText, Sparkles, Sun, Share2, FileSignature, Euro } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -123,6 +123,7 @@ const DashboardSidebar = () => {
       currentPath === "/peak-shaving" ||
       currentPath.startsWith("/ppa") ||
       currentPath === "/tenant-electricity" ||
+      currentPath === "/savings-share" ||
       currentPath.startsWith("/energy-sharing")
     ) {
       setOpenMenus((prev) => prev.includes("/trading") ? prev : [...prev, "/trading"]);
@@ -171,6 +172,7 @@ const DashboardSidebar = () => {
         { to: "/peak-shaving", icon: Activity, labelKey: "Peak-Shaving" as TranslationKey },
         { to: "/ppa", icon: FileSignature, labelKey: "nav.ppa" as TranslationKey },
         { to: "/tenant-electricity", icon: Home, labelKey: "nav.tenantElectricity" as TranslationKey },
+        { to: "/savings-share", icon: Euro, labelKey: "Gain-Sharing" as TranslationKey },
         { to: "/energy-sharing", icon: Share2, labelKey: "nav.energySharing" as TranslationKey },
       ],
     },
