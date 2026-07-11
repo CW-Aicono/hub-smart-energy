@@ -13,10 +13,13 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Briefcase, Loader2, Plus, Mail, Users, AlertCircle, CheckCircle2, Send } from "lucide-react";
+import { Briefcase, Loader2, Plus, Mail, Users, AlertCircle, CheckCircle2, Send, Search } from "lucide-react";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { AuditLogList } from "@/components/audit/AuditLogList";
 import { writeAuditLog } from "@/lib/auditLog";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+
+type PartnerSortKey = "name" | "slug" | "contact" | "members" | "billing_mode" | "status";
 
 interface Partner {
   id: string;
