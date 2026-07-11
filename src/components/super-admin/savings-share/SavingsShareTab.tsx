@@ -314,6 +314,21 @@ function SettlementsCard({ contract, baselines }: { contract: SavingsContract; b
   const [year, setYear] = useState(new Date().getFullYear() - 1);
   const [detail, setDetail] = useState<SavingsSettlement | null>(null);
   const hasValidBaseline = baselines.some((b) => (b.data_quality ?? "unknown") !== "none");
+  const { sorted: sortedSettlements, sort: settlementSort, toggle: toggleSettlementSort } = useSortableData<SavingsSettlement, "year" | "status" | "total" | "aicono" | "partner" | "tenant">(
+    (list.data ?? []),
+    (s, k) => {
+      switch (k) {
+        case "year": return s.period_year;
+        case "status": return s.status;
+        case "total": return Number(s.total_savings_eur ?? 0);
+        case "aicono": return Number(s.aicono_amount_eur ?? 0);
+        case "partner": return Number(s.partner_amount_eur ?? 0);
+        case "tenant": return Number(s.tenant_retained_eur ?? 0);
+        default: return null;
+      }
+    },
+    { key: "year", direction: "desc" },
+  );
 
   return (
     <Card>
