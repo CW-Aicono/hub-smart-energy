@@ -340,6 +340,7 @@ export default function PartnerBilling() {
                     })}
                   </TableBody>
                 </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
