@@ -1,8 +1,27 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Timer } from "lucide-react";
+import { Timer, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useSortableData } from "@/components/ui/sortable-head";
+import { cn } from "@/lib/utils";
+
+type PollSortKey = "tenant" | "location" | "interval" | "sync";
+
+function SortTh<K extends string>({ label, sortKey, sort, onToggle, className }: {
+  label: React.ReactNode; sortKey: K; sort: { key: K | null; direction: "asc" | "desc" }; onToggle: (k: K) => void; className?: string;
+}) {
+  const isActive = sort.key === sortKey;
+  const Icon = !isActive ? ArrowUpDown : sort.direction === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th className={cn("py-2 pr-4 text-left select-none", className)}>
+      <button type="button" onClick={() => onToggle(sortKey)} className={cn("inline-flex items-center gap-1 hover:text-foreground", isActive && "text-foreground")}>
+        {label}
+        <Icon className="h-3 w-3 opacity-60" />
+      </button>
+    </th>
+  );
+}
 
 interface Row {
   id: string;
