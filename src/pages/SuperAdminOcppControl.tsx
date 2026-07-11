@@ -29,6 +29,7 @@ const SuperAdminOcppControl = () => {
   const [tenantFilter, setTenantFilter] = useState<string>("all");
   const [logTenantId, setLogTenantId] = useState<string>("");
   const [logChargePointId, setLogChargePointId] = useState<string>("");
+  const [search, setSearch] = useState("");
 
   const getTenantName = (tenantId: string) => {
     return tenants.find(t => t.id === tenantId)?.name || tenantId.slice(0, 8);
