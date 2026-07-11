@@ -314,6 +314,7 @@ const App = () => (
                       <Route path="/partner/tenants/:tenantId" element={<PartnerLayout><PartnerTenantDetail /></PartnerLayout>} />
                       <Route path="/partner/reporting" element={<PartnerLayout><PartnerReporting /></PartnerLayout>} />
                       <Route path="/partner/billing" element={<PartnerLayout><PartnerBilling /></PartnerLayout>} />
+                      <Route path="/partner/savings-share" element={<PartnerLayout><PartnerSavingsShare /></PartnerLayout>} />
                       <Route path="/partner/branding" element={<PartnerLayout><PartnerBranding /></PartnerLayout>} />
                       <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
                       <Route path="/partner/sales/catalog" element={<PartnerLayout><PartnerSalesCatalog /></PartnerLayout>} />
