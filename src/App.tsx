@@ -122,6 +122,7 @@ const SalesProjectEdit = lazy(() => import("./pages/SalesProjectEdit"));
 const SalesProjectDetail = lazy(() => import("./pages/SalesProjectDetail"));
 const EmbedPitchDashboard = lazy(() => import("./pages/EmbedPitchDashboard"));
 const EnergyReport = lazy(() => import("./pages/EnergyReport"));
+const SavingsShare = lazy(() => import("./pages/SavingsShare"));
 const LegalPageView = lazy(() => import("./pages/LegalPageView"));
 const PublicSalesQuote = lazy(() => import("./pages/PublicSalesQuote"));
 const PublicChargeStatus = lazy(() => import("./pages/PublicChargeStatus"));
@@ -276,6 +277,7 @@ const App = () => (
                       <Route path="/demo/peak-shaving" element={<PeakShaving />} />
                       <Route path="/copilot" element={<M><Copilot /></M>} />
                       <Route path="/energy-report" element={<M><EnergyReport /></M>} />
+                      <Route path="/savings-share" element={<M><SavingsShare /></M>} />
                       <Route path="/energy-sharing" element={<M><EnergySharing /></M>} />
                       <Route path="/energy-sharing/members/:memberId" element={<M><EnergySharingMemberDetail /></M>} />
                       <Route path="/sharing/marktplatz" element={<MarketplacePublic />} />
