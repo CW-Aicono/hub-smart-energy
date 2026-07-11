@@ -271,18 +271,31 @@ export default function PartnerSavingsShare() {
 
           <Card>
             <CardHeader><CardTitle>Verträge</CardTitle></CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="relative max-w-sm">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Vertrag suchen (Tenant, Status)…"
+                  value={contractSearch}
+                  onChange={(e) => setContractSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              {sortedContracts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{contractSearch.trim() ? `Keine Treffer für „${contractSearch}".` : "Keine Verträge."}</p>
+              ) : (
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Tenant</TableHead><TableHead>Status</TableHead>
-                  <TableHead className="text-right">Baseline-Jahr</TableHead>
-                  <TableHead className="text-right">Start</TableHead>
-                  <TableHead className="text-right">AICONO %</TableHead>
-                  <TableHead className="text-right">Partner-Anteil an AICONO %</TableHead>
+                  <SortableHead sortKey="tenant" sort={contractSort} onToggle={toggleContractSort}>Tenant</SortableHead>
+                  <SortableHead sortKey="status" sort={contractSort} onToggle={toggleContractSort}>Status</SortableHead>
+                  <SortableHead sortKey="baseline" sort={contractSort} onToggle={toggleContractSort} align="right">Baseline-Jahr</SortableHead>
+                  <SortableHead sortKey="start" sort={contractSort} onToggle={toggleContractSort} align="right">Start</SortableHead>
+                  <SortableHead sortKey="aicono" sort={contractSort} onToggle={toggleContractSort} align="right">AICONO %</SortableHead>
+                  <SortableHead sortKey="partner" sort={contractSort} onToggle={toggleContractSort} align="right">Partner-Anteil an AICONO %</SortableHead>
                   <TableHead />
                 </TableRow></TableHeader>
                 <TableBody>
-                  {contracts.map((c) => (
+                  {sortedContracts.map((c) => (
                     <TableRow key={c.id}>
                       <TableCell className="font-medium">{c.tenants?.name ?? c.tenants?.slug ?? c.tenant_id}</TableCell>
                       <TableCell><Badge variant="outline">{CONTRACT_STATUS[c.status] ?? c.status}</Badge></TableCell>
