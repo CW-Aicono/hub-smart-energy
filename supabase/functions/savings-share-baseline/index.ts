@@ -128,6 +128,19 @@ Deno.serve(async (req) => {
     if (meter.location_id) locationSet.add(meter.location_id);
   }
 
+  const { data: manualRows, error: manualErr } = await admin.from("tenant_savings_baselines")
+    .select("energy_type")
+    .eq("contract_id", contractId)
+    .in("baseline_source", ["manual_override", "invoice_based"]);
+  if (manualErr) return json({ error: "existing baselines query failed: " + manualErr.message }, 500);
+  const protectedEnergyTypes = new Set((manualRows ?? []).map((r: any) => String(r.energy_type).trim().toLowerCase()));
+
+  const { error: cleanupErr } = await admin.from("tenant_savings_baselines")
+    .delete()
+    .eq("contract_id", contractId)
+    .eq("baseline_source", "auto_from_meters");
+  if (cleanupErr) return json({ error: "baseline cleanup failed: " + cleanupErr.message }, 500);
+
   let baselineHdd: number | null = null;
   if (locationSet.size > 0) {
     const { data: hddRows, error: hddErr } = await admin.from("weather_degree_days")
@@ -193,6 +206,10 @@ Deno.serve(async (req) => {
     });
 
     if (dataQuality === "none") continue;
+    if (protectedEnergyTypes.has(energyType)) {
+      diagnostic.warnings.push(`Für ${energyType} existiert eine manuelle oder rechnungsbasierte Baseline; automatische Werte wurden nicht überschrieben.`);
+      continue;
+    }
 
     const isHeating = HEATING_TYPES.has(energyType) && contract.weather_normalize;
     const hdd = isHeating ? baselineHdd : null;
