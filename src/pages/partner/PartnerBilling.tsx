@@ -145,7 +145,15 @@ export default function PartnerBilling() {
     });
   }, [tenants, modulePrices, partnerOverrides, partner]);
 
-  const { sorted: sortedTotals, sort: sortTotals, toggle: toggleTotals } = useSortableData<any, "name" | "sector" | "purchase" | "sale" | "margin" | "commission">(tenantTotals, (r, k) => {
+  const [tenantSearch, setTenantSearch] = useState("");
+  const filteredTenantTotals = tenantSearch.trim()
+    ? tenantTotals.filter((t) => {
+        const q = tenantSearch.toLowerCase();
+        return (t.name ?? "").toLowerCase().includes(q) || (t.is_kommune ? "kommune" : "industrie").includes(q);
+      })
+    : tenantTotals;
+
+  const { sorted: sortedTotals, sort: sortTotals, toggle: toggleTotals } = useSortableData<any, "name" | "sector" | "purchase" | "sale" | "margin" | "commission">(filteredTenantTotals, (r, k) => {
     switch (k) {
       case "name": return r.name;
       case "sector": return r.is_kommune ? "kommune" : "industrie";
