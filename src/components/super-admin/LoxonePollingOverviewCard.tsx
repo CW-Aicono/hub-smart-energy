@@ -63,6 +63,22 @@ export default function LoxonePollingOverviewCard() {
     return () => { cancelled = true; clearInterval(t); };
   }, []);
 
+  const { sorted, sort, toggle } = useSortableData<Row, PollSortKey>(
+    rows,
+    (r, k) => {
+      const raw = Number((r.config as any)?.poll_interval_minutes);
+      const interval = Number.isFinite(raw) && raw >= 1 && raw <= 60 ? Math.floor(raw) : 15;
+      switch (k) {
+        case "tenant": return r.location?.tenant?.name ?? "";
+        case "location": return r.location?.name ?? "";
+        case "interval": return interval;
+        case "sync": return r.last_sync_at ? new Date(r.last_sync_at) : null;
+        default: return null;
+      }
+    },
+    { key: "tenant", direction: "asc" },
+  );
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -84,14 +100,14 @@ export default function LoxonePollingOverviewCard() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-muted-foreground border-b">
-                  <th className="py-2 pr-4">Tenant</th>
-                  <th className="py-2 pr-4">Liegenschaft</th>
-                  <th className="py-2 pr-4">Intervall (Min)</th>
-                  <th className="py-2 pr-4">Letzter Sync</th>
+                  <SortTh<PollSortKey> label="Tenant" sortKey="tenant" sort={sort} onToggle={toggle} />
+                  <SortTh<PollSortKey> label="Liegenschaft" sortKey="location" sort={sort} onToggle={toggle} />
+                  <SortTh<PollSortKey> label="Intervall (Min)" sortKey="interval" sort={sort} onToggle={toggle} />
+                  <SortTh<PollSortKey> label="Letzter Sync" sortKey="sync" sort={sort} onToggle={toggle} />
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {sorted.map((r) => {
                   const raw = Number((r.config as any)?.poll_interval_minutes);
                   const interval = Number.isFinite(raw) && raw >= 1 && raw <= 60 ? Math.floor(raw) : 15;
                   const isDefault = !Number.isFinite(raw);
