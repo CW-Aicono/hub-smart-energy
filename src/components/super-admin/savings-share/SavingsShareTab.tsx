@@ -358,7 +358,7 @@ function SettlementsCard({ contract, baselines }: { contract: SavingsContract; b
                   <TableBody>
                     {(detail.per_energy_type ?? []).map((r, i) => (
                       <TableRow key={i}>
-                        <TableCell>{r.energy_type}<div className="text-xs text-muted-foreground">Baseline: {QUALITY_LABEL[r.baseline_quality ?? "unknown"] ?? r.baseline_quality}</div></TableCell>
+                        <TableCell>{formatEnergyType(r.energy_type)}<div className="text-xs text-muted-foreground">Baseline: {QUALITY_LABEL[r.baseline_quality ?? "unknown"] ?? r.baseline_quality}</div></TableCell>
                         <TableCell className="text-right">{fmtInt(r.baseline_kwh)}</TableCell>
                         <TableCell className="text-right">{fmtInt(r.actual_kwh)}</TableCell>
                         <TableCell className="text-right">{r.actual_coverage_months ?? 0}/12</TableCell>
