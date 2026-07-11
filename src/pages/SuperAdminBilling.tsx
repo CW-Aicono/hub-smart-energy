@@ -98,7 +98,18 @@ const SuperAdminBilling = () => {
   };
 
   const sorted = useMemo(() => {
-    const arr = [...invoices];
+    const filtered = search.trim()
+      ? invoices.filter((r: any) => {
+          const q = search.toLowerCase();
+          return (
+            (r.tenants?.name ?? "").toLowerCase().includes(q) ||
+            (r.status ?? "").toLowerCase().includes(q) ||
+            (r.invoice_number ?? "").toLowerCase().includes(q) ||
+            (r.lexware_invoice_number ?? "").toLowerCase().includes(q)
+          );
+        })
+      : invoices;
+    const arr = [...filtered];
     const dir = sortDir === "asc" ? 1 : -1;
     arr.sort((a: any, b: any) => {
       switch (sortKey) {
@@ -118,7 +129,7 @@ const SuperAdminBilling = () => {
       }
     });
     return arr;
-  }, [invoices, sortKey, sortDir]);
+  }, [invoices, sortKey, sortDir, search]);
 
   // Summary stats
   const stats = useMemo(() => {
