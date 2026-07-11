@@ -423,18 +423,29 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
 
       <Card>
         <CardHeader>
-          <CardTitle>
-            {showGlobalOverrideUI
-              ? `Globale Artikel mit eigenem Preis (${filtered.length})`
-              : `Geräte (${filtered.length})`}
-          </CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardTitle>
+              {showGlobalOverrideUI
+                ? `Globale Artikel mit eigenem Preis (${filtered.length})`
+                : `Geräte (${filtered.length})`}
+            </CardTitle>
+            <div className="relative max-w-sm w-full sm:w-auto">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Suchen (Hersteller, Modell, Art.-Nr., EAN)…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 sm:w-72"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="text-muted-foreground">Lade …</div>
           ) : filtered.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
-              Keine Geräte in dieser Klasse.
+              {search.trim() ? `Keine Treffer für „${search}".` : "Keine Geräte in dieser Klasse."}
             </div>
           ) : showGlobalOverrideUI ? (
             <Table>
