@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowLeft, Pencil, Building2, MapPin, Package, Activity } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import SavingsShareReadOnly from "@/components/savings-share/SavingsShareReadOnly";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 const statusColor: Record<string, string> = {
   active: "default",
