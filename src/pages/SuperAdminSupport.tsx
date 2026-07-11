@@ -59,7 +59,18 @@ const SuperAdminSupport = () => {
     return Math.ceil(mins / 15);
   };
 
-  const { sorted, sort, toggle } = useSortableData<any, SortKey>(sessions, (r, k) => {
+  const [search, setSearch] = useState("");
+  const filteredSessions = search.trim()
+    ? sessions.filter((s: any) => {
+        const q = search.toLowerCase();
+        return (
+          (s.tenants?.name ?? "").toLowerCase().includes(q) ||
+          (s.reason ?? "").toLowerCase().includes(q)
+        );
+      })
+    : sessions;
+
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(filteredSessions, (r, k) => {
     switch (k) {
       case "tenant": return r.tenants?.name ?? "";
       case "reason": return r.reason ?? "";
