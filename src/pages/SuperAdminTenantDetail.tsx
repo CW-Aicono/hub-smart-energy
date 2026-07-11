@@ -1151,7 +1151,7 @@ const SuperAdminTenantDetail = () => {
                               </TableCell>
                             </TableRow>
                           ))}
-                          {pendingInvitations.map((inv: any) => {
+                          {filteredInvitations.map((inv: any) => {
                             const expired = new Date(inv.expires_at).getTime() < Date.now();
                             return (
                               <TableRow key={inv.id} className="opacity-80">
