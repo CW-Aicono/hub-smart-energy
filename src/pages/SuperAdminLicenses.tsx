@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +22,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Ban } from "lucide-react";
+import { Ban, Search } from "lucide-react";
 import LicenseDialog from "@/components/super-admin/LicenseDialog";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
@@ -33,6 +34,7 @@ const SuperAdminLicenses = () => {
   const { t } = useSATranslation();
   const qc = useQueryClient();
   const [cancelTarget, setCancelTarget] = useState<{ id: string; tenant: string } | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: licenses = [] } = useQuery({
     queryKey: ["super-admin-licenses"],
@@ -46,7 +48,18 @@ const SuperAdminLicenses = () => {
     },
   });
 
-  const { sorted, sort, toggle } = useSortableData<any, SortKey>(licenses, (r, k) => {
+  const filteredLicenses = search.trim()
+    ? licenses.filter((r: any) => {
+        const q = search.toLowerCase();
+        return (
+          (r.tenants?.name ?? "").toLowerCase().includes(q) ||
+          (r.plan_name ?? "").toLowerCase().includes(q) ||
+          (r.status ?? "").toLowerCase().includes(q)
+        );
+      })
+    : licenses;
+
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(filteredLicenses, (r, k) => {
     switch (k) {
       case "tenant": return r.tenants?.name ?? "";
       case "plan": return r.plan_name;
@@ -91,7 +104,16 @@ const SuperAdminLicenses = () => {
           </div>
           <LicenseDialog mode="create" />
         </header>
-        <div className="p-6">
+        <div className="p-6 space-y-4">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Suchen (Mandant, Plan, Status)…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
           <Card>
             <CardHeader>
               <CardTitle>{t("billing.active_licenses")}</CardTitle>

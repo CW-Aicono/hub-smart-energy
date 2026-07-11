@@ -20,7 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { UserPlus, Trash2, Pencil, ShieldCheck } from "lucide-react";
+import { UserPlus, Trash2, Pencil, ShieldCheck, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
 import { useAuth } from "@/hooks/useAuth";
@@ -80,7 +80,18 @@ export default function PartnerMembers() {
 
   const canManage = isPartnerAdmin || permissions.manageMembers;
 
-  const { sorted, sort, toggle } = useSortableData<MemberRow, "name" | "email" | "role" | "created_at">(rows, (r, k) => {
+  const [search, setSearch] = useState("");
+  const filteredRows = search.trim()
+    ? rows.filter((r) => {
+        const q = search.toLowerCase();
+        return (
+          (r.email ?? "").toLowerCase().includes(q) ||
+          (r.contact_person ?? "").toLowerCase().includes(q) ||
+          r.partner_role.toLowerCase().includes(q)
+        );
+      })
+    : rows;
+  const { sorted, sort, toggle } = useSortableData<MemberRow, "name" | "email" | "role" | "created_at">(filteredRows, (r, k) => {
     switch (k) {
       case "name": return r.contact_person ?? "";
       case "email": return r.email ?? "";
@@ -272,11 +283,20 @@ export default function PartnerMembers() {
 
         <Card>
           <CardHeader><CardTitle>Mitglieder</CardTitle></CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <div className="relative max-w-sm">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Suchen (Name, Email, Rolle)…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8"
+              />
+            </div>
             {loading ? (
               <p className="text-sm text-muted-foreground">Lade…</p>
             ) : sorted.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Noch keine Mitglieder.</p>
+              <p className="text-sm text-muted-foreground">{search.trim() ? `Keine Treffer für „${search}".` : "Noch keine Mitglieder."}</p>
             ) : (
               <Table>
                 <TableHeader>

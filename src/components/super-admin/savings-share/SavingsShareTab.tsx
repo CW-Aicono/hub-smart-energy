@@ -15,6 +15,7 @@ import { useTenantSavingsContract, SavingsContract, SavingsBaseline, BaselineDia
 import { useTenantSavingsSettlements, SavingsSettlement } from "@/hooks/useTenantSavingsSettlements";
 import { Calculator, Save, PlayCircle, PauseCircle, CheckCircle2, Pencil, AlertTriangle, Plus, FileText } from "lucide-react";
 import { formatEnergyType } from "@/lib/energyTypeLabels";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 const fmt = (n: number | null | undefined, digits = 2) =>
   n == null ? "–" : Number(n).toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -217,6 +218,21 @@ function BaselineCard({ contract, baselines, recalc, override, createManual, dia
   const avgCoverage = baselines.length > 0 ? baselines.reduce((s, b) => s + Number(b.coverage_months ?? 0), 0) / baselines.length : 0;
   const calculatedDates = baselines.map(b => b.updated_at).sort();
   const lastCalculated = calculatedDates.length > 0 ? calculatedDates[calculatedDates.length - 1] : undefined;
+  const { sorted: sortedBaselines, sort: baselineSort, toggle: toggleBaselineSort } = useSortableData<SavingsBaseline, "energy" | "raw" | "normalized" | "hdd" | "quality" | "source">(
+    baselines,
+    (b, k) => {
+      switch (k) {
+        case "energy": return formatEnergyType(b.energy_type);
+        case "raw": return Number(b.baseline_kwh_raw ?? 0);
+        case "normalized": return Number(b.baseline_kwh_normalized ?? 0);
+        case "hdd": return Number(b.baseline_hdd ?? 0);
+        case "quality": return b.data_quality ?? "";
+        case "source": return b.baseline_source ?? "";
+        default: return null;
+      }
+    },
+    { key: "energy", direction: "asc" },
+  );
 
   return (
     <Card>
@@ -246,12 +262,17 @@ function BaselineCard({ contract, baselines, recalc, override, createManual, dia
         ) : (
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Energieart</TableHead><TableHead className="text-right">Roh (kWh)</TableHead>
-              <TableHead className="text-right">Bereinigt (kWh)</TableHead><TableHead className="text-right">HDD</TableHead>
-              <TableHead>Datenqualität</TableHead><TableHead>Zeitraum</TableHead><TableHead>Quelle</TableHead><TableHead></TableHead>
+              <SortableHead sortKey="energy" sort={baselineSort} onToggle={toggleBaselineSort}>Energieart</SortableHead>
+              <SortableHead sortKey="raw" sort={baselineSort} onToggle={toggleBaselineSort} align="right">Roh (kWh)</SortableHead>
+              <SortableHead sortKey="normalized" sort={baselineSort} onToggle={toggleBaselineSort} align="right">Bereinigt (kWh)</SortableHead>
+              <SortableHead sortKey="hdd" sort={baselineSort} onToggle={toggleBaselineSort} align="right">HDD</SortableHead>
+              <SortableHead sortKey="quality" sort={baselineSort} onToggle={toggleBaselineSort}>Datenqualität</SortableHead>
+              <TableHead>Zeitraum</TableHead>
+              <SortableHead sortKey="source" sort={baselineSort} onToggle={toggleBaselineSort}>Quelle</SortableHead>
+              <TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {baselines.map(b => {
+              {sortedBaselines.map(b => {
                 const details = b.calculation_details ?? {};
                 return (
                   <TableRow key={b.id}>
@@ -293,6 +314,21 @@ function SettlementsCard({ contract, baselines }: { contract: SavingsContract; b
   const [year, setYear] = useState(new Date().getFullYear() - 1);
   const [detail, setDetail] = useState<SavingsSettlement | null>(null);
   const hasValidBaseline = baselines.some((b) => (b.data_quality ?? "unknown") !== "none");
+  const { sorted: sortedSettlements, sort: settlementSort, toggle: toggleSettlementSort } = useSortableData<SavingsSettlement, "year" | "status" | "total" | "aicono" | "partner" | "tenant">(
+    (list.data ?? []),
+    (s, k) => {
+      switch (k) {
+        case "year": return s.period_year;
+        case "status": return s.status;
+        case "total": return Number(s.total_savings_eur ?? 0);
+        case "aicono": return Number(s.aicono_amount_eur ?? 0);
+        case "partner": return Number(s.partner_amount_eur ?? 0);
+        case "tenant": return Number(s.tenant_retained_eur ?? 0);
+        default: return null;
+      }
+    },
+    { key: "year", direction: "desc" },
+  );
 
   return (
     <Card>
@@ -310,15 +346,16 @@ function SettlementsCard({ contract, baselines }: { contract: SavingsContract; b
         ) : (
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Jahr</TableHead><TableHead>Status</TableHead>
-              <TableHead className="text-right">Einsparung (€)</TableHead>
-              <TableHead className="text-right">AICONO (€)</TableHead>
-              <TableHead className="text-right">Partner (€)</TableHead>
-              <TableHead className="text-right">Mandant (€)</TableHead>
+              <SortableHead sortKey="year" sort={settlementSort} onToggle={toggleSettlementSort}>Jahr</SortableHead>
+              <SortableHead sortKey="status" sort={settlementSort} onToggle={toggleSettlementSort}>Status</SortableHead>
+              <SortableHead sortKey="total" sort={settlementSort} onToggle={toggleSettlementSort} align="right">Einsparung (€)</SortableHead>
+              <SortableHead sortKey="aicono" sort={settlementSort} onToggle={toggleSettlementSort} align="right">AICONO (€)</SortableHead>
+              <SortableHead sortKey="partner" sort={settlementSort} onToggle={toggleSettlementSort} align="right">Partner (€)</SortableHead>
+              <SortableHead sortKey="tenant" sort={settlementSort} onToggle={toggleSettlementSort} align="right">Mandant (€)</SortableHead>
               <TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {(list.data ?? []).map(s => (
+              {sortedSettlements.map(s => (
                 <TableRow key={s.id}>
                   <TableCell className="font-medium">{s.period_year}</TableCell>
                   <TableCell><Badge variant={STATUS_VARIANT[s.status]}>{STATUS_LABEL[s.status]}</Badge></TableCell>

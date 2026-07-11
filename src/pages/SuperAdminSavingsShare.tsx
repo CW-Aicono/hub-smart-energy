@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Euro, ExternalLink } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Euro, ExternalLink, Search } from "lucide-react";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+
+type SortKey = "tenant" | "status" | "baseline" | "share" | "latest_year" | "savings" | "aicono";
 
 const fmt = (n: number) => n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -81,6 +85,30 @@ export default function SuperAdminSavingsShare() {
 
   const rows = query.data ?? [];
 
+  const [search, setSearch] = useState("");
+  const filteredRows = search.trim()
+    ? rows.filter((r) => {
+        const q = search.toLowerCase();
+        return (
+          r.tenant_name.toLowerCase().includes(q) ||
+          (r.status ?? "").toLowerCase().includes(q) ||
+          (r.latest_status ?? "").toLowerCase().includes(q)
+        );
+      })
+    : rows;
+  const { sorted, sort, toggle } = useSortableData<Row, SortKey>(filteredRows, (r, k) => {
+    switch (k) {
+      case "tenant": return r.tenant_name;
+      case "status": return r.status;
+      case "baseline": return r.baseline_year;
+      case "share": return r.aicono_share_pct;
+      case "latest_year": return r.latest_year ?? 0;
+      case "savings": return r.total_savings_eur;
+      case "aicono": return r.aicono_amount_eur;
+      default: return null;
+    }
+  }, { key: "tenant", direction: "asc" });
+
   const kpis = useMemo(() => {
     const active = rows.filter(r => r.status === "active").length;
     const totalSavings = rows.reduce((s, r) => s + r.total_savings_eur, 0);
@@ -111,23 +139,36 @@ export default function SuperAdminSavingsShare() {
 
         <Card>
           <CardHeader><CardTitle>Mandanten mit Gain-Sharing-Vertrag</CardTitle></CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             {query.isLoading ? <p className="text-sm text-muted-foreground">Lädt…</p> : rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">Noch keine Verträge angelegt.</p>
             ) : (
+              <>
+                <div className="relative max-w-sm">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Suchen (Mandant, Status)…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+                {sorted.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Keine Treffer für „{search}".</p>
+                ) : (
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Mandant</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Baseline-Jahr</TableHead>
-                  <TableHead className="text-right">AICONO %</TableHead>
-                  <TableHead>Letztes Jahr</TableHead>
-                  <TableHead className="text-right">Einsparung (€)</TableHead>
-                  <TableHead className="text-right">AICONO-Anteil (€)</TableHead>
+                  <SortableHead sortKey="tenant" sort={sort} onToggle={toggle}>Mandant</SortableHead>
+                  <SortableHead sortKey="status" sort={sort} onToggle={toggle}>Status</SortableHead>
+                  <SortableHead sortKey="baseline" sort={sort} onToggle={toggle}>Baseline-Jahr</SortableHead>
+                  <SortableHead sortKey="share" sort={sort} onToggle={toggle} align="right">AICONO %</SortableHead>
+                  <SortableHead sortKey="latest_year" sort={sort} onToggle={toggle}>Letztes Jahr</SortableHead>
+                  <SortableHead sortKey="savings" sort={sort} onToggle={toggle} align="right">Einsparung (€)</SortableHead>
+                  <SortableHead sortKey="aicono" sort={sort} onToggle={toggle} align="right">AICONO-Anteil (€)</SortableHead>
                   <TableHead></TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {rows.map(r => (
+                  {sorted.map(r => (
                     <TableRow key={r.contract_id}>
                       <TableCell className="font-medium">{r.tenant_name}</TableCell>
                       <TableCell><Badge variant={r.status === "active" ? "default" : "outline"}>{r.status}</Badge></TableCell>
@@ -145,6 +186,8 @@ export default function SuperAdminSavingsShare() {
                   ))}
                 </TableBody>
               </Table>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

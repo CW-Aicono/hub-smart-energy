@@ -1,95 +1,86 @@
-## Befund
-
-- In der Datenbank existiert aktuell **1 Gain-Sharing-Vertrag** für den Tenant **Stadt Steinfurt**.
-- Das Modul `gain_sharing` ist für diesen Tenant aktiv.
-- In `tenant_savings_baselines` stehen aktuell **0 Baseline-Zeilen**. Deshalb zeigt die UI korrekt weiter: „Noch keine Baseline berechnet.“
-- Der Vertrag nutzt derzeit **Baseline-Jahr 2026**. Für den Tenant liegen 2026 zwar aggregierte Zählerwerte vor, aber die Baseline-Funktion schreibt offenbar keine Zeilen oder liefert ein leeres Ergebnis ohne erkennbare Diagnose in der Oberfläche.
-- Die Edge-Function-Logs enthalten nur Boot/Shutdown, aber keine fachlichen Logs. Dadurch ist für Admins und Tenant nicht nachvollziehbar, ob keine Zähler gefunden wurden, keine Werte vorhanden sind, falsche Energiearten verwendet werden oder der Upsert fehlschlägt.
+# Tabellen-Audit & Ergänzungsplan (Super-Admin + Partner-Portal)
 
 ## Ziel
+Alle Tabellen im Super-Admin- und Partner-Bereich sollen:
+1. Eine **Textsuche** über die relevanten Spalten haben (Input oben rechts über der Tabelle, client-seitig gefiltert).
+2. **Sortierung auf-/absteigend per Klick auf den Spaltentitel** unterstützen — via bestehender Helper `SortableHead` + `useSortableData` (`src/components/ui/sortable-head.tsx`).
 
-Das Gain-Sharing-Modul soll nicht nur rechnen, sondern für Super-Admin und Tenant nachvollziehbar zeigen:
+Kleine, rein informative Tabellen (< ~10 Zeilen, feste Länge) bekommen **nur Sortierung**, keine Suche.
 
-- welche Datenbasis verwendet wurde,
-- welche Zähler/Energiearten einbezogen wurden,
-- warum ggf. keine Baseline erzeugt wurde,
-- welche Werte berechnet wurden,
-- ob die Baseline vollständig genug für eine spätere Abrechnung ist.
+## Ist-Zustand (kompakt)
 
-## Umsetzungsplan
+Legende: S = Suche, ↕ = Sortierung. ✅ vorhanden · ❌ fehlt · — nicht sinnvoll.
 
-### 1. Baseline-Berechnung robust machen
+### Super-Admin
+| Datei / Tabelle | S | ↕ | To-do |
+|---|---|---|---|
+| SuperAdminPartners.tsx – Partner-Liste | ❌ | ❌ | S + ↕ |
+| SuperAdminRoles.tsx – SA-User + Rollen (2 Tabellen) | ❌ | ✅ | S (nur SA-User-Tabelle) |
+| SuperAdminUsers.tsx – Plattform-User | ✅ | ✅ | — |
+| SuperAdminOcppIntegrations.tsx – Charger-Modelle | ❌ | ✅ | S (zusätzlich zu bestehenden Chips) |
+| SuperAdminTenants.tsx – Tenants | ✅ | ✅ | — |
+| SuperAdminOcppControl.tsx – Ladesessions | ❌ | ✅ | S |
+| SuperAdminTenantDetail.tsx – Module, User+Invites, Bundle-Module, Support-Sessions | ❌ | ❌ | S + ↕ (Users, Support); nur ↕ (Module, Bundle) |
+| SuperAdminOcppFirmware.tsx – Firmware-Artifacts | ✅ | ✅ | — |
+| SuperAdminSupport.tsx – Remote-Support-Sessions | ❌ | ✅ | S |
+| SuperAdminSimulators.tsx – Simulator-Instanzen | ❌ | ❌ | S + ↕ |
+| SuperAdminLicenses.tsx – Lizenzen | ❌ | ✅ | S |
+| SuperAdminBilling.tsx – Tenant-Rechnungen | ❌ | ✅ (lokal) | S |
+| SuperAdminSavingsShare.tsx – Gain-Sharing-Verträge | ❌ | ❌ | S + ↕ |
+| SuperAdminGatewayFleet.tsx – Fleet, Update-Jobs, Release-Channels (3) | ❌ | ❌ | S + ↕ (Fleet); nur ↕ (Jobs, Channels) |
+| savings-share/SavingsShareTab.tsx – Baselines, Settlements | ❌ | ❌ | ↕ (klein) |
+| LoxoneMiniserverMonitorCard.tsx (raw `<table>`) | ❌ | ❌ | ↕ |
+| LoxonePollingOverviewCard.tsx (raw `<table>`) | ❌ | ❌ | ↕ |
+| AlertRulesCard.tsx (raw `<table>`) | ❌ | ❌ | — (sehr klein, fest) |
 
-- Die Baseline-Funktion soll nicht mehr still mit `success: true` enden, wenn keine Baseline-Zeilen geschrieben wurden.
-- Wenn keine geeigneten Zähler gefunden werden, soll sie eine klare Meldung zurückgeben, z. B.:
-  - „Keine Verbrauchszähler für diesen Tenant gefunden.“
-  - „Zähler vorhanden, aber keine Periodenwerte im Baseline-Jahr.“
-  - „Nur Erzeugungs-/Exportzähler gefunden, diese werden nicht berücksichtigt.“
-- Energiearten wie `none` sollen ausgeschlossen werden, damit technische Sensoren nicht in Gain-Sharing einfließen.
-- Archivierte Zähler sollen standardmäßig ausgeschlossen werden.
-- Die Funktion soll pro Energieart auf Monats- oder Tageswerte zurückfallen, je nachdem welche Daten verfügbar sind.
-- Fehler aus `get_meter_period_sums` und Upserts sollen explizit behandelt und in der UI angezeigt werden.
+### Partner-Portal
+| Datei / Tabelle | S | ↕ | To-do |
+|---|---|---|---|
+| partner/PartnerTenants.tsx | ✅ | ✅ | — |
+| partner/PartnerMembers.tsx | ❌ | ✅ | S |
+| partner/PartnerTenantDetail.tsx – Locations, Lizenzen | ❌ | ❌ | ↕ (beide klein) |
+| partner/PartnerBilling.tsx – Commission, Modul-Pricing, Tenant-Margen (3) | ❌ | ✅ | S (nur Commission + Margen) |
+| partner/PartnerSavingsShare.tsx – Verträge, Settlements | ❌ | ❌ | S + ↕ |
 
-### 2. Diagnose-/Audit-Daten in der Antwort zurückgeben
+## Vorgehen pro Tabelle
 
-Die Baseline-Funktion soll zusätzlich zu den berechneten Ergebnissen eine nachvollziehbare Diagnose zurückgeben:
+Einheitlich, damit UI konsistent bleibt:
 
-- Anzahl aller Tenant-Zähler
-- Anzahl berücksichtigter Verbrauchszähler
-- ausgeschlossene Zähler nach Grund
-- Datenabdeckung je Energieart
-- Zeitraum der verwendeten Werte
-- Anzahl geschriebener Baseline-Zeilen
-- Warnungen, z. B. „Baseline-Jahr ist laufendes Jahr“ oder „nur Teildaten vorhanden“
+1. **Sortierung**
+   - Für shadcn-Tables: `TableHead` → `SortableHead` aus `@/components/ui/sortable-head`, Daten durch `useSortableData(rows, initialKey)` schicken.
+   - Für die drei raw `<table>` Monitor-Karten: kleine, lokale Sort-State (`useState<{key,dir}>`), `<th>` mit `cursor-pointer` + kleinem Pfeil-Icon (`ArrowUp/ArrowDown/ArrowUpDown` aus lucide) — kein Umbau auf shadcn, um das schlanke Layout dieser Cards nicht zu ändern.
 
-### 3. Oberfläche erweitern: Baseline-Status statt leerer Meldung
+2. **Suche**
+   - Standard-Muster (wie in `SuperAdminTenants.tsx`, `SuperAdminUsers.tsx`, `PartnerTenants.tsx`):
+     ```tsx
+     const [search, setSearch] = useState("");
+     const filtered = useMemo(
+       () => rows.filter(r => matches(r, search)),
+       [rows, search]
+     );
+     const { items, requestSort, sortConfig } = useSortableData(filtered, defaultKey);
+     ```
+   - Suchfeld: `<Input placeholder="Suchen..." />` (mit `Search`-Icon) rechts oberhalb der Tabelle bzw. neben bestehenden Filter-Selects.
+   - `matches` deckt die sinnvollen Textspalten ab (Name, Slug, Email, Location, Status-Label, …); Zahlen/Beträge/Datumsspalten werden nur formatiert-verglichen wenn sinnvoll.
 
-Im Gain-Sharing-Tab soll die Baseline-Karte erweitert werden:
+3. **Konsistenz**
+   - Kein Server-Roundtrip: alles clientseitig auf den bereits geladenen Rows.
+   - Leerzustand: "Keine Treffer für „{search}"" statt der bisherigen "keine Daten"-Meldung, wenn `search` gesetzt ist.
+   - `SortableHead` wird bei jeder Tabelle mit einem sinnvollen Default-Sort initialisiert (meist bestehender Server-Sort, damit die Anzeige beim Öffnen unverändert bleibt).
+   - Keine Änderungen an Datenquellen, Queries oder RLS — reine Präsentations-Schicht.
 
-- Nach einer Berechnung werden Warnungen/Diagnosen sichtbar angezeigt.
-- Wenn keine Baseline geschrieben wurde, erscheint nicht nur „Noch keine Baseline berechnet“, sondern der konkrete Grund.
-- Neben der Tabelle sollen KPI-Zusammenfassungen erscheinen:
-  - Anzahl Energiearten
-  - Gesamtverbrauch kWh
-  - Datenabdeckung
-  - letzte Berechnung
-- Pro Energieart soll sichtbar sein:
-  - Verbrauch roh
-  - normalisierter Verbrauch
-  - Quelle
-  - verwendeter Zeitraum
-  - Datenqualität / Warnung
+## Umsetzung in Batches
 
-### 4. Tenant-Nachvollziehbarkeit ergänzen
+Um die Änderung überschaubar zu halten, in vier Commits/Batches:
 
-Für Tenant-Admins und Partner soll die Einsparbeteiligung lesbar, aber nicht administrativ veränderbar sein:
+- **Batch 1 – Super-Admin große Listen:** Partners, Tenants (bereits ok), OcppControl, OcppIntegrations (S), Support, Licenses, Billing, Simulators.
+- **Batch 2 – Super-Admin Detail & Gain-Sharing:** SuperAdminTenantDetail (4 Sub-Tabellen), SuperAdminSavingsShare, SavingsShareTab (Baselines + Settlements), SuperAdminRoles (S für SA-User).
+- **Batch 3 – Super-Admin Fleet & Monitoring-Cards:** SuperAdminGatewayFleet (Fleet + Jobs + Channels), LoxoneMiniserverMonitorCard, LoxonePollingOverviewCard (nur ↕).
+- **Batch 4 – Partner-Portal:** PartnerMembers (S), PartnerTenantDetail (↕), PartnerBilling (S), PartnerSavingsShare (S + ↕).
 
-- Vertrag anzeigen: Baseline-Jahr, Startjahr, Anteil AICONO, Partneranteil, Witterungsbereinigung, Preisbasis.
-- Baseline anzeigen: Energiearten, Werte, Quelle, letzte Berechnung, manuelle Overrides inkl. Begründung.
-- Abrechnungen anzeigen: nur freigegebene/abgerechnete/bezahlte Abrechnungen gemäß bestehender Rechte.
-- Keine Bearbeiten-/Berechnen-Buttons außerhalb Super-Admin.
+Nach jedem Batch: `tsgo` Typecheck + kurzer visueller Check im Preview.
 
-### 5. Fehlende fachliche Funktionen für ein vollständiges Modell ergänzen
-
-- Manuelle Baseline-Anlage, falls keine verwertbaren Messwerte existieren.
-- Pflicht-Begründung für manuelle Overrides.
-- Festpreise pro Energieart editierbar machen, wenn `contract_fixed` gewählt ist.
-- Datenqualitätsstatus einführen:
-  - `vollständig`
-  - `teilweise`
-  - `keine Daten`
-  - `manuell`
-- Warnung, wenn Baseline-Jahr noch nicht abgeschlossen ist.
-- Abrechnung erst zulassen, wenn mindestens eine gültige Baseline existiert.
-- Details zur Abrechnung tenantverständlich anzeigen: Baseline, Ist-Verbrauch, Preis, Einsparung, AICONO-Anteil, verbleibende Tenant-Einsparung.
-
-### 6. Technische Absicherung
-
-- Edge Functions mit fachlichen Logs versehen, ohne sensible Daten auszugeben.
-- Baseline- und Calculate-Funktion konsistent machen: gleiche Zählerfilter, gleiche Energiearten, gleiche Datenquellen.
-- Frontend-Invalidierung nach Berechnung härten, damit die Baseline-Liste sicher neu geladen wird.
-- Optional: kleine Datenbank-Erweiterung für Baseline-Metadaten wie `coverage_months`, `data_quality`, `calculation_details`, damit die Nachvollziehbarkeit dauerhaft gespeichert wird.
-
-## Erwartetes Ergebnis
-
-Nach Umsetzung sieht der Super-Admin direkt, ob die Baseline erfolgreich erzeugt wurde oder warum nicht. Der Tenant kann später transparent nachvollziehen, auf welcher Datenbasis die Einsparbeteiligung basiert, ohne administrative Rechte zu erhalten.
+## Nicht enthalten
+- Keine Server-seitige Pagination — Datenmengen sind für alle betroffenen Tabellen im gezeigten Umfang unkritisch.
+- Keine Änderungen an `AlertRulesCard` (feste, minimale Regel-Liste — Sortierung überflüssig).
+- Keine Änderungen an Geschäftslogik, Queries oder Berechtigungen.

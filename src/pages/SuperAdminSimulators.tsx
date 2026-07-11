@@ -51,8 +51,12 @@ import {
   Loader2,
   AlertTriangle,
   ScrollText,
+  Search,
 } from "lucide-react";
 import { format } from "date-fns";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+
+type SimSortKey = "tenant" | "ocpp_id" | "status" | "power" | "meter" | "idTag" | "started_at";
 
 const isTemporaryEdgeError = (error: unknown) => {
   const message = error instanceof Error ? error.message : JSON.stringify(error);
@@ -262,6 +266,34 @@ const SuperAdminSimulators = () => {
   const tenantName = (id: string) =>
     tenants.find((t) => t.id === id)?.name || id.slice(0, 8);
 
+  const [search, setSearch] = useState("");
+  const filteredRows = (data ?? []).filter((row) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      tenantName(row.tenant_id).toLowerCase().includes(q) ||
+      row.ocpp_id.toLowerCase().includes(q) ||
+      (row.id_tag ?? "").toLowerCase().includes(q) ||
+      (row.live_status ?? row.status ?? "").toLowerCase().includes(q)
+    );
+  });
+  const { sorted: sortedRows, sort: simSort, toggle: toggleSimSort } = useSortableData<SimulatorRow, SimSortKey>(
+    filteredRows,
+    (r, k) => {
+      switch (k) {
+        case "tenant": return tenantName(r.tenant_id);
+        case "ocpp_id": return r.ocpp_id;
+        case "status": return r.live_status ?? r.status;
+        case "power": return r.live_power_kw ?? r.power_kw ?? 0;
+        case "meter": return r.live_meter_wh ?? 0;
+        case "idTag": return r.id_tag ?? "";
+        case "started_at": return r.started_at ? new Date(r.started_at) : null;
+        default: return null;
+      }
+    },
+    { key: "started_at", direction: "desc" },
+  );
+
   const openLogs = (row: SimulatorRow) => {
     setLogInstanceId(row.id);
     setLogOcppId(row.ocpp_id);
@@ -437,21 +469,36 @@ const SuperAdminSimulators = () => {
                   Noch keine Simulator-Instanzen vorhanden.
                 </div>
               ) : (
+                <>
+                  <div className="relative max-w-sm mb-4">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Suchen (Mandant, OCPP-ID, Status, idTag)…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="pl-8"
+                    />
+                  </div>
+                  {sortedRows.length === 0 ? (
+                    <div className="py-8 text-center text-sm text-muted-foreground">
+                      Keine Treffer für „{search}".
+                    </div>
+                  ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Tenant</TableHead>
-                      <TableHead>OCPP-ID</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Leistung</TableHead>
-                      <TableHead className="text-right">Zähler (kWh)</TableHead>
-                      <TableHead>idTag</TableHead>
-                      <TableHead>Gestartet</TableHead>
+                      <SortableHead sortKey="tenant" sort={simSort} onToggle={toggleSimSort}>Tenant</SortableHead>
+                      <SortableHead sortKey="ocpp_id" sort={simSort} onToggle={toggleSimSort}>OCPP-ID</SortableHead>
+                      <SortableHead sortKey="status" sort={simSort} onToggle={toggleSimSort}>Status</SortableHead>
+                      <SortableHead sortKey="power" sort={simSort} onToggle={toggleSimSort} align="right">Leistung</SortableHead>
+                      <SortableHead sortKey="meter" sort={simSort} onToggle={toggleSimSort} align="right">Zähler (kWh)</SortableHead>
+                      <SortableHead sortKey="idTag" sort={simSort} onToggle={toggleSimSort}>idTag</SortableHead>
+                      <SortableHead sortKey="started_at" sort={simSort} onToggle={toggleSimSort}>Gestartet</SortableHead>
                       <TableHead className="text-right">Aktionen</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {data.map((row) => {
+                    {sortedRows.map((row) => {
                       const live = row.live_status ?? row.status;
                       const livePower = row.live_power_kw ?? row.power_kw ?? 11;
                       const livePaused = !!row.live_paused;
@@ -539,6 +586,8 @@ const SuperAdminSimulators = () => {
                     })}
                   </TableBody>
                 </Table>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

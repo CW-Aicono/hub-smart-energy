@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Receipt, TrendingUp, Percent, Building2, Factory } from "lucide-react";
+import { Receipt, TrendingUp, Percent, Building2, Factory, Search } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "@/hooks/use-toast";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
@@ -145,7 +145,15 @@ export default function PartnerBilling() {
     });
   }, [tenants, modulePrices, partnerOverrides, partner]);
 
-  const { sorted: sortedTotals, sort: sortTotals, toggle: toggleTotals } = useSortableData<any, "name" | "sector" | "purchase" | "sale" | "margin" | "commission">(tenantTotals, (r, k) => {
+  const [tenantSearch, setTenantSearch] = useState("");
+  const filteredTenantTotals = tenantSearch.trim()
+    ? tenantTotals.filter((t) => {
+        const q = tenantSearch.toLowerCase();
+        return (t.name ?? "").toLowerCase().includes(q) || (t.is_kommune ? "kommune" : "industrie").includes(q);
+      })
+    : tenantTotals;
+
+  const { sorted: sortedTotals, sort: sortTotals, toggle: toggleTotals } = useSortableData<any, "name" | "sector" | "purchase" | "sale" | "margin" | "commission">(filteredTenantTotals, (r, k) => {
     switch (k) {
       case "name": return r.name;
       case "sector": return r.is_kommune ? "kommune" : "industrie";
@@ -205,9 +213,18 @@ export default function PartnerBilling() {
           <CardHeader>
             <CardTitle className="text-base">Provisionsübersicht je Tenant (Monatsbasis)</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <div className="relative max-w-sm">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Tenant suchen…"
+                value={tenantSearch}
+                onChange={(e) => setTenantSearch(e.target.value)}
+                className="pl-8"
+              />
+            </div>
             {sortedTotals.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Noch keine Tenants zugeordnet.</p>
+              <p className="text-sm text-muted-foreground">{tenantSearch.trim() ? `Keine Treffer für „${tenantSearch}".` : "Noch keine Tenants zugeordnet."}</p>
             ) : (
               <Table>
                 <TableHeader>
@@ -315,9 +332,18 @@ export default function PartnerBilling() {
               <CardHeader>
                 <CardTitle className="text-base">Margenübersicht je Tenant (Monatsbasis)</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                <div className="relative max-w-sm">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Tenant suchen…"
+                    value={tenantSearch}
+                    onChange={(e) => setTenantSearch(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
                 {sortedTotals.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Noch keine Tenants zugeordnet.</p>
+                  <p className="text-sm text-muted-foreground">{tenantSearch.trim() ? `Keine Treffer für „${tenantSearch}".` : "Noch keine Tenants zugeordnet."}</p>
                 ) : (
                   <Table>
                     <TableHeader>

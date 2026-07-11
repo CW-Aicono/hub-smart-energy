@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Edit, Trash2, PlugZap } from "lucide-react";
+import { Plus, Edit, Trash2, PlugZap, Search } from "lucide-react";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
@@ -40,10 +40,21 @@ const SuperAdminOcppIntegrations = () => {
   const [form, setForm] = useState(emptyForm);
   const [filterVendor, setFilterVendor] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const filtered = chargerModels
     .filter(m => !filterType || m.charging_type === filterType)
-    .filter(m => !filterVendor || m.vendor === filterVendor);
+    .filter(m => !filterVendor || m.vendor === filterVendor)
+    .filter(m => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        m.vendor.toLowerCase().includes(q) ||
+        m.model.toLowerCase().includes(q) ||
+        (m.protocol ?? "").toLowerCase().includes(q) ||
+        (m.notes ?? "").toLowerCase().includes(q)
+      );
+    });
 
   const { sorted, sort, toggle } = useSortableData<ChargerModel, SortKey>(filtered, (r, k) => {
     switch (k) {
@@ -172,6 +183,15 @@ const SuperAdminOcppIntegrations = () => {
             </TabsList>
 
             <TabsContent value="models" className="mt-6 space-y-4">
+              <div className="relative max-w-sm">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Modell suchen (Hersteller, Modell, Protokoll)…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
               <div className="flex gap-2 flex-wrap">
                 <Badge variant={filterType === null ? "default" : "outline"} className="cursor-pointer" onClick={() => setFilterType(null)}>
                   Alle ({chargerModels.length})

@@ -1,12 +1,15 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PiggyBank, ExternalLink, TrendingUp, Handshake, LineChart, Sparkles } from "lucide-react";
+import { PiggyBank, ExternalLink, TrendingUp, Handshake, LineChart, Sparkles, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 const fmt = (n: number | null | undefined, d = 2) =>
   n == null ? "–" : Number(n).toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -187,6 +190,64 @@ export default function PartnerSavingsShare() {
   const totalSavings = settlements.reduce((s, r) => s + Number(r.total_savings_eur ?? 0), 0);
   const contractsById = new Map(contracts.map((c) => [c.id, c] as const));
 
+  const [contractSearch, setContractSearch] = useState("");
+  const [settlementSearch, setSettlementSearch] = useState("");
+  const filteredContracts = contractSearch.trim()
+    ? contracts.filter((c) => {
+        const q = contractSearch.toLowerCase();
+        return (
+          (c.tenants?.name ?? "").toLowerCase().includes(q) ||
+          (c.tenants?.slug ?? "").toLowerCase().includes(q) ||
+          (CONTRACT_STATUS[c.status] ?? c.status).toLowerCase().includes(q)
+        );
+      })
+    : contracts;
+  const filteredSettlements = settlementSearch.trim()
+    ? settlements.filter((s) => {
+        const q = settlementSearch.toLowerCase();
+        const c = contractsById.get(s.contract_id);
+        return (
+          (c?.tenants?.name ?? "").toLowerCase().includes(q) ||
+          (c?.tenants?.slug ?? "").toLowerCase().includes(q) ||
+          String(s.period_year).includes(q) ||
+          (SETTLE_STATUS[s.status] ?? s.status).toLowerCase().includes(q) ||
+          (s.invoice_ref ?? "").toLowerCase().includes(q)
+        );
+      })
+    : settlements;
+  const { sorted: sortedContracts, sort: contractSort, toggle: toggleContractSort } = useSortableData<any, "tenant" | "status" | "baseline" | "start" | "aicono" | "partner">(
+    filteredContracts,
+    (c, k) => {
+      switch (k) {
+        case "tenant": return c.tenants?.name ?? c.tenants?.slug ?? c.tenant_id;
+        case "status": return c.status;
+        case "baseline": return c.baseline_year;
+        case "start": return c.start_year;
+        case "aicono": return Number(c.aicono_share_pct);
+        case "partner": return Number(c.partner_share_pct_of_aicono);
+        default: return null;
+      }
+    },
+    { key: "tenant", direction: "asc" },
+  );
+  const { sorted: sortedSettlements, sort: settleSort, toggle: toggleSettleSort } = useSortableData<any, "tenant" | "year" | "status" | "total" | "aicono" | "partner" | "invoice">(
+    filteredSettlements,
+    (s, k) => {
+      const c = contractsById.get(s.contract_id);
+      switch (k) {
+        case "tenant": return c?.tenants?.name ?? c?.tenants?.slug ?? "";
+        case "year": return s.period_year;
+        case "status": return s.status;
+        case "total": return Number(s.total_savings_eur ?? 0);
+        case "aicono": return Number(s.aicono_amount_eur ?? 0);
+        case "partner": return Number(s.partner_amount_eur ?? 0);
+        case "invoice": return s.invoice_ref ?? "";
+        default: return null;
+      }
+    },
+    { key: "year", direction: "desc" },
+  );
+
   return (
     <div className="container mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-6 max-w-7xl">
       <div>
@@ -210,18 +271,31 @@ export default function PartnerSavingsShare() {
 
           <Card>
             <CardHeader><CardTitle>Verträge</CardTitle></CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="relative max-w-sm">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Vertrag suchen (Tenant, Status)…"
+                  value={contractSearch}
+                  onChange={(e) => setContractSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              {sortedContracts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{contractSearch.trim() ? `Keine Treffer für „${contractSearch}".` : "Keine Verträge."}</p>
+              ) : (
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Tenant</TableHead><TableHead>Status</TableHead>
-                  <TableHead className="text-right">Baseline-Jahr</TableHead>
-                  <TableHead className="text-right">Start</TableHead>
-                  <TableHead className="text-right">AICONO %</TableHead>
-                  <TableHead className="text-right">Partner-Anteil an AICONO %</TableHead>
+                  <SortableHead sortKey="tenant" sort={contractSort} onToggle={toggleContractSort}>Tenant</SortableHead>
+                  <SortableHead sortKey="status" sort={contractSort} onToggle={toggleContractSort}>Status</SortableHead>
+                  <SortableHead sortKey="baseline" sort={contractSort} onToggle={toggleContractSort} align="right">Baseline-Jahr</SortableHead>
+                  <SortableHead sortKey="start" sort={contractSort} onToggle={toggleContractSort} align="right">Start</SortableHead>
+                  <SortableHead sortKey="aicono" sort={contractSort} onToggle={toggleContractSort} align="right">AICONO %</SortableHead>
+                  <SortableHead sortKey="partner" sort={contractSort} onToggle={toggleContractSort} align="right">Partner-Anteil an AICONO %</SortableHead>
                   <TableHead />
                 </TableRow></TableHeader>
                 <TableBody>
-                  {contracts.map((c) => (
+                  {sortedContracts.map((c) => (
                     <TableRow key={c.id}>
                       <TableCell className="font-medium">{c.tenants?.name ?? c.tenants?.slug ?? c.tenant_id}</TableCell>
                       <TableCell><Badge variant="outline">{CONTRACT_STATUS[c.status] ?? c.status}</Badge></TableCell>
@@ -238,27 +312,39 @@ export default function PartnerSavingsShare() {
                   ))}
                 </TableBody>
               </Table>
+              )}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader><CardTitle>Abrechnungen</CardTitle></CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="relative max-w-sm">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Abrechnung suchen (Tenant, Jahr, Status, Rechnungs-Ref)…"
+                  value={settlementSearch}
+                  onChange={(e) => setSettlementSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
               {settlements.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Noch keine freigegebenen Abrechnungen.</p>
+              ) : sortedSettlements.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Keine Treffer für „{settlementSearch}".</p>
               ) : (
                 <Table>
                   <TableHeader><TableRow>
-                    <TableHead>Tenant</TableHead>
-                    <TableHead>Jahr</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Einsparung</TableHead>
-                    <TableHead className="text-right">AICONO-Anteil</TableHead>
-                    <TableHead className="text-right">Ihr Anteil</TableHead>
-                    <TableHead>Rechnung</TableHead>
+                    <SortableHead sortKey="tenant" sort={settleSort} onToggle={toggleSettleSort}>Tenant</SortableHead>
+                    <SortableHead sortKey="year" sort={settleSort} onToggle={toggleSettleSort}>Jahr</SortableHead>
+                    <SortableHead sortKey="status" sort={settleSort} onToggle={toggleSettleSort}>Status</SortableHead>
+                    <SortableHead sortKey="total" sort={settleSort} onToggle={toggleSettleSort} align="right">Einsparung</SortableHead>
+                    <SortableHead sortKey="aicono" sort={settleSort} onToggle={toggleSettleSort} align="right">AICONO-Anteil</SortableHead>
+                    <SortableHead sortKey="partner" sort={settleSort} onToggle={toggleSettleSort} align="right">Ihr Anteil</SortableHead>
+                    <SortableHead sortKey="invoice" sort={settleSort} onToggle={toggleSettleSort}>Rechnung</SortableHead>
                   </TableRow></TableHeader>
                   <TableBody>
-                    {settlements.map((s) => {
+                    {sortedSettlements.map((s) => {
                       const c = contractsById.get(s.contract_id);
                       return (
                         <TableRow key={s.id}>

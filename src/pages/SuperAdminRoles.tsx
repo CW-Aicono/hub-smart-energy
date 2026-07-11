@@ -1,4 +1,5 @@
 import { Navigate } from "react-router-dom";
+import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
@@ -6,7 +7,8 @@ import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Crown, Users, CheckCircle2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Shield, Crown, Users, CheckCircle2, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import CreateSAPermissionRoleDialog from "@/components/super-admin/CreateSAPermissionRoleDialog";
@@ -44,7 +46,14 @@ const SuperAdminRoles = () => {
     },
   });
 
-  const { sorted: sortedAdmins, sort: sortAdmins, toggle: toggleAdmins } = useSortableData<any, "name" | "email" | "since">(superAdmins, (r, k) => {
+  const [adminSearch, setAdminSearch] = useState("");
+  const filteredAdmins = adminSearch.trim()
+    ? superAdmins.filter((a: any) => {
+        const q = adminSearch.toLowerCase();
+        return (a.email ?? "").toLowerCase().includes(q) || (a.name ?? "").toLowerCase().includes(q);
+      })
+    : superAdmins;
+  const { sorted: sortedAdmins, sort: sortAdmins, toggle: toggleAdmins } = useSortableData<any, "name" | "email" | "since">(filteredAdmins, (r, k) => {
     switch (k) {
       case "name": return r.name;
       case "email": return r.email;
@@ -123,6 +132,17 @@ const SuperAdminRoles = () => {
               <CardDescription>{t("roles.sa_users_desc")}</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
+              <div className="p-4 pb-0">
+                <div className="relative max-w-sm">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Suchen (Name, Email)…"
+                    value={adminSearch}
+                    onChange={(e) => setAdminSearch(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>

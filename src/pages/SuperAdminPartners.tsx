@@ -13,10 +13,13 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Briefcase, Loader2, Plus, Mail, Users, AlertCircle, CheckCircle2, Send } from "lucide-react";
+import { Briefcase, Loader2, Plus, Mail, Users, AlertCircle, CheckCircle2, Send, Search } from "lucide-react";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { AuditLogList } from "@/components/audit/AuditLogList";
 import { writeAuditLog } from "@/lib/auditLog";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+
+type PartnerSortKey = "name" | "slug" | "contact" | "members" | "billing_mode" | "status";
 
 interface Partner {
   id: string;
@@ -129,6 +132,33 @@ export default function SuperAdminPartners() {
       return counts;
     },
   });
+
+  const [search, setSearch] = useState("");
+  const filteredPartners = partners.filter((p) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.slug.toLowerCase().includes(q) ||
+      (p.contact_email ?? "").toLowerCase().includes(q) ||
+      (p.billing_mode ?? "").toLowerCase().includes(q)
+    );
+  });
+  const { sorted: sortedPartners, sort: partnerSort, toggle: togglePartnerSort } = useSortableData<Partner, PartnerSortKey>(
+    filteredPartners,
+    (p, k) => {
+      switch (k) {
+        case "name": return p.name;
+        case "slug": return p.slug;
+        case "contact": return p.contact_email ?? "";
+        case "members": return memberCounts[p.id] ?? 0;
+        case "billing_mode": return p.billing_mode ?? "";
+        case "status": return p.is_active ? 1 : 0;
+        default: return null;
+      }
+    },
+    { key: "name", direction: "asc" },
+  );
 
   // Debounced Slug-Check (Create)
   useEffect(() => {
@@ -474,6 +504,16 @@ export default function SuperAdminPartners() {
         </Dialog>
       </header>
 
+      <div className="relative max-w-sm">
+        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Partner suchen (Name, Slug, Kontakt, Modell)…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-8"
+        />
+      </div>
+
       <div className="border rounded-lg overflow-x-auto bg-card">
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">
@@ -481,21 +521,23 @@ export default function SuperAdminPartners() {
           </div>
         ) : partners.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">Noch keine Partner angelegt.</div>
+        ) : sortedPartners.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground">Keine Treffer für „{search}".</div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Slug</TableHead>
-                <TableHead>Kontakt</TableHead>
-                <TableHead className="text-center"><Users className="h-4 w-4 inline" /></TableHead>
-                <TableHead>Modell</TableHead>
-                <TableHead>Status</TableHead>
+                <SortableHead sortKey="name" sort={partnerSort} onToggle={togglePartnerSort}>Name</SortableHead>
+                <SortableHead sortKey="slug" sort={partnerSort} onToggle={togglePartnerSort}>Slug</SortableHead>
+                <SortableHead sortKey="contact" sort={partnerSort} onToggle={togglePartnerSort}>Kontakt</SortableHead>
+                <SortableHead sortKey="members" sort={partnerSort} onToggle={togglePartnerSort}><Users className="h-4 w-4 inline" /></SortableHead>
+                <SortableHead sortKey="billing_mode" sort={partnerSort} onToggle={togglePartnerSort}>Modell</SortableHead>
+                <SortableHead sortKey="status" sort={partnerSort} onToggle={togglePartnerSort}>Status</SortableHead>
                 <TableHead className="text-right">Aktion</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {partners.map((p) => {
+              {sortedPartners.map((p) => {
                 const count = memberCounts[p.id] ?? 0;
                 const needsInvite = count === 0;
                 return (
