@@ -93,7 +93,7 @@ export default function SavingsShareReadOnly({ tenantId }: { tenantId: string })
                   const details = b.calculation_details ?? {};
                   return (
                     <TableRow key={b.id}>
-                      <TableCell className="font-medium">{b.energy_type}</TableCell>
+                      <TableCell className="font-medium">{formatEnergyType(b.energy_type)}</TableCell>
                       <TableCell className="text-right">{fmtInt(b.baseline_kwh_normalized)}</TableCell>
                       <TableCell><Badge variant="outline">{QUALITY_LABEL[b.data_quality ?? "unknown"] ?? b.data_quality}</Badge><div className="text-xs text-muted-foreground mt-1">{b.coverage_months ?? 0}/12 Monate</div></TableCell>
                       <TableCell className="text-xs text-muted-foreground">{date(details.first_period)} – {date(details.last_period)}</TableCell>
