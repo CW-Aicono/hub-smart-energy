@@ -11,6 +11,8 @@ export interface SavingsSettlement {
   status: SettlementStatus;
   per_energy_type: Array<{
     energy_type: string; baseline_kwh: number; actual_kwh: number;
+    baseline_quality?: string; baseline_coverage_months?: number | null;
+    actual_coverage_months?: number; actual_source_period_type?: string;
     hdd_factor: number; avg_price_eur_per_kwh: number;
     savings_kwh: number; savings_eur: number;
   }>;
@@ -24,6 +26,25 @@ export interface SavingsSettlement {
   notes: string | null;
   created_at: string;
   updated_at: string;
+}
+
+async function invokeFunction<T>(name: string, body: Record<string, unknown>): Promise<T> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error("Keine aktive Sitzung. Bitte erneut anmelden.");
+
+  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.error) throw new Error(payload?.error || `Funktion fehlgeschlagen (${response.status})`);
+  return payload as T;
 }
 
 export function useTenantSavingsSettlements(contractId: string | null) {
@@ -46,12 +67,7 @@ export function useTenantSavingsSettlements(contractId: string | null) {
   const calculate = useMutation({
     mutationFn: async (periodYear: number) => {
       if (!contractId) throw new Error("Kein Vertrag");
-      const { data, error } = await supabase.functions.invoke("savings-share-calculate", {
-        body: { contract_id: contractId, period_year: periodYear },
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      return data;
+      return invokeFunction("savings-share-calculate", { contract_id: contractId, period_year: periodYear });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tenant-savings-settlements", contractId] });
