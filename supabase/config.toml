@@ -17,3 +17,9 @@ verify_jwt = false
 
 [functions.worker-killswitch]
 verify_jwt = false
+
+[functions.savings-share-baseline]
+verify_jwt = true
+
+[functions.savings-share-calculate]
+verify_jwt = true
