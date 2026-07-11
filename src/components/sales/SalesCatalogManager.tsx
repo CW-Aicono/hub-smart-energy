@@ -182,12 +182,23 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
   const ownItems = items.filter((i) => i.owner_scope === "partner" && i.partner_id === partnerId);
   const globalItems = items.filter((i) => i.owner_scope === "global");
   const baseList = scope === "partner" ? (tab === "own" ? ownItems : globalItems) : items;
-  const filtered =
+  const classFiltered =
     classFilter === "all"
       ? baseList
       : classFilter === NO_CLASS
         ? baseList.filter((i) => !i.geraete_klasse)
         : baseList.filter((i) => i.geraete_klasse === classFilter);
+  const filtered = search.trim()
+    ? classFiltered.filter((i) => {
+        const q = search.toLowerCase();
+        return (
+          (i.hersteller ?? "").toLowerCase().includes(q) ||
+          (i.modell ?? "").toLowerCase().includes(q) ||
+          (i.artikelnummer ?? "").toLowerCase().includes(q) ||
+          (i.ean ?? "").toLowerCase().includes(q)
+        );
+      })
+    : classFiltered;
   const classCounts = DEVICE_CLASSES.map((c) => ({
     ...c,
     count:
