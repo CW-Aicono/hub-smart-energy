@@ -132,6 +132,17 @@ const SuperAdminRoles = () => {
               <CardDescription>{t("roles.sa_users_desc")}</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
+              <div className="p-4 pb-0">
+                <div className="relative max-w-sm">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Suchen (Name, Email)…"
+                    value={adminSearch}
+                    onChange={(e) => setAdminSearch(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>
