@@ -488,6 +488,22 @@ const SuperAdminGatewayFleet = () => {
     enabled: !!isSuperAdmin,
   });
 
+  const { sorted: sortedChannels, sort: chanSort, toggle: toggleChanSort } = useSortableData<ReleaseChannel, "channel" | "version" | "image" | "released" | "latest">(
+    channels,
+    (c, k) => {
+      switch (k) {
+        case "channel": return c.channel;
+        case "version": return c.version;
+        case "image": return c.image_ref;
+        case "released": return c.released_at ? new Date(c.released_at) : null;
+        case "latest": return c.is_latest ? 1 : 0;
+        default: return null;
+      }
+    },
+    { key: "released", direction: "desc" },
+  );
+
+
   const { data: jobs = [], refetch: refetchJobs } = useQuery({
     queryKey: ["sa-gateway-jobs"],
     queryFn: async () => {
