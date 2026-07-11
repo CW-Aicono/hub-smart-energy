@@ -312,6 +312,7 @@ export default function PartnerSavingsShare() {
                   ))}
                 </TableBody>
               </Table>
+              )}
             </CardContent>
           </Card>
 
