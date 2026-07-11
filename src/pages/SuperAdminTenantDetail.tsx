@@ -407,7 +407,7 @@ const SuperAdminTenantDetail = () => {
   );
 
   const { sorted: sortedModules, sort: moduleSort, toggle: toggleModuleSort } = useSortableData<any, "label" | "enabled" | "global" | "override" | "effective">(
-    ALL_MODULES,
+    [...ALL_MODULES] as any[],
     (mod, k) => {
       const isAlwaysOn = "alwaysOn" in mod;
       const isMember = !!(tenant as any)?.is_aicono_member;
