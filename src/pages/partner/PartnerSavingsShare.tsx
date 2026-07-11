@@ -1,12 +1,15 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PiggyBank, ExternalLink, TrendingUp, Handshake, LineChart, Sparkles } from "lucide-react";
+import { PiggyBank, ExternalLink, TrendingUp, Handshake, LineChart, Sparkles, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 const fmt = (n: number | null | undefined, d = 2) =>
   n == null ? "–" : Number(n).toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
