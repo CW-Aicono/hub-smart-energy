@@ -96,6 +96,10 @@ export const SALES_MODULE_LABELS: Record<string, ModuleLabel> = {
     title: "Ladeabrechnung",
     description: "Abrechnung von Ladevorgängen inkl. Rechnungserstellung.",
   },
+  gain_sharing: {
+    title: "Gain-Sharing (Einsparbeteiligung)",
+    description: "AICONO wird prozentual an den jährlichen Energiekosten-Einsparungen des Mandanten beteiligt (witterungsbereinigte Baseline, optionaler Partner-Split).",
+  },
 };
 
 /** Gibt den DE-Titel eines Modul-Codes zurück; fällt auf den Code selbst zurück. */

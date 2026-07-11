@@ -11653,6 +11653,174 @@ export type Database = {
           },
         ]
       }
+      tenant_savings_baselines: {
+        Row: {
+          baseline_hdd: number | null
+          baseline_kwh_normalized: number
+          baseline_kwh_raw: number
+          baseline_source: Database["public"]["Enums"]["savings_baseline_source"]
+          contract_id: string
+          created_at: string
+          energy_type: string
+          id: string
+          override_reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          baseline_hdd?: number | null
+          baseline_kwh_normalized?: number
+          baseline_kwh_raw?: number
+          baseline_source?: Database["public"]["Enums"]["savings_baseline_source"]
+          contract_id: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          override_reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          baseline_hdd?: number | null
+          baseline_kwh_normalized?: number
+          baseline_kwh_raw?: number
+          baseline_source?: Database["public"]["Enums"]["savings_baseline_source"]
+          contract_id?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          override_reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_savings_baselines_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_savings_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_savings_contracts: {
+        Row: {
+          aicono_share_pct: number
+          baseline_year: number
+          created_at: string
+          created_by: string | null
+          fixed_price_eur_per_kwh: Json
+          id: string
+          notes: string | null
+          partner_share_pct_of_aicono: number
+          price_basis: Database["public"]["Enums"]["savings_price_basis"]
+          start_year: number
+          status: Database["public"]["Enums"]["savings_contract_status"]
+          tenant_id: string
+          updated_at: string
+          weather_normalize: boolean
+        }
+        Insert: {
+          aicono_share_pct?: number
+          baseline_year: number
+          created_at?: string
+          created_by?: string | null
+          fixed_price_eur_per_kwh?: Json
+          id?: string
+          notes?: string | null
+          partner_share_pct_of_aicono?: number
+          price_basis?: Database["public"]["Enums"]["savings_price_basis"]
+          start_year: number
+          status?: Database["public"]["Enums"]["savings_contract_status"]
+          tenant_id: string
+          updated_at?: string
+          weather_normalize?: boolean
+        }
+        Update: {
+          aicono_share_pct?: number
+          baseline_year?: number
+          created_at?: string
+          created_by?: string | null
+          fixed_price_eur_per_kwh?: Json
+          id?: string
+          notes?: string | null
+          partner_share_pct_of_aicono?: number
+          price_basis?: Database["public"]["Enums"]["savings_price_basis"]
+          start_year?: number
+          status?: Database["public"]["Enums"]["savings_contract_status"]
+          tenant_id?: string
+          updated_at?: string
+          weather_normalize?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_savings_contracts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_savings_settlements: {
+        Row: {
+          aicono_amount_eur: number
+          approved_at: string | null
+          approved_by: string | null
+          contract_id: string
+          created_at: string
+          id: string
+          invoice_ref: string | null
+          notes: string | null
+          partner_amount_eur: number
+          per_energy_type: Json
+          period_year: number
+          status: Database["public"]["Enums"]["savings_settlement_status"]
+          tenant_retained_eur: number
+          total_savings_eur: number
+          updated_at: string
+        }
+        Insert: {
+          aicono_amount_eur?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          contract_id: string
+          created_at?: string
+          id?: string
+          invoice_ref?: string | null
+          notes?: string | null
+          partner_amount_eur?: number
+          per_energy_type?: Json
+          period_year: number
+          status?: Database["public"]["Enums"]["savings_settlement_status"]
+          tenant_retained_eur?: number
+          total_savings_eur?: number
+          updated_at?: string
+        }
+        Update: {
+          aicono_amount_eur?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          contract_id?: string
+          created_at?: string
+          id?: string
+          invoice_ref?: string | null
+          notes?: string | null
+          partner_amount_eur?: number
+          per_energy_type?: Json
+          period_year?: number
+          status?: Database["public"]["Enums"]["savings_settlement_status"]
+          tenant_retained_eur?: number
+          total_savings_eur?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_savings_settlements_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_savings_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_self_tariffs: {
         Row: {
           base_fee_monthly: number
@@ -12853,6 +13021,18 @@ export type Database = {
         | "gewerbe"
         | "privat"
       partner_member_role: "partner_admin" | "partner_user"
+      savings_baseline_source:
+        | "auto_from_meters"
+        | "manual_override"
+        | "invoice_based"
+      savings_contract_status: "draft" | "active" | "paused" | "terminated"
+      savings_price_basis: "current_year_avg" | "contract_fixed"
+      savings_settlement_status:
+        | "draft"
+        | "approved"
+        | "invoiced"
+        | "paid"
+        | "void"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -13023,6 +13203,20 @@ export const Constants = {
         "privat",
       ],
       partner_member_role: ["partner_admin", "partner_user"],
+      savings_baseline_source: [
+        "auto_from_meters",
+        "manual_override",
+        "invoice_based",
+      ],
+      savings_contract_status: ["draft", "active", "paused", "terminated"],
+      savings_price_basis: ["current_year_avg", "contract_fixed"],
+      savings_settlement_status: [
+        "draft",
+        "approved",
+        "invoiced",
+        "paid",
+        "void",
+      ],
     },
   },
 } as const

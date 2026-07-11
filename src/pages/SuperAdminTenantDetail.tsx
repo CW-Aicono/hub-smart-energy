@@ -18,7 +18,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock, Pencil, Save, Blocks, Plus, X, Award, Trash2, Send, CalendarClock, FileSearch } from "lucide-react";
+import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock, Pencil, Save, Blocks, Plus, X, Award, Trash2, Send, CalendarClock, FileSearch, Euro } from "lucide-react";
 import { AuditLogList } from "@/components/audit/AuditLogList";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import {
@@ -33,6 +33,7 @@ import {
   DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import TenantPartnerTransferCard from "@/components/super-admin/TenantPartnerTransferCard";
+import SavingsShareTab from "@/components/super-admin/savings-share/SavingsShareTab";
 
 interface InviteTenantAdminDialogProps {
   tenantId: string;
@@ -466,6 +467,7 @@ const SuperAdminTenantDetail = () => {
               <TabsTrigger value="license">{t("tenant_detail.license")}</TabsTrigger>
               <TabsTrigger value="users">{t("nav.users")}</TabsTrigger>
               <TabsTrigger value="billing"><Receipt className="h-4 w-4 mr-1" />{t("tenant_detail.billing")}</TabsTrigger>
+              <TabsTrigger value="gain_sharing"><Euro className="h-4 w-4 mr-1" />Gain-Sharing</TabsTrigger>
               <TabsTrigger value="audit"><FileSearch className="h-4 w-4 mr-1" />Aktivitätslog</TabsTrigger>
             </TabsList>
 
@@ -1254,7 +1256,17 @@ const SuperAdminTenantDetail = () => {
               </Card>
             </TabsContent>
 
+            <TabsContent value="gain_sharing" className="mt-6">
+              {id && (
+                <SavingsShareTab
+                  tenantId={id}
+                  moduleEnabled={modules.some((m) => m.module_code === "gain_sharing" && m.is_enabled)}
+                />
+              )}
+            </TabsContent>
+
             <TabsContent value="audit" className="mt-6">
+
               <AuditLogList tenantId={id} title="Aktivitätslog dieses Mandanten" />
             </TabsContent>
           </Tabs>
