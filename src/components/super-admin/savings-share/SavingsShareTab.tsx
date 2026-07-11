@@ -266,7 +266,7 @@ function BaselineCard({ contract, baselines, recalc, override, createManual, dia
                       <Dialog open={dialogOpen === b.id} onOpenChange={(o) => { setDialogOpen(o ? b.id : null); if (o) { setOverrideVal(String(b.baseline_kwh_normalized)); setReason(b.override_reason ?? ""); } }}>
                         <DialogTrigger asChild><Button size="sm" variant="ghost"><Pencil className="w-4 h-4" /></Button></DialogTrigger>
                         <DialogContent>
-                          <DialogHeader><DialogTitle>Baseline überschreiben – {b.energy_type}</DialogTitle></DialogHeader>
+                          <DialogHeader><DialogTitle>Baseline überschreiben – {formatEnergyType(b.energy_type)}</DialogTitle></DialogHeader>
                           <div className="space-y-3">
                             <div><Label>Bereinigter Verbrauch (kWh)</Label><Input type="number" value={overrideVal} onChange={e => setOverrideVal(e.target.value)} /></div>
                             <div><Label>Begründung</Label><Textarea value={reason} onChange={e => setReason(e.target.value)} /></div>
