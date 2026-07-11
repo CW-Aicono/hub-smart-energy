@@ -1285,17 +1285,17 @@ const SuperAdminTenantDetail = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{t("tenant_detail.date_time")}</TableHead>
-                        <TableHead>{t("support.reason")}</TableHead>
-                        <TableHead className="text-right">{t("tenant_detail.duration")}</TableHead>
-                        <TableHead className="text-right">{t("tenant_detail.cost")}</TableHead>
+                        <SortableHead sortKey="date" sort={supportSort} onToggle={toggleSupportSort}>{t("tenant_detail.date_time")}</SortableHead>
+                        <SortableHead sortKey="reason" sort={supportSort} onToggle={toggleSupportSort}>{t("support.reason")}</SortableHead>
+                        <SortableHead sortKey="duration" sort={supportSort} onToggle={toggleSupportSort} align="right">{t("tenant_detail.duration")}</SortableHead>
+                        <SortableHead sortKey="cost" sort={supportSort} onToggle={toggleSupportSort} align="right">{t("tenant_detail.cost")}</SortableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {supportSessions.length === 0 ? (
+                      {sortedSupportSessions.length === 0 ? (
                         <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t("tenant_detail.no_support_sessions")}</TableCell></TableRow>
                       ) : (
-                        supportSessions.map((s: any) => {
+                        sortedSupportSessions.map((s: any) => {
                           const durMin = calcSessionDurationMin(s);
                           const cost = calcSessionCost(s);
                           return (
