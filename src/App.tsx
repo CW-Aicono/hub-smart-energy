@@ -23,6 +23,7 @@ import PartnerSalesRules from "@/pages/partner/PartnerSalesRules";
 import PartnerBranding from "@/pages/partner/PartnerBranding";
 import PartnerReporting from "@/pages/partner/PartnerReporting";
 import PartnerTenantDetail from "@/pages/partner/PartnerTenantDetail";
+import PartnerSavingsShare from "@/pages/partner/PartnerSavingsShare";
 import RecoveryGuard from "@/components/RecoveryGuard";
 import MustChangePasswordGuard from "@/components/MustChangePasswordGuard";
 import { ChunkErrorBoundary } from "@/components/ChunkErrorBoundary";
