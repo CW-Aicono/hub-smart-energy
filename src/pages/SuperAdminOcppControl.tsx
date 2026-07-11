@@ -49,9 +49,22 @@ const SuperAdminOcppControl = () => {
   const filteredCPIds = new Set(filteredCPs.map(cp => cp.id));
 
   // Filter sessions by tenant via charge points
-  const filteredSessions = tenantFilter === "all"
+  const filteredSessionsByTenant = tenantFilter === "all"
     ? sessions
     : sessions.filter(s => s.charge_point_id && filteredCPIds.has(s.charge_point_id));
+
+  const filteredSessions = search.trim()
+    ? filteredSessionsByTenant.filter((s: any) => {
+        const q = search.toLowerCase();
+        return (
+          getTenantName(s.tenant_id).toLowerCase().includes(q) ||
+          getCPName(s.charge_point_id).toLowerCase().includes(q) ||
+          (s.id_tag ?? "").toLowerCase().includes(q) ||
+          (s.status ?? "").toLowerCase().includes(q) ||
+          (s.stop_reason ?? "").toLowerCase().includes(q)
+        );
+      })
+    : filteredSessionsByTenant;
 
   const { sorted, sort, toggle } = useSortableData<any, SortKey>(filteredSessions, (r, k) => {
     switch (k) {
