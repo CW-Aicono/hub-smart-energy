@@ -80,7 +80,18 @@ export default function PartnerMembers() {
 
   const canManage = isPartnerAdmin || permissions.manageMembers;
 
-  const { sorted, sort, toggle } = useSortableData<MemberRow, "name" | "email" | "role" | "created_at">(rows, (r, k) => {
+  const [search, setSearch] = useState("");
+  const filteredRows = search.trim()
+    ? rows.filter((r) => {
+        const q = search.toLowerCase();
+        return (
+          (r.email ?? "").toLowerCase().includes(q) ||
+          (r.contact_person ?? "").toLowerCase().includes(q) ||
+          r.partner_role.toLowerCase().includes(q)
+        );
+      })
+    : rows;
+  const { sorted, sort, toggle } = useSortableData<MemberRow, "name" | "email" | "role" | "created_at">(filteredRows, (r, k) => {
     switch (k) {
       case "name": return r.contact_person ?? "";
       case "email": return r.email ?? "";
