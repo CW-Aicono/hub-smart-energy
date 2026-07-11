@@ -133,6 +133,33 @@ export default function SuperAdminPartners() {
     },
   });
 
+  const [search, setSearch] = useState("");
+  const filteredPartners = partners.filter((p) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.slug.toLowerCase().includes(q) ||
+      (p.contact_email ?? "").toLowerCase().includes(q) ||
+      (p.billing_mode ?? "").toLowerCase().includes(q)
+    );
+  });
+  const { sorted: sortedPartners, sort: partnerSort, toggle: togglePartnerSort } = useSortableData<Partner, PartnerSortKey>(
+    filteredPartners,
+    (p, k) => {
+      switch (k) {
+        case "name": return p.name;
+        case "slug": return p.slug;
+        case "contact": return p.contact_email ?? "";
+        case "members": return memberCounts[p.id] ?? 0;
+        case "billing_mode": return p.billing_mode ?? "";
+        case "status": return p.is_active ? 1 : 0;
+        default: return null;
+      }
+    },
+    { key: "name", direction: "asc" },
+  );
+
   // Debounced Slug-Check (Create)
   useEffect(() => {
     if (!slug) { setSlugStatus({ kind: "idle" }); return; }
