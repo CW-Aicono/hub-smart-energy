@@ -165,7 +165,12 @@ export default function PartnerBilling() {
     }
   }, { key: "name", direction: "asc" });
 
-  const { sorted: sortedModules, sort: sortModules, toggle: toggleModules } = useSortableData<any, "label" | "purchase" | "recommended" | "sale" | "margin">(editableModules, (mod, k) => {
+  const [moduleSearch, setModuleSearch] = useState("");
+  const filteredEditableModules = moduleSearch.trim()
+    ? editableModules.filter((m: any) => (m.label ?? "").toLowerCase().includes(moduleSearch.toLowerCase()))
+    : editableModules;
+
+  const { sorted: sortedModules, sort: sortModules, toggle: toggleModules } = useSortableData<any, "label" | "purchase" | "recommended" | "sale" | "margin">(filteredEditableModules, (mod, k) => {
     const isKommune = sector === "kommune";
     const purchase = purchasePrice(mod.code, isKommune);
     const recommended = recommendedSale(mod.code, isKommune);
