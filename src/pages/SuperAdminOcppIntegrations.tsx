@@ -40,10 +40,21 @@ const SuperAdminOcppIntegrations = () => {
   const [form, setForm] = useState(emptyForm);
   const [filterVendor, setFilterVendor] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const filtered = chargerModels
     .filter(m => !filterType || m.charging_type === filterType)
-    .filter(m => !filterVendor || m.vendor === filterVendor);
+    .filter(m => !filterVendor || m.vendor === filterVendor)
+    .filter(m => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        m.vendor.toLowerCase().includes(q) ||
+        m.model.toLowerCase().includes(q) ||
+        (m.protocol ?? "").toLowerCase().includes(q) ||
+        (m.notes ?? "").toLowerCase().includes(q)
+      );
+    });
 
   const { sorted, sort, toggle } = useSortableData<ChargerModel, SortKey>(filtered, (r, k) => {
     switch (k) {
