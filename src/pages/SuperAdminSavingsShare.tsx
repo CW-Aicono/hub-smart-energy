@@ -186,6 +186,8 @@ export default function SuperAdminSavingsShare() {
                   ))}
                 </TableBody>
               </Table>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
