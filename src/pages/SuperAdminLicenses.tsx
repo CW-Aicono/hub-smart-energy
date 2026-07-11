@@ -34,6 +34,7 @@ const SuperAdminLicenses = () => {
   const { t } = useSATranslation();
   const qc = useQueryClient();
   const [cancelTarget, setCancelTarget] = useState<{ id: string; tenant: string } | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data: licenses = [] } = useQuery({
     queryKey: ["super-admin-licenses"],
