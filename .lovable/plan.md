@@ -1,54 +1,103 @@
-# Tenant-Transfer (Partner ↔ Partner ↔ Super-Admin)
-
 ## Ziel
-Super-Admin kann einen Tenant von einem Partner auf einen anderen Partner übertragen — oder in die direkte Super-Admin-Verwaltung („Platform") zurückholen. Vorgang inkl. Audit-Log, Wechsel des Remote-Support-Zugriffs und optionaler Benachrichtigung.
+Prozentuale Beteiligung von AICONO (und optional Partner) an den jährlichen **Energiekosten-Einsparungen** eines Tenants. Baseline = historisches Referenzjahr, witterungsbereinigt. Ein Vertrag pro Tenant, umfasst alle Liegenschaften & Energiearten.
 
-## Scope
-- Nur Super-Admin darf transferieren (keine Partner-Selbstbedienung).
-- Betroffene Felder auf `tenants`: `partner_id` (kann NULL = Platform), `support_owner` (`partner` | `platform`).
-- Historische Zuordnung wird in einem neuen Audit-Table protokolliert.
+**Aktivierung:** Gain-Sharing ist ein eigenständiges, pro Tenant schaltbares Modul (analog zu Ladeinfrastruktur, Aufgabenverwaltung, Mieterstrom).
 
-## Umsetzung
+## Phasen
 
-### 1. Datenmodell
-Neue Tabelle `tenant_partner_transfers` (Audit/Historie):
-- `tenant_id`, `from_partner_id` (nullable), `to_partner_id` (nullable), `from_support_owner`, `to_support_owner`, `reason` (text), `performed_by` (auth user), `created_at`.
-- RLS: nur `super_admin` darf SELECT/INSERT; `service_role` all.
+### Phase 0 — Modul-Registrierung
+- Neuer Modul-Code `gain_sharing` in `ALL_MODULES` (`src/hooks/useTenantModules.tsx`), Label „Gain-Sharing (Einsparbeteiligung)".
+- Eintrag in `SALES_MODULE_LABELS` (`src/lib/salesModuleLabels.ts`) für Sales-Scout/Angebote.
+- Route-Mapping in `ROUTE_MODULE_MAP` und `NAV_MODULE_MAP` (`src/hooks/useModuleGuard.tsx`) für `/super-admin/savings-share` bzw. Tenant-Ansicht.
+- Optional: Eintrag in `module_prices` als Migrationsseed (Standardpreis 0 €, konfigurierbar durch Super-Admin).
+- Super-Admin Tenant-Modul-Dialog (`TenantModulesDialog`) erhält Schalter automatisch via `ALL_MODULES`.
+- Regeln:
+  - Nur wenn `gain_sharing` für Tenant aktiv: Tab „Einsparbeteiligung" im Super-Admin Tenant-Detail sichtbar, Tenant erscheint in `/super-admin/savings-share`-Übersicht, Partner-Read-View filtert entsprechend.
+  - Deaktivierung sperrt UI (readonly-Hinweis), löscht **keine** bestehenden Verträge/Baselines/Settlements — Reaktivierung ist verlustfrei.
 
-### 2. Edge Function `super-admin-transfer-tenant`
-Input: `{ tenant_id, target_partner_id | null, reason }`
-Ablauf:
-1. JWT prüfen, `has_role(user, 'super_admin')` erzwingen.
-2. Alten `partner_id` / `support_owner` lesen.
-3. `tenants` updaten:
-   - `partner_id = target_partner_id` (oder NULL)
-   - `support_owner = target_partner_id ? 'partner' : 'platform'`
-4. Zeile in `tenant_partner_transfers` schreiben.
-5. `audit_logs` Eintrag (`action = 'tenant.partner_transfer'`).
-6. Ergebnis zurückgeben.
+### Phase 1 — Datenmodell & Vertrag (Super-Admin only)
+Neue Tabellen im `public`-Schema (mit GRANTs + RLS `has_role(auth.uid(),'super_admin')`):
 
-Kein Löschen von Daten des Tenants; nur Ownership-Wechsel. Bestehende Partner-Members verlieren dadurch automatisch Zugriff (RLS läuft über `tenants.partner_id`).
+**`tenant_savings_contracts`** — genau 1 aktiver Vertrag pro Tenant
+- `tenant_id` (FK), `status` (`draft|active|paused|terminated`)
+- `baseline_year` (int), `start_year` (int, ab wann Beteiligung abgerechnet wird)
+- `aicono_share_pct` (numeric 0–100)
+- `partner_share_pct_of_aicono` (numeric 0–100, default 0)
+- `weather_normalize` (bool, default true)
+- `price_basis` (`current_year_avg` | `contract_fixed`), `fixed_price_eur_per_kwh` (JSON je Energieart)
+- `notes`, `created_by`, Timestamps
+- Partial Unique Index: nur ein `status='active'` je `tenant_id`
 
-### 3. UI im Super-Admin
-Auf der Super-Admin Tenant-Detailseite (bzw. Tenants-Liste, Zeilen-Aktion) neuer Button „Partner wechseln":
-- Dialog mit:
-  - Aktueller Partner (readonly).
-  - Ziel: Dropdown aller aktiven Partner + Option „Direkt Super-Admin (Platform)".
-  - Grund (Pflicht-Textfeld, min. 5 Zeichen).
-  - Warnhinweis: alter Partner verliert sofort Zugriff & Remote-Support.
-- Bestätigen ruft die Edge Function auf, invalidiert Tenant-Queries.
+**`tenant_savings_baselines`** — Baseline je Energieart (Aggregat über alle Liegenschaften)
+- `contract_id`, `energy_type`
+- `baseline_kwh_raw`, `baseline_hdd` (nullable, nur Heizenergien)
+- `baseline_kwh_normalized`, `baseline_source` (`auto_from_meters | manual_override | invoice_based`)
+- `override_reason` (nullable)
+- Unique (`contract_id`, `energy_type`)
 
-### 4. Historie-Ansicht
-Im Tenant-Detail (Super-Admin) neuer Abschnitt „Partner-Historie": Liste aller Einträge aus `tenant_partner_transfers` (Von → Nach, Grund, Datum, Ausführender).
+**`tenant_savings_settlements`** — Jahresabschluss
+- `contract_id`, `period_year`, `status` (`draft|approved|invoiced|paid|void`)
+- JSON `per_energy_type` (Snapshot: baseline_kwh, actual_kwh, hdd_factor, avg_price, savings_kwh, savings_eur)
+- `total_savings_eur`, `aicono_amount_eur`, `partner_amount_eur`, `tenant_retained_eur`
+- `approved_by`, `approved_at`, `invoice_ref` (Lexware später)
+- Unique (`contract_id`, `period_year`)
 
-### 5. Nicht enthalten (bewusst)
-- Kein Zustimmungs-Workflow des neuen Partners (Super-Admin-Aktion).
-- Kein automatisches E-Mail-Versenden (kann in Folge-Story ergänzt werden).
-- Partner-Selfservice („Tenant abgeben") ausdrücklich ausgeschlossen.
+### Phase 2 — Berechnungslogik (Edge Functions)
+**`savings-share-baseline`** — Erstberechnung / Neuberechnung Baseline
+- Historische Daten via `get_meter_period_sums_with_fallback` für `baseline_year`, aggregiert je Energieart über alle Tenant-Meter (Verbrauchsseite).
+- Holt HDD für alle Liegenschaften des Tenants → gewichtetes HDD.
+- Speichert `baseline_kwh_raw` + `baseline_kwh_normalized`. Manueller Override via UI.
+
+**`savings-share-calculate`** — Settlement für ein Jahr
+1. Ist-Verbrauch je Energieart (Aggregat) für `period_year`.
+2. Witterungsbereinigung Heizenergien: `actual_norm = actual * (baseline_hdd / period_hdd)`.
+3. Preis-Ermittlung: Jahresmittel aus `energy_prices` gewichtet nach Verbrauch, oder Vertrags-Fixpreis.
+4. `savings_kwh = baseline_norm - actual_norm`; `savings_eur = savings_kwh * price`. Negative Werte = 0.
+5. `aicono_amount = total_savings * aicono_share_pct/100`; `partner_amount = aicono_amount * partner_share_pct_of_aicono/100`; `tenant_retained = total - aicono_amount`.
+6. Snapshot als `draft` speichern.
+
+Beide Functions: JWT-Check auf `super_admin` **und** Modulcheck (`gain_sharing` für Tenant aktiv) — sonst 403.
+
+### Phase 3 — Super-Admin UI
+**Neuer Tab „Einsparbeteiligung" in `SuperAdminTenantDetail`** (nur wenn Modul aktiv):
+- Karte: Vertragsstatus, Kern-Parameter, Buttons „Bearbeiten" / „Aktivieren" / „Pausieren".
+- Karte „Baseline": Tabelle je Energieart (raw, normalized, HDD, Quelle), Actions „Neu berechnen" + „Manuell überschreiben" (Dialog mit Begründung).
+- Karte „Abrechnungen": Liste aller Jahre, Status-Badge, Summe, Aufteilung. Buttons: „Für Jahr X berechnen", „Freigeben", „Auf gezahlt setzen", „Details" (Drilldown).
+
+Bei inaktivem Modul: Hinweis-Karte „Modul Gain-Sharing für diesen Tenant nicht aktiv" mit Direktlink zum Modul-Dialog.
+
+**Neue Übersichtsseite `/super-admin/savings-share`** (via `ModuleGuard` an `gain_sharing` gebunden, filtert auf Tenants mit aktivem Modul):
+- KPI-Kacheln: aktive Verträge, Gesamt-Einsparung laufendes Jahr, offene Settlements, ausstehendes AICONO-Volumen.
+- Tabelle aller Tenants mit aktivem Vertrag, Link → Tenant-Detail-Tab.
+
+Alle Zahlen im deutschen Format (`toLocaleString("de-DE")`).
+
+### Phase 4 — Partner-Sichtbarkeit (read-only)
+- Im Partner-Portal neuer Menüpunkt „Einsparbeteiligung": Liste eigener Tenants **mit aktivem `gain_sharing`-Modul**, freigegebene Settlements + Partner-Anteil. Kein Edit, keine Rohdaten-Baseline.
+
+## Bewusst NICHT in diesem Plan
+- Automatischer Rechnungsversand / Lexware-Buchung → separate Story, nutzt `invoice_ref`.
+- Beteiligung pro Liegenschaft (Datenmodell erweiterbar).
+- CO2- oder PV-Erlös-Beteiligung.
+- Tenant-Self-Service-Ansicht.
+- Automatische Jahres-Trigger (pg_cron) — vorerst manuell.
 
 ## Betroffene Dateien (geplant)
-- Migration: neue Tabelle `tenant_partner_transfers` + RLS + GRANTs.
-- Neu: `supabase/functions/super-admin-transfer-tenant/index.ts`.
-- Neu: `src/components/super-admin/TransferTenantDialog.tsx`.
-- Neu: `src/components/super-admin/TenantPartnerHistory.tsx`.
-- Edit: Super-Admin Tenant-Detail/Listen-Seite (Aktion einbinden).
+- Migration: 3 neue Tabellen + GRANTs + RLS + Trigger + Partial-Unique-Index; optional Seed `module_prices`.
+- Edit: `src/hooks/useTenantModules.tsx` (Modul-Code `gain_sharing`).
+- Edit: `src/hooks/useModuleGuard.tsx` (Route-Mapping).
+- Edit: `src/lib/salesModuleLabels.ts` (Sales-Label).
+- Neu: `supabase/functions/savings-share-baseline/index.ts`, `savings-share-calculate/index.ts`
+- Neu: `src/hooks/useTenantSavingsContract.ts`, `useTenantSavingsSettlements.ts`
+- Neu: `src/components/super-admin/savings-share/` (ContractCard, BaselineTable, SettlementsTable, SettlementDetailDialog, ManualOverrideDialog)
+- Neu: `src/pages/SuperAdminSavingsShare.tsx` + Route (mit `ModuleGuard`)
+- Edit: `src/pages/SuperAdminTenantDetail.tsx` (neuer Tab, modul-gated).
+- Edit: `src/components/super-admin/SuperAdminSidebar.tsx` (Menüpunkt).
+- Phase 4: `src/pages/PartnerSavingsShare.tsx` + Partner-Sidebar-Eintrag.
+
+## Reihenfolge der Umsetzung
+1. Modul-Registrierung (`gain_sharing`) + Migration Tabellen
+2. Baseline-Edge-Function + Vertrags-CRUD-UI + Baseline-UI (modul-gated)
+3. Calculate-Edge-Function + Settlements-UI + Freigabe-Workflow
+4. Übersichtsseite `/super-admin/savings-share`
+5. Partner-Read-View
