@@ -11,9 +11,10 @@ import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, ScrollText, Building2 } from "lucide-react";
+import { Activity, ScrollText, Building2, Search } from "lucide-react";
 import { format } from "date-fns";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
