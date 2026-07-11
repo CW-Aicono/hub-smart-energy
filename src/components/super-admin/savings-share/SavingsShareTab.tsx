@@ -255,7 +255,7 @@ function BaselineCard({ contract, baselines, recalc, override, createManual, dia
                 const details = b.calculation_details ?? {};
                 return (
                   <TableRow key={b.id}>
-                    <TableCell className="font-medium">{b.energy_type}</TableCell>
+                    <TableCell className="font-medium">{formatEnergyType(b.energy_type)}</TableCell>
                     <TableCell className="text-right">{fmtInt(b.baseline_kwh_raw)}</TableCell>
                     <TableCell className="text-right">{fmtInt(b.baseline_kwh_normalized)}</TableCell>
                     <TableCell className="text-right">{b.baseline_hdd ? fmt(b.baseline_hdd, 0) : "–"}</TableCell>
