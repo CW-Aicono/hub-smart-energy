@@ -378,6 +378,72 @@ const SuperAdminTenantDetail = () => {
 
   const totalSupportCost = supportSessions.reduce((sum, s) => sum + calcSessionCost(s), 0);
 
+  // Search + sort states for sub-tables
+  const [userSearch, setUserSearch] = useState("");
+  const filteredUsers = userSearch.trim()
+    ? users.filter((u: any) => {
+        const q = userSearch.toLowerCase();
+        return (
+          (u.email ?? "").toLowerCase().includes(q) ||
+          (u.contact_person ?? "").toLowerCase().includes(q)
+        );
+      })
+    : users;
+  const filteredInvitations = userSearch.trim()
+    ? pendingInvitations.filter((inv: any) => (inv.email ?? "").toLowerCase().includes(userSearch.toLowerCase()))
+    : pendingInvitations;
+  const { sorted: sortedUsers, sort: userSort, toggle: toggleUserSort } = useSortableData<any, "email" | "contact" | "status" | "created">(
+    filteredUsers,
+    (u, k) => {
+      switch (k) {
+        case "email": return u.email ?? "";
+        case "contact": return u.contact_person ?? "";
+        case "status": return u.is_blocked ? 1 : 0;
+        case "created": return u.created_at ? new Date(u.created_at) : null;
+        default: return null;
+      }
+    },
+    { key: "email", direction: "asc" },
+  );
+
+  const { sorted: sortedModules, sort: moduleSort, toggle: toggleModuleSort } = useSortableData<any, "label" | "enabled" | "global" | "override" | "effective">(
+    ALL_MODULES,
+    (mod, k) => {
+      const isAlwaysOn = "alwaysOn" in mod;
+      const isMember = !!(tenant as any)?.is_aicono_member;
+      const isKommune = (tenant as any)?.is_kommune !== false;
+      const globalPrice = isKommune
+        ? (isMember ? getGlobalPrice(mod.code) : getGlobalStandardPrice(mod.code))
+        : (isMember ? getGlobalIndustryPrice(mod.code) : getGlobalIndustryStandardPrice(mod.code));
+      const override = getModulePriceOverride(mod.code);
+      switch (k) {
+        case "label": return mod.label;
+        case "enabled": return isAlwaysOn ? 2 : (getModuleEnabled(mod.code) ? 1 : 0);
+        case "global": return isAlwaysOn ? -1 : globalPrice;
+        case "override": return override ?? -1;
+        case "effective": return isAlwaysOn ? -1 : getEffectivePrice(mod.code);
+        default: return null;
+      }
+    },
+    { key: "label", direction: "asc" },
+  );
+
+  const { sorted: sortedSupportSessions, sort: supportSort, toggle: toggleSupportSort } = useSortableData<any, "date" | "reason" | "duration" | "cost">(
+    supportSessions,
+    (s, k) => {
+      switch (k) {
+        case "date": return s.started_at ? new Date(s.started_at) : null;
+        case "reason": return s.reason ?? "";
+        case "duration": return calcSessionDurationMin(s);
+        case "cost": return calcSessionCost(s);
+        default: return null;
+      }
+    },
+    { key: "date", direction: "desc" },
+  );
+
+
+
   const refreshUsers = () => {
     queryClient.invalidateQueries({ queryKey: ["tenant-users", id] });
     queryClient.invalidateQueries({ queryKey: ["tenant-invitations", id] });
