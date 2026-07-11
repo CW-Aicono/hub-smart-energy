@@ -48,7 +48,18 @@ const SuperAdminLicenses = () => {
     },
   });
 
-  const { sorted, sort, toggle } = useSortableData<any, SortKey>(licenses, (r, k) => {
+  const filteredLicenses = search.trim()
+    ? licenses.filter((r: any) => {
+        const q = search.toLowerCase();
+        return (
+          (r.tenants?.name ?? "").toLowerCase().includes(q) ||
+          (r.plan_name ?? "").toLowerCase().includes(q) ||
+          (r.status ?? "").toLowerCase().includes(q)
+        );
+      })
+    : licenses;
+
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(filteredLicenses, (r, k) => {
     switch (k) {
       case "tenant": return r.tenants?.name ?? "";
       case "plan": return r.plan_name;
