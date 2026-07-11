@@ -20,7 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { UserPlus, Trash2, Pencil, ShieldCheck } from "lucide-react";
+import { UserPlus, Trash2, Pencil, ShieldCheck, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
 import { useAuth } from "@/hooks/useAuth";
