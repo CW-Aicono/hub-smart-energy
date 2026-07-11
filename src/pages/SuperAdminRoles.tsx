@@ -1,4 +1,5 @@
 import { Navigate } from "react-router-dom";
+import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
@@ -6,7 +7,8 @@ import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Crown, Users, CheckCircle2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Shield, Crown, Users, CheckCircle2, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import CreateSAPermissionRoleDialog from "@/components/super-admin/CreateSAPermissionRoleDialog";
