@@ -104,7 +104,16 @@ const SuperAdminLicenses = () => {
           </div>
           <LicenseDialog mode="create" />
         </header>
-        <div className="p-6">
+        <div className="p-6 space-y-4">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Suchen (Mandant, Plan, Status)…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
           <Card>
             <CardHeader>
               <CardTitle>{t("billing.active_licenses")}</CardTitle>
