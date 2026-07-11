@@ -504,6 +504,16 @@ export default function SuperAdminPartners() {
         </Dialog>
       </header>
 
+      <div className="relative max-w-sm">
+        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Partner suchen (Name, Slug, Kontakt, Modell)…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-8"
+        />
+      </div>
+
       <div className="border rounded-lg overflow-x-auto bg-card">
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">
@@ -511,21 +521,23 @@ export default function SuperAdminPartners() {
           </div>
         ) : partners.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">Noch keine Partner angelegt.</div>
+        ) : sortedPartners.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground">Keine Treffer für „{search}".</div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Slug</TableHead>
-                <TableHead>Kontakt</TableHead>
-                <TableHead className="text-center"><Users className="h-4 w-4 inline" /></TableHead>
-                <TableHead>Modell</TableHead>
-                <TableHead>Status</TableHead>
+                <SortableHead sortKey="name" sort={partnerSort} onToggle={togglePartnerSort}>Name</SortableHead>
+                <SortableHead sortKey="slug" sort={partnerSort} onToggle={togglePartnerSort}>Slug</SortableHead>
+                <SortableHead sortKey="contact" sort={partnerSort} onToggle={togglePartnerSort}>Kontakt</SortableHead>
+                <SortableHead sortKey="members" sort={partnerSort} onToggle={togglePartnerSort}><Users className="h-4 w-4 inline" /></SortableHead>
+                <SortableHead sortKey="billing_mode" sort={partnerSort} onToggle={togglePartnerSort}>Modell</SortableHead>
+                <SortableHead sortKey="status" sort={partnerSort} onToggle={togglePartnerSort}>Status</SortableHead>
                 <TableHead className="text-right">Aktion</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {partners.map((p) => {
+              {sortedPartners.map((p) => {
                 const count = memberCounts[p.id] ?? 0;
                 const needsInvite = count === 0;
                 return (
