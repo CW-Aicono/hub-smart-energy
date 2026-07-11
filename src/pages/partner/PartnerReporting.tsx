@@ -66,7 +66,7 @@ export default function PartnerReporting() {
   );
 
   const moduleData = useMemo(
-    () => modules.map((m) => ({ label: m.module_code, Tenants: m.tenants_count })),
+    () => modules.map((m) => ({ label: moduleTitle(m.module_code), Tenants: m.tenants_count })),
     [modules],
   );
 
