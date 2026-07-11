@@ -262,12 +262,17 @@ function BaselineCard({ contract, baselines, recalc, override, createManual, dia
         ) : (
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Energieart</TableHead><TableHead className="text-right">Roh (kWh)</TableHead>
-              <TableHead className="text-right">Bereinigt (kWh)</TableHead><TableHead className="text-right">HDD</TableHead>
-              <TableHead>Datenqualität</TableHead><TableHead>Zeitraum</TableHead><TableHead>Quelle</TableHead><TableHead></TableHead>
+              <SortableHead sortKey="energy" sort={baselineSort} onToggle={toggleBaselineSort}>Energieart</SortableHead>
+              <SortableHead sortKey="raw" sort={baselineSort} onToggle={toggleBaselineSort} align="right">Roh (kWh)</SortableHead>
+              <SortableHead sortKey="normalized" sort={baselineSort} onToggle={toggleBaselineSort} align="right">Bereinigt (kWh)</SortableHead>
+              <SortableHead sortKey="hdd" sort={baselineSort} onToggle={toggleBaselineSort} align="right">HDD</SortableHead>
+              <SortableHead sortKey="quality" sort={baselineSort} onToggle={toggleBaselineSort}>Datenqualität</SortableHead>
+              <TableHead>Zeitraum</TableHead>
+              <SortableHead sortKey="source" sort={baselineSort} onToggle={toggleBaselineSort}>Quelle</SortableHead>
+              <TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {baselines.map(b => {
+              {sortedBaselines.map(b => {
                 const details = b.calculation_details ?? {};
                 return (
                   <TableRow key={b.id}>
