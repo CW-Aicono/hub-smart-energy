@@ -3,9 +3,28 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Radio, Activity, AlertCircle, RefreshCw, Server } from "lucide-react";
+import { Radio, Activity, AlertCircle, RefreshCw, Server, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
+import { useSortableData } from "@/components/ui/sortable-head";
+import { cn } from "@/lib/utils";
+
+type LoxSortKey = "tenant" | "location" | "status" | "connected" | "heartbeat" | "events" | "reconnects" | "uptime" | "sessions" | "worker";
+
+function SortTh<K extends string>({ label, sortKey, sort, onToggle, align, className }: {
+  label: React.ReactNode; sortKey: K; sort: { key: K | null; direction: "asc" | "desc" }; onToggle: (k: K) => void; align?: "left" | "right"; className?: string;
+}) {
+  const isActive = sort.key === sortKey;
+  const Icon = !isActive ? ArrowUpDown : sort.direction === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th className={cn("py-2 pr-3 font-medium select-none", align === "right" ? "text-right" : "text-left", className)}>
+      <button type="button" onClick={() => onToggle(sortKey)} className={cn("inline-flex items-center gap-1 hover:text-foreground", isActive && "text-foreground")}>
+        {label}
+        <Icon className="h-3 w-3 opacity-60" />
+      </button>
+    </th>
+  );
+}
 
 interface SessionRow {
   id: string;
