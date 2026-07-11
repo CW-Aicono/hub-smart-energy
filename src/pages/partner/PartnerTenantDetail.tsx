@@ -173,9 +173,13 @@ export default function PartnerTenantDetail() {
                 <p className="text-sm text-muted-foreground">Noch keine Standorte angelegt.</p>
               ) : (
                 <Table>
-                  <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Ort</TableHead><TableHead>Erstellt</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow>
+                    <SortableHead sortKey="name" sort={locSort} onToggle={toggleLocSort}>Name</SortableHead>
+                    <SortableHead sortKey="city" sort={locSort} onToggle={toggleLocSort}>Ort</SortableHead>
+                    <SortableHead sortKey="created" sort={locSort} onToggle={toggleLocSort}>Erstellt</SortableHead>
+                  </TableRow></TableHeader>
                   <TableBody>
-                    {locations.map((l) => (
+                    {sortedLocations.map((l) => (
                       <TableRow key={l.id}>
                         <TableCell className="font-medium">{l.name}</TableCell>
                         <TableCell>{l.postal_code} {l.city}</TableCell>
