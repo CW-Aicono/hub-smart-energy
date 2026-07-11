@@ -214,7 +214,8 @@ function BaselineCard({ contract, baselines, recalc, override, createManual, dia
   const [reason, setReason] = useState("");
   const total = useMemo(() => baselines.reduce((s, b) => s + Number(b.baseline_kwh_normalized ?? 0), 0), [baselines]);
   const avgCoverage = baselines.length > 0 ? baselines.reduce((s, b) => s + Number(b.coverage_months ?? 0), 0) / baselines.length : 0;
-  const lastCalculated = baselines.map(b => b.updated_at).sort().at(-1);
+  const calculatedDates = baselines.map(b => b.updated_at).sort();
+  const lastCalculated = calculatedDates.length > 0 ? calculatedDates[calculatedDates.length - 1] : undefined;
 
   return (
     <Card>
