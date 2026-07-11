@@ -17,6 +17,7 @@ export default function PartnerSidebar() {
     { to: "/partner/tenants", icon: Building2, label: "Meine Tenants", show: true },
     { to: "/partner/reporting", icon: BarChart3, label: "Reporting", show: isPartnerAdmin || permissions.viewReporting || permissions.viewBilling },
     { to: "/partner/billing", icon: Receipt, label: "Abrechnung", show: isPartnerAdmin || permissions.viewBilling },
+    { to: "/partner/savings-share", icon: PiggyBank, label: "Gain-Sharing", show: isPartnerAdmin || permissions.viewBilling || permissions.viewReporting },
     { to: "/partner/branding", icon: Palette, label: "Branding", show: isPartnerAdmin || permissions.manageBranding },
     { to: "/partner/members", icon: Users, label: "Partner-User", show: isPartnerAdmin || permissions.manageMembers },
     { to: "/partner/sales/catalog", icon: Cpu, label: "Geräte-Katalog", show: permissions.manageSalesCatalog },
