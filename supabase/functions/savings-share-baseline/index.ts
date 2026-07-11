@@ -57,12 +57,13 @@ Deno.serve(async (req) => {
   const toDate = `${year}-12-31`;
 
   // Verbrauchszähler des Mandanten (nur Bezugsseite, keine Einspeisung/PV)
-  const { data: meters } = await admin.from("meters")
-    .select("id, energy_type, location_id, is_export_meter, is_generation_meter")
+  const { data: meters, error: mErr } = await admin.from("meters")
+    .select("id, energy_type, location_id, capture_type")
     .eq("tenant_id", contract.tenant_id);
+  if (mErr) return json({ error: "meters query failed: " + mErr.message }, 500);
 
   const consumptionMeters = (meters ?? []).filter((m: any) =>
-    !m.is_export_meter && !m.is_generation_meter && m.energy_type);
+    m.energy_type && m.capture_type !== "export" && m.capture_type !== "generation");
 
   // Gruppieren je energy_type
   const groups = new Map<string, string[]>();
