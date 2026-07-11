@@ -131,6 +131,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
   const [form, setForm] = useState<FormData>(emptyForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
   // Partner: Tab zwischen eigenen Artikeln und globalen Artikeln mit Override
   const [tab, setTab] = useState<"own" | "global">("own");
   const [importOpen, setImportOpen] = useState(false);
