@@ -293,7 +293,19 @@ export default function PartnerBilling() {
                   </ToggleGroup>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                <div className="relative max-w-sm">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Modul suchen…"
+                    value={moduleSearch}
+                    onChange={(e) => setModuleSearch(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+                {sortedModules.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Keine Treffer für „{moduleSearch}".</p>
+                ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
