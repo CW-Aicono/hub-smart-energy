@@ -170,6 +170,7 @@ export function useTenantSavingsContract(tenantId: string | null) {
 
   const overrideBaseline = useMutation({
     mutationFn: async (params: { id: string; baseline_kwh_normalized: number; override_reason: string }) => {
+      if (!params.override_reason.trim()) throw new Error("Bitte eine Begründung angeben.");
       const { error } = await supabase.from("tenant_savings_baselines" as any)
         .update({
           baseline_kwh_normalized: params.baseline_kwh_normalized,
