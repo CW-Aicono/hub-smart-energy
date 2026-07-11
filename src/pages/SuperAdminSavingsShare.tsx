@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Euro, ExternalLink } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Euro, ExternalLink, Search } from "lucide-react";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+
+type SortKey = "tenant" | "status" | "baseline" | "share" | "latest_year" | "savings" | "aicono";
 
 const fmt = (n: number) => n.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
