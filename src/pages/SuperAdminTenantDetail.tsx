@@ -860,20 +860,20 @@ const SuperAdminTenantDetail = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{t("tenant_detail.modules")}</TableHead>
-                        <TableHead className="w-24 text-center">{t("common.active")}</TableHead>
-                        <TableHead className="w-36 text-right">
+                        <SortableHead sortKey="label" sort={moduleSort} onToggle={toggleModuleSort}>{t("tenant_detail.modules")}</SortableHead>
+                        <SortableHead sortKey="enabled" sort={moduleSort} onToggle={toggleModuleSort} className="w-24 text-center">{t("common.active")}</SortableHead>
+                        <SortableHead sortKey="global" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-36">
                           <span className="inline-flex items-center gap-1 justify-end">
                             Standardpreis
                             {(tenant as any)?.is_aicono_member && <Award className="h-4 w-4 text-primary" />}
                           </span>
-                        </TableHead>
-                        <TableHead className="w-44 text-right">{t("tenant_detail.individual_price")}</TableHead>
-                        <TableHead className="w-32 text-right">{t("tenant_detail.effective")}</TableHead>
+                        </SortableHead>
+                        <SortableHead sortKey="override" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-44">{t("tenant_detail.individual_price")}</SortableHead>
+                        <SortableHead sortKey="effective" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-32">{t("tenant_detail.effective")}</SortableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {ALL_MODULES.map((mod) => {
+                      {sortedModules.map((mod) => {
                         const isAlwaysOn = "alwaysOn" in mod;
                         const isMember = !!(tenant as any)?.is_aicono_member;
                         const isKommune = (tenant as any)?.is_kommune !== false;
