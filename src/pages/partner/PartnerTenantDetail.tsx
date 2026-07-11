@@ -16,6 +16,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, Pencil, Building2, MapPin, Package, Activity } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import SavingsShareReadOnly from "@/components/savings-share/SavingsShareReadOnly";
 
 const statusColor: Record<string, string> = {
   active: "default",
@@ -114,6 +115,7 @@ export default function PartnerTenantDetail() {
           <TabsTrigger value="overview">Übersicht</TabsTrigger>
           <TabsTrigger value="locations">Standorte ({locations.length})</TabsTrigger>
           <TabsTrigger value="modules">Module & Lizenzen</TabsTrigger>
+          {modules.some((m) => m.module_code === "gain_sharing") && <TabsTrigger value="gain_sharing">Gain-Sharing</TabsTrigger>}
           <TabsTrigger value="activity">Aktivität</TabsTrigger>
         </TabsList>
 
@@ -202,6 +204,12 @@ export default function PartnerTenantDetail() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {modules.some((m) => m.module_code === "gain_sharing") && (
+          <TabsContent value="gain_sharing">
+            <SavingsShareReadOnly tenantId={tenantId!} />
+          </TabsContent>
+        )}
 
         <TabsContent value="activity">
           <Card>
