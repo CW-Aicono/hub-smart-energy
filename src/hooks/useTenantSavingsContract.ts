@@ -186,5 +186,32 @@ export function useTenantSavingsContract(tenantId: string | null) {
     onError: (e: Error) => toast.error("Override fehlgeschlagen: " + e.message),
   });
 
-  return { contract, baselines, upsertContract, recalcBaseline, overrideBaseline, lastBaselineRun };
+  const createManualBaseline = useMutation({
+    mutationFn: async (params: { energy_type: string; baseline_kwh_normalized: number; baseline_kwh_raw?: number; override_reason: string }) => {
+      if (!contract.data) throw new Error("Kein Vertrag");
+      if (!params.override_reason.trim()) throw new Error("Bitte eine Begründung angeben.");
+      const value = Number(params.baseline_kwh_normalized);
+      const { error } = await supabase.from("tenant_savings_baselines" as any)
+        .upsert({
+          contract_id: contract.data.id,
+          energy_type: params.energy_type.trim().toLowerCase(),
+          baseline_kwh_raw: params.baseline_kwh_raw ?? value,
+          baseline_kwh_normalized: value,
+          baseline_hdd: null,
+          baseline_source: "manual_override",
+          override_reason: params.override_reason,
+          coverage_months: 0,
+          data_quality: "manual",
+          calculation_details: { manual_entry: true },
+        }, { onConflict: "contract_id,energy_type" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tenant-savings-baselines", contract.data?.id] });
+      toast.success("Manuelle Baseline gespeichert");
+    },
+    onError: (e: Error) => toast.error("Manuelle Baseline fehlgeschlagen: " + e.message),
+  });
+
+  return { contract, baselines, upsertContract, recalcBaseline, overrideBaseline, createManualBaseline, lastBaselineRun };
 }
