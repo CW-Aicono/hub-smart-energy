@@ -1091,22 +1091,33 @@ const SuperAdminTenantDetail = () => {
                   )}
                 </CardHeader>
                 <CardContent className="p-0">
+                  <div className="p-4 pb-0">
+                    <div className="relative max-w-sm">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Suchen (Email, Ansprechpartner)…"
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                  </div>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{t("common.email")}</TableHead>
-                        <TableHead>{t("tenant_detail.contact_person")}</TableHead>
-                        <TableHead>{t("common.status")}</TableHead>
-                        <TableHead>{t("common.created")}</TableHead>
+                        <SortableHead sortKey="email" sort={userSort} onToggle={toggleUserSort}>{t("common.email")}</SortableHead>
+                        <SortableHead sortKey="contact" sort={userSort} onToggle={toggleUserSort}>{t("tenant_detail.contact_person")}</SortableHead>
+                        <SortableHead sortKey="status" sort={userSort} onToggle={toggleUserSort}>{t("common.status")}</SortableHead>
+                        <SortableHead sortKey="created" sort={userSort} onToggle={toggleUserSort}>{t("common.created")}</SortableHead>
                         <TableHead className="text-right">Aktionen</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {users.length === 0 && pendingInvitations.length === 0 ? (
-                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("tenant_detail.no_users")}</TableCell></TableRow>
+                      {sortedUsers.length === 0 && filteredInvitations.length === 0 ? (
+                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{userSearch.trim() ? `Keine Treffer für „${userSearch}".` : t("tenant_detail.no_users")}</TableCell></TableRow>
                       ) : (
                         <>
-                          {users.map((u) => (
+                          {sortedUsers.map((u) => (
                             <TableRow key={u.id}>
                               <TableCell>{u.email ?? "–"}</TableCell>
                               <TableCell>{u.contact_person ?? "–"}</TableCell>
