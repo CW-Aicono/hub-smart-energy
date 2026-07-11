@@ -258,21 +258,21 @@ export default function LoxoneMiniserverMonitorCard() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-xs text-muted-foreground">
-                  <th className="text-left py-2 pr-3 font-medium">Tenant</th>
-                  <th className="text-left py-2 pr-3 font-medium">Liegenschaft</th>
-                  <th className="text-left py-2 pr-3 font-medium">Status</th>
-                  <th className="text-left py-2 pr-3 font-medium">Verbunden seit</th>
-                  <th className="text-left py-2 pr-3 font-medium">Letzter Heartbeat</th>
-                  <th className="text-right py-2 pr-3 font-medium">Events 24 h</th>
-                  <th className="text-right py-2 pr-3 font-medium">Reconnects 24 h</th>
-                  <th className="text-right py-2 pr-3 font-medium">Uptime 24 h</th>
-                  <th className="text-right py-2 pr-3 font-medium">Sitzungen 24 h</th>
-                  <th className="text-left py-2 pr-3 font-medium">Worker</th>
+                  <SortTh<LoxSortKey> label="Tenant" sortKey="tenant" sort={sort} onToggle={toggle} />
+                  <SortTh<LoxSortKey> label="Liegenschaft" sortKey="location" sort={sort} onToggle={toggle} />
+                  <SortTh<LoxSortKey> label="Status" sortKey="status" sort={sort} onToggle={toggle} />
+                  <SortTh<LoxSortKey> label="Verbunden seit" sortKey="connected" sort={sort} onToggle={toggle} />
+                  <SortTh<LoxSortKey> label="Letzter Heartbeat" sortKey="heartbeat" sort={sort} onToggle={toggle} />
+                  <SortTh<LoxSortKey> label="Events 24 h" sortKey="events" sort={sort} onToggle={toggle} align="right" />
+                  <SortTh<LoxSortKey> label="Reconnects 24 h" sortKey="reconnects" sort={sort} onToggle={toggle} align="right" />
+                  <SortTh<LoxSortKey> label="Uptime 24 h" sortKey="uptime" sort={sort} onToggle={toggle} align="right" />
+                  <SortTh<LoxSortKey> label="Sitzungen 24 h" sortKey="sessions" sort={sort} onToggle={toggle} align="right" />
+                  <SortTh<LoxSortKey> label="Worker" sortKey="worker" sort={sort} onToggle={toggle} />
                   <th className="text-left py-2 font-medium">Letzter Disconnect</th>
                 </tr>
               </thead>
               <tbody>
-                {data.map((row) => {
+                {sorted.map((row) => {
                   const s = row.current;
                   const heartbeatAge = s ? Date.now() - new Date(s.updated_at).getTime() : null;
                   const startedSince = s
