@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { useTenantSavingsContract, SavingsContract, SavingsBaseline, BaselineDiagnostic } from "@/hooks/useTenantSavingsContract";
 import { useTenantSavingsSettlements, SavingsSettlement } from "@/hooks/useTenantSavingsSettlements";
 import { Calculator, Save, PlayCircle, PauseCircle, CheckCircle2, Pencil, AlertTriangle, Plus, FileText } from "lucide-react";
+import { formatEnergyType } from "@/lib/energyTypeLabels";
 
 const fmt = (n: number | null | undefined, digits = 2) =>
   n == null ? "–" : Number(n).toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
