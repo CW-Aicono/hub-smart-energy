@@ -84,6 +84,33 @@ export default function PartnerTenantDetail() {
     },
   });
 
+  const { sorted: sortedLocations, sort: locSort, toggle: toggleLocSort } = useSortableData<any, "name" | "city" | "created">(
+    locations,
+    (l, k) => {
+      switch (k) {
+        case "name": return l.name ?? "";
+        case "city": return `${l.postal_code ?? ""} ${l.city ?? ""}`.trim();
+        case "created": return l.created_at ? new Date(l.created_at) : null;
+        default: return null;
+      }
+    },
+    { key: "name", direction: "asc" },
+  );
+  const { sorted: sortedLicenses, sort: licSort, toggle: toggleLicSort } = useSortableData<any, "plan" | "price" | "status" | "from" | "until">(
+    licenses,
+    (l, k) => {
+      switch (k) {
+        case "plan": return l.plan_name ?? "";
+        case "price": return Number(l.price_monthly ?? 0);
+        case "status": return l.status ?? "";
+        case "from": return l.valid_from ? new Date(l.valid_from) : null;
+        case "until": return l.valid_until ? new Date(l.valid_until) : null;
+        default: return null;
+      }
+    },
+    { key: "plan", direction: "asc" },
+  );
+
   if (isLoading || accessLoading) return <div className="p-6 text-muted-foreground">Lädt…</div>;
   if (!tenant) return <div className="p-6 text-muted-foreground">Tenant nicht gefunden oder kein Zugriff.</div>;
 
