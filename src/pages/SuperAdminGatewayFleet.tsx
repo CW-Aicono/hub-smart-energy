@@ -498,6 +498,24 @@ const SuperAdminGatewayFleet = () => {
     refetchInterval: 15_000,
   });
 
+  const { sorted: sortedJobs, sort: jobsSort, toggle: toggleJobsSort } = useSortableData<any, "gateway" | "version" | "status" | "trigger" | "created" | "finished">(
+    jobs,
+    (j, k) => {
+      const dev = fleet.find((f) => f.id === j.gateway_device_id);
+      switch (k) {
+        case "gateway": return dev?.device_name ?? j.gateway_device_id;
+        case "version": return j.target_version ?? "";
+        case "status": return j.status ?? "";
+        case "trigger": return j.triggered_by ?? "";
+        case "created": return j.created_at ? new Date(j.created_at) : null;
+        case "finished": return j.finished_at ? new Date(j.finished_at) : null;
+        default: return null;
+      }
+    },
+    { key: "created", direction: "desc" },
+  );
+
+
   // Realtime: live job updates
   useEffect(() => {
     if (!isSuperAdmin) return;
