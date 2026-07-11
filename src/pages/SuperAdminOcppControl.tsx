@@ -104,7 +104,16 @@ const SuperAdminOcppControl = () => {
                 Service-Übersicht: Ladevorgänge und OCPP-Kommunikation aller Ladestationen
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Suchen (Mandant, Ladepunkt, ID-Tag, Status)…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8 w-72 h-9 text-sm"
+                />
+              </div>
               <Building2 className="h-4 w-4 opacity-60" />
               <Select value={tenantFilter} onValueChange={setTenantFilter}>
                 <SelectTrigger className="w-56 h-9 text-sm">
