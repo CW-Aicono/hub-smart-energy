@@ -46,7 +46,14 @@ const SuperAdminRoles = () => {
     },
   });
 
-  const { sorted: sortedAdmins, sort: sortAdmins, toggle: toggleAdmins } = useSortableData<any, "name" | "email" | "since">(superAdmins, (r, k) => {
+  const [adminSearch, setAdminSearch] = useState("");
+  const filteredAdmins = adminSearch.trim()
+    ? superAdmins.filter((a: any) => {
+        const q = adminSearch.toLowerCase();
+        return (a.email ?? "").toLowerCase().includes(q) || (a.name ?? "").toLowerCase().includes(q);
+      })
+    : superAdmins;
+  const { sorted: sortedAdmins, sort: sortAdmins, toggle: toggleAdmins } = useSortableData<any, "name" | "email" | "since">(filteredAdmins, (r, k) => {
     switch (k) {
       case "name": return r.name;
       case "email": return r.email;
