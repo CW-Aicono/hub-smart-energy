@@ -318,22 +318,33 @@ export default function PartnerSavingsShare() {
 
           <Card>
             <CardHeader><CardTitle>Abrechnungen</CardTitle></CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="relative max-w-sm">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Abrechnung suchen (Tenant, Jahr, Status, Rechnungs-Ref)…"
+                  value={settlementSearch}
+                  onChange={(e) => setSettlementSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
               {settlements.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Noch keine freigegebenen Abrechnungen.</p>
+              ) : sortedSettlements.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Keine Treffer für „{settlementSearch}".</p>
               ) : (
                 <Table>
                   <TableHeader><TableRow>
-                    <TableHead>Tenant</TableHead>
-                    <TableHead>Jahr</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Einsparung</TableHead>
-                    <TableHead className="text-right">AICONO-Anteil</TableHead>
-                    <TableHead className="text-right">Ihr Anteil</TableHead>
-                    <TableHead>Rechnung</TableHead>
+                    <SortableHead sortKey="tenant" sort={settleSort} onToggle={toggleSettleSort}>Tenant</SortableHead>
+                    <SortableHead sortKey="year" sort={settleSort} onToggle={toggleSettleSort}>Jahr</SortableHead>
+                    <SortableHead sortKey="status" sort={settleSort} onToggle={toggleSettleSort}>Status</SortableHead>
+                    <SortableHead sortKey="total" sort={settleSort} onToggle={toggleSettleSort} align="right">Einsparung</SortableHead>
+                    <SortableHead sortKey="aicono" sort={settleSort} onToggle={toggleSettleSort} align="right">AICONO-Anteil</SortableHead>
+                    <SortableHead sortKey="partner" sort={settleSort} onToggle={toggleSettleSort} align="right">Ihr Anteil</SortableHead>
+                    <SortableHead sortKey="invoice" sort={settleSort} onToggle={toggleSettleSort}>Rechnung</SortableHead>
                   </TableRow></TableHeader>
                   <TableBody>
-                    {settlements.map((s) => {
+                    {sortedSettlements.map((s) => {
                       const c = contractsById.get(s.contract_id);
                       return (
                         <TableRow key={s.id}>
