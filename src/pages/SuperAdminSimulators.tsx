@@ -266,6 +266,34 @@ const SuperAdminSimulators = () => {
   const tenantName = (id: string) =>
     tenants.find((t) => t.id === id)?.name || id.slice(0, 8);
 
+  const [search, setSearch] = useState("");
+  const filteredRows = (data ?? []).filter((row) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      tenantName(row.tenant_id).toLowerCase().includes(q) ||
+      row.ocpp_id.toLowerCase().includes(q) ||
+      (row.id_tag ?? "").toLowerCase().includes(q) ||
+      (row.live_status ?? row.status ?? "").toLowerCase().includes(q)
+    );
+  });
+  const { sorted: sortedRows, sort: simSort, toggle: toggleSimSort } = useSortableData<SimulatorRow, SimSortKey>(
+    filteredRows,
+    (r, k) => {
+      switch (k) {
+        case "tenant": return tenantName(r.tenant_id);
+        case "ocpp_id": return r.ocpp_id;
+        case "status": return r.live_status ?? r.status;
+        case "power": return r.live_power_kw ?? r.power_kw ?? 0;
+        case "meter": return r.live_meter_wh ?? 0;
+        case "idTag": return r.id_tag ?? "";
+        case "started_at": return r.started_at ? new Date(r.started_at) : null;
+        default: return null;
+      }
+    },
+    { key: "started_at", direction: "desc" },
+  );
+
   const openLogs = (row: SimulatorRow) => {
     setLogInstanceId(row.id);
     setLogOcppId(row.ocpp_id);
