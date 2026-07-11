@@ -346,15 +346,16 @@ function SettlementsCard({ contract, baselines }: { contract: SavingsContract; b
         ) : (
           <Table>
             <TableHeader><TableRow>
-              <TableHead>Jahr</TableHead><TableHead>Status</TableHead>
-              <TableHead className="text-right">Einsparung (€)</TableHead>
-              <TableHead className="text-right">AICONO (€)</TableHead>
-              <TableHead className="text-right">Partner (€)</TableHead>
-              <TableHead className="text-right">Mandant (€)</TableHead>
+              <SortableHead sortKey="year" sort={settlementSort} onToggle={toggleSettlementSort}>Jahr</SortableHead>
+              <SortableHead sortKey="status" sort={settlementSort} onToggle={toggleSettlementSort}>Status</SortableHead>
+              <SortableHead sortKey="total" sort={settlementSort} onToggle={toggleSettlementSort} align="right">Einsparung (€)</SortableHead>
+              <SortableHead sortKey="aicono" sort={settlementSort} onToggle={toggleSettlementSort} align="right">AICONO (€)</SortableHead>
+              <SortableHead sortKey="partner" sort={settlementSort} onToggle={toggleSettlementSort} align="right">Partner (€)</SortableHead>
+              <SortableHead sortKey="tenant" sort={settlementSort} onToggle={toggleSettlementSort} align="right">Mandant (€)</SortableHead>
               <TableHead></TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {(list.data ?? []).map(s => (
+              {sortedSettlements.map(s => (
                 <TableRow key={s.id}>
                   <TableCell className="font-medium">{s.period_year}</TableCell>
                   <TableCell><Badge variant={STATUS_VARIANT[s.status]}>{STATUS_LABEL[s.status]}</Badge></TableCell>
