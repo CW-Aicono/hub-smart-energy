@@ -876,19 +876,19 @@ const SuperAdminGatewayFleet = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Channel</TableHead>
-                        <TableHead>Version</TableHead>
-                        <TableHead>Image</TableHead>
-                        <TableHead>Veröffentlicht</TableHead>
-                        <TableHead>Latest</TableHead>
+                        <SortableHead sortKey="channel" sort={chanSort} onToggle={toggleChanSort}>Channel</SortableHead>
+                        <SortableHead sortKey="version" sort={chanSort} onToggle={toggleChanSort}>Version</SortableHead>
+                        <SortableHead sortKey="image" sort={chanSort} onToggle={toggleChanSort}>Image</SortableHead>
+                        <SortableHead sortKey="released" sort={chanSort} onToggle={toggleChanSort}>Veröffentlicht</SortableHead>
+                        <SortableHead sortKey="latest" sort={chanSort} onToggle={toggleChanSort}>Latest</SortableHead>
                         <TableHead className="text-right">Aktion</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {channels.length === 0 && (
+                      {sortedChannels.length === 0 && (
                         <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">Noch keine Versionen veröffentlicht.</TableCell></TableRow>
                       )}
-                      {channels.map((c) => (
+                      {sortedChannels.map((c) => (
                         <TableRow key={c.id}>
                           <TableCell><Badge variant="outline">{c.channel}</Badge></TableCell>
                           <TableCell className="font-mono">{c.version}</TableCell>
