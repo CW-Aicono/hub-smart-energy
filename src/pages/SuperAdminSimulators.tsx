@@ -51,8 +51,12 @@ import {
   Loader2,
   AlertTriangle,
   ScrollText,
+  Search,
 } from "lucide-react";
 import { format } from "date-fns";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+
+type SimSortKey = "tenant" | "ocpp_id" | "status" | "power" | "meter" | "idTag" | "started_at";
 
 const isTemporaryEdgeError = (error: unknown) => {
   const message = error instanceof Error ? error.message : JSON.stringify(error);
