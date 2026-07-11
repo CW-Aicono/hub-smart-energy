@@ -212,6 +212,26 @@ export default function LoxoneMiniserverMonitorCard() {
     refetchInterval: 15_000,
   });
 
+  const { sorted, sort, toggle } = useSortableData<MiniserverRow, LoxSortKey>(
+    data ?? [],
+    (r, k) => {
+      const s = r.current;
+      switch (k) {
+        case "tenant": return r.tenantName;
+        case "location": return r.locationName;
+        case "status": return s ? (s.ended_at ? 0 : 1) : -1;
+        case "connected": return s?.started_at ? new Date(s.started_at) : null;
+        case "heartbeat": return s?.updated_at ? new Date(s.updated_at) : null;
+        case "events": return r.eventsLast24h;
+        case "reconnects": return r.reconnectsLast24h;
+        case "uptime": return r.uptimeRatio24h;
+        case "sessions": return r.sessionsLast24h;
+        case "worker": return s?.worker_host ?? "";
+        default: return null;
+      }
+    },
+    { key: "tenant", direction: "asc" },
+  );
   return (
     <Card>
       <CardHeader className="pb-3">
