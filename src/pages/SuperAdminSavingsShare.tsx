@@ -139,23 +139,36 @@ export default function SuperAdminSavingsShare() {
 
         <Card>
           <CardHeader><CardTitle>Mandanten mit Gain-Sharing-Vertrag</CardTitle></CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             {query.isLoading ? <p className="text-sm text-muted-foreground">Lädt…</p> : rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">Noch keine Verträge angelegt.</p>
             ) : (
+              <>
+                <div className="relative max-w-sm">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Suchen (Mandant, Status)…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+                {sorted.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Keine Treffer für „{search}".</p>
+                ) : (
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Mandant</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Baseline-Jahr</TableHead>
-                  <TableHead className="text-right">AICONO %</TableHead>
-                  <TableHead>Letztes Jahr</TableHead>
-                  <TableHead className="text-right">Einsparung (€)</TableHead>
-                  <TableHead className="text-right">AICONO-Anteil (€)</TableHead>
+                  <SortableHead sortKey="tenant" sort={sort} onToggle={toggle}>Mandant</SortableHead>
+                  <SortableHead sortKey="status" sort={sort} onToggle={toggle}>Status</SortableHead>
+                  <SortableHead sortKey="baseline" sort={sort} onToggle={toggle}>Baseline-Jahr</SortableHead>
+                  <SortableHead sortKey="share" sort={sort} onToggle={toggle} align="right">AICONO %</SortableHead>
+                  <SortableHead sortKey="latest_year" sort={sort} onToggle={toggle}>Letztes Jahr</SortableHead>
+                  <SortableHead sortKey="savings" sort={sort} onToggle={toggle} align="right">Einsparung (€)</SortableHead>
+                  <SortableHead sortKey="aicono" sort={sort} onToggle={toggle} align="right">AICONO-Anteil (€)</SortableHead>
                   <TableHead></TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {rows.map(r => (
+                  {sorted.map(r => (
                     <TableRow key={r.contract_id}>
                       <TableCell className="font-medium">{r.tenant_name}</TableCell>
                       <TableCell><Badge variant={r.status === "active" ? "default" : "outline"}>{r.status}</Badge></TableCell>
