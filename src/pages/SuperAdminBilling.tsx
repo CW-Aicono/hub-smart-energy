@@ -40,6 +40,7 @@ const SuperAdminBilling = () => {
   const [editStatus, setEditStatus] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("tenant");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [search, setSearch] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [lexwareSummary, setLexwareSummary] = useState<Record<string, { count: number; totalAmount: number; openAmount: number }> | null>(null);
   const queryClient = useQueryClient();
