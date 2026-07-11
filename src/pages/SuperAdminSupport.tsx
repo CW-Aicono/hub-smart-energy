@@ -106,7 +106,16 @@ const SuperAdminSupport = () => {
           </div>
           <CreateSupportEntryDialog />
         </header>
-        <div className="p-6">
+        <div className="p-6 space-y-4">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Suchen (Mandant, Grund)…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
           <Card>
             <CardHeader><CardTitle>{t("support.log")}</CardTitle></CardHeader>
             <CardContent className="p-0">
