@@ -586,6 +586,8 @@ const SuperAdminSimulators = () => {
                     })}
                   </TableBody>
                 </Table>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
