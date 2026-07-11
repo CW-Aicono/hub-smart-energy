@@ -1,16 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileText, ExternalLink } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { PiggyBank, ExternalLink, TrendingUp, Handshake, LineChart, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const fmt = (n: number | null | undefined, d = 2) =>
   n == null ? "–" : Number(n).toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
 const eur = (n: number | null | undefined) => fmt(n) + " €";
+const eur0 = (n: number) => Number(n).toLocaleString("de-DE", { maximumFractionDigits: 0 }) + " €";
 
 const CONTRACT_STATUS: Record<string, string> = {
   draft: "Entwurf", active: "Aktiv", paused: "Pausiert", terminated: "Beendet",
@@ -43,6 +44,119 @@ interface SettlementRow {
   approved_at: string | null;
 }
 
+function EmptyMotivation() {
+  // Beispielrechnung: AICONO 30 %, Partner-Anteil 40 % von AICONO
+  const aiconoPct = 0.3;
+  const partnerOfAicono = 0.4;
+  const examples = [
+    { label: "Mittelständisches Bürogebäude", baseline: 120_000, saved: 18_000, price: 0.32 },
+    { label: "Filialkette (5 Standorte)", baseline: 640_000, saved: 96_000, price: 0.29 },
+  ].map((e) => {
+    const savedEur = e.saved * e.price;
+    const aiconoEur = savedEur * aiconoPct;
+    const partnerEur = aiconoEur * partnerOfAicono;
+    const tenantEur = savedEur - aiconoEur;
+    return { ...e, savedEur, aiconoEur, partnerEur, tenantEur };
+  });
+
+  return (
+    <div className="space-y-6">
+      <Card className="border-primary/30 bg-gradient-to-br from-primary/5 via-transparent to-transparent">
+        <CardHeader>
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg bg-primary/10 p-2 text-primary"><PiggyBank className="h-5 w-5" /></div>
+            <div>
+              <CardTitle className="text-xl">Verdienen Sie an jeder eingesparten Kilowattstunde mit</CardTitle>
+              <CardDescription className="mt-1">
+                Mit einem Gain-Sharing-Vertrag beteiligen wir Sie an den realen Energieeinsparungen Ihrer Tenants – ganz ohne Zusatzaufwand für Sie.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="flex gap-3">
+            <TrendingUp className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold">Messbar & fair</p>
+              <p className="text-xs text-muted-foreground">Baseline-basierte, wetternormalisierte Berechnung je Energieart.</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Handshake className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold">Kein Vertriebsdruck</p>
+              <p className="text-xs text-muted-foreground">Sie kassieren mit, wann immer Ihr Tenant spart – jahrelang.</p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <LineChart className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold">Volle Transparenz</p>
+              <p className="text-xs text-muted-foreground">Alle Zahlen jederzeit hier im Partner-Dashboard nachvollziehbar.</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div>
+        <div className="mb-3 flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <h2 className="text-lg font-semibold">So könnte Ihre Beteiligung aussehen</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          Modell: AICONO erhält {Math.round(aiconoPct * 100)} % der eingesparten Energiekosten, davon fließen {Math.round(partnerOfAicono * 100)} % als Provision an Sie. Der Rest bleibt beim Tenant.
+        </p>
+        <div className="grid gap-4 md:grid-cols-2">
+          {examples.map((e, i) => (
+            <Card key={i}>
+              <CardHeader>
+                <CardTitle className="text-base">{e.label}</CardTitle>
+                <CardDescription>
+                  Baseline {e.baseline.toLocaleString("de-DE")} kWh · Einsparung {Math.round((e.saved / e.baseline) * 100)} % · Ø {fmt(e.price)} €/kWh
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <dl className="space-y-2 text-sm">
+                  <div className="flex justify-between border-b pb-2">
+                    <dt className="text-muted-foreground">Eingesparte Energie</dt>
+                    <dd className="font-medium">{e.saved.toLocaleString("de-DE")} kWh</dd>
+                  </div>
+                  <div className="flex justify-between border-b pb-2">
+                    <dt className="text-muted-foreground">Wert der Einsparung</dt>
+                    <dd className="font-medium">{eur0(e.savedEur)}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Anteil Tenant</dt>
+                    <dd>{eur0(e.tenantEur)}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">AICONO-Anteil ({Math.round(aiconoPct * 100)} %)</dt>
+                    <dd>{eur0(e.aiconoEur)}</dd>
+                  </div>
+                  <div className="flex justify-between rounded-md bg-primary/10 px-3 py-2 mt-2">
+                    <dt className="font-semibold text-primary">Ihre Provision pro Jahr</dt>
+                    <dd className="font-bold text-primary">{eur0(e.partnerEur)}</dd>
+                  </div>
+                </dl>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <p className="mt-4 text-xs text-muted-foreground">
+          Beispielrechnungen zur Veranschaulichung. Tatsächliche Anteile werden individuell vertraglich vereinbart.
+        </p>
+      </div>
+
+      <Alert>
+        <Handshake className="h-4 w-4" />
+        <AlertDescription>
+          Interesse? Sprechen Sie Ihren AICONO-Ansprechpartner an – wir richten den Gain-Sharing-Vertrag für Ihre Tenants ein.
+        </AlertDescription>
+      </Alert>
+    </div>
+  );
+}
+
 export default function PartnerSavingsShare() {
   const query = useQuery({
     queryKey: ["partner-savings-share"],
@@ -65,18 +179,6 @@ export default function PartnerSavingsShare() {
     },
   });
 
-  if (query.isLoading) {
-    return <p className="text-sm text-muted-foreground">Lädt…</p>;
-  }
-  if (query.error) {
-    return (
-      <Alert variant="destructive">
-        <AlertTitle>Fehler</AlertTitle>
-        <AlertDescription>{(query.error as Error).message}</AlertDescription>
-      </Alert>
-    );
-  }
-
   const contracts = query.data?.contracts ?? [];
   const settlements = query.data?.settlements ?? [];
 
@@ -86,18 +188,18 @@ export default function PartnerSavingsShare() {
   const contractsById = new Map(contracts.map((c) => [c.id, c] as const));
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-6 max-w-7xl">
       <div>
         <h1 className="text-2xl font-semibold">Gain-Sharing</h1>
         <p className="text-sm text-muted-foreground">Einsparbeteiligungen Ihrer Tenants – zur Kontrolle Ihrer Abrechnung.</p>
       </div>
 
-      {contracts.length === 0 ? (
-        <Alert>
-          <FileText className="h-4 w-4" />
-          <AlertTitle>Keine Gain-Sharing-Verträge</AlertTitle>
-          <AlertDescription>Für Ihre Tenants ist aktuell keine Einsparbeteiligung hinterlegt.</AlertDescription>
-        </Alert>
+      {query.isLoading ? (
+        <p className="text-sm text-muted-foreground">Lädt…</p>
+      ) : query.error ? (
+        <Alert variant="destructive"><AlertDescription>{(query.error as Error).message}</AlertDescription></Alert>
+      ) : contracts.length === 0 ? (
+        <EmptyMotivation />
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
