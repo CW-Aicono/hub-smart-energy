@@ -15,6 +15,7 @@ import { useTenantSavingsContract, SavingsContract, SavingsBaseline, BaselineDia
 import { useTenantSavingsSettlements, SavingsSettlement } from "@/hooks/useTenantSavingsSettlements";
 import { Calculator, Save, PlayCircle, PauseCircle, CheckCircle2, Pencil, AlertTriangle, Plus, FileText } from "lucide-react";
 import { formatEnergyType } from "@/lib/energyTypeLabels";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 const fmt = (n: number | null | undefined, digits = 2) =>
   n == null ? "–" : Number(n).toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
