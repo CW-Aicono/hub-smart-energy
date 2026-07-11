@@ -190,6 +190,64 @@ export default function PartnerSavingsShare() {
   const totalSavings = settlements.reduce((s, r) => s + Number(r.total_savings_eur ?? 0), 0);
   const contractsById = new Map(contracts.map((c) => [c.id, c] as const));
 
+  const [contractSearch, setContractSearch] = useState("");
+  const [settlementSearch, setSettlementSearch] = useState("");
+  const filteredContracts = contractSearch.trim()
+    ? contracts.filter((c) => {
+        const q = contractSearch.toLowerCase();
+        return (
+          (c.tenants?.name ?? "").toLowerCase().includes(q) ||
+          (c.tenants?.slug ?? "").toLowerCase().includes(q) ||
+          (CONTRACT_STATUS[c.status] ?? c.status).toLowerCase().includes(q)
+        );
+      })
+    : contracts;
+  const filteredSettlements = settlementSearch.trim()
+    ? settlements.filter((s) => {
+        const q = settlementSearch.toLowerCase();
+        const c = contractsById.get(s.contract_id);
+        return (
+          (c?.tenants?.name ?? "").toLowerCase().includes(q) ||
+          (c?.tenants?.slug ?? "").toLowerCase().includes(q) ||
+          String(s.period_year).includes(q) ||
+          (SETTLE_STATUS[s.status] ?? s.status).toLowerCase().includes(q) ||
+          (s.invoice_ref ?? "").toLowerCase().includes(q)
+        );
+      })
+    : settlements;
+  const { sorted: sortedContracts, sort: contractSort, toggle: toggleContractSort } = useSortableData<any, "tenant" | "status" | "baseline" | "start" | "aicono" | "partner">(
+    filteredContracts,
+    (c, k) => {
+      switch (k) {
+        case "tenant": return c.tenants?.name ?? c.tenants?.slug ?? c.tenant_id;
+        case "status": return c.status;
+        case "baseline": return c.baseline_year;
+        case "start": return c.start_year;
+        case "aicono": return Number(c.aicono_share_pct);
+        case "partner": return Number(c.partner_share_pct_of_aicono);
+        default: return null;
+      }
+    },
+    { key: "tenant", direction: "asc" },
+  );
+  const { sorted: sortedSettlements, sort: settleSort, toggle: toggleSettleSort } = useSortableData<any, "tenant" | "year" | "status" | "total" | "aicono" | "partner" | "invoice">(
+    filteredSettlements,
+    (s, k) => {
+      const c = contractsById.get(s.contract_id);
+      switch (k) {
+        case "tenant": return c?.tenants?.name ?? c?.tenants?.slug ?? "";
+        case "year": return s.period_year;
+        case "status": return s.status;
+        case "total": return Number(s.total_savings_eur ?? 0);
+        case "aicono": return Number(s.aicono_amount_eur ?? 0);
+        case "partner": return Number(s.partner_amount_eur ?? 0);
+        case "invoice": return s.invoice_ref ?? "";
+        default: return null;
+      }
+    },
+    { key: "year", direction: "desc" },
+  );
+
   return (
     <div className="container mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-6 max-w-7xl">
       <div>
