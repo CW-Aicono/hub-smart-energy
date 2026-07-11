@@ -11659,8 +11659,11 @@ export type Database = {
           baseline_kwh_normalized: number
           baseline_kwh_raw: number
           baseline_source: Database["public"]["Enums"]["savings_baseline_source"]
+          calculation_details: Json
           contract_id: string
+          coverage_months: number
           created_at: string
+          data_quality: string
           energy_type: string
           id: string
           override_reason: string | null
@@ -11671,8 +11674,11 @@ export type Database = {
           baseline_kwh_normalized?: number
           baseline_kwh_raw?: number
           baseline_source?: Database["public"]["Enums"]["savings_baseline_source"]
+          calculation_details?: Json
           contract_id: string
+          coverage_months?: number
           created_at?: string
+          data_quality?: string
           energy_type: string
           id?: string
           override_reason?: string | null
@@ -11683,8 +11689,11 @@ export type Database = {
           baseline_kwh_normalized?: number
           baseline_kwh_raw?: number
           baseline_source?: Database["public"]["Enums"]["savings_baseline_source"]
+          calculation_details?: Json
           contract_id?: string
+          coverage_months?: number
           created_at?: string
+          data_quality?: string
           energy_type?: string
           id?: string
           override_reason?: string | null

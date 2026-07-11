@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -31,11 +32,74 @@ export interface SavingsBaseline {
   baseline_kwh_normalized: number;
   baseline_source: "auto_from_meters" | "manual_override" | "invoice_based";
   override_reason: string | null;
+  coverage_months: number;
+  data_quality: "complete" | "partial" | "none" | "manual" | "unknown";
+  calculation_details: Record<string, any>;
   updated_at: string;
+}
+
+export interface BaselineDiagnostic {
+  tenant_id: string;
+  baseline_year: number;
+  all_meters: number;
+  eligible_meters: number;
+  excluded_meters: Record<string, number>;
+  written_rows: number;
+  warnings: string[];
+  energy_types: Array<{
+    energy_type: string;
+    meter_count: number;
+    source_period_type: "month" | "day" | "none";
+    coverage_months: number;
+    first_period: string | null;
+    last_period: string | null;
+    total_kwh: number;
+    data_quality: "complete" | "partial" | "none";
+    warning: string | null;
+  }>;
+}
+
+export interface BaselineRunResult {
+  success: boolean;
+  error?: string;
+  baseline_year: number;
+  results: Array<{
+    energy_type: string;
+    baseline_kwh_raw: number;
+    baseline_hdd: number | null;
+    baseline_kwh_normalized: number;
+    coverage_months: number;
+    data_quality: string;
+  }>;
+  diagnostic: BaselineDiagnostic;
+}
+
+async function invokeFunction<T>(name: string, body: Record<string, unknown>): Promise<T> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) throw new Error("Keine aktive Sitzung. Bitte erneut anmelden.");
+
+  const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.error) {
+    const err = new Error(payload?.error || `Funktion fehlgeschlagen (${response.status})`);
+    (err as any).payload = payload;
+    throw err;
+  }
+  return payload as T;
 }
 
 export function useTenantSavingsContract(tenantId: string | null) {
   const qc = useQueryClient();
+  const [lastBaselineRun, setLastBaselineRun] = useState<BaselineRunResult | null>(null);
 
   const contract = useQuery({
     queryKey: ["tenant-savings-contract", tenantId],
@@ -87,12 +151,15 @@ export function useTenantSavingsContract(tenantId: string | null) {
   const recalcBaseline = useMutation({
     mutationFn: async () => {
       if (!contract.data) throw new Error("Kein Vertrag");
-      const { data, error } = await supabase.functions.invoke("savings-share-baseline", {
-        body: { contract_id: contract.data.id },
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      return data;
+      try {
+        const data = await invokeFunction<BaselineRunResult>("savings-share-baseline", { contract_id: contract.data.id });
+        setLastBaselineRun(data);
+        return data;
+      } catch (error) {
+        const payload = (error as any).payload as BaselineRunResult | undefined;
+        if (payload?.diagnostic) setLastBaselineRun(payload);
+        throw error;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tenant-savings-baselines", contract.data?.id] });
@@ -103,11 +170,13 @@ export function useTenantSavingsContract(tenantId: string | null) {
 
   const overrideBaseline = useMutation({
     mutationFn: async (params: { id: string; baseline_kwh_normalized: number; override_reason: string }) => {
+      if (!params.override_reason.trim()) throw new Error("Bitte eine Begründung angeben.");
       const { error } = await supabase.from("tenant_savings_baselines" as any)
         .update({
           baseline_kwh_normalized: params.baseline_kwh_normalized,
           baseline_source: "manual_override",
           override_reason: params.override_reason,
+          data_quality: "manual",
         }).eq("id", params.id);
       if (error) throw error;
     },
@@ -118,5 +187,32 @@ export function useTenantSavingsContract(tenantId: string | null) {
     onError: (e: Error) => toast.error("Override fehlgeschlagen: " + e.message),
   });
 
-  return { contract, baselines, upsertContract, recalcBaseline, overrideBaseline };
+  const createManualBaseline = useMutation({
+    mutationFn: async (params: { energy_type: string; baseline_kwh_normalized: number; baseline_kwh_raw?: number; override_reason: string }) => {
+      if (!contract.data) throw new Error("Kein Vertrag");
+      if (!params.override_reason.trim()) throw new Error("Bitte eine Begründung angeben.");
+      const value = Number(params.baseline_kwh_normalized);
+      const { error } = await supabase.from("tenant_savings_baselines" as any)
+        .upsert({
+          contract_id: contract.data.id,
+          energy_type: params.energy_type.trim().toLowerCase(),
+          baseline_kwh_raw: params.baseline_kwh_raw ?? value,
+          baseline_kwh_normalized: value,
+          baseline_hdd: null,
+          baseline_source: "manual_override",
+          override_reason: params.override_reason,
+          coverage_months: 0,
+          data_quality: "manual",
+          calculation_details: { manual_entry: true },
+        }, { onConflict: "contract_id,energy_type" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tenant-savings-baselines", contract.data?.id] });
+      toast.success("Manuelle Baseline gespeichert");
+    },
+    onError: (e: Error) => toast.error("Manuelle Baseline fehlgeschlagen: " + e.message),
+  });
+
+  return { contract, baselines, upsertContract, recalcBaseline, overrideBaseline, createManualBaseline, lastBaselineRun };
 }

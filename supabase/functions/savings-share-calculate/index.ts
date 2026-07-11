@@ -9,7 +9,12 @@ const corsHeaders = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-const HEATING_TYPES = new Set(["gas", "heating_oil", "district_heating", "heat_pump", "wood_pellets"]);
+const HEATING_TYPES = new Set(["gas", "heating_oil", "district_heating", "heat_pump", "wood_pellets", "waerme", "wärme"]);
+const EXCLUDED_ENERGY_TYPES = new Set(["none", "", "unknown", "co2"]);
+const EXCLUDED_CAPTURE_TYPES = new Set(["export", "generation"]);
+const EXCLUDED_METER_FUNCTIONS = new Set(["generation", "export"]);
+
+const monthKey = (value: string) => value.slice(0, 7);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -51,20 +56,30 @@ Deno.serve(async (req) => {
     .select("is_enabled").eq("tenant_id", contract.tenant_id).eq("module_code", "gain_sharing").maybeSingle();
   if (!mod?.is_enabled) return json({ error: "Modul gain_sharing für diesen Mandanten nicht aktiv" }, 403);
 
-  const { data: baselines } = await admin.from("tenant_savings_baselines")
-    .select("energy_type, baseline_kwh_normalized, baseline_hdd, baseline_kwh_raw")
-    .eq("contract_id", contractId);
-  if (!baselines || baselines.length === 0) return json({ error: "Keine Baseline vorhanden – zuerst Baseline berechnen" }, 400);
+  const { data: baselines, error: bErr } = await admin.from("tenant_savings_baselines")
+    .select("energy_type, baseline_kwh_normalized, baseline_hdd, baseline_kwh_raw, data_quality, coverage_months")
+    .eq("contract_id", contractId)
+    .neq("data_quality", "none");
+  if (bErr) return json({ error: "Baseline konnte nicht geladen werden: " + bErr.message }, 500);
+  if (!baselines || baselines.length === 0) return json({ error: "Keine gültige Baseline vorhanden – zuerst Baseline berechnen oder manuell anlegen" }, 400);
 
   const fromDate = `${periodYear}-01-01`;
   const toDate = `${periodYear}-12-31`;
 
   const { data: meters, error: mErr } = await admin.from("meters")
-    .select("id, energy_type, location_id, capture_type")
+    .select("id, energy_type, location_id, capture_type, meter_function, is_archived")
     .eq("tenant_id", contract.tenant_id);
   if (mErr) return json({ error: "meters query failed: " + mErr.message }, 500);
-  const consumptionMeters = (meters ?? []).filter((m: any) =>
-    m.energy_type && m.capture_type !== "export" && m.capture_type !== "generation");
+  const consumptionMeters = (meters ?? []).filter((m: any) => {
+    const energyType = String(m.energy_type ?? "").trim().toLowerCase();
+    const captureType = String(m.capture_type ?? "").trim().toLowerCase();
+    const meterFunction = String(m.meter_function ?? "").trim().toLowerCase();
+    return !m.is_archived
+      && energyType
+      && !EXCLUDED_ENERGY_TYPES.has(energyType)
+      && !EXCLUDED_CAPTURE_TYPES.has(captureType)
+      && !EXCLUDED_METER_FUNCTIONS.has(meterFunction);
+  }).map((m: any) => ({ ...m, energy_type: String(m.energy_type).trim().toLowerCase() }));
 
   const groups = new Map<string, string[]>();
   const locationSet = new Set<string>();
@@ -74,52 +89,66 @@ Deno.serve(async (req) => {
     if (m.location_id) locationSet.add(m.location_id);
   }
 
-  // Period HDD
   let periodHdd: number | null = null;
   if (locationSet.size > 0) {
-    const { data: hddRows } = await admin.from("weather_degree_days")
+    const { data: hddRows, error: hddErr } = await admin.from("weather_degree_days")
       .select("location_id, month, heating_degree_days")
       .in("location_id", [...locationSet])
       .gte("month", fromDate).lte("month", toDate);
+    if (hddErr) return json({ error: "weather query failed: " + hddErr.message }, 500);
     if (hddRows && hddRows.length > 0) {
       const perLoc = new Map<string, number>();
       for (const r of hddRows) {
         perLoc.set(r.location_id, (perLoc.get(r.location_id) ?? 0) + Number(r.heating_degree_days ?? 0));
       }
       const sum = [...perLoc.values()].reduce((a, b) => a + b, 0);
-      periodHdd = sum / perLoc.size;
+      periodHdd = perLoc.size > 0 ? sum / perLoc.size : null;
     }
   }
 
-  // Preise: Jahresmittel je energy_type aus energy_prices (Mandanten-Ebene)
-  const { data: priceRows } = await admin.from("energy_prices")
+  const { data: priceRows, error: priceErr } = await admin.from("energy_prices")
     .select("energy_type, price_per_unit, valid_from")
     .eq("tenant_id", contract.tenant_id)
     .order("valid_from", { ascending: false });
+  if (priceErr) return json({ error: "Preise konnten nicht geladen werden: " + priceErr.message }, 500);
 
   const priceByType = new Map<string, number>();
   for (const p of priceRows ?? []) {
-    if (!priceByType.has(p.energy_type)) priceByType.set(p.energy_type, Number(p.price_per_unit));
+    const energyType = String(p.energy_type ?? "").trim().toLowerCase();
+    if (!priceByType.has(energyType)) priceByType.set(energyType, Number(p.price_per_unit));
   }
   const fixedPrices = (contract.fixed_price_eur_per_kwh ?? {}) as Record<string, number>;
 
   const perEnergyType: any[] = [];
+  const warnings: string[] = [];
   let totalSavings = 0;
 
   for (const b of baselines) {
-    const meterIds = groups.get(b.energy_type) ?? [];
+    const energyType = String(b.energy_type).trim().toLowerCase();
+    const meterIds = groups.get(energyType) ?? [];
     let actualKwh = 0;
+    let coverageMonths = 0;
+    let sourcePeriodType = "none";
     if (meterIds.length > 0) {
-      const { data: sums } = await admin.rpc("get_meter_period_sums", {
-        p_meter_ids: meterIds, p_from_date: fromDate, p_to_date: toDate,
-      });
-      actualKwh = Number(sums?.[0]?.total_value ?? 0);
+      const { data: periodRows, error: periodErr } = await admin.from("meter_period_totals")
+        .select("period_type, period_start, total_value")
+        .in("meter_id", meterIds)
+        .in("period_type", ["month", "day"])
+        .gte("period_start", fromDate)
+        .lte("period_start", toDate);
+      if (periodErr) return json({ error: `Ist-Werte konnten nicht geladen werden (${energyType}): ${periodErr.message}` }, 500);
+      const monthlyRows = (periodRows ?? []).filter((r: any) => r.period_type === "month");
+      const dailyRows = (periodRows ?? []).filter((r: any) => r.period_type === "day");
+      const sourceRows = monthlyRows.length > 0 ? monthlyRows : dailyRows;
+      sourcePeriodType = monthlyRows.length > 0 ? "month" : dailyRows.length > 0 ? "day" : "none";
+      actualKwh = sourceRows.reduce((sum: number, r: any) => sum + Number(r.total_value ?? 0), 0);
+      coverageMonths = new Set(sourceRows.map((r: any) => monthKey(String(r.period_start)))).size;
     }
+    if (coverageMonths < 12) warnings.push(`Ist-Jahr ${periodYear}: Für ${energyType} liegen nur ${coverageMonths} von 12 Monaten vor.`);
 
-    const isHeating = HEATING_TYPES.has(b.energy_type) && contract.weather_normalize;
+    const isHeating = HEATING_TYPES.has(energyType) && contract.weather_normalize;
     let hddFactor = 1;
     if (isHeating && b.baseline_hdd && periodHdd && periodHdd > 0) {
-      // Ist-Verbrauch auf Baseline-Klima hochrechnen
       hddFactor = Number(b.baseline_hdd) / periodHdd;
     }
     const actualNorm = actualKwh * hddFactor;
@@ -127,14 +156,19 @@ Deno.serve(async (req) => {
     const savingsKwh = Math.max(0, baselineNorm - actualNorm);
 
     const price = contract.price_basis === "contract_fixed"
-      ? Number(fixedPrices[b.energy_type] ?? 0)
-      : Number(priceByType.get(b.energy_type) ?? 0);
+      ? Number(fixedPrices[energyType] ?? fixedPrices[b.energy_type] ?? 0)
+      : Number(priceByType.get(energyType) ?? 0);
+    if (price === 0) warnings.push(`Für ${energyType} ist kein Preis hinterlegt; monetäre Einsparung wird mit 0 € berechnet.`);
     const savingsEur = Math.round(savingsKwh * price * 100) / 100;
 
     perEnergyType.push({
-      energy_type: b.energy_type,
+      energy_type: energyType,
       baseline_kwh: baselineNorm,
+      baseline_quality: b.data_quality ?? "unknown",
+      baseline_coverage_months: b.coverage_months ?? null,
       actual_kwh: actualKwh,
+      actual_coverage_months: coverageMonths,
+      actual_source_period_type: sourcePeriodType,
       hdd_factor: Math.round(hddFactor * 10000) / 10000,
       avg_price_eur_per_kwh: price,
       savings_kwh: Math.round(savingsKwh * 100) / 100,
@@ -160,9 +194,19 @@ Deno.serve(async (req) => {
       aicono_amount_eur: aiconoAmount,
       partner_amount_eur: partnerAmount,
       tenant_retained_eur: tenantRetained,
+      notes: warnings.length > 0 ? warnings.join("\n") : null,
     }, { onConflict: "contract_id,period_year" })
     .select().maybeSingle();
   if (upErr) return json({ error: upErr.message }, 500);
 
-  return json({ success: true, settlement });
+  console.log("savings-share-calculate", JSON.stringify({
+    contract_id: contractId,
+    tenant_id: contract.tenant_id,
+    period_year: periodYear,
+    rows: perEnergyType.length,
+    total_savings: totalSavings,
+    warnings: warnings.length,
+  }));
+
+  return json({ success: true, settlement, warnings });
 });
