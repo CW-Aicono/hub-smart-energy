@@ -1,61 +1,75 @@
+
 ## Ziel
-Ein neues Widget im Tenant-Dashboard, das die wichtigsten KPIs des Gain-Sharings kompakt anzeigt und auf die Vollansicht `/savings-share` verlinkt. Das Widget wird nur angezeigt, wenn das Modul `gain_sharing` für den Tenant aktiviert ist.
+Der Custom-Widget-Typ „Energieflussmonitor" (`src/components/dashboard/EnergyFlowMonitor.tsx`) soll deutlich reicher, interaktiver und lesbarer werden — inspiriert von modernen Home-Energy-Dashboards (Tesla Powerwall App, Sense, Home Assistant Energy Distribution Card, Enphase Enlighten, SolarEdge mySolarEdge).
 
-## Angezeigte KPIs
-Datenquelle: `tenant_savings_contracts` + `tenant_savings_baselines` + `tenant_savings_settlements` (identisch zu `SavingsShareReadOnly`).
+## Recherche / Referenzen (Best Practices)
+- **Tesla / Sense**: zentrale Icons in Kreisen, farbige animierte Partikel entlang der Verbindungen, Richtung + Geschwindigkeit spiegeln Fluss wider.
+- **Home Assistant Energy Distribution**: Klick auf Knoten öffnet Detail-Popover mit Tages-/Monats-KPIs und Mini-Chart.
+- **Enphase/SolarEdge**: farbige Rand-Ringe visualisieren Auslastung (0–100 %), inaktive Knoten dezent ausgegraut, klare Legende.
+- **Common Pattern**: Partikeldichte + Farbe = Leistung; „glow"-Effekt bei aktivem Fluss; kompakte Zahlen mit Einheitswechsel (W → kW → MW).
 
-Vier KPI-Kacheln:
-1. **Vertragsstatus** – Badge (Entwurf/Aktiv/Pausiert/Beendet) + Baseline-Jahr → Start-Jahr.
-2. **Baseline gesamt** – Σ `baseline_kwh_normalized` in kWh; Untertext: schwächste Datenqualität + Ø Monatsabdeckung.
-3. **Einsparung letzte Abrechnung** – `total_savings_eur` der neuesten Settlement-Periode; Untertext: Jahr + Status-Badge.
-4. **Kumulierte Einsparung** – Σ `total_savings_eur` aller Settlements mit Status ∈ (approved, invoiced, paid); Untertext: „davon Tenant-Anteil: X €" (Σ `tenant_retained_eur`).
+## Erweiterungen im Widget
 
-Darunter:
-- Mini-Balkendiagramm (recharts, stacked) der letzten bis zu 5 Abrechnungsjahre: Tenant-Anteil (grün) + AICONO-Anteil (teal).
-- Button „Details ansehen" → navigiert nach `/savings-share`.
+### 1. Zentrale Icons in Kreisen (Fix)
+- Icon exakt in Kreismitte (`foreignObject` mittig, ohne Y-Shift), Live-Wert **unter** dem Kreis (zusammen mit Label & Periodensumme in einer sauberen Text-Stack) — nicht mehr im Kreis überlappend.
+- Icon-Größe skaliert mit `nodeRadius` (statt fixe `h-6 w-6`).
+- Aktive Knoten: gefüllter Farbverlauf-Hintergrund (12 % Opacity), Rand-Ring mit Farbe. Inaktive: dezent grau.
 
-Leer-Zustände:
-- Kein Vertrag: Card mit Hinweis „Noch kein Gain-Sharing-Vertrag hinterlegt" + Link.
-- Vertrag ohne Settlements: KPI 3 & 4 zeigen „–"; Chart-Bereich zeigt „Noch keine Abrechnungen".
+### 2. Klick auf Kreis → Detail-Overlay
+- Klick auf einen Knoten öffnet ein Popover (Radix `Popover` oder Inline-Panel, z. B. `Sheet`) mit:
+  - Rollen-Titel + Icon + `label`
+  - **Aktuelle Leistung** (live, farbcodiert, Vorzeichen)
+  - **Tages-/Perioden-Summe** (aus `periodSums`)
+  - **Anteil am Fluss** (z. B. „PV deckt 72 % des Hausverbrauchs")
+  - **Mini-Chart** der letzten 24 h (kleine Sparkline über `meter_power_readings`, `recharts` `Area`)
+  - Link „Zum Zähler-Detail" → `/meters/:id`
+- ESC/Klick außerhalb schließt Overlay; nur ein Knoten gleichzeitig geöffnet (`selectedNodeId`).
 
-Alle Zahlen mit `toLocaleString("de-DE")`.
+### 3. Animierte Energieflüsse (Verbesserung)
+- Partikel-Dichte skaliert mit Leistung (3 → bis 8 Punkte), Größe wächst leicht mit W.
+- Zusätzlich **animierter Gradient-Stroke** (`stroke-dasharray` + `dashoffset`-Animation) für weichen „Fluss-Look" statt nur Punkte.
+- Farbe = Quellknoten-Farbe; bei Rückfluss (negativer Wert) automatisch Richtung umkehren + Ziel-Farbe verwenden.
+- Bei `flowWatts === 0` oder `null`: nur dünne, gepunktete Linie, keine Animation, `opacity 0.15`.
+- Kleine **Fluss-Label** mittig auf der Linie („2,4 kW"), on-hover einblenden.
 
-## Umsetzung
+### 4. Weitere UX-/Feature-Verbesserungen
+- **Auto-Layout-Hilfe**: wenn Knoten sich überlappen, kleine Warnung im Designer (kein Layout-Change am Widget selbst).
+- **Legende / Aktiv-Ampel**: kleine Ecken-Badge oben rechts „● Live" (grün, pulsierend, wenn Realtime-Werte reinkommen; grau, wenn nur Periodendaten).
+- **Selbstverbrauch-KPI-Zeile** unten (nur bei Vorhandensein von `pv`, `grid`, `house`-Rollen): berechnet „Autarkie %" und „Eigenverbrauch %" live aus den Watt-Werten.
+- **Deutsche Zahlen** durchgängig via `toLocaleString("de-DE")` (statt `toFixed`) — Kern-Regel des Projekts.
+- **Barrierefreiheit**: Knoten sind `<button>`-artig (tabbable, `aria-label` mit Rolle+Wert), Fokus-Ring in Node-Farbe.
+- **Reduced Motion**: `@media (prefers-reduced-motion)` → Partikel deaktivieren, statt dessen nur Farbintensität der Linie.
 
-### 1. Neue Datei `src/components/dashboard/SavingsShareWidget.tsx`
-- Props: `WidgetProps` (locationId wird ignoriert – Gain-Sharing ist tenantweit).
-- Nutzt `useTenant()` für `tenant.id`.
-- `useQuery` (`queryKey: ["savings-share-widget", tenant.id]`) lädt neuesten Contract + Baselines + Settlements (Logik analog `SavingsShareReadOnly`, inline gehalten).
-- Card mit Titel „Gain-Sharing", `Euro`-Icon, KPI-Grid + Mini-Chart.
-- Bei Loading: Skeleton. Bei Fehler: kompakte Fehlermeldung.
+### 5. Vorschau im Designer
+- Gleiche Komponente wird in `src/components/settings/WidgetPreview.tsx` verwendet → alle Verbesserungen wirken automatisch auch in der „Vorschau"-Tab (Screenshot 2).
 
-### 2. Sichtbarkeitssteuerung über Modul (zentrale Stelle)
-`src/pages/DashboardContent.tsx` – nur diese Datei wird angepasst, damit die Filterung konsistent zu bestehenden modul-gebundenen Widgets erfolgt:
+## Technische Umsetzung (kompakt)
 
-- In `WIDGET_MODULE_MAP` neuen Eintrag ergänzen:
-  ```ts
-  savings_share: "gain_sharing",
-  ```
-  → `filteredVisibleWidgets` blendet das Widget automatisch aus, wenn `isModuleEnabled("gain_sharing")` `false` liefert. Damit erscheint es weder im Dashboard-Grid noch im Expand-Dialog.
+```text
+EnergyFlowMonitor.tsx
+├── State: selectedNodeId
+├── Layout-Helfer: getClippedLine (bleibt), plus getMidpoint für Fluss-Label
+├── Rendering
+│   ├── <defs> Gradient pro Verbindung (Quelle→Ziel-Farbe)
+│   ├── Connections
+│   │   ├── base line (gepunktet wenn kein Fluss)
+│   │   ├── gradient stroke (dashoffset-Animation, prefers-reduced-motion aware)
+│   │   ├── particles (Anzahl abhängig von Watt)
+│   │   └── flow label (hover)
+│   ├── Nodes (als <g> mit onClick → setSelectedNodeId, aria-role="button")
+│   │   ├── circle (fill mit Farbverlauf, stroke=Farbe, dimmed wenn inaktiv)
+│   │   ├── icon zentriert
+│   │   └── label + live-Wert + Periodensumme unter dem Kreis
+│   └── KPI-Footer (Autarkie/Eigenverbrauch, wenn PV+grid+house vorhanden)
+└── <NodeDetailPopover /> — Radix Popover, positioniert am Knoten
+    └── Sparkline: neuer kleiner useQuery auf meter_power_readings (letzte 24h, LTTB-Downsampling optional)
+```
 
-- Optional (kein Blocker): der Dashboard-Customizer zeigt den Eintrag weiterhin, kann aber später über dieselbe Map gefiltert werden. Für diesen Task nicht erforderlich, da `useModuleGuard` bereits alle Anzeige-Entscheidungen trifft.
+- Keine DB-/RLS-Änderungen; Sparkline nutzt bestehende `meter_power_readings`-Tabelle (bereits über `useRealtimePower`/`BoardEnergyBand` erprobt).
+- Keine Änderungen an `useCustomWidgetDefinitions` (Datenmodell bleibt gleich).
+- Keine neuen Dependencies (Recharts, Radix Popover bereits im Projekt).
 
-### 3. Registrierung in `src/pages/DashboardContent.tsx`
-- Lazy-Import: `const SavingsShareWidget = lazy(() => import("@/components/dashboard/SavingsShareWidget"));`
-- `WIDGET_COMPONENTS`: `savings_share: SavingsShareWidget`.
-- `WIDGET_HEIGHT_LIMITS`: `savings_share: { min: 340, max: 520 }`.
-
-### 4. Default-Widget-Eintrag in `src/hooks/useDashboardWidgets.tsx`
-- `{ widget_type: "savings_share", position: 17, is_visible: true }` — initial sichtbar; wird durch Modul-Filter ausgeblendet, solange `gain_sharing` deaktiviert ist.
-
-### 5. Anzeige-Label im Customizer
-Label „Gain-Sharing KPIs" für `savings_share` in der Labels-Map des `DashboardCustomizer` bzw. den i18n-Übersetzungen ergänzen (DE/EN/ES/NL).
-
-### Kein DB-/RLS-Change
-Widget liest bestehende Tabellen mit vorhandenen Policies – keine Migration nötig.
-
-## Technische Notizen
-- Modul-Check läuft über den bestehenden `useModuleGuard`-Mechanismus (`WIDGET_MODULE_MAP` → `isModuleEnabled`). Damit ist die Sichtbarkeit strikt an das im Super-Admin/Partner freigeschaltete Modul `gain_sharing` gekoppelt – konsistent mit Route-Guard `/savings-share`.
-- Widget respektiert Widget-Size über responsives Grid (`grid-cols-2 md:grid-cols-4` bei full, sonst `grid-cols-2`).
-- Kein Location-Bezug – Inhalt ändert sich nicht beim Standort-Filter.
-- Chart via `recharts` (bereits im Projekt), Y-Achse in €, Tooltip mit deutscher Formatierung.
+## Nicht enthalten
+- Änderungen am Designer-Editor (Knoten-Anordnung/Topologie) — nur Optik/Verhalten des gerenderten Widgets.
+- Neue Rollen-Typen (bleiben pv/grid/house/battery/wallbox/heatpump/consumer).
+- Keine Backend-/Edge-Function-Änderungen.
