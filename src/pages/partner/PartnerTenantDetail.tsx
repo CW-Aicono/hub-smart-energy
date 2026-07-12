@@ -16,6 +16,8 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, Pencil, Building2, MapPin, Package, Activity } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import SavingsShareReadOnly from "@/components/savings-share/SavingsShareReadOnly";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 const statusColor: Record<string, string> = {
   active: "default",
@@ -82,6 +84,33 @@ export default function PartnerTenantDetail() {
     },
   });
 
+  const { sorted: sortedLocations, sort: locSort, toggle: toggleLocSort } = useSortableData<any, "name" | "city" | "created">(
+    locations,
+    (l, k) => {
+      switch (k) {
+        case "name": return l.name ?? "";
+        case "city": return `${l.postal_code ?? ""} ${l.city ?? ""}`.trim();
+        case "created": return l.created_at ? new Date(l.created_at) : null;
+        default: return null;
+      }
+    },
+    { key: "name", direction: "asc" },
+  );
+  const { sorted: sortedLicenses, sort: licSort, toggle: toggleLicSort } = useSortableData<any, "plan" | "price" | "status" | "from" | "until">(
+    licenses,
+    (l, k) => {
+      switch (k) {
+        case "plan": return l.plan_name ?? "";
+        case "price": return Number(l.price_monthly ?? 0);
+        case "status": return l.status ?? "";
+        case "from": return l.valid_from ? new Date(l.valid_from) : null;
+        case "until": return l.valid_until ? new Date(l.valid_until) : null;
+        default: return null;
+      }
+    },
+    { key: "plan", direction: "asc" },
+  );
+
   if (isLoading || accessLoading) return <div className="p-6 text-muted-foreground">Lädt…</div>;
   if (!tenant) return <div className="p-6 text-muted-foreground">Tenant nicht gefunden oder kein Zugriff.</div>;
 
@@ -114,6 +143,7 @@ export default function PartnerTenantDetail() {
           <TabsTrigger value="overview">Übersicht</TabsTrigger>
           <TabsTrigger value="locations">Standorte ({locations.length})</TabsTrigger>
           <TabsTrigger value="modules">Module & Lizenzen</TabsTrigger>
+          {modules.some((m) => m.module_code === "gain_sharing") && <TabsTrigger value="gain_sharing">Gain-Sharing</TabsTrigger>}
           <TabsTrigger value="activity">Aktivität</TabsTrigger>
         </TabsList>
 
@@ -143,9 +173,13 @@ export default function PartnerTenantDetail() {
                 <p className="text-sm text-muted-foreground">Noch keine Standorte angelegt.</p>
               ) : (
                 <Table>
-                  <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Ort</TableHead><TableHead>Erstellt</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow>
+                    <SortableHead sortKey="name" sort={locSort} onToggle={toggleLocSort}>Name</SortableHead>
+                    <SortableHead sortKey="city" sort={locSort} onToggle={toggleLocSort}>Ort</SortableHead>
+                    <SortableHead sortKey="created" sort={locSort} onToggle={toggleLocSort}>Erstellt</SortableHead>
+                  </TableRow></TableHeader>
                   <TableBody>
-                    {locations.map((l) => (
+                    {sortedLocations.map((l) => (
                       <TableRow key={l.id}>
                         <TableCell className="font-medium">{l.name}</TableCell>
                         <TableCell>{l.postal_code} {l.city}</TableCell>
@@ -183,11 +217,14 @@ export default function PartnerTenantDetail() {
               ) : (
                 <Table>
                   <TableHeader><TableRow>
-                    <TableHead>Plan</TableHead><TableHead>Preis/Monat</TableHead><TableHead>Status</TableHead>
-                    <TableHead>Gültig ab</TableHead><TableHead>Gültig bis</TableHead>
+                    <SortableHead sortKey="plan" sort={licSort} onToggle={toggleLicSort}>Plan</SortableHead>
+                    <SortableHead sortKey="price" sort={licSort} onToggle={toggleLicSort}>Preis/Monat</SortableHead>
+                    <SortableHead sortKey="status" sort={licSort} onToggle={toggleLicSort}>Status</SortableHead>
+                    <SortableHead sortKey="from" sort={licSort} onToggle={toggleLicSort}>Gültig ab</SortableHead>
+                    <SortableHead sortKey="until" sort={licSort} onToggle={toggleLicSort}>Gültig bis</SortableHead>
                   </TableRow></TableHeader>
                   <TableBody>
-                    {licenses.map((l) => (
+                    {sortedLicenses.map((l) => (
                       <TableRow key={l.id}>
                         <TableCell className="font-medium">{l.plan_name}</TableCell>
                         <TableCell>{fmtEur(Number(l.price_monthly))}</TableCell>
@@ -202,6 +239,12 @@ export default function PartnerTenantDetail() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {modules.some((m) => m.module_code === "gain_sharing") && (
+          <TabsContent value="gain_sharing">
+            <SavingsShareReadOnly tenantId={tenantId!} />
+          </TabsContent>
+        )}
 
         <TabsContent value="activity">
           <Card>

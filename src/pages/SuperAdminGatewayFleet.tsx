@@ -16,7 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Cpu, RefreshCw, RocketIcon, CheckCircle2, XCircle, Clock, Loader2, ChevronRight, ChevronDown, Radio, Activity, AlertCircle } from "lucide-react";
+import { Cpu, RefreshCw, RocketIcon, CheckCircle2, XCircle, Clock, Loader2, ChevronRight, ChevronDown, Radio, Activity, AlertCircle, Search } from "lucide-react";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -438,11 +439,44 @@ const SuperAdminGatewayFleet = () => {
 
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [fleetSearch, setFleetSearch] = useState("");
   const deviceTypes = Array.from(new Set(unifiedRows.map((r) => r.type)));
   const statusOptions = Array.from(new Set(unifiedRows.map((r) => r.status)));
-  const filteredRows = unifiedRows.filter((r) =>
+  const filteredRowsPre = unifiedRows.filter((r) =>
     (typeFilter === "all" || r.type === typeFilter) &&
     (statusFilter === "all" || r.status === statusFilter)
+  );
+  const filteredRowsSearched = fleetSearch.trim()
+    ? filteredRowsPre.filter((r) => {
+        const q = fleetSearch.toLowerCase();
+        return (
+          (r.tenantName ?? "").toLowerCase().includes(q) ||
+          (r.locationName ?? "").toLowerCase().includes(q) ||
+          (r.type ?? "").toLowerCase().includes(q) ||
+          (r.statusLabel ?? r.status ?? "").toLowerCase().includes(q) ||
+          (r.worker ?? "").toLowerCase().includes(q)
+        );
+      })
+    : filteredRowsPre;
+  const { sorted: filteredRows, sort: fleetSort, toggle: toggleFleetSort } = useSortableData<any, "tenant" | "location" | "type" | "status" | "connected" | "heartbeat" | "events" | "reconnects" | "uptime" | "sessions" | "worker">(
+    filteredRowsSearched,
+    (r, k) => {
+      switch (k) {
+        case "tenant": return r.tenantName ?? "";
+        case "location": return r.locationName ?? "";
+        case "type": return r.type ?? "";
+        case "status": return r.statusLabel ?? r.status ?? "";
+        case "connected": return r.connectedSince ? new Date(r.connectedSince) : null;
+        case "heartbeat": return r.heartbeatAgeMs ?? Number.MAX_SAFE_INTEGER;
+        case "events": return r.eventsLast24h ?? -1;
+        case "reconnects": return r.reconnectsLast24h ?? -1;
+        case "uptime": return r.uptimeRatio24h ?? -1;
+        case "sessions": return r.sessionsLast24h ?? -1;
+        case "worker": return r.worker ?? "";
+        default: return null;
+      }
+    },
+    { key: "tenant", direction: "asc" },
   );
 
   const { data: channels = [], refetch: refetchChannels } = useQuery({
@@ -454,6 +488,22 @@ const SuperAdminGatewayFleet = () => {
     enabled: !!isSuperAdmin,
   });
 
+  const { sorted: sortedChannels, sort: chanSort, toggle: toggleChanSort } = useSortableData<ReleaseChannel, "channel" | "version" | "image" | "released" | "latest">(
+    channels,
+    (c, k) => {
+      switch (k) {
+        case "channel": return c.channel;
+        case "version": return c.version;
+        case "image": return c.image_ref;
+        case "released": return c.released_at ? new Date(c.released_at) : null;
+        case "latest": return c.is_latest ? 1 : 0;
+        default: return null;
+      }
+    },
+    { key: "released", direction: "desc" },
+  );
+
+
   const { data: jobs = [], refetch: refetchJobs } = useQuery({
     queryKey: ["sa-gateway-jobs"],
     queryFn: async () => {
@@ -463,6 +513,24 @@ const SuperAdminGatewayFleet = () => {
     enabled: !!isSuperAdmin,
     refetchInterval: 15_000,
   });
+
+  const { sorted: sortedJobs, sort: jobsSort, toggle: toggleJobsSort } = useSortableData<any, "gateway" | "version" | "status" | "trigger" | "created" | "finished">(
+    jobs,
+    (j, k) => {
+      const dev = fleet.find((f) => f.id === j.gateway_device_id);
+      switch (k) {
+        case "gateway": return dev?.device_name ?? j.gateway_device_id;
+        case "version": return j.target_version ?? "";
+        case "status": return j.status ?? "";
+        case "trigger": return j.triggered_by ?? "";
+        case "created": return j.created_at ? new Date(j.created_at) : null;
+        case "finished": return j.finished_at ? new Date(j.finished_at) : null;
+        default: return null;
+      }
+    },
+    { key: "created", direction: "desc" },
+  );
+
 
   // Realtime: live job updates
   useEffect(() => {
@@ -577,6 +645,15 @@ const SuperAdminGatewayFleet = () => {
                     {statusOptions.includes("unknown") && <SelectItem value="unknown">Unbekannt</SelectItem>}
                   </SelectContent>
                 </Select>
+                <div className="relative ml-2">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Suchen (Tenant, Liegenschaft, Typ, Worker)…"
+                    value={fleetSearch}
+                    onChange={(e) => setFleetSearch(e.target.value)}
+                    className="pl-8 h-9 w-72"
+                  />
+                </div>
                 <span className="ml-auto text-xs text-muted-foreground">
                   Aktuelle Sitzung + Statistik der letzten 24 h
                 </span>
@@ -587,17 +664,17 @@ const SuperAdminGatewayFleet = () => {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-8"></TableHead>
-                        <TableHead>Tenant</TableHead>
-                        <TableHead>Liegenschaft</TableHead>
-                        <TableHead>Typ</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Verbunden seit</TableHead>
-                        <TableHead>Letzter Heartbeat</TableHead>
-                        <TableHead className="text-right">Events 24 h</TableHead>
-                        <TableHead className="text-right">Reconnects 24 h</TableHead>
-                        <TableHead className="text-right">Uptime 24 h</TableHead>
-                        <TableHead className="text-right">Sitzungen 24 h</TableHead>
-                        <TableHead>Worker</TableHead>
+                        <SortableHead sortKey="tenant" sort={fleetSort} onToggle={toggleFleetSort}>Tenant</SortableHead>
+                        <SortableHead sortKey="location" sort={fleetSort} onToggle={toggleFleetSort}>Liegenschaft</SortableHead>
+                        <SortableHead sortKey="type" sort={fleetSort} onToggle={toggleFleetSort}>Typ</SortableHead>
+                        <SortableHead sortKey="status" sort={fleetSort} onToggle={toggleFleetSort}>Status</SortableHead>
+                        <SortableHead sortKey="connected" sort={fleetSort} onToggle={toggleFleetSort}>Verbunden seit</SortableHead>
+                        <SortableHead sortKey="heartbeat" sort={fleetSort} onToggle={toggleFleetSort}>Letzter Heartbeat</SortableHead>
+                        <SortableHead sortKey="events" sort={fleetSort} onToggle={toggleFleetSort} align="right">Events 24 h</SortableHead>
+                        <SortableHead sortKey="reconnects" sort={fleetSort} onToggle={toggleFleetSort} align="right">Reconnects 24 h</SortableHead>
+                        <SortableHead sortKey="uptime" sort={fleetSort} onToggle={toggleFleetSort} align="right">Uptime 24 h</SortableHead>
+                        <SortableHead sortKey="sessions" sort={fleetSort} onToggle={toggleFleetSort} align="right">Sitzungen 24 h</SortableHead>
+                        <SortableHead sortKey="worker" sort={fleetSort} onToggle={toggleFleetSort}>Worker</SortableHead>
                         <TableHead>Letzter Disconnect</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -748,20 +825,20 @@ const SuperAdminGatewayFleet = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Gateway</TableHead>
-                        <TableHead>Version</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Trigger</TableHead>
-                        <TableHead>Erstellt</TableHead>
-                        <TableHead>Beendet</TableHead>
+                        <SortableHead sortKey="gateway" sort={jobsSort} onToggle={toggleJobsSort}>Gateway</SortableHead>
+                        <SortableHead sortKey="version" sort={jobsSort} onToggle={toggleJobsSort}>Version</SortableHead>
+                        <SortableHead sortKey="status" sort={jobsSort} onToggle={toggleJobsSort}>Status</SortableHead>
+                        <SortableHead sortKey="trigger" sort={jobsSort} onToggle={toggleJobsSort}>Trigger</SortableHead>
+                        <SortableHead sortKey="created" sort={jobsSort} onToggle={toggleJobsSort}>Erstellt</SortableHead>
+                        <SortableHead sortKey="finished" sort={jobsSort} onToggle={toggleJobsSort}>Beendet</SortableHead>
                         <TableHead className="text-right">Aktion</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {jobs.length === 0 && (
+                      {sortedJobs.length === 0 && (
                         <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">Noch keine Update-Jobs.</TableCell></TableRow>
                       )}
-                      {jobs.map((j) => {
+                      {sortedJobs.map((j) => {
                         const dev = fleet.find((f) => f.id === j.gateway_device_id);
                         const open = ["queued", "dispatched", "running"].includes(j.status);
                         return (
@@ -799,19 +876,19 @@ const SuperAdminGatewayFleet = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Channel</TableHead>
-                        <TableHead>Version</TableHead>
-                        <TableHead>Image</TableHead>
-                        <TableHead>Veröffentlicht</TableHead>
-                        <TableHead>Latest</TableHead>
+                        <SortableHead sortKey="channel" sort={chanSort} onToggle={toggleChanSort}>Channel</SortableHead>
+                        <SortableHead sortKey="version" sort={chanSort} onToggle={toggleChanSort}>Version</SortableHead>
+                        <SortableHead sortKey="image" sort={chanSort} onToggle={toggleChanSort}>Image</SortableHead>
+                        <SortableHead sortKey="released" sort={chanSort} onToggle={toggleChanSort}>Veröffentlicht</SortableHead>
+                        <SortableHead sortKey="latest" sort={chanSort} onToggle={toggleChanSort}>Latest</SortableHead>
                         <TableHead className="text-right">Aktion</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {channels.length === 0 && (
+                      {sortedChannels.length === 0 && (
                         <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">Noch keine Versionen veröffentlicht.</TableCell></TableRow>
                       )}
-                      {channels.map((c) => (
+                      {sortedChannels.map((c) => (
                         <TableRow key={c.id}>
                           <TableCell><Badge variant="outline">{c.channel}</Badge></TableCell>
                           <TableCell className="font-mono">{c.version}</TableCell>

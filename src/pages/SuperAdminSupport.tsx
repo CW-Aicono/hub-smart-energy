@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
@@ -6,6 +7,8 @@ import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import CreateSupportEntryDialog from "@/components/super-admin/CreateSupportEntryDialog";
@@ -56,7 +59,18 @@ const SuperAdminSupport = () => {
     return Math.ceil(mins / 15);
   };
 
-  const { sorted, sort, toggle } = useSortableData<any, SortKey>(sessions, (r, k) => {
+  const [search, setSearch] = useState("");
+  const filteredSessions = search.trim()
+    ? sessions.filter((s: any) => {
+        const q = search.toLowerCase();
+        return (
+          (s.tenants?.name ?? "").toLowerCase().includes(q) ||
+          (s.reason ?? "").toLowerCase().includes(q)
+        );
+      })
+    : sessions;
+
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(filteredSessions, (r, k) => {
     switch (k) {
       case "tenant": return r.tenants?.name ?? "";
       case "reason": return r.reason ?? "";
@@ -92,7 +106,16 @@ const SuperAdminSupport = () => {
           </div>
           <CreateSupportEntryDialog />
         </header>
-        <div className="p-6">
+        <div className="p-6 space-y-4">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Suchen (Mandant, Grund)…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
           <Card>
             <CardHeader><CardTitle>{t("support.log")}</CardTitle></CardHeader>
             <CardContent className="p-0">

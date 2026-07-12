@@ -9,6 +9,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend,
 } from "recharts";
 import { BarChart3, Download, TrendingUp, Building2, Euro, Package, AlertTriangle } from "lucide-react";
+import { moduleTitle } from "@/lib/salesModuleLabels";
 
 const fmtInt = (v: number) => Number(v ?? 0).toLocaleString("de-DE");
 const fmtEur = (v: number) => Number(v ?? 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -65,7 +66,7 @@ export default function PartnerReporting() {
   );
 
   const moduleData = useMemo(
-    () => modules.map((m) => ({ label: m.module_code, Tenants: m.tenants_count })),
+    () => modules.map((m) => ({ label: moduleTitle(m.module_code), Tenants: m.tenants_count })),
     [modules],
   );
 

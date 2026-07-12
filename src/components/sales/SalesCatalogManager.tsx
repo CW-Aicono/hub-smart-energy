@@ -21,7 +21,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Pencil, Trash2, Cpu, Link2, Globe2, Save, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, Cpu, Link2, Globe2, Save, Upload, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { CompatibilityEditor } from "@/components/super-admin/CompatibilityEditor";
 import { ClassBadge } from "@/components/sales/ClassBadge";
@@ -131,6 +131,7 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
   const [form, setForm] = useState<FormData>(emptyForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
   // Partner: Tab zwischen eigenen Artikeln und globalen Artikeln mit Override
   const [tab, setTab] = useState<"own" | "global">("own");
   const [importOpen, setImportOpen] = useState(false);
@@ -181,12 +182,23 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
   const ownItems = items.filter((i) => i.owner_scope === "partner" && i.partner_id === partnerId);
   const globalItems = items.filter((i) => i.owner_scope === "global");
   const baseList = scope === "partner" ? (tab === "own" ? ownItems : globalItems) : items;
-  const filtered =
+  const classFiltered =
     classFilter === "all"
       ? baseList
       : classFilter === NO_CLASS
         ? baseList.filter((i) => !i.geraete_klasse)
         : baseList.filter((i) => i.geraete_klasse === classFilter);
+  const filtered = search.trim()
+    ? classFiltered.filter((i) => {
+        const q = search.toLowerCase();
+        return (
+          (i.hersteller ?? "").toLowerCase().includes(q) ||
+          (i.modell ?? "").toLowerCase().includes(q) ||
+          (i.artikelnummer ?? "").toLowerCase().includes(q) ||
+          (i.ean ?? "").toLowerCase().includes(q)
+        );
+      })
+    : classFiltered;
   const classCounts = DEVICE_CLASSES.map((c) => ({
     ...c,
     count:
@@ -411,18 +423,29 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
 
       <Card>
         <CardHeader>
-          <CardTitle>
-            {showGlobalOverrideUI
-              ? `Globale Artikel mit eigenem Preis (${filtered.length})`
-              : `Geräte (${filtered.length})`}
-          </CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardTitle>
+              {showGlobalOverrideUI
+                ? `Globale Artikel mit eigenem Preis (${filtered.length})`
+                : `Geräte (${filtered.length})`}
+            </CardTitle>
+            <div className="relative max-w-sm w-full sm:w-auto">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Suchen (Hersteller, Modell, Art.-Nr., EAN)…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 sm:w-72"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="text-muted-foreground">Lade …</div>
           ) : filtered.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
-              Keine Geräte in dieser Klasse.
+              {search.trim() ? `Keine Treffer für „${search}".` : "Keine Geräte in dieser Klasse."}
             </div>
           ) : showGlobalOverrideUI ? (
             <Table>

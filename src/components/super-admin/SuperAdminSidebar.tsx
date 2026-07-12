@@ -104,6 +104,7 @@ export default function SuperAdminSidebar() {
       children: [
         { to: "/super-admin/billing", icon: Receipt, label: t("nav.billing") },
         { to: "/super-admin/licenses", icon: Euro, label: t("nav.active_licenses") },
+        { to: "/super-admin/savings-share", icon: Euro, label: "Gain-Sharing" },
       ],
     },
     {

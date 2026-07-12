@@ -18,7 +18,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock, Pencil, Save, Blocks, Plus, X, Award, Trash2, Send, CalendarClock, FileSearch } from "lucide-react";
+import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock, Pencil, Save, Blocks, Plus, X, Award, Trash2, Send, CalendarClock, FileSearch, Euro, Search } from "lucide-react";
 import { AuditLogList } from "@/components/audit/AuditLogList";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import {
@@ -32,6 +32,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
+import TenantPartnerTransferCard from "@/components/super-admin/TenantPartnerTransferCard";
+import SavingsShareTab from "@/components/super-admin/savings-share/SavingsShareTab";
 
 interface InviteTenantAdminDialogProps {
   tenantId: string;
@@ -312,11 +314,6 @@ const SuperAdminTenantDetail = () => {
   };
 
 
-  if (authLoading || roleLoading) {
-    return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
-  }
-  if (!user) return <Navigate to="/auth" replace />;
-  if (!isSuperAdmin) return <Navigate to="/" replace />;
 
   const getModuleEnabled = (code: string) => modules.find((m) => m.module_code === code)?.is_enabled ?? false;
   const getModulePriceOverride = (code: string): number | null => {
@@ -375,6 +372,88 @@ const SuperAdminTenantDetail = () => {
   };
 
   const totalSupportCost = supportSessions.reduce((sum, s) => sum + calcSessionCost(s), 0);
+
+  // Search + sort states for sub-tables
+  const [userSearch, setUserSearch] = useState("");
+  const filteredUsers = userSearch.trim()
+    ? users.filter((u: any) => {
+        const q = userSearch.toLowerCase();
+        return (
+          (u.email ?? "").toLowerCase().includes(q) ||
+          (u.contact_person ?? "").toLowerCase().includes(q)
+        );
+      })
+    : users;
+  const filteredInvitations = userSearch.trim()
+    ? pendingInvitations.filter((inv: any) => (inv.email ?? "").toLowerCase().includes(userSearch.toLowerCase()))
+    : pendingInvitations;
+  const { sorted: sortedUsers, sort: userSort, toggle: toggleUserSort } = useSortableData<any, "email" | "contact" | "status" | "created">(
+    filteredUsers,
+    (u, k) => {
+      switch (k) {
+        case "email": return u.email ?? "";
+        case "contact": return u.contact_person ?? "";
+        case "status": return u.is_blocked ? 1 : 0;
+        case "created": return u.created_at ? new Date(u.created_at) : null;
+        default: return null;
+      }
+    },
+    { key: "email", direction: "asc" },
+  );
+
+  const [moduleSearch, setModuleSearch] = useState("");
+  const filteredModuleList = moduleSearch.trim()
+    ? [...ALL_MODULES].filter((mod) =>
+        mod.label.toLowerCase().includes(moduleSearch.toLowerCase()) ||
+        mod.code.toLowerCase().includes(moduleSearch.toLowerCase())
+      )
+    : [...ALL_MODULES];
+
+  const { sorted: sortedModules, sort: moduleSort, toggle: toggleModuleSort } = useSortableData<any, "label" | "enabled" | "global" | "override" | "effective">(
+    filteredModuleList,
+    (mod, k) => {
+      const isAlwaysOn = "alwaysOn" in mod;
+      const isMember = !!(tenant as any)?.is_aicono_member;
+      const isKommune = (tenant as any)?.is_kommune !== false;
+      const globalPrice = isKommune
+        ? (isMember ? getGlobalPrice(mod.code) : getGlobalStandardPrice(mod.code))
+        : (isMember ? getGlobalIndustryPrice(mod.code) : getGlobalIndustryStandardPrice(mod.code));
+      const override = getModulePriceOverride(mod.code);
+      switch (k) {
+        case "label": return mod.label;
+        case "enabled": return isAlwaysOn ? 2 : (getModuleEnabled(mod.code) ? 1 : 0);
+        case "global": return isAlwaysOn ? -1 : globalPrice;
+        case "override": return override ?? -1;
+        case "effective": return isAlwaysOn ? -1 : getEffectivePrice(mod.code);
+        default: return null;
+      }
+    },
+    { key: "label", direction: "asc" },
+  );
+
+  const { sorted: sortedSupportSessions, sort: supportSort, toggle: toggleSupportSort } = useSortableData<any, "date" | "reason" | "duration" | "cost">(
+    supportSessions,
+    (s, k) => {
+      switch (k) {
+        case "date": return s.started_at ? new Date(s.started_at) : null;
+        case "reason": return s.reason ?? "";
+        case "duration": return calcSessionDurationMin(s);
+        case "cost": return calcSessionCost(s);
+        default: return null;
+      }
+    },
+    { key: "date", direction: "desc" },
+  );
+
+  if (authLoading || roleLoading) {
+    return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
+  }
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!isSuperAdmin) return <Navigate to="/" replace />;
+
+
+
+
 
   const refreshUsers = () => {
     queryClient.invalidateQueries({ queryKey: ["tenant-users", id] });
@@ -465,6 +544,7 @@ const SuperAdminTenantDetail = () => {
               <TabsTrigger value="license">{t("tenant_detail.license")}</TabsTrigger>
               <TabsTrigger value="users">{t("nav.users")}</TabsTrigger>
               <TabsTrigger value="billing"><Receipt className="h-4 w-4 mr-1" />{t("tenant_detail.billing")}</TabsTrigger>
+              <TabsTrigger value="gain_sharing"><Euro className="h-4 w-4 mr-1" />Gain-Sharing</TabsTrigger>
               <TabsTrigger value="audit"><FileSearch className="h-4 w-4 mr-1" />Aktivitätslog</TabsTrigger>
             </TabsList>
 
@@ -701,27 +781,6 @@ const SuperAdminTenantDetail = () => {
                           </Label>
                         </div>
                       </div>
-                      <div className="space-y-2 pt-2 border-t">
-                        <Label className="flex items-center gap-2">
-                          <Users className="h-4 w-4" />
-                          Zuordnung zu Partner
-                        </Label>
-                        <Select
-                          value={tenantInfoForm.partner_id || "__platform__"}
-                          onValueChange={(v) => setTenantInfoForm(f => ({ ...f, partner_id: v === "__platform__" ? "" : v }))}
-                        >
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__platform__">Direkt AICONO (Super-Admin)</SelectItem>
-                            {allPartners.map((p: any) => (
-                              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          Legt fest, welcher Vertriebspartner diesen Mandanten betreut. „Direkt AICONO" = kein Partner, Mandant wird zentral verwaltet.
-                        </p>
-                      </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -795,29 +854,50 @@ const SuperAdminTenantDetail = () => {
                   )}
                 </CardContent>
               </Card>
+
+              {tenant && (
+                <TenantPartnerTransferCard
+                  tenantId={(tenant as any).id}
+                  tenantName={(tenant as any).name}
+                  currentPartnerId={(tenant as any).partner_id ?? null}
+                />
+              )}
             </TabsContent>
 
             <TabsContent value="modules" className="mt-6 space-y-6">
               <Card>
-                <CardHeader><CardTitle>{t("tenant_detail.modules_prices")}</CardTitle></CardHeader>
+                <CardHeader>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <CardTitle>{t("tenant_detail.modules_prices")}</CardTitle>
+                    <div className="relative w-full sm:w-64">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder={t("common.search")}
+                        value={moduleSearch}
+                        onChange={(e) => setModuleSearch(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
                 <CardContent>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{t("tenant_detail.modules")}</TableHead>
-                        <TableHead className="w-24 text-center">{t("common.active")}</TableHead>
-                        <TableHead className="w-36 text-right">
+                        <SortableHead sortKey="label" sort={moduleSort} onToggle={toggleModuleSort}>{t("tenant_detail.modules")}</SortableHead>
+                        <SortableHead sortKey="enabled" sort={moduleSort} onToggle={toggleModuleSort} className="w-24 text-center">{t("common.active")}</SortableHead>
+                        <SortableHead sortKey="global" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-36">
                           <span className="inline-flex items-center gap-1 justify-end">
                             Standardpreis
                             {(tenant as any)?.is_aicono_member && <Award className="h-4 w-4 text-primary" />}
                           </span>
-                        </TableHead>
-                        <TableHead className="w-44 text-right">{t("tenant_detail.individual_price")}</TableHead>
-                        <TableHead className="w-32 text-right">{t("tenant_detail.effective")}</TableHead>
+                        </SortableHead>
+                        <SortableHead sortKey="override" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-44">{t("tenant_detail.individual_price")}</SortableHead>
+                        <SortableHead sortKey="effective" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-32">{t("tenant_detail.effective")}</SortableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {ALL_MODULES.map((mod) => {
+                      {sortedModules.map((mod) => {
                         const isAlwaysOn = "alwaysOn" in mod;
                         const isMember = !!(tenant as any)?.is_aicono_member;
                         const isKommune = (tenant as any)?.is_kommune !== false;
@@ -861,6 +941,13 @@ const SuperAdminTenantDetail = () => {
                           </TableRow>
                         );
                       })}
+                      {sortedModules.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                            Keine Module gefunden.
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                   <div className="flex justify-end mt-4 pt-4 border-t">
@@ -1035,22 +1122,33 @@ const SuperAdminTenantDetail = () => {
                   )}
                 </CardHeader>
                 <CardContent className="p-0">
+                  <div className="p-4 pb-0">
+                    <div className="relative max-w-sm">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Suchen (Email, Ansprechpartner)…"
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                  </div>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{t("common.email")}</TableHead>
-                        <TableHead>{t("tenant_detail.contact_person")}</TableHead>
-                        <TableHead>{t("common.status")}</TableHead>
-                        <TableHead>{t("common.created")}</TableHead>
+                        <SortableHead sortKey="email" sort={userSort} onToggle={toggleUserSort}>{t("common.email")}</SortableHead>
+                        <SortableHead sortKey="contact" sort={userSort} onToggle={toggleUserSort}>{t("tenant_detail.contact_person")}</SortableHead>
+                        <SortableHead sortKey="status" sort={userSort} onToggle={toggleUserSort}>{t("common.status")}</SortableHead>
+                        <SortableHead sortKey="created" sort={userSort} onToggle={toggleUserSort}>{t("common.created")}</SortableHead>
                         <TableHead className="text-right">Aktionen</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {users.length === 0 && pendingInvitations.length === 0 ? (
-                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("tenant_detail.no_users")}</TableCell></TableRow>
+                      {sortedUsers.length === 0 && filteredInvitations.length === 0 ? (
+                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{userSearch.trim() ? `Keine Treffer für „${userSearch}".` : t("tenant_detail.no_users")}</TableCell></TableRow>
                       ) : (
                         <>
-                          {users.map((u) => (
+                          {sortedUsers.map((u) => (
                             <TableRow key={u.id}>
                               <TableCell>{u.email ?? "–"}</TableCell>
                               <TableCell>{u.contact_person ?? "–"}</TableCell>
@@ -1084,7 +1182,7 @@ const SuperAdminTenantDetail = () => {
                               </TableCell>
                             </TableRow>
                           ))}
-                          {pendingInvitations.map((inv: any) => {
+                          {filteredInvitations.map((inv: any) => {
                             const expired = new Date(inv.expires_at).getTime() < Date.now();
                             return (
                               <TableRow key={inv.id} className="opacity-80">
@@ -1218,17 +1316,17 @@ const SuperAdminTenantDetail = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{t("tenant_detail.date_time")}</TableHead>
-                        <TableHead>{t("support.reason")}</TableHead>
-                        <TableHead className="text-right">{t("tenant_detail.duration")}</TableHead>
-                        <TableHead className="text-right">{t("tenant_detail.cost")}</TableHead>
+                        <SortableHead sortKey="date" sort={supportSort} onToggle={toggleSupportSort}>{t("tenant_detail.date_time")}</SortableHead>
+                        <SortableHead sortKey="reason" sort={supportSort} onToggle={toggleSupportSort}>{t("support.reason")}</SortableHead>
+                        <SortableHead sortKey="duration" sort={supportSort} onToggle={toggleSupportSort} align="right">{t("tenant_detail.duration")}</SortableHead>
+                        <SortableHead sortKey="cost" sort={supportSort} onToggle={toggleSupportSort} align="right">{t("tenant_detail.cost")}</SortableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {supportSessions.length === 0 ? (
+                      {sortedSupportSessions.length === 0 ? (
                         <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t("tenant_detail.no_support_sessions")}</TableCell></TableRow>
                       ) : (
-                        supportSessions.map((s: any) => {
+                        sortedSupportSessions.map((s: any) => {
                           const durMin = calcSessionDurationMin(s);
                           const cost = calcSessionCost(s);
                           return (
@@ -1266,7 +1364,17 @@ const SuperAdminTenantDetail = () => {
               </Card>
             </TabsContent>
 
+            <TabsContent value="gain_sharing" className="mt-6">
+              {id && (
+                <SavingsShareTab
+                  tenantId={id}
+                  moduleEnabled={modules.some((m) => m.module_code === "gain_sharing" && m.is_enabled)}
+                />
+              )}
+            </TabsContent>
+
             <TabsContent value="audit" className="mt-6">
+
               <AuditLogList tenantId={id} title="Aktivitätslog dieses Mandanten" />
             </TabsContent>
           </Tabs>

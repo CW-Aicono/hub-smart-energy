@@ -1,8 +1,27 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Timer } from "lucide-react";
+import { Timer, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useSortableData } from "@/components/ui/sortable-head";
+import { cn } from "@/lib/utils";
+
+type PollSortKey = "tenant" | "location" | "interval" | "sync";
+
+function SortTh<K extends string>({ label, sortKey, sort, onToggle, className }: {
+  label: React.ReactNode; sortKey: K; sort: { key: K | null; direction: "asc" | "desc" }; onToggle: (k: K) => void; className?: string;
+}) {
+  const isActive = sort.key === sortKey;
+  const Icon = !isActive ? ArrowUpDown : sort.direction === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th className={cn("py-2 pr-4 text-left select-none", className)}>
+      <button type="button" onClick={() => onToggle(sortKey)} className={cn("inline-flex items-center gap-1 hover:text-foreground", isActive && "text-foreground")}>
+        {label}
+        <Icon className="h-3 w-3 opacity-60" />
+      </button>
+    </th>
+  );
+}
 
 interface Row {
   id: string;
@@ -44,6 +63,22 @@ export default function LoxonePollingOverviewCard() {
     return () => { cancelled = true; clearInterval(t); };
   }, []);
 
+  const { sorted, sort, toggle } = useSortableData<Row, PollSortKey>(
+    rows,
+    (r, k) => {
+      const raw = Number((r.config as any)?.poll_interval_minutes);
+      const interval = Number.isFinite(raw) && raw >= 1 && raw <= 60 ? Math.floor(raw) : 15;
+      switch (k) {
+        case "tenant": return r.location?.tenant?.name ?? "";
+        case "location": return r.location?.name ?? "";
+        case "interval": return interval;
+        case "sync": return r.last_sync_at ? new Date(r.last_sync_at) : null;
+        default: return null;
+      }
+    },
+    { key: "tenant", direction: "asc" },
+  );
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -65,14 +100,14 @@ export default function LoxonePollingOverviewCard() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-muted-foreground border-b">
-                  <th className="py-2 pr-4">Tenant</th>
-                  <th className="py-2 pr-4">Liegenschaft</th>
-                  <th className="py-2 pr-4">Intervall (Min)</th>
-                  <th className="py-2 pr-4">Letzter Sync</th>
+                  <SortTh<PollSortKey> label="Tenant" sortKey="tenant" sort={sort} onToggle={toggle} />
+                  <SortTh<PollSortKey> label="Liegenschaft" sortKey="location" sort={sort} onToggle={toggle} />
+                  <SortTh<PollSortKey> label="Intervall (Min)" sortKey="interval" sort={sort} onToggle={toggle} />
+                  <SortTh<PollSortKey> label="Letzter Sync" sortKey="sync" sort={sort} onToggle={toggle} />
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {sorted.map((r) => {
                   const raw = Number((r.config as any)?.poll_interval_minutes);
                   const interval = Number.isFinite(raw) && raw >= 1 && raw <= 60 ? Math.floor(raw) : 15;
                   const isDefault = !Number.isFinite(raw);

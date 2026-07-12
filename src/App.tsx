@@ -23,6 +23,7 @@ import PartnerSalesRules from "@/pages/partner/PartnerSalesRules";
 import PartnerBranding from "@/pages/partner/PartnerBranding";
 import PartnerReporting from "@/pages/partner/PartnerReporting";
 import PartnerTenantDetail from "@/pages/partner/PartnerTenantDetail";
+import PartnerSavingsShare from "@/pages/partner/PartnerSavingsShare";
 import RecoveryGuard from "@/components/RecoveryGuard";
 import MustChangePasswordGuard from "@/components/MustChangePasswordGuard";
 import { ChunkErrorBoundary } from "@/components/ChunkErrorBoundary";
@@ -63,6 +64,7 @@ const SuperAdminTenantDetail = lazy(() => import("./pages/SuperAdminTenantDetail
 const SuperAdminStatistics = lazy(() => import("./pages/SuperAdminStatistics"));
 const SuperAdminBilling = lazy(() => import("./pages/SuperAdminBilling"));
 const SuperAdminLicenses = lazy(() => import("./pages/SuperAdminLicenses"));
+const SuperAdminSavingsShare = lazy(() => import("./pages/SuperAdminSavingsShare"));
 const SuperAdminSupport = lazy(() => import("./pages/SuperAdminSupport"));
 const SuperAdminModulePricing = lazy(() => import("./pages/SuperAdminModulePricing"));
 const SuperAdminBundles = lazy(() => import("./pages/SuperAdminBundles"));
@@ -121,6 +123,7 @@ const SalesProjectEdit = lazy(() => import("./pages/SalesProjectEdit"));
 const SalesProjectDetail = lazy(() => import("./pages/SalesProjectDetail"));
 const EmbedPitchDashboard = lazy(() => import("./pages/EmbedPitchDashboard"));
 const EnergyReport = lazy(() => import("./pages/EnergyReport"));
+const SavingsShare = lazy(() => import("./pages/SavingsShare"));
 const LegalPageView = lazy(() => import("./pages/LegalPageView"));
 const PublicSalesQuote = lazy(() => import("./pages/PublicSalesQuote"));
 const PublicChargeStatus = lazy(() => import("./pages/PublicChargeStatus"));
@@ -195,6 +198,7 @@ const App = () => (
                       <Route path="/demo/arbitrage" element={<ArbitrageTrading />} />
                       <Route path="/demo/copilot" element={<Copilot />} />
                       <Route path="/demo/tenant-electricity" element={<TenantElectricity />} />
+                      <Route path="/demo/savings-share" element={<SavingsShare />} />
                       <Route path="/demo/network" element={<NetworkInfrastructure />} />
                       <Route path="/demo/tasks" element={<Tasks />} />
                       <Route path="/demo/admin" element={<Admin />} />
@@ -236,6 +240,7 @@ const App = () => (
                       <Route path="/super-admin/board" element={<SA><SuperAdminBoard /></SA>} />
                       <Route path="/super-admin/billing" element={<SA><SuperAdminBilling /></SA>} />
                       <Route path="/super-admin/licenses" element={<SA><SuperAdminLicenses /></SA>} />
+                      <Route path="/super-admin/savings-share" element={<SA><SuperAdminSavingsShare /></SA>} />
                       <Route path="/super-admin/module-pricing" element={<SA><SuperAdminModulePricing /></SA>} />
                       <Route path="/super-admin/bundles" element={<SA><SuperAdminBundles /></SA>} />
                       <Route path="/super-admin/support" element={<SA><SuperAdminSupport /></SA>} />
@@ -274,6 +279,7 @@ const App = () => (
                       <Route path="/demo/peak-shaving" element={<PeakShaving />} />
                       <Route path="/copilot" element={<M><Copilot /></M>} />
                       <Route path="/energy-report" element={<M><EnergyReport /></M>} />
+                      <Route path="/savings-share" element={<M><SavingsShare /></M>} />
                       <Route path="/energy-sharing" element={<M><EnergySharing /></M>} />
                       <Route path="/energy-sharing/members/:memberId" element={<M><EnergySharingMemberDetail /></M>} />
                       <Route path="/sharing/marktplatz" element={<MarketplacePublic />} />
@@ -308,6 +314,7 @@ const App = () => (
                       <Route path="/partner/tenants/:tenantId" element={<PartnerLayout><PartnerTenantDetail /></PartnerLayout>} />
                       <Route path="/partner/reporting" element={<PartnerLayout><PartnerReporting /></PartnerLayout>} />
                       <Route path="/partner/billing" element={<PartnerLayout><PartnerBilling /></PartnerLayout>} />
+                      <Route path="/partner/savings-share" element={<PartnerLayout><PartnerSavingsShare /></PartnerLayout>} />
                       <Route path="/partner/branding" element={<PartnerLayout><PartnerBranding /></PartnerLayout>} />
                       <Route path="/partner/members" element={<PartnerLayout><PartnerMembers /></PartnerLayout>} />
                       <Route path="/partner/sales/catalog" element={<PartnerLayout><PartnerSalesCatalog /></PartnerLayout>} />

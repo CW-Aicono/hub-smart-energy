@@ -3793,6 +3793,7 @@ export const translations = {
   "widget.pvForecast": { de: "PV-Prognose", en: "PV Forecast", es: "Pronóstico FV", nl: "PV-prognose" },
   "widget.arbitrageAi": { de: "KI-Handelsempfehlung", en: "AI Trading Recommendation", es: "Recomendación de trading con IA", nl: "AI-handelsaanbeveling" },
   "widget.integrationErrors": { de: "Integrations-Fehlermeldungen", en: "Integration Errors", es: "Errores de integración", nl: "Integratiefouten" },
+  "widget.savingsShare": { de: "Gain-Sharing KPIs", en: "Gain-Sharing KPIs", es: "KPIs de Gain-Sharing", nl: "Gain-Sharing KPI's" },
 
   // Widget size labels
   "widget.sizeFull": { de: "Volle Breite", en: "Full Width", es: "Ancho completo", nl: "Volledige breedte" },

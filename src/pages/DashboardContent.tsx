@@ -40,6 +40,7 @@ const WIDGET_HEIGHT_LIMITS: Record<string, { min?: number; max?: number }> = {
   arbitrage_ai: { min: 360 },
   integration_errors: { min: 360 },
   ppa_fleet: { min: 360 },
+  savings_share: { min: 340, max: 520 },
 };
 
 
@@ -63,6 +64,7 @@ const PvForecastWidget = lazy(() => import("@/components/dashboard/PvForecastWid
 const ArbitrageAiWidget = lazy(() => import("@/components/dashboard/ArbitrageAiWidget"));
 const IntegrationErrorsWidget = lazy(() => import("@/components/dashboard/IntegrationErrorsWidget"));
 const PPAFleetWidget = lazy(() => import("@/components/dashboard/PPAFleetWidget"));
+const SavingsShareWidget = lazy(() => import("@/components/dashboard/SavingsShareWidget"));
 
 interface WidgetProps {
   locationId: string | null;
@@ -90,6 +92,7 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   arbitrage_ai: ArbitrageAiWidget,
   integration_errors: IntegrationErrorsWidget,
   ppa_fleet: PPAFleetWidget,
+  savings_share: SavingsShareWidget,
 };
 
 const SIZE_CLASS: Record<WidgetSize, string> = {
@@ -116,6 +119,7 @@ const WIDGET_MODULE_MAP: Record<string, string> = {
   spot_price: "arbitrage_trading",
   pv_forecast: "energy_monitoring",
   ppa_fleet: "ppa_onsite",
+  savings_share: "gain_sharing",
 };
 
 const getLocationWidget = (_locationId: string | null): string => {

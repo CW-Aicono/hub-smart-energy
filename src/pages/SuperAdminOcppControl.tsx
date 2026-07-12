@@ -11,9 +11,10 @@ import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, ScrollText, Building2 } from "lucide-react";
+import { Activity, ScrollText, Building2, Search } from "lucide-react";
 import { format } from "date-fns";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
@@ -28,6 +29,7 @@ const SuperAdminOcppControl = () => {
   const [tenantFilter, setTenantFilter] = useState<string>("all");
   const [logTenantId, setLogTenantId] = useState<string>("");
   const [logChargePointId, setLogChargePointId] = useState<string>("");
+  const [search, setSearch] = useState("");
 
   const getTenantName = (tenantId: string) => {
     return tenants.find(t => t.id === tenantId)?.name || tenantId.slice(0, 8);
@@ -47,9 +49,22 @@ const SuperAdminOcppControl = () => {
   const filteredCPIds = new Set(filteredCPs.map(cp => cp.id));
 
   // Filter sessions by tenant via charge points
-  const filteredSessions = tenantFilter === "all"
+  const filteredSessionsByTenant = tenantFilter === "all"
     ? sessions
     : sessions.filter(s => s.charge_point_id && filteredCPIds.has(s.charge_point_id));
+
+  const filteredSessions = search.trim()
+    ? filteredSessionsByTenant.filter((s: any) => {
+        const q = search.toLowerCase();
+        return (
+          getTenantName(s.tenant_id).toLowerCase().includes(q) ||
+          getCPName(s.charge_point_id).toLowerCase().includes(q) ||
+          (s.id_tag ?? "").toLowerCase().includes(q) ||
+          (s.status ?? "").toLowerCase().includes(q) ||
+          (s.stop_reason ?? "").toLowerCase().includes(q)
+        );
+      })
+    : filteredSessionsByTenant;
 
   const { sorted, sort, toggle } = useSortableData<any, SortKey>(filteredSessions, (r, k) => {
     switch (k) {
@@ -89,7 +104,16 @@ const SuperAdminOcppControl = () => {
                 Service-Übersicht: Ladevorgänge und OCPP-Kommunikation aller Ladestationen
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Suchen (Mandant, Ladepunkt, ID-Tag, Status)…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8 w-72 h-9 text-sm"
+                />
+              </div>
               <Building2 className="h-4 w-4 opacity-60" />
               <Select value={tenantFilter} onValueChange={setTenantFilter}>
                 <SelectTrigger className="w-56 h-9 text-sm">

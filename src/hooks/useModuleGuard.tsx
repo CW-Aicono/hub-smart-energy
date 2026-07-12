@@ -22,10 +22,12 @@ const ROUTE_MODULE_MAP: Record<string, string> = {
   "/peak-shaving": "peak_shaving",
   "/tenant-electricity": "tenant_electricity",
   "/energy-report": "energy_report",
+  "/savings-share": "gain_sharing",
   "/energy-sharing": "energy_sharing",
   "/ppa": "ppa_onsite|ppa_offsite",
   "/ppa/onsite": "ppa_onsite",
   "/ppa/offsite": "ppa_offsite",
+  "/super-admin/savings-share": "gain_sharing",
 };
 
 /**
@@ -45,6 +47,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/peak-shaving": "peak_shaving",
   "/tenant-electricity": "tenant_electricity",
   "/energy-report": "energy_report",
+  "/savings-share": "gain_sharing",
   "/energy-sharing": "energy_sharing",
   "/ppa": "ppa_onsite|ppa_offsite",
   "/ppa/onsite": "ppa_onsite",
