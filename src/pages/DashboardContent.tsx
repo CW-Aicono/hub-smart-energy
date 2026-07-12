@@ -92,6 +92,7 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType<WidgetProps>> = {
   arbitrage_ai: ArbitrageAiWidget,
   integration_errors: IntegrationErrorsWidget,
   ppa_fleet: PPAFleetWidget,
+  savings_share: SavingsShareWidget,
 };
 
 const SIZE_CLASS: Record<WidgetSize, string> = {
