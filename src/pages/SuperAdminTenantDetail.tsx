@@ -401,8 +401,16 @@ const SuperAdminTenantDetail = () => {
     { key: "email", direction: "asc" },
   );
 
+  const [moduleSearch, setModuleSearch] = useState("");
+  const filteredModuleList = moduleSearch.trim()
+    ? (ALL_MODULES as any[]).filter((mod) =>
+        mod.label.toLowerCase().includes(moduleSearch.toLowerCase()) ||
+        mod.code.toLowerCase().includes(moduleSearch.toLowerCase())
+      )
+    : [...ALL_MODULES] as any[];
+
   const { sorted: sortedModules, sort: moduleSort, toggle: toggleModuleSort } = useSortableData<any, "label" | "enabled" | "global" | "override" | "effective">(
-    [...ALL_MODULES] as any[],
+    filteredModuleList,
     (mod, k) => {
       const isAlwaysOn = "alwaysOn" in mod;
       const isMember = !!(tenant as any)?.is_aicono_member;
