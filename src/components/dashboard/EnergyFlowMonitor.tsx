@@ -145,8 +145,8 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
       if (!meterIds.length) return {};
       const { data } = await supabase.rpc("get_meter_daily_totals_with_fallback" as any, {
         p_meter_ids: meterIds,
-        p_from_date: from.toISOString().split("T")[0],
-        p_to_date: to.toISOString().split("T")[0],
+        p_from_date: toBerlinDateString(from),
+        p_to_date: toBerlinDateString(to),
       });
       if (!data) return {};
       const sums: Record<string, number> = {};
@@ -159,6 +159,34 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     staleTime: 60_000,
   });
 
+  // Seed: letzter Wert aus meter_power_readings (10-min-Fenster) — analog BoardEnergyBand.
+  // Sorgt dafür, dass Live-Werte sofort sichtbar sind, auch wenn direkt nach dem Mount
+  // noch kein Realtime-INSERT eintraf und der Gateway keinen getSensors-Pfad hat (Loxone).
+  const meterKey = useMemo(() => meterIds.slice().sort().join(","), [meterIds]);
+  const { data: seedByMeter = {} } = useQuery({
+    queryKey: ["energyflow-seed", meterKey],
+    enabled: meterIds.length > 0,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<Record<string, number>> => {
+      const since = new Date(Date.now() - 10 * 60_000).toISOString();
+      const { data } = await supabase
+        .from("meter_power_readings")
+        .select("meter_id, power_value, recorded_at")
+        .in("meter_id", meterIds)
+        .gte("recorded_at", since)
+        .order("recorded_at", { ascending: false })
+        .limit(2000);
+      const latest: Record<string, number> = {};
+      for (const row of data ?? []) {
+        if (latest[row.meter_id] === undefined) {
+          latest[row.meter_id] = Number(row.power_value);
+        }
+      }
+      return latest;
+    },
+  });
+
   const getLiveWatts = useCallback(
     (meterId: string): number | null => {
       if (latestByMeter[meterId] != null) return latestByMeter[meterId];
@@ -168,16 +196,22 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
         if (gw.unit === "MW") return gw.value * 1_000_000;
         return gw.value;
       }
+      // Seed aus meter_power_readings ist in kW gespeichert.
+      const seed = seedByMeter[meterId];
+      if (seed != null) return seed * 1000;
       return null;
     },
-    [latestByMeter, livePowerByMeter],
+    [latestByMeter, livePowerByMeter, seedByMeter],
   );
 
   // Live badge: is anything reporting realtime?
   const hasLive = useMemo(
-    () => meterIds.some((id) => latestByMeter[id] != null || livePowerByMeter[id] != null),
-    [meterIds, latestByMeter, livePowerByMeter],
+    () => meterIds.some(
+      (id) => latestByMeter[id] != null || livePowerByMeter[id] != null || seedByMeter[id] != null,
+    ),
+    [meterIds, latestByMeter, livePowerByMeter, seedByMeter],
   );
+
 
   useEffect(() => {
     const el = svgRef.current?.parentElement;
