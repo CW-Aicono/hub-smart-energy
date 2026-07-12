@@ -944,7 +944,7 @@ const SuperAdminTenantDetail = () => {
                       {sortedModules.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                            {t("common.no_results")}
+                            Keine Module gefunden.
                           </TableCell>
                         </TableRow>
                       )}
