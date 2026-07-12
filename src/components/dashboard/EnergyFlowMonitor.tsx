@@ -432,55 +432,33 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
             ? Math.min(5, 2.5 + Math.log10(Math.abs(flowWatts!) + 10) * 0.5)
             : 3;
 
+          const sourceColor = isReversed ? toNode.color : fromNode.color;
+
           return (
             <g key={i}>
-              {/* Base line: dotted when idle, gradient stroke when active */}
-              {!hasFlow ? (
-                <line
-                  x1={x1} y1={y1} x2={x2} y2={y2}
-                  stroke="hsl(var(--muted-foreground))"
-                  strokeWidth={1.5}
-                  strokeOpacity={0.2}
-                  strokeDasharray="2 6"
-                />
-              ) : (
-                <>
-                  <line
-                    x1={x1} y1={y1} x2={x2} y2={y2}
-                    stroke={`url(#flow-grad-${i})`}
-                    strokeWidth={2}
-                    strokeOpacity={0.35}
+              {/* Base line: always solid, colored by source when active, muted when idle */}
+              <line
+                x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke={hasFlow ? sourceColor : "hsl(var(--muted-foreground))"}
+                strokeWidth={hasFlow ? 2 : 1.5}
+                strokeOpacity={hasFlow ? 0.55 : 0.25}
+              />
+              {/* Animated particles along the line */}
+              {hasFlow && !reducedMotion && Array.from({ length: particleCount }).map((_, di) => (
+                <circle
+                  key={di}
+                  r={particleR}
+                  fill={sourceColor}
+                  opacity={0.95}
+                >
+                  <animateMotion
+                    dur={`${dur}s`}
+                    repeatCount="indefinite"
+                    begin={`${(di / particleCount) * dur}s`}
+                    path={animPath}
                   />
-                  {!reducedMotion && (
-                    <line
-                      x1={isReversed ? x2 : x1} y1={isReversed ? y2 : y1}
-                      x2={isReversed ? x1 : x2} y2={isReversed ? y1 : y2}
-                      stroke={`url(#flow-grad-${i})`}
-                      strokeWidth={2.5}
-                      strokeLinecap="round"
-                      strokeDasharray="8 14"
-                      style={{
-                        animation: `energyflow-dash ${dur}s linear infinite`,
-                      }}
-                    />
-                  )}
-                  {!reducedMotion && Array.from({ length: particleCount }).map((_, di) => (
-                    <circle
-                      key={di}
-                      r={particleR}
-                      fill={isReversed ? toNode.color : fromNode.color}
-                      opacity={0.95}
-                    >
-                      <animateMotion
-                        dur={`${dur}s`}
-                        repeatCount="indefinite"
-                        begin={`${(di / particleCount) * dur}s`}
-                        path={animPath}
-                      />
-                    </circle>
-                  ))}
-                </>
-              )}
+                </circle>
+              ))}
               {/* Flow label at midpoint */}
               {hasFlow && (
                 <g transform={`translate(${mx}, ${my})`}>
@@ -489,7 +467,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                     width={52} height={18}
                     rx={9}
                     fill="hsl(var(--background))"
-                    stroke={isReversed ? toNode.color : fromNode.color}
+                    stroke={sourceColor}
                     strokeOpacity={0.5}
                     strokeWidth={1}
                   />
@@ -580,20 +558,10 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                 {node.label}
               </text>
               {/* Live watts */}
-              {liveW != null && (
-                <text
-                  x={cx} y={cy + nodeRadius + 28}
-                  textAnchor="middle"
-                  className={`text-[10px] font-semibold tabular-nums ${
-                    liveW < 0 ? "fill-emerald-500" : "fill-muted-foreground"
-                  }`}
-                >
-                  {formatPower(liveW)}
-                </text>
-              )}
+              {/* Live watts under the circle removed — shown on the flow line only */}
               {periodSum != null && periodSum !== 0 && (
                 <text
-                  x={cx} y={cy + nodeRadius + 40}
+                  x={cx} y={cy + nodeRadius + 28}
                   textAnchor="middle"
                   className="fill-muted-foreground text-[9px] tabular-nums"
                 >
