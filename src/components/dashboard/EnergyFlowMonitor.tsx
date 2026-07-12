@@ -569,19 +569,17 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                 </div>
               </foreignObject>
 
-              {/* Label under circle */}
+              {/* Label + Periodensumme, dynamisch oben oder unten */}
               <text
-                x={cx} y={cy + nodeRadius + 14}
+                x={cx} y={labelY}
                 textAnchor="middle"
                 className="fill-foreground text-[11px] font-medium"
               >
                 {node.label}
               </text>
-              {/* Live watts */}
-              {/* Live watts under the circle removed — shown on the flow line only */}
               {periodSum != null && periodSum !== 0 && (
                 <text
-                  x={cx} y={cy + nodeRadius + 28}
+                  x={cx} y={sumY}
                   textAnchor="middle"
                   className="fill-muted-foreground text-[9px] tabular-nums"
                 >
