@@ -159,9 +159,24 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     staleTime: 60_000,
   });
 
-  // Seed: letzter Wert aus meter_power_readings (10-min-Fenster) — analog BoardEnergyBand.
-  // Sorgt dafür, dass Live-Werte sofort sichtbar sind, auch wenn direkt nach dem Mount
-  // noch kein Realtime-INSERT eintraf und der Gateway keinen getSensors-Pfad hat (Loxone).
+  // UUID→meter_id + tenants für Loxone-Bridge/Broadcast
+  const uuidToMeterId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const meter of relevantMeters as any[]) {
+      if (meter.sensor_uuid) m.set(String(meter.sensor_uuid).toLowerCase(), meter.id);
+    }
+    return m;
+  }, [relevantMeters]);
+  const uuids = useMemo(
+    () => Array.from(uuidToMeterId.keys()),
+    [uuidToMeterId],
+  );
+  const tenantIds = useMemo(
+    () => Array.from(new Set((relevantMeters as any[]).map((m) => m.tenant_id).filter(Boolean))) as string[],
+    [relevantMeters],
+  );
+
+  // Seed A: meter_power_readings (60-min Fenster – Polling-Ingest-Pfad, z. B. Shelly/Gateway)
   const meterKey = useMemo(() => meterIds.slice().sort().join(","), [meterIds]);
   const { data: seedByMeter = {} } = useQuery({
     queryKey: ["energyflow-seed", meterKey],
@@ -169,7 +184,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     staleTime: 60_000,
     refetchInterval: 60_000,
     queryFn: async (): Promise<Record<string, number>> => {
-      const since = new Date(Date.now() - 10 * 60_000).toISOString();
+      const since = new Date(Date.now() - 60 * 60_000).toISOString();
       const { data } = await supabase
         .from("meter_power_readings")
         .select("meter_id, power_value, recorded_at")
@@ -187,29 +202,96 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     },
   });
 
+  // Seed B: bridge_raw_samples (Loxone WS-Bridge – hier landen Live-Leistungen aus Loxone)
+  const uuidKey = useMemo(() => uuids.slice().sort().join(","), [uuids]);
+  const { data: bridgeByMeter = {} } = useQuery({
+    queryKey: ["energyflow-bridge", uuidKey],
+    enabled: uuids.length > 0,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<Record<string, number>> => {
+      const since = new Date(Date.now() - 60 * 60_000).toISOString();
+      const { data } = await (supabase
+        .from("bridge_raw_samples" as any)
+        .select("uuid, value, received_at")
+        .in("uuid", uuids)
+        .gte("received_at", since)
+        .order("received_at", { ascending: false })
+        .limit(2000));
+      const latest: Record<string, number> = {};
+      for (const row of ((data as any[]) ?? [])) {
+        const meterId = uuidToMeterId.get(String(row.uuid).toLowerCase());
+        if (!meterId) continue;
+        if (latest[meterId] === undefined) {
+          latest[meterId] = Number(row.value);
+        }
+      }
+      return latest;
+    },
+  });
+
+  // Realtime: Loxone broadcast (loxone-live-{tenantId}) – sub-sekündliche Updates
+  const [broadcastByMeter, setBroadcastByMeter] = useState<Record<string, number>>({});
+  const tenantKey = tenantIds.join(",");
+  useEffect(() => {
+    if (tenantIds.length === 0 || uuidToMeterId.size === 0) return;
+    const channels = tenantIds.map((tenantId) =>
+      supabase
+        .channel(`loxone-live-${tenantId}`, { config: { broadcast: { self: false } } })
+        .on("broadcast", { event: "readings" }, (msg: any) => {
+          const events = msg?.payload?.events ?? [];
+          if (!events.length) return;
+          setBroadcastByMeter((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            for (const ev of events) {
+              const role = ev.role ?? "pwr";
+              if (role !== "pwr") continue;
+              if (!Number.isFinite(ev.value) || Math.abs(ev.value) > 10_000) continue;
+              const meterId = uuidToMeterId.get(String(ev.uuid).toLowerCase());
+              if (!meterId) continue;
+              next[meterId] = Number(ev.value);
+              changed = true;
+            }
+            return changed ? next : prev;
+          });
+        })
+        .subscribe(),
+    );
+    return () => { channels.forEach((c) => supabase.removeChannel(c)); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantKey, uuidToMeterId]);
+
   const getLiveWatts = useCallback(
     (meterId: string): number | null => {
-      if (latestByMeter[meterId] != null) return latestByMeter[meterId];
+      // Priorität: Loxone-Broadcast → Realtime → Gateway-API → Bridge-Seed → Polling-Seed
+      // (alle Seeds/Broadcast liefern kW; Realtime liefert bereits kW aus meter_power_readings.)
+      if (broadcastByMeter[meterId] != null) return broadcastByMeter[meterId] * 1000;
+      if (latestByMeter[meterId] != null) return latestByMeter[meterId] * 1000;
       const gw = livePowerByMeter[meterId];
       if (gw) {
         if (gw.unit === "kW") return gw.value * 1000;
         if (gw.unit === "MW") return gw.value * 1_000_000;
         return gw.value;
       }
-      // Seed aus meter_power_readings ist in kW gespeichert.
+      if (bridgeByMeter[meterId] != null) return bridgeByMeter[meterId] * 1000;
       const seed = seedByMeter[meterId];
       if (seed != null) return seed * 1000;
       return null;
     },
-    [latestByMeter, livePowerByMeter, seedByMeter],
+    [broadcastByMeter, latestByMeter, livePowerByMeter, bridgeByMeter, seedByMeter],
   );
 
-  // Live badge: is anything reporting realtime?
   const hasLive = useMemo(
     () => meterIds.some(
-      (id) => latestByMeter[id] != null || livePowerByMeter[id] != null || seedByMeter[id] != null,
+      (id) =>
+        broadcastByMeter[id] != null ||
+        latestByMeter[id] != null ||
+        livePowerByMeter[id] != null ||
+        bridgeByMeter[id] != null ||
+        seedByMeter[id] != null,
     ),
-    [meterIds, latestByMeter, livePowerByMeter, seedByMeter],
+    [meterIds, broadcastByMeter, latestByMeter, livePowerByMeter, bridgeByMeter, seedByMeter],
   );
 
 
