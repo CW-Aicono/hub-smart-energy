@@ -40,6 +40,7 @@ const WIDGET_HEIGHT_LIMITS: Record<string, { min?: number; max?: number }> = {
   arbitrage_ai: { min: 360 },
   integration_errors: { min: 360 },
   ppa_fleet: { min: 360 },
+  savings_share: { min: 340, max: 520 },
 };
 
 
