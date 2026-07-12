@@ -64,6 +64,7 @@ const PvForecastWidget = lazy(() => import("@/components/dashboard/PvForecastWid
 const ArbitrageAiWidget = lazy(() => import("@/components/dashboard/ArbitrageAiWidget"));
 const IntegrationErrorsWidget = lazy(() => import("@/components/dashboard/IntegrationErrorsWidget"));
 const PPAFleetWidget = lazy(() => import("@/components/dashboard/PPAFleetWidget"));
+const SavingsShareWidget = lazy(() => import("@/components/dashboard/SavingsShareWidget"));
 
 interface WidgetProps {
   locationId: string | null;
