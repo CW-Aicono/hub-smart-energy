@@ -226,13 +226,57 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
     [nodes, connections],
   );
 
-  // Group meters by energy type
-  const meterGroups = (meters || []).reduce<Record<string, any[]>>((acc, m: any) => {
+  const { locations } = useLocations();
+
+  // Filter state for the meter picker inside each node card
+  const [filterLocation, setFilterLocation] = useState<string>("__all__");
+  const [filterCategory, setFilterCategory] = useState<EnergyFlowNodeRole | "__all__">("__all__");
+  const [filterEnergyType, setFilterEnergyType] = useState<string>("__all__");
+
+  // Keyword-based mapping of a meter to a node "category" (role)
+  const CATEGORY_KEYWORDS: Record<EnergyFlowNodeRole, string[]> = {
+    pv: ["pv", "solar", "photovoltaik", "wechselrichter", "inverter", "erzeug"],
+    grid: ["netz", "grid", "einspei", "bezug", "hausanschluss", "zählpunkt"],
+    house: ["haus", "gebäude", "gebaeude", "verbrauch gesamt", "allgemein"],
+    battery: ["batterie", "battery", "speicher", "akku"],
+    wallbox: ["wallbox", "ladepunkt", "ladesäule", "ladesaeule", "charger", "e-auto", "ev "],
+    heatpump: ["wärmepumpe", "waermepumpe", "heat pump", "wp "],
+    consumer: [],
+  };
+
+  const meterMatchesCategory = (m: any, role: EnergyFlowNodeRole): boolean => {
+    if (role === "consumer") return true;
+    const kws = CATEGORY_KEYWORDS[role] || [];
+    const hay = `${m.name || ""} ${m.device_type || ""} ${m.energy_type || ""}`.toLowerCase();
+    return kws.some((k) => hay.includes(k));
+  };
+
+  const energyTypeOptions = useMemo(() => {
+    const set = new Set<string>();
+    (meters || []).forEach((m: any) => m.energy_type && set.add(m.energy_type));
+    return Array.from(set).sort();
+  }, [meters]);
+
+  const filteredMeters = useMemo(() => {
+    return (meters || []).filter((m: any) => {
+      if (filterLocation !== "__all__" && m.location_id !== filterLocation) return false;
+      if (filterEnergyType !== "__all__" && m.energy_type !== filterEnergyType) return false;
+      if (filterCategory !== "__all__" && !meterMatchesCategory(m, filterCategory)) return false;
+      return true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meters, filterLocation, filterEnergyType, filterCategory]);
+
+  const locationName = (id: string) => locations.find((l) => l.id === id)?.name || "–";
+
+  // Group filtered meters by energy type for the picker
+  const meterGroups = filteredMeters.reduce<Record<string, any[]>>((acc, m: any) => {
     const t = m.energy_type || "Sonstige";
     if (!acc[t]) acc[t] = [];
     acc[t].push(m);
     return acc;
   }, {});
+
 
   return (
     <div className="space-y-4">
