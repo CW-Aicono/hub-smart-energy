@@ -401,8 +401,16 @@ const SuperAdminTenantDetail = () => {
     { key: "email", direction: "asc" },
   );
 
+  const [moduleSearch, setModuleSearch] = useState("");
+  const filteredModuleList = moduleSearch.trim()
+    ? [...ALL_MODULES].filter((mod) =>
+        mod.label.toLowerCase().includes(moduleSearch.toLowerCase()) ||
+        mod.code.toLowerCase().includes(moduleSearch.toLowerCase())
+      )
+    : [...ALL_MODULES];
+
   const { sorted: sortedModules, sort: moduleSort, toggle: toggleModuleSort } = useSortableData<any, "label" | "enabled" | "global" | "override" | "effective">(
-    [...ALL_MODULES] as any[],
+    filteredModuleList,
     (mod, k) => {
       const isAlwaysOn = "alwaysOn" in mod;
       const isMember = !!(tenant as any)?.is_aicono_member;
@@ -858,7 +866,20 @@ const SuperAdminTenantDetail = () => {
 
             <TabsContent value="modules" className="mt-6 space-y-6">
               <Card>
-                <CardHeader><CardTitle>{t("tenant_detail.modules_prices")}</CardTitle></CardHeader>
+                <CardHeader>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <CardTitle>{t("tenant_detail.modules_prices")}</CardTitle>
+                    <div className="relative w-full sm:w-64">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder={t("common.search")}
+                        value={moduleSearch}
+                        onChange={(e) => setModuleSearch(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
                 <CardContent>
                   <Table>
                     <TableHeader>
@@ -920,6 +941,13 @@ const SuperAdminTenantDetail = () => {
                           </TableRow>
                         );
                       })}
+                      {sortedModules.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                            Keine Module gefunden.
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                   <div className="flex justify-end mt-4 pt-4 border-t">
