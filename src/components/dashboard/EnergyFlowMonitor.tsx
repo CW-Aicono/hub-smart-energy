@@ -499,6 +499,26 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           const Icon = ROLE_ICON[node.role];
           const isSelected = selectedNodeId === node.id;
 
+          // Label side: default "bottom"; flip to "top" if any adjacent connection
+          // leaves this node downward (angle in [45°, 135°]) — avoids overlap with flow.
+          let labelSide: "top" | "bottom" = "bottom";
+          for (const conn of connections) {
+            let neighborId: string | null = null;
+            if (conn.from === node.id) neighborId = conn.to;
+            else if (conn.to === node.id) neighborId = conn.from;
+            if (!neighborId) continue;
+            const neighbor = nodes.find((n) => n.id === neighborId);
+            if (!neighbor) continue;
+            const np = nodePos(neighbor);
+            const angleDeg = (Math.atan2(np.y - cy, np.x - cx) * 180) / Math.PI;
+            if (angleDeg >= 45 && angleDeg <= 135) {
+              labelSide = "top";
+              break;
+            }
+          }
+          const labelY = labelSide === "bottom" ? cy + nodeRadius + 14 : cy - nodeRadius - 22;
+          const sumY   = labelSide === "bottom" ? cy + nodeRadius + 28 : cy - nodeRadius - 8;
+
           return (
             <g
               key={node.id}
