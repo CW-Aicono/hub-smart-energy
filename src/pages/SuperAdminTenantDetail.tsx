@@ -314,11 +314,6 @@ const SuperAdminTenantDetail = () => {
   };
 
 
-  if (authLoading || roleLoading) {
-    return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
-  }
-  if (!user) return <Navigate to="/auth" replace />;
-  if (!isSuperAdmin) return <Navigate to="/" replace />;
 
   const getModuleEnabled = (code: string) => modules.find((m) => m.module_code === code)?.is_enabled ?? false;
   const getModulePriceOverride = (code: string): number | null => {
@@ -441,6 +436,14 @@ const SuperAdminTenantDetail = () => {
     },
     { key: "date", direction: "desc" },
   );
+
+  if (authLoading || roleLoading) {
+    return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
+  }
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!isSuperAdmin) return <Navigate to="/" replace />;
+
+
 
 
 
