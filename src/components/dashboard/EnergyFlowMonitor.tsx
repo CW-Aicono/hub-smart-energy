@@ -454,7 +454,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                   <animateMotion
                     dur={`${dur}s`}
                     repeatCount="indefinite"
-                    begin={`${(di / particleCount) * dur}s`}
+                    begin={`-${(di / particleCount) * dur}s`}
                     path={animPath}
                   />
                 </circle>
