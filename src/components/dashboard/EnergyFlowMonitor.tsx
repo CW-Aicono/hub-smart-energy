@@ -30,6 +30,7 @@ import {
   PlugZap,
   SunMedium,
   ExternalLink,
+  type LucideIcon,
 } from "lucide-react";
 
 /* ── Role → icon component (rendered as SVG so we can size fluid) ── */
