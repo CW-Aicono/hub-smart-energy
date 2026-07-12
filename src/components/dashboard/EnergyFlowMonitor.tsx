@@ -558,20 +558,10 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                 {node.label}
               </text>
               {/* Live watts */}
-              {liveW != null && (
-                <text
-                  x={cx} y={cy + nodeRadius + 28}
-                  textAnchor="middle"
-                  className={`text-[10px] font-semibold tabular-nums ${
-                    liveW < 0 ? "fill-emerald-500" : "fill-muted-foreground"
-                  }`}
-                >
-                  {formatPower(liveW)}
-                </text>
-              )}
+              {/* Live watts under the circle removed — shown on the flow line only */}
               {periodSum != null && periodSum !== 0 && (
                 <text
-                  x={cx} y={cy + nodeRadius + 40}
+                  x={cx} y={cy + nodeRadius + 28}
                   textAnchor="middle"
                   className="fill-muted-foreground text-[9px] tabular-nums"
                 >
