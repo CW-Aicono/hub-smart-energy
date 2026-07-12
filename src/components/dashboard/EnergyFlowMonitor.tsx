@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 
 /* ── Role → icon component (rendered as SVG so we can size fluid) ── */
-const ROLE_ICON: Record<EnergyFlowNodeRole, React.ComponentType<{ size?: number; className?: string }>> = {
+const ROLE_ICON: Record<EnergyFlowNodeRole, LucideIcon> = {
   pv: SunMedium,
   grid: Zap,
   house: Home,
