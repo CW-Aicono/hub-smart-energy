@@ -476,14 +476,44 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Kein Zähler</SelectItem>
-                    {Object.entries(meterGroups).map(([type, groupMeters]) => (
-                      groupMeters.map((m: any) => (
-                        <SelectItem key={m.id} value={m.id}>
-                          {m.name} ({type})
-                        </SelectItem>
-                      ))
-                    ))}
+                    {(() => {
+                      // Ensure the currently selected meter is always visible,
+                      // even if it doesn't match the active filters
+                      const visible = new Map<string, any>();
+                      filteredMeters.forEach((m: any) => visible.set(m.id, m));
+                      if (node.meter_id && !visible.has(node.meter_id)) {
+                        const sel = (meters || []).find((m: any) => m.id === node.meter_id);
+                        if (sel) visible.set(sel.id, sel);
+                      }
+                      const grouped = Array.from(visible.values()).reduce<Record<string, any[]>>(
+                        (acc, m: any) => {
+                          const t = m.energy_type || "Sonstige";
+                          (acc[t] ||= []).push(m);
+                          return acc;
+                        },
+                        {},
+                      );
+                      const entries = Object.entries(grouped);
+                      if (entries.length === 0) {
+                        return (
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                            Keine Zähler passen zu den Filtern
+                          </div>
+                        );
+                      }
+                      return entries.map(([type, groupMeters]) =>
+                        groupMeters.map((m: any) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            {m.name}
+                            <span className="text-muted-foreground">
+                              {" "}· {formatEnergyType(type)} · {locationName(m.location_id)}
+                            </span>
+                          </SelectItem>
+                        )),
+                      );
+                    })()}
                   </SelectContent>
+
                 </Select>
               </div>
             </div>
