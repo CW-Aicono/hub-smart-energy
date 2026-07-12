@@ -866,7 +866,20 @@ const SuperAdminTenantDetail = () => {
 
             <TabsContent value="modules" className="mt-6 space-y-6">
               <Card>
-                <CardHeader><CardTitle>{t("tenant_detail.modules_prices")}</CardTitle></CardHeader>
+                <CardHeader>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <CardTitle>{t("tenant_detail.modules_prices")}</CardTitle>
+                    <div className="relative w-full sm:w-64">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder={t("common.search")}
+                        value={moduleSearch}
+                        onChange={(e) => setModuleSearch(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
                 <CardContent>
                   <Table>
                     <TableHeader>
