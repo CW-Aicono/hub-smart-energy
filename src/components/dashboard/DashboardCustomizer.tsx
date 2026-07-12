@@ -37,6 +37,7 @@ const WIDGET_LABEL_KEYS: Record<string, string> = {
   pv_forecast: "widget.pvForecast",
   arbitrage_ai: "widget.arbitrageAi",
   integration_errors: "widget.integrationErrors",
+  savings_share: "widget.savingsShare",
 };
 
 const SIZE_LABEL_KEYS: Record<WidgetSize, string> = {
