@@ -403,11 +403,11 @@ const SuperAdminTenantDetail = () => {
 
   const [moduleSearch, setModuleSearch] = useState("");
   const filteredModuleList = moduleSearch.trim()
-    ? (ALL_MODULES as any[]).filter((mod) =>
+    ? [...ALL_MODULES].filter((mod) =>
         mod.label.toLowerCase().includes(moduleSearch.toLowerCase()) ||
         mod.code.toLowerCase().includes(moduleSearch.toLowerCase())
       )
-    : [...ALL_MODULES] as any[];
+    : [...ALL_MODULES];
 
   const { sorted: sortedModules, sort: moduleSort, toggle: toggleModuleSort } = useSortableData<any, "label" | "enabled" | "global" | "override" | "effective">(
     filteredModuleList,
