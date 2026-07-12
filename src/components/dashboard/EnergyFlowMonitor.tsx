@@ -499,6 +499,26 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           const Icon = ROLE_ICON[node.role];
           const isSelected = selectedNodeId === node.id;
 
+          // Label side: default "bottom"; flip to "top" if any adjacent connection
+          // leaves this node downward (angle in [45°, 135°]) — avoids overlap with flow.
+          let labelSide: "top" | "bottom" = "bottom";
+          for (const conn of connections) {
+            let neighborId: string | null = null;
+            if (conn.from === node.id) neighborId = conn.to;
+            else if (conn.to === node.id) neighborId = conn.from;
+            if (!neighborId) continue;
+            const neighbor = nodes.find((n) => n.id === neighborId);
+            if (!neighbor) continue;
+            const np = nodePos(neighbor);
+            const angleDeg = (Math.atan2(np.y - cy, np.x - cx) * 180) / Math.PI;
+            if (angleDeg >= 45 && angleDeg <= 135) {
+              labelSide = "top";
+              break;
+            }
+          }
+          const labelY = labelSide === "bottom" ? cy + nodeRadius + 14 : cy - nodeRadius - 22;
+          const sumY   = labelSide === "bottom" ? cy + nodeRadius + 28 : cy - nodeRadius - 8;
+
           return (
             <g
               key={node.id}
@@ -549,19 +569,17 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                 </div>
               </foreignObject>
 
-              {/* Label under circle */}
+              {/* Label + Periodensumme, dynamisch oben oder unten */}
               <text
-                x={cx} y={cy + nodeRadius + 14}
+                x={cx} y={labelY}
                 textAnchor="middle"
                 className="fill-foreground text-[11px] font-medium"
               >
                 {node.label}
               </text>
-              {/* Live watts */}
-              {/* Live watts under the circle removed — shown on the flow line only */}
               {periodSum != null && periodSum !== 0 && (
                 <text
-                  x={cx} y={cy + nodeRadius + 28}
+                  x={cx} y={sumY}
                   textAnchor="middle"
                   className="fill-muted-foreground text-[9px] tabular-nums"
                 >
