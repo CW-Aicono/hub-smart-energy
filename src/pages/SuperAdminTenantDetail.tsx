@@ -941,6 +941,13 @@ const SuperAdminTenantDetail = () => {
                           </TableRow>
                         );
                       })}
+                      {sortedModules.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                            {t("common.no_results")}
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                   <div className="flex justify-end mt-4 pt-4 border-t">
