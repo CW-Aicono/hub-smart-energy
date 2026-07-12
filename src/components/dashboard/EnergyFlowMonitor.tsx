@@ -77,6 +77,12 @@ function getDateRange(period: TimePeriod): { from: Date; to: Date } {
   return { from, to: now };
 }
 
+/** YYYY-MM-DD in Europe/Berlin — vermeidet den UTC-Shift von toISOString(). */
+function toBerlinDateString(d: Date): string {
+  return d.toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
+}
+
+
 function fmtDe(n: number, digits = 1): string {
   return n.toLocaleString("de-DE", {
     minimumFractionDigits: digits,

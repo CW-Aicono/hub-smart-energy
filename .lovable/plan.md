@@ -1,75 +1,64 @@
+# Fix: Energieflussmonitor — Live-Werte, Animation, Tagessummen
 
-## Ziel
-Der Custom-Widget-Typ „Energieflussmonitor" (`src/components/dashboard/EnergyFlowMonitor.tsx`) soll deutlich reicher, interaktiver und lesbarer werden — inspiriert von modernen Home-Energy-Dashboards (Tesla Powerwall App, Sense, Home Assistant Energy Distribution Card, Enphase Enlighten, SolarEdge mySolarEdge).
+## Diagnose
 
-## Recherche / Referenzen (Best Practices)
-- **Tesla / Sense**: zentrale Icons in Kreisen, farbige animierte Partikel entlang der Verbindungen, Richtung + Geschwindigkeit spiegeln Fluss wider.
-- **Home Assistant Energy Distribution**: Klick auf Knoten öffnet Detail-Popover mit Tages-/Monats-KPIs und Mini-Chart.
-- **Enphase/SolarEdge**: farbige Rand-Ringe visualisieren Auslastung (0–100 %), inaktive Knoten dezent ausgegraut, klare Legende.
-- **Common Pattern**: Partikeldichte + Farbe = Leistung; „glow"-Effekt bei aktivem Fluss; kompakte Zahlen mit Einheitswechsel (W → kW → MW).
+**1) Keine Animation, keine Live-Werte (5,7 kW etc.)**
+Das Widget bezieht Live-Leistung aus zwei Quellen:
+- `useRealtimePower` — nur Realtime-INSERT-Events auf `meter_power_readings` (nach dem Mount)
+- `useGatewayLivePower` — überspringt explizit Loxone (`loxone-api` und `gateway-ingest` sind ausgeschlossen, siehe `src/hooks/useGatewayLivePower.ts` Z. 119)
 
-## Erweiterungen im Widget
+Solange also kein frischer 5-min-INSERT nach dem Öffnen des Dashboards eintrifft, ist `latestByMeter` leer → `flowWatts = null` → `hasFlow = false` → keine Partikel/Dash-Animation, keine Watt-Anzeige. Genau das Verhalten im Screenshot.
 
-### 1. Zentrale Icons in Kreisen (Fix)
-- Icon exakt in Kreismitte (`foreignObject` mittig, ohne Y-Shift), Live-Wert **unter** dem Kreis (zusammen mit Label & Periodensumme in einer sauberen Text-Stack) — nicht mehr im Kreis überlappend.
-- Icon-Größe skaliert mit `nodeRadius` (statt fixe `h-6 w-6`).
-- Aktive Knoten: gefüllter Farbverlauf-Hintergrund (12 % Opacity), Rand-Ring mit Farbe. Inaktive: dezent grau.
+`BoardEnergyBand` löst das bereits sauber: initialer **Seed-Query** auf `meter_power_readings` der letzten 10 Minuten, Realtime nur als Overlay darüber.
 
-### 2. Klick auf Kreis → Detail-Overlay
-- Klick auf einen Knoten öffnet ein Popover (Radix `Popover` oder Inline-Panel, z. B. `Sheet`) mit:
-  - Rollen-Titel + Icon + `label`
-  - **Aktuelle Leistung** (live, farbcodiert, Vorzeichen)
-  - **Tages-/Perioden-Summe** (aus `periodSums`)
-  - **Anteil am Fluss** (z. B. „PV deckt 72 % des Hausverbrauchs")
-  - **Mini-Chart** der letzten 24 h (kleine Sparkline über `meter_power_readings`, `recharts` `Area`)
-  - Link „Zum Zähler-Detail" → `/meters/:id`
-- ESC/Klick außerhalb schließt Overlay; nur ein Knoten gleichzeitig geöffnet (`selectedNodeId`).
-
-### 3. Animierte Energieflüsse (Verbesserung)
-- Partikel-Dichte skaliert mit Leistung (3 → bis 8 Punkte), Größe wächst leicht mit W.
-- Zusätzlich **animierter Gradient-Stroke** (`stroke-dasharray` + `dashoffset`-Animation) für weichen „Fluss-Look" statt nur Punkte.
-- Farbe = Quellknoten-Farbe; bei Rückfluss (negativer Wert) automatisch Richtung umkehren + Ziel-Farbe verwenden.
-- Bei `flowWatts === 0` oder `null`: nur dünne, gepunktete Linie, keine Animation, `opacity 0.15`.
-- Kleine **Fluss-Label** mittig auf der Linie („2,4 kW"), on-hover einblenden.
-
-### 4. Weitere UX-/Feature-Verbesserungen
-- **Auto-Layout-Hilfe**: wenn Knoten sich überlappen, kleine Warnung im Designer (kein Layout-Change am Widget selbst).
-- **Legende / Aktiv-Ampel**: kleine Ecken-Badge oben rechts „● Live" (grün, pulsierend, wenn Realtime-Werte reinkommen; grau, wenn nur Periodendaten).
-- **Selbstverbrauch-KPI-Zeile** unten (nur bei Vorhandensein von `pv`, `grid`, `house`-Rollen): berechnet „Autarkie %" und „Eigenverbrauch %" live aus den Watt-Werten.
-- **Deutsche Zahlen** durchgängig via `toLocaleString("de-DE")` (statt `toFixed`) — Kern-Regel des Projekts.
-- **Barrierefreiheit**: Knoten sind `<button>`-artig (tabbable, `aria-label` mit Rolle+Wert), Fokus-Ring in Node-Farbe.
-- **Reduced Motion**: `@media (prefers-reduced-motion)` → Partikel deaktivieren, statt dessen nur Farbintensität der Linie.
-
-### 5. Vorschau im Designer
-- Gleiche Komponente wird in `src/components/settings/WidgetPreview.tsx` verwendet → alle Verbesserungen wirken automatisch auch in der „Vorschau"-Tab (Screenshot 2).
-
-## Technische Umsetzung (kompakt)
-
-```text
-EnergyFlowMonitor.tsx
-├── State: selectedNodeId
-├── Layout-Helfer: getClippedLine (bleibt), plus getMidpoint für Fluss-Label
-├── Rendering
-│   ├── <defs> Gradient pro Verbindung (Quelle→Ziel-Farbe)
-│   ├── Connections
-│   │   ├── base line (gepunktet wenn kein Fluss)
-│   │   ├── gradient stroke (dashoffset-Animation, prefers-reduced-motion aware)
-│   │   ├── particles (Anzahl abhängig von Watt)
-│   │   └── flow label (hover)
-│   ├── Nodes (als <g> mit onClick → setSelectedNodeId, aria-role="button")
-│   │   ├── circle (fill mit Farbverlauf, stroke=Farbe, dimmed wenn inaktiv)
-│   │   ├── icon zentriert
-│   │   └── label + live-Wert + Periodensumme unter dem Kreis
-│   └── KPI-Footer (Autarkie/Eigenverbrauch, wenn PV+grid+house vorhanden)
-└── <NodeDetailPopover /> — Radix Popover, positioniert am Knoten
-    └── Sparkline: neuer kleiner useQuery auf meter_power_readings (letzte 24h, LTTB-Downsampling optional)
+**2) Tagessummen weichen von Loxone-App ab (111,2 vs. 49,3 kWh)**
+Zeitzonen-Bug in `EnergyFlowMonitor`:
+```ts
+from.setHours(0, 0, 0, 0);                 // Berlin-Mitternacht (lokal)
+p_from_date: from.toISOString().split("T")[0];  // ← UTC-Datum!
 ```
+Berlin 00:00 → UTC 22:00 des Vortags. `toISOString()` liefert den **Vortag** als Datum. Damit fragt die RPC `get_meter_daily_totals_with_fallback` mit `p_from_date = gestern`, `p_to_date = heute` an und summiert **zwei** Tage. 49,3 (heute) + ~62 (gestern) ≈ 111 kWh — exakt der beobachtete Wert.
 
-- Keine DB-/RLS-Änderungen; Sparkline nutzt bestehende `meter_power_readings`-Tabelle (bereits über `useRealtimePower`/`BoardEnergyBand` erprobt).
-- Keine Änderungen an `useCustomWidgetDefinitions` (Datenmodell bleibt gleich).
-- Keine neuen Dependencies (Recharts, Radix Popover bereits im Projekt).
+## Änderungen (nur `src/components/dashboard/EnergyFlowMonitor.tsx`)
 
-## Nicht enthalten
-- Änderungen am Designer-Editor (Knoten-Anordnung/Topologie) — nur Optik/Verhalten des gerenderten Widgets.
-- Neue Rollen-Typen (bleiben pv/grid/house/battery/wallbox/heatpump/consumer).
-- Keine Backend-/Edge-Function-Änderungen.
+### A) Seed für Live-Leistung ergänzen
+Neuen `useQuery`-Block einbauen, analog zu `BoardEnergyBand`:
+- Query: `meter_power_readings` (`meter_id`, `power_value`, `recorded_at`), `in("meter_id", meterIds)`, `gte("recorded_at", now-10min)`, `order desc`, `limit 2000`.
+- Reduzieren auf `seedByMeter: Record<string, number>` (jeweils neuester Wert pro Meter, in **kW** — wie in DB gespeichert).
+- `staleTime: 60_000`, `refetchInterval: 60_000` (Sicherheitsnetz, Realtime übernimmt).
+
+`getLiveWatts` wird um den Seed erweitert (Reihenfolge: Realtime → Gateway-API → Seed):
+```
+latestByMeter[id]  (bereits W)
+→ livePowerByMeter[id]  (Einheiten-Umrechnung)
+→ seedByMeter[id] * 1000  (kW → W)
+```
+Damit erscheinen Live-Werte sofort nach dem Öffnen, Animation läuft, und Realtime aktualisiert sie sub-sekündlich sobald ein neuer Datenpunkt landet.
+
+### B) Zeitzonen-korrektes Datum für Tagessummen
+Kleine Helper-Funktion im File:
+```ts
+function toBerlinDateString(d: Date): string {
+  // sv-SE liefert 'YYYY-MM-DD', erzwungen in Europe/Berlin
+  return d.toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
+}
+```
+`getDateRange` weiterhin für Datumsobjekte nutzen, aber in der RPC-Query:
+```ts
+p_from_date: toBerlinDateString(from),
+p_to_date:   toBerlinDateString(to),
+```
+Für `period === "day"` liefert das exakt `heute` = `heute` → nur der heutige Tag wird summiert und deckt sich mit der Loxone-App.
+
+### C) Kein Refactor der Animation nötig
+Sobald A) greift, ist `flowWatts != null` → `hasFlow = true` → Dash-Animation und Partikel laufen wie geplant. Kein Eingriff in die SVG-Logik.
+
+## Nicht betroffen
+- `useGatewayLivePower`, `useRealtimePower`, `BoardEnergyBand` — bleiben unverändert.
+- RPC `get_meter_daily_totals_with_fallback` — funktioniert korrekt, der Bug liegt beim Aufrufer.
+- Widget-Designer / Node-Filter — bleiben unverändert.
+
+## Verifikation nach dem Fix
+1. Dashboard neu laden → PV/Netz/Gebäude/Speicher zeigen sofort kW-Wert unter dem Kreis.
+2. Fließende Verbindungen zeigen Partikel + Watt-Label am Mittelpunkt.
+3. „Heute"-Summe für PV ≈ 49 kWh (Loxone-App-Referenz), nicht mehr 111 kWh.
