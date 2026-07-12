@@ -1,9 +1,11 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useLocations } from "@/hooks/useLocations";
+import { formatEnergyType } from "@/lib/energyTypeLabels";
 import {
   EnergyFlowNode,
   EnergyFlowConnection,
@@ -224,13 +226,57 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
     [nodes, connections],
   );
 
-  // Group meters by energy type
-  const meterGroups = (meters || []).reduce<Record<string, any[]>>((acc, m: any) => {
+  const { locations } = useLocations();
+
+  // Filter state for the meter picker inside each node card
+  const [filterLocation, setFilterLocation] = useState<string>("__all__");
+  const [filterCategory, setFilterCategory] = useState<EnergyFlowNodeRole | "__all__">("__all__");
+  const [filterEnergyType, setFilterEnergyType] = useState<string>("__all__");
+
+  // Keyword-based mapping of a meter to a node "category" (role)
+  const CATEGORY_KEYWORDS: Record<EnergyFlowNodeRole, string[]> = {
+    pv: ["pv", "solar", "photovoltaik", "wechselrichter", "inverter", "erzeug"],
+    grid: ["netz", "grid", "einspei", "bezug", "hausanschluss", "zählpunkt"],
+    house: ["haus", "gebäude", "gebaeude", "verbrauch gesamt", "allgemein"],
+    battery: ["batterie", "battery", "speicher", "akku"],
+    wallbox: ["wallbox", "ladepunkt", "ladesäule", "ladesaeule", "charger", "e-auto", "ev "],
+    heatpump: ["wärmepumpe", "waermepumpe", "heat pump", "wp "],
+    consumer: [],
+  };
+
+  const meterMatchesCategory = (m: any, role: EnergyFlowNodeRole): boolean => {
+    if (role === "consumer") return true;
+    const kws = CATEGORY_KEYWORDS[role] || [];
+    const hay = `${m.name || ""} ${m.device_type || ""} ${m.energy_type || ""}`.toLowerCase();
+    return kws.some((k) => hay.includes(k));
+  };
+
+  const energyTypeOptions = useMemo(() => {
+    const set = new Set<string>();
+    (meters || []).forEach((m: any) => m.energy_type && set.add(m.energy_type));
+    return Array.from(set).sort();
+  }, [meters]);
+
+  const filteredMeters = useMemo(() => {
+    return (meters || []).filter((m: any) => {
+      if (filterLocation !== "__all__" && m.location_id !== filterLocation) return false;
+      if (filterEnergyType !== "__all__" && m.energy_type !== filterEnergyType) return false;
+      if (filterCategory !== "__all__" && !meterMatchesCategory(m, filterCategory)) return false;
+      return true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meters, filterLocation, filterEnergyType, filterCategory]);
+
+  const locationName = (id: string) => locations.find((l) => l.id === id)?.name || "–";
+
+  // Group filtered meters by energy type for the picker
+  const meterGroups = filteredMeters.reduce<Record<string, any[]>>((acc, m: any) => {
     const t = m.energy_type || "Sonstige";
     if (!acc[t]) acc[t] = [];
     acc[t].push(m);
     return acc;
   }, {});
+
 
   return (
     <div className="space-y-4">
@@ -300,6 +346,74 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
           </div>
         )}
 
+        {/* Filter für die Zähler-Auswahl */}
+        <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              Zähler-Filter
+            </Label>
+            {(filterLocation !== "__all__" ||
+              filterCategory !== "__all__" ||
+              filterEnergyType !== "__all__") && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs"
+                onClick={() => {
+                  setFilterLocation("__all__");
+                  setFilterCategory("__all__");
+                  setFilterEnergyType("__all__");
+                }}
+              >
+                Zurücksetzen
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <Select value={filterLocation} onValueChange={setFilterLocation}>
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue placeholder="Liegenschaft" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Alle Liegenschaften</SelectItem>
+                {locations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={filterCategory}
+              onValueChange={(v) => setFilterCategory(v as EnergyFlowNodeRole | "__all__")}
+            >
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue placeholder="Kategorie" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Alle Kategorien</SelectItem>
+                {NODE_ROLES.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterEnergyType} onValueChange={setFilterEnergyType}>
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue placeholder="Energieart" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Alle Energiearten</SelectItem>
+                {energyTypeOptions.map((t) => (
+                  <SelectItem key={t} value={t}>{formatEnergyType(t)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {filteredMeters.length} von {(meters || []).length} Zählern sichtbar
+          </p>
+        </div>
+
+
         <div className="space-y-3 max-h-64 overflow-auto">
           {nodes.map((node) => (
             <div key={node.id} className="border rounded-lg p-3 space-y-2">
@@ -362,14 +476,44 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Kein Zähler</SelectItem>
-                    {Object.entries(meterGroups).map(([type, groupMeters]) => (
-                      groupMeters.map((m: any) => (
-                        <SelectItem key={m.id} value={m.id}>
-                          {m.name} ({type})
-                        </SelectItem>
-                      ))
-                    ))}
+                    {(() => {
+                      // Ensure the currently selected meter is always visible,
+                      // even if it doesn't match the active filters
+                      const visible = new Map<string, any>();
+                      filteredMeters.forEach((m: any) => visible.set(m.id, m));
+                      if (node.meter_id && !visible.has(node.meter_id)) {
+                        const sel = (meters || []).find((m: any) => m.id === node.meter_id);
+                        if (sel) visible.set(sel.id, sel);
+                      }
+                      const grouped = Array.from(visible.values()).reduce<Record<string, any[]>>(
+                        (acc, m: any) => {
+                          const t = m.energy_type || "Sonstige";
+                          (acc[t] ||= []).push(m);
+                          return acc;
+                        },
+                        {},
+                      );
+                      const entries = Object.entries(grouped);
+                      if (entries.length === 0) {
+                        return (
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                            Keine Zähler passen zu den Filtern
+                          </div>
+                        );
+                      }
+                      return entries.map(([type, groupMeters]) =>
+                        groupMeters.map((m: any) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            {m.name}
+                            <span className="text-muted-foreground">
+                              {" "}· {formatEnergyType(type)} · {locationName(m.location_id)}
+                            </span>
+                          </SelectItem>
+                        )),
+                      );
+                    })()}
                   </SelectContent>
+
                 </Select>
               </div>
             </div>
