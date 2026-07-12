@@ -346,6 +346,74 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
           </div>
         )}
 
+        {/* Filter für die Zähler-Auswahl */}
+        <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              Zähler-Filter
+            </Label>
+            {(filterLocation !== "__all__" ||
+              filterCategory !== "__all__" ||
+              filterEnergyType !== "__all__") && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs"
+                onClick={() => {
+                  setFilterLocation("__all__");
+                  setFilterCategory("__all__");
+                  setFilterEnergyType("__all__");
+                }}
+              >
+                Zurücksetzen
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <Select value={filterLocation} onValueChange={setFilterLocation}>
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue placeholder="Liegenschaft" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Alle Liegenschaften</SelectItem>
+                {locations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={filterCategory}
+              onValueChange={(v) => setFilterCategory(v as EnergyFlowNodeRole | "__all__")}
+            >
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue placeholder="Kategorie" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Alle Kategorien</SelectItem>
+                {NODE_ROLES.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterEnergyType} onValueChange={setFilterEnergyType}>
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue placeholder="Energieart" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Alle Energiearten</SelectItem>
+                {energyTypeOptions.map((t) => (
+                  <SelectItem key={t} value={t}>{formatEnergyType(t)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {filteredMeters.length} von {(meters || []).length} Zählern sichtbar
+          </p>
+        </div>
+
+
         <div className="space-y-3 max-h-64 overflow-auto">
           {nodes.map((node) => (
             <div key={node.id} className="border rounded-lg p-3 space-y-2">
