@@ -1,64 +1,43 @@
-# Fix: Energieflussmonitor — Live-Werte, Animation, Tagessummen
+## Ziel
 
-## Diagnose
+Node-Beschriftung (Name + Periodensumme) soll den Live-Flow auf einer angrenzenden Verbindung nicht mehr überlagern.
 
-**1) Keine Animation, keine Live-Werte (5,7 kW etc.)**
-Das Widget bezieht Live-Leistung aus zwei Quellen:
-- `useRealtimePower` — nur Realtime-INSERT-Events auf `meter_power_readings` (nach dem Mount)
-- `useGatewayLivePower` — überspringt explizit Loxone (`loxone-api` und `gateway-ingest` sind ausgeschlossen, siehe `src/hooks/useGatewayLivePower.ts` Z. 119)
+## Regel
 
-Solange also kein frischer 5-min-INSERT nach dem Öffnen des Dashboards eintrifft, ist `latestByMeter` leer → `flowWatts = null` → `hasFlow = false` → keine Partikel/Dash-Animation, keine Watt-Anzeige. Genau das Verhalten im Screenshot.
+- **Standard:** Beschriftung unterhalb des Kreises (wie heute).
+- **Ausnahme:** Wenn von diesem Knoten mindestens eine Verbindung nach **unten** verläuft (Winkel der Line-Richtung fällt in den unteren Sektor, ca. 45°–135°), wird die Beschriftung **oberhalb** des Kreises platziert.
+- Reihenfolge bleibt gleich:
+  - oben: erst `node.label`, darunter Periodensumme
+  - unten: erst `node.label`, darunter Periodensumme
+  (bei Position „oben" umgekehrte y-Offsets, sodass Label näher am Kreis steht als die Summe)
 
-`BoardEnergyBand` löst das bereits sauber: initialer **Seed-Query** auf `meter_power_readings` der letzten 10 Minuten, Realtime nur als Overlay darüber.
+## Umsetzung in `src/components/dashboard/EnergyFlowMonitor.tsx`
 
-**2) Tagessummen weichen von Loxone-App ab (111,2 vs. 49,3 kWh)**
-Zeitzonen-Bug in `EnergyFlowMonitor`:
-```ts
-from.setHours(0, 0, 0, 0);                 // Berlin-Mitternacht (lokal)
-p_from_date: from.toISOString().split("T")[0];  // ← UTC-Datum!
-```
-Berlin 00:00 → UTC 22:00 des Vortags. `toISOString()` liefert den **Vortag** als Datum. Damit fragt die RPC `get_meter_daily_totals_with_fallback` mit `p_from_date = gestern`, `p_to_date = heute` an und summiert **zwei** Tage. 49,3 (heute) + ~62 (gestern) ≈ 111 kWh — exakt der beobachtete Wert.
+1. **Helper `getLabelSide(node)**` in der Node-Render-Schleife:
+  - Iteriere über `connections`, filtere die, an denen `node` als `from` oder `to` beteiligt ist.
+  - Für jede Verbindung: berechne den Richtungsvektor **von diesem Knoten weg** zum Nachbarknoten, dann Winkel `atan2(dy, dx)` in Grad (0° = rechts, 90° = unten in SVG-Koordinaten).
+  - Wenn ein Winkel im Bereich `[45°, 135°]` liegt → Nachbar-Verbindung geht nach unten → return `"top"`.
+  - Sonst `"bottom"`.
+2. **Text-Rendering im `nodes.map(...)**`:
+  - `const side = getLabelSide(node);`
+  - `const labelY = side === "bottom" ? cy + nodeRadius + 14 : cy - nodeRadius - 18;`
+  - `const sumY   = side === "bottom" ? cy + nodeRadius + 28 : cy - nodeRadius - 6;`  
+  (bei „top" ist die Summe zwischen Label und Kreis, damit die Reihenfolge Label→Summe→Kreis von oben nach unten gelesen wird — alternativ Label ganz oben und Summe direkt darunter, siehe Frage unten)
+3. Keine Änderung am Flow-Label auf der Linie selbst (das ist mittig auf der Line, kein Konflikt zu erwarten).
 
-## Änderungen (nur `src/components/dashboard/EnergyFlowMonitor.tsx`)
+## Randfälle
 
-### A) Seed für Live-Leistung ergänzen
-Neuen `useQuery`-Block einbauen, analog zu `BoardEnergyBand`:
-- Query: `meter_power_readings` (`meter_id`, `power_value`, `recorded_at`), `in("meter_id", meterIds)`, `gte("recorded_at", now-10min)`, `order desc`, `limit 2000`.
-- Reduzieren auf `seedByMeter: Record<string, number>` (jeweils neuester Wert pro Meter, in **kW** — wie in DB gespeichert).
-- `staleTime: 60_000`, `refetchInterval: 60_000` (Sicherheitsnetz, Realtime übernimmt).
+- Knoten ohne Verbindung: `side = "bottom"` (Default).
+- Mehrere Verbindungen mit gemischten Richtungen: Sobald **eine** nach unten geht, flippt die Beschriftung nach oben.
+- Bei horizontalem Layout (heutiger Regelfall PV — Gebäude — Speicher) bleibt alles unten; bei Netz-über-Gebäude (Screenshot) flippt „Gebäude gesamt"-Beschriftung nach oben — der aktuelle Screenshot betrifft aber vor allem **„Netz"**: dessen Verbindung geht nach unten → Beschriftung wandert **über** den Netz-Kreis.
 
-`getLiveWatts` wird um den Seed erweitert (Reihenfolge: Realtime → Gateway-API → Seed):
-```
-latestByMeter[id]  (bereits W)
-→ livePowerByMeter[id]  (Einheiten-Umrechnung)
-→ seedByMeter[id] * 1000  (kW → W)
-```
-Damit erscheinen Live-Werte sofort nach dem Öffnen, Animation läuft, und Realtime aktualisiert sie sub-sekündlich sobald ein neuer Datenpunkt landet.
+## Offene Frage
 
-### B) Zeitzonen-korrektes Datum für Tagessummen
-Kleine Helper-Funktion im File:
-```ts
-function toBerlinDateString(d: Date): string {
-  // sv-SE liefert 'YYYY-MM-DD', erzwungen in Europe/Berlin
-  return d.toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
-}
-```
-`getDateRange` weiterhin für Datumsobjekte nutzen, aber in der RPC-Query:
-```ts
-p_from_date: toBerlinDateString(from),
-p_to_date:   toBerlinDateString(to),
-```
-Für `period === "day"` liefert das exakt `heute` = `heute` → nur der heutige Tag wird summiert und deckt sich mit der Loxone-App.
+Bei Position „oben" — welche Reihenfolge (von oben nach unten gelesen)?
 
-### C) Kein Refactor der Animation nötig
-Sobald A) greift, ist `flowWatts != null` → `hasFlow = true` → Dash-Animation und Partikel laufen wie geplant. Kein Eingriff in die SVG-Logik.
+- **A:** `Label` → `Summe` → Kreis  (Label ganz oben, wie heute unten die Reihenfolge Label→Summe)
+- **B:** `Summe` → `Label` → Kreis  (Label direkt am Kreis, Summe darüber — spiegelverkehrt zur Unten-Variante)
 
-## Nicht betroffen
-- `useGatewayLivePower`, `useRealtimePower`, `BoardEnergyBand` — bleiben unverändert.
-- RPC `get_meter_daily_totals_with_fallback` — funktioniert korrekt, der Bug liegt beim Aufrufer.
-- Widget-Designer / Node-Filter — bleiben unverändert.
-
-## Verifikation nach dem Fix
-1. Dashboard neu laden → PV/Netz/Gebäude/Speicher zeigen sofort kW-Wert unter dem Kreis.
-2. Fließende Verbindungen zeigen Partikel + Watt-Label am Mittelpunkt.
-3. „Heute"-Summe für PV ≈ 49 kWh (Loxone-App-Referenz), nicht mehr 111 kWh.
+Ich würde **A** wählen (visuelle Konsistenz: Label immer weiter weg vom Kreis als Rand-Info wirkt seltsam) — bestätige bitte oder wähle B.  
+  
+Antwort: Ja, Lösung A wie von dir vorgeschlagen.
