@@ -12,13 +12,28 @@ import {
 } from "@/hooks/useCustomWidgetDefinitions";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import {
   ResponsiveContainer,
   AreaChart,
   Area,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
+  CartesianGrid,
+  ReferenceLine,
+  Legend,
+  Label as AxisLabel,
   Tooltip as RTooltip,
 } from "recharts";
 import {
@@ -29,7 +44,7 @@ import {
   Fan,
   PlugZap,
   SunMedium,
-  ExternalLink,
+  Maximize2,
   type LucideIcon,
 } from "lucide-react";
 
