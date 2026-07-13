@@ -948,6 +948,15 @@ function NodeDetailOverlay({
 
 type DetailRange = "1h" | "24h" | "7d" | "30d";
 
+type StorageDetailInfo = {
+  id: string;
+  created_at: string;
+  current_soc_pct: number | null;
+  soc_sensor_uuid: string | null;
+  soc_updated_at: string | null;
+  power_meter_id: string | null;
+};
+
 const RANGE_LABEL: Record<DetailRange, string> = {
   "1h": "1 Stunde",
   "24h": "24 Stunden",
@@ -974,11 +983,38 @@ function MeterDetailDialog({
   const Icon = ROLE_ICON[node.role];
   const [range, setRange] = useState<DetailRange>("24h");
 
+  const isBattery = node.role === "battery";
+
+  const { data: storageInfo, isLoading: isStorageLoading } = useQuery({
+    queryKey: ["meter-detail-storage-info", node.meter_id],
+    enabled: isBattery && !!node.meter_id,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<StorageDetailInfo | null> => {
+      const { data } = await supabase
+        .from("energy_storages")
+        .select("id, created_at, current_soc_pct, soc_sensor_uuid, soc_updated_at, power_meter_id")
+        .eq("power_meter_id", node.meter_id)
+        .maybeSingle();
+      return (data as StorageDetailInfo | null) ?? null;
+    },
+  });
+
+  const visibleStartMs = useMemo(() => {
+    const rangeStart = Date.now() - RANGE_MS[range];
+    if (!isBattery || !storageInfo?.created_at) return rangeStart;
+    const storageStart = new Date(storageInfo.created_at).getTime();
+    return Number.isFinite(storageStart) ? Math.max(rangeStart, storageStart) : rangeStart;
+  }, [isBattery, range, storageInfo?.created_at]);
+
+  const effectiveSocPct = storageInfo?.current_soc_pct != null
+    ? Number(storageInfo.current_soc_pct)
+    : socPct;
+
   const { data: series = [], isLoading } = useQuery({
-    queryKey: ["meter-detail-series", node.meter_id, range],
+    queryKey: ["meter-detail-series", node.meter_id, range, visibleStartMs],
     queryFn: async () => {
       if (!node.meter_id) return [];
-      const since = new Date(Date.now() - RANGE_MS[range]).toISOString();
+      const since = new Date(visibleStartMs).toISOString();
       const limit = range === "30d" ? 5000 : range === "7d" ? 3000 : 1500;
       const { data } = await supabase
         .from("meter_power_readings")
@@ -993,63 +1029,31 @@ function MeterDetailDialog({
         kw: Number(r.power_value),
       }));
     },
-    enabled: !!node.meter_id,
+    enabled: !!node.meter_id && (!isBattery || !isStorageLoading),
     staleTime: 30_000,
   });
 
-  const isBattery = node.role === "battery";
-
-  // SOC-Sensor-UUID (nur bei Speichern) aus energy_storages ermitteln
-  const { data: socSensorUuid } = useQuery({
-    queryKey: ["meter-detail-soc-uuid", node.meter_id],
-    enabled: isBattery && !!node.meter_id,
-    staleTime: 5 * 60_000,
-    queryFn: async (): Promise<string | null> => {
-      const { data } = await supabase
-        .from("energy_storages")
-        .select("soc_sensor_uuid, power_meter_id")
-        .eq("power_meter_id", node.meter_id)
-        .maybeSingle();
-      return (data as any)?.soc_sensor_uuid ?? null;
-    },
-  });
-
-  // SOC-Historie aus bridge_raw_samples (roh, ungefiltert)
-  const { data: socSeriesRaw = [] } = useQuery({
-    queryKey: ["meter-detail-soc-series", socSensorUuid, range],
-    enabled: !!socSensorUuid,
+  // Echte SOC-Historie: wird ab jetzt separat persistiert, damit Power/kW-Werte
+  // nicht mehr fälschlich als Ladezustand (%) interpretiert werden.
+  const { data: socSeries = [] } = useQuery({
+    queryKey: ["meter-detail-soc-readings", storageInfo?.id, range, visibleStartMs],
+    enabled: isBattery && !!storageInfo?.id && (!isStorageLoading),
     staleTime: 30_000,
     queryFn: async () => {
-      const since = new Date(Date.now() - RANGE_MS[range]).toISOString();
+      const since = new Date(visibleStartMs).toISOString();
       const limit = range === "30d" ? 5000 : range === "7d" ? 3000 : 1500;
-      const { data } = await (supabase
-        .from("bridge_raw_samples" as any)
-        .select("received_at, value")
-        .eq("uuid", socSensorUuid)
-        .gte("received_at", since)
-        .order("received_at", { ascending: true })
+      const { data } = await ((supabase as any)
+        .from("storage_soc_readings")
+        .select("recorded_at, soc_pct")
+        .eq("storage_id", storageInfo!.id)
+        .gte("recorded_at", since)
+        .order("recorded_at", { ascending: true })
         .limit(limit));
       return ((data as any[]) ?? [])
-        .map((r) => ({ t: new Date(r.received_at).getTime(), soc: Number(r.value) }))
-        .filter((d) => Number.isFinite(d.soc));
+        .map((r) => ({ t: new Date(r.recorded_at).getTime(), soc: Number(r.soc_pct) }))
+        .filter((d) => Number.isFinite(d.soc) && d.soc >= 0 && d.soc <= 100);
     },
   });
-
-  // Plausibilitätscheck: sieht die Reihe wirklich nach SOC (%) aus?
-  // Falsche UUID-Verknüpfungen liefern häufig Leistungswerte (~0 kW) statt Prozentwerte.
-  const { socSeries, socInvalid } = useMemo(() => {
-    if (!socSensorUuid || socSeriesRaw.length === 0) {
-      return { socSeries: [] as { t: number; soc: number }[], socInvalid: false };
-    }
-    const inRange = socSeriesRaw.filter((d) => d.soc > 0 && d.soc <= 100);
-    if (inRange.length < 3) return { socSeries: [], socInvalid: true };
-    const sorted = [...inRange].map((d) => d.soc).sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)];
-    const max = sorted[sorted.length - 1];
-    // Plausibel: Median mindestens 1 % UND ein Wert erreicht mindestens 5 %.
-    if (median < 1 || max < 5) return { socSeries: [], socInvalid: true };
-    return { socSeries: inRange, socInvalid: false };
-  }, [socSeriesRaw, socSensorUuid]);
 
   // Power- und SOC-Reihen zu einer Datenreihe mergen (nach Zeit)
   const mergedSeries = useMemo(() => {
@@ -1065,7 +1069,7 @@ function MeterDetailDialog({
   }, [series, socSeries]);
   const hasSoc = socSeries.length > 0;
   // Rechte SOC-Achse auch dann anzeigen, wenn nur der aktuelle SOC bekannt ist.
-  const showSocAxis = hasSoc || (isBattery && socPct != null);
+  const showSocAxis = hasSoc || (isBattery && effectiveSocPct != null);
 
 
   const stats = useMemo(() => {
@@ -1141,11 +1145,11 @@ function MeterDetailDialog({
     for (let t = start; t <= xDomain[1]; t += step) ticks.push(t);
     return ticks;
   }, [xDomain, range]);
-  const firstDataTs = series[0]?.t;
+  const firstDataTs = series[0]?.t ?? socSeries[0]?.t;
   const showGapHint =
     firstDataTs != null && firstDataTs - xDomain[0] > 60 * 60_000;
   const gapHintText = showGapHint
-    ? `Keine Daten vor ${new Date(firstDataTs).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`
+    ? `Daten ab ${new Date(firstDataTs).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`
     : "";
 
 
@@ -1165,13 +1169,13 @@ function MeterDetailDialog({
               <DialogTitle className="truncate">{node.label}</DialogTitle>
               <DialogDescription>
                 {ROLE_LABEL[node.role]}
-                {isBattery && socPct != null && (
-                  <> · Ladezustand aktuell <span className="font-semibold text-foreground">{fmtDeNum(socPct, 0)} %</span></>
+                {isBattery && effectiveSocPct != null && (
+                  <> · Ladezustand aktuell <span className="font-semibold text-foreground">{fmtDeNum(effectiveSocPct, 0)} %</span></>
                 )}
               </DialogDescription>
             </div>
-            {isBattery && socPct != null && (
-              <Badge variant="secondary" className="tabular-nums">SOC {fmtDeNum(socPct, 0)} %</Badge>
+            {isBattery && effectiveSocPct != null && (
+              <Badge variant="secondary" className="tabular-nums">SOC {fmtDeNum(effectiveSocPct, 0)} %</Badge>
             )}
           </div>
         </DialogHeader>
@@ -1228,13 +1232,9 @@ function MeterDetailDialog({
             <div className="text-sm font-medium">
               Leistungsverlauf{showSocAxis ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
             </div>
-            {socInvalid && (
-              <Badge
-                variant="outline"
-                className="border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[10px]"
-                title="Der hinterlegte SOC-Sensor liefert Leistungswerte (kW) statt Ladezustand (%)."
-              >
-                SOC-Sensor liefert Leistungswerte (kW) statt Ladezustand (%). Bitte in den Speicher-Einstellungen die korrekte SOC-UUID hinterlegen.
+            {!hasSoc && showSocAxis && (
+              <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                SOC-Historie ab dem nächsten Gateway-Wert
               </Badge>
             )}
           </div>
@@ -1294,17 +1294,17 @@ function MeterDetailDialog({
                     </YAxis>
                   )}
                   {stats?.bidirectional && <ReferenceLine yAxisId="kw" y={0} stroke="hsl(var(--muted-foreground))" />}
-                  {!hasSoc && showSocAxis && socPct != null && (
+                  {!hasSoc && showSocAxis && effectiveSocPct != null && (
                     <ReferenceDot
                       yAxisId="soc"
                       x={xDomain[1]}
-                      y={Math.max(0, Math.min(100, socPct))}
+                      y={Math.max(0, Math.min(100, effectiveSocPct))}
                       r={5}
                       fill="hsl(217 91% 60%)"
                       stroke="hsl(217 91% 60%)"
                       isFront
                       label={{
-                        value: `SOC jetzt: ${fmtDeNum(socPct, 0)} %`,
+                        value: `SOC aktuell: ${fmtDeNum(effectiveSocPct, 0)} %`,
                         position: "left",
                         fill: "hsl(217 91% 60%)",
                         fontSize: 11,

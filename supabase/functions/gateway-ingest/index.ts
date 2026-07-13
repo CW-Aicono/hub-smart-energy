@@ -1298,6 +1298,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
   const rawRows: any[] = [];
   const broadcastRows: Array<{ tenant_id: string | null; uuid: string; value: number; at: string; role: Role }> = [];
   const socRows: Array<{ tenant_id: string; uuid: string; value: number; at: string }> = [];
+  const socReadingRows: Array<{ storage_id: string; tenant_id: string; sensor_uuid: string; soc_pct: number; recorded_at: string; source: string }> = [];
   let skipped = 0;
   for (const r of body.readings) {
     if (!r.miniserver_serial || !r.sensor_uuid || typeof r.value !== "number" || !isFinite(r.value)) {
@@ -1374,8 +1375,25 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
       if (socErr) {
         console.warn(`[bridge-readings] SOC update failed for ${row.uuid}: ${socErr.message}`);
       } else {
+        socReadingRows.push({
+          storage_id: storage.id,
+          tenant_id: row.tenant_id,
+          sensor_uuid: row.uuid,
+          soc_pct: row.value,
+          recorded_at: row.at,
+          source: "bridge_readings",
+        });
         socUpdated++;
       }
+    }
+  }
+
+  if (socReadingRows.length > 0) {
+    const { error: socReadingsErr } = await supabase
+      .from("storage_soc_readings")
+      .insert(socReadingRows);
+    if (socReadingsErr) {
+      console.warn(`[bridge-readings] SOC history insert failed: ${socReadingsErr.message}`);
     }
   }
 
