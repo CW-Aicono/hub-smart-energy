@@ -1270,6 +1270,21 @@ function MeterDetailDialog({
                     </YAxis>
                   )}
                   {stats?.bidirectional && <ReferenceLine yAxisId="kw" y={0} stroke="hsl(var(--muted-foreground))" />}
+                  {!hasSoc && showSocAxis && socPct != null && (
+                    <ReferenceLine
+                      yAxisId="soc"
+                      y={Math.max(0, Math.min(100, socPct))}
+                      stroke="hsl(217 91% 60%)"
+                      strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                      label={{
+                        value: `SOC aktuell: ${fmtDeNum(socPct, 0)} %`,
+                        position: "insideTopRight",
+                        fill: "hsl(217 91% 60%)",
+                        fontSize: 11,
+                      }}
+                    />
+                  )}
                   <RTooltip
                     contentStyle={{ fontSize: 11 }}
                     content={({ active, payload, label }) => {
