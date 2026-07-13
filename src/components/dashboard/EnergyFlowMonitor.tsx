@@ -948,7 +948,7 @@ function NodeDetailOverlay({
             className="w-full mt-2 h-7 text-xs"
             onClick={() => onOpenDetail(node)}
           >
-            Zum Zähler in der Übersicht
+            Detailansicht
             <Maximize2 className="ml-1 h-3 w-3" />
           </Button>
         )}
