@@ -663,7 +663,7 @@ async function syncBatterySoc(
   try {
     const { data: storages, error } = await supabase
       .from("energy_storages")
-      .select("id, name, soc_sensor_uuid, current_soc_pct, soc_updated_at")
+      .select("id, name, soc_sensor_uuid, current_soc_pct, soc_updated_at, power_meter_id")
       .eq("tenant_id", tenantId)
       .eq("location_id", locationId);
     if (error) {
@@ -671,7 +671,19 @@ async function syncBatterySoc(
       return;
     }
 
-    const rows = (storages ?? []) as Array<{ id: string; name: string; soc_sensor_uuid: string | null; current_soc_pct: number | null; soc_updated_at: string | null }>;
+    const rows = (storages ?? []) as Array<{ id: string; name: string; soc_sensor_uuid: string | null; current_soc_pct: number | null; soc_updated_at: string | null; power_meter_id: string | null }>;
+
+    const { data: locationMeters } = await supabase
+      .from("meters")
+      .select("id, sensor_uuid")
+      .eq("tenant_id", tenantId)
+      .eq("location_id", locationId)
+      .eq("is_archived", false)
+      .not("sensor_uuid", "is", null);
+    const meterIdBySensorUuid = new Map<string, string>();
+    for (const meter of locationMeters ?? []) {
+      meterIdBySensorUuid.set(String((meter as any).sensor_uuid).toLowerCase(), (meter as any).id);
+    }
 
     // Discovery, falls (a) mindestens ein Storage ohne UUID existiert
     // oder (b) noch gar keiner existiert (dann evtl. auto-anlegen).
@@ -704,6 +716,7 @@ async function syncBatterySoc(
           max_discharge_kw: 0,
           efficiency_pct: 90,
           soc_sensor_uuid: best.uuid,
+          power_meter_id: meterIdBySensorUuid.get(best.uuid) ?? null,
           current_soc_pct: best.currentValue,
           soc_updated_at: best.currentValue != null ? new Date().toISOString() : null,
         })
@@ -805,6 +818,8 @@ async function syncBatterySoc(
 
       const patch: Record<string, unknown> = {};
       if (uuid !== row.soc_sensor_uuid) patch.soc_sensor_uuid = uuid;
+      const matchingPowerMeterId = meterIdBySensorUuid.get(uuid);
+      if (matchingPowerMeterId && matchingPowerMeterId !== row.power_meter_id) patch.power_meter_id = matchingPowerMeterId;
       if (value != null) {
         patch.current_soc_pct = value;
         patch.soc_updated_at = new Date().toISOString();
