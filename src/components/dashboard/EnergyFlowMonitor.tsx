@@ -1390,15 +1390,18 @@ function MeterDetailDialog({
             </div>
             <div className="h-[240px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={energyBuckets} margin={{ top: 8, right: 16, left: 8, bottom: 28 }}>
+                <BarChart data={energyBuckets} margin={{ top: 8, right: showSocAxis ? 60 : 16, left: 8, bottom: 28 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                   <XAxis
                     dataKey="t"
                     type="number"
-                    domain={["dataMin", "dataMax"]}
+                    domain={xDomain}
+                    ticks={xTicks}
                     scale="time"
                     tickFormatter={fmtTime}
                     tick={{ fontSize: 11 }}
+                    interval={0}
+                    allowDataOverflow
                     height={40}
                   >
                     <AxisLabel value="Zeit" position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
