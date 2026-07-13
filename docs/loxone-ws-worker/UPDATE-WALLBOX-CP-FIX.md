@@ -1,7 +1,53 @@
 # Update: Wallbox „Cp" korrekt erkennen – sichere Vorgehensweise
 
-> **Wichtig vorab:** Die vorherige Fassung dieser Anleitung war falsch gefährlich, weil sie `docker rm -f` zu früh genannt hat.  
+> **Wichtig vorab:** Die vorherige Fassung dieser Anleitung war falsch gefährlich, weil sie `docker rm -f` zu früh genannt hat.
 > **Niemals zuerst löschen.** Erst prüfen, sichern und den neuen Start-Befehl vorbereiten. Erst wenn alle Werte bekannt sind, wird der alte Container ersetzt.
+
+---
+
+## Schnellstart Live (Copy/Paste über Putty)
+
+Nur nutzen, wenn der alte Container bereits gelöscht wurde und Sie den Worker so schnell wie möglich wieder starten müssen.
+
+### 1. API-Key aus der Live-App holen
+
+1. `https://ems-pro.aicono.org` öffnen.
+2. **Einstellungen → Integrationen → API** öffnen.
+3. Beim **API-Key** auf das Auge klicken, kopieren.
+   Falls keiner mehr sichtbar ist: **Neuen API-Key erzeugen** und sofort kopieren.
+
+Der Key beginnt mit `g_work_...`.
+
+### 2. In Putty auf dem Hetzner-Server einloggen und diesen Block ausführen
+
+Ersetzen Sie **nur** die Zeile `GATEWAY_API_KEY=...` durch Ihren echten Key. Der Rest bleibt exakt wie unten:
+
+```bash
+cd /opt/loxone-ws-worker || cd /opt/loxone-ws-worker-live
+docker build -t loxone-ws-worker .
+
+docker rm -f loxone-ws-worker 2>/dev/null
+
+docker run -d --restart=always --name loxone-ws-worker \
+  -p 8080:8080 \
+  -e SUPABASE_URL=https://api-ems.aicono.org \
+  -e GATEWAY_API_KEY=g_work_HIER_IHREN_KEY_EINFUEGEN \
+  -e LOG_LEVEL=info \
+  -e WORKER_HOST=hetzner-prod-1 \
+  -e BRIDGE_WORKER_NAME=loxone-ws-worker \
+  loxone-ws-worker
+```
+
+### 3. Prüfen, ob er läuft
+
+```bash
+docker ps | grep loxone-ws-worker
+docker logs --tail 50 loxone-ws-worker
+```
+
+In den Logs sollte stehen, dass der Worker mit `https://api-ems.aicono.org` verbindet und Meter geladen werden. **Keine** Meldung `401 Unauthorized` – dann ist der Key richtig.
+
+> **Sicherheitshinweis:** Sobald der Worker läuft, den API-Key aus dem Chat-Verlauf **nicht** weiterverwenden. Der aktuell in der App sichtbare Key `g_work_Pp7R6Wp8MwgUgCw0zhfzDAs9jCmSdgvh` gilt als kompromittiert – bitte in der App **neu ausstellen** und den alten deaktivieren.
 
 ---
 
