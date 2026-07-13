@@ -589,6 +589,9 @@ async function connect(state: ConnState): Promise<void> {
     log("info", `[WS] ${state.serialNumber} per-block snapshot: ok=${subscribedOk} err=${subscribedErr} (blocks=${uniqueBlocks.size}, stateUuids=${state.uuidMap.size})`);
     bridgeLog("info", "ws_per_block_snapshot", `Per-block snapshot: ok=${subscribedOk} err=${subscribedErr}`, state.serialNumber, { ok: subscribedOk, err: subscribedErr, blocks: uniqueBlocks.size, stateUuids: state.uuidMap.size, failed: failedBlocks });
   } catch (err) {
+    // DNS-Cache invalidieren: falls ein falscher Host gecacht wurde (z.B. dns.loxonecloud.com selbst),
+    // zwingt das den nächsten Reconnect zu einer frischen Auflösung.
+    dnsCache.delete(state.serialNumber);
     log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${err}`);
     bridgeLog("error", "ws_connect_failed", `Verbindung fehlgeschlagen: ${(err as Error).message ?? err}`, state.serialNumber);
     state.ws = null;
