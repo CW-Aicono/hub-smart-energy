@@ -1,38 +1,47 @@
-Der neue Screenshot klärt die Ursache: Der SOC kommt nicht als eigener SOC-UUID/VI, sondern als Ausgang `Slvl` am Loxone-Baustein/Zähler „Speicher“. Die aktuelle Implementierung sucht primär nach `SOC`/`StateOfCharge` und hat dadurch beim Rathaus einen falschen Fronius-Kandidaten gespeichert; `Slvl` wird weder im Worker noch im Sync als SOC-Rolle ausgewertet.
+## Ziel
+Der Button "Zum Zähler in der Übersicht" im EnergyFlowMonitor-Popover soll nicht mehr auf `/meters?meter=…` navigieren. Stattdessen: aktuelles Popover schließen und einen großen Detail-Dialog mit ausführlichen Graphen zum ausgewählten Messpunkt öffnen.
 
-## Plan
+## Umsetzung
 
-1. **SOC-Erkennung in der Loxone-API korrigieren**
-   - `Slvl` als offiziellen SOC-Ausgang erkennen: „Storage level or state of charge“.
-   - Discovery so anpassen, dass `Meter`/„Speicher“-Bausteine mit `Slvl` Vorrang vor Fronius-/SOC-Namensheuristiken bekommen.
-   - Auch dann erkennen, wenn `Slvl` nur in `/jdev/sps/io/<Speicher-Block>/all` als Output erscheint und nicht als eigene sichtbare UUID in Loxone Config/App.
-   - Bestehende gespeicherte falsche SOC-UUIDs automatisch neu validieren: Wenn der gespeicherte Kandidat keinen plausiblen 0–100-Wert liefert, wird neu gesucht und der `Slvl`-Pfad ersetzt.
+**Datei:** `src/components/dashboard/EnergyFlowMonitor.tsx`
 
-2. **WebSocket-Worker erweitern**
-   - Neue State-Rolle `soc` ergänzen.
-   - State-/Output-Patterns um `Slvl`, `storageLevel`, `stateOfCharge`, `SOC`, `ladezustand` erweitern.
-   - Bei `soc` Werte 0–100 zulassen und nicht als Leistungswert behandeln.
-   - Der Worker sendet SOC-Events mit `role: "soc"`, aber weiterhin mit der Speicher-Block-UUID als stabile Zuordnung.
+1. **Button-Verhalten ändern**
+   - Statt `<Link to={/meters?meter=…}>` → `onClick`-Handler.
+   - Handler setzt lokalen State `detailNode = node`, ruft `onClose()` auf.
+   - Icon `ExternalLink` → `Maximize2` (bleibt konsistent).
 
-3. **Ingest-Route für Live-SOC ergänzen**
-   - `gateway-ingest?action=bridge-readings` verarbeitet `role: "soc"` separat.
-   - Für SOC keine Leistungswerte in `bridge_raw_samples` schreiben.
-   - Stattdessen den passenden Speicher über Speicher-Zähler/Standort finden und aktualisieren:
-     - `energy_storages.current_soc_pct`
-     - `energy_storages.soc_updated_at`
-     - falls eindeutig: `energy_storages.power_meter_id` und `soc_sensor_uuid` auf den Speicher-Baustein setzen.
-   - SOC zusätzlich per Live-Broadcast senden, damit das Widget nicht auf den nächsten Poll warten muss.
+2. **Neuer Dialog `MeterDetailDialog`** (im selben File)
+   - shadcn `Dialog` (`max-w-5xl`, `max-h-[90vh]`, scrollbar).
+   - Header: Icon + Rolle + Meter-Name + SOC-Badge (falls Batterie).
+   - KPI-Zeile (4 Kacheln): Aktuell (W), Heute (kWh), 24 h Min/Max, 24 h Mittel.
+   - Zeitraum-Umschalter: 1 h · 24 h · 7 d · 30 d (Buttongruppe).
+     - Query lädt `meter_power_readings` entsprechend, mit passenden Aggregations-Limits.
+   - **Chart 1 – Leistungsverlauf** (`AreaChart`, volle Breite, ~300 px):
+     - X-Achse: Zeit, Labels lokalisiert de-DE (HH:mm bzw. dd.MM), Achsentitel „Zeit".
+     - Y-Achse: Leistung in kW, Achsentitel „Leistung (kW)", `toLocaleString('de-DE')`.
+     - Grid, Tooltip mit Zeit + Leistung, Referenzlinie bei 0 wenn bidirektional (negative Werte).
+     - Farbe = `node.color`.
+   - **Chart 2 – Energie kumuliert** (`BarChart` bei ≥24 h Fenster, sonst LineChart):
+     - Integriert Leistung → Energie pro Bucket (Stunde/Tag), zeigt Verbrauch bzw. Einspeisung.
+     - Bei bidirektionalen Zählern: zwei Serien (Bezug/Einspeisung, Split-Bars).
+   - **SOC-Chart** (nur Rolle `battery`, falls SOC-Historie vorhanden):
+     - `LineChart` mit Ladezustand 0-100 %, Y-Achse fix `[0, 100]`, Label „SOC (%)".
+     - Datenquelle: `energy_storages.current_soc_pct` snapshots (falls verfügbar) — ansonsten nur der aktuelle Wert als horizontale Referenzlinie im Leistungschart.
+   - **Details-Panel** unten: Meter-ID, Rolle, letzte Aktualisierung, Sensor-UUID (mono), Farbe/Legende.
+   - Alle Zahlen `toLocaleString('de-DE')`, Einheiten explizit.
+   - Kein Navigations-Button; der Dialog wird über `onOpenChange` geschlossen.
 
-4. **Rathaus-Datensatz reparieren**
-   - Den vorhandenen Speicher „Speicher Rathaus“ vom falschen Fronius-Kandidaten auf den Zähler/Baustein „Speicher“ umstellen.
-   - `power_meter_id` auf den Rathaus-Zähler „Speicher“ setzen.
-   - `current_soc_pct` wird danach über `Slvl` aktualisiert; erwarteter Wert aktuell: 100 %.
+3. **State/Wiring im Root-`EnergyFlowMonitor`**
+   - Neuer State `const [detailNode, setDetailNode] = useState<FlowNode | null>(null)`.
+   - `NodePopover` bekommt Prop `onOpenDetail: (node) => void`; ruft im Button den Handler auf statt `<Link>`.
+   - Dialog wird gerendert, wenn `detailNode` gesetzt ist.
 
-5. **EnergyFlowMonitor live aktualisieren**
-   - Zusätzlich zum Datenbankwert `current_soc_pct` SOC-Broadcasts mit `role: "soc"` auswerten.
-   - Anzeige priorisiert Live-SOC, fällt aber auf den gespeicherten Backend-Wert zurück.
+4. **Keine Änderungen an**
+   - Backend, Migrations, anderen Widgets/Seiten.
+   - Bestehendem Popover-Content oder Layout.
 
-6. **Verifikation**
-   - Backend-Logs prüfen: `Slvl` wird als SOC-Kandidat erkannt.
-   - Datenbank prüfen: `energy_storages.current_soc_pct` für Rathaus ist `100` und `soc_updated_at` gesetzt.
-   - Widget prüfen: Speicher zeigt `SOC: 100 %`.
+## Technisches
+- Wiederverwendet vorhandene `recharts`-Importe (`AreaChart`, `BarChart`, `LineChart`, `CartesianGrid`, `ReferenceLine`, `Legend`, `Label`).
+- `useQuery`-Key umfasst Zeitraum, damit Umschalter re-fetcht.
+- Bidirektionalitäts-Erkennung: `data.some(d => d.v < 0)`.
+- SOC-Historie kommt aus `bridge_raw_samples`/`energy_storages` — im ersten Schritt nur Ist-SOC (bestehend), Historie später falls verfügbar; wenn keine Reihe → SOC-Chart einfach weglassen.
