@@ -1200,8 +1200,19 @@ function MeterDetailDialog({
 
         {/* Chart 1: Leistungsverlauf (+ optional SOC bei Speichern) */}
         <div>
-          <div className="text-sm font-medium mb-1">
-            Leistungsverlauf{hasSoc ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <div className="text-sm font-medium">
+              Leistungsverlauf{showSocAxis ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
+            </div>
+            {socInvalid && (
+              <Badge
+                variant="outline"
+                className="border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[10px]"
+                title="Die in den Speicher-Einstellungen hinterlegte SOC-Sensor-UUID liefert keine plausiblen Prozentwerte."
+              >
+                SOC-Sensor liefert unplausible Werte – bitte in den Speicher-Einstellungen prüfen
+              </Badge>
+            )}
           </div>
           <div className="h-[320px]">
             {isLoading ? (
