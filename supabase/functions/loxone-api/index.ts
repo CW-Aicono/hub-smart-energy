@@ -86,6 +86,7 @@ const LOXONE_OUTPUT_TO_STATE: Record<string, string> = {
   "Gpwr": "Gpwr",       // Grid power
   "consCurr": "consCurr",
   "prodCurr": "prodCurr",
+  "Slvl": "soc",        // Storage level / state of charge (Speicher-Ladezustand)
 };
 
 // States to never use as fallback
@@ -443,6 +444,7 @@ function scoreSocCandidate(
   if (/stateofcharge/i.test(name)) score += 10;
   // Schwächere Namensignale
   if (/batter|speicher|akku/i.test(name)) score += 3;
+  if (/meter/i.test(type) && /speicher|akku|batter/i.test(name)) score += 7;
 
   // Kontext (Raum/Kategorie)
   if (/batter|speicher|akku|fronius|solar|pv/i.test(roomLc)) score += 2;
@@ -465,11 +467,32 @@ function scoreSocCandidate(
 // Erkennt SOC-artige Namen für Sub-States (Fronius/Battery-Baustein-Ausgänge)
 function isSocStateName(name: string): boolean {
   const lc = name.toLowerCase();
+  if (/^slvl$/.test(lc)) return true;
   if (/^soc$/.test(lc)) return true;
+  if (/storage.?level|speicher.?stand|speicher.?level/i.test(name)) return true;
   if (/stateofcharge/i.test(name)) return true;
   if (/state.?of.?charge/i.test(name)) return true;
   if (/ladezustand/i.test(lc)) return true;
   return false;
+}
+
+function extractSocValueFromAllStates(states: Record<string, number | string | null>): number | null {
+  const preferredKeys = ["Slvl", "soc", "SOC", "stateOfCharge", "stateOfCharge_Relative", "storageLevel", "ladezustand"];
+  for (const key of preferredKeys) {
+    for (const [k, v] of Object.entries(states)) {
+      if (k === "_primary") continue;
+      if (k.toLowerCase() === key.toLowerCase() && typeof v === "number" && v >= 0 && v <= 100 && Number.isFinite(v)) {
+        return v;
+      }
+    }
+  }
+  for (const [k, v] of Object.entries(states)) {
+    if (k === "_primary") continue;
+    if (isSocStateName(k) && typeof v === "number" && v >= 0 && v <= 100 && Number.isFinite(v)) {
+      return v;
+    }
+  }
+  return null;
 }
 
 async function discoverSocCandidates(
@@ -530,8 +553,11 @@ async function discoverSocCandidates(
       if (isBatteryContext) subScore += 3;
       // Fronius-Bausteine sind der Regelfall in DE-Anlagen
       if (/Fronius/i.test(type)) subScore += 2;
+      const isSlvl = /^slvl$/i.test(stateKey);
       prelim.push({
-        uuid: stateUuid.toLowerCase(),
+        // Slvl is the SOC output of the Loxone storage meter block. Store the
+        // parent block UUID so websocket SOC events map to the storage meter.
+        uuid: (isSlvl ? ctrlUuid : stateUuid).toLowerCase(),
         displayName: `${control.name || "?"} → ${stateKey}`,
         controlName: control.name || "",
         controlType: type,
