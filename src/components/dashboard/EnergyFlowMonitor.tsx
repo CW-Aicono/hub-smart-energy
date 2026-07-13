@@ -1125,6 +1125,29 @@ function MeterDetailDialog({
   const totalImport = energyBuckets.reduce((s, b) => s + b.import, 0);
   const totalExport = energyBuckets.reduce((s, b) => s + b.export, 0);
 
+  // Gemeinsame Zeitachse für beide Charts
+  const xDomain = useMemo<[number, number]>(() => {
+    const now = Date.now();
+    return [now - RANGE_MS[range], now];
+  }, [range]);
+  const xTicks = useMemo(() => {
+    const step =
+      range === "1h" ? 10 * 60_000
+      : range === "24h" ? 3 * 60 * 60_000
+      : range === "7d" ? 24 * 60 * 60_000
+      : 7 * 24 * 60 * 60_000;
+    const ticks: number[] = [];
+    const start = Math.ceil(xDomain[0] / step) * step;
+    for (let t = start; t <= xDomain[1]; t += step) ticks.push(t);
+    return ticks;
+  }, [xDomain, range]);
+  const firstDataTs = series[0]?.t;
+  const showGapHint =
+    firstDataTs != null && firstDataTs - xDomain[0] > 60 * 60_000;
+  const gapHintText = showGapHint
+    ? `Keine Daten vor ${new Date(firstDataTs).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`
+    : "";
+
 
 
   return (
