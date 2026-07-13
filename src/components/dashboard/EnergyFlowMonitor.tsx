@@ -676,6 +676,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           liveWatts={getLiveWatts(selectedNode.meter_id)}
           periodSum={periodSums[selectedNode.meter_id]}
           periodLabel={PERIOD_SUM_LABEL[selectedPeriod]}
+          socPct={socByMeter[selectedNode.meter_id] ?? null}
           allNodes={nodes}
           getLiveWatts={getLiveWatts}
           anchor={{
