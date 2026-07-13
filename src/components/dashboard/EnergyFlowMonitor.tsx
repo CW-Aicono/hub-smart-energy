@@ -272,28 +272,37 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     },
   });
 
-  // Seed B: bridge_raw_samples (Loxone WS-Bridge – hier landen Live-Leistungen aus Loxone)
-  const uuidKey = useMemo(() => uuids.slice().sort().join(","), [uuids]);
+  // Seed B: bridge_raw_samples (Loxone WS-Bridge – hier landen Live-Leistungen aus Loxone).
+  // Wir laden über Family-Prefixe (nicht über exakte Meter-UUIDs), damit auch die
+  // Sub-Output-UUIDs des WS-Workers gefunden werden. Die Auflösung passiert
+  // clientseitig durch den `resolver`.
+  const familyKey = useMemo(() => resolver.familyPrefixes.slice().sort().join(","), [resolver]);
+  const tenantKey = tenantIds.join(",");
   const { data: bridgeByMeter = {} } = useQuery({
-    queryKey: ["energyflow-bridge", uuidKey],
-    enabled: uuids.length > 0,
+    queryKey: ["energyflow-bridge", familyKey, tenantKey],
+    enabled: resolver.familyPrefixes.length > 0 && tenantIds.length > 0,
     staleTime: 60_000,
     refetchInterval: 60_000,
     queryFn: async (): Promise<Record<string, number>> => {
       const since = new Date(Date.now() - 60 * 60_000).toISOString();
+      const orExpr = resolver.familyPrefixes
+        .map((p) => `uuid.ilike.${p}%`)
+        .join(",");
       const { data } = await (supabase
         .from("bridge_raw_samples" as any)
-        .select("uuid, value, received_at")
-        .in("uuid", uuids)
+        .select("uuid, value, received_at, tenant_id")
+        .in("tenant_id", tenantIds)
+        .or(orExpr)
         .gte("received_at", since)
         .order("received_at", { ascending: false })
-        .limit(2000));
+        .limit(4000));
       const latest: Record<string, number> = {};
       for (const row of ((data as any[]) ?? [])) {
-        const meterId = uuidToMeterId.get(String(row.uuid).toLowerCase());
+        const value = Number(row.value);
+        const meterId = resolver.resolve(String(row.uuid), row.tenant_id ?? null, value);
         if (!meterId) continue;
         if (latest[meterId] === undefined) {
-          latest[meterId] = Number(row.value);
+          latest[meterId] = value;
         }
       }
       return latest;
@@ -303,9 +312,8 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
   // Realtime: Loxone broadcast (loxone-live-{tenantId}) – sub-sekündliche Updates
   const [broadcastByMeter, setBroadcastByMeter] = useState<Record<string, number>>({});
   const [broadcastSocByMeter, setBroadcastSocByMeter] = useState<Record<string, number>>({});
-  const tenantKey = tenantIds.join(",");
   useEffect(() => {
-    if (tenantIds.length === 0 || uuidToMeterId.size === 0) return;
+    if (tenantIds.length === 0 || resolver.exactByUuid.size === 0) return;
     const channels = tenantIds.map((tenantId) =>
       supabase
         .channel(`loxone-live-${tenantId}`, { config: { broadcast: { self: false } } })
@@ -318,10 +326,11 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
             for (const ev of events) {
               const role = ev.role ?? "pwr";
               if (role !== "pwr") continue;
-              if (!Number.isFinite(ev.value) || Math.abs(ev.value) > 10_000) continue;
-              const meterId = uuidToMeterId.get(String(ev.uuid).toLowerCase());
+              const value = Number(ev.value);
+              if (!Number.isFinite(value) || Math.abs(value) > 10_000) continue;
+              const meterId = resolver.resolve(String(ev.uuid), tenantId, value);
               if (!meterId) continue;
-              next[meterId] = Number(ev.value);
+              next[meterId] = value;
               changed = true;
             }
             return changed ? next : prev;
@@ -332,10 +341,12 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
             for (const ev of events) {
               const role = ev.role ?? "pwr";
               if (role !== "soc") continue;
-              if (!Number.isFinite(ev.value) || ev.value < 0 || ev.value > 100) continue;
-              const meterId = uuidToMeterId.get(String(ev.uuid).toLowerCase());
-              if (!meterId) continue;
-              next[meterId] = Number(ev.value);
+              const value = Number(ev.value);
+              if (!Number.isFinite(value) || value < 0 || value > 100) continue;
+              // SOC hat eigene UUID-Familie, kein Nearest-Match — nur exact.
+              const meter = resolver.exactByUuid.get(String(ev.uuid).toLowerCase());
+              if (!meter) continue;
+              next[meter.id] = value;
               changed = true;
             }
             return changed ? next : prev;
@@ -345,7 +356,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     );
     return () => { channels.forEach((c) => supabase.removeChannel(c)); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantKey, uuidToMeterId]);
+  }, [tenantKey, resolver]);
 
   const getLiveWatts = useCallback(
     (meterId: string): number | null => {
