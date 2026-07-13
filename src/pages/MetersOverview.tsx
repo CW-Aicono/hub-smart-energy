@@ -17,6 +17,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Search, X } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -89,6 +91,7 @@ const MetersOverview = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [expandedSim, setExpandedSim] = useState<Set<string>>(new Set());
   const [expandedVirtual, setExpandedVirtual] = useState<Set<string>>(new Set());
 
@@ -106,10 +109,16 @@ const MetersOverview = () => {
 
   if (!user) return <Navigate to="/auth" replace />;
 
+  const normalizedSearch = searchQuery.trim().toLowerCase();
   const locationFiltered = meters.filter((m) => {
     if (selectedLocationId !== "all" && m.location_id !== selectedLocationId) return false;
     if (selectedEnergyType !== "all" && m.energy_type !== selectedEnergyType) return false;
     if (selectedCaptureType !== "all" && m.capture_type !== selectedCaptureType) return false;
+    if (normalizedSearch) {
+      const locName = locations.find((l) => l.id === m.location_id)?.name ?? "";
+      const haystack = `${m.name ?? ""} ${m.meter_number ?? ""} ${locName} ${m.notes ?? ""} ${m.energy_type ?? ""}`.toLowerCase();
+      if (!haystack.includes(normalizedSearch)) return false;
+    }
     return true;
   });
 
@@ -162,7 +171,27 @@ const MetersOverview = () => {
                 {t("meters.filterLocation" as any)}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Suchen nach Name, Zählernummer, Liegenschaft…"
+                  className="pl-9 pr-9"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+                    aria-label="Suche zurücksetzen"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
               <div className="flex flex-wrap gap-4">
                 <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
                   <SelectTrigger className="w-[220px]">
