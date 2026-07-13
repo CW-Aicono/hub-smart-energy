@@ -160,6 +160,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setIsMainMeter(meter.is_main_meter);
     setIsBidirectional((meter as any).is_bidirectional ?? false);
     setMeterFunction(meter.meter_function || "consumption");
+    setFlowConvention(
+      ((meter as any).flow_direction_convention as "negative_delivery" | "positive_delivery") || "negative_delivery",
+    );
     setSelectedFloorId(meter.floor_id || "");
     setSelectedRoomId(meter.room_id || "");
     setInstallationDate(meter.installation_date || "");
