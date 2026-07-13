@@ -1232,9 +1232,9 @@ function MeterDetailDialog({
               <Badge
                 variant="outline"
                 className="border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[10px]"
-                title="Die in den Speicher-Einstellungen hinterlegte SOC-Sensor-UUID liefert keine plausiblen Prozentwerte."
+                title="Der hinterlegte SOC-Sensor liefert Leistungswerte (kW) statt Ladezustand (%)."
               >
-                SOC-Sensor liefert unplausible Werte – bitte in den Speicher-Einstellungen prüfen
+                SOC-Sensor liefert Leistungswerte (kW) statt Ladezustand (%). Bitte in den Speicher-Einstellungen die korrekte SOC-UUID hinterlegen.
               </Badge>
             )}
           </div>
