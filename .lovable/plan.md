@@ -1,61 +1,43 @@
 ## Ziel
-Ein neues Widget im Tenant-Dashboard, das die wichtigsten KPIs des Gain-Sharings kompakt anzeigt und auf die Vollansicht `/savings-share` verlinkt. Das Widget wird nur angezeigt, wenn das Modul `gain_sharing` für den Tenant aktiviert ist.
 
-## Angezeigte KPIs
-Datenquelle: `tenant_savings_contracts` + `tenant_savings_baselines` + `tenant_savings_settlements` (identisch zu `SavingsShareReadOnly`).
+Node-Beschriftung (Name + Periodensumme) soll den Live-Flow auf einer angrenzenden Verbindung nicht mehr überlagern.
 
-Vier KPI-Kacheln:
-1. **Vertragsstatus** – Badge (Entwurf/Aktiv/Pausiert/Beendet) + Baseline-Jahr → Start-Jahr.
-2. **Baseline gesamt** – Σ `baseline_kwh_normalized` in kWh; Untertext: schwächste Datenqualität + Ø Monatsabdeckung.
-3. **Einsparung letzte Abrechnung** – `total_savings_eur` der neuesten Settlement-Periode; Untertext: Jahr + Status-Badge.
-4. **Kumulierte Einsparung** – Σ `total_savings_eur` aller Settlements mit Status ∈ (approved, invoiced, paid); Untertext: „davon Tenant-Anteil: X €" (Σ `tenant_retained_eur`).
+## Regel
 
-Darunter:
-- Mini-Balkendiagramm (recharts, stacked) der letzten bis zu 5 Abrechnungsjahre: Tenant-Anteil (grün) + AICONO-Anteil (teal).
-- Button „Details ansehen" → navigiert nach `/savings-share`.
+- **Standard:** Beschriftung unterhalb des Kreises (wie heute).
+- **Ausnahme:** Wenn von diesem Knoten mindestens eine Verbindung nach **unten** verläuft (Winkel der Line-Richtung fällt in den unteren Sektor, ca. 45°–135°), wird die Beschriftung **oberhalb** des Kreises platziert.
+- Reihenfolge bleibt gleich:
+  - oben: erst `node.label`, darunter Periodensumme
+  - unten: erst `node.label`, darunter Periodensumme
+  (bei Position „oben" umgekehrte y-Offsets, sodass Label näher am Kreis steht als die Summe)
 
-Leer-Zustände:
-- Kein Vertrag: Card mit Hinweis „Noch kein Gain-Sharing-Vertrag hinterlegt" + Link.
-- Vertrag ohne Settlements: KPI 3 & 4 zeigen „–"; Chart-Bereich zeigt „Noch keine Abrechnungen".
+## Umsetzung in `src/components/dashboard/EnergyFlowMonitor.tsx`
 
-Alle Zahlen mit `toLocaleString("de-DE")`.
+1. **Helper `getLabelSide(node)**` in der Node-Render-Schleife:
+  - Iteriere über `connections`, filtere die, an denen `node` als `from` oder `to` beteiligt ist.
+  - Für jede Verbindung: berechne den Richtungsvektor **von diesem Knoten weg** zum Nachbarknoten, dann Winkel `atan2(dy, dx)` in Grad (0° = rechts, 90° = unten in SVG-Koordinaten).
+  - Wenn ein Winkel im Bereich `[45°, 135°]` liegt → Nachbar-Verbindung geht nach unten → return `"top"`.
+  - Sonst `"bottom"`.
+2. **Text-Rendering im `nodes.map(...)**`:
+  - `const side = getLabelSide(node);`
+  - `const labelY = side === "bottom" ? cy + nodeRadius + 14 : cy - nodeRadius - 18;`
+  - `const sumY   = side === "bottom" ? cy + nodeRadius + 28 : cy - nodeRadius - 6;`  
+  (bei „top" ist die Summe zwischen Label und Kreis, damit die Reihenfolge Label→Summe→Kreis von oben nach unten gelesen wird — alternativ Label ganz oben und Summe direkt darunter, siehe Frage unten)
+3. Keine Änderung am Flow-Label auf der Linie selbst (das ist mittig auf der Line, kein Konflikt zu erwarten).
 
-## Umsetzung
+## Randfälle
 
-### 1. Neue Datei `src/components/dashboard/SavingsShareWidget.tsx`
-- Props: `WidgetProps` (locationId wird ignoriert – Gain-Sharing ist tenantweit).
-- Nutzt `useTenant()` für `tenant.id`.
-- `useQuery` (`queryKey: ["savings-share-widget", tenant.id]`) lädt neuesten Contract + Baselines + Settlements (Logik analog `SavingsShareReadOnly`, inline gehalten).
-- Card mit Titel „Gain-Sharing", `Euro`-Icon, KPI-Grid + Mini-Chart.
-- Bei Loading: Skeleton. Bei Fehler: kompakte Fehlermeldung.
+- Knoten ohne Verbindung: `side = "bottom"` (Default).
+- Mehrere Verbindungen mit gemischten Richtungen: Sobald **eine** nach unten geht, flippt die Beschriftung nach oben.
+- Bei horizontalem Layout (heutiger Regelfall PV — Gebäude — Speicher) bleibt alles unten; bei Netz-über-Gebäude (Screenshot) flippt „Gebäude gesamt"-Beschriftung nach oben — der aktuelle Screenshot betrifft aber vor allem **„Netz"**: dessen Verbindung geht nach unten → Beschriftung wandert **über** den Netz-Kreis.
 
-### 2. Sichtbarkeitssteuerung über Modul (zentrale Stelle)
-`src/pages/DashboardContent.tsx` – nur diese Datei wird angepasst, damit die Filterung konsistent zu bestehenden modul-gebundenen Widgets erfolgt:
+## Offene Frage
 
-- In `WIDGET_MODULE_MAP` neuen Eintrag ergänzen:
-  ```ts
-  savings_share: "gain_sharing",
-  ```
-  → `filteredVisibleWidgets` blendet das Widget automatisch aus, wenn `isModuleEnabled("gain_sharing")` `false` liefert. Damit erscheint es weder im Dashboard-Grid noch im Expand-Dialog.
+Bei Position „oben" — welche Reihenfolge (von oben nach unten gelesen)?
 
-- Optional (kein Blocker): der Dashboard-Customizer zeigt den Eintrag weiterhin, kann aber später über dieselbe Map gefiltert werden. Für diesen Task nicht erforderlich, da `useModuleGuard` bereits alle Anzeige-Entscheidungen trifft.
+- **A:** `Label` → `Summe` → Kreis  (Label ganz oben, wie heute unten die Reihenfolge Label→Summe)
+- **B:** `Summe` → `Label` → Kreis  (Label direkt am Kreis, Summe darüber — spiegelverkehrt zur Unten-Variante)
 
-### 3. Registrierung in `src/pages/DashboardContent.tsx`
-- Lazy-Import: `const SavingsShareWidget = lazy(() => import("@/components/dashboard/SavingsShareWidget"));`
-- `WIDGET_COMPONENTS`: `savings_share: SavingsShareWidget`.
-- `WIDGET_HEIGHT_LIMITS`: `savings_share: { min: 340, max: 520 }`.
-
-### 4. Default-Widget-Eintrag in `src/hooks/useDashboardWidgets.tsx`
-- `{ widget_type: "savings_share", position: 17, is_visible: true }` — initial sichtbar; wird durch Modul-Filter ausgeblendet, solange `gain_sharing` deaktiviert ist.
-
-### 5. Anzeige-Label im Customizer
-Label „Gain-Sharing KPIs" für `savings_share` in der Labels-Map des `DashboardCustomizer` bzw. den i18n-Übersetzungen ergänzen (DE/EN/ES/NL).
-
-### Kein DB-/RLS-Change
-Widget liest bestehende Tabellen mit vorhandenen Policies – keine Migration nötig.
-
-## Technische Notizen
-- Modul-Check läuft über den bestehenden `useModuleGuard`-Mechanismus (`WIDGET_MODULE_MAP` → `isModuleEnabled`). Damit ist die Sichtbarkeit strikt an das im Super-Admin/Partner freigeschaltete Modul `gain_sharing` gekoppelt – konsistent mit Route-Guard `/savings-share`.
-- Widget respektiert Widget-Size über responsives Grid (`grid-cols-2 md:grid-cols-4` bei full, sonst `grid-cols-2`).
-- Kein Location-Bezug – Inhalt ändert sich nicht beim Standort-Filter.
-- Chart via `recharts` (bereits im Projekt), Y-Achse in €, Tooltip mit deutscher Formatierung.
+Ich würde **A** wählen (visuelle Konsistenz: Label immer weiter weg vom Kreis als Rand-Info wirkt seltsam) — bestätige bitte oder wähle B.  
+  
+Antwort: Ja, Lösung A wie von dir vorgeschlagen.
