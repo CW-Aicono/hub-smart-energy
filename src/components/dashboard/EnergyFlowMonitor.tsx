@@ -1013,8 +1013,8 @@ function MeterDetailDialog({
     },
   });
 
-  // SOC-Historie aus bridge_raw_samples
-  const { data: socSeries = [] } = useQuery({
+  // SOC-Historie aus bridge_raw_samples (roh, ungefiltert)
+  const { data: socSeriesRaw = [] } = useQuery({
     queryKey: ["meter-detail-soc-series", socSensorUuid, range],
     enabled: !!socSensorUuid,
     staleTime: 30_000,
@@ -1030,10 +1030,25 @@ function MeterDetailDialog({
         .limit(limit));
       return ((data as any[]) ?? [])
         .map((r) => ({ t: new Date(r.received_at).getTime(), soc: Number(r.value) }))
-        // 0 als "unbekannt/Reset" verwerfen (Bridge liefert initialen 0-Wert)
-        .filter((d) => Number.isFinite(d.soc) && d.soc > 0 && d.soc <= 100);
+        .filter((d) => Number.isFinite(d.soc));
     },
   });
+
+  // Plausibilitätscheck: sieht die Reihe wirklich nach SOC (%) aus?
+  // Falsche UUID-Verknüpfungen liefern häufig Leistungswerte (~0 kW) statt Prozentwerte.
+  const { socSeries, socInvalid } = useMemo(() => {
+    if (!socSensorUuid || socSeriesRaw.length === 0) {
+      return { socSeries: [] as { t: number; soc: number }[], socInvalid: false };
+    }
+    const inRange = socSeriesRaw.filter((d) => d.soc > 0 && d.soc <= 100);
+    if (inRange.length < 3) return { socSeries: [], socInvalid: true };
+    const sorted = [...inRange].map((d) => d.soc).sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const max = sorted[sorted.length - 1];
+    // Plausibel: Median mindestens 1 % UND ein Wert erreicht mindestens 5 %.
+    if (median < 1 || max < 5) return { socSeries: [], socInvalid: true };
+    return { socSeries: inRange, socInvalid: false };
+  }, [socSeriesRaw, socSensorUuid]);
 
   // Power- und SOC-Reihen zu einer Datenreihe mergen (nach Zeit)
   const mergedSeries = useMemo(() => {
@@ -1048,6 +1063,8 @@ function MeterDetailDialog({
     return Array.from(map.values()).sort((a, b) => a.t - b.t);
   }, [series, socSeries]);
   const hasSoc = socSeries.length > 0;
+  // Rechte SOC-Achse auch dann anzeigen, wenn nur der aktuelle SOC bekannt ist.
+  const showSocAxis = hasSoc || (isBattery && socPct != null);
 
 
   const stats = useMemo(() => {
