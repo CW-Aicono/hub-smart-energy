@@ -503,14 +503,24 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           if (dist <= 0) return null;
 
           const rawWatts = getLiveWatts(fromNode.meter_id);
-          // PV/Generation-Meter: Vorzeichen ist gateway-abhängig (Loxone liefert
-          // Erzeugung negativ). Erzeugung fließt physikalisch immer vom Erzeuger
-          // weg → Betrag verwenden, Richtung nie umkehren.
-          const isGeneration = fromNode.role === "pv";
-          const flowWatts = isGeneration && rawWatts != null ? Math.abs(rawWatts) : rawWatts;
+          // Flussrichtung folgt der pro Zähler konfigurierten Vorzeichenkonvention
+          // (Feld `flow_direction_convention` auf meters, analog zur Loxone-Einstellung
+          // "Leistung/Durchfluss Richtung"):
+          //   - "negative_delivery" (Default): negativ = Lieferung/vom Gerät weg,
+          //                                    positiv = Bezug/zum Gerät hin
+          //   - "positive_delivery":            umgekehrt
+          const meterRow = (relevantMeters as any[]).find((m) => m.id === fromNode.meter_id);
+          const convention: "negative_delivery" | "positive_delivery" =
+            (meterRow?.flow_direction_convention as any) || "negative_delivery";
+          const flowWatts = rawWatts;
           const hasFlow = flowWatts != null && Math.abs(flowWatts) > 0;
           const dur = getAnimDuration(flowWatts);
-          const isReversed = !isGeneration && flowWatts != null && flowWatts < 0;
+          // Partikel laufen von fromNode → toNode ("vom Gerät weg"), wenn der Wert
+          // Lieferung bedeutet. Bei Bezug wird die Animation umgekehrt.
+          const isDelivery =
+            flowWatts != null &&
+            (convention === "negative_delivery" ? flowWatts < 0 : flowWatts > 0);
+          const isReversed = hasFlow && !isDelivery;
 
           const animPath = isReversed
             ? `M${x2},${y2} L${x1},${y1}`
