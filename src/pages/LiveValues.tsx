@@ -459,8 +459,6 @@ const LiveValues = () => {
               return changed ? next : prev;
             });
           }
-          const events = msg.payload?.events ?? [];
-          if (events.length === 0) return;
           setLiveValues((prev) => {
             let changed = false;
             const next = new Map(prev);
