@@ -697,20 +697,8 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
         `}</style>
       </svg>
 
-      {/* KPI footer: Autarkie / Eigenverbrauch */}
-      {kpiFooter && (
-        <div className="absolute left-2 bottom-1 flex items-center gap-3 rounded-md border bg-background/70 backdrop-blur px-2 py-1 text-[10px]">
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground">Autarkie</span>
-            <span className="font-semibold tabular-nums">{fmtDe(kpiFooter.autarkie, 0)} %</span>
-          </div>
-          <div className="h-3 w-px bg-border" />
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground">Eigenverbrauch</span>
-            <span className="font-semibold tabular-nums">{fmtDe(kpiFooter.eigenverbrauch, 0)} %</span>
-          </div>
-        </div>
-      )}
+
+
 
       {/* Detail-Popover als Overlay (Portal via Radix) */}
       {selectedNode && (
