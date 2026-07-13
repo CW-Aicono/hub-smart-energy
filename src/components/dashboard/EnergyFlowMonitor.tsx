@@ -1229,6 +1229,7 @@ function MeterDetailDialog({
                       yAxisId="soc"
                       orientation="right"
                       domain={[0, 100]}
+                      ticks={[0, 25, 50, 75, 100]}
                       tick={{ fontSize: 11 }}
                       tickFormatter={(v) => `${v}`}
                       width={50}
@@ -1239,23 +1240,40 @@ function MeterDetailDialog({
                   {stats?.bidirectional && <ReferenceLine yAxisId="kw" y={0} stroke="hsl(var(--muted-foreground))" />}
                   <RTooltip
                     contentStyle={{ fontSize: 11 }}
-                    labelFormatter={(v) =>
-                      new Date(v as number).toLocaleString("de-DE", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    }
-                    formatter={(v: any, name: string) => {
-                      if (name === "soc") return [`${fmtDeNum(Number(v), 0)} %`, "SOC"];
-                      return [`${fmtDeNum(Number(v))} kW`, "Leistung"];
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const kwEntry = payload.find((p: any) => p.dataKey === "kw");
+                      const socEntry = payload.find((p: any) => p.dataKey === "soc");
+                      const kw = kwEntry?.value;
+                      const soc = socEntry?.value;
+                      return (
+                        <div className="rounded-md border bg-background/95 px-2 py-1.5 text-[11px] shadow-md">
+                          <div className="mb-1 text-muted-foreground">
+                            {new Date(label as number).toLocaleString("de-DE", {
+                              day: "2-digit", month: "2-digit", year: "numeric",
+                              hour: "2-digit", minute: "2-digit",
+                            })}
+                          </div>
+                          {kw != null && (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-block h-2 w-2 rounded-sm" style={{ background: node.color }} />
+                              <span>Leistung: <span className="font-medium tabular-nums">{fmtDeNum(Number(kw))} kW</span></span>
+                            </div>
+                          )}
+                          {soc != null && (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-block h-2 w-2 rounded-sm" style={{ background: "hsl(217 91% 60%)" }} />
+                              <span>SOC: <span className="font-medium tabular-nums">{fmtDeNum(Number(soc), 0)} %</span></span>
+                            </div>
+                          )}
+                        </div>
+                      );
                     }}
                   />
                   {hasSoc && (
                     <Legend
-                      wrapperStyle={{ fontSize: 11 }}
+                      verticalAlign="top"
+                      wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
                       formatter={(v) => (v === "soc" ? "Ladezustand (SOC %)" : "Leistung (kW)")}
                     />
                   )}
@@ -1275,11 +1293,12 @@ function MeterDetailDialog({
                       yAxisId="soc"
                       type="monotone"
                       dataKey="soc"
-                      stroke="hsl(152 55% 42%)"
-                      strokeWidth={2}
+                      stroke="hsl(217 91% 60%)"
+                      strokeWidth={2.5}
                       dot={false}
+                      activeDot={{ r: 3 }}
                       isAnimationActive={false}
-                      connectNulls
+                      connectNulls={false}
                       name="soc"
                     />
                   )}
