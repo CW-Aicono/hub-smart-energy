@@ -75,6 +75,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [isMainMeter, setIsMainMeter] = useState(meter.is_main_meter);
   const [isBidirectional, setIsBidirectional] = useState((meter as any).is_bidirectional ?? false);
   const [meterFunction, setMeterFunction] = useState(meter.meter_function || "consumption");
+  const [flowConvention, setFlowConvention] = useState<"negative_delivery" | "positive_delivery">(
+    ((meter as any).flow_direction_convention as "negative_delivery" | "positive_delivery") || "negative_delivery",
+  );
   const [selectedFloorId, setSelectedFloorId] = useState(meter.floor_id || "");
   const [selectedRoomId, setSelectedRoomId] = useState(meter.room_id || "");
   const [installationDate, setInstallationDate] = useState(meter.installation_date || "");
