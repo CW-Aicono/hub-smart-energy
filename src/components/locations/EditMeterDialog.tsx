@@ -343,6 +343,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       is_main_meter: isMainMeter,
       is_bidirectional: isBidirectional,
       meter_function: meterFunction,
+      flow_direction_convention: flowConvention,
       floor_id: selectedFloorId || null,
       room_id: selectedRoomId || null,
       installation_date: installationDate || undefined,
