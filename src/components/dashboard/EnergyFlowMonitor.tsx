@@ -1030,7 +1030,8 @@ function MeterDetailDialog({
         .limit(limit));
       return ((data as any[]) ?? [])
         .map((r) => ({ t: new Date(r.received_at).getTime(), soc: Number(r.value) }))
-        .filter((d) => Number.isFinite(d.soc) && d.soc >= 0 && d.soc <= 100);
+        // 0 als "unbekannt/Reset" verwerfen (Bridge liefert initialen 0-Wert)
+        .filter((d) => Number.isFinite(d.soc) && d.soc > 0 && d.soc <= 100);
     },
   });
 
@@ -1059,20 +1060,26 @@ function MeterDetailDialog({
     return { min, max, avg, bidirectional };
   }, [series]);
 
-  // Energie pro Bucket via Trapez-Integration
+  // Energie pro Bucket via Trapez-Integration – prefilled über den gesamten Zeitraum
   const energyBuckets = useMemo(() => {
-    if (series.length < 2) return [];
     const bucketMs =
       range === "1h" ? 5 * 60_000
       : range === "24h" ? 60 * 60_000
       : range === "7d" ? 6 * 60 * 60_000
       : 24 * 60 * 60_000;
+    const now = Date.now();
+    const startAligned = Math.floor((now - RANGE_MS[range]) / bucketMs) * bucketMs;
+    const endAligned = Math.floor(now / bucketMs) * bucketMs;
     const map = new Map<number, { import: number; export: number }>();
+    // Alle Buckets vorab mit 0 initialisieren, damit keine Lücken entstehen
+    for (let k = startAligned; k <= endAligned; k += bucketMs) {
+      map.set(k, { import: 0, export: 0 });
+    }
     for (let i = 1; i < series.length; i++) {
       const a = series[i - 1];
       const b = series[i];
       const dtH = (b.t - a.t) / 3_600_000;
-      if (dtH <= 0 || dtH > 1) continue; // Lücken überspringen
+      if (dtH <= 0 || dtH > 1) continue; // echte Datenlücken überspringen
       const kw = (a.kw + b.kw) / 2;
       const kwh = kw * dtH;
       const bucketKey = Math.floor(b.t / bucketMs) * bucketMs;
@@ -1222,6 +1229,7 @@ function MeterDetailDialog({
                       yAxisId="soc"
                       orientation="right"
                       domain={[0, 100]}
+                      ticks={[0, 25, 50, 75, 100]}
                       tick={{ fontSize: 11 }}
                       tickFormatter={(v) => `${v}`}
                       width={50}
@@ -1232,23 +1240,40 @@ function MeterDetailDialog({
                   {stats?.bidirectional && <ReferenceLine yAxisId="kw" y={0} stroke="hsl(var(--muted-foreground))" />}
                   <RTooltip
                     contentStyle={{ fontSize: 11 }}
-                    labelFormatter={(v) =>
-                      new Date(v as number).toLocaleString("de-DE", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    }
-                    formatter={(v: any, name: string) => {
-                      if (name === "soc") return [`${fmtDeNum(Number(v), 0)} %`, "SOC"];
-                      return [`${fmtDeNum(Number(v))} kW`, "Leistung"];
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const kwEntry = payload.find((p: any) => p.dataKey === "kw");
+                      const socEntry = payload.find((p: any) => p.dataKey === "soc");
+                      const kw = kwEntry?.value;
+                      const soc = socEntry?.value;
+                      return (
+                        <div className="rounded-md border bg-background/95 px-2 py-1.5 text-[11px] shadow-md">
+                          <div className="mb-1 text-muted-foreground">
+                            {new Date(label as number).toLocaleString("de-DE", {
+                              day: "2-digit", month: "2-digit", year: "numeric",
+                              hour: "2-digit", minute: "2-digit",
+                            })}
+                          </div>
+                          {kw != null && (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-block h-2 w-2 rounded-sm" style={{ background: node.color }} />
+                              <span>Leistung: <span className="font-medium tabular-nums">{fmtDeNum(Number(kw))} kW</span></span>
+                            </div>
+                          )}
+                          {soc != null && (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-block h-2 w-2 rounded-sm" style={{ background: "hsl(217 91% 60%)" }} />
+                              <span>SOC: <span className="font-medium tabular-nums">{fmtDeNum(Number(soc), 0)} %</span></span>
+                            </div>
+                          )}
+                        </div>
+                      );
                     }}
                   />
                   {hasSoc && (
                     <Legend
-                      wrapperStyle={{ fontSize: 11 }}
+                      verticalAlign="top"
+                      wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
                       formatter={(v) => (v === "soc" ? "Ladezustand (SOC %)" : "Leistung (kW)")}
                     />
                   )}
@@ -1268,11 +1293,12 @@ function MeterDetailDialog({
                       yAxisId="soc"
                       type="monotone"
                       dataKey="soc"
-                      stroke="hsl(152 55% 42%)"
-                      strokeWidth={2}
+                      stroke="hsl(217 91% 60%)"
+                      strokeWidth={2.5}
                       dot={false}
+                      activeDot={{ r: 3 }}
                       isAnimationActive={false}
-                      connectNulls
+                      connectNulls={false}
                       name="soc"
                     />
                   )}
@@ -1316,7 +1342,7 @@ function MeterDetailDialog({
                     labelFormatter={(v) => new Date(v as number).toLocaleString("de-DE")}
                     formatter={(v: any, name: string) => [`${fmtDeNum(Number(v))} kWh`, name === "import" ? "Bezug" : "Einspeisung"]}
                   />
-                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={(v) => (v === "import" ? "Bezug" : "Einspeisung")} />
+                  <Legend verticalAlign="top" wrapperStyle={{ fontSize: 11, paddingBottom: 8 }} formatter={(v) => (v === "import" ? "Bezug" : "Einspeisung")} />
                   <Bar dataKey="import" stackId="e" fill={node.color} />
                   {stats?.bidirectional && (
                     <Bar dataKey="export" stackId="e" fill="hsl(152 55% 42%)" />
