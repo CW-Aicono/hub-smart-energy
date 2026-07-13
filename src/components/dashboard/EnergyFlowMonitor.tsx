@@ -33,6 +33,7 @@ import {
   YAxis,
   CartesianGrid,
   ReferenceLine,
+  ReferenceDot,
   Legend,
   Label as AxisLabel,
   Tooltip as RTooltip,
