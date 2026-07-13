@@ -1260,16 +1260,16 @@ function MeterDetailDialog({
                   <XAxis
                     dataKey="t"
                     type="number"
-                    domain={[Date.now() - RANGE_MS[range], Date.now()]}
+                    domain={xDomain}
+                    ticks={xTicks}
                     scale="time"
                     tickFormatter={fmtTime}
                     tick={{ fontSize: 11 }}
-                    tickCount={8}
-                    interval="preserveStartEnd"
+                    interval={0}
                     allowDataOverflow
                     height={40}
                   >
-                    <AxisLabel value="Zeit" position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
+                    <AxisLabel value={gapHintText ? `Zeit — ${gapHintText}` : "Zeit"} position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
                   </XAxis>
                   <YAxis
                     yAxisId="kw"
