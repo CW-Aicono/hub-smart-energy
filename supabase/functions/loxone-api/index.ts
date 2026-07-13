@@ -761,11 +761,17 @@ async function syncBatterySoc(
           const targetUuid = parentUuid ?? uuid;
           const states = await fetchAllStates(baseUrl, loxoneAuth, targetUuid);
           if (stateKey) {
+            value = extractSocValueFromAllStates(states);
             const targetLc = stateKey.toLowerCase();
-            for (const [k, v] of Object.entries(states)) {
-              if (k === "_primary") continue;
-              if (k.toLowerCase() === targetLc && typeof v === "number") { value = v; break; }
+            if (value == null) {
+              for (const [k, v] of Object.entries(states)) {
+                if (k === "_primary") continue;
+                if (k.toLowerCase() === targetLc && typeof v === "number") { value = v; break; }
+              }
             }
+          }
+          if (value == null) {
+            value = extractSocValueFromAllStates(states);
           }
           if (value == null) {
             const primary = states["_primary"];
@@ -778,6 +784,15 @@ async function syncBatterySoc(
           }
         } catch (err) {
           console.warn(`[SOC-Sync] Wert-Abruf fehlgeschlagen für ${uuid}:`, (err as Error).message);
+        }
+      }
+
+      if (value == null && candidates.length > 0) {
+        const replacement = candidates.find((c) => c.currentValue != null && c.uuid !== uuid) ?? candidates.find((c) => c.currentValue != null);
+        if (replacement) {
+          console.log(`[SOC-Sync] Ersetze ungültige SOC-Quelle ${uuid} durch ${replacement.uuid} (${replacement.name}, value=${replacement.currentValue})`);
+          uuid = replacement.uuid;
+          value = replacement.currentValue ?? null;
         }
       }
 
@@ -1886,7 +1901,7 @@ serve(async (req) => {
       }
 
       const sensorsWithPfMrc = sensorList.filter(s =>
-        s.stateNames.includes("Pf") || s.stateNames.includes("Mrc") || s.stateNames.includes("Mrd")
+        s.stateNames.includes("Pf") || s.stateNames.includes("Mrc") || s.stateNames.includes("Mrd") || s.stateNames.includes("Slvl")
       );
 
       return new Response(
