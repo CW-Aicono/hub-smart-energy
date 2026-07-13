@@ -1227,7 +1227,17 @@ function MeterDetailDialog({
           </div>
         </div>
 
+        {isHouse && (
+          <HouseSelfSufficiencyPanel
+            allNodes={allNodes}
+            metersById={metersById}
+            visibleStartMs={visibleStartMs}
+            rangeLabel={RANGE_LABEL[range]}
+          />
+        )}
+
         {/* Chart 1: Leistungsverlauf (+ optional SOC bei Speichern) */}
+
         <div>
           <div className="mb-1 flex items-center justify-between gap-2">
             <div className="text-sm font-medium">
