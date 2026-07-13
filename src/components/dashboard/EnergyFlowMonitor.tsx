@@ -624,13 +624,22 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
               >
                 {node.label}
               </text>
-              {periodSum != null && periodSum !== 0 && (
+              {periodSum != null && periodSum !== 0 && node.role !== "battery" && (
                 <text
                   x={cx} y={sumY}
                   textAnchor="middle"
                   className="fill-muted-foreground text-[9px] tabular-nums"
                 >
                   {PERIOD_SUM_LABEL[selectedPeriod]}: {periodSum < 0 ? "−" : ""}{formatEnergy(Math.abs(periodSum))}
+                </text>
+              )}
+              {node.role === "battery" && socByMeter[node.meter_id] != null && (
+                <text
+                  x={cx} y={sumY}
+                  textAnchor="middle"
+                  className="fill-muted-foreground text-[9px] tabular-nums"
+                >
+                  SOC: {fmtDe(socByMeter[node.meter_id], 0)} %
                 </text>
               )}
             </g>
