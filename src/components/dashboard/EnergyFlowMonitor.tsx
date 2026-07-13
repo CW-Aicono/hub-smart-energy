@@ -142,6 +142,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
   const svgRef = useRef<SVGSVGElement>(null);
   const [dims, setDims] = useState({ w: 500, h: 320 });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [detailNode, setDetailNode] = useState<EnergyFlowNode | null>(null);
   const reducedMotion = usePrefersReducedMotion();
 
   const meterIds = useMemo(() => nodes.map((n) => n.meter_id).filter(Boolean), [nodes]);
