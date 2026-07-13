@@ -1225,7 +1225,7 @@ function MeterDetailDialog({
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={mergedSeries} margin={{ top: 8, right: hasSoc ? 60 : 16, left: 8, bottom: 28 }}>
+                <ComposedChart data={mergedSeries} margin={{ top: 8, right: showSocAxis ? 60 : 16, left: 8, bottom: 28 }}>
                   <defs>
                     <linearGradient id={`det-${node.id}`} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={node.color} stopOpacity={0.5} />
@@ -1236,10 +1236,13 @@ function MeterDetailDialog({
                   <XAxis
                     dataKey="t"
                     type="number"
-                    domain={["dataMin", "dataMax"]}
+                    domain={[Date.now() - RANGE_MS[range], Date.now()]}
                     scale="time"
                     tickFormatter={fmtTime}
                     tick={{ fontSize: 11 }}
+                    tickCount={8}
+                    interval="preserveStartEnd"
+                    allowDataOverflow
                     height={40}
                   >
                     <AxisLabel value="Zeit" position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
@@ -1252,7 +1255,7 @@ function MeterDetailDialog({
                   >
                     <AxisLabel value="Leistung (kW)" angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
-                  {hasSoc && (
+                  {showSocAxis && (
                     <YAxis
                       yAxisId="soc"
                       orientation="right"
@@ -1263,6 +1266,7 @@ function MeterDetailDialog({
                       width={50}
                     >
                       <AxisLabel value="SOC (%)" angle={-90} position="insideRight" style={{ fontSize: 11, textAnchor: "middle" }} />
+
                     </YAxis>
                   )}
                   {stats?.bidirectional && <ReferenceLine yAxisId="kw" y={0} stroke="hsl(var(--muted-foreground))" />}
