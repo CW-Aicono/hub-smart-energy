@@ -939,3 +939,322 @@ function NodeDetailOverlay({
     </Popover>
   );
 }
+
+/* ─────────────────────────────────────────────────────── */
+/* Großer Detail-Dialog mit ausführlichen Graphen          */
+/* ─────────────────────────────────────────────────────── */
+
+type DetailRange = "1h" | "24h" | "7d" | "30d";
+
+const RANGE_LABEL: Record<DetailRange, string> = {
+  "1h": "1 Stunde",
+  "24h": "24 Stunden",
+  "7d": "7 Tage",
+  "30d": "30 Tage",
+};
+
+const RANGE_MS: Record<DetailRange, number> = {
+  "1h": 3600_000,
+  "24h": 24 * 3600_000,
+  "7d": 7 * 24 * 3600_000,
+  "30d": 30 * 24 * 3600_000,
+};
+
+function MeterDetailDialog({
+  node,
+  socPct,
+  onClose,
+}: {
+  node: EnergyFlowNode;
+  socPct?: number | null;
+  onClose: () => void;
+}) {
+  const Icon = ROLE_ICON[node.role];
+  const [range, setRange] = useState<DetailRange>("24h");
+
+  const { data: series = [], isLoading } = useQuery({
+    queryKey: ["meter-detail-series", node.meter_id, range],
+    queryFn: async () => {
+      if (!node.meter_id) return [];
+      const since = new Date(Date.now() - RANGE_MS[range]).toISOString();
+      const limit = range === "30d" ? 5000 : range === "7d" ? 3000 : 1500;
+      const { data } = await supabase
+        .from("meter_power_readings")
+        .select("recorded_at, power_value")
+        .eq("meter_id", node.meter_id)
+        .gte("recorded_at", since)
+        .order("recorded_at", { ascending: true })
+        .limit(limit);
+      return (data ?? []).map((r: any) => ({
+        t: new Date(r.recorded_at).getTime(),
+        // kW aus der DB (power_value ist bereits kW)
+        kw: Number(r.power_value),
+      }));
+    },
+    enabled: !!node.meter_id,
+    staleTime: 30_000,
+  });
+
+  const stats = useMemo(() => {
+    if (!series.length) return null;
+    const vals = series.map((d) => d.kw);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+    const bidirectional = min < -0.001 && max > 0.001;
+    return { min, max, avg, bidirectional };
+  }, [series]);
+
+  // Energie pro Bucket via Trapez-Integration
+  const energyBuckets = useMemo(() => {
+    if (series.length < 2) return [];
+    const bucketMs =
+      range === "1h" ? 5 * 60_000
+      : range === "24h" ? 60 * 60_000
+      : range === "7d" ? 6 * 60 * 60_000
+      : 24 * 60 * 60_000;
+    const map = new Map<number, { import: number; export: number }>();
+    for (let i = 1; i < series.length; i++) {
+      const a = series[i - 1];
+      const b = series[i];
+      const dtH = (b.t - a.t) / 3_600_000;
+      if (dtH <= 0 || dtH > 1) continue; // Lücken überspringen
+      const kw = (a.kw + b.kw) / 2;
+      const kwh = kw * dtH;
+      const bucketKey = Math.floor(b.t / bucketMs) * bucketMs;
+      const cur = map.get(bucketKey) ?? { import: 0, export: 0 };
+      if (kwh >= 0) cur.import += kwh;
+      else cur.export += -kwh;
+      map.set(bucketKey, cur);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([t, v]) => ({ t, import: v.import, export: v.export }));
+  }, [series, range]);
+
+  const fmtTime = (t: number) => {
+    const d = new Date(t);
+    if (range === "1h" || range === "24h") {
+      return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    }
+    return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+  };
+
+  const fmtDeNum = (n: number, digits = 2) =>
+    n.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+
+  const totalImport = energyBuckets.reduce((s, b) => s + b.import, 0);
+  const totalExport = energyBuckets.reduce((s, b) => s + b.export, 0);
+  const isBattery = node.role === "battery";
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-full"
+              style={{ backgroundColor: `${node.color}22`, color: node.color }}
+            >
+              <Icon size={22} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="truncate">{node.label}</DialogTitle>
+              <DialogDescription>
+                {ROLE_LABEL[node.role]}
+                {isBattery && socPct != null && (
+                  <> · Ladezustand aktuell <span className="font-semibold text-foreground">{fmtDeNum(socPct, 0)} %</span></>
+                )}
+              </DialogDescription>
+            </div>
+            {isBattery && socPct != null && (
+              <Badge variant="secondary" className="tabular-nums">SOC {fmtDeNum(socPct, 0)} %</Badge>
+            )}
+          </div>
+        </DialogHeader>
+
+        {/* Zeitraum-Umschalter */}
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(RANGE_LABEL) as DetailRange[]).map((r) => (
+            <Button
+              key={r}
+              size="sm"
+              variant={r === range ? "default" : "outline"}
+              onClick={() => setRange(r)}
+            >
+              {RANGE_LABEL[r]}
+            </Button>
+          ))}
+        </div>
+
+        {/* KPI-Kacheln */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">Ø Leistung</div>
+            <div className="text-base font-semibold tabular-nums">
+              {stats ? `${fmtDeNum(stats.avg)} kW` : "–"}
+            </div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">Max</div>
+            <div className="text-base font-semibold tabular-nums">
+              {stats ? `${fmtDeNum(stats.max)} kW` : "–"}
+            </div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">Min</div>
+            <div className="text-base font-semibold tabular-nums">
+              {stats ? `${fmtDeNum(stats.min)} kW` : "–"}
+            </div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">
+              Energie{stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}
+            </div>
+            <div className="text-base font-semibold tabular-nums">
+              {stats?.bidirectional
+                ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} kWh`
+                : `${fmtDeNum(totalImport - totalExport)} kWh`}
+            </div>
+          </div>
+        </div>
+
+        {/* Chart 1: Leistungsverlauf */}
+        <div>
+          <div className="text-sm font-medium mb-1">
+            Leistungsverlauf · {RANGE_LABEL[range]}
+          </div>
+          <div className="h-[300px]">
+            {isLoading ? (
+              <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                Lade Daten…
+              </div>
+            ) : series.length < 2 ? (
+              <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                Keine Daten im gewählten Zeitraum
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={series} margin={{ top: 8, right: 16, left: 8, bottom: 28 }}>
+                  <defs>
+                    <linearGradient id={`det-${node.id}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={node.color} stopOpacity={0.5} />
+                      <stop offset="100%" stopColor={node.color} stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis
+                    dataKey="t"
+                    type="number"
+                    domain={["dataMin", "dataMax"]}
+                    scale="time"
+                    tickFormatter={fmtTime}
+                    tick={{ fontSize: 11 }}
+                    height={40}
+                  >
+                    <AxisLabel value="Zeit" position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
+                  </XAxis>
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) => v.toLocaleString("de-DE")}
+                    width={70}
+                  >
+                    <AxisLabel value="Leistung (kW)" angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
+                  </YAxis>
+                  {stats?.bidirectional && <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />}
+                  <RTooltip
+                    contentStyle={{ fontSize: 11 }}
+                    labelFormatter={(v) =>
+                      new Date(v as number).toLocaleString("de-DE", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    }
+                    formatter={(v: any) => [`${fmtDeNum(Number(v))} kW`, "Leistung"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="kw"
+                    stroke={node.color}
+                    strokeWidth={1.8}
+                    fill={`url(#det-${node.id})`}
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Chart 2: Energie pro Bucket */}
+        {energyBuckets.length > 0 && (
+          <div>
+            <div className="text-sm font-medium mb-1">
+              Energie pro {range === "1h" ? "5 Min" : range === "24h" ? "Stunde" : range === "7d" ? "6 h" : "Tag"}
+            </div>
+            <div className="h-[240px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={energyBuckets} margin={{ top: 8, right: 16, left: 8, bottom: 28 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis
+                    dataKey="t"
+                    type="number"
+                    domain={["dataMin", "dataMax"]}
+                    scale="time"
+                    tickFormatter={fmtTime}
+                    tick={{ fontSize: 11 }}
+                    height={40}
+                  >
+                    <AxisLabel value="Zeit" position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
+                  </XAxis>
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) => v.toLocaleString("de-DE")}
+                    width={70}
+                  >
+                    <AxisLabel value="Energie (kWh)" angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
+                  </YAxis>
+                  <RTooltip
+                    contentStyle={{ fontSize: 11 }}
+                    labelFormatter={(v) => new Date(v as number).toLocaleString("de-DE")}
+                    formatter={(v: any, name: string) => [`${fmtDeNum(Number(v))} kWh`, name === "import" ? "Bezug" : "Einspeisung"]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={(v) => (v === "import" ? "Bezug" : "Einspeisung")} />
+                  <Bar dataKey="import" stackId="e" fill={node.color} />
+                  {stats?.bidirectional && (
+                    <Bar dataKey="export" stackId="e" fill="hsl(152 55% 42%)" />
+                  )}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {/* Details-Fußzeile */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs pt-2 border-t">
+          <div>
+            <div className="text-muted-foreground">Rolle</div>
+            <div className="font-medium">{ROLE_LABEL[node.role]}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Datenpunkte</div>
+            <div className="font-medium tabular-nums">{series.length.toLocaleString("de-DE")}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Letzter Wert</div>
+            <div className="font-medium">
+              {series.length ? new Date(series[series.length - 1].t).toLocaleString("de-DE") : "–"}
+            </div>
+          </div>
+          <div className="min-w-0">
+            <div className="text-muted-foreground">Meter-ID</div>
+            <div className="font-mono text-[10px] truncate" title={node.meter_id}>{node.meter_id || "–"}</div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
