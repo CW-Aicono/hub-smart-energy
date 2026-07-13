@@ -1342,7 +1342,7 @@ function MeterDetailDialog({
                     labelFormatter={(v) => new Date(v as number).toLocaleString("de-DE")}
                     formatter={(v: any, name: string) => [`${fmtDeNum(Number(v))} kWh`, name === "import" ? "Bezug" : "Einspeisung"]}
                   />
-                  <Legend wrapperStyle={{ fontSize: 11 }} formatter={(v) => (v === "import" ? "Bezug" : "Einspeisung")} />
+                  <Legend verticalAlign="top" wrapperStyle={{ fontSize: 11, paddingBottom: 8 }} formatter={(v) => (v === "import" ? "Bezug" : "Einspeisung")} />
                   <Bar dataKey="import" stackId="e" fill={node.color} />
                   {stats?.bidirectional && (
                     <Bar dataKey="export" stackId="e" fill="hsl(152 55% 42%)" />
