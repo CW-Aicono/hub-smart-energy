@@ -33,6 +33,7 @@ import {
   YAxis,
   CartesianGrid,
   ReferenceLine,
+  ReferenceDot,
   Legend,
   Label as AxisLabel,
   Tooltip as RTooltip,
@@ -1124,6 +1125,29 @@ function MeterDetailDialog({
   const totalImport = energyBuckets.reduce((s, b) => s + b.import, 0);
   const totalExport = energyBuckets.reduce((s, b) => s + b.export, 0);
 
+  // Gemeinsame Zeitachse für beide Charts
+  const xDomain = useMemo<[number, number]>(() => {
+    const now = Date.now();
+    return [now - RANGE_MS[range], now];
+  }, [range]);
+  const xTicks = useMemo(() => {
+    const step =
+      range === "1h" ? 10 * 60_000
+      : range === "24h" ? 3 * 60 * 60_000
+      : range === "7d" ? 24 * 60 * 60_000
+      : 7 * 24 * 60 * 60_000;
+    const ticks: number[] = [];
+    const start = Math.ceil(xDomain[0] / step) * step;
+    for (let t = start; t <= xDomain[1]; t += step) ticks.push(t);
+    return ticks;
+  }, [xDomain, range]);
+  const firstDataTs = series[0]?.t;
+  const showGapHint =
+    firstDataTs != null && firstDataTs - xDomain[0] > 60 * 60_000;
+  const gapHintText = showGapHint
+    ? `Keine Daten vor ${new Date(firstDataTs).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`
+    : "";
+
 
 
   return (
@@ -1208,9 +1232,9 @@ function MeterDetailDialog({
               <Badge
                 variant="outline"
                 className="border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[10px]"
-                title="Die in den Speicher-Einstellungen hinterlegte SOC-Sensor-UUID liefert keine plausiblen Prozentwerte."
+                title="Der hinterlegte SOC-Sensor liefert Leistungswerte (kW) statt Ladezustand (%)."
               >
-                SOC-Sensor liefert unplausible Werte – bitte in den Speicher-Einstellungen prüfen
+                SOC-Sensor liefert Leistungswerte (kW) statt Ladezustand (%). Bitte in den Speicher-Einstellungen die korrekte SOC-UUID hinterlegen.
               </Badge>
             )}
           </div>
@@ -1236,16 +1260,16 @@ function MeterDetailDialog({
                   <XAxis
                     dataKey="t"
                     type="number"
-                    domain={[Date.now() - RANGE_MS[range], Date.now()]}
+                    domain={xDomain}
+                    ticks={xTicks}
                     scale="time"
                     tickFormatter={fmtTime}
                     tick={{ fontSize: 11 }}
-                    tickCount={8}
-                    interval="preserveStartEnd"
+                    interval={0}
                     allowDataOverflow
                     height={40}
                   >
-                    <AxisLabel value="Zeit" position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
+                    <AxisLabel value={gapHintText ? `Zeit — ${gapHintText}` : "Zeit"} position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
                   </XAxis>
                   <YAxis
                     yAxisId="kw"
@@ -1271,15 +1295,17 @@ function MeterDetailDialog({
                   )}
                   {stats?.bidirectional && <ReferenceLine yAxisId="kw" y={0} stroke="hsl(var(--muted-foreground))" />}
                   {!hasSoc && showSocAxis && socPct != null && (
-                    <ReferenceLine
+                    <ReferenceDot
                       yAxisId="soc"
+                      x={xDomain[1]}
                       y={Math.max(0, Math.min(100, socPct))}
+                      r={5}
+                      fill="hsl(217 91% 60%)"
                       stroke="hsl(217 91% 60%)"
-                      strokeDasharray="4 4"
-                      strokeWidth={1.5}
+                      isFront
                       label={{
-                        value: `SOC aktuell: ${fmtDeNum(socPct, 0)} %`,
-                        position: "insideTopRight",
+                        value: `SOC jetzt: ${fmtDeNum(socPct, 0)} %`,
+                        position: "left",
                         fill: "hsl(217 91% 60%)",
                         fontSize: 11,
                       }}
@@ -1364,15 +1390,18 @@ function MeterDetailDialog({
             </div>
             <div className="h-[240px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={energyBuckets} margin={{ top: 8, right: 16, left: 8, bottom: 28 }}>
+                <BarChart data={energyBuckets} margin={{ top: 8, right: showSocAxis ? 60 : 16, left: 8, bottom: 28 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                   <XAxis
                     dataKey="t"
                     type="number"
-                    domain={["dataMin", "dataMax"]}
+                    domain={xDomain}
+                    ticks={xTicks}
                     scale="time"
                     tickFormatter={fmtTime}
                     tick={{ fontSize: 11 }}
+                    interval={0}
+                    allowDataOverflow
                     height={40}
                   >
                     <AxisLabel value="Zeit" position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
