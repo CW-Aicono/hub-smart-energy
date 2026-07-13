@@ -996,6 +996,59 @@ function MeterDetailDialog({
     staleTime: 30_000,
   });
 
+  const isBattery = node.role === "battery";
+
+  // SOC-Sensor-UUID (nur bei Speichern) aus energy_storages ermitteln
+  const { data: socSensorUuid } = useQuery({
+    queryKey: ["meter-detail-soc-uuid", node.meter_id],
+    enabled: isBattery && !!node.meter_id,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<string | null> => {
+      const { data } = await supabase
+        .from("energy_storages")
+        .select("soc_sensor_uuid, power_meter_id")
+        .eq("power_meter_id", node.meter_id)
+        .maybeSingle();
+      return (data as any)?.soc_sensor_uuid ?? null;
+    },
+  });
+
+  // SOC-Historie aus bridge_raw_samples
+  const { data: socSeries = [] } = useQuery({
+    queryKey: ["meter-detail-soc-series", socSensorUuid, range],
+    enabled: !!socSensorUuid,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const since = new Date(Date.now() - RANGE_MS[range]).toISOString();
+      const limit = range === "30d" ? 5000 : range === "7d" ? 3000 : 1500;
+      const { data } = await (supabase
+        .from("bridge_raw_samples" as any)
+        .select("received_at, value")
+        .eq("uuid", socSensorUuid)
+        .gte("received_at", since)
+        .order("received_at", { ascending: true })
+        .limit(limit));
+      return ((data as any[]) ?? [])
+        .map((r) => ({ t: new Date(r.received_at).getTime(), soc: Number(r.value) }))
+        .filter((d) => Number.isFinite(d.soc) && d.soc >= 0 && d.soc <= 100);
+    },
+  });
+
+  // Power- und SOC-Reihen zu einer Datenreihe mergen (nach Zeit)
+  const mergedSeries = useMemo(() => {
+    if (!socSeries.length) return series.map((d) => ({ ...d, soc: null as number | null }));
+    const map = new Map<number, { t: number; kw: number | null; soc: number | null }>();
+    for (const p of series) map.set(p.t, { t: p.t, kw: p.kw, soc: null });
+    for (const s of socSeries) {
+      const cur = map.get(s.t) ?? { t: s.t, kw: null, soc: null };
+      cur.soc = s.soc;
+      map.set(s.t, cur);
+    }
+    return Array.from(map.values()).sort((a, b) => a.t - b.t);
+  }, [series, socSeries]);
+  const hasSoc = socSeries.length > 0;
+
+
   const stats = useMemo(() => {
     if (!series.length) return null;
     const vals = series.map((d) => d.kw);
