@@ -67,6 +67,44 @@ const LiveValues = () => {
   const [cpVirtualValues, setCpVirtualValues] = useState<Map<string, { value: number; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null }>>(new Map());
   const [loadingLive, setLoadingLive] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [socByMeterId, setSocByMeterId] = useState<Map<string, { pct: number; updatedAt: string | null }>>(new Map());
+  const [socUuidToMeterId, setSocUuidToMeterId] = useState<Map<string, string>>(new Map());
+
+  // Fetch SOC values from energy_storages (linked via power_meter_id)
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const fetchSoc = async () => {
+      const { data } = await supabase
+        .from("energy_storages")
+        .select("power_meter_id, soc_sensor_uuid, current_soc_pct, soc_updated_at")
+        .not("power_meter_id", "is", null);
+      if (cancelled || !data) return;
+      const socMap = new Map<string, { pct: number; updatedAt: string | null }>();
+      const uuidMap = new Map<string, string>();
+      for (const row of data as any[]) {
+        if (row.power_meter_id && row.current_soc_pct != null) {
+          socMap.set(row.power_meter_id, { pct: Number(row.current_soc_pct), updatedAt: row.soc_updated_at });
+        }
+        if (row.soc_sensor_uuid && row.power_meter_id) {
+          uuidMap.set(String(row.soc_sensor_uuid).toLowerCase(), row.power_meter_id);
+        }
+      }
+      setSocByMeterId(socMap);
+      setSocUuidToMeterId(uuidMap);
+    };
+    fetchSoc();
+    const iv = setInterval(fetchSoc, 60_000);
+    const ch = supabase
+      .channel("energy-storages-soc")
+      .on("postgres_changes", { event: "*", schema: "public", table: "energy_storages" }, fetchSoc)
+      .subscribe();
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+      supabase.removeChannel(ch);
+    };
+  }, [user]);
 
   // Fetch virtual meter sources
   useEffect(() => {
@@ -402,9 +440,25 @@ const LiveValues = () => {
       const channelName = `loxone-live-${tenantId}`;
       const ch = supabase
         .channel(channelName, { config: { broadcast: { self: false } } })
-        .on("broadcast", { event: "readings" }, (msg: { payload: { events?: Array<{ uuid: string; value: number; at: string; role?: "pwr" | "today" | "total" | "month" | "year" }> } }) => {
+        .on("broadcast", { event: "readings" }, (msg: { payload: { events?: Array<{ uuid: string; value: number; at: string; role?: "pwr" | "today" | "total" | "month" | "year" | "soc" }> } }) => {
           const events = msg.payload?.events ?? [];
           if (events.length === 0) return;
+          // Handle SOC events separately (update energy_storages-derived map)
+          const socEvents = events.filter((e) => e.role === "soc");
+          if (socEvents.length > 0) {
+            setSocByMeterId((prev) => {
+              const next = new Map(prev);
+              let changed = false;
+              for (const ev of socEvents) {
+                const meterId = socUuidToMeterId.get(ev.uuid.toLowerCase());
+                if (!meterId) continue;
+                if (!Number.isFinite(ev.value) || ev.value < 0 || ev.value > 100) continue;
+                next.set(meterId, { pct: ev.value, updatedAt: ev.at });
+                changed = true;
+              }
+              return changed ? next : prev;
+            });
+          }
           setLiveValues((prev) => {
             let changed = false;
             const next = new Map(prev);
@@ -680,6 +734,7 @@ const LiveValues = () => {
                 const Icon = config.icon;
                 const location = locations.find((l) => l.id === meter.location_id);
                 const isFlowType = meter.energy_type === "wasser" || meter.energy_type === "gas";
+                const soc = socByMeterId.get(meter.id);
 
                 return (
                   <Card key={meter.id} className="relative overflow-hidden">
@@ -731,6 +786,14 @@ const LiveValues = () => {
                             <span className="text-muted-foreground text-lg">{t("common.noValue" as any)}</span>
                           )}
                         </div>
+                        {soc && (
+                          <div className="flex items-center gap-2 rounded-md bg-emerald-500/10 border border-emerald-500/30 px-2 py-1">
+                            <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">SOC</span>
+                            <span className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                              {soc.pct.toLocaleString(dateLocale, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} %
+                            </span>
+                          </div>
+                        )}
                         {meter.energy_type === "gas" && value !== null && (
                           <div className="text-sm text-muted-foreground font-medium">
                             ≈ {formatGasDual(value, (meter as any).gas_type, (meter as any).brennwert, (meter as any).zustandszahl).kwhStr}
