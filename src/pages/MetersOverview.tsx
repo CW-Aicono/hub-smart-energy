@@ -109,10 +109,16 @@ const MetersOverview = () => {
 
   if (!user) return <Navigate to="/auth" replace />;
 
+  const normalizedSearch = searchQuery.trim().toLowerCase();
   const locationFiltered = meters.filter((m) => {
     if (selectedLocationId !== "all" && m.location_id !== selectedLocationId) return false;
     if (selectedEnergyType !== "all" && m.energy_type !== selectedEnergyType) return false;
     if (selectedCaptureType !== "all" && m.capture_type !== selectedCaptureType) return false;
+    if (normalizedSearch) {
+      const locName = locations.find((l) => l.id === m.location_id)?.name ?? "";
+      const haystack = `${m.name ?? ""} ${m.meter_number ?? ""} ${locName} ${m.notes ?? ""} ${m.energy_type ?? ""}`.toLowerCase();
+      if (!haystack.includes(normalizedSearch)) return false;
+    }
     return true;
   });
 
