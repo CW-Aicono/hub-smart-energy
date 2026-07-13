@@ -1030,7 +1030,8 @@ function MeterDetailDialog({
         .limit(limit));
       return ((data as any[]) ?? [])
         .map((r) => ({ t: new Date(r.received_at).getTime(), soc: Number(r.value) }))
-        .filter((d) => Number.isFinite(d.soc) && d.soc >= 0 && d.soc <= 100);
+        // 0 als "unbekannt/Reset" verwerfen (Bridge liefert initialen 0-Wert)
+        .filter((d) => Number.isFinite(d.soc) && d.soc > 0 && d.soc <= 100);
     },
   });
 
