@@ -820,9 +820,11 @@ async function syncBatterySoc(
       if (uuid !== row.soc_sensor_uuid) patch.soc_sensor_uuid = uuid;
       const matchingPowerMeterId = meterIdBySensorUuid.get(uuid);
       if (matchingPowerMeterId && matchingPowerMeterId !== row.power_meter_id) patch.power_meter_id = matchingPowerMeterId;
+      let socRecordedAt: string | null = null;
       if (value != null) {
+        socRecordedAt = new Date().toISOString();
         patch.current_soc_pct = value;
-        patch.soc_updated_at = new Date().toISOString();
+        patch.soc_updated_at = socRecordedAt;
       }
       if (Object.keys(patch).length === 0) continue;
 
@@ -831,6 +833,19 @@ async function syncBatterySoc(
       if (upErr) {
         console.warn(`[SOC-Sync] Update ${row.id} fehlgeschlagen:`, upErr.message);
       } else {
+        if (value != null && socRecordedAt) {
+          const { error: histErr } = await supabase
+            .from("storage_soc_readings")
+            .insert({
+              storage_id: row.id,
+              tenant_id: tenantId,
+              sensor_uuid: uuid,
+              soc_pct: value,
+              recorded_at: socRecordedAt,
+              source: "loxone_api_sync",
+            });
+          if (histErr) console.warn(`[SOC-Sync] Historie konnte nicht gespeichert werden:`, histErr.message);
+        }
         console.log(`[SOC-Sync] Speicher ${row.id} aktualisiert: ${JSON.stringify(patch)}`);
       }
     }

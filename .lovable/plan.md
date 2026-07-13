@@ -1,40 +1,31 @@
-## Ziel
-SOC-Darstellung ehrlich und konsistent machen, beide Charts auf identischer Zeitachse, keine irreführende ReferenceLine mehr.
+Ich habe die Datenbank geprüft. Ergebnis: Die Anzeige ab 02:00 kommt nicht aus einer Achsen-/Timezone-Panne, sondern weil der Detaildialog aktuell `meter_power_readings` liest — dort gibt es für den Speicher-Meter tatsächlich 48 Werte ab 02:00 Berlin. Der Speicher-Datensatz selbst wurde aber erst um ca. 10:05 Berlin angelegt; deshalb soll die Detailgrafik für diesen Speicher erst ab diesem Speicher-/Gateway-Kontext starten. Beim SOC ist der aktuelle Wert in `energy_storages.current_soc_pct = 100`, aber die bisher abgefragte Historie aus `bridge_raw_samples` ist für diese UUID Power/kW, nicht SOC-%. Außerdem werden echte SOC-Events derzeit nicht als Zeitreihe in `bridge_raw_samples` persistiert, sondern nur als aktueller SOC gespeichert.
 
-## Änderungen in `src/components/dashboard/EnergyFlowMonitor.tsx` (nur `MeterDetailDialog`)
+Plan:
 
-### 1. SOC-Fallback als **Punkt „jetzt"**, nicht als Linie
-- `ReferenceLine y={100}` entfernen.
-- Stattdessen: `ReferenceDot x={now} y={currentSocPct} r={5}` in Blau, mit Label „SOC 100 %" rechts daneben.
-- Ergebnis: Der aktuelle SOC ist als einzelner Punkt am rechten Rand sichtbar — kein Balken quer über 24 h.
+1. **Power-Chart für Speicher korrekt begrenzen**
+   - Im Detaildialog zusätzlich `energy_storages.created_at`, `soc_updated_at`, `current_soc_pct`, `soc_sensor_uuid` und `power_meter_id` laden.
+   - Für Batterie/Speicher die sichtbare Datenreihe auf `max(rangeStart, storage.created_at)` begrenzen.
+   - Dadurch verschwindet die scheinbare Historie ab 02:00, wenn der Speicher erst seit ca. 10:00 in diesem Kontext Daten liefert.
 
-### 2. Wenn echte SOC-Historie vorliegt (Guard OK)
-- SOC-Linie **durchgezogen** (nicht gestrichelt), `connectNulls={false}`, so dass sie erst dort beginnt, wo Samples existieren (z. B. ab 10:00).
-- Rechte Y-Achse (0–100 %) nur einblenden, wenn `hasSoc` **oder** `currentSocPct != null`.
+2. **Datenquelle klarer verwenden**
+   - Die Leistungswerte weiterhin aus `meter_power_readings` lesen, aber erst ab dem berechneten Cutoff.
+   - Optional vorhandene Vorwerte vor `storage.created_at` nicht mehr in Statistik, Linie und Energie-Buckets einbeziehen.
 
-### 3. Beide Charts auf identische Zeitachse
-- `XAxis` in **beiden** Charts (Leistung + Energie pro Stunde):
-  - `type="number"`, `scale="time"`,
-  - `domain={[now - 24h, now]}` (fix, nicht `dataMin/dataMax`),
-  - `ticks` = generierte Stundenmarken alle 3 h ab `now` rückwärts,
-  - `interval={0}`, `allowDataOverflow`.
-- Energie-Buckets bleiben stundengenau mit Vor-Initialisierung 0 → jetzt liegen sie deckungsgleich unter den Power-Ticks.
+3. **SOC-Historie nicht mehr falsch aus Power-Rohdaten zeichnen**
+   - Die bisherige SOC-Abfrage aus `bridge_raw_samples` für `soc_sensor_uuid` entfernen bzw. nur noch verwenden, wenn eindeutig Prozentwerte vorliegen und nicht dieselbe UUID wie der Power-Meter ist.
+   - Für den aktuellen Stand `current_soc_pct = 100` einen Punkt am rechten Rand anzeigen, aber nicht als historische Linie aus Powerdaten interpretieren.
 
-### 4. Leerraum links beim Leistungs-Chart transparent machen
-- Kleiner Hinweis unter der X-Achse (nur wenn erster Datenpunkt > 1 h nach Domain-Start):
-  „Keine Daten vor {HH:mm}" — als dezenter grauer Text, damit klar ist: kein Bug, sondern echter Gateway-Ausfall.
+4. **SOC-Zeitreihe sauber für die Zukunft persistieren**
+   - Eine kleine Backend-Erweiterung vorsehen: SOC-Events mit `role='soc'` zusätzlich als eigene SOC-Zeitreihe speichern, statt nur `energy_storages.current_soc_pct` zu aktualisieren.
+   - Neue Tabelle mit Tenant/RLS/Grants: `storage_soc_readings(storage_id, tenant_id, sensor_uuid, soc_pct, recorded_at)`.
+   - Danach kann die UI echte SOC-Historie ab dem Zeitpunkt anzeigen, ab dem SOC-Events persistiert werden.
 
-### 5. Hinweis-Badge präzisieren
-Wenn `socInvalid` **und** `socSensorUuid` gesetzt → Badge-Text:
-„SOC-Sensor liefert Leistungswerte (kW) statt Ladezustand (%). Bitte in den Speicher-Einstellungen die korrekte SOC-UUID hinterlegen."
+5. **Chart-Beschriftung vereinheitlichen**
+   - Wenn der erste sichtbare Power-Datenpunkt später als der 24h-Start ist, Hinweis: `Daten ab HH:mm` statt `Keine Daten vor HH:mm`.
+   - Beim SOC: wenn keine echte SOC-Zeitreihe vorhanden ist, Label `SOC aktuell: 100 %`, keine Linie.
+   - Wenn künftig echte SOC-Historie vorhanden ist, wird sie als durchgezogene Linie erst ab dem ersten SOC-Datenpunkt gezeichnet.
 
-### 6. Nicht geändert
-- Keine DB-/Migration-Änderungen.
-- Keine Auto-Korrektur der `soc_sensor_uuid` — muss der Nutzer in den Einstellungen fixen.
-- Kein Anfassen der Fetch-Logik/Query-Keys.
-
-## Ergebnis
-- Frage 1: Badge macht die Ursache klar und actionable.
-- Frage 2/3: Keine gestrichelte, chartbreite Referenzlinie mehr — nur ein Punkt „jetzt".
-- Frage 4: Klarer Hinweis „keine Daten vor 02:00" statt stiller Leerraum.
-- Frage 5: Beide Charts nutzen identisches `[now-24h, now]`-Domain mit denselben Ticks → visuell aligned.
+6. **Validierung nach Umsetzung**
+   - Per Datenbank prüfen: erster angezeigter Power-Punkt liegt bei ca. 10:00/10:05 Berlin, nicht 02:00.
+   - SOC zeigt 100 % aktuell und keine falsche kW-basierte SOC-Kurve.
+   - Energie-pro-Stunde nutzt denselben Cutoff wie der Leistungsverlauf, damit beide X-Achsen konsistent bleiben.
