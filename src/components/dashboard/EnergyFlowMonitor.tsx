@@ -5,6 +5,9 @@ import { useMeters } from "@/hooks/useMeters";
 import { useGatewayLivePower } from "@/hooks/useGatewayLivePower";
 import { useRealtimePower } from "@/hooks/useRealtimePower";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
+import { useTranslation } from "@/hooks/useTranslation";
+
+const LANG_TO_LOCALE: Record<string, string> = { de: "de-DE", en: "en-US", es: "es-ES", nl: "nl-NL" };
 import {
   EnergyFlowNode,
   EnergyFlowConnection,
