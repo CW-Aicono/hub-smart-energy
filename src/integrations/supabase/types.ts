@@ -10739,6 +10739,47 @@ export type Database = {
           },
         ]
       }
+      storage_soc_readings: {
+        Row: {
+          created_at: string
+          id: string
+          recorded_at: string
+          sensor_uuid: string
+          soc_pct: number
+          source: string
+          storage_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          recorded_at?: string
+          sensor_uuid: string
+          soc_pct: number
+          source?: string
+          storage_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          recorded_at?: string
+          sensor_uuid?: string
+          soc_pct?: number
+          source?: string
+          storage_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storage_soc_readings_storage_id_fkey"
+            columns: ["storage_id"]
+            isOneToOne: false
+            referencedRelation: "energy_storages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_sessions: {
         Row: {
           created_at: string
