@@ -1090,7 +1090,7 @@ function MeterDetailDialog({
       : range === "7d" ? 6 * 60 * 60_000
       : 24 * 60 * 60_000;
     const now = Date.now();
-    const startAligned = Math.floor((now - RANGE_MS[range]) / bucketMs) * bucketMs;
+    const startAligned = Math.floor(visibleStartMs / bucketMs) * bucketMs;
     const endAligned = Math.floor(now / bucketMs) * bucketMs;
     const map = new Map<number, { import: number; export: number }>();
     // Alle Buckets vorab mit 0 initialisieren, damit keine Lücken entstehen
@@ -1113,7 +1113,7 @@ function MeterDetailDialog({
     return Array.from(map.entries())
       .sort((a, b) => a[0] - b[0])
       .map(([t, v]) => ({ t, import: v.import, export: v.export }));
-  }, [series, range]);
+  }, [series, range, visibleStartMs]);
 
   const fmtTime = (t: number) => {
     const d = new Date(t);
