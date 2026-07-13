@@ -190,12 +190,13 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     queryFn: async (): Promise<Record<string, number>> => {
       const { data } = await supabase
         .from("energy_storages")
-        .select("id, location_id, gateway_device_id, current_soc_pct")
+        .select("id, location_id, gateway_device_id, power_meter_id, current_soc_pct")
         .in("location_id", batteryLocationIds);
       const rows = (data ?? []) as any[];
       const result: Record<string, number> = {};
       for (const b of batteryMeterInfo) {
         const match =
+          rows.find((r) => r.power_meter_id && r.power_meter_id === b.meterId) ??
           rows.find((r) => r.gateway_device_id && r.gateway_device_id === b.gatewayDeviceId) ??
           rows.find((r) => r.location_id === b.locationId);
         if (match && match.current_soc_pct != null) {
@@ -205,6 +206,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
       return result;
     },
   });
+
 
   // UUID→meter_id + tenants für Loxone-Bridge/Broadcast
   const uuidToMeterId = useMemo(() => {

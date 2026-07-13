@@ -1,43 +1,61 @@
-## Ziel
+## Kernerkenntnis der Recherche
 
-Node-Beschriftung (Name + Periodensumme) soll den Live-Flow auf einer angrenzenden Verbindung nicht mehr überlagern.
+Der SOC des Fronius-Battery-Bausteins **hat sehr wohl eine UUID im Loxone-Miniserver** — sie ist nur in der Config-Baumansicht nicht als eigener VI sichtbar, weil sie ein interner Analog-Ausgang (`InfoOnlyAnalog`, Format `%`) des Fronius-Plugin-Bausteins ist. Über die Loxone-REST-API `/data/LoxAPP3.json` **taucht sie als eigenes Control mit `uuidAction` auf** und kann automatisch identifiziert werden. Der Anwender muss also keine UUID händisch heraussuchen.
 
-## Regel
+Quellen: Loxone "Communicating with the Miniserver" V17, Loxone Fronius-Plugin-Doku, Library-Template „Fronius Battery" (StateOfCharge_Relative als Input) — alle bestätigen, dass SOC ein Sub-Output des Bausteins ist.
 
-- **Standard:** Beschriftung unterhalb des Kreises (wie heute).
-- **Ausnahme:** Wenn von diesem Knoten mindestens eine Verbindung nach **unten** verläuft (Winkel der Line-Richtung fällt in den unteren Sektor, ca. 45°–135°), wird die Beschriftung **oberhalb** des Kreises platziert.
-- Reihenfolge bleibt gleich:
-  - oben: erst `node.label`, darunter Periodensumme
-  - unten: erst `node.label`, darunter Periodensumme
-  (bei Position „oben" umgekehrte y-Offsets, sodass Label näher am Kreis steht als die Summe)
+## Umsetzung
 
-## Umsetzung in `src/components/dashboard/EnergyFlowMonitor.tsx`
+### 1. Schema-Erweiterung `energy_storages` (Migration)
 
-1. **Helper `getLabelSide(node)**` in der Node-Render-Schleife:
-  - Iteriere über `connections`, filtere die, an denen `node` als `from` oder `to` beteiligt ist.
-  - Für jede Verbindung: berechne den Richtungsvektor **von diesem Knoten weg** zum Nachbarknoten, dann Winkel `atan2(dy, dx)` in Grad (0° = rechts, 90° = unten in SVG-Koordinaten).
-  - Wenn ein Winkel im Bereich `[45°, 135°]` liegt → Nachbar-Verbindung geht nach unten → return `"top"`.
-  - Sonst `"bottom"`.
-2. **Text-Rendering im `nodes.map(...)**`:
-  - `const side = getLabelSide(node);`
-  - `const labelY = side === "bottom" ? cy + nodeRadius + 14 : cy - nodeRadius - 18;`
-  - `const sumY   = side === "bottom" ? cy + nodeRadius + 28 : cy - nodeRadius - 6;`  
-  (bei „top" ist die Summe zwischen Label und Kreis, damit die Reihenfolge Label→Summe→Kreis von oben nach unten gelesen wird — alternativ Label ganz oben und Summe direkt darunter, siehe Frage unten)
-3. Keine Änderung am Flow-Label auf der Linie selbst (das ist mittig auf der Line, kein Konflikt zu erwarten).
+- `soc_sensor_uuid text` — automatisch befüllte SOC-UUID
+- `power_meter_id uuid` (FK → `meters.id`, ON DELETE SET NULL) — verknüpft Speicher mit dem Leistungszähler des Battery-Nodes im Widget
+- `soc_updated_at timestamptz`
 
-## Randfälle
+### 2. Auto-Discovery in `loxone-api`
 
-- Knoten ohne Verbindung: `side = "bottom"` (Default).
-- Mehrere Verbindungen mit gemischten Richtungen: Sobald **eine** nach unten geht, flippt die Beschriftung nach oben.
-- Bei horizontalem Layout (heutiger Regelfall PV — Gebäude — Speicher) bleibt alles unten; bei Netz-über-Gebäude (Screenshot) flippt „Gebäude gesamt"-Beschriftung nach oben — der aktuelle Screenshot betrifft aber vor allem **„Netz"**: dessen Verbindung geht nach unten → Beschriftung wandert **über** den Netz-Kreis.
+Neue Action `discoverBatterySoc` (bzw. Integration in bestehenden Sync):
 
-## Offene Frage
+- Lädt gecachte `LoxAPP3.json`.
+- Durchsucht `controls` nach Kandidaten:
+  - `type` in `["InfoOnlyAnalog", "Fronius", "Battery"]`
+  - **oder** `details.format` enthält `%`
+  - **und** Name/Room/Cat matched Regex `/soc|ladezustand|state.?of.?charge|batter|speicher/i`
+- Zusätzliche Plausibilitätsprüfung: aktueller Wert via `/jdev/sps/io/{uuid}/all` liegt zwischen 0 und 100.
+- Bei Match: `energy_storages.soc_sensor_uuid` schreiben, `location_id` = Location der Integration.
+- Läuft im bestehenden `loxone-periodic-sync` alle 5 Min mit (idempotent).
 
-Bei Position „oben" — welche Reihenfolge (von oben nach unten gelesen)?
+### 3. Ingest-Pfad um Rolle `soc` erweitern
 
-- **A:** `Label` → `Summe` → Kreis  (Label ganz oben, wie heute unten die Reihenfolge Label→Summe)
-- **B:** `Summe` → `Label` → Kreis  (Label direkt am Kreis, Summe darüber — spiegelverkehrt zur Unten-Variante)
+- **`list-loxone-ws-meters`**: liefert pro `energy_storages` mit `soc_sensor_uuid` einen virtuellen Eintrag `role_hint = "soc"` + `storage_id`.
+- **Loxone-Worker** (`docs/loxone-ws-worker/index.ts`): neue `StateRole = "soc"`, kein LoxAPP3-Expand, direkt in `state.uuidMap` mit Rolle `soc`. Broadcast + Ingest-Payload enthalten `role: "soc"` und `storage_id`.
+- **`gateway-ingest`** / **`bridge-aggregator`**: bei `role === "soc"` **kein** `meter_power_readings`-INSERT, sondern `UPDATE energy_storages SET current_soc_pct = value, soc_updated_at = now() WHERE id = storage_id`.
 
-Ich würde **A** wählen (visuelle Konsistenz: Label immer weiter weg vom Kreis als Rand-Info wirkt seltsam) — bestätige bitte oder wähle B.  
-  
-Antwort: Ja, Lösung A wie von dir vorgeschlagen.
+Fallback: für Miniserver, bei denen der Worker (WebSocket) nicht läuft, pollt `loxone-periodic-sync` den SOC per REST (`/jdev/sps/io/{uuid}`) mit und schreibt ihn direkt in `energy_storages`.
+
+### 4. UI
+
+- **Automatische Anlage**: für Locations mit erkannter SOC-UUID, aber ohne `energy_storages`-Datensatz, wird ein Datensatz automatisch angelegt (Name = „Speicher <Location>", `capacity_kwh` = 0 als Default).
+- **Manuelle Nachjustierung**: bestehender Storage-Dialog erhält zusätzlich:
+  - Dropdown „Leistungszähler" → `power_meter_id`
+  - Anzeigefeld „SOC-Quelle (Loxone-UUID)" mit Copy-Button + Button „Neu erkennen" (ruft `discoverBatterySoc`).
+  - Optional: Textfeld zum manuellen Override falls die Heuristik daneben liegt.
+
+### 5. Widget `EnergyFlowMonitor`
+
+- SOC-Query matched zuerst über `power_meter_id === node.meter_id`, dann Fallback über `location_id`.
+- Zusätzlich Loxone-Broadcast-Channel (`loxone-live-{tenantId}`) auf `role === "soc"` hören, `socByMeter` lokal überschreiben → Sub-Sekunden-Update.
+- Kachel zeigt „SOC: {n} %", Popover zeigt SOC-Balken + gespeicherte kWh (aus `current_soc_pct * capacity_kwh`).
+
+### 6. Verifikation
+
+1. Nach Deployment: für Rathaus wird `energy_storages`-Datensatz mit `soc_sensor_uuid` automatisch angelegt.
+2. `bridge_raw_samples` enthält Werte um 100 für die neue UUID.
+3. `energy_storages.current_soc_pct = 100`, `soc_updated_at` frisch.
+4. Widget-Kachel zeigt „SOC: 100 %".
+
+Falls die Heuristik in Schritt 2 nichts findet, gibt die Discovery-Funktion die 5 wahrscheinlichsten Kandidaten (Name + UUID + aktueller Wert) im Storage-Dialog als Auswahl-Liste zurück — der Nutzer wählt einen aus, ganz ohne UUID-Kopieren.
+
+## Was du nach dem Deployment machen musst
+
+Nichts. Der Sync erkennt den SOC automatisch. Sollte die Auto-Erkennung fehlschlagen, siehst du im Speicher-Dialog eine Auswahlliste mit den plausibelsten Loxone-Werten und wählst per Klick den richtigen aus.
