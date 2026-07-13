@@ -28,6 +28,7 @@ import {
   Bar,
   LineChart,
   Line,
+  ComposedChart,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -995,6 +996,59 @@ function MeterDetailDialog({
     staleTime: 30_000,
   });
 
+  const isBattery = node.role === "battery";
+
+  // SOC-Sensor-UUID (nur bei Speichern) aus energy_storages ermitteln
+  const { data: socSensorUuid } = useQuery({
+    queryKey: ["meter-detail-soc-uuid", node.meter_id],
+    enabled: isBattery && !!node.meter_id,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<string | null> => {
+      const { data } = await supabase
+        .from("energy_storages")
+        .select("soc_sensor_uuid, power_meter_id")
+        .eq("power_meter_id", node.meter_id)
+        .maybeSingle();
+      return (data as any)?.soc_sensor_uuid ?? null;
+    },
+  });
+
+  // SOC-Historie aus bridge_raw_samples
+  const { data: socSeries = [] } = useQuery({
+    queryKey: ["meter-detail-soc-series", socSensorUuid, range],
+    enabled: !!socSensorUuid,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const since = new Date(Date.now() - RANGE_MS[range]).toISOString();
+      const limit = range === "30d" ? 5000 : range === "7d" ? 3000 : 1500;
+      const { data } = await (supabase
+        .from("bridge_raw_samples" as any)
+        .select("received_at, value")
+        .eq("uuid", socSensorUuid)
+        .gte("received_at", since)
+        .order("received_at", { ascending: true })
+        .limit(limit));
+      return ((data as any[]) ?? [])
+        .map((r) => ({ t: new Date(r.received_at).getTime(), soc: Number(r.value) }))
+        .filter((d) => Number.isFinite(d.soc) && d.soc >= 0 && d.soc <= 100);
+    },
+  });
+
+  // Power- und SOC-Reihen zu einer Datenreihe mergen (nach Zeit)
+  const mergedSeries = useMemo(() => {
+    if (!socSeries.length) return series.map((d) => ({ ...d, soc: null as number | null }));
+    const map = new Map<number, { t: number; kw: number | null; soc: number | null }>();
+    for (const p of series) map.set(p.t, { t: p.t, kw: p.kw, soc: null });
+    for (const s of socSeries) {
+      const cur = map.get(s.t) ?? { t: s.t, kw: null, soc: null };
+      cur.soc = s.soc;
+      map.set(s.t, cur);
+    }
+    return Array.from(map.values()).sort((a, b) => a.t - b.t);
+  }, [series, socSeries]);
+  const hasSoc = socSeries.length > 0;
+
+
   const stats = useMemo(() => {
     if (!series.length) return null;
     const vals = series.map((d) => d.kw);
@@ -1045,7 +1099,8 @@ function MeterDetailDialog({
 
   const totalImport = energyBuckets.reduce((s, b) => s + b.import, 0);
   const totalExport = energyBuckets.reduce((s, b) => s + b.export, 0);
-  const isBattery = node.role === "battery";
+
+
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -1119,23 +1174,23 @@ function MeterDetailDialog({
           </div>
         </div>
 
-        {/* Chart 1: Leistungsverlauf */}
+        {/* Chart 1: Leistungsverlauf (+ optional SOC bei Speichern) */}
         <div>
           <div className="text-sm font-medium mb-1">
-            Leistungsverlauf · {RANGE_LABEL[range]}
+            Leistungsverlauf{hasSoc ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
           </div>
-          <div className="h-[300px]">
+          <div className="h-[320px]">
             {isLoading ? (
               <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
                 Lade Daten…
               </div>
-            ) : series.length < 2 ? (
+            ) : mergedSeries.length < 2 ? (
               <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
                 Keine Daten im gewählten Zeitraum
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={series} margin={{ top: 8, right: 16, left: 8, bottom: 28 }}>
+                <ComposedChart data={mergedSeries} margin={{ top: 8, right: hasSoc ? 60 : 16, left: 8, bottom: 28 }}>
                   <defs>
                     <linearGradient id={`det-${node.id}`} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={node.color} stopOpacity={0.5} />
@@ -1155,13 +1210,26 @@ function MeterDetailDialog({
                     <AxisLabel value="Zeit" position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
                   </XAxis>
                   <YAxis
+                    yAxisId="kw"
                     tick={{ fontSize: 11 }}
                     tickFormatter={(v) => v.toLocaleString("de-DE")}
                     width={70}
                   >
                     <AxisLabel value="Leistung (kW)" angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
-                  {stats?.bidirectional && <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />}
+                  {hasSoc && (
+                    <YAxis
+                      yAxisId="soc"
+                      orientation="right"
+                      domain={[0, 100]}
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v) => `${v}`}
+                      width={50}
+                    >
+                      <AxisLabel value="SOC (%)" angle={-90} position="insideRight" style={{ fontSize: 11, textAnchor: "middle" }} />
+                    </YAxis>
+                  )}
+                  {stats?.bidirectional && <ReferenceLine yAxisId="kw" y={0} stroke="hsl(var(--muted-foreground))" />}
                   <RTooltip
                     contentStyle={{ fontSize: 11 }}
                     labelFormatter={(v) =>
@@ -1173,21 +1241,47 @@ function MeterDetailDialog({
                         minute: "2-digit",
                       })
                     }
-                    formatter={(v: any) => [`${fmtDeNum(Number(v))} kW`, "Leistung"]}
+                    formatter={(v: any, name: string) => {
+                      if (name === "soc") return [`${fmtDeNum(Number(v), 0)} %`, "SOC"];
+                      return [`${fmtDeNum(Number(v))} kW`, "Leistung"];
+                    }}
                   />
+                  {hasSoc && (
+                    <Legend
+                      wrapperStyle={{ fontSize: 11 }}
+                      formatter={(v) => (v === "soc" ? "Ladezustand (SOC %)" : "Leistung (kW)")}
+                    />
+                  )}
                   <Area
+                    yAxisId="kw"
                     type="monotone"
                     dataKey="kw"
                     stroke={node.color}
                     strokeWidth={1.8}
                     fill={`url(#det-${node.id})`}
                     isAnimationActive={false}
+                    connectNulls
+                    name="kw"
                   />
-                </AreaChart>
+                  {hasSoc && (
+                    <Line
+                      yAxisId="soc"
+                      type="monotone"
+                      dataKey="soc"
+                      stroke="hsl(152 55% 42%)"
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                      connectNulls
+                      name="soc"
+                    />
+                  )}
+                </ComposedChart>
               </ResponsiveContainer>
             )}
           </div>
         </div>
+
 
         {/* Chart 2: Energie pro Bucket */}
         {energyBuckets.length > 0 && (
