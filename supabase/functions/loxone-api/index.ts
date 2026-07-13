@@ -600,19 +600,25 @@ async function discoverSocCandidates(
     // Wert ermitteln: bei Sub-State über parentControl/all + Output-Name; bei Control direkt /all
     if (cand.subStateKey) {
       const all = await getAll(cand.parentControlUuid);
+      value = extractSocValueFromAllStates(all);
       // Loxone /all liefert Outputs mit `name` == stateKey. Match case-insensitive.
-      const targetKey = cand.subStateKey.toLowerCase();
-      for (const [k, v] of Object.entries(all)) {
-        if (k === "_primary") continue;
-        if (k.toLowerCase() === targetKey && typeof v === "number") { value = v; break; }
+      if (value == null) {
+        const targetKey = cand.subStateKey.toLowerCase();
+        for (const [k, v] of Object.entries(all)) {
+          if (k === "_primary") continue;
+          if (k.toLowerCase() === targetKey && typeof v === "number") { value = v; break; }
+        }
       }
     } else {
       const all = await getAll(cand.parentControlUuid);
-      const primary = all["_primary"];
-      if (typeof primary === "number") value = primary;
-      else {
-        for (const v of Object.values(all)) {
-          if (typeof v === "number") { value = v; break; }
+      value = extractSocValueFromAllStates(all);
+      if (value == null) {
+        const primary = all["_primary"];
+        if (typeof primary === "number") value = primary;
+        else {
+          for (const v of Object.values(all)) {
+            if (typeof v === "number") { value = v; break; }
+          }
         }
       }
     }
@@ -630,7 +636,12 @@ async function discoverSocCandidates(
       });
     }
   }
-  results.sort((a, b) => b.score - a.score);
+  results.sort((a, b) => {
+    const ap = a.currentValue != null ? 1 : 0;
+    const bp = b.currentValue != null ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    return b.score - a.score;
+  });
   return results;
 }
 
@@ -652,7 +663,7 @@ async function syncBatterySoc(
   try {
     const { data: storages, error } = await supabase
       .from("energy_storages")
-      .select("id, name, soc_sensor_uuid, current_soc_pct")
+      .select("id, name, soc_sensor_uuid, current_soc_pct, soc_updated_at")
       .eq("tenant_id", tenantId)
       .eq("location_id", locationId);
     if (error) {
@@ -660,11 +671,11 @@ async function syncBatterySoc(
       return;
     }
 
-    const rows = (storages ?? []) as Array<{ id: string; name: string; soc_sensor_uuid: string | null; current_soc_pct: number | null }>;
+    const rows = (storages ?? []) as Array<{ id: string; name: string; soc_sensor_uuid: string | null; current_soc_pct: number | null; soc_updated_at: string | null }>;
 
     // Discovery, falls (a) mindestens ein Storage ohne UUID existiert
     // oder (b) noch gar keiner existiert (dann evtl. auto-anlegen).
-    const needsDiscovery = rows.length === 0 || rows.some((r) => !r.soc_sensor_uuid);
+    const needsDiscovery = rows.length === 0 || rows.some((r) => !r.soc_sensor_uuid || r.current_soc_pct == null || !r.soc_updated_at);
     let candidates: SocCandidate[] = [];
     if (needsDiscovery) {
       const controlsCount = Object.keys(structure.controls || {}).length;
