@@ -10,6 +10,7 @@ import {
   EnergyFlowConnection,
   EnergyFlowNodeRole,
 } from "@/hooks/useCustomWidgetDefinitions";
+import { buildLoxoneResolver } from "@/lib/loxoneUuidResolver";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
