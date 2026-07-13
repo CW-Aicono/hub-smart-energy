@@ -1295,15 +1295,17 @@ function MeterDetailDialog({
                   )}
                   {stats?.bidirectional && <ReferenceLine yAxisId="kw" y={0} stroke="hsl(var(--muted-foreground))" />}
                   {!hasSoc && showSocAxis && socPct != null && (
-                    <ReferenceLine
+                    <ReferenceDot
                       yAxisId="soc"
+                      x={xDomain[1]}
                       y={Math.max(0, Math.min(100, socPct))}
+                      r={5}
+                      fill="hsl(217 91% 60%)"
                       stroke="hsl(217 91% 60%)"
-                      strokeDasharray="4 4"
-                      strokeWidth={1.5}
+                      isFront
                       label={{
-                        value: `SOC aktuell: ${fmtDeNum(socPct, 0)} %`,
-                        position: "insideTopRight",
+                        value: `SOC jetzt: ${fmtDeNum(socPct, 0)} %`,
+                        position: "left",
                         fill: "hsl(217 91% 60%)",
                         fontSize: 11,
                       }}
