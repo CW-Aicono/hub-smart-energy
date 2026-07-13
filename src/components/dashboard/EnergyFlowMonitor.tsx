@@ -968,16 +968,22 @@ const RANGE_MS: Record<DetailRange, number> = {
 function MeterDetailDialog({
   node,
   socPct,
+  allNodes,
+  metersById,
   onClose,
 }: {
   node: EnergyFlowNode;
   socPct?: number | null;
+  allNodes: EnergyFlowNode[];
+  metersById: Record<string, any>;
   onClose: () => void;
 }) {
   const Icon = ROLE_ICON[node.role];
   const [range, setRange] = useState<DetailRange>("24h");
 
   const isBattery = node.role === "battery";
+  const isHouse = node.role === "house";
+
 
   const { data: storageInfo, isLoading: isStorageLoading } = useQuery({
     queryKey: ["meter-detail-storage-info", node.meter_id],
