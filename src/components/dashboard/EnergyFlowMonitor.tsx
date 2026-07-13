@@ -1099,7 +1099,8 @@ function MeterDetailDialog({
 
   const totalImport = energyBuckets.reduce((s, b) => s + b.import, 0);
   const totalExport = energyBuckets.reduce((s, b) => s + b.export, 0);
-  const isBattery = node.role === "battery";
+
+
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
