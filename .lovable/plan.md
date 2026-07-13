@@ -1,31 +1,50 @@
-Ich habe die Datenbank geprüft. Ergebnis: Die Anzeige ab 02:00 kommt nicht aus einer Achsen-/Timezone-Panne, sondern weil der Detaildialog aktuell `meter_power_readings` liest — dort gibt es für den Speicher-Meter tatsächlich 48 Werte ab 02:00 Berlin. Der Speicher-Datensatz selbst wurde aber erst um ca. 10:05 Berlin angelegt; deshalb soll die Detailgrafik für diesen Speicher erst ab diesem Speicher-/Gateway-Kontext starten. Beim SOC ist der aktuelle Wert in `energy_storages.current_soc_pct = 100`, aber die bisher abgefragte Historie aus `bridge_raw_samples` ist für diese UUID Power/kW, nicht SOC-%. Außerdem werden echte SOC-Events derzeit nicht als Zeitreihe in `bridge_raw_samples` persistiert, sondern nur als aktueller SOC gespeichert.
+# Diagnose
 
-Plan:
+Der Meter **„Erzeugung"** (meter_function=`generation`) liefert aktuell **-108,519 kW** (also negativ). Aus der DB bestätigt für 13.07.2026 11:30 UTC:
 
-1. **Power-Chart für Speicher korrekt begrenzen**
-   - Im Detaildialog zusätzlich `energy_storages.created_at`, `soc_updated_at`, `current_soc_pct`, `soc_sensor_uuid` und `power_meter_id` laden.
-   - Für Batterie/Speicher die sichtbare Datenreihe auf `max(rangeStart, storage.created_at)` begrenzen.
-   - Dadurch verschwindet die scheinbare Historie ab 02:00, wenn der Speicher erst seit ca. 10:00 in diesem Kontext Daten liefert.
+```
+name: Erzeugung
+meter_function: generation
+power_value: -108.519
+```
 
-2. **Datenquelle klarer verwenden**
-   - Die Leistungswerte weiterhin aus `meter_power_readings` lesen, aber erst ab dem berechneten Cutoff.
-   - Optional vorhandene Vorwerte vor `storage.created_at` nicht mehr in Statistik, Linie und Energie-Buckets einbeziehen.
+Im Widget wird der Absolutwert (108,52 kW) korrekt angezeigt, aber die Flussrichtungs-Logik in `EnergyFlowMonitor.tsx` (Zeile 508) interpretiert das negative Vorzeichen als „reversed":
 
-3. **SOC-Historie nicht mehr falsch aus Power-Rohdaten zeichnen**
-   - Die bisherige SOC-Abfrage aus `bridge_raw_samples` für `soc_sensor_uuid` entfernen bzw. nur noch verwenden, wenn eindeutig Prozentwerte vorliegen und nicht dieselbe UUID wie der Power-Meter ist.
-   - Für den aktuellen Stand `current_soc_pct = 100` einen Punkt am rechten Rand anzeigen, aber nicht als historische Linie aus Powerdaten interpretieren.
+```ts
+const isReversed = flowWatts != null && flowWatts < 0;
+```
 
-4. **SOC-Zeitreihe sauber für die Zukunft persistieren**
-   - Eine kleine Backend-Erweiterung vorsehen: SOC-Events mit `role='soc'` zusätzlich als eigene SOC-Zeitreihe speichern, statt nur `energy_storages.current_soc_pct` zu aktualisieren.
-   - Neue Tabelle mit Tenant/RLS/Grants: `storage_soc_readings(storage_id, tenant_id, sensor_uuid, soc_pct, recorded_at)`.
-   - Danach kann die UI echte SOC-Historie ab dem Zeitpunkt anzeigen, ab dem SOC-Events persistiert werden.
+Dadurch drehen sich Pfad und Animation um → die Punkte laufen von NSHV SÜD **zur** PV, obwohl PV immer erzeugt (also zum Verbraucher fließt).
 
-5. **Chart-Beschriftung vereinheitlichen**
-   - Wenn der erste sichtbare Power-Datenpunkt später als der 24h-Start ist, Hinweis: `Daten ab HH:mm` statt `Keine Daten vor HH:mm`.
-   - Beim SOC: wenn keine echte SOC-Zeitreihe vorhanden ist, Label `SOC aktuell: 100 %`, keine Linie.
-   - Wenn künftig echte SOC-Historie vorhanden ist, wird sie als durchgezogene Linie erst ab dem ersten SOC-Datenpunkt gezeichnet.
+Beim „Test Flow-Widget" stimmt die Richtung nur zufällig, weil die dortige PV („Produktion", +6,68 kW) ein positives Vorzeichen liefert. Verschiedene Gateway-Familien nutzen unterschiedliche Vorzeichen-Konventionen für Erzeugung.
 
-6. **Validierung nach Umsetzung**
-   - Per Datenbank prüfen: erster angezeigter Power-Punkt liegt bei ca. 10:00/10:05 Berlin, nicht 02:00.
-   - SOC zeigt 100 % aktuell und keine falsche kW-basierte SOC-Kurve.
-   - Energie-pro-Stunde nutzt denselben Cutoff wie der Leistungsverlauf, damit beide X-Achsen konsistent bleiben.
+# Ursache
+
+Die aktuelle Richtungslogik behandelt jeden Meter gleich: „Vorzeichen bestimmt Richtung". Für **generation-Meter** ist das falsch — Erzeugung fließt physikalisch immer vom Erzeuger weg, unabhängig vom Vorzeichen des Rohwerts (das je nach Gateway-Konvention +/– sein kann).
+
+# Fix
+
+In `src/components/dashboard/EnergyFlowMonitor.tsx` (~Zeile 505–510):
+
+Für Kanten, deren `fromNode` ein Generation-Meter ist:
+- Vorzeichen ignorieren, `isReversed = false` erzwingen
+- Anzeige- und Animationswert = `Math.abs(flowWatts)`
+
+Für alle anderen Kanten (Netz bidirektional, Speicher, Verbraucher-Submeter) bleibt die bestehende Logik unverändert.
+
+## Technische Umsetzung
+
+1. `nodes`/`connections` bereits vorhanden — pro Kante prüfen, ob `fromNode.meter_function === 'generation'` (Feld ggf. mitladen, falls nicht vorhanden).
+2. In der Render-Schleife (Zeile 505 ff.):
+   ```ts
+   const rawWatts = getLiveWatts(fromNode.meter_id);
+   const isGeneration = fromNode.meter_function === 'generation';
+   const flowWatts = isGeneration && rawWatts != null ? Math.abs(rawWatts) : rawWatts;
+   const isReversed = !isGeneration && flowWatts != null && flowWatts < 0;
+   ```
+3. `meter_function` in der Node-Ladelogik ergänzen, falls es noch nicht mitkommt.
+
+# Nicht Teil dieses Fixes
+
+- Speicher-/Netz-Konvention (Test-Widget stimmt bereits laut Nutzer)
+- Änderung der Rohdaten oder Ingest-Funktionen — nur UI-seitige Vorzeichenbehandlung für Generation
