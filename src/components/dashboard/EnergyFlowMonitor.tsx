@@ -432,22 +432,10 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     return Math.max(2.5, 40 - Math.log10(Math.max(abs, 1)) * 11);
   }, []);
 
-  // Autarkie/Eigenverbrauch (nur wenn passende Rollen vorhanden)
-  const kpiFooter = useMemo(() => {
-    const pv = nodes.find((n) => n.role === "pv");
-    const grid = nodes.find((n) => n.role === "grid");
-    const house = nodes.find((n) => n.role === "house");
-    if (!pv || !grid || !house) return null;
-    const pvW = Math.max(0, getLiveWatts(pv.meter_id) ?? 0);
-    const gridW = getLiveWatts(grid.meter_id) ?? 0; // + Bezug, − Einspeisung
-    const gridImport = Math.max(0, gridW);
-    const gridExport = Math.max(0, -gridW);
-    const houseW = Math.max(0, pvW + gridImport - gridExport);
-    if (pvW + gridImport <= 0) return null;
-    const autarkie = houseW > 0 ? Math.min(100, ((houseW - gridImport) / houseW) * 100) : 0;
-    const eigenverbrauch = pvW > 0 ? Math.min(100, ((pvW - gridExport) / pvW) * 100) : 0;
-    return { autarkie, eigenverbrauch };
-  }, [nodes, getLiveWatts]);
+  // Autarkie/Eigenverbrauch werden in der Gebäude-Detailansicht (MeterDetailDialog,
+  // role === "house") auf Energiemengen (kWh) über das gewählte Zeitfenster berechnet,
+  // nicht mehr live im Flow-Widget.
+
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null;
 
