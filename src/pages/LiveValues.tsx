@@ -67,6 +67,44 @@ const LiveValues = () => {
   const [cpVirtualValues, setCpVirtualValues] = useState<Map<string, { value: number; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null }>>(new Map());
   const [loadingLive, setLoadingLive] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [socByMeterId, setSocByMeterId] = useState<Map<string, { pct: number; updatedAt: string | null }>>(new Map());
+  const [socUuidToMeterId, setSocUuidToMeterId] = useState<Map<string, string>>(new Map());
+
+  // Fetch SOC values from energy_storages (linked via power_meter_id)
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const fetchSoc = async () => {
+      const { data } = await supabase
+        .from("energy_storages")
+        .select("power_meter_id, soc_sensor_uuid, current_soc_pct, soc_updated_at")
+        .not("power_meter_id", "is", null);
+      if (cancelled || !data) return;
+      const socMap = new Map<string, { pct: number; updatedAt: string | null }>();
+      const uuidMap = new Map<string, string>();
+      for (const row of data as any[]) {
+        if (row.power_meter_id && row.current_soc_pct != null) {
+          socMap.set(row.power_meter_id, { pct: Number(row.current_soc_pct), updatedAt: row.soc_updated_at });
+        }
+        if (row.soc_sensor_uuid && row.power_meter_id) {
+          uuidMap.set(String(row.soc_sensor_uuid).toLowerCase(), row.power_meter_id);
+        }
+      }
+      setSocByMeterId(socMap);
+      setSocUuidToMeterId(uuidMap);
+    };
+    fetchSoc();
+    const iv = setInterval(fetchSoc, 60_000);
+    const ch = supabase
+      .channel("energy-storages-soc")
+      .on("postgres_changes", { event: "*", schema: "public", table: "energy_storages" }, fetchSoc)
+      .subscribe();
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+      supabase.removeChannel(ch);
+    };
+  }, [user]);
 
   // Fetch virtual meter sources
   useEffect(() => {
