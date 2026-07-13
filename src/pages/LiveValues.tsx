@@ -734,6 +734,7 @@ const LiveValues = () => {
                 const Icon = config.icon;
                 const location = locations.find((l) => l.id === meter.location_id);
                 const isFlowType = meter.energy_type === "wasser" || meter.energy_type === "gas";
+                const soc = socByMeterId.get(meter.id);
 
                 return (
                   <Card key={meter.id} className="relative overflow-hidden">
