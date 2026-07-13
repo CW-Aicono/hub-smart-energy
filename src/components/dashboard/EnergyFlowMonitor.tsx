@@ -1013,8 +1013,8 @@ function MeterDetailDialog({
     },
   });
 
-  // SOC-Historie aus bridge_raw_samples
-  const { data: socSeries = [] } = useQuery({
+  // SOC-Historie aus bridge_raw_samples (roh, ungefiltert)
+  const { data: socSeriesRaw = [] } = useQuery({
     queryKey: ["meter-detail-soc-series", socSensorUuid, range],
     enabled: !!socSensorUuid,
     staleTime: 30_000,
@@ -1030,10 +1030,25 @@ function MeterDetailDialog({
         .limit(limit));
       return ((data as any[]) ?? [])
         .map((r) => ({ t: new Date(r.received_at).getTime(), soc: Number(r.value) }))
-        // 0 als "unbekannt/Reset" verwerfen (Bridge liefert initialen 0-Wert)
-        .filter((d) => Number.isFinite(d.soc) && d.soc > 0 && d.soc <= 100);
+        .filter((d) => Number.isFinite(d.soc));
     },
   });
+
+  // Plausibilitätscheck: sieht die Reihe wirklich nach SOC (%) aus?
+  // Falsche UUID-Verknüpfungen liefern häufig Leistungswerte (~0 kW) statt Prozentwerte.
+  const { socSeries, socInvalid } = useMemo(() => {
+    if (!socSensorUuid || socSeriesRaw.length === 0) {
+      return { socSeries: [] as { t: number; soc: number }[], socInvalid: false };
+    }
+    const inRange = socSeriesRaw.filter((d) => d.soc > 0 && d.soc <= 100);
+    if (inRange.length < 3) return { socSeries: [], socInvalid: true };
+    const sorted = [...inRange].map((d) => d.soc).sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const max = sorted[sorted.length - 1];
+    // Plausibel: Median mindestens 1 % UND ein Wert erreicht mindestens 5 %.
+    if (median < 1 || max < 5) return { socSeries: [], socInvalid: true };
+    return { socSeries: inRange, socInvalid: false };
+  }, [socSeriesRaw, socSensorUuid]);
 
   // Power- und SOC-Reihen zu einer Datenreihe mergen (nach Zeit)
   const mergedSeries = useMemo(() => {
@@ -1048,6 +1063,8 @@ function MeterDetailDialog({
     return Array.from(map.values()).sort((a, b) => a.t - b.t);
   }, [series, socSeries]);
   const hasSoc = socSeries.length > 0;
+  // Rechte SOC-Achse auch dann anzeigen, wenn nur der aktuelle SOC bekannt ist.
+  const showSocAxis = hasSoc || (isBattery && socPct != null);
 
 
   const stats = useMemo(() => {
@@ -1183,8 +1200,19 @@ function MeterDetailDialog({
 
         {/* Chart 1: Leistungsverlauf (+ optional SOC bei Speichern) */}
         <div>
-          <div className="text-sm font-medium mb-1">
-            Leistungsverlauf{hasSoc ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <div className="text-sm font-medium">
+              Leistungsverlauf{showSocAxis ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
+            </div>
+            {socInvalid && (
+              <Badge
+                variant="outline"
+                className="border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[10px]"
+                title="Die in den Speicher-Einstellungen hinterlegte SOC-Sensor-UUID liefert keine plausiblen Prozentwerte."
+              >
+                SOC-Sensor liefert unplausible Werte – bitte in den Speicher-Einstellungen prüfen
+              </Badge>
+            )}
           </div>
           <div className="h-[320px]">
             {isLoading ? (
@@ -1197,7 +1225,7 @@ function MeterDetailDialog({
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={mergedSeries} margin={{ top: 8, right: hasSoc ? 60 : 16, left: 8, bottom: 28 }}>
+                <ComposedChart data={mergedSeries} margin={{ top: 8, right: showSocAxis ? 60 : 16, left: 8, bottom: 28 }}>
                   <defs>
                     <linearGradient id={`det-${node.id}`} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={node.color} stopOpacity={0.5} />
@@ -1208,10 +1236,13 @@ function MeterDetailDialog({
                   <XAxis
                     dataKey="t"
                     type="number"
-                    domain={["dataMin", "dataMax"]}
+                    domain={[Date.now() - RANGE_MS[range], Date.now()]}
                     scale="time"
                     tickFormatter={fmtTime}
                     tick={{ fontSize: 11 }}
+                    tickCount={8}
+                    interval="preserveStartEnd"
+                    allowDataOverflow
                     height={40}
                   >
                     <AxisLabel value="Zeit" position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
@@ -1224,7 +1255,7 @@ function MeterDetailDialog({
                   >
                     <AxisLabel value="Leistung (kW)" angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
-                  {hasSoc && (
+                  {showSocAxis && (
                     <YAxis
                       yAxisId="soc"
                       orientation="right"
@@ -1235,9 +1266,25 @@ function MeterDetailDialog({
                       width={50}
                     >
                       <AxisLabel value="SOC (%)" angle={-90} position="insideRight" style={{ fontSize: 11, textAnchor: "middle" }} />
+
                     </YAxis>
                   )}
                   {stats?.bidirectional && <ReferenceLine yAxisId="kw" y={0} stroke="hsl(var(--muted-foreground))" />}
+                  {!hasSoc && showSocAxis && socPct != null && (
+                    <ReferenceLine
+                      yAxisId="soc"
+                      y={Math.max(0, Math.min(100, socPct))}
+                      stroke="hsl(217 91% 60%)"
+                      strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                      label={{
+                        value: `SOC aktuell: ${fmtDeNum(socPct, 0)} %`,
+                        position: "insideTopRight",
+                        fill: "hsl(217 91% 60%)",
+                        fontSize: 11,
+                      }}
+                    />
+                  )}
                   <RTooltip
                     contentStyle={{ fontSize: 11 }}
                     content={({ active, payload, label }) => {
