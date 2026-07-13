@@ -159,6 +159,53 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     staleTime: 60_000,
   });
 
+  // Battery SOC per meter (for role === "battery" nodes).
+  // Link: energy_storages.location_id === meters.location_id (bevorzugt gateway_device_id match).
+  const batteryMeterInfo = useMemo(() => {
+    const info: Array<{ meterId: string; locationId: string | null; gatewayDeviceId: string | null }> = [];
+    for (const node of nodes) {
+      if (node.role !== "battery" || !node.meter_id) continue;
+      const m = (relevantMeters as any[]).find((x) => x.id === node.meter_id);
+      if (!m) continue;
+      info.push({
+        meterId: node.meter_id,
+        locationId: m.location_id ?? null,
+        gatewayDeviceId: m.gateway_device_id ?? null,
+      });
+    }
+    return info;
+  }, [nodes, relevantMeters]);
+
+  const batteryLocationIds = useMemo(
+    () => Array.from(new Set(batteryMeterInfo.map((b) => b.locationId).filter(Boolean))) as string[],
+    [batteryMeterInfo],
+  );
+  const batteryLocKey = batteryLocationIds.slice().sort().join(",");
+
+  const { data: socByMeter = {} } = useQuery({
+    queryKey: ["energyflow-soc", batteryLocKey, batteryMeterInfo.map((b) => b.meterId).join(",")],
+    enabled: batteryLocationIds.length > 0,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data } = await supabase
+        .from("energy_storages")
+        .select("id, location_id, gateway_device_id, current_soc_pct")
+        .in("location_id", batteryLocationIds);
+      const rows = (data ?? []) as any[];
+      const result: Record<string, number> = {};
+      for (const b of batteryMeterInfo) {
+        const match =
+          rows.find((r) => r.gateway_device_id && r.gateway_device_id === b.gatewayDeviceId) ??
+          rows.find((r) => r.location_id === b.locationId);
+        if (match && match.current_soc_pct != null) {
+          result[b.meterId] = Number(match.current_soc_pct);
+        }
+      }
+      return result;
+    },
+  });
+
   // UUID→meter_id + tenants für Loxone-Bridge/Broadcast
   const uuidToMeterId = useMemo(() => {
     const m = new Map<string, string>();
@@ -577,13 +624,22 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
               >
                 {node.label}
               </text>
-              {periodSum != null && periodSum !== 0 && (
+              {periodSum != null && periodSum !== 0 && node.role !== "battery" && (
                 <text
                   x={cx} y={sumY}
                   textAnchor="middle"
                   className="fill-muted-foreground text-[9px] tabular-nums"
                 >
                   {PERIOD_SUM_LABEL[selectedPeriod]}: {periodSum < 0 ? "−" : ""}{formatEnergy(Math.abs(periodSum))}
+                </text>
+              )}
+              {node.role === "battery" && socByMeter[node.meter_id] != null && (
+                <text
+                  x={cx} y={sumY}
+                  textAnchor="middle"
+                  className="fill-muted-foreground text-[9px] tabular-nums"
+                >
+                  SOC: {fmtDe(socByMeter[node.meter_id], 0)} %
                 </text>
               )}
             </g>
@@ -620,6 +676,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           liveWatts={getLiveWatts(selectedNode.meter_id)}
           periodSum={periodSums[selectedNode.meter_id]}
           periodLabel={PERIOD_SUM_LABEL[selectedPeriod]}
+          socPct={socByMeter[selectedNode.meter_id] ?? null}
           allNodes={nodes}
           getLiveWatts={getLiveWatts}
           anchor={{
@@ -644,6 +701,7 @@ interface NodeDetailOverlayProps {
   liveWatts: number | null;
   periodSum: number | undefined;
   periodLabel: string;
+  socPct?: number | null;
   allNodes: EnergyFlowNode[];
   getLiveWatts: (id: string) => number | null;
   anchor: { x: number; y: number; w: number; h: number };
@@ -655,6 +713,7 @@ function NodeDetailOverlay({
   liveWatts,
   periodSum,
   periodLabel,
+  socPct,
   allNodes,
   getLiveWatts,
   anchor,
@@ -745,7 +804,25 @@ function NodeDetailOverlay({
             <div className="text-sm font-semibold tabular-nums">
               {periodSum != null ? `${periodSum < 0 ? "−" : ""}${formatEnergy(Math.abs(periodSum))}` : "–"}
             </div>
+        </div>
+
+        {node.role === "battery" && socPct != null && (
+          <div className="rounded-md border p-2 text-xs mb-3">
+            <div className="text-muted-foreground">Ladezustand (SOC)</div>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, socPct))}%`,
+                    backgroundColor: node.color,
+                  }}
+                />
+              </div>
+              <div className="text-sm font-semibold tabular-nums">{fmtDe(socPct, 0)} %</div>
+            </div>
           </div>
+        )}
         </div>
 
         {share != null && (
