@@ -1,61 +1,38 @@
-## Kernerkenntnis der Recherche
+Der neue Screenshot klärt die Ursache: Der SOC kommt nicht als eigener SOC-UUID/VI, sondern als Ausgang `Slvl` am Loxone-Baustein/Zähler „Speicher“. Die aktuelle Implementierung sucht primär nach `SOC`/`StateOfCharge` und hat dadurch beim Rathaus einen falschen Fronius-Kandidaten gespeichert; `Slvl` wird weder im Worker noch im Sync als SOC-Rolle ausgewertet.
 
-Der SOC des Fronius-Battery-Bausteins **hat sehr wohl eine UUID im Loxone-Miniserver** — sie ist nur in der Config-Baumansicht nicht als eigener VI sichtbar, weil sie ein interner Analog-Ausgang (`InfoOnlyAnalog`, Format `%`) des Fronius-Plugin-Bausteins ist. Über die Loxone-REST-API `/data/LoxAPP3.json` **taucht sie als eigenes Control mit `uuidAction` auf** und kann automatisch identifiziert werden. Der Anwender muss also keine UUID händisch heraussuchen.
+## Plan
 
-Quellen: Loxone "Communicating with the Miniserver" V17, Loxone Fronius-Plugin-Doku, Library-Template „Fronius Battery" (StateOfCharge_Relative als Input) — alle bestätigen, dass SOC ein Sub-Output des Bausteins ist.
+1. **SOC-Erkennung in der Loxone-API korrigieren**
+   - `Slvl` als offiziellen SOC-Ausgang erkennen: „Storage level or state of charge“.
+   - Discovery so anpassen, dass `Meter`/„Speicher“-Bausteine mit `Slvl` Vorrang vor Fronius-/SOC-Namensheuristiken bekommen.
+   - Auch dann erkennen, wenn `Slvl` nur in `/jdev/sps/io/<Speicher-Block>/all` als Output erscheint und nicht als eigene sichtbare UUID in Loxone Config/App.
+   - Bestehende gespeicherte falsche SOC-UUIDs automatisch neu validieren: Wenn der gespeicherte Kandidat keinen plausiblen 0–100-Wert liefert, wird neu gesucht und der `Slvl`-Pfad ersetzt.
 
-## Umsetzung
+2. **WebSocket-Worker erweitern**
+   - Neue State-Rolle `soc` ergänzen.
+   - State-/Output-Patterns um `Slvl`, `storageLevel`, `stateOfCharge`, `SOC`, `ladezustand` erweitern.
+   - Bei `soc` Werte 0–100 zulassen und nicht als Leistungswert behandeln.
+   - Der Worker sendet SOC-Events mit `role: "soc"`, aber weiterhin mit der Speicher-Block-UUID als stabile Zuordnung.
 
-### 1. Schema-Erweiterung `energy_storages` (Migration)
+3. **Ingest-Route für Live-SOC ergänzen**
+   - `gateway-ingest?action=bridge-readings` verarbeitet `role: "soc"` separat.
+   - Für SOC keine Leistungswerte in `bridge_raw_samples` schreiben.
+   - Stattdessen den passenden Speicher über Speicher-Zähler/Standort finden und aktualisieren:
+     - `energy_storages.current_soc_pct`
+     - `energy_storages.soc_updated_at`
+     - falls eindeutig: `energy_storages.power_meter_id` und `soc_sensor_uuid` auf den Speicher-Baustein setzen.
+   - SOC zusätzlich per Live-Broadcast senden, damit das Widget nicht auf den nächsten Poll warten muss.
 
-- `soc_sensor_uuid text` — automatisch befüllte SOC-UUID
-- `power_meter_id uuid` (FK → `meters.id`, ON DELETE SET NULL) — verknüpft Speicher mit dem Leistungszähler des Battery-Nodes im Widget
-- `soc_updated_at timestamptz`
+4. **Rathaus-Datensatz reparieren**
+   - Den vorhandenen Speicher „Speicher Rathaus“ vom falschen Fronius-Kandidaten auf den Zähler/Baustein „Speicher“ umstellen.
+   - `power_meter_id` auf den Rathaus-Zähler „Speicher“ setzen.
+   - `current_soc_pct` wird danach über `Slvl` aktualisiert; erwarteter Wert aktuell: 100 %.
 
-### 2. Auto-Discovery in `loxone-api`
+5. **EnergyFlowMonitor live aktualisieren**
+   - Zusätzlich zum Datenbankwert `current_soc_pct` SOC-Broadcasts mit `role: "soc"` auswerten.
+   - Anzeige priorisiert Live-SOC, fällt aber auf den gespeicherten Backend-Wert zurück.
 
-Neue Action `discoverBatterySoc` (bzw. Integration in bestehenden Sync):
-
-- Lädt gecachte `LoxAPP3.json`.
-- Durchsucht `controls` nach Kandidaten:
-  - `type` in `["InfoOnlyAnalog", "Fronius", "Battery"]`
-  - **oder** `details.format` enthält `%`
-  - **und** Name/Room/Cat matched Regex `/soc|ladezustand|state.?of.?charge|batter|speicher/i`
-- Zusätzliche Plausibilitätsprüfung: aktueller Wert via `/jdev/sps/io/{uuid}/all` liegt zwischen 0 und 100.
-- Bei Match: `energy_storages.soc_sensor_uuid` schreiben, `location_id` = Location der Integration.
-- Läuft im bestehenden `loxone-periodic-sync` alle 5 Min mit (idempotent).
-
-### 3. Ingest-Pfad um Rolle `soc` erweitern
-
-- **`list-loxone-ws-meters`**: liefert pro `energy_storages` mit `soc_sensor_uuid` einen virtuellen Eintrag `role_hint = "soc"` + `storage_id`.
-- **Loxone-Worker** (`docs/loxone-ws-worker/index.ts`): neue `StateRole = "soc"`, kein LoxAPP3-Expand, direkt in `state.uuidMap` mit Rolle `soc`. Broadcast + Ingest-Payload enthalten `role: "soc"` und `storage_id`.
-- **`gateway-ingest`** / **`bridge-aggregator`**: bei `role === "soc"` **kein** `meter_power_readings`-INSERT, sondern `UPDATE energy_storages SET current_soc_pct = value, soc_updated_at = now() WHERE id = storage_id`.
-
-Fallback: für Miniserver, bei denen der Worker (WebSocket) nicht läuft, pollt `loxone-periodic-sync` den SOC per REST (`/jdev/sps/io/{uuid}`) mit und schreibt ihn direkt in `energy_storages`.
-
-### 4. UI
-
-- **Automatische Anlage**: für Locations mit erkannter SOC-UUID, aber ohne `energy_storages`-Datensatz, wird ein Datensatz automatisch angelegt (Name = „Speicher <Location>", `capacity_kwh` = 0 als Default).
-- **Manuelle Nachjustierung**: bestehender Storage-Dialog erhält zusätzlich:
-  - Dropdown „Leistungszähler" → `power_meter_id`
-  - Anzeigefeld „SOC-Quelle (Loxone-UUID)" mit Copy-Button + Button „Neu erkennen" (ruft `discoverBatterySoc`).
-  - Optional: Textfeld zum manuellen Override falls die Heuristik daneben liegt.
-
-### 5. Widget `EnergyFlowMonitor`
-
-- SOC-Query matched zuerst über `power_meter_id === node.meter_id`, dann Fallback über `location_id`.
-- Zusätzlich Loxone-Broadcast-Channel (`loxone-live-{tenantId}`) auf `role === "soc"` hören, `socByMeter` lokal überschreiben → Sub-Sekunden-Update.
-- Kachel zeigt „SOC: {n} %", Popover zeigt SOC-Balken + gespeicherte kWh (aus `current_soc_pct * capacity_kwh`).
-
-### 6. Verifikation
-
-1. Nach Deployment: für Rathaus wird `energy_storages`-Datensatz mit `soc_sensor_uuid` automatisch angelegt.
-2. `bridge_raw_samples` enthält Werte um 100 für die neue UUID.
-3. `energy_storages.current_soc_pct = 100`, `soc_updated_at` frisch.
-4. Widget-Kachel zeigt „SOC: 100 %".
-
-Falls die Heuristik in Schritt 2 nichts findet, gibt die Discovery-Funktion die 5 wahrscheinlichsten Kandidaten (Name + UUID + aktueller Wert) im Storage-Dialog als Auswahl-Liste zurück — der Nutzer wählt einen aus, ganz ohne UUID-Kopieren.
-
-## Was du nach dem Deployment machen musst
-
-Nichts. Der Sync erkennt den SOC automatisch. Sollte die Auto-Erkennung fehlschlagen, siehst du im Speicher-Dialog eine Auswahlliste mit den plausibelsten Loxone-Werten und wählst per Klick den richtigen aus.
+6. **Verifikation**
+   - Backend-Logs prüfen: `Slvl` wird als SOC-Kandidat erkannt.
+   - Datenbank prüfen: `energy_storages.current_soc_pct` für Rathaus ist `100` und `soc_updated_at` gesetzt.
+   - Widget prüfen: Speicher zeigt `SOC: 100 %`.
