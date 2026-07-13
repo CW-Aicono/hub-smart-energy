@@ -475,12 +475,13 @@ async function connect(state: ConnState): Promise<void> {
 
     const ROLE_PATTERNS: Array<{ role: StateRole; rx: RegExp }> = [
       // Reihenfolge wichtig: spezifischere Patterns zuerst
-      { role: "today", rx: /^(energytoday|today|daily|day|tagesverbrauch)$/i },
-      { role: "month", rx: /^(energymonth|month|monthly|monatsverbrauch)$/i },
-      { role: "year",  rx: /^(energyyear|year|yearly|jahresverbrauch)$/i },
-      { role: "total", rx: /^(energytotal|total|totalenergy|zaehlerstand|meter)$/i },
+      { role: "today", rx: /^(energytoday|today|daily|day|tagesverbrauch|cd)$/i },
+      { role: "month", rx: /^(energymonth|month|monthly|monatsverbrauch|cm)$/i },
+      { role: "year",  rx: /^(energyyear|year|yearly|jahresverbrauch|cy)$/i },
+      { role: "total", rx: /^(energytotal|total|totalenergy|zaehlerstand|meter|mr)$/i },
       { role: "soc",   rx: /^(slvl|soc|stateofcharge|state_of_charge|storagelevel|storage_level|ladezustand|speicherstand)$/i },
-      { role: "pwr",   rx: /^(pwr|power|currentpower|actual|actualpower|value|p)$/i },
+      // pwr: klassische Meter (pwr/power/...) + Wallbox „Cp" (Current charging power)
+      { role: "pwr",   rx: /^(pwr|power|currentpower|actual|actualpower|value|p|cp|chargingpower|currentchargingpower)$/i },
     ];
     function classifyState(key: string): StateRole | null {
       for (const { role, rx } of ROLE_PATTERNS) if (rx.test(key)) return role;
