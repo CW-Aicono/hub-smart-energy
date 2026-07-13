@@ -925,11 +925,14 @@ function NodeDetailOverlay({
         </div>
 
         {node.meter_id && (
-          <Button asChild variant="ghost" size="sm" className="w-full mt-2 h-7 text-xs">
-            <Link to={`/meters?meter=${node.meter_id}`}>
-              Zum Zähler in der Übersicht
-              <ExternalLink className="ml-1 h-3 w-3" />
-            </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full mt-2 h-7 text-xs"
+            onClick={() => onOpenDetail(node)}
+          >
+            Zum Zähler in der Übersicht
+            <Maximize2 className="ml-1 h-3 w-3" />
           </Button>
         )}
       </PopoverContent>
