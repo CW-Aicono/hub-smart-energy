@@ -432,22 +432,10 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     return Math.max(2.5, 40 - Math.log10(Math.max(abs, 1)) * 11);
   }, []);
 
-  // Autarkie/Eigenverbrauch (nur wenn passende Rollen vorhanden)
-  const kpiFooter = useMemo(() => {
-    const pv = nodes.find((n) => n.role === "pv");
-    const grid = nodes.find((n) => n.role === "grid");
-    const house = nodes.find((n) => n.role === "house");
-    if (!pv || !grid || !house) return null;
-    const pvW = Math.max(0, getLiveWatts(pv.meter_id) ?? 0);
-    const gridW = getLiveWatts(grid.meter_id) ?? 0; // + Bezug, − Einspeisung
-    const gridImport = Math.max(0, gridW);
-    const gridExport = Math.max(0, -gridW);
-    const houseW = Math.max(0, pvW + gridImport - gridExport);
-    if (pvW + gridImport <= 0) return null;
-    const autarkie = houseW > 0 ? Math.min(100, ((houseW - gridImport) / houseW) * 100) : 0;
-    const eigenverbrauch = pvW > 0 ? Math.min(100, ((pvW - gridExport) / pvW) * 100) : 0;
-    return { autarkie, eigenverbrauch };
-  }, [nodes, getLiveWatts]);
+  // Autarkie/Eigenverbrauch werden in der Gebäude-Detailansicht (MeterDetailDialog,
+  // role === "house") auf Energiemengen (kWh) über das gewählte Zeitfenster berechnet,
+  // nicht mehr live im Flow-Widget.
+
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null;
 
@@ -709,20 +697,8 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
         `}</style>
       </svg>
 
-      {/* KPI footer: Autarkie / Eigenverbrauch */}
-      {kpiFooter && (
-        <div className="absolute left-2 bottom-1 flex items-center gap-3 rounded-md border bg-background/70 backdrop-blur px-2 py-1 text-[10px]">
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground">Autarkie</span>
-            <span className="font-semibold tabular-nums">{fmtDe(kpiFooter.autarkie, 0)} %</span>
-          </div>
-          <div className="h-3 w-px bg-border" />
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground">Eigenverbrauch</span>
-            <span className="font-semibold tabular-nums">{fmtDe(kpiFooter.eigenverbrauch, 0)} %</span>
-          </div>
-        </div>
-      )}
+
+
 
       {/* Detail-Popover als Overlay (Portal via Radix) */}
       {selectedNode && (
@@ -752,9 +728,12 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
         <MeterDetailDialog
           node={detailNode}
           socPct={getSocPct(detailNode.meter_id)}
+          allNodes={nodes}
+          metersById={Object.fromEntries((relevantMeters as any[]).map((m) => [m.id, m]))}
           onClose={() => setDetailNode(null)}
         />
       )}
+
     </div>
   );
 }
@@ -989,16 +968,22 @@ const RANGE_MS: Record<DetailRange, number> = {
 function MeterDetailDialog({
   node,
   socPct,
+  allNodes,
+  metersById,
   onClose,
 }: {
   node: EnergyFlowNode;
   socPct?: number | null;
+  allNodes: EnergyFlowNode[];
+  metersById: Record<string, any>;
   onClose: () => void;
 }) {
   const Icon = ROLE_ICON[node.role];
   const [range, setRange] = useState<DetailRange>("24h");
 
   const isBattery = node.role === "battery";
+  const isHouse = node.role === "house";
+
 
   const { data: storageInfo, isLoading: isStorageLoading } = useQuery({
     queryKey: ["meter-detail-storage-info", node.meter_id],
@@ -1242,7 +1227,17 @@ function MeterDetailDialog({
           </div>
         </div>
 
+        {isHouse && (
+          <HouseSelfSufficiencyPanel
+            allNodes={allNodes}
+            metersById={metersById}
+            visibleStartMs={visibleStartMs}
+            rangeLabel={RANGE_LABEL[range]}
+          />
+        )}
+
         {/* Chart 1: Leistungsverlauf (+ optional SOC bei Speichern) */}
+
         <div>
           <div className="mb-1 flex items-center justify-between gap-2">
             <div className="text-sm font-medium">
@@ -1470,3 +1465,156 @@ function MeterDetailDialog({
     </Dialog>
   );
 }
+
+/* ─────────────────────────────────────────────────────── */
+/* Autarkie & Eigenverbrauch (Gebäude-Detailansicht)       */
+/* ─────────────────────────────────────────────────────── */
+
+function HouseSelfSufficiencyPanel({
+  allNodes,
+  metersById,
+  visibleStartMs,
+  rangeLabel,
+}: {
+  allNodes: EnergyFlowNode[];
+  metersById: Record<string, any>;
+  visibleStartMs: number;
+  rangeLabel: string;
+}) {
+  const pvNodes = allNodes.filter((n) => n.role === "pv" && n.meter_id);
+  const gridNodes = allNodes.filter((n) => n.role === "grid" && n.meter_id);
+  const batteryNodes = allNodes.filter((n) => n.role === "battery" && n.meter_id);
+
+  const involvedMeterIds = useMemo(
+    () => [...pvNodes, ...gridNodes, ...batteryNodes].map((n) => n.meter_id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pvNodes.map((n) => n.meter_id).join(","), gridNodes.map((n) => n.meter_id).join(","), batteryNodes.map((n) => n.meter_id).join(",")],
+  );
+
+  const { data: seriesByMeter = {}, isLoading } = useQuery({
+    queryKey: ["house-selfsuff-series", involvedMeterIds, visibleStartMs],
+    enabled: involvedMeterIds.length > 0 && (pvNodes.length > 0 || gridNodes.length > 0),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const since = new Date(visibleStartMs).toISOString();
+      const result: Record<string, { t: number; kw: number }[]> = {};
+      await Promise.all(
+        involvedMeterIds.map(async (mid) => {
+          const { data } = await supabase
+            .from("meter_power_readings")
+            .select("recorded_at, power_value")
+            .eq("meter_id", mid)
+            .gte("recorded_at", since)
+            .order("recorded_at", { ascending: true })
+            .limit(3000);
+          result[mid] = (data ?? []).map((r: any) => ({
+            t: new Date(r.recorded_at).getTime(),
+            kw: Number(r.power_value),
+          }));
+        }),
+      );
+      return result;
+    },
+  });
+
+  // Vorzeichen laut Zähler-Konvention normalisieren, sodass +kW bei
+  // Netz = Bezug, bei PV = Erzeugung, bei Speicher = Ladung bedeutet.
+  const normalizedKw = (meterId: string, kw: number): number => {
+    const conv = metersById[meterId]?.flow_direction_convention || "negative_delivery";
+    // Default: negativ = Lieferung/vom Gerät weg, positiv = Bezug/zum Gerät hin.
+    // Bei "positive_delivery" ist es umgekehrt → Vorzeichen flippen.
+    return conv === "positive_delivery" ? -kw : kw;
+  };
+
+  // Trapez-Integration: liefert getrennte positive/negative kWh-Anteile
+  // (positiv = Zufluss zum Gerät, negativ = Abfluss vom Gerät).
+  const integrate = (rows: { t: number; kw: number }[], meterId: string) => {
+    let pos = 0;
+    let neg = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const a = rows[i - 1];
+      const b = rows[i];
+      const dtH = (b.t - a.t) / 3_600_000;
+      if (dtH <= 0 || dtH > 1) continue; // Datenlücken ignorieren
+      const kw = (normalizedKw(meterId, a.kw) + normalizedKw(meterId, b.kw)) / 2;
+      const kwh = kw * dtH;
+      if (kwh >= 0) pos += kwh;
+      else neg += -kwh;
+    }
+    return { pos, neg };
+  };
+
+  const kpi = useMemo(() => {
+    if (pvNodes.length === 0 && gridNodes.length === 0) return null;
+    let ePv = 0;
+    for (const n of pvNodes) {
+      const { pos } = integrate(seriesByMeter[n.meter_id] ?? [], n.meter_id);
+      ePv += pos;
+    }
+    let eGridImport = 0;
+    let eGridExport = 0;
+    for (const n of gridNodes) {
+      const { pos, neg } = integrate(seriesByMeter[n.meter_id] ?? [], n.meter_id);
+      eGridImport += pos;
+      eGridExport += neg;
+    }
+    let eBattCharge = 0;
+    let eBattDischarge = 0;
+    for (const n of batteryNodes) {
+      const { pos, neg } = integrate(seriesByMeter[n.meter_id] ?? [], n.meter_id);
+      eBattCharge += pos;
+      eBattDischarge += neg;
+    }
+    const eLoad = Math.max(
+      0,
+      ePv + eGridImport + eBattDischarge - eGridExport - eBattCharge,
+    );
+    const clamp01 = (x: number) => Math.max(0, Math.min(100, x));
+    const autarkie = eLoad > 0 ? clamp01(((eLoad - eGridImport) / eLoad) * 100) : null;
+    const eigenverbrauch = ePv > 0 ? clamp01(((ePv - eGridExport) / ePv) * 100) : null;
+    return { autarkie, eigenverbrauch, ePv, eGridImport, eGridExport, eLoad };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seriesByMeter, pvNodes.length, gridNodes.length, batteryNodes.length]);
+
+  if (pvNodes.length === 0 && gridNodes.length === 0) return null;
+
+  const fmtPct = (v: number | null) =>
+    v == null ? "–" : `${v.toLocaleString("de-DE", { maximumFractionDigits: 0 })} %`;
+  const fmtKwh = (v: number) =>
+    `${v.toLocaleString("de-DE", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} kWh`;
+
+  return (
+    <div className="rounded-md border p-3">
+      <div className="mb-2 text-sm font-medium">
+        Autarkie & Eigenverbrauch · {rangeLabel}
+      </div>
+      {isLoading ? (
+        <div className="text-xs text-muted-foreground">Lade Daten…</div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">Autarkiegrad</div>
+            <div className="text-base font-semibold tabular-nums">{fmtPct(kpi?.autarkie ?? null)}</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">Eigenverbrauch / Gesamtverbrauch</div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">Eigenverbrauchsquote</div>
+            <div className="text-base font-semibold tabular-nums">{fmtPct(kpi?.eigenverbrauch ?? null)}</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">Selbst genutzte PV / PV-Erzeugung</div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">PV-Erzeugung</div>
+            <div className="text-base font-semibold tabular-nums">{kpi ? fmtKwh(kpi.ePv) : "–"}</div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">Netz Bezug / Einspeisung</div>
+            <div className="text-base font-semibold tabular-nums">
+              {kpi ? `${fmtKwh(kpi.eGridImport)} / ${fmtKwh(kpi.eGridExport)}` : "–"}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
