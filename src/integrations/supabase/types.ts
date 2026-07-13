@@ -7099,6 +7099,7 @@ export type Database = {
           discovery_source: string | null
           energy_type: string
           floor_id: string | null
+          flow_direction_convention: string
           gas_type: string | null
           id: string
           installation_date: string | null
@@ -7155,6 +7156,7 @@ export type Database = {
           discovery_source?: string | null
           energy_type?: string
           floor_id?: string | null
+          flow_direction_convention?: string
           gas_type?: string | null
           id?: string
           installation_date?: string | null
@@ -7211,6 +7213,7 @@ export type Database = {
           discovery_source?: string | null
           energy_type?: string
           floor_id?: string | null
+          flow_direction_convention?: string
           gas_type?: string | null
           id?: string
           installation_date?: string | null
