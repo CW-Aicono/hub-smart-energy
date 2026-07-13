@@ -5,20 +5,41 @@ import { useMeters } from "@/hooks/useMeters";
 import { useGatewayLivePower } from "@/hooks/useGatewayLivePower";
 import { useRealtimePower } from "@/hooks/useRealtimePower";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
+import { useTranslation } from "@/hooks/useTranslation";
+
+const LANG_TO_LOCALE: Record<string, string> = { de: "de-DE", en: "en-US", es: "es-ES", nl: "nl-NL" };
 import {
   EnergyFlowNode,
   EnergyFlowConnection,
   EnergyFlowNodeRole,
 } from "@/hooks/useCustomWidgetDefinitions";
+import { buildLoxoneResolver } from "@/lib/loxoneUuidResolver";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import {
   ResponsiveContainer,
   AreaChart,
   Area,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  ComposedChart,
   XAxis,
   YAxis,
+  CartesianGrid,
+  ReferenceLine,
+  ReferenceDot,
+  Legend,
+  Label as AxisLabel,
   Tooltip as RTooltip,
 } from "recharts";
 import {
@@ -29,7 +50,7 @@ import {
   Fan,
   PlugZap,
   SunMedium,
-  ExternalLink,
+  Maximize2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -127,6 +148,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
   const svgRef = useRef<SVGSVGElement>(null);
   const [dims, setDims] = useState({ w: 500, h: 320 });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [detailNode, setDetailNode] = useState<EnergyFlowNode | null>(null);
   const reducedMotion = usePrefersReducedMotion();
 
   const meterIds = useMemo(() => nodes.map((n) => n.meter_id).filter(Boolean), [nodes]);
@@ -159,17 +181,68 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     staleTime: 60_000,
   });
 
-  // UUID→meter_id + tenants für Loxone-Bridge/Broadcast
-  const uuidToMeterId = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const meter of relevantMeters as any[]) {
-      if (meter.sensor_uuid) m.set(String(meter.sensor_uuid).toLowerCase(), meter.id);
+  // Battery SOC per meter (for role === "battery" nodes).
+  // Link: energy_storages.location_id === meters.location_id (bevorzugt gateway_device_id match).
+  const batteryMeterInfo = useMemo(() => {
+    const info: Array<{ meterId: string; locationId: string | null; gatewayDeviceId: string | null }> = [];
+    for (const node of nodes) {
+      if (node.role !== "battery" || !node.meter_id) continue;
+      const m = (relevantMeters as any[]).find((x) => x.id === node.meter_id);
+      if (!m) continue;
+      info.push({
+        meterId: node.meter_id,
+        locationId: m.location_id ?? null,
+        gatewayDeviceId: m.gateway_device_id ?? null,
+      });
     }
-    return m;
-  }, [relevantMeters]);
-  const uuids = useMemo(
-    () => Array.from(uuidToMeterId.keys()),
-    [uuidToMeterId],
+    return info;
+  }, [nodes, relevantMeters]);
+
+  const batteryLocationIds = useMemo(
+    () => Array.from(new Set(batteryMeterInfo.map((b) => b.locationId).filter(Boolean))) as string[],
+    [batteryMeterInfo],
+  );
+  const batteryLocKey = batteryLocationIds.slice().sort().join(",");
+
+  const { data: socByMeter = {} } = useQuery({
+    queryKey: ["energyflow-soc", batteryLocKey, batteryMeterInfo.map((b) => b.meterId).join(",")],
+    enabled: batteryLocationIds.length > 0,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data } = await supabase
+        .from("energy_storages")
+        .select("id, location_id, gateway_device_id, power_meter_id, current_soc_pct")
+        .in("location_id", batteryLocationIds);
+      const rows = (data ?? []) as any[];
+      const result: Record<string, number> = {};
+      for (const b of batteryMeterInfo) {
+        const match =
+          rows.find((r) => r.power_meter_id && r.power_meter_id === b.meterId) ??
+          rows.find((r) => r.gateway_device_id && r.gateway_device_id === b.gatewayDeviceId) ??
+          rows.find((r) => r.location_id === b.locationId);
+        if (match && match.current_soc_pct != null) {
+          result[b.meterId] = Number(match.current_soc_pct);
+        }
+      }
+      return result;
+    },
+  });
+
+
+  // Loxone-Resolver: bildet Bridge-Sub-Output-UUIDs (Broadcast + Seed)
+  // auf Meter-IDs ab. Nutzt exakten Match für Nicht-Loxone-Zähler und
+  // Family+Nearest-3rd-Segment für Loxone (analog bridge-aggregator).
+  const resolver = useMemo(
+    () => buildLoxoneResolver(
+      (relevantMeters as any[]).map((m) => ({
+        id: m.id,
+        tenant_id: m.tenant_id ?? null,
+        energy_type: m.energy_type ?? null,
+        sensor_uuid: m.sensor_uuid ?? null,
+      })),
+    ),
+    [relevantMeters],
   );
   const tenantIds = useMemo(
     () => Array.from(new Set((relevantMeters as any[]).map((m) => m.tenant_id).filter(Boolean))) as string[],
@@ -202,28 +275,37 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     },
   });
 
-  // Seed B: bridge_raw_samples (Loxone WS-Bridge – hier landen Live-Leistungen aus Loxone)
-  const uuidKey = useMemo(() => uuids.slice().sort().join(","), [uuids]);
+  // Seed B: bridge_raw_samples (Loxone WS-Bridge – hier landen Live-Leistungen aus Loxone).
+  // Wir laden über Family-Prefixe (nicht über exakte Meter-UUIDs), damit auch die
+  // Sub-Output-UUIDs des WS-Workers gefunden werden. Die Auflösung passiert
+  // clientseitig durch den `resolver`.
+  const familyKey = useMemo(() => resolver.familyPrefixes.slice().sort().join(","), [resolver]);
+  const tenantKey = tenantIds.join(",");
   const { data: bridgeByMeter = {} } = useQuery({
-    queryKey: ["energyflow-bridge", uuidKey],
-    enabled: uuids.length > 0,
+    queryKey: ["energyflow-bridge", familyKey, tenantKey],
+    enabled: resolver.familyPrefixes.length > 0 && tenantIds.length > 0,
     staleTime: 60_000,
     refetchInterval: 60_000,
     queryFn: async (): Promise<Record<string, number>> => {
       const since = new Date(Date.now() - 60 * 60_000).toISOString();
+      const orExpr = resolver.familyPrefixes
+        .map((p) => `uuid.ilike.${p}%`)
+        .join(",");
       const { data } = await (supabase
         .from("bridge_raw_samples" as any)
-        .select("uuid, value, received_at")
-        .in("uuid", uuids)
+        .select("uuid, value, received_at, tenant_id")
+        .in("tenant_id", tenantIds)
+        .or(orExpr)
         .gte("received_at", since)
         .order("received_at", { ascending: false })
-        .limit(2000));
+        .limit(4000));
       const latest: Record<string, number> = {};
       for (const row of ((data as any[]) ?? [])) {
-        const meterId = uuidToMeterId.get(String(row.uuid).toLowerCase());
+        const value = Number(row.value);
+        const meterId = resolver.resolve(String(row.uuid), row.tenant_id ?? null, value);
         if (!meterId) continue;
         if (latest[meterId] === undefined) {
-          latest[meterId] = Number(row.value);
+          latest[meterId] = value;
         }
       }
       return latest;
@@ -232,9 +314,9 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
 
   // Realtime: Loxone broadcast (loxone-live-{tenantId}) – sub-sekündliche Updates
   const [broadcastByMeter, setBroadcastByMeter] = useState<Record<string, number>>({});
-  const tenantKey = tenantIds.join(",");
+  const [broadcastSocByMeter, setBroadcastSocByMeter] = useState<Record<string, number>>({});
   useEffect(() => {
-    if (tenantIds.length === 0 || uuidToMeterId.size === 0) return;
+    if (tenantIds.length === 0 || resolver.exactByUuid.size === 0) return;
     const channels = tenantIds.map((tenantId) =>
       supabase
         .channel(`loxone-live-${tenantId}`, { config: { broadcast: { self: false } } })
@@ -247,10 +329,27 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
             for (const ev of events) {
               const role = ev.role ?? "pwr";
               if (role !== "pwr") continue;
-              if (!Number.isFinite(ev.value) || Math.abs(ev.value) > 10_000) continue;
-              const meterId = uuidToMeterId.get(String(ev.uuid).toLowerCase());
+              const value = Number(ev.value);
+              if (!Number.isFinite(value) || Math.abs(value) > 10_000) continue;
+              const meterId = resolver.resolve(String(ev.uuid), tenantId, value);
               if (!meterId) continue;
-              next[meterId] = Number(ev.value);
+              next[meterId] = value;
+              changed = true;
+            }
+            return changed ? next : prev;
+          });
+          setBroadcastSocByMeter((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            for (const ev of events) {
+              const role = ev.role ?? "pwr";
+              if (role !== "soc") continue;
+              const value = Number(ev.value);
+              if (!Number.isFinite(value) || value < 0 || value > 100) continue;
+              // SOC hat eigene UUID-Familie, kein Nearest-Match — nur exact.
+              const meter = resolver.exactByUuid.get(String(ev.uuid).toLowerCase());
+              if (!meter) continue;
+              next[meter.id] = value;
               changed = true;
             }
             return changed ? next : prev;
@@ -260,7 +359,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     );
     return () => { channels.forEach((c) => supabase.removeChannel(c)); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantKey, uuidToMeterId]);
+  }, [tenantKey, resolver]);
 
   const getLiveWatts = useCallback(
     (meterId: string): number | null => {
@@ -282,6 +381,11 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     [broadcastByMeter, latestByMeter, livePowerByMeter, bridgeByMeter, seedByMeter],
   );
 
+  const getSocPct = useCallback(
+    (meterId: string): number | null => broadcastSocByMeter[meterId] ?? socByMeter[meterId] ?? null,
+    [broadcastSocByMeter, socByMeter],
+  );
+
   const hasLive = useMemo(
     () => meterIds.some(
       (id) =>
@@ -293,6 +397,22 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     ),
     [meterIds, broadcastByMeter, latestByMeter, livePowerByMeter, bridgeByMeter, seedByMeter],
   );
+
+  const { language } = useTranslation();
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  useEffect(() => {
+    if (hasLive) setLastUpdate(new Date());
+  }, [hasLive, broadcastByMeter, latestByMeter, livePowerByMeter, bridgeByMeter, seedByMeter]);
+  const lastUpdateStr = useMemo(() => {
+    if (!lastUpdate) return null;
+    try {
+      return new Intl.DateTimeFormat(LANG_TO_LOCALE[language] ?? "de-DE", {
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+      }).format(lastUpdate);
+    } catch { return lastUpdate.toLocaleTimeString(); }
+  }, [lastUpdate, language]);
+
+
 
 
   useEffect(() => {
@@ -345,22 +465,10 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     return Math.max(2.5, 40 - Math.log10(Math.max(abs, 1)) * 11);
   }, []);
 
-  // Autarkie/Eigenverbrauch (nur wenn passende Rollen vorhanden)
-  const kpiFooter = useMemo(() => {
-    const pv = nodes.find((n) => n.role === "pv");
-    const grid = nodes.find((n) => n.role === "grid");
-    const house = nodes.find((n) => n.role === "house");
-    if (!pv || !grid || !house) return null;
-    const pvW = Math.max(0, getLiveWatts(pv.meter_id) ?? 0);
-    const gridW = getLiveWatts(grid.meter_id) ?? 0; // + Bezug, − Einspeisung
-    const gridImport = Math.max(0, gridW);
-    const gridExport = Math.max(0, -gridW);
-    const houseW = Math.max(0, pvW + gridImport - gridExport);
-    if (pvW + gridImport <= 0) return null;
-    const autarkie = houseW > 0 ? Math.min(100, ((houseW - gridImport) / houseW) * 100) : 0;
-    const eigenverbrauch = pvW > 0 ? Math.min(100, ((pvW - gridExport) / pvW) * 100) : 0;
-    return { autarkie, eigenverbrauch };
-  }, [nodes, getLiveWatts]);
+  // Autarkie/Eigenverbrauch werden in der Gebäude-Detailansicht (MeterDetailDialog,
+  // role === "house") auf Energiemengen (kWh) über das gewählte Zeitfenster berechnet,
+  // nicht mehr live im Flow-Widget.
+
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null;
 
@@ -382,6 +490,9 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           }`}
         />
         {hasLive ? "Live" : "Offline"}
+        {lastUpdateStr && (
+          <span className="tabular-nums opacity-80">· {lastUpdateStr}</span>
+        )}
       </div>
 
       <svg
@@ -415,10 +526,25 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           const { x1, y1, x2, y2, dist, mx, my } = getClippedLine(fromNode, toNode);
           if (dist <= 0) return null;
 
-          const flowWatts = getLiveWatts(fromNode.meter_id);
+          const rawWatts = getLiveWatts(fromNode.meter_id);
+          // Flussrichtung folgt der pro Zähler konfigurierten Vorzeichenkonvention
+          // (Feld `flow_direction_convention` auf meters, analog zur Loxone-Einstellung
+          // "Leistung/Durchfluss Richtung"):
+          //   - "negative_delivery" (Default): negativ = Lieferung/vom Gerät weg,
+          //                                    positiv = Bezug/zum Gerät hin
+          //   - "positive_delivery":            umgekehrt
+          const meterRow = (relevantMeters as any[]).find((m) => m.id === fromNode.meter_id);
+          const convention: "negative_delivery" | "positive_delivery" =
+            (meterRow?.flow_direction_convention as any) || "negative_delivery";
+          const flowWatts = rawWatts;
           const hasFlow = flowWatts != null && Math.abs(flowWatts) > 0;
           const dur = getAnimDuration(flowWatts);
-          const isReversed = flowWatts != null && flowWatts < 0;
+          // Partikel laufen von fromNode → toNode ("vom Gerät weg"), wenn der Wert
+          // Lieferung bedeutet. Bei Bezug wird die Animation umgekehrt.
+          const isDelivery =
+            flowWatts != null &&
+            (convention === "negative_delivery" ? flowWatts < 0 : flowWatts > 0);
+          const isReversed = hasFlow && !isDelivery;
 
           const animPath = isReversed
             ? `M${x2},${y2} L${x1},${y1}`
@@ -577,13 +703,22 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
               >
                 {node.label}
               </text>
-              {periodSum != null && periodSum !== 0 && (
+              {periodSum != null && periodSum !== 0 && node.role !== "battery" && (
                 <text
                   x={cx} y={sumY}
                   textAnchor="middle"
                   className="fill-muted-foreground text-[9px] tabular-nums"
                 >
                   {PERIOD_SUM_LABEL[selectedPeriod]}: {periodSum < 0 ? "−" : ""}{formatEnergy(Math.abs(periodSum))}
+                </text>
+              )}
+              {node.role === "battery" && getSocPct(node.meter_id) != null && (
+                <text
+                  x={cx} y={sumY}
+                  textAnchor="middle"
+                  className="fill-muted-foreground text-[9px] tabular-nums"
+                >
+                  SOC: {fmtDe(getSocPct(node.meter_id) ?? 0, 0)} %
                 </text>
               )}
             </g>
@@ -598,20 +733,8 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
         `}</style>
       </svg>
 
-      {/* KPI footer: Autarkie / Eigenverbrauch */}
-      {kpiFooter && (
-        <div className="absolute left-2 bottom-1 flex items-center gap-3 rounded-md border bg-background/70 backdrop-blur px-2 py-1 text-[10px]">
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground">Autarkie</span>
-            <span className="font-semibold tabular-nums">{fmtDe(kpiFooter.autarkie, 0)} %</span>
-          </div>
-          <div className="h-3 w-px bg-border" />
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground">Eigenverbrauch</span>
-            <span className="font-semibold tabular-nums">{fmtDe(kpiFooter.eigenverbrauch, 0)} %</span>
-          </div>
-        </div>
-      )}
+
+
 
       {/* Detail-Popover als Overlay (Portal via Radix) */}
       {selectedNode && (
@@ -620,6 +743,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           liveWatts={getLiveWatts(selectedNode.meter_id)}
           periodSum={periodSums[selectedNode.meter_id]}
           periodLabel={PERIOD_SUM_LABEL[selectedPeriod]}
+          socPct={getSocPct(selectedNode.meter_id)}
           allNodes={nodes}
           getLiveWatts={getLiveWatts}
           anchor={{
@@ -629,8 +753,23 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
             h: dims.h,
           }}
           onClose={() => setSelectedNodeId(null)}
+          onOpenDetail={(n) => {
+            setDetailNode(n);
+            setSelectedNodeId(null);
+          }}
         />
       )}
+
+      {detailNode && (
+        <MeterDetailDialog
+          node={detailNode}
+          socPct={getSocPct(detailNode.meter_id)}
+          allNodes={nodes}
+          metersById={Object.fromEntries((relevantMeters as any[]).map((m) => [m.id, m]))}
+          onClose={() => setDetailNode(null)}
+        />
+      )}
+
     </div>
   );
 }
@@ -644,10 +783,12 @@ interface NodeDetailOverlayProps {
   liveWatts: number | null;
   periodSum: number | undefined;
   periodLabel: string;
+  socPct?: number | null;
   allNodes: EnergyFlowNode[];
   getLiveWatts: (id: string) => number | null;
   anchor: { x: number; y: number; w: number; h: number };
   onClose: () => void;
+  onOpenDetail: (node: EnergyFlowNode) => void;
 }
 
 function NodeDetailOverlay({
@@ -655,10 +796,12 @@ function NodeDetailOverlay({
   liveWatts,
   periodSum,
   periodLabel,
+  socPct,
   allNodes,
   getLiveWatts,
   anchor,
   onClose,
+  onOpenDetail,
 }: NodeDetailOverlayProps) {
   const Icon = ROLE_ICON[node.role];
 
@@ -745,7 +888,25 @@ function NodeDetailOverlay({
             <div className="text-sm font-semibold tabular-nums">
               {periodSum != null ? `${periodSum < 0 ? "−" : ""}${formatEnergy(Math.abs(periodSum))}` : "–"}
             </div>
+        </div>
+
+        {node.role === "battery" && socPct != null && (
+          <div className="rounded-md border p-2 text-xs mb-3">
+            <div className="text-muted-foreground">Ladezustand (SOC)</div>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, socPct))}%`,
+                    backgroundColor: node.color,
+                  }}
+                />
+              </div>
+              <div className="text-sm font-semibold tabular-nums">{fmtDe(socPct, 0)} %</div>
+            </div>
           </div>
+        )}
         </div>
 
         {share != null && (
@@ -796,14 +957,700 @@ function NodeDetailOverlay({
         </div>
 
         {node.meter_id && (
-          <Button asChild variant="ghost" size="sm" className="w-full mt-2 h-7 text-xs">
-            <Link to={`/meters?meter=${node.meter_id}`}>
-              Zum Zähler in der Übersicht
-              <ExternalLink className="ml-1 h-3 w-3" />
-            </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full mt-2 h-7 text-xs"
+            onClick={() => onOpenDetail(node)}
+          >
+            Detailansicht
+            <Maximize2 className="ml-1 h-3 w-3" />
           </Button>
         )}
       </PopoverContent>
     </Popover>
   );
 }
+
+/* ─────────────────────────────────────────────────────── */
+/* Großer Detail-Dialog mit ausführlichen Graphen          */
+/* ─────────────────────────────────────────────────────── */
+
+type DetailRange = "1h" | "24h" | "7d" | "30d";
+
+type StorageDetailInfo = {
+  id: string;
+  created_at: string;
+  current_soc_pct: number | null;
+  soc_sensor_uuid: string | null;
+  soc_updated_at: string | null;
+  power_meter_id: string | null;
+};
+
+const RANGE_LABEL: Record<DetailRange, string> = {
+  "1h": "1 Stunde",
+  "24h": "24 Stunden",
+  "7d": "7 Tage",
+  "30d": "30 Tage",
+};
+
+const RANGE_MS: Record<DetailRange, number> = {
+  "1h": 3600_000,
+  "24h": 24 * 3600_000,
+  "7d": 7 * 24 * 3600_000,
+  "30d": 30 * 24 * 3600_000,
+};
+
+function MeterDetailDialog({
+  node,
+  socPct,
+  allNodes,
+  metersById,
+  onClose,
+}: {
+  node: EnergyFlowNode;
+  socPct?: number | null;
+  allNodes: EnergyFlowNode[];
+  metersById: Record<string, any>;
+  onClose: () => void;
+}) {
+  const Icon = ROLE_ICON[node.role];
+  const [range, setRange] = useState<DetailRange>("24h");
+
+  const isBattery = node.role === "battery";
+  const isHouse = node.role === "house";
+
+
+  const { data: storageInfo, isLoading: isStorageLoading } = useQuery({
+    queryKey: ["meter-detail-storage-info", node.meter_id],
+    enabled: isBattery && !!node.meter_id,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<StorageDetailInfo | null> => {
+      const { data } = await supabase
+        .from("energy_storages")
+        .select("id, created_at, current_soc_pct, soc_sensor_uuid, soc_updated_at, power_meter_id")
+        .eq("power_meter_id", node.meter_id)
+        .maybeSingle();
+      return (data as StorageDetailInfo | null) ?? null;
+    },
+  });
+
+  const visibleStartMs = useMemo(() => {
+    const rangeStart = Date.now() - RANGE_MS[range];
+    if (!isBattery || !storageInfo?.created_at) return rangeStart;
+    const storageStart = new Date(storageInfo.created_at).getTime();
+    return Number.isFinite(storageStart) ? Math.max(rangeStart, storageStart) : rangeStart;
+  }, [isBattery, range, storageInfo?.created_at]);
+
+  const effectiveSocPct = storageInfo?.current_soc_pct != null
+    ? Number(storageInfo.current_soc_pct)
+    : socPct;
+
+  const { data: series = [], isLoading } = useQuery({
+    queryKey: ["meter-detail-series", node.meter_id, range, visibleStartMs],
+    queryFn: async () => {
+      if (!node.meter_id) return [];
+      const since = new Date(visibleStartMs).toISOString();
+      const limit = range === "30d" ? 5000 : range === "7d" ? 3000 : 1500;
+      const { data } = await supabase
+        .from("meter_power_readings")
+        .select("recorded_at, power_value")
+        .eq("meter_id", node.meter_id)
+        .gte("recorded_at", since)
+        .order("recorded_at", { ascending: true })
+        .limit(limit);
+      return (data ?? []).map((r: any) => ({
+        t: new Date(r.recorded_at).getTime(),
+        // kW aus der DB (power_value ist bereits kW)
+        kw: Number(r.power_value),
+      }));
+    },
+    enabled: !!node.meter_id && (!isBattery || !isStorageLoading),
+    staleTime: 30_000,
+  });
+
+  // Echte SOC-Historie: wird ab jetzt separat persistiert, damit Power/kW-Werte
+  // nicht mehr fälschlich als Ladezustand (%) interpretiert werden.
+  const { data: socSeries = [] } = useQuery({
+    queryKey: ["meter-detail-soc-readings", storageInfo?.id, range, visibleStartMs],
+    enabled: isBattery && !!storageInfo?.id && (!isStorageLoading),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const since = new Date(visibleStartMs).toISOString();
+      const limit = range === "30d" ? 5000 : range === "7d" ? 3000 : 1500;
+      const { data } = await ((supabase as any)
+        .from("storage_soc_readings")
+        .select("recorded_at, soc_pct")
+        .eq("storage_id", storageInfo!.id)
+        .gte("recorded_at", since)
+        .order("recorded_at", { ascending: true })
+        .limit(limit));
+      return ((data as any[]) ?? [])
+        .map((r) => ({ t: new Date(r.recorded_at).getTime(), soc: Number(r.soc_pct) }))
+        .filter((d) => Number.isFinite(d.soc) && d.soc >= 0 && d.soc <= 100);
+    },
+  });
+
+  // Power- und SOC-Reihen zu einer Datenreihe mergen (nach Zeit)
+  const mergedSeries = useMemo(() => {
+    if (!socSeries.length) return series.map((d) => ({ ...d, soc: null as number | null }));
+    const map = new Map<number, { t: number; kw: number | null; soc: number | null }>();
+    for (const p of series) map.set(p.t, { t: p.t, kw: p.kw, soc: null });
+    for (const s of socSeries) {
+      const cur = map.get(s.t) ?? { t: s.t, kw: null, soc: null };
+      cur.soc = s.soc;
+      map.set(s.t, cur);
+    }
+    return Array.from(map.values()).sort((a, b) => a.t - b.t);
+  }, [series, socSeries]);
+  const hasSoc = socSeries.length > 0;
+  const hasSocLine = socSeries.length >= 2;
+  // Rechte SOC-Achse auch dann anzeigen, wenn nur der aktuelle SOC bekannt ist.
+  const showSocAxis = hasSoc || (isBattery && effectiveSocPct != null);
+
+
+  const stats = useMemo(() => {
+    if (!series.length) return null;
+    const vals = series.map((d) => d.kw);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+    const bidirectional = min < -0.001 && max > 0.001;
+    return { min, max, avg, bidirectional };
+  }, [series]);
+
+  // Energie pro Bucket via Trapez-Integration – prefilled über den gesamten Zeitraum
+  const energyBuckets = useMemo(() => {
+    const bucketMs =
+      range === "1h" ? 5 * 60_000
+      : range === "24h" ? 60 * 60_000
+      : range === "7d" ? 6 * 60 * 60_000
+      : 24 * 60 * 60_000;
+    const now = Date.now();
+    const startAligned = Math.floor(visibleStartMs / bucketMs) * bucketMs;
+    const endAligned = Math.floor(now / bucketMs) * bucketMs;
+    const map = new Map<number, { import: number; export: number }>();
+    // Alle Buckets vorab mit 0 initialisieren, damit keine Lücken entstehen
+    for (let k = startAligned; k <= endAligned; k += bucketMs) {
+      map.set(k, { import: 0, export: 0 });
+    }
+    for (let i = 1; i < series.length; i++) {
+      const a = series[i - 1];
+      const b = series[i];
+      const dtH = (b.t - a.t) / 3_600_000;
+      if (dtH <= 0 || dtH > 1) continue; // echte Datenlücken überspringen
+      const kw = (a.kw + b.kw) / 2;
+      const kwh = kw * dtH;
+      const bucketKey = Math.floor(b.t / bucketMs) * bucketMs;
+      const cur = map.get(bucketKey) ?? { import: 0, export: 0 };
+      if (kwh >= 0) cur.import += kwh;
+      else cur.export += -kwh;
+      map.set(bucketKey, cur);
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([t, v]) => ({ t, import: v.import, export: v.export }));
+  }, [series, range, visibleStartMs]);
+
+  const fmtTime = (t: number) => {
+    const d = new Date(t);
+    if (range === "1h" || range === "24h") {
+      return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    }
+    return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+  };
+
+  const fmtDeNum = (n: number, digits = 2) =>
+    n.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+
+  const totalImport = energyBuckets.reduce((s, b) => s + b.import, 0);
+  const totalExport = energyBuckets.reduce((s, b) => s + b.export, 0);
+
+  // Gemeinsame Zeitachse für beide Charts
+  const xDomain = useMemo<[number, number]>(() => {
+    const now = Date.now();
+    return [now - RANGE_MS[range], now];
+  }, [range]);
+  const xTicks = useMemo(() => {
+    const step =
+      range === "1h" ? 10 * 60_000
+      : range === "24h" ? 3 * 60 * 60_000
+      : range === "7d" ? 24 * 60 * 60_000
+      : 7 * 24 * 60 * 60_000;
+    const ticks: number[] = [];
+    const start = Math.ceil(xDomain[0] / step) * step;
+    for (let t = start; t <= xDomain[1]; t += step) ticks.push(t);
+    return ticks;
+  }, [xDomain, range]);
+  const firstDataTs = series[0]?.t ?? socSeries[0]?.t;
+  const showGapHint =
+    firstDataTs != null && firstDataTs - xDomain[0] > 60 * 60_000;
+  const gapHintText = showGapHint
+    ? `Daten ab ${new Date(firstDataTs).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`
+    : "";
+
+
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-full"
+              style={{ backgroundColor: `${node.color}22`, color: node.color }}
+            >
+              <Icon size={22} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="truncate">{node.label}</DialogTitle>
+              <DialogDescription>
+                {ROLE_LABEL[node.role]}
+                {isBattery && effectiveSocPct != null && (
+                  <> · Ladezustand aktuell <span className="font-semibold text-foreground">{fmtDeNum(effectiveSocPct, 0)} %</span></>
+                )}
+              </DialogDescription>
+            </div>
+            {isBattery && effectiveSocPct != null && (
+              <Badge variant="secondary" className="tabular-nums">SOC {fmtDeNum(effectiveSocPct, 0)} %</Badge>
+            )}
+          </div>
+        </DialogHeader>
+
+        {/* Zeitraum-Umschalter */}
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(RANGE_LABEL) as DetailRange[]).map((r) => (
+            <Button
+              key={r}
+              size="sm"
+              variant={r === range ? "default" : "outline"}
+              onClick={() => setRange(r)}
+            >
+              {RANGE_LABEL[r]}
+            </Button>
+          ))}
+        </div>
+
+        {/* KPI-Kacheln */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">Ø Leistung</div>
+            <div className="text-base font-semibold tabular-nums">
+              {stats ? `${fmtDeNum(stats.avg)} kW` : "–"}
+            </div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">Max</div>
+            <div className="text-base font-semibold tabular-nums">
+              {stats ? `${fmtDeNum(stats.max)} kW` : "–"}
+            </div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">Min</div>
+            <div className="text-base font-semibold tabular-nums">
+              {stats ? `${fmtDeNum(stats.min)} kW` : "–"}
+            </div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">
+              Energie{stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}
+            </div>
+            <div className="text-base font-semibold tabular-nums">
+              {stats?.bidirectional
+                ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} kWh`
+                : `${fmtDeNum(totalImport - totalExport)} kWh`}
+            </div>
+          </div>
+        </div>
+
+        {isHouse && (
+          <HouseSelfSufficiencyPanel
+            allNodes={allNodes}
+            metersById={metersById}
+            visibleStartMs={visibleStartMs}
+            rangeLabel={RANGE_LABEL[range]}
+          />
+        )}
+
+        {/* Chart 1: Leistungsverlauf (+ optional SOC bei Speichern) */}
+
+        <div>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <div className="text-sm font-medium">
+              Leistungsverlauf{showSocAxis ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
+            </div>
+            {!hasSoc && showSocAxis && (
+              <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                SOC-Historie ab dem nächsten Gateway-Wert
+              </Badge>
+            )}
+          </div>
+          <div className="h-[320px]">
+            {isLoading ? (
+              <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                Lade Daten…
+              </div>
+            ) : mergedSeries.length < 2 ? (
+              <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                Keine Daten im gewählten Zeitraum
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={mergedSeries} margin={{ top: 8, right: showSocAxis ? 60 : 16, left: 8, bottom: 28 }}>
+                  <defs>
+                    <linearGradient id={`det-${node.id}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={node.color} stopOpacity={0.5} />
+                      <stop offset="100%" stopColor={node.color} stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis
+                    dataKey="t"
+                    type="number"
+                    domain={xDomain}
+                    ticks={xTicks}
+                    scale="time"
+                    tickFormatter={fmtTime}
+                    tick={{ fontSize: 11 }}
+                    interval={0}
+                    allowDataOverflow
+                    height={40}
+                  >
+                    <AxisLabel value={gapHintText ? `Zeit — ${gapHintText}` : "Zeit"} position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
+                  </XAxis>
+                  <YAxis
+                    yAxisId="kw"
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) => v.toLocaleString("de-DE")}
+                    width={70}
+                  >
+                    <AxisLabel value="Leistung (kW)" angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
+                  </YAxis>
+                  {showSocAxis && (
+                    <YAxis
+                      yAxisId="soc"
+                      orientation="right"
+                      domain={[0, 100]}
+                      ticks={[0, 25, 50, 75, 100]}
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v) => `${v}`}
+                      width={50}
+                    >
+                      <AxisLabel value="SOC (%)" angle={-90} position="insideRight" style={{ fontSize: 11, textAnchor: "middle" }} />
+
+                    </YAxis>
+                  )}
+                  {stats?.bidirectional && <ReferenceLine yAxisId="kw" y={0} stroke="hsl(var(--muted-foreground))" />}
+                  {showSocAxis && (socSeries.length === 1 || (!hasSoc && effectiveSocPct != null)) && (
+                    <ReferenceDot
+                      yAxisId="soc"
+                      x={socSeries[0]?.t ?? xDomain[1]}
+                      y={Math.max(0, Math.min(100, socSeries[0]?.soc ?? effectiveSocPct ?? 0))}
+                      r={5}
+                      fill="hsl(217 91% 60%)"
+                      stroke="hsl(217 91% 60%)"
+                      isFront
+                      label={{
+                        value: `SOC aktuell: ${fmtDeNum(socSeries[0]?.soc ?? effectiveSocPct ?? 0, 0)} %`,
+                        position: "left",
+                        fill: "hsl(217 91% 60%)",
+                        fontSize: 11,
+                      }}
+                    />
+                  )}
+                  <RTooltip
+                    contentStyle={{ fontSize: 11 }}
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const kwEntry = payload.find((p: any) => p.dataKey === "kw");
+                      const socEntry = payload.find((p: any) => p.dataKey === "soc");
+                      const kw = kwEntry?.value;
+                      const soc = socEntry?.value;
+                      return (
+                        <div className="rounded-md border bg-background/95 px-2 py-1.5 text-[11px] shadow-md">
+                          <div className="mb-1 text-muted-foreground">
+                            {new Date(label as number).toLocaleString("de-DE", {
+                              day: "2-digit", month: "2-digit", year: "numeric",
+                              hour: "2-digit", minute: "2-digit",
+                            })}
+                          </div>
+                          {kw != null && (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-block h-2 w-2 rounded-sm" style={{ background: node.color }} />
+                              <span>Leistung: <span className="font-medium tabular-nums">{fmtDeNum(Number(kw))} kW</span></span>
+                            </div>
+                          )}
+                          {soc != null && (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-block h-2 w-2 rounded-sm" style={{ background: "hsl(217 91% 60%)" }} />
+                              <span>SOC: <span className="font-medium tabular-nums">{fmtDeNum(Number(soc), 0)} %</span></span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }}
+                  />
+                  {hasSocLine && (
+                    <Legend
+                      verticalAlign="top"
+                      wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
+                      formatter={(v) => (v === "soc" ? "Ladezustand (SOC %)" : "Leistung (kW)")}
+                    />
+                  )}
+                  <Area
+                    yAxisId="kw"
+                    type="monotone"
+                    dataKey="kw"
+                    stroke={node.color}
+                    strokeWidth={1.8}
+                    fill={`url(#det-${node.id})`}
+                    isAnimationActive={false}
+                    connectNulls
+                    name="kw"
+                  />
+                  {hasSocLine && (
+                    <Line
+                      yAxisId="soc"
+                      type="monotone"
+                      dataKey="soc"
+                      stroke="hsl(217 91% 60%)"
+                      strokeWidth={2.5}
+                      dot={false}
+                      activeDot={{ r: 3 }}
+                      isAnimationActive={false}
+                      connectNulls={false}
+                      name="soc"
+                    />
+                  )}
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+
+        {/* Chart 2: Energie pro Bucket */}
+        {energyBuckets.length > 0 && (
+          <div>
+            <div className="text-sm font-medium mb-1">
+              Energie pro {range === "1h" ? "5 Min" : range === "24h" ? "Stunde" : range === "7d" ? "6 h" : "Tag"}
+            </div>
+            <div className="h-[240px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={energyBuckets} margin={{ top: 8, right: showSocAxis ? 60 : 16, left: 8, bottom: 28 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis
+                    dataKey="t"
+                    type="number"
+                    domain={xDomain}
+                    ticks={xTicks}
+                    scale="time"
+                    tickFormatter={fmtTime}
+                    tick={{ fontSize: 11 }}
+                    interval={0}
+                    allowDataOverflow
+                    height={40}
+                  >
+                    <AxisLabel value="Zeit" position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
+                  </XAxis>
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) => v.toLocaleString("de-DE")}
+                    width={70}
+                  >
+                    <AxisLabel value="Energie (kWh)" angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
+                  </YAxis>
+                  <RTooltip
+                    contentStyle={{ fontSize: 11 }}
+                    labelFormatter={(v) => new Date(v as number).toLocaleString("de-DE")}
+                    formatter={(v: any, name: string) => [`${fmtDeNum(Number(v))} kWh`, name === "import" ? "Bezug" : "Einspeisung"]}
+                  />
+                  <Legend verticalAlign="top" wrapperStyle={{ fontSize: 11, paddingBottom: 8 }} formatter={(v) => (v === "import" ? "Bezug" : "Einspeisung")} />
+                  <Bar dataKey="import" stackId="e" fill={node.color} />
+                  {stats?.bidirectional && (
+                    <Bar dataKey="export" stackId="e" fill="hsl(152 55% 42%)" />
+                  )}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {/* Details-Fußzeile */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs pt-2 border-t">
+          <div>
+            <div className="text-muted-foreground">Rolle</div>
+            <div className="font-medium">{ROLE_LABEL[node.role]}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Datenpunkte</div>
+            <div className="font-medium tabular-nums">{series.length.toLocaleString("de-DE")}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Letzter Wert</div>
+            <div className="font-medium">
+              {series.length ? new Date(series[series.length - 1].t).toLocaleString("de-DE") : "–"}
+            </div>
+          </div>
+          <div className="min-w-0">
+            <div className="text-muted-foreground">Meter-ID</div>
+            <div className="font-mono text-[10px] truncate" title={node.meter_id}>{node.meter_id || "–"}</div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─────────────────────────────────────────────────────── */
+/* Autarkie & Eigenverbrauch (Gebäude-Detailansicht)       */
+/* ─────────────────────────────────────────────────────── */
+
+function HouseSelfSufficiencyPanel({
+  allNodes,
+  metersById,
+  visibleStartMs,
+  rangeLabel,
+}: {
+  allNodes: EnergyFlowNode[];
+  metersById: Record<string, any>;
+  visibleStartMs: number;
+  rangeLabel: string;
+}) {
+  const pvNodes = allNodes.filter((n) => n.role === "pv" && n.meter_id);
+  const gridNodes = allNodes.filter((n) => n.role === "grid" && n.meter_id);
+  const batteryNodes = allNodes.filter((n) => n.role === "battery" && n.meter_id);
+
+  const involvedMeterIds = useMemo(
+    () => [...pvNodes, ...gridNodes, ...batteryNodes].map((n) => n.meter_id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pvNodes.map((n) => n.meter_id).join(","), gridNodes.map((n) => n.meter_id).join(","), batteryNodes.map((n) => n.meter_id).join(",")],
+  );
+
+  const { data: seriesByMeter = {}, isLoading } = useQuery({
+    queryKey: ["house-selfsuff-series", involvedMeterIds, visibleStartMs],
+    enabled: involvedMeterIds.length > 0 && (pvNodes.length > 0 || gridNodes.length > 0),
+    staleTime: 30_000,
+    queryFn: async () => {
+      const since = new Date(visibleStartMs).toISOString();
+      const result: Record<string, { t: number; kw: number }[]> = {};
+      await Promise.all(
+        involvedMeterIds.map(async (mid) => {
+          const { data } = await supabase
+            .from("meter_power_readings")
+            .select("recorded_at, power_value")
+            .eq("meter_id", mid)
+            .gte("recorded_at", since)
+            .order("recorded_at", { ascending: true })
+            .limit(3000);
+          result[mid] = (data ?? []).map((r: any) => ({
+            t: new Date(r.recorded_at).getTime(),
+            kw: Number(r.power_value),
+          }));
+        }),
+      );
+      return result;
+    },
+  });
+
+  // Vorzeichen laut Zähler-Konvention normalisieren, sodass +kW bei
+  // Netz = Bezug, bei PV = Erzeugung, bei Speicher = Ladung bedeutet.
+  const normalizedKw = (meterId: string, kw: number): number => {
+    const conv = metersById[meterId]?.flow_direction_convention || "negative_delivery";
+    // Default: negativ = Lieferung/vom Gerät weg, positiv = Bezug/zum Gerät hin.
+    // Bei "positive_delivery" ist es umgekehrt → Vorzeichen flippen.
+    return conv === "positive_delivery" ? -kw : kw;
+  };
+
+  // Trapez-Integration: liefert getrennte positive/negative kWh-Anteile
+  // (positiv = Zufluss zum Gerät, negativ = Abfluss vom Gerät).
+  const integrate = (rows: { t: number; kw: number }[], meterId: string) => {
+    let pos = 0;
+    let neg = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const a = rows[i - 1];
+      const b = rows[i];
+      const dtH = (b.t - a.t) / 3_600_000;
+      if (dtH <= 0 || dtH > 1) continue; // Datenlücken ignorieren
+      const kw = (normalizedKw(meterId, a.kw) + normalizedKw(meterId, b.kw)) / 2;
+      const kwh = kw * dtH;
+      if (kwh >= 0) pos += kwh;
+      else neg += -kwh;
+    }
+    return { pos, neg };
+  };
+
+  const kpi = useMemo(() => {
+    if (pvNodes.length === 0 && gridNodes.length === 0) return null;
+    let ePv = 0;
+    for (const n of pvNodes) {
+      const { pos } = integrate(seriesByMeter[n.meter_id] ?? [], n.meter_id);
+      ePv += pos;
+    }
+    let eGridImport = 0;
+    let eGridExport = 0;
+    for (const n of gridNodes) {
+      const { pos, neg } = integrate(seriesByMeter[n.meter_id] ?? [], n.meter_id);
+      eGridImport += pos;
+      eGridExport += neg;
+    }
+    let eBattCharge = 0;
+    let eBattDischarge = 0;
+    for (const n of batteryNodes) {
+      const { pos, neg } = integrate(seriesByMeter[n.meter_id] ?? [], n.meter_id);
+      eBattCharge += pos;
+      eBattDischarge += neg;
+    }
+    const eLoad = Math.max(
+      0,
+      ePv + eGridImport + eBattDischarge - eGridExport - eBattCharge,
+    );
+    const clamp01 = (x: number) => Math.max(0, Math.min(100, x));
+    const autarkie = eLoad > 0 ? clamp01(((eLoad - eGridImport) / eLoad) * 100) : null;
+    const eigenverbrauch = ePv > 0 ? clamp01(((ePv - eGridExport) / ePv) * 100) : null;
+    return { autarkie, eigenverbrauch, ePv, eGridImport, eGridExport, eLoad };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seriesByMeter, pvNodes.length, gridNodes.length, batteryNodes.length]);
+
+  if (pvNodes.length === 0 && gridNodes.length === 0) return null;
+
+  const fmtPct = (v: number | null) =>
+    v == null ? "–" : `${v.toLocaleString("de-DE", { maximumFractionDigits: 0 })} %`;
+  const fmtKwh = (v: number) =>
+    `${v.toLocaleString("de-DE", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} kWh`;
+
+  return (
+    <div className="rounded-md border p-3">
+      <div className="mb-2 text-sm font-medium">
+        Autarkie & Eigenverbrauch · {rangeLabel}
+      </div>
+      {isLoading ? (
+        <div className="text-xs text-muted-foreground">Lade Daten…</div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">Autarkiegrad</div>
+            <div className="text-base font-semibold tabular-nums">{fmtPct(kpi?.autarkie ?? null)}</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">Eigenverbrauch / Gesamtverbrauch</div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">Eigenverbrauchsquote</div>
+            <div className="text-base font-semibold tabular-nums">{fmtPct(kpi?.eigenverbrauch ?? null)}</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">Selbst genutzte PV / PV-Erzeugung</div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">PV-Erzeugung</div>
+            <div className="text-base font-semibold tabular-nums">{kpi ? fmtKwh(kpi.ePv) : "–"}</div>
+          </div>
+          <div className="rounded-md border p-3">
+            <div className="text-muted-foreground">Netz Bezug / Einspeisung</div>
+            <div className="text-base font-semibold tabular-nums">
+              {kpi ? `${fmtKwh(kpi.eGridImport)} / ${fmtKwh(kpi.eGridExport)}` : "–"}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+

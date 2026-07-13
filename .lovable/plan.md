@@ -1,43 +1,71 @@
-## Ziel
+## Root Cause
 
-Node-Beschriftung (Name + Periodensumme) soll den Live-Flow auf einer angrenzenden Verbindung nicht mehr überlagern.
+`resolveLoxoneHost()` in `docs/loxone-ws-worker/index.ts` (Zeile 249–268) ist zu tolerant:
 
-## Regel
+```ts
+const finalUrl = r.url;   // bei fehlgeschlagenem Redirect: "https://dns.loxonecloud.com/504F94A2BAA2"
+if (finalUrl && finalUrl.toLowerCase().includes(serial.toLowerCase())) {
+  const host = new URL(finalUrl).host;   // → "dns.loxonecloud.com"
+  dnsCache.set(serial, host);            // GIFT: falscher Host wird für immer gecacht
+}
+```
 
-- **Standard:** Beschriftung unterhalb des Kreises (wie heute).
-- **Ausnahme:** Wenn von diesem Knoten mindestens eine Verbindung nach **unten** verläuft (Winkel der Line-Richtung fällt in den unteren Sektor, ca. 45°–135°), wird die Beschriftung **oberhalb** des Kreises platziert.
-- Reihenfolge bleibt gleich:
-  - oben: erst `node.label`, darunter Periodensumme
-  - unten: erst `node.label`, darunter Periodensumme
-  (bei Position „oben" umgekehrte y-Offsets, sodass Label näher am Kreis steht als die Summe)
+Wenn der 307-Redirect beim ersten Auflösen (z.B. wegen Race beim Registrieren des neuen Miniservers oder undici-Timing) nicht gefolgt wurde, landet `dns.loxonecloud.com` selbst im Cache — der Serial ist ja in der URL enthalten, die Prüfung schlägt fälschlich an. Alle folgenden Verbindungsversuche gehen dann gegen `https://dns.loxonecloud.com/jdev/...` und Loxone antwortet mit HTTP 404 → `[WS] Verbindung fehlgeschlagen ... Error: Request failed with status code 404`.
 
-## Umsetzung in `src/components/dashboard/EnergyFlowMonitor.tsx`
+Log-Beleg des Users: `[WS] verbinde 504F94A2BAA2 → dns.loxonecloud.com` (die anderen zwei zeigen die echte dyndns-Adresse).
 
-1. **Helper `getLabelSide(node)**` in der Node-Render-Schleife:
-  - Iteriere über `connections`, filtere die, an denen `node` als `from` oder `to` beteiligt ist.
-  - Für jede Verbindung: berechne den Richtungsvektor **von diesem Knoten weg** zum Nachbarknoten, dann Winkel `atan2(dy, dx)` in Grad (0° = rechts, 90° = unten in SVG-Koordinaten).
-  - Wenn ein Winkel im Bereich `[45°, 135°]` liegt → Nachbar-Verbindung geht nach unten → return `"top"`.
-  - Sonst `"bottom"`.
-2. **Text-Rendering im `nodes.map(...)**`:
-  - `const side = getLabelSide(node);`
-  - `const labelY = side === "bottom" ? cy + nodeRadius + 14 : cy - nodeRadius - 18;`
-  - `const sumY   = side === "bottom" ? cy + nodeRadius + 28 : cy - nodeRadius - 6;`  
-  (bei „top" ist die Summe zwischen Label und Kreis, damit die Reihenfolge Label→Summe→Kreis von oben nach unten gelesen wird — alternativ Label ganz oben und Summe direkt darunter, siehe Frage unten)
-3. Keine Änderung am Flow-Label auf der Linie selbst (das ist mittig auf der Line, kein Konflikt zu erwarten).
+Die zwei bereits laufenden Miniserver haben ihren korrekten Host beim allerersten Auflösen bekommen und sind seither zufriedene Cache-Hits — deshalb funktionieren sie.
 
-## Randfälle
+## Fix im Worker (`docs/loxone-ws-worker/index.ts`)
 
-- Knoten ohne Verbindung: `side = "bottom"` (Default).
-- Mehrere Verbindungen mit gemischten Richtungen: Sobald **eine** nach unten geht, flippt die Beschriftung nach oben.
-- Bei horizontalem Layout (heutiger Regelfall PV — Gebäude — Speicher) bleibt alles unten; bei Netz-über-Gebäude (Screenshot) flippt „Gebäude gesamt"-Beschriftung nach oben — der aktuelle Screenshot betrifft aber vor allem **„Netz"**: dessen Verbindung geht nach unten → Beschriftung wandert **über** den Netz-Kreis.
+Zwei kleine, defensive Änderungen — keine Logik-Umstellung, keine anderen Miniserver betroffen:
 
-## Offene Frage
+**1. Strengere Validierung in `resolveLoxoneHost()`** — nur akzeptieren, wenn der aufgelöste **Host** (nicht die ganze URL) etwas anderes ist als `dns.loxonecloud.com` und den Serial enthält:
 
-Bei Position „oben" — welche Reihenfolge (von oben nach unten gelesen)?
+```ts
+const host = new URL(finalUrl).host;
+const hostLc = host.toLowerCase();
+if (hostLc !== "dns.loxonecloud.com" && hostLc.includes(serial.toLowerCase())) {
+  dnsCache.set(serial, host);
+  return host;
+}
+// sonst: nichts cachen, unten Fallback nehmen
+```
 
-- **A:** `Label` → `Summe` → Kreis  (Label ganz oben, wie heute unten die Reihenfolge Label→Summe)
-- **B:** `Summe` → `Label` → Kreis  (Label direkt am Kreis, Summe darüber — spiegelverkehrt zur Unten-Variante)
+Fallback (`<serial>.dns.loxonecloud.com`) NICHT dauerhaft cachen — nur zurückgeben, damit der nächste Reconnect erneut versucht, die echte Cloud-Adresse aufzulösen.
 
-Ich würde **A** wählen (visuelle Konsistenz: Label immer weiter weg vom Kreis als Rand-Info wirkt seltsam) — bestätige bitte oder wähle B.  
-  
-Antwort: Ja, Lösung A wie von dir vorgeschlagen.
+**2. Cache invalidieren bei Verbindungsfehlern** — im `catch`-Block von `connect()` (um Zeile 585):
+
+```ts
+} catch (err) {
+  dnsCache.delete(state.serialNumber);   // zwingt Neu-Auflösung beim nächsten Versuch
+  log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${err}`);
+  ...
+}
+```
+
+## Danach — Copy/Paste für den User
+
+```bash
+cd /opt/loxone-ws-worker-live
+# neue index.ts wird von Lovable synchronisiert / manuell reingelegt (wie beim CP-Fix zuvor)
+docker build -t loxone-ws-worker:latest .
+docker rm -f loxone-ws-worker-live
+docker run -d --name loxone-ws-worker-live --restart unless-stopped \
+  -p 8081:8080 --env-file /opt/loxone-ws-worker-live/.env \
+  loxone-ws-worker:latest
+docker logs -f loxone-ws-worker-live | grep -E "504F94A2BAA2|DNS|WS"
+```
+
+Erwartung: `[DNS] 504F94A2BAA2 → 2a01-4f8-c010-2f7--1.504F94A2BAA2.dyndns.loxonecloud.com:54146` und anschließend `LoxAPP3.json geladen`.
+
+## Warum nicht anders
+
+- User-Credentials sind bestätigt (getkey2 = 200).
+- Cloud-Tunnel steht (getPublicKey = 200).
+- Es gibt keinen sinnvollen Workaround „im UI" — der Bug sitzt im Worker-Cache. Ein Worker-Restart alleine würde reichen **für diesen einen Miniserver**, aber der Bug tritt bei jedem neu hinzugefügten Miniserver mit ungünstigem Timing wieder auf.
+
+## Umfang
+
+- 1 Datei, ~10 Zeilen Änderung: `docs/loxone-ws-worker/index.ts`
+- Keine Änderung an Cloud/Edge-Functions, keine DB-Migration.

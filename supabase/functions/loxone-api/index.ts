@@ -86,6 +86,7 @@ const LOXONE_OUTPUT_TO_STATE: Record<string, string> = {
   "Gpwr": "Gpwr",       // Grid power
   "consCurr": "consCurr",
   "prodCurr": "prodCurr",
+  "Slvl": "soc",        // Storage level / state of charge (Speicher-Ladezustand)
 };
 
 // States to never use as fallback
@@ -400,6 +401,457 @@ function formatValue(rawValue: number | string, sensorType: string): string {
     return rawValue.toFixed(2);
   }
   return String(rawValue);
+}
+
+// ── Battery SOC Discovery & Sync ─────────────────────────────────────────────
+// Findet den State-of-Charge-Ausgang eines Fronius/Battery-Bausteins im
+// Loxone-Structure-File (LoxAPP3.json), holt den aktuellen Wert vom Miniserver
+// und schreibt ihn in energy_storages.current_soc_pct.
+//
+// Motivation: Der SOC-Wert ist in Loxone Config oft ein interner Analog-Output
+// des Fronius-Battery-Bausteins ohne eigenen sichtbaren VI. Er hat trotzdem eine
+// eigene uuidAction im Structure-File und kann per /jdev/sps/io/{uuid}/all
+// abgefragt werden. Diese Discovery ist heuristisch und toleriert unterschiedliche
+// Loxone-Config-Konventionen (deutsch/englisch/Fronius-Plugin/Community-Lib).
+
+interface SocCandidate {
+  uuid: string;
+  name: string;
+  room: string;
+  cat: string;
+  type: string;
+  score: number;
+  currentValue: number | null;
+}
+
+function scoreSocCandidate(
+  uuid: string,
+  control: LoxoneControl,
+  rooms: Record<string, { name: string }>,
+  cats: Record<string, { name: string }>,
+): { score: number; roomName: string; catName: string } {
+  const name = (control.name || "").toLowerCase();
+  const roomName = control.room ? rooms[control.room]?.name || "" : "";
+  const catName = control.cat ? cats[control.cat]?.name || "" : "";
+  const roomLc = roomName.toLowerCase();
+  const catLc = catName.toLowerCase();
+  const type = control.type || "";
+
+  let score = 0;
+
+  // Starke Namensignale
+  if (/\bsoc\b|state.?of.?charge|ladezustand/i.test(name)) score += 10;
+  if (/stateofcharge/i.test(name)) score += 10;
+  // Schwächere Namensignale
+  if (/batter|speicher|akku/i.test(name)) score += 3;
+  if (/meter/i.test(type) && /speicher|akku|batter/i.test(name)) score += 7;
+
+  // Kontext (Raum/Kategorie)
+  if (/batter|speicher|akku|fronius|solar|pv/i.test(roomLc)) score += 2;
+  if (/batter|speicher|akku|fronius|solar|pv/i.test(catLc)) score += 2;
+
+  // Typ
+  if (/InfoOnlyAnalog|InfoOnlyDigital/i.test(type)) score += 1;
+  if (/Fronius|Battery/i.test(type)) score += 2;
+
+  // Format % (aus details, falls vorhanden)
+  const details = (control as any).details;
+  if (details && typeof details === "object") {
+    const format = String(details.format ?? details.formatValue ?? "");
+    if (format.includes("%")) score += 3;
+  }
+
+  return { score, roomName, catName };
+}
+
+// Erkennt SOC-artige Namen für Sub-States (Fronius/Battery-Baustein-Ausgänge)
+function isSocStateName(name: string): boolean {
+  const lc = name.toLowerCase();
+  if (/^slvl$/.test(lc)) return true;
+  if (/^soc$/.test(lc)) return true;
+  if (/storage.?level|speicher.?stand|speicher.?level/i.test(name)) return true;
+  if (/stateofcharge/i.test(name)) return true;
+  if (/state.?of.?charge/i.test(name)) return true;
+  if (/ladezustand/i.test(lc)) return true;
+  return false;
+}
+
+function extractSocValueFromAllStates(states: Record<string, number | string | null>): number | null {
+  const preferredKeys = ["Slvl", "soc", "SOC", "stateOfCharge", "stateOfCharge_Relative", "storageLevel", "ladezustand"];
+  for (const key of preferredKeys) {
+    for (const [k, v] of Object.entries(states)) {
+      if (k === "_primary") continue;
+      if (k.toLowerCase() === key.toLowerCase() && typeof v === "number" && v >= 0 && v <= 100 && Number.isFinite(v)) {
+        return v;
+      }
+    }
+  }
+  for (const [k, v] of Object.entries(states)) {
+    if (k === "_primary") continue;
+    if (isSocStateName(k) && typeof v === "number" && v >= 0 && v <= 100 && Number.isFinite(v)) {
+      return v;
+    }
+  }
+  return null;
+}
+
+async function discoverSocCandidates(
+  baseUrl: string,
+  loxoneAuth: string,
+  structure: LoxoneStructure,
+): Promise<SocCandidate[]> {
+  const controls = structure.controls || {};
+  const rooms = structure.rooms || {};
+  const cats = structure.cats || {};
+
+  // Schritt 1: Kandidaten sammeln — sowohl Controls (Standalone-VI mit SOC im Namen)
+  // als auch Sub-States von Fronius/Battery/Meter-Bausteinen (SOC als Output eines Blocks).
+  const prelim: Array<{
+    uuid: string;
+    displayName: string;
+    controlName: string;
+    controlType: string;
+    roomName: string;
+    catName: string;
+    score: number;
+    parentControlUuid: string;
+    subStateKey: string | null;
+  }> = [];
+
+  for (const [ctrlUuid, control] of Object.entries(controls)) {
+    const { score, roomName, catName } = scoreSocCandidate(ctrlUuid, control, rooms, cats);
+    // (1a) Control selbst als Kandidat, wenn Name/Typ passen
+    if (score >= 5) {
+      prelim.push({
+        uuid: ctrlUuid,
+        displayName: control.name || "",
+        controlName: control.name || "",
+        controlType: control.type || "",
+        roomName, catName,
+        score,
+        parentControlUuid: ctrlUuid,
+        subStateKey: null,
+      });
+    }
+    // (1b) Sub-States des Controls durchgehen (z. B. Fronius-Baustein → stateOfCharge_Relative)
+    const states = control.states as Record<string, string> | undefined;
+    if (!states || typeof states !== "object") continue;
+    const type = control.type || "";
+    const isBatteryContext =
+      /Fronius|Battery/i.test(type) ||
+      /batter|speicher|akku|fronius/i.test((control.name || "").toLowerCase()) ||
+      /batter|speicher|akku|fronius/i.test(roomName.toLowerCase()) ||
+      /batter|speicher|akku|fronius/i.test(catName.toLowerCase());
+
+    for (const [stateKey, stateUuid] of Object.entries(states)) {
+      if (typeof stateUuid !== "string") continue;
+      let subScore = 0;
+      if (isSocStateName(stateKey)) subScore += 12;
+      else if (/soc/i.test(stateKey)) subScore += 6;
+      else if (/batter|akku|speicher/i.test(stateKey)) subScore += 2;
+      if (subScore === 0) continue;
+      if (isBatteryContext) subScore += 3;
+      // Fronius-Bausteine sind der Regelfall in DE-Anlagen
+      if (/Fronius/i.test(type)) subScore += 2;
+      const isSlvl = /^slvl$/i.test(stateKey);
+      prelim.push({
+        // Slvl is the SOC output of the Loxone storage meter block. Store the
+        // parent block UUID so websocket SOC events map to the storage meter.
+        uuid: (isSlvl ? ctrlUuid : stateUuid).toLowerCase(),
+        displayName: `${control.name || "?"} → ${stateKey}`,
+        controlName: control.name || "",
+        controlType: type,
+        roomName, catName,
+        score: subScore,
+        parentControlUuid: ctrlUuid,
+        subStateKey: stateKey,
+      });
+    }
+  }
+
+  // Dedupe auf uuid (falls doppelt), Max-Score behalten
+  const byUuid = new Map<string, typeof prelim[number]>();
+  for (const p of prelim) {
+    const prev = byUuid.get(p.uuid);
+    if (!prev || p.score > prev.score) byUuid.set(p.uuid, p);
+  }
+
+  // Top 12 nach Score prüfen (Live-Wert holen; Plausibilität 0–100)
+  const sorted = [...byUuid.values()].sort((a, b) => b.score - a.score).slice(0, 12);
+
+  // Cache für /all pro parentControl (spart HTTP-Requests bei mehreren Sub-States pro Baustein)
+  const allStatesCache = new Map<string, Record<string, number | string | null>>();
+  async function getAll(controlUuid: string) {
+    const cached = allStatesCache.get(controlUuid);
+    if (cached) return cached;
+    try {
+      const s = await fetchAllStates(baseUrl, loxoneAuth, controlUuid);
+      allStatesCache.set(controlUuid, s);
+      return s;
+    } catch (err) {
+      console.warn(`[SOC-Discovery] fetchAllStates fehlgeschlagen für ${controlUuid}:`, (err as Error).message);
+      return {} as Record<string, number | string | null>;
+    }
+  }
+
+  const results: SocCandidate[] = [];
+  for (const cand of sorted) {
+    let value: number | null = null;
+    // Wert ermitteln: bei Sub-State über parentControl/all + Output-Name; bei Control direkt /all
+    if (cand.subStateKey) {
+      const all = await getAll(cand.parentControlUuid);
+      value = extractSocValueFromAllStates(all);
+      // Loxone /all liefert Outputs mit `name` == stateKey. Match case-insensitive.
+      if (value == null) {
+        const targetKey = cand.subStateKey.toLowerCase();
+        for (const [k, v] of Object.entries(all)) {
+          if (k === "_primary") continue;
+          if (k.toLowerCase() === targetKey && typeof v === "number") { value = v; break; }
+        }
+      }
+    } else {
+      const all = await getAll(cand.parentControlUuid);
+      value = extractSocValueFromAllStates(all);
+      if (value == null) {
+        const primary = all["_primary"];
+        if (typeof primary === "number") value = primary;
+        else {
+          for (const v of Object.values(all)) {
+            if (typeof v === "number") { value = v; break; }
+          }
+        }
+      }
+    }
+    // Plausibilität: 0–100 (Werte außerhalb sind i. d. R. Leistung/Zählerstand, nicht SOC)
+    const plausible = value != null && value >= 0 && value <= 100 && Number.isFinite(value);
+    if (plausible || cand.score >= 14) {
+      results.push({
+        uuid: cand.uuid,
+        name: cand.displayName,
+        room: cand.roomName,
+        cat: cand.catName,
+        type: cand.controlType,
+        score: cand.score + (plausible ? 5 : 0),
+        currentValue: plausible ? value : null,
+      });
+    }
+  }
+  results.sort((a, b) => {
+    const ap = a.currentValue != null ? 1 : 0;
+    const bp = b.currentValue != null ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    return b.score - a.score;
+  });
+  return results;
+}
+
+
+async function syncBatterySoc(
+  supabase: any,
+  locationIntegrationId: string,
+  tenantId: string | null,
+  locationId: string | null,
+  baseUrl: string,
+  loxoneAuth: string,
+  structure: LoxoneStructure,
+): Promise<void> {
+  console.log(`[SOC-Sync] START li=${locationIntegrationId} tenant=${tenantId} location=${locationId}`);
+  if (!tenantId || !locationId) {
+    console.log(`[SOC-Sync] skip: missing tenant/location`);
+    return;
+  }
+  try {
+    const { data: storages, error } = await supabase
+      .from("energy_storages")
+      .select("id, name, soc_sensor_uuid, current_soc_pct, soc_updated_at, power_meter_id")
+      .eq("tenant_id", tenantId)
+      .eq("location_id", locationId);
+    if (error) {
+      console.warn(`[SOC-Sync] energy_storages read failed:`, error.message);
+      return;
+    }
+
+    const rows = (storages ?? []) as Array<{ id: string; name: string; soc_sensor_uuid: string | null; current_soc_pct: number | null; soc_updated_at: string | null; power_meter_id: string | null }>;
+
+    const { data: locationMeters } = await supabase
+      .from("meters")
+      .select("id, sensor_uuid")
+      .eq("tenant_id", tenantId)
+      .eq("location_id", locationId)
+      .eq("is_archived", false)
+      .not("sensor_uuid", "is", null);
+    const meterIdBySensorUuid = new Map<string, string>();
+    for (const meter of locationMeters ?? []) {
+      meterIdBySensorUuid.set(String((meter as any).sensor_uuid).toLowerCase(), (meter as any).id);
+    }
+
+    // Discovery, falls (a) mindestens ein Storage ohne UUID existiert
+    // oder (b) noch gar keiner existiert (dann evtl. auto-anlegen).
+    const needsDiscovery = rows.length === 0 || rows.some((r) => !r.soc_sensor_uuid || r.current_soc_pct == null || !r.soc_updated_at);
+    let candidates: SocCandidate[] = [];
+    if (needsDiscovery) {
+      const controlsCount = Object.keys(structure.controls || {}).length;
+      candidates = await discoverSocCandidates(baseUrl, loxoneAuth, structure);
+      console.log(`[SOC-Sync] Discovery rows=${rows.length} controls=${controlsCount} candidates=${candidates.length}`,
+        candidates.slice(0, 5).map(c => `${c.name}[${c.uuid.slice(0,8)}]=${c.currentValue}(sc=${c.score})`).join(" | "));
+    } else {
+      console.log(`[SOC-Sync] Discovery skipped (all rows have uuid). rows=${rows.length}`);
+    }
+
+
+    // A) Keine Storage-Zeile, aber Kandidat gefunden → automatisch anlegen
+    if (rows.length === 0 && candidates.length > 0) {
+      const best = candidates[0];
+      const { data: locRow } = await supabase
+        .from("locations").select("name").eq("id", locationId).maybeSingle();
+      const locName = locRow?.name ?? "Standort";
+      const { data: created, error: insErr } = await supabase
+        .from("energy_storages")
+        .insert({
+          tenant_id: tenantId,
+          location_id: locationId,
+          name: `Speicher ${locName}`.slice(0, 100),
+          capacity_kwh: 0,
+          max_charge_kw: 0,
+          max_discharge_kw: 0,
+          efficiency_pct: 90,
+          soc_sensor_uuid: best.uuid,
+          power_meter_id: meterIdBySensorUuid.get(best.uuid) ?? null,
+          current_soc_pct: best.currentValue,
+          soc_updated_at: best.currentValue != null ? new Date().toISOString() : null,
+        })
+        .select("id")
+        .single();
+      if (insErr) {
+        console.warn(`[SOC-Sync] Auto-Anlage Speicher fehlgeschlagen:`, insErr.message);
+      } else {
+        console.log(`[SOC-Sync] Speicher-Datensatz auto-angelegt (id=${created?.id}, soc=${best.currentValue}%, uuid=${best.uuid})`);
+      }
+      return;
+    }
+
+    // B) Für jede Zeile: UUID zuweisen (falls fehlt) und aktuellen Wert schreiben
+    for (const row of rows) {
+      let uuid = row.soc_sensor_uuid;
+      let value: number | null = null;
+
+      if (!uuid && candidates.length > 0) {
+        // Nimm besten (noch nicht anderweitig verwendeten) Kandidaten
+        const used = new Set(rows.map((r) => r.soc_sensor_uuid).filter(Boolean) as string[]);
+        const pick = candidates.find((c) => !used.has(c.uuid));
+        if (pick) {
+          uuid = pick.uuid;
+          value = pick.currentValue;
+          console.log(`[SOC-Sync] Zuweisung uuid=${uuid} an Speicher ${row.id} (${row.name})`);
+        }
+      }
+
+      if (!uuid) continue;
+
+      // Aktuellen Wert vom Miniserver holen (falls noch nicht durch Discovery).
+      // Zwei Fälle:
+      //   (a) uuid ist eine Control-UUID (Standalone-VI) → /jdev/sps/io/{uuid}/all direkt.
+      //   (b) uuid ist eine Sub-State-UUID eines Bausteins (Fronius etc.) → müssen
+      //       den Parent-Control finden und dessen /all lesen; darin steckt der
+      //       benannte Output mit dem Wert.
+      if (value == null) {
+        // Parent + State-Key im Structure-File suchen
+        let parentUuid: string | null = null;
+        let stateKey: string | null = null;
+        for (const [cUuid, ctrl] of Object.entries(structure.controls || {})) {
+          const states = (ctrl as any)?.states as Record<string, string> | undefined;
+          if (!states) continue;
+          for (const [k, v] of Object.entries(states)) {
+            if (typeof v === "string" && v.toLowerCase() === uuid.toLowerCase()) {
+              parentUuid = cUuid;
+              stateKey = k;
+              break;
+            }
+          }
+          if (parentUuid) break;
+        }
+        try {
+          const targetUuid = parentUuid ?? uuid;
+          const states = await fetchAllStates(baseUrl, loxoneAuth, targetUuid);
+          if (stateKey) {
+            value = extractSocValueFromAllStates(states);
+            const targetLc = stateKey.toLowerCase();
+            if (value == null) {
+              for (const [k, v] of Object.entries(states)) {
+                if (k === "_primary") continue;
+                if (k.toLowerCase() === targetLc && typeof v === "number") { value = v; break; }
+              }
+            }
+          }
+          if (value == null) {
+            value = extractSocValueFromAllStates(states);
+          }
+          if (value == null) {
+            const primary = states["_primary"];
+            if (typeof primary === "number") value = primary;
+            else {
+              for (const v of Object.values(states)) {
+                if (typeof v === "number") { value = v; break; }
+              }
+            }
+          }
+        } catch (err) {
+          console.warn(`[SOC-Sync] Wert-Abruf fehlgeschlagen für ${uuid}:`, (err as Error).message);
+        }
+      }
+
+      if (value == null && candidates.length > 0) {
+        const replacement = candidates.find((c) => c.currentValue != null && c.uuid !== uuid) ?? candidates.find((c) => c.currentValue != null);
+        if (replacement) {
+          console.log(`[SOC-Sync] Ersetze ungültige SOC-Quelle ${uuid} durch ${replacement.uuid} (${replacement.name}, value=${replacement.currentValue})`);
+          uuid = replacement.uuid;
+          value = replacement.currentValue ?? null;
+        }
+      }
+
+
+      // Plausibilitätsprüfung
+      if (value != null && (value < 0 || value > 100 || !isFinite(value))) {
+        console.warn(`[SOC-Sync] unplausibler Wert ${value} für ${uuid} — ignoriert`);
+        value = null;
+      }
+
+      const patch: Record<string, unknown> = {};
+      if (uuid !== row.soc_sensor_uuid) patch.soc_sensor_uuid = uuid;
+      const matchingPowerMeterId = meterIdBySensorUuid.get(uuid);
+      if (matchingPowerMeterId && matchingPowerMeterId !== row.power_meter_id) patch.power_meter_id = matchingPowerMeterId;
+      let socRecordedAt: string | null = null;
+      if (value != null) {
+        socRecordedAt = new Date().toISOString();
+        patch.current_soc_pct = value;
+        patch.soc_updated_at = socRecordedAt;
+      }
+      if (Object.keys(patch).length === 0) continue;
+
+      const { error: upErr } = await supabase
+        .from("energy_storages").update(patch).eq("id", row.id);
+      if (upErr) {
+        console.warn(`[SOC-Sync] Update ${row.id} fehlgeschlagen:`, upErr.message);
+      } else {
+        if (value != null && socRecordedAt) {
+          const { error: histErr } = await supabase
+            .from("storage_soc_readings")
+            .insert({
+              storage_id: row.id,
+              tenant_id: tenantId,
+              sensor_uuid: uuid,
+              soc_pct: value,
+              recorded_at: socRecordedAt,
+              source: "loxone_api_sync",
+            });
+          if (histErr) console.warn(`[SOC-Sync] Historie konnte nicht gespeichert werden:`, histErr.message);
+        }
+        console.log(`[SOC-Sync] Speicher ${row.id} aktualisiert: ${JSON.stringify(patch)}`);
+      }
+    }
+  } catch (err) {
+    console.error(`[SOC-Sync] unerwarteter Fehler (li=${locationIntegrationId}):`, (err as Error).message);
+  }
 }
 
 serve(async (req) => {
@@ -1344,9 +1796,28 @@ serve(async (req) => {
       }
       }
 
+      // ── Battery-SOC sync (Fronius/Battery Sub-Output aus LoxAPP3.json) ──
+      // Läuft bei jedem getSensors, benutzt die bereits geladene Struktur und Auth.
+      // Idempotent, kostet 1–8 zusätzliche Miniserver-Requests nur beim allerersten
+      // Sync einer Location; danach nur noch 1 Request pro konfiguriertem Speicher.
+      try {
+        await syncBatterySoc(
+          supabase,
+          locationIntegrationId,
+          (locationIntegration as any).location?.tenant_id ?? null,
+          (locationIntegration as any).location_id ?? null,
+          baseUrl,
+          loxoneAuth,
+          structure,
+        );
+      } catch (socErr) {
+        console.warn("[SOC-Sync] fehlgeschlagen:", (socErr as Error).message);
+      }
+
       if (shouldPersistReadings) {
         await updateSyncStatus(supabase, locationIntegrationId, "success");
       }
+
 
       // ── Always write snapshot on successful sensor fetch ──
       await writeSensorSnapshot(supabase, locationIntegrationId, {
@@ -1460,7 +1931,7 @@ serve(async (req) => {
       }
 
       const sensorsWithPfMrc = sensorList.filter(s =>
-        s.stateNames.includes("Pf") || s.stateNames.includes("Mrc") || s.stateNames.includes("Mrd")
+        s.stateNames.includes("Pf") || s.stateNames.includes("Mrc") || s.stateNames.includes("Mrd") || s.stateNames.includes("Slvl")
       );
 
       return new Response(

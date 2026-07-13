@@ -4323,6 +4323,9 @@ export type Database = {
           max_charge_kw: number
           max_discharge_kw: number
           name: string
+          power_meter_id: string | null
+          soc_sensor_uuid: string | null
+          soc_updated_at: string | null
           status: string
           tenant_id: string
           updated_at: string
@@ -4338,6 +4341,9 @@ export type Database = {
           max_charge_kw?: number
           max_discharge_kw?: number
           name: string
+          power_meter_id?: string | null
+          soc_sensor_uuid?: string | null
+          soc_updated_at?: string | null
           status?: string
           tenant_id: string
           updated_at?: string
@@ -4353,6 +4359,9 @@ export type Database = {
           max_charge_kw?: number
           max_discharge_kw?: number
           name?: string
+          power_meter_id?: string | null
+          soc_sensor_uuid?: string | null
+          soc_updated_at?: string | null
           status?: string
           tenant_id?: string
           updated_at?: string
@@ -4370,6 +4379,13 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "energy_storages_power_meter_id_fkey"
+            columns: ["power_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
             referencedColumns: ["id"]
           },
           {
@@ -7083,6 +7099,7 @@ export type Database = {
           discovery_source: string | null
           energy_type: string
           floor_id: string | null
+          flow_direction_convention: string
           gas_type: string | null
           id: string
           installation_date: string | null
@@ -7139,6 +7156,7 @@ export type Database = {
           discovery_source?: string | null
           energy_type?: string
           floor_id?: string | null
+          flow_direction_convention?: string
           gas_type?: string | null
           id?: string
           installation_date?: string | null
@@ -7195,6 +7213,7 @@ export type Database = {
           discovery_source?: string | null
           energy_type?: string
           floor_id?: string | null
+          flow_direction_convention?: string
           gas_type?: string | null
           id?: string
           installation_date?: string | null
@@ -10719,6 +10738,47 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      storage_soc_readings: {
+        Row: {
+          created_at: string
+          id: string
+          recorded_at: string
+          sensor_uuid: string
+          soc_pct: number
+          source: string
+          storage_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          recorded_at?: string
+          sensor_uuid: string
+          soc_pct: number
+          source?: string
+          storage_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          recorded_at?: string
+          sensor_uuid?: string
+          soc_pct?: number
+          source?: string
+          storage_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storage_soc_readings_storage_id_fkey"
+            columns: ["storage_id"]
+            isOneToOne: false
+            referencedRelation: "energy_storages"
             referencedColumns: ["id"]
           },
         ]

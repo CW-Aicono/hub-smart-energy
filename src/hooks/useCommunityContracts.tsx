@@ -113,7 +113,7 @@ export function useContractTemplates(communityId: string | null) {
         const current = templates.find((t) => t.id === id);
         patch.version = (current?.version ?? 1) + 1;
       }
-      const { error } = await supabase.from("community_contract_templates").update(patch).eq("id", id);
+      const { error } = await supabase.from("community_contract_templates").update(patch as any).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {

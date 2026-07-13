@@ -530,8 +530,16 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
               const f = nodes.find((n) => n.id === c.from);
               const t = nodes.find((n) => n.id === c.to);
               return (
-                <span key={i} className="text-xs bg-muted px-2 py-0.5 rounded-full">
+                <span key={i} className="text-xs bg-muted pl-2 pr-1 py-0.5 rounded-full inline-flex items-center gap-1">
                   {f?.label || "?"} → {t?.label || "?"}
+                  <button
+                    type="button"
+                    aria-label="Verbindung entfernen"
+                    className="rounded-full p-0.5 hover:bg-destructive/10 hover:text-destructive transition-colors"
+                    onClick={() => onChange(nodes, connections.filter((_, idx) => idx !== i))}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
                 </span>
               );
             })}

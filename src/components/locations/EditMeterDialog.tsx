@@ -75,6 +75,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [isMainMeter, setIsMainMeter] = useState(meter.is_main_meter);
   const [isBidirectional, setIsBidirectional] = useState((meter as any).is_bidirectional ?? false);
   const [meterFunction, setMeterFunction] = useState(meter.meter_function || "consumption");
+  const [flowConvention, setFlowConvention] = useState<"negative_delivery" | "positive_delivery">(
+    ((meter as any).flow_direction_convention as "negative_delivery" | "positive_delivery") || "negative_delivery",
+  );
   const [selectedFloorId, setSelectedFloorId] = useState(meter.floor_id || "");
   const [selectedRoomId, setSelectedRoomId] = useState(meter.room_id || "");
   const [installationDate, setInstallationDate] = useState(meter.installation_date || "");
@@ -157,6 +160,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setIsMainMeter(meter.is_main_meter);
     setIsBidirectional((meter as any).is_bidirectional ?? false);
     setMeterFunction(meter.meter_function || "consumption");
+    setFlowConvention(
+      ((meter as any).flow_direction_convention as "negative_delivery" | "positive_delivery") || "negative_delivery",
+    );
     setSelectedFloorId(meter.floor_id || "");
     setSelectedRoomId(meter.room_id || "");
     setInstallationDate(meter.installation_date || "");
@@ -337,6 +343,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       is_main_meter: isMainMeter,
       is_bidirectional: isBidirectional,
       meter_function: meterFunction,
+      flow_direction_convention: flowConvention,
       floor_id: selectedFloorId || null,
       room_id: selectedRoomId || null,
       installation_date: installationDate || undefined,
@@ -686,6 +693,20 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               <div className="flex items-center justify-between">
                 <Label>Bidirektionaler Zähler (Bezug & Einspeisung)</Label>
                 <Switch checked={isBidirectional} onCheckedChange={setIsBidirectional} />
+              </div>
+              <div>
+                <Label>Flussrichtungserkennung</Label>
+                <Select value={flowConvention} onValueChange={(v) => setFlowConvention(v as "negative_delivery" | "positive_delivery")}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="negative_delivery">Lieferung = negativer Wert / Bezug = positiver Wert (Standard)</SelectItem>
+                    <SelectItem value="positive_delivery">Lieferung = positiver Wert / Bezug = negativer Wert</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Bestimmt, wie das Vorzeichen des Rohwerts im Flussdiagramm interpretiert wird
+                  (analog zur Einstellung „Leistung/Durchfluss Richtung" in der Loxone Config).
+                </p>
               </div>
               <div>
                 <Label>Zählerfunktion</Label>

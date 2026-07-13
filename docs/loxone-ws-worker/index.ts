@@ -100,8 +100,9 @@ const SPIKE_THRESHOLDS: Record<string, number> = {
   strom: 10000, gas: 5000, wasser: 1000, wärme: 5000, kälte: 2000, default: 50000,
 };
 // Zählerstände (today/month/year/total) können viele 100.000 kWh groß sein → keinen kW-Spike-Filter darauf anwenden.
-function isSpike(v: number, energyType: string, role: "pwr" | "today" | "total" | "month" | "year" = "pwr"): boolean {
+function isSpike(v: number, energyType: string, role: StateRole = "pwr"): boolean {
   if (!isFinite(v) || isNaN(v)) return true;
+  if (role === "soc") return v < 0 || v > 100;
   if (role !== "pwr") return false; // Energiewerte nicht filtern
   return Math.abs(v) > (SPIKE_THRESHOLDS[energyType] ?? SPIKE_THRESHOLDS.default);
 }
@@ -200,7 +201,8 @@ interface WsMeter {
 //   total   → Zählerstand gesamt (kWh)
 //   month   → Monatsverbrauch (kWh, optional)
 //   year    → Jahresverbrauch (kWh, optional)
-type StateRole = "pwr" | "today" | "total" | "month" | "year";
+//   soc     → Speicher-Ladezustand / Storage level (%, Slvl)
+type StateRole = "pwr" | "today" | "total" | "month" | "year" | "soc";
 
 interface UuidEntry {
   meter_id: string;
@@ -251,17 +253,24 @@ async function resolveLoxoneHost(serial: string): Promise<string | null> {
       method: "GET", redirect: "follow", signal: AbortSignal.timeout(8000),
     });
     const finalUrl = r.url;
-    if (finalUrl && finalUrl.toLowerCase().includes(serial.toLowerCase())) {
+    if (finalUrl) {
       const host = new URL(finalUrl).host;
-      dnsCache.set(serial, host);
-      log("info", `[DNS] ${serial} → ${host}`);
-      return host;
+      const hostLc = host.toLowerCase();
+      // Nur cachen, wenn der Redirect wirklich auf die dyndns-Adresse des Miniservers zeigt.
+      // Andernfalls (z.B. wenn r.url noch die dns.loxonecloud.com-Ausgangs-URL ist) NICHT
+      // fälschlich "dns.loxonecloud.com" als Ziel-Host speichern → sonst 404 bei LxCommunicator.open().
+      if (hostLc !== "dns.loxonecloud.com" && hostLc.includes(serial.toLowerCase())) {
+        dnsCache.set(serial, host);
+        log("info", `[DNS] ${serial} → ${host}`);
+        return host;
+      }
+      log("warn", `[DNS] ${serial} kein gültiger Redirect-Host (finalUrl=${finalUrl}) — Fallback`);
     }
   } catch (err) {
     log("warn", `[DNS] ${serial} fehlgeschlagen: ${(err as Error).message}`);
   }
+  // Fallback NICHT dauerhaft cachen: beim nächsten Reconnect erneut versuchen, den echten Cloud-Host aufzulösen.
   const fb = `${serial.toLowerCase()}.dns.loxonecloud.com`;
-  dnsCache.set(serial, fb);
   return fb;
 }
 
@@ -473,11 +482,13 @@ async function connect(state: ConnState): Promise<void> {
 
     const ROLE_PATTERNS: Array<{ role: StateRole; rx: RegExp }> = [
       // Reihenfolge wichtig: spezifischere Patterns zuerst
-      { role: "today", rx: /^(energytoday|today|daily|day|tagesverbrauch)$/i },
-      { role: "month", rx: /^(energymonth|month|monthly|monatsverbrauch)$/i },
-      { role: "year",  rx: /^(energyyear|year|yearly|jahresverbrauch)$/i },
-      { role: "total", rx: /^(energytotal|total|totalenergy|zaehlerstand|meter)$/i },
-      { role: "pwr",   rx: /^(pwr|power|currentpower|actual|actualpower|value|p)$/i },
+      { role: "today", rx: /^(energytoday|today|daily|day|tagesverbrauch|cd)$/i },
+      { role: "month", rx: /^(energymonth|month|monthly|monatsverbrauch|cm)$/i },
+      { role: "year",  rx: /^(energyyear|year|yearly|jahresverbrauch|cy)$/i },
+      { role: "total", rx: /^(energytotal|total|totalenergy|zaehlerstand|meter|mr)$/i },
+      { role: "soc",   rx: /^(slvl|soc|stateofcharge|state_of_charge|storagelevel|storage_level|ladezustand|speicherstand)$/i },
+      // pwr: klassische Meter (pwr/power/...) + Wallbox „Cp" (Current charging power)
+      { role: "pwr",   rx: /^(pwr|power|currentpower|actual|actualpower|value|p|cp|chargingpower|currentchargingpower)$/i },
     ];
     function classifyState(key: string): StateRole | null {
       for (const { role, rx } of ROLE_PATTERNS) if (rx.test(key)) return role;
@@ -578,6 +589,9 @@ async function connect(state: ConnState): Promise<void> {
     log("info", `[WS] ${state.serialNumber} per-block snapshot: ok=${subscribedOk} err=${subscribedErr} (blocks=${uniqueBlocks.size}, stateUuids=${state.uuidMap.size})`);
     bridgeLog("info", "ws_per_block_snapshot", `Per-block snapshot: ok=${subscribedOk} err=${subscribedErr}`, state.serialNumber, { ok: subscribedOk, err: subscribedErr, blocks: uniqueBlocks.size, stateUuids: state.uuidMap.size, failed: failedBlocks });
   } catch (err) {
+    // DNS-Cache invalidieren: falls ein falscher Host gecacht wurde (z.B. dns.loxonecloud.com selbst),
+    // zwingt das den nächsten Reconnect zu einer frischen Auflösung.
+    dnsCache.delete(state.serialNumber);
     log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${err}`);
     bridgeLog("error", "ws_connect_failed", `Verbindung fehlgeschlagen: ${(err as Error).message ?? err}`, state.serialNumber);
     state.ws = null;
@@ -679,10 +693,11 @@ async function flush(): Promise<void> {
       // ODER der letzte Push älter als MIN_PUSH_INTERVAL_MS ist (Keepalive).
       // Energiezähler (today/total/month/year) ändern sich in kleinen Schritten →
       // niedrigere Mindest-Änderung, damit kWh-Inkremente nicht verschluckt werden.
+      // SOC (%) soll ebenfalls zuverlässig als eigener Rollenwert gesendet werden.
       const prev = entry.last_pushed_value;
       const ageMs = nowMs - entry.last_pushed_at;
       const delta = prev === null ? Infinity : Math.abs(entry.latest_value - prev);
-      const minDelta = entry.role === "pwr" ? MIN_DELTA : 0.001;
+      const minDelta = entry.role === "pwr" ? MIN_DELTA : entry.role === "soc" ? 0.1 : 0.001;
       const changed = delta >= minDelta;
       const stale = ageMs >= MIN_PUSH_INTERVAL_MS;
       if (!changed && !stale) continue;

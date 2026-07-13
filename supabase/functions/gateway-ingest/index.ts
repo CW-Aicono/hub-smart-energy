@@ -1258,7 +1258,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
       sensor_uuid?: string;
       value?: number;
       recorded_at?: string;
-      role?: "pwr" | "today" | "total" | "month" | "year";
+      role?: "pwr" | "today" | "total" | "month" | "year" | "soc";
     }>;
   };
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
@@ -1292,10 +1292,13 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
 
   // Phase 7: rollenbasiertes Routing
   //  - role="pwr" (Default)  → bridge_raw_samples (für 5-Min-Aggregator) + Broadcast
-  //  - role!="pwr"            → nur Broadcast (kein DB-Write); UI nutzt den Wert live in KPI-Kacheln
-  type Role = "pwr" | "today" | "total" | "month" | "year";
+  //  - role="soc"            → energy_storages.current_soc_pct + Broadcast
+  //  - andere Rollen          → nur Broadcast (kein DB-Write); UI nutzt den Wert live in KPI-Kacheln
+  type Role = "pwr" | "today" | "total" | "month" | "year" | "soc";
   const rawRows: any[] = [];
   const broadcastRows: Array<{ tenant_id: string | null; uuid: string; value: number; at: string; role: Role }> = [];
+  const socRows: Array<{ tenant_id: string; uuid: string; value: number; at: string }> = [];
+  const socReadingRows: Array<{ storage_id: string; tenant_id: string; sensor_uuid: string; soc_pct: number; recorded_at: string; source: string }> = [];
   let skipped = 0;
   for (const r of body.readings) {
     if (!r.miniserver_serial || !r.sensor_uuid || typeof r.value !== "number" || !isFinite(r.value)) {
@@ -1317,6 +1320,10 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
         value: r.value,
         received_at: at,
       });
+    } else if (role === "soc") {
+      if (link?.tenant_id && r.value >= 0 && r.value <= 100) {
+        socRows.push({ tenant_id: link.tenant_id, uuid, value: r.value, at });
+      }
     }
   }
 
@@ -1324,6 +1331,70 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
   if (rawRows.length > 0) {
     const { error } = await supabase.from("bridge_raw_samples").insert(rawRows);
     if (error) return json({ success: false, error: error.message }, 500);
+  }
+
+  // SOC-Werte persistieren: Loxone liefert Slvl am Speicher-Zählerblock. Der Worker
+  // sendet deshalb die Speicher-Block-UUID; hier wird sie auf meter → storage gemappt.
+  let socUpdated = 0;
+  if (socRows.length > 0) {
+    const tenants = [...new Set(socRows.map((r) => r.tenant_id))];
+    const uuids = [...new Set(socRows.map((r) => r.uuid))];
+    const { data: meters } = await supabase
+      .from("meters")
+      .select("id, tenant_id, location_id, sensor_uuid")
+      .in("tenant_id", tenants)
+      .in("sensor_uuid", uuids)
+      .eq("is_archived", false);
+
+    for (const row of socRows) {
+      const meter = (meters ?? []).find((m: any) => m.tenant_id === row.tenant_id && String(m.sensor_uuid).toLowerCase() === row.uuid);
+      if (!meter?.location_id) continue;
+
+      const { data: storages } = await supabase
+        .from("energy_storages")
+        .select("id, power_meter_id, soc_sensor_uuid")
+        .eq("tenant_id", row.tenant_id)
+        .eq("location_id", meter.location_id);
+
+      const storage = (storages ?? []).find((s: any) => s.power_meter_id === meter.id)
+        ?? (storages ?? []).find((s: any) => String(s.soc_sensor_uuid ?? "").toLowerCase() === row.uuid)
+        ?? (storages ?? []).find((s: any) => !s.power_meter_id);
+      if (!storage) continue;
+
+      const patch: Record<string, unknown> = {
+        current_soc_pct: row.value,
+        soc_updated_at: row.at,
+      };
+      if (storage.soc_sensor_uuid !== row.uuid) patch.soc_sensor_uuid = row.uuid;
+      if (storage.power_meter_id !== meter.id) patch.power_meter_id = meter.id;
+
+      const { error: socErr } = await supabase
+        .from("energy_storages")
+        .update(patch)
+        .eq("id", storage.id);
+      if (socErr) {
+        console.warn(`[bridge-readings] SOC update failed for ${row.uuid}: ${socErr.message}`);
+      } else {
+        socReadingRows.push({
+          storage_id: storage.id,
+          tenant_id: row.tenant_id,
+          sensor_uuid: row.uuid,
+          soc_pct: row.value,
+          recorded_at: row.at,
+          source: "bridge_readings",
+        });
+        socUpdated++;
+      }
+    }
+  }
+
+  if (socReadingRows.length > 0) {
+    const { error: socReadingsErr } = await supabase
+      .from("storage_soc_readings")
+      .insert(socReadingRows);
+    if (socReadingsErr) {
+      console.warn(`[bridge-readings] SOC history insert failed: ${socReadingsErr.message}`);
+    }
   }
 
   // Realtime-Broadcast pro Tenant: Power + Energiestände (today/total/...) zusammen.
@@ -1358,7 +1429,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
           const txt = await r.text().catch(() => "");
           console.error(`[bridge-readings] broadcast HTTP ${r.status}: ${txt}`);
         } else {
-          console.log(`[bridge-readings] broadcast ok: ${messages.length} topic(s), ${broadcastRows.length} event(s) (raw_inserted=${rawRows.length})`);
+          console.log(`[bridge-readings] broadcast ok: ${messages.length} topic(s), ${broadcastRows.length} event(s) (raw_inserted=${rawRows.length}, soc_updated=${socUpdated})`);
         }
       }).catch((e) => console.error("[bridge-readings] broadcast failed:", e?.message ?? e));
     }
@@ -1366,7 +1437,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     console.error("[bridge-readings] broadcast prep error:", (e as Error).message);
   }
 
-  return json({ success: true, inserted: rawRows.length, broadcast: broadcastRows.length, skipped });
+  return json({ success: true, inserted: rawRows.length, broadcast: broadcastRows.length, soc_updated: socUpdated, skipped });
 }
 
 /* ── Loxone Remote-Connect WebSocket Feldtest ───────────────────────────────── */
