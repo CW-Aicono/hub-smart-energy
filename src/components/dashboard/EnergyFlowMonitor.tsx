@@ -756,6 +756,7 @@ interface NodeDetailOverlayProps {
   getLiveWatts: (id: string) => number | null;
   anchor: { x: number; y: number; w: number; h: number };
   onClose: () => void;
+  onOpenDetail: (node: EnergyFlowNode) => void;
 }
 
 function NodeDetailOverlay({
@@ -768,6 +769,7 @@ function NodeDetailOverlay({
   getLiveWatts,
   anchor,
   onClose,
+  onOpenDetail,
 }: NodeDetailOverlayProps) {
   const Icon = ROLE_ICON[node.role];
 
