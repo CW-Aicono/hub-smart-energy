@@ -724,6 +724,18 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
             h: dims.h,
           }}
           onClose={() => setSelectedNodeId(null)}
+          onOpenDetail={(n) => {
+            setDetailNode(n);
+            setSelectedNodeId(null);
+          }}
+        />
+      )}
+
+      {detailNode && (
+        <MeterDetailDialog
+          node={detailNode}
+          socPct={getSocPct(detailNode.meter_id)}
+          onClose={() => setDetailNode(null)}
         />
       )}
     </div>
