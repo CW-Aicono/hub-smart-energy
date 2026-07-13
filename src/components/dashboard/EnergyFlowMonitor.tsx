@@ -227,17 +227,19 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
   });
 
 
-  // UUID→meter_id + tenants für Loxone-Bridge/Broadcast
-  const uuidToMeterId = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const meter of relevantMeters as any[]) {
-      if (meter.sensor_uuid) m.set(String(meter.sensor_uuid).toLowerCase(), meter.id);
-    }
-    return m;
-  }, [relevantMeters]);
-  const uuids = useMemo(
-    () => Array.from(uuidToMeterId.keys()),
-    [uuidToMeterId],
+  // Loxone-Resolver: bildet Bridge-Sub-Output-UUIDs (Broadcast + Seed)
+  // auf Meter-IDs ab. Nutzt exakten Match für Nicht-Loxone-Zähler und
+  // Family+Nearest-3rd-Segment für Loxone (analog bridge-aggregator).
+  const resolver = useMemo(
+    () => buildLoxoneResolver(
+      (relevantMeters as any[]).map((m) => ({
+        id: m.id,
+        tenant_id: m.tenant_id ?? null,
+        energy_type: m.energy_type ?? null,
+        sensor_uuid: m.sensor_uuid ?? null,
+      })),
+    ),
+    [relevantMeters],
   );
   const tenantIds = useMemo(
     () => Array.from(new Set((relevantMeters as any[]).map((m) => m.tenant_id).filter(Boolean))) as string[],
