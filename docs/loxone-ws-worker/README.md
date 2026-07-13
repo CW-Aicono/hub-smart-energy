@@ -655,7 +655,7 @@ docker build -t loxone-ws-worker .
 
 Bevor Sie den folgenden Befehl eingeben, müssen Sie **zwei Platzhalter ersetzen**:
 
-1. `[HIER_SUPABASE_URL]` → Ihre Supabase-URL. Diese bekommen Sie von Ihrem Administrator. Sie sieht aus wie `https://abcdefg12345.supabase.co`.
+1. `[HIER_SUPABASE_URL]` → Ihre Backend-URL. Für die Live-Umgebung dieses Projekts ist das `https://api-ems.aicono.org`.
 2. `[HIER_API_KEY]` → Ihr `GATEWAY_API_KEY`. Diesen finden Sie im AICONO-Backend unter **Einstellungen → Integrationen → Reiter API**. Dort steht ein Feld mit der Beschriftung **API-Key** – kopieren Sie den Wert daraus.
 
 Ersetzen Sie die Platzhalter im folgenden Befehl und fügen Sie ihn ein:
@@ -675,7 +675,7 @@ docker run -d --restart=always --name loxone-ws-worker \
 > ```bash
 > docker run -d --restart=always --name loxone-ws-worker \
 >   -p 8080:8080 \
->   -e SUPABASE_URL=https://abcdefg12345.supabase.co \
+>   -e SUPABASE_URL=https://api-ems.aicono.org \
 >   -e GATEWAY_API_KEY=sk_live_51H8xyz... \
 >   -e LOG_LEVEL=info \
 >   -e WORKER_HOST=hetzner-prod-1 \
@@ -883,7 +883,26 @@ Sie haben den neuen Code in Lovable im Browser vor sich. Jetzt müssen Sie ihn a
    ➡️ **Erwartetes Ergebnis:** Sie sehen mindestens eine Zeile mit `"phase3"`.
    > **Wenn nichts erscheint:** Die Datei wurde nicht richtig gespeichert. Wiederholen Sie die Schritte 12.3.2 bis 12.3.7 noch einmal.
 
-### 12.4 Alten Container stoppen und löschen
+### 12.4 Container-Konfiguration sichern – unbedingt vor dem Löschen
+
+Bevor ein bestehender Container ersetzt wird, sichern Sie zuerst seine Startwerte. Sonst gehen Werte wie `SUPABASE_URL`, `GATEWAY_API_KEY`, Ports und Namen verloren.
+
+```bash
+mkdir -p /root/aicono-worker-backup
+docker inspect loxone-ws-worker > /root/aicono-worker-backup/loxone-ws-worker.inspect.json
+docker inspect loxone-ws-worker --format '{{range .Config.Env}}{{println .}}{{end}}' > /root/aicono-worker-backup/loxone-ws-worker.env.txt
+docker inspect loxone-ws-worker --format '{{json .HostConfig.PortBindings}}' > /root/aicono-worker-backup/loxone-ws-worker.ports.json
+```
+
+Prüfen:
+
+```bash
+grep -E "SUPABASE_URL|GATEWAY_API_KEY|WORKER_HOST|BRIDGE_WORKER_NAME" /root/aicono-worker-backup/loxone-ws-worker.env.txt
+```
+
+Wenn hier `SUPABASE_URL` oder `GATEWAY_API_KEY` fehlen: **nicht fortfahren und den Container nicht löschen.**
+
+### 12.5 Alten Container stoppen und löschen
 
 ```bash
 docker rm -f loxone-ws-worker
@@ -891,7 +910,7 @@ docker rm -f loxone-ws-worker
 
 ➡️ **Erwartetes Ergebnis:** `loxone-ws-worker`
 
-### 12.5 Docker-Image neu bauen
+### 12.6 Docker-Image neu bauen
 
 ```bash
 docker build -t loxone-ws-worker .
@@ -899,10 +918,10 @@ docker build -t loxone-ws-worker .
 
 ➡️ **Erwartetes Ergebnis:** Dauert ca. 30–60 Sekunden. Am Ende muss `Successfully tagged loxone-ws-worker:latest` stehen.
 
-### 12.6 Container neu starten
+### 12.7 Container neu starten
 
 > **Wichtig:** Ersetzen Sie in den folgenden Zeilen die beiden Platzhalter durch Ihre echten Werte:
-> - `[HIER_SUPABASE_URL]` → Ihre Supabase-URL (z. B. `https://abcdefg12345.supabase.co`)
+> - `[HIER_SUPABASE_URL]` → Ihre Backend-URL. Für Live: `https://api-ems.aicono.org`
 > - `[HIER_API_KEY]` → Ihr `GATEWAY_API_KEY` aus dem AICONO-Backend (Einstellungen → Integrationen → Reiter API)
 
 ```bash
@@ -920,7 +939,7 @@ docker run -d --restart=always --name loxone-ws-worker \
 > ```bash
 > docker run -d --restart=always --name loxone-ws-worker \
 >   -p 8080:8080 \
->   -e SUPABASE_URL=https://abcdefg12345.supabase.co \
+>   -e SUPABASE_URL=https://api-ems.aicono.org \
 >   -e GATEWAY_API_KEY=sk_live_51H8xyz... \
 >   -e LOG_LEVEL=info \
 >   -e WORKER_HOST=hetzner-prod-1 \
@@ -930,7 +949,7 @@ docker run -d --restart=always --name loxone-ws-worker \
 
 ➡️ **Erwartetes Ergebnis:** Eine lange Zeichenkette aus Buchstaben und Zahlen – das ist die ID des gestarteten Containers.
 
-### 12.7 Erfolg in den Logs prüfen
+### 12.8 Erfolg in den Logs prüfen
 
 ```bash
 docker logs --tail 20 loxone-ws-worker
@@ -1338,7 +1357,7 @@ Sie müssen diese jetzt nicht ausführen, aber merken Sie sich diese Befehle fü
 | Logs anschauen (letzte 50 Zeilen) | `docker logs --tail 50 loxone-ws-worker` |
 | Alle laufenden Boxen anzeigen | `docker ps` |
 
-> **Tipp:** Nachdem Sie den Programm-Code geändert haben (z. B. eine neue Version), müssen Sie erst `docker rm -f loxone-ws-worker` (löschen), dann `docker build -t loxone-ws-worker .` (neu bauen) und dann den `docker run ...`-Befehl aus Schritt 7 nochmal ausführen.
+> **Wichtig:** Wenn Sie Programm-Code ändern, sichern Sie zuerst die Container-Konfiguration mit `docker inspect` (siehe Schritt 12.4). Erst danach darf der Container ersetzt werden. Niemals direkt mit `docker rm -f` beginnen.
 
 ---
 
@@ -1350,7 +1369,7 @@ Docker ist nicht installiert. Fragen Sie Ihren Administrator, ob Docker auf dem 
 
 ### „FATAL: SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein“
 
-Sie haben in Schritt 7 die Platzhalter `[HIER_SUPABASE_URL]` und `[HIER_API_KEY]` nicht durch die richtigen Werte ersetzt. Löschen Sie den Container (`docker rm -f loxone-ws-worker`) und starten Sie bei Schritt 7 nochmal.
+Sie haben in Schritt 7 die Platzhalter `[HIER_SUPABASE_URL]` und `[HIER_API_KEY]` nicht durch die richtigen Werte ersetzt. Löschen Sie den Container nicht direkt, sondern prüfen Sie zuerst die gesicherten Werte aus Schritt 12.4 oder holen Sie den API-Key erneut aus der Live-App.
 
 ### „aktive Miniserver: 0“ bleibt für immer
 
