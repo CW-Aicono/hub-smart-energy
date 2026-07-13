@@ -1060,20 +1060,26 @@ function MeterDetailDialog({
     return { min, max, avg, bidirectional };
   }, [series]);
 
-  // Energie pro Bucket via Trapez-Integration
+  // Energie pro Bucket via Trapez-Integration – prefilled über den gesamten Zeitraum
   const energyBuckets = useMemo(() => {
-    if (series.length < 2) return [];
     const bucketMs =
       range === "1h" ? 5 * 60_000
       : range === "24h" ? 60 * 60_000
       : range === "7d" ? 6 * 60 * 60_000
       : 24 * 60 * 60_000;
+    const now = Date.now();
+    const startAligned = Math.floor((now - RANGE_MS[range]) / bucketMs) * bucketMs;
+    const endAligned = Math.floor(now / bucketMs) * bucketMs;
     const map = new Map<number, { import: number; export: number }>();
+    // Alle Buckets vorab mit 0 initialisieren, damit keine Lücken entstehen
+    for (let k = startAligned; k <= endAligned; k += bucketMs) {
+      map.set(k, { import: 0, export: 0 });
+    }
     for (let i = 1; i < series.length; i++) {
       const a = series[i - 1];
       const b = series[i];
       const dtH = (b.t - a.t) / 3_600_000;
-      if (dtH <= 0 || dtH > 1) continue; // Lücken überspringen
+      if (dtH <= 0 || dtH > 1) continue; // echte Datenlücken überspringen
       const kw = (a.kw + b.kw) / 2;
       const kwh = kw * dtH;
       const bucketKey = Math.floor(b.t / bucketMs) * bucketMs;
