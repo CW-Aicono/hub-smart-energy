@@ -695,6 +695,20 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                 <Switch checked={isBidirectional} onCheckedChange={setIsBidirectional} />
               </div>
               <div>
+                <Label>Flussrichtungserkennung</Label>
+                <Select value={flowConvention} onValueChange={(v) => setFlowConvention(v as "negative_delivery" | "positive_delivery")}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="negative_delivery">Lieferung = negativer Wert / Bezug = positiver Wert (Standard)</SelectItem>
+                    <SelectItem value="positive_delivery">Lieferung = positiver Wert / Bezug = negativer Wert</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Bestimmt, wie das Vorzeichen des Rohwerts im Flussdiagramm interpretiert wird
+                  (analog zur Einstellung „Leistung/Durchfluss Richtung" in der Loxone Config).
+                </p>
+              </div>
+              <div>
                 <Label>Zählerfunktion</Label>
                 <Select value={meterFunction} onValueChange={setMeterFunction}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
