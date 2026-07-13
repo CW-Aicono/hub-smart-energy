@@ -171,7 +171,27 @@ const MetersOverview = () => {
                 {t("meters.filterLocation" as any)}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Suchen nach Name, Zählernummer, Liegenschaft…"
+                  className="pl-9 pr-9"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+                    aria-label="Suche zurücksetzen"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
               <div className="flex flex-wrap gap-4">
                 <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
                   <SelectTrigger className="w-[220px]">
