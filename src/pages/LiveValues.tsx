@@ -440,7 +440,25 @@ const LiveValues = () => {
       const channelName = `loxone-live-${tenantId}`;
       const ch = supabase
         .channel(channelName, { config: { broadcast: { self: false } } })
-        .on("broadcast", { event: "readings" }, (msg: { payload: { events?: Array<{ uuid: string; value: number; at: string; role?: "pwr" | "today" | "total" | "month" | "year" }> } }) => {
+        .on("broadcast", { event: "readings" }, (msg: { payload: { events?: Array<{ uuid: string; value: number; at: string; role?: "pwr" | "today" | "total" | "month" | "year" | "soc" }> } }) => {
+          const events = msg.payload?.events ?? [];
+          if (events.length === 0) return;
+          // Handle SOC events separately (update energy_storages-derived map)
+          const socEvents = events.filter((e) => e.role === "soc");
+          if (socEvents.length > 0) {
+            setSocByMeterId((prev) => {
+              const next = new Map(prev);
+              let changed = false;
+              for (const ev of socEvents) {
+                const meterId = socUuidToMeterId.get(ev.uuid.toLowerCase());
+                if (!meterId) continue;
+                if (!Number.isFinite(ev.value) || ev.value < 0 || ev.value > 100) continue;
+                next.set(meterId, { pct: ev.value, updatedAt: ev.at });
+                changed = true;
+              }
+              return changed ? next : prev;
+            });
+          }
           const events = msg.payload?.events ?? [];
           if (events.length === 0) return;
           setLiveValues((prev) => {
