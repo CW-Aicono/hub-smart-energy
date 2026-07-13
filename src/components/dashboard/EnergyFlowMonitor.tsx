@@ -701,6 +701,7 @@ interface NodeDetailOverlayProps {
   liveWatts: number | null;
   periodSum: number | undefined;
   periodLabel: string;
+  socPct?: number | null;
   allNodes: EnergyFlowNode[];
   getLiveWatts: (id: string) => number | null;
   anchor: { x: number; y: number; w: number; h: number };
@@ -712,6 +713,7 @@ function NodeDetailOverlay({
   liveWatts,
   periodSum,
   periodLabel,
+  socPct,
   allNodes,
   getLiveWatts,
   anchor,
