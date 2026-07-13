@@ -804,7 +804,25 @@ function NodeDetailOverlay({
             <div className="text-sm font-semibold tabular-nums">
               {periodSum != null ? `${periodSum < 0 ? "−" : ""}${formatEnergy(Math.abs(periodSum))}` : "–"}
             </div>
+        </div>
+
+        {node.role === "battery" && socPct != null && (
+          <div className="rounded-md border p-2 text-xs mb-3">
+            <div className="text-muted-foreground">Ladezustand (SOC)</div>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, socPct))}%`,
+                    backgroundColor: node.color,
+                  }}
+                />
+              </div>
+              <div className="text-sm font-semibold tabular-nums">{fmtDe(socPct, 0)} %</div>
+            </div>
           </div>
+        )}
         </div>
 
         {share != null && (
