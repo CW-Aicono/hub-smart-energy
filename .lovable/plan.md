@@ -1,37 +1,71 @@
-## Ziel
-Loxone-Live-Werte (sub-sekündlich) im Flow-Widget ankommen lassen, indem der Frontend-Live-Pfad dieselbe UUID→Meter-Auflösung nutzt wie der `bridge-aggregator`.
+## Root Cause
 
-## Ursache (bestätigt)
-- `meters.sensor_uuid` speichert die **Basis-Objekt-UUID** (Suffix = Miniserver-MAC, z. B. `…-ffffed57184a04d2`).
-- Der Loxone-WS-Worker emittiert die **State-/Sub-Output-UUIDs** desselben Objekts (gleiche ersten beiden Segmente, andere 3./4./5. Gruppe).
-- `EnergyFlowMonitor` mappt Broadcast/Seed derzeit per exaktem `sensor_uuid`-Match → schlägt fehl → Fallback auf die 5-min-Werte aus `meter_power_readings`.
-- Der `bridge-aggregator` löst das serverseitig via *Family-Key* (erste 2 UUID-Segmente + tenant) + *Third-Segment-Nearest-Match* (Delta ≤ 32, Plausibilitätsfilter ≤ 500 kW, `energy_type = 'strom'`) auf. Genau diese Logik fehlt im Frontend.
+`resolveLoxoneHost()` in `docs/loxone-ws-worker/index.ts` (Zeile 249–268) ist zu tolerant:
 
-## Umsetzung
-Nur Frontend-Änderungen, keine Migration, kein Edge-Function-Deploy.
+```ts
+const finalUrl = r.url;   // bei fehlgeschlagenem Redirect: "https://dns.loxonecloud.com/504F94A2BAA2"
+if (finalUrl && finalUrl.toLowerCase().includes(serial.toLowerCase())) {
+  const host = new URL(finalUrl).host;   // → "dns.loxonecloud.com"
+  dnsCache.set(serial, host);            // GIFT: falscher Host wird für immer gecacht
+}
+```
 
-**1. Neuer Helper `src/lib/loxoneUuidResolver.ts`**
-Portiert `loxoneFamilyKey`, `loxoneThirdSegment`, `isPlausibleElectricalPowerKw` und `resolveMeterForRawSample` aus `supabase/functions/bridge-aggregator/index.ts`. Exponiert:
-- `buildLoxoneResolver(meters)` → liefert `{ exactByUuid, byTenantFamily, resolve(uuid, tenantId, value) }`.
+Wenn der 307-Redirect beim ersten Auflösen (z.B. wegen Race beim Registrieren des neuen Miniservers oder undici-Timing) nicht gefolgt wurde, landet `dns.loxonecloud.com` selbst im Cache — der Serial ist ja in der URL enthalten, die Prüfung schlägt fälschlich an. Alle folgenden Verbindungsversuche gehen dann gegen `https://dns.loxonecloud.com/jdev/...` und Loxone antwortet mit HTTP 404 → `[WS] Verbindung fehlgeschlagen ... Error: Request failed with status code 404`.
 
-**2. `src/components/dashboard/EnergyFlowMonitor.tsx`**
-- Statt der aktuellen `uuidToMeterId`-Map einen `resolver = useMemo(() => buildLoxoneResolver(relevantMeters), [relevantMeters])` verwenden.
-- Broadcast-Handler (`.on("broadcast", { event: "readings" })`): für jedes Event `resolver.resolve(ev.uuid, tenantIdOfChannel, ev.value)` aufrufen; nur bei Treffer `broadcastByMeter[meterId]` setzen. Für `role === "soc"` weiterhin exact-Match (SOC hat eigene UUID-Familie, kein Nearest-Match sinnvoll).
-- `bridge_raw_samples`-Seed-Query: statt `.in("uuid", uuids)` per Family-Prefix laden (`or(family1.*, family2.*, …)` mittels `ilike` auf die ersten beiden UUID-Segmente) und die Rückgabe clientseitig durch `resolver.resolve` schicken. Dabei pro Meter nur den zeitlich neuesten Wert übernehmen.
-- Der `uuids`-Ableitung nichts wegwerfen — nur die Auflösung ändert sich.
+Log-Beleg des Users: `[WS] verbinde 504F94A2BAA2 → dns.loxonecloud.com` (die anderen zwei zeigen die echte dyndns-Adresse).
 
-**3. Analoge Nachziehung (nur wenn simple Ersetzung reicht) in:**
-- `src/pages/LiveValues.tsx` (gleicher Broadcast-Kanal)
-- `src/components/charging/DynamicDlmCard.tsx` (gleicher Broadcast-Kanal)
+Die zwei bereits laufenden Miniserver haben ihren korrekten Host beim allerersten Auflösen bekommen und sind seither zufriedene Cache-Hits — deshalb funktionieren sie.
 
-Beide bekommen den `resolver` über denselben Helper. Kein Verhaltenswechsel für Nicht-Loxone-Meter (dort greift `exactByUuid` weiterhin sofort).
+## Fix im Worker (`docs/loxone-ws-worker/index.ts`)
 
-## Verifikation
-- Nach Deploy in Browser-Devtools prüfen, dass im Broadcast-Handler `resolver.resolve` für die fünf Widget-Meter Treffer liefert (temporäres `console.debug`, danach wieder entfernen).
-- Widget-Werte müssen sich bei sichtbaren Loxone-Änderungen im Sekundentakt bewegen (statt alle 5 min in Sprüngen).
-- `meter_power_readings`-Seed bleibt als Fallback aktiv; keine Regression bei nicht-Loxone-Zählern (Shelly/HA/Gateway) — dort weiterhin exact-UUID-Match.
+Zwei kleine, defensive Änderungen — keine Logik-Umstellung, keine anderen Miniserver betroffen:
 
-## Nicht Teil dieser Änderung
-- Kein Schema-Change, keine Migration von `meters.sensor_uuid`.
-- Kein Umbau des `bridge-aggregator` (Server-Seite bleibt unverändert – Frontend zieht nur nach).
-- Keine neue RPC/Edge-Function.
+**1. Strengere Validierung in `resolveLoxoneHost()`** — nur akzeptieren, wenn der aufgelöste **Host** (nicht die ganze URL) etwas anderes ist als `dns.loxonecloud.com` und den Serial enthält:
+
+```ts
+const host = new URL(finalUrl).host;
+const hostLc = host.toLowerCase();
+if (hostLc !== "dns.loxonecloud.com" && hostLc.includes(serial.toLowerCase())) {
+  dnsCache.set(serial, host);
+  return host;
+}
+// sonst: nichts cachen, unten Fallback nehmen
+```
+
+Fallback (`<serial>.dns.loxonecloud.com`) NICHT dauerhaft cachen — nur zurückgeben, damit der nächste Reconnect erneut versucht, die echte Cloud-Adresse aufzulösen.
+
+**2. Cache invalidieren bei Verbindungsfehlern** — im `catch`-Block von `connect()` (um Zeile 585):
+
+```ts
+} catch (err) {
+  dnsCache.delete(state.serialNumber);   // zwingt Neu-Auflösung beim nächsten Versuch
+  log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${err}`);
+  ...
+}
+```
+
+## Danach — Copy/Paste für den User
+
+```bash
+cd /opt/loxone-ws-worker-live
+# neue index.ts wird von Lovable synchronisiert / manuell reingelegt (wie beim CP-Fix zuvor)
+docker build -t loxone-ws-worker:latest .
+docker rm -f loxone-ws-worker-live
+docker run -d --name loxone-ws-worker-live --restart unless-stopped \
+  -p 8081:8080 --env-file /opt/loxone-ws-worker-live/.env \
+  loxone-ws-worker:latest
+docker logs -f loxone-ws-worker-live | grep -E "504F94A2BAA2|DNS|WS"
+```
+
+Erwartung: `[DNS] 504F94A2BAA2 → 2a01-4f8-c010-2f7--1.504F94A2BAA2.dyndns.loxonecloud.com:54146` und anschließend `LoxAPP3.json geladen`.
+
+## Warum nicht anders
+
+- User-Credentials sind bestätigt (getkey2 = 200).
+- Cloud-Tunnel steht (getPublicKey = 200).
+- Es gibt keinen sinnvollen Workaround „im UI" — der Bug sitzt im Worker-Cache. Ein Worker-Restart alleine würde reichen **für diesen einen Miniserver**, aber der Bug tritt bei jedem neu hinzugefügten Miniserver mit ungünstigem Timing wieder auf.
+
+## Umfang
+
+- 1 Datei, ~10 Zeilen Änderung: `docs/loxone-ws-worker/index.ts`
+- Keine Änderung an Cloud/Edge-Functions, keine DB-Migration.
