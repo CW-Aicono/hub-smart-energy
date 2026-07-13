@@ -197,7 +197,7 @@ export function useChargingInvoices() {
 
   const createInvoice = useMutation({
     mutationFn: async (invoice: Partial<ChargingInvoice> & { tenant_id: string }) => {
-      const { data, error } = await supabase.from("charging_invoices").insert(invoice).select().single();
+      const { data, error } = await supabase.from("charging_invoices").insert(invoice as any).select().single();
       if (error) throw error;
       return data;
     },

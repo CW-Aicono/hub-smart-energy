@@ -100,8 +100,9 @@ const SPIKE_THRESHOLDS: Record<string, number> = {
   strom: 10000, gas: 5000, wasser: 1000, wärme: 5000, kälte: 2000, default: 50000,
 };
 // Zählerstände (today/month/year/total) können viele 100.000 kWh groß sein → keinen kW-Spike-Filter darauf anwenden.
-function isSpike(v: number, energyType: string, role: "pwr" | "today" | "total" | "month" | "year" = "pwr"): boolean {
+function isSpike(v: number, energyType: string, role: StateRole = "pwr"): boolean {
   if (!isFinite(v) || isNaN(v)) return true;
+  if (role === "soc") return v < 0 || v > 100;
   if (role !== "pwr") return false; // Energiewerte nicht filtern
   return Math.abs(v) > (SPIKE_THRESHOLDS[energyType] ?? SPIKE_THRESHOLDS.default);
 }
@@ -200,7 +201,8 @@ interface WsMeter {
 //   total   → Zählerstand gesamt (kWh)
 //   month   → Monatsverbrauch (kWh, optional)
 //   year    → Jahresverbrauch (kWh, optional)
-type StateRole = "pwr" | "today" | "total" | "month" | "year";
+//   soc     → Speicher-Ladezustand / Storage level (%, Slvl)
+type StateRole = "pwr" | "today" | "total" | "month" | "year" | "soc";
 
 interface UuidEntry {
   meter_id: string;
@@ -477,6 +479,7 @@ async function connect(state: ConnState): Promise<void> {
       { role: "month", rx: /^(energymonth|month|monthly|monatsverbrauch)$/i },
       { role: "year",  rx: /^(energyyear|year|yearly|jahresverbrauch)$/i },
       { role: "total", rx: /^(energytotal|total|totalenergy|zaehlerstand|meter)$/i },
+      { role: "soc",   rx: /^(slvl|soc|stateofcharge|state_of_charge|storagelevel|storage_level|ladezustand|speicherstand)$/i },
       { role: "pwr",   rx: /^(pwr|power|currentpower|actual|actualpower|value|p)$/i },
     ];
     function classifyState(key: string): StateRole | null {
@@ -679,10 +682,11 @@ async function flush(): Promise<void> {
       // ODER der letzte Push älter als MIN_PUSH_INTERVAL_MS ist (Keepalive).
       // Energiezähler (today/total/month/year) ändern sich in kleinen Schritten →
       // niedrigere Mindest-Änderung, damit kWh-Inkremente nicht verschluckt werden.
+      // SOC (%) soll ebenfalls zuverlässig als eigener Rollenwert gesendet werden.
       const prev = entry.last_pushed_value;
       const ageMs = nowMs - entry.last_pushed_at;
       const delta = prev === null ? Infinity : Math.abs(entry.latest_value - prev);
-      const minDelta = entry.role === "pwr" ? MIN_DELTA : 0.001;
+      const minDelta = entry.role === "pwr" ? MIN_DELTA : entry.role === "soc" ? 0.1 : 0.001;
       const changed = delta >= minDelta;
       const stale = ageMs >= MIN_PUSH_INTERVAL_MS;
       if (!changed && !stale) continue;

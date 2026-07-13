@@ -281,6 +281,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
 
   // Realtime: Loxone broadcast (loxone-live-{tenantId}) – sub-sekündliche Updates
   const [broadcastByMeter, setBroadcastByMeter] = useState<Record<string, number>>({});
+  const [broadcastSocByMeter, setBroadcastSocByMeter] = useState<Record<string, number>>({});
   const tenantKey = tenantIds.join(",");
   useEffect(() => {
     if (tenantIds.length === 0 || uuidToMeterId.size === 0) return;
@@ -297,6 +298,20 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
               const role = ev.role ?? "pwr";
               if (role !== "pwr") continue;
               if (!Number.isFinite(ev.value) || Math.abs(ev.value) > 10_000) continue;
+              const meterId = uuidToMeterId.get(String(ev.uuid).toLowerCase());
+              if (!meterId) continue;
+              next[meterId] = Number(ev.value);
+              changed = true;
+            }
+            return changed ? next : prev;
+          });
+          setBroadcastSocByMeter((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            for (const ev of events) {
+              const role = ev.role ?? "pwr";
+              if (role !== "soc") continue;
+              if (!Number.isFinite(ev.value) || ev.value < 0 || ev.value > 100) continue;
               const meterId = uuidToMeterId.get(String(ev.uuid).toLowerCase());
               if (!meterId) continue;
               next[meterId] = Number(ev.value);
@@ -329,6 +344,11 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
       return null;
     },
     [broadcastByMeter, latestByMeter, livePowerByMeter, bridgeByMeter, seedByMeter],
+  );
+
+  const getSocPct = useCallback(
+    (meterId: string): number | null => broadcastSocByMeter[meterId] ?? socByMeter[meterId] ?? null,
+    [broadcastSocByMeter, socByMeter],
   );
 
   const hasLive = useMemo(
@@ -635,13 +655,13 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                   {PERIOD_SUM_LABEL[selectedPeriod]}: {periodSum < 0 ? "−" : ""}{formatEnergy(Math.abs(periodSum))}
                 </text>
               )}
-              {node.role === "battery" && socByMeter[node.meter_id] != null && (
+              {node.role === "battery" && getSocPct(node.meter_id) != null && (
                 <text
                   x={cx} y={sumY}
                   textAnchor="middle"
                   className="fill-muted-foreground text-[9px] tabular-nums"
                 >
-                  SOC: {fmtDe(socByMeter[node.meter_id], 0)} %
+                  SOC: {fmtDe(getSocPct(node.meter_id) ?? 0, 0)} %
                 </text>
               )}
             </g>
@@ -678,7 +698,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           liveWatts={getLiveWatts(selectedNode.meter_id)}
           periodSum={periodSums[selectedNode.meter_id]}
           periodLabel={PERIOD_SUM_LABEL[selectedPeriod]}
-          socPct={socByMeter[selectedNode.meter_id] ?? null}
+          socPct={getSocPct(selectedNode.meter_id)}
           allNodes={nodes}
           getLiveWatts={getLiveWatts}
           anchor={{
