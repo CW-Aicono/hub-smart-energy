@@ -1,203 +1,224 @@
-# Update: Wallbox „Cp" (Current Charging Power) korrekt erkennen
+# Update: Wallbox „Cp" korrekt erkennen – sichere Vorgehensweise
 
-> **Was ändert sich?** Der Worker kennt jetzt die Wallbox-Kennungen `Cp` (aktuelle Ladeleistung) und die Wallbox-Energiezähler `Cd/Cm/Cy/Mr`. Vorher hat er stattdessen fälschlich den Wert von `Ca` (Charging allowed = 0/1) als „Leistung" gemeldet – deshalb stand im Dashboard konstant „1,00 kW" an der Wallbox.
->
-> **Zeitaufwand:** ca. 5 Minuten.
-> **Vorkenntnisse:** Keine. Sie kopieren nur Textblöcke und fügen sie ein.
-> **Ausfallzeit:** ca. 30 Sekunden (der Worker startet neu).
+> **Wichtig vorab:** Die vorherige Fassung dieser Anleitung war falsch gefährlich, weil sie `docker rm -f` zu früh genannt hat.  
+> **Niemals zuerst löschen.** Erst prüfen, sichern und den neuen Start-Befehl vorbereiten. Erst wenn alle Werte bekannt sind, wird der alte Container ersetzt.
 
 ---
 
-## Was brauchen Sie?
+## Wenn Sie den Container schon gelöscht haben
 
-- Zugang zu Ihrem Hetzner-Server (dasselbe SSH-Passwort wie bei der Erstinstallation)
-- Ihren `GATEWAY_API_KEY` und die `SUPABASE_URL` – **nur falls Sie den Container komplett neu starten müssen** (Schritt 5). Beide finden Sie im AICONO-Backend → Einstellungen → Integrationen → Reiter **API**.
+Bitte zuerst **keinen weiteren Löschbefehl** ausführen.
 
-> Wenn Sie die Werte damals aufgeschrieben haben: liegen lassen, Sie brauchen sie evtl. gleich.
-
----
-
-## Schritt 1: Auf den Server einloggen
-
-Öffnen Sie die Eingabeaufforderung (Windows: `cmd`) bzw. Terminal (Mac) und tippen Sie:
+Für die Live-Umgebung dieses Projekts ist die Backend-Adresse:
 
 ```bash
-ssh root@IHRE.SERVER.IP.ADRESSE
+https://api-ems.aicono.org
 ```
 
-Passwort eingeben. Wenn Sie die Zeile `root@mein-server:~#` sehen, sind Sie drin.
+Der fehlende `GATEWAY_API_KEY` kann aus der Live-App erneut geholt werden:
 
----
+1. Live-App öffnen: `https://ems-pro.aicono.org` oder die von Ihnen genutzte Live-Adresse.
+2. Links auf **Einstellungen** gehen.
+3. **Integrationen** öffnen.
+4. Reiter **API** öffnen.
+5. Beim **API-Key / Gateway API Key** auf Anzeigen bzw. Kopieren klicken.
+6. Falls dort kein Schlüssel mehr angezeigt wird: **neuen API-Key erzeugen** und sofort kopieren.
 
-## Schritt 2: In den Worker-Ordner wechseln
+Danach starten Sie den Live-Worker mit:
 
 ```bash
-cd /opt/loxone-ws-worker
+docker run -d --restart=always --name loxone-ws-worker-live \
+  -p 8081:8080 \
+  -e SUPABASE_URL=https://api-ems.aicono.org \
+  -e GATEWAY_API_KEY=[HIER_LIVE_API_KEY_EINFÜGEN] \
+  -e LOG_LEVEL=info \
+  -e WORKER_HOST=hetzner-prod-1 \
+  -e BRIDGE_WORKER_NAME=hetzner-bridge-live \
+  loxone-ws-worker-live
 ```
 
----
-
-## Schritt 3: Die neue Version der Datei `index.ts` einspielen
-
-Sie brauchen die neueste Version von `docs/loxone-ws-worker/index.ts` aus dem AICONO-Projekt. Es gibt zwei Wege – wählen Sie den, der bei Ihnen einfacher ist:
-
-### Weg A (empfohlen): Direkt vom GitHub-Repo laden
-
-Falls Ihr Server das AICONO-Repo bereits geklont hat:
-
-```bash
-cd /opt/loxone-ws-worker
-git pull
-```
-
-Danach weiter mit Schritt 4.
-
-### Weg B: Datei manuell überschreiben (Copy & Paste)
-
-1. Öffnen Sie in Lovable im Dateibaum links `docs/loxone-ws-worker/index.ts`.
-2. Markieren Sie den **kompletten** Inhalt (Strg+A / Cmd+A) und kopieren Sie ihn (Strg+C / Cmd+C).
-3. Auf dem Server öffnen Sie die Datei zum Bearbeiten:
-
-   ```bash
-   nano /opt/loxone-ws-worker/index.ts
-   ```
-
-4. Alten Inhalt löschen: **Strg+K** so oft drücken, bis die Datei leer ist (oder `Strg+_` → `Strg+V` → oberste Zeile eingeben, dann `Strg+K` gedrückt halten).
-
-   Einfacher: Datei komplett löschen und neu anlegen:
-
-   ```bash
-   rm /opt/loxone-ws-worker/index.ts
-   nano /opt/loxone-ws-worker/index.ts
-   ```
-
-5. In `nano` mit **Rechtsklick → Einfügen** (oder Strg+Shift+V) den kopierten Inhalt einfügen.
-6. Speichern: **Strg+O**, dann **Enter**. Schließen: **Strg+X**.
-
----
-
-## Schritt 4: Prüfen, dass der Fix wirklich in der Datei steht
-
-Tippen Sie:
-
-```bash
-grep -n "chargingpower" /opt/loxone-ws-worker/index.ts
-```
-
-➡️ **Erwartetes Ergebnis:** Sie sehen eine Zeile, die u. a. `cp|chargingpower|currentchargingpower` enthält.
-
-Wenn nichts kommt: Die neue Datei wurde nicht korrekt eingespielt – zurück zu Schritt 3.
-
----
-
-## Schritt 5: Docker-Container neu bauen und starten
-
-Alten Container stoppen und löschen:
-
-```bash
-docker rm -f loxone-ws-worker
-```
-
-➡️ **Erwartetes Ergebnis:** `loxone-ws-worker`
-
-Neu bauen (dauert ca. 30–60 Sekunden):
-
-```bash
-docker build -t loxone-ws-worker .
-```
-
-➡️ **Erwartetes Ergebnis:** Am Ende steht `Successfully tagged loxone-ws-worker:latest`.
-
-Starten – **exakt derselbe Befehl wie bei der Erstinstallation.** Ersetzen Sie die Platzhalter durch Ihre Werte:
+Falls Ihr Container vorher anders hieß, z. B. `loxone-ws-worker` statt `loxone-ws-worker-live`, nehmen Sie beim Namen und Image wieder genau diesen Namen:
 
 ```bash
 docker run -d --restart=always --name loxone-ws-worker \
   -p 8080:8080 \
-  -e SUPABASE_URL=[HIER_SUPABASE_URL] \
-  -e GATEWAY_API_KEY=[HIER_API_KEY] \
+  -e SUPABASE_URL=https://api-ems.aicono.org \
+  -e GATEWAY_API_KEY=[HIER_LIVE_API_KEY_EINFÜGEN] \
   -e LOG_LEVEL=info \
   -e WORKER_HOST=hetzner-prod-1 \
   -e BRIDGE_WORKER_NAME=hetzner-bridge-test \
   loxone-ws-worker
 ```
 
-> **Hinweis:** Wenn Sie damals andere Werte für `WORKER_HOST` oder `BRIDGE_WORKER_NAME` verwendet haben, nehmen Sie die – unbedingt gleich wie vorher.
-
----
-
-## Schritt 6: Prüfen, ob der Worker wieder läuft
+Prüfen:
 
 ```bash
-docker logs --tail 30 loxone-ws-worker
+docker logs --tail 50 loxone-ws-worker-live
 ```
 
-➡️ **Was Sie sehen sollten:**
-- Zeilen wie `[WS] ... LoxAPP3-Mapping: blocks=..., mapped=..., fallback=..., totalStateUuids=...`
-- Kein `error` in den letzten Zeilen.
-- Nach 10–20 Sekunden erste Werte-Zeilen mit `role=pwr`, `role=today`, usw.
-
----
-
-## Schritt 7: Im AICONO-Dashboard prüfen
-
-1. Öffnen Sie das Dashboard mit dem **Energieflussmonitor**.
-2. **Aktualisieren Sie die Seite** (F5 bzw. Cmd+R), damit der Browser die neuen Live-Daten frisch abonniert.
-3. Schauen Sie an die Wallbox-Kachel:
-   - **Wenn kein Auto lädt:** Wert sollte jetzt **0,00 kW** stehen (statt 1,00 kW).
-   - **Wenn ein Auto lädt:** Wert sollte die reale Ladeleistung in kW zeigen.
-
-Sekündliche Aktualisierung ist normal, sobald die Wallbox lädt.
-
----
-
-## Wenn etwas schiefgeht
-
-**Container startet nicht / stürzt sofort ab:**
+oder, falls der Container `loxone-ws-worker` heißt:
 
 ```bash
-docker logs --tail 100 loxone-ws-worker
+docker logs --tail 50 loxone-ws-worker
 ```
 
-Suchen Sie nach der ersten `error`-Zeile – meistens ist ein Umgebungswert (`SUPABASE_URL` oder `GATEWAY_API_KEY`) falsch geschrieben.
+---
 
-**Wallbox zeigt weiter „1,00 kW":**
+## Sichere Update-Anleitung, wenn der alte Container noch läuft
 
-- Browser hart neu laden (Strg+Shift+R / Cmd+Shift+R).
-- Warten Sie 1–2 Minuten – der Worker muss beim Miniserver einmal das komplette LoxAPP3-Mapping neu anfordern.
-- Kontrollieren Sie im Log, ob die Wallbox-UUID neu klassifiziert wurde:
-  ```bash
-  docker logs loxone-ws-worker 2>&1 | grep -i "cp\|charging"
-  ```
-
-**Zurück zur alten Version (Notfall):**
-
-Falls Sie den alten `index.ts` als Sicherheitskopie haben:
+### Schritt 1: Prüfen, wie der Container wirklich heißt
 
 ```bash
-cp /opt/loxone-ws-worker/index.ts.bak /opt/loxone-ws-worker/index.ts
-docker rm -f loxone-ws-worker
+docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Ports}}"
+```
+
+Suchen Sie nach `loxone-ws-worker` oder `loxone-ws-worker-live`.
+
+In den folgenden Beispielen steht `[CONTAINER_NAME]` für genau diesen Namen.
+
+---
+
+### Schritt 2: Start-Konfiguration sichern
+
+**Diesen Schritt immer vor Stoppen/Löschen ausführen.**
+
+```bash
+mkdir -p /root/aicono-worker-backup
+docker inspect [CONTAINER_NAME] > /root/aicono-worker-backup/[CONTAINER_NAME].inspect.json
+docker inspect [CONTAINER_NAME] --format '{{range .Config.Env}}{{println .}}{{end}}' > /root/aicono-worker-backup/[CONTAINER_NAME].env.txt
+docker inspect [CONTAINER_NAME] --format '{{json .HostConfig.PortBindings}}' > /root/aicono-worker-backup/[CONTAINER_NAME].ports.json
+```
+
+Kontrollieren, ob die wichtigen Werte gesichert wurden:
+
+```bash
+grep -E "SUPABASE_URL|GATEWAY_API_KEY|WORKER_HOST|BRIDGE_WORKER_NAME" /root/aicono-worker-backup/[CONTAINER_NAME].env.txt
+```
+
+Wenn hier **kein** `SUPABASE_URL` und **kein** `GATEWAY_API_KEY` erscheint: **Stoppen. Nicht löschen.** Dann erst klären, woher der Start-Befehl ursprünglich kam.
+
+---
+
+### Schritt 3: Programmdateien sichern
+
+```bash
+cd /opt/loxone-ws-worker
+cp index.ts /root/aicono-worker-backup/index.ts.bak
+cp Dockerfile /root/aicono-worker-backup/Dockerfile.bak
+cp package.json /root/aicono-worker-backup/package.json.bak
+cp tsconfig.json /root/aicono-worker-backup/tsconfig.json.bak
+```
+
+Falls Ihr Live-Worker im Ordner `/opt/loxone-ws-worker-live` liegt, verwenden Sie stattdessen:
+
+```bash
+cd /opt/loxone-ws-worker-live
+cp index.ts /root/aicono-worker-backup/index.ts.bak
+cp Dockerfile /root/aicono-worker-backup/Dockerfile.bak
+cp package.json /root/aicono-worker-backup/package.json.bak
+cp tsconfig.json /root/aicono-worker-backup/tsconfig.json.bak
+```
+
+---
+
+### Schritt 4: Neue `index.ts` einspielen
+
+Öffnen Sie in Lovable `docs/loxone-ws-worker/index.ts`, kopieren Sie den kompletten Inhalt und ersetzen Sie damit die Datei auf dem Server:
+
+```bash
+nano index.ts
+```
+
+Speichern in `nano`: **Strg+O**, **Enter**, dann **Strg+X**.
+
+Prüfen, ob der Fix enthalten ist:
+
+```bash
+grep -n "currentchargingpower" index.ts
+```
+
+---
+
+### Schritt 5: Neues Image bauen
+
+Für den normalen Worker:
+
+```bash
 docker build -t loxone-ws-worker .
-# ... danach denselben docker run wie oben
 ```
 
-> **Tipp für die Zukunft:** Vor jedem Update einmal
-> ```bash
-> cp /opt/loxone-ws-worker/index.ts /opt/loxone-ws-worker/index.ts.bak
-> ```
-> ausführen. Dann haben Sie immer eine Sicherheitskopie.
+Für den Live-Worker:
+
+```bash
+docker build -t loxone-ws-worker-live .
+```
 
 ---
 
-## Fertig
+### Schritt 6: Neuen Start-Befehl vorbereiten
 
-Der Worker meldet jetzt für Wallbox-Blöcke:
+Öffnen Sie die gesicherten Werte:
 
-| Loxone-Kennung | Bedeutung | Rolle im Backend |
-|----------------|-----------|-------------------|
-| `Cp` | Current charging power (kW) | `pwr` |
-| `Cd` | Consumption today (kWh) | `today` |
-| `Cm` | Consumption this month (kWh) | `month` |
-| `Cy` | Consumption this year (kWh) | `year` |
-| `Mr` | Meter reading total (kWh) | `total` |
+```bash
+cat /root/aicono-worker-backup/[CONTAINER_NAME].env.txt
+```
 
-Alle anderen Meter (Netz, Speicher, Produktion, Verbrauch) sind vom Update **nicht** betroffen und laufen wie gewohnt weiter.
+Bauen Sie daraus den neuen `docker run`-Befehl. Für Live ist `SUPABASE_URL`:
+
+```bash
+https://api-ems.aicono.org
+```
+
+**Erst wenn der fertige neue `docker run`-Befehl vollständig vorliegt, weiter zu Schritt 7.**
+
+---
+
+### Schritt 7: Alten Container ersetzen
+
+Jetzt erst den alten Container stoppen und entfernen:
+
+```bash
+docker rm -f [CONTAINER_NAME]
+```
+
+Direkt danach den vorbereiteten `docker run`-Befehl ausführen.
+
+---
+
+### Schritt 8: Prüfen
+
+```bash
+docker logs --tail 50 [CONTAINER_NAME]
+```
+
+Sie sollten sehen, dass der Worker startet, die Meter-Liste lädt und keine Authentifizierungsfehler meldet.
+
+---
+
+## Notfall: Aus Sicherung wiederherstellen
+
+Wenn der neue Worker nicht startet, die alte Datei zurückkopieren:
+
+```bash
+cd /opt/loxone-ws-worker
+cp /root/aicono-worker-backup/index.ts.bak index.ts
+docker build -t loxone-ws-worker .
+```
+
+Dann mit dem gesicherten Start-Befehl erneut starten.
+
+---
+
+## Was der Fix fachlich ändert
+
+Der Worker kennt jetzt bei Wallbox-Blöcken:
+
+| Loxone-Kennung | Bedeutung | Rolle |
+|---|---|---|
+| `Cp` | Current charging power | `pwr` |
+| `Cd` | Consumption today | `today` |
+| `Cm` | Consumption this month | `month` |
+| `Cy` | Consumption this year | `year` |
+| `Mr` | Meter reading total | `total` |
+
+Damit wird `Ca` nicht mehr irrtümlich als Ladeleistung interpretiert.
