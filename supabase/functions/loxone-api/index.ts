@@ -49,6 +49,7 @@ interface StateMapping {
 
 const CONTROL_TYPE_MAPPINGS: Record<string, StateMapping> = {
   Meter:          { primaryState: "actual",   primaryUnit: "kW",  secondaryState: "total",    secondaryUnit: "kWh", sensorType: "power" },
+  Wallbox2:       { primaryState: "actual",   primaryUnit: "kW",  secondaryState: "total",    secondaryUnit: "kWh", sensorType: "power" },
   EFM:            { primaryState: "Ppwr",     primaryUnit: "kW",  secondaryState: "Gpwr",     secondaryUnit: "kW",  sensorType: "power" },
   EnergyManager2: { primaryState: "Gpwr",     primaryUnit: "kW",  secondaryState: "Ppwr",     secondaryUnit: "kW",  sensorType: "power" },
   Fronius:        { primaryState: "consCurr", primaryUnit: "kW",  secondaryState: "prodCurr", secondaryUnit: "kW",  sensorType: "power" },
@@ -86,6 +87,7 @@ const LOXONE_OUTPUT_TO_STATE: Record<string, string> = {
   "Gpwr": "Gpwr",       // Grid power
   "consCurr": "consCurr",
   "prodCurr": "prodCurr",
+  "Cp": "actual",       // Wallbox2 current charging power (not _primary status/mode)
   "Slvl": "soc",        // Storage level / state of charge (Speicher-Ladezustand)
 };
 
