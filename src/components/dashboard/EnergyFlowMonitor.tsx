@@ -490,6 +490,9 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           }`}
         />
         {hasLive ? "Live" : "Offline"}
+        {lastUpdateStr && (
+          <span className="tabular-nums opacity-80">· {lastUpdateStr}</span>
+        )}
       </div>
 
       <svg
