@@ -786,6 +786,14 @@ const LiveValues = () => {
                             <span className="text-muted-foreground text-lg">{t("common.noValue" as any)}</span>
                           )}
                         </div>
+                        {soc && (
+                          <div className="flex items-center gap-2 rounded-md bg-emerald-500/10 border border-emerald-500/30 px-2 py-1">
+                            <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">SOC</span>
+                            <span className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                              {soc.pct.toLocaleString(dateLocale, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} %
+                            </span>
+                          </div>
+                        )}
                         {meter.energy_type === "gas" && value !== null && (
                           <div className="text-sm text-muted-foreground font-medium">
                             ≈ {formatGasDual(value, (meter as any).gas_type, (meter as any).brennwert, (meter as any).zustandszahl).kwhStr}
