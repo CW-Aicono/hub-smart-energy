@@ -1174,23 +1174,23 @@ function MeterDetailDialog({
           </div>
         </div>
 
-        {/* Chart 1: Leistungsverlauf */}
+        {/* Chart 1: Leistungsverlauf (+ optional SOC bei Speichern) */}
         <div>
           <div className="text-sm font-medium mb-1">
-            Leistungsverlauf · {RANGE_LABEL[range]}
+            Leistungsverlauf{hasSoc ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
           </div>
-          <div className="h-[300px]">
+          <div className="h-[320px]">
             {isLoading ? (
               <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
                 Lade Daten…
               </div>
-            ) : series.length < 2 ? (
+            ) : mergedSeries.length < 2 ? (
               <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
                 Keine Daten im gewählten Zeitraum
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={series} margin={{ top: 8, right: 16, left: 8, bottom: 28 }}>
+                <ComposedChart data={mergedSeries} margin={{ top: 8, right: hasSoc ? 60 : 16, left: 8, bottom: 28 }}>
                   <defs>
                     <linearGradient id={`det-${node.id}`} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={node.color} stopOpacity={0.5} />
@@ -1210,13 +1210,26 @@ function MeterDetailDialog({
                     <AxisLabel value="Zeit" position="insideBottom" offset={-4} style={{ fontSize: 11 }} />
                   </XAxis>
                   <YAxis
+                    yAxisId="kw"
                     tick={{ fontSize: 11 }}
                     tickFormatter={(v) => v.toLocaleString("de-DE")}
                     width={70}
                   >
                     <AxisLabel value="Leistung (kW)" angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
-                  {stats?.bidirectional && <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />}
+                  {hasSoc && (
+                    <YAxis
+                      yAxisId="soc"
+                      orientation="right"
+                      domain={[0, 100]}
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v) => `${v}`}
+                      width={50}
+                    >
+                      <AxisLabel value="SOC (%)" angle={-90} position="insideRight" style={{ fontSize: 11, textAnchor: "middle" }} />
+                    </YAxis>
+                  )}
+                  {stats?.bidirectional && <ReferenceLine yAxisId="kw" y={0} stroke="hsl(var(--muted-foreground))" />}
                   <RTooltip
                     contentStyle={{ fontSize: 11 }}
                     labelFormatter={(v) =>
@@ -1228,21 +1241,47 @@ function MeterDetailDialog({
                         minute: "2-digit",
                       })
                     }
-                    formatter={(v: any) => [`${fmtDeNum(Number(v))} kW`, "Leistung"]}
+                    formatter={(v: any, name: string) => {
+                      if (name === "soc") return [`${fmtDeNum(Number(v), 0)} %`, "SOC"];
+                      return [`${fmtDeNum(Number(v))} kW`, "Leistung"];
+                    }}
                   />
+                  {hasSoc && (
+                    <Legend
+                      wrapperStyle={{ fontSize: 11 }}
+                      formatter={(v) => (v === "soc" ? "Ladezustand (SOC %)" : "Leistung (kW)")}
+                    />
+                  )}
                   <Area
+                    yAxisId="kw"
                     type="monotone"
                     dataKey="kw"
                     stroke={node.color}
                     strokeWidth={1.8}
                     fill={`url(#det-${node.id})`}
                     isAnimationActive={false}
+                    connectNulls
+                    name="kw"
                   />
-                </AreaChart>
+                  {hasSoc && (
+                    <Line
+                      yAxisId="soc"
+                      type="monotone"
+                      dataKey="soc"
+                      stroke="hsl(152 55% 42%)"
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                      connectNulls
+                      name="soc"
+                    />
+                  )}
+                </ComposedChart>
               </ResponsiveContainer>
             )}
           </div>
         </div>
+
 
         {/* Chart 2: Energie pro Bucket */}
         {energyBuckets.length > 0 && (
