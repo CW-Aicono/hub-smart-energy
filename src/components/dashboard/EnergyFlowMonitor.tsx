@@ -398,6 +398,22 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     [meterIds, broadcastByMeter, latestByMeter, livePowerByMeter, bridgeByMeter, seedByMeter],
   );
 
+  const { language } = useTranslation();
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  useEffect(() => {
+    if (hasLive) setLastUpdate(new Date());
+  }, [hasLive, broadcastByMeter, latestByMeter, livePowerByMeter, bridgeByMeter, seedByMeter]);
+  const lastUpdateStr = useMemo(() => {
+    if (!lastUpdate) return null;
+    try {
+      return new Intl.DateTimeFormat(LANG_TO_LOCALE[language] ?? "de-DE", {
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+      }).format(lastUpdate);
+    } catch { return lastUpdate.toLocaleTimeString(); }
+  }, [lastUpdate, language]);
+
+
+
 
   useEffect(() => {
     const el = svgRef.current?.parentElement;
