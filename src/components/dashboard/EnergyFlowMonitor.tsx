@@ -502,10 +502,15 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           const { x1, y1, x2, y2, dist, mx, my } = getClippedLine(fromNode, toNode);
           if (dist <= 0) return null;
 
-          const flowWatts = getLiveWatts(fromNode.meter_id);
+          const rawWatts = getLiveWatts(fromNode.meter_id);
+          // PV/Generation-Meter: Vorzeichen ist gateway-abhängig (Loxone liefert
+          // Erzeugung negativ). Erzeugung fließt physikalisch immer vom Erzeuger
+          // weg → Betrag verwenden, Richtung nie umkehren.
+          const isGeneration = fromNode.role === "pv";
+          const flowWatts = isGeneration && rawWatts != null ? Math.abs(rawWatts) : rawWatts;
           const hasFlow = flowWatts != null && Math.abs(flowWatts) > 0;
           const dur = getAnimDuration(flowWatts);
-          const isReversed = flowWatts != null && flowWatts < 0;
+          const isReversed = !isGeneration && flowWatts != null && flowWatts < 0;
 
           const animPath = isReversed
             ? `M${x2},${y2} L${x1},${y1}`
