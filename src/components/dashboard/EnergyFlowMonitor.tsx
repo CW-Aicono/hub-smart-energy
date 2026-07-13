@@ -1068,6 +1068,7 @@ function MeterDetailDialog({
     return Array.from(map.values()).sort((a, b) => a.t - b.t);
   }, [series, socSeries]);
   const hasSoc = socSeries.length > 0;
+  const hasSocLine = socSeries.length >= 2;
   // Rechte SOC-Achse auch dann anzeigen, wenn nur der aktuelle SOC bekannt ist.
   const showSocAxis = hasSoc || (isBattery && effectiveSocPct != null);
 
@@ -1294,17 +1295,17 @@ function MeterDetailDialog({
                     </YAxis>
                   )}
                   {stats?.bidirectional && <ReferenceLine yAxisId="kw" y={0} stroke="hsl(var(--muted-foreground))" />}
-                  {!hasSoc && showSocAxis && effectiveSocPct != null && (
+                  {showSocAxis && (socSeries.length === 1 || (!hasSoc && effectiveSocPct != null)) && (
                     <ReferenceDot
                       yAxisId="soc"
-                      x={xDomain[1]}
-                      y={Math.max(0, Math.min(100, effectiveSocPct))}
+                      x={socSeries[0]?.t ?? xDomain[1]}
+                      y={Math.max(0, Math.min(100, socSeries[0]?.soc ?? effectiveSocPct ?? 0))}
                       r={5}
                       fill="hsl(217 91% 60%)"
                       stroke="hsl(217 91% 60%)"
                       isFront
                       label={{
-                        value: `SOC aktuell: ${fmtDeNum(effectiveSocPct, 0)} %`,
+                        value: `SOC aktuell: ${fmtDeNum(socSeries[0]?.soc ?? effectiveSocPct ?? 0, 0)} %`,
                         position: "left",
                         fill: "hsl(217 91% 60%)",
                         fontSize: 11,
@@ -1343,7 +1344,7 @@ function MeterDetailDialog({
                       );
                     }}
                   />
-                  {hasSoc && (
+                  {hasSocLine && (
                     <Legend
                       verticalAlign="top"
                       wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
@@ -1361,7 +1362,7 @@ function MeterDetailDialog({
                     connectNulls
                     name="kw"
                   />
-                  {hasSoc && (
+                  {hasSocLine && (
                     <Line
                       yAxisId="soc"
                       type="monotone"
