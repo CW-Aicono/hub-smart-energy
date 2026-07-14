@@ -924,6 +924,14 @@ const LiveValues = () => {
           )}
         </div>
       </main>
+      {detailNode && (
+        <MeterDetailDialog
+          node={detailNode}
+          socPct={socByMeterId.get(detailNode.meter_id)?.pct ?? null}
+          onClose={() => setDetailNode(null)}
+        />
+      )}
+
     </div>
   );
 };
