@@ -1,65 +1,60 @@
-## Beweis (aus `pg_stat_statements`, nicht geraten)
+## Ziel
+Tenant-Admins können in den Tenant-Einstellungen (Route `/settings/branding`) einen automatischen Logout bei Inaktivität aktivieren/deaktivieren und die Zeitdauer einstellen. Angemeldete Nutzer werden nach Ablauf der eingestellten Zeit automatisch abgemeldet — auch wenn der Browser zwischenzeitlich geschlossen wurde.
 
-Rangliste nach **physischen Disk-Reads** (nicht nach CPU-Zeit — Disk-Reads ist genau das, was das IO-Budget belastet):
+## UI: Neue Karte „Auto-Logout"
+Neue Komponente `src/components/settings/AutoLogoutSetting.tsx`, eingebunden in `src/pages/Branding.tsx` **zwischen** `WeekStartSetting` und `ManualMetersSetting`.
 
-| Rang | Disk gelesen | Calls | ⌀ Zeit | Query |
-|-----:|-------------:|------:|-------:|-------|
-| **1** | **23 152 MB** | 768 | 2 321 ms | `SELECT id FROM meter_power_readings WHERE created_at >= $1 LIMIT $2 OFFSET $3` + `COUNT(*)` mit gleichem Filter |
-| 2 | 2 677 MB | 5,2 M | 5 ms | INSERT in `meter_power_readings` (nur Schreib-Volumen — unvermeidbar) |
-| 3 | 1 295 MB | 23 | 1 951 ms | `VACUUM (ANALYZE) meter_power_readings` (Wartung) |
-| 4 | 1 201 MB | 292 | 65 ms | Gleiche Query wie #1, andere Variante mit `LIMIT` im Count-Zweig |
-| 5 | 1 111 MB | 6 584 | 190 ms | INSERT in `meter_power_readings_5min` (Aggregator, korrekt) |
-| 6 | 505 MB | 8 946 | 343 ms | `EnergyGaugeWidget` Peak-Query (`ORDER BY power_value DESC`) |
-| 7 | 386 MB | 1 | 13 706 ms | `VACUUM FULL meter_power_readings` (einmalig, Wartung) |
+Aufbau (analog zu `WeekStartSetting`, gleiches Card-Layout):
+- Titel „Auto-Logout" mit Icon (`LogOut` aus lucide-react).
+- Beschreibung: „Nutzer werden bei Inaktivität automatisch abgemeldet."
+- Switch „Auto-Logout aktiv" (Default: an).
+- Wenn aktiv: Select mit den Optionen **10, 20, 30, 60, 120 Minuten** (Default: 30).
+- Speichern-Button.
 
-**#1 + #4 zusammen = 24,3 GB — das sind ~80 % aller Disk-Reads.** Alles andere ist Rauschen im Vergleich.
+## Datenmodell
+Migration erweitert `public.tenants`:
+- `auto_logout_enabled boolean NOT NULL DEFAULT true`
+- `auto_logout_minutes integer NOT NULL DEFAULT 30 CHECK (auto_logout_minutes IN (10, 20, 30, 60, 120))`
 
-## Ursache — eindeutig
+Keine neuen RLS-Policies nötig — Tenants-Tabelle wird bereits vom Tenant-Admin (und Super-Admin) beschrieben, wie bei `week_start_day`.
 
-Die IO-Bombe ist eine Query mit Filter **ausschließlich auf `created_at`**. Auf `created_at` existiert nur ein **BRIN-Index** (`idx_meter_power_readings_created_at_brin`, angelegt Juni 2026). BRIN funktioniert nur, wenn die Zeilen physisch nach `created_at` sortiert liegen — bei einer Tabelle mit 5,2 Mio verteilten INSERTs pro Zyklus ist das nicht mehr der Fall, deshalb muss Postgres große Teile der Tabelle lesen (~30 MB pro Aufruf).
+## Logout-Logik (Frontend)
+Neuer Hook `src/hooks/useAutoLogout.ts`, global aktiviert in `src/App.tsx` innerhalb des bestehenden Auth-/Tenant-Contexts.
 
-Woher der Aufruf stammt, ist im Codebase-Scan **nur eine Kandidat-Stelle**: die Edge Function `gateway-worker-status/index.ts` Zeile 62–65:
-```ts
-.from("meter_power_readings")
-.select("id", { count: "estimated", head: true })
-.gte("created_at", fiveMinAgo);
-```
-Der Query-Fingerprint in `pg_stat_statements` enthält allerdings `LIMIT/OFFSET` — das passt nicht zu `head: true`. Es gibt also **noch mindestens einen zweiten Aufruf** (Cron/Monitor/Backup-Job außerhalb unseres Repos, oder die Edge Function wird bei Fehlern in einen anderen Pfad umgeleitet). Das müssen wir vor dem Fix noch identifizieren, um sicher zu gehen.
+**Inaktivitäts-Erkennung (offener Browser):**
+- Listener auf `mousemove`, `keydown`, `click`, `scroll`, `touchstart`, `visibilitychange`.
+- Bei jedem Event wird `localStorage["aicono.lastActivity"] = Date.now()` gesetzt (throttled auf 1×/Sekunde).
+- Ein Interval (alle 30 s) prüft `Date.now() - lastActivity > timeoutMs`. Wenn ja: `supabase.auth.signOut()` + Redirect auf `/auth`.
+- Timer nutzt die tenant-spezifische Dauer aus `tenant.auto_logout_minutes`; wenn `auto_logout_enabled = false`, ist der Hook no-op.
 
-## Sicherheitsgrad meiner Diagnose
+**Session-Ablauf über Browser-Neustart (Kernanforderung):**
+- Beim App-Start (nach Hydrierung von Auth + Tenant) prüft der Hook **vor** jeder anderen Aktion:
+  ```
+  if (enabled && lastActivity && Date.now() - lastActivity > timeoutMs) {
+    await supabase.auth.signOut();
+    navigate("/auth");
+  }
+  ```
+- Damit greift der Auto-Logout auch, wenn der Nutzer den Browser gestern Abend einfach geschlossen hat und heute wieder öffnet — die Session wird sofort beim Laden invalidiert, bevor geschützte Inhalte gerendert werden.
+- `lastActivity` liegt in `localStorage` (überlebt Browser-Neustart, gebunden an Origin/Profil).
 
-- **Ursache-Query eindeutig identifiziert:** ✅ 100 % (harte Zahlen aus `pg_stat_statements`)
-- **Fix wirkt:** ✅ ~95 % — ein B-Tree-Index auf `created_at` reduziert 30 MB/Call auf wenige kB (klassischer Index-vs-Seq-Scan-Fall).
-- **Aufrufer im eigenen Code identifiziert:** ⚠️ 60 % — der Cloud-Code enthält nur einen passenden Aufruf, aber der Query-Fingerprint passt nicht 1:1. Vor dem Deploy müssen wir den Aufrufer klären.
+**Cross-Tab-Konsistenz:**
+- Ein `storage`-Event-Listener synchronisiert `lastActivity` zwischen mehreren Tabs, sodass Aktivität in einem Tab die anderen Tabs am Leben hält und der Logout in allen Tabs gleichzeitig auslöst.
 
-## Fix-Plan (in dieser Reihenfolge)
+## Technische Details
+- Migration fügt die zwei Spalten hinzu; anschließend Typen-Regeneration (`src/integrations/supabase/types.ts` wird automatisch aktualisiert).
+- `useTenant` liefert die neuen Felder ohne Änderung mit (SELECT *).
+- i18n: Neue Keys `autoLogout.title/subtitle/enabled/minutes/saved/saveError` in allen 4 Sprachen (DE/EN/ES/NL).
+- Kein Eingriff in Edge Functions, keine Änderung an bestehenden Auth-Flows.
 
-### Schritt 1 — Aufrufer eindeutig identifizieren (Verifikation vor jedem Codeeingriff)
-- `postgres_logs` via `supabase--analytics_query` nach genau dieser Query filtern (`event_message ILIKE '%meter_power_readings%created_at%'`), Zeitstempel + `application_name` prüfen. So sehen wir, ob es die Edge Function, ein pg_cron-Job oder ein externer Consumer ist.
-- Falls unser eigener Code: an der Aufrufstelle korrigieren (bei 5-Min-Fenster besser auf `recorded_at` filtern, da dort ein B-Tree-Index existiert).
+## Betroffene/neue Dateien
+- **Neu:** `supabase/migrations/<ts>_add_auto_logout_to_tenants.sql`
+- **Neu:** `src/components/settings/AutoLogoutSetting.tsx`
+- **Neu:** `src/hooks/useAutoLogout.ts`
+- **Edit:** `src/pages/Branding.tsx` — Karte einfügen
+- **Edit:** `src/App.tsx` — Hook global aktivieren
+- **Edit:** i18n-Dateien (DE/EN/ES/NL) — neue Übersetzungs-Keys
 
-### Schritt 2 — B-Tree-Index auf `created_at`
-Migration:
-```sql
-CREATE INDEX IF NOT EXISTS idx_meter_power_readings_created_at
-  ON public.meter_power_readings (created_at DESC);
-```
-Wirkt sofort für **jeden** Aufrufer und macht die Query planmäßig unter 20 ms bei wenigen kB Read. Der bestehende BRIN kann parallel bleiben (oder Schritt 3).
-
-### Schritt 3 — Optional: BRIN-Index entfernen
-`DROP INDEX idx_meter_power_readings_created_at_brin;` falls Analyze bestätigt, dass er nach dem B-Tree-Fix nicht mehr verwendet wird.
-
-### Schritt 4 — Peak-Query im `EnergyGaugeWidget` (Rang 6)
-Nachrangig, aber lohnt sich noch (505 MB, 343 ms Mittel):
-- `src/components/dashboard/EnergyGaugeWidget.tsx` Zeilen 142–164: `ORDER BY power_value DESC` ohne LIMIT ersetzen durch RPC `get_meter_daily_peaks(meter_ids, day)` mit `MAX(power_value) GROUP BY meter_id`.
-
-### Schritt 5 — Verifikation
-- 30 min nach Deploy: `SELECT shared_blks_read FROM pg_stat_statements WHERE query ILIKE '%meter_power_readings%created_at%'` — muss auf ~0 sinken (relativ zur Vorher-Basis).
-- IO-Budget-Anzeige aktualisiert sich verzögert (Snapshot-Semantik).
-
-## Zurückgezogen aus der ersten Version
-Der **Detail-Dialog Paging-Fix** und der **`integration_errors` Composite-Index** stehen nicht mehr im kritischen Pfad — sie machen zusammen unter 5 % der IO-Last aus. Sinnvoll später, aber nicht Auslöser des 100-%-Budgets.
-
-## Technisches
-- Der neue B-Tree-Index auf `created_at` kostet einmalig Buildzeit (~1–3 min bei ~200 M Zeilen) und danach ca. 5–8 % zusätzlichen Schreib-Overhead pro INSERT — vernachlässigbar im Vergleich zu 23 GB Read-Ersparnis.
-- Kein Applikationscode muss zwingend geändert werden, wenn der Aufrufer außerhalb unseres Repos liegt — der Index wirkt für alle.
+## Hinweise / offene Punkte
+- Die Anforderung „auch wenn er den Browser geschlossen hat" wird über `localStorage` + Prüfung beim Reload gelöst. Es gibt technisch keine Möglichkeit, einen Server-seitigen Logout auszulösen, während der Browser komplett geschlossen ist — Supabase-Sessions laufen erst nach ihrer eigenen Refresh-Token-Lebensdauer ab. Der beschriebene Ansatz stellt aber sicher, dass der Nutzer nach Wiederöffnen **sofort und ohne Zugriff auf geschützte Inhalte** ausgeloggt wird, was den Sicherheitswunsch erfüllt.
+- Super-Admin-Impersonation-Sessions bleiben unberührt (der Hook prüft nur Tenant-Sessions).
