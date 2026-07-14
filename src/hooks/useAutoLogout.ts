@@ -45,11 +45,21 @@ export function useAutoLogout() {
       return Date.now() - last > timeoutMs;
     };
 
-    // Beim Mount IMMER auf 'jetzt' setzen. Ein alter Wert aus einer früheren
-    // Session darf nicht dazu führen, dass der frisch eingeloggte User sofort
-    // wieder ausgeloggt wird. Die Ablaufprüfung greift danach über das
-    // Interval und visibilitychange.
-    localStorage.setItem(STORAGE_KEY, String(Date.now()));
+    const userKey = `${STORAGE_KEY}:user`;
+    const storedUser = localStorage.getItem(userKey);
+    if (storedUser !== user.id) {
+      // Anderer/erster User in diesem Browser -> Timer neu starten,
+      // alten Wert nicht als 'abgelaufen' werten.
+      localStorage.setItem(userKey, user.id);
+      localStorage.setItem(STORAGE_KEY, String(Date.now()));
+    } else if (isExpired()) {
+      // Gleicher User, Browser war zu lange geschlossen -> Logout.
+      void doLogout();
+      return;
+    } else if (!localStorage.getItem(STORAGE_KEY)) {
+      localStorage.setItem(STORAGE_KEY, String(Date.now()));
+    }
+
 
 
     let lastWrite = 0;
