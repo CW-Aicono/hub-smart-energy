@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
 import { toast } from "sonner";
@@ -114,8 +114,26 @@ function NodeDeletePopover({
 
 export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gatewayDeviceIds, onChange }: Props) {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ nodeId: string; startX: number; startY: number } | null>(null);
+
+  const updateMeterFlowConvention = async (
+    meterId: string,
+    v: "negative_delivery" | "positive_delivery",
+  ) => {
+    const { error } = await supabase
+      .from("meters")
+      .update({ flow_direction_convention: v })
+      .eq("id", meterId);
+    if (error) {
+      toast.error("Flussrichtung konnte nicht gespeichert werden", { description: error.message });
+      return;
+    }
+    toast.success("Flussrichtung aktualisiert");
+    queryClient.invalidateQueries({ queryKey: ["meters"] });
+    queryClient.invalidateQueries({ queryKey: ["custom_widget_definitions"] });
+  };
 
   const scope = { locationId, gatewayDeviceIds };
   const scopeReady = !!locationId && gatewayDeviceIds.length > 0;
@@ -644,6 +662,42 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
 
                 </Select>
               </div>
+
+              {node.meter_id && (() => {
+                const meter = (meters || []).find((m: any) => m.id === node.meter_id);
+                const conv =
+                  (meter?.flow_direction_convention as "negative_delivery" | "positive_delivery") ||
+                  "negative_delivery";
+                return (
+                  <div className="space-y-1 pt-1">
+                    <Label className="text-xs">Flussrichtungserkennung</Label>
+                    <Select
+                      value={conv}
+                      onValueChange={(v) =>
+                        updateMeterFlowConvention(
+                          node.meter_id,
+                          v as "negative_delivery" | "positive_delivery",
+                        )
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="negative_delivery">
+                          Lieferung = negativer Wert / Bezug = positiver Wert (Standard)
+                        </SelectItem>
+                        <SelectItem value="positive_delivery">
+                          Lieferung = positiver Wert / Bezug = negativer Wert
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Synchron mit der Einstellung in „Messstellen → Zähler bearbeiten".
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </div>
