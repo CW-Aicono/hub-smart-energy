@@ -107,8 +107,10 @@ export function useDashboardWidgets() {
           widget_type: w.widget_type,
           position: maxPosition + idx + 1,
           is_visible: w.is_visible,
+          widget_size: "full",
           config: {} as Json,
         }));
+
         const customInserts = missingCustom.map((d, idx) => ({
           user_id: user.id,
           widget_type: `custom_${d.id}`,
@@ -146,6 +148,7 @@ export function useDashboardWidgets() {
         widget_type: w.widget_type,
         position: w.position,
         is_visible: w.is_visible,
+        widget_size: "full",
         config: {} as Json,
       })),
       ...customDefs.map((d, idx) => ({
@@ -153,9 +156,11 @@ export function useDashboardWidgets() {
         widget_type: `custom_${d.id}`,
         position: DEFAULT_WIDGETS.length + idx,
         is_visible: true,
+        widget_size: "full",
         config: {} as Json,
       })),
     ];
+
 
     const { data, error } = await supabase
       .from("dashboard_widgets")
