@@ -142,6 +142,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         report_settings: { footer_text: "Stadtwerke Musterstadt GmbH", show_logo: true },
         week_start_day: 1,
         show_manual_meters: false,
+        auto_logout_enabled: true,
+        auto_logout_minutes: 30,
         created_at: "2025-01-01T00:00:00Z",
         updated_at: "2025-01-01T00:00:00Z",
       };
