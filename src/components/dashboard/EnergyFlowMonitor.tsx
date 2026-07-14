@@ -316,6 +316,64 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     },
   });
 
+  // Gateway-Status für den zentralen Knoten. Wir sammeln alle gateway_device_ids
+  // der beteiligten Zähler und lesen den aktuellen Status. Priorität für die
+  // Farbwahl: offline (rot) > error (gelb) > online (grün).
+  const gatewayDeviceIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (relevantMeters as any[])
+            .map((m) => m.gateway_device_id)
+            .filter((v): v is string => !!v),
+        ),
+      ),
+    [relevantMeters],
+  );
+  const gatewayKey = gatewayDeviceIds.slice().sort().join(",");
+  const { data: gatewayStatuses = [] } = useQuery({
+    queryKey: ["energyflow-gateway-status", gatewayKey],
+    enabled: gatewayDeviceIds.length > 0,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<Array<{ status: string; lastHeartbeat: number }>> => {
+      const { data } = await supabase
+        .from("gateway_devices")
+        .select("status, last_heartbeat_at")
+        .in("id", gatewayDeviceIds);
+      return (data ?? []).map((r: any) => ({
+        status: String(r.status ?? "offline"),
+        lastHeartbeat: r.last_heartbeat_at ? new Date(r.last_heartbeat_at).getTime() : 0,
+      }));
+    },
+  });
+
+  const gatewayStatus: "online" | "offline" | "error" | "unknown" = useMemo(() => {
+    if (gatewayDeviceIds.length === 0) return "unknown";
+    if (gatewayStatuses.length === 0) return "unknown";
+    const now = Date.now();
+    const normalized = gatewayStatuses.map((g) => {
+      const stale = now - g.lastHeartbeat > 3 * 60_000;
+      if (stale) return "offline";
+      const s = g.status.toLowerCase();
+      if (s === "online") return "online";
+      if (s === "error" || s === "faulted") return "error";
+      return "offline";
+    });
+    if (normalized.some((s) => s === "offline")) return "offline";
+    if (normalized.some((s) => s === "error")) return "error";
+    return "online";
+  }, [gatewayStatuses, gatewayDeviceIds.length]);
+
+  const gatewayStatusColor =
+    gatewayStatus === "online"
+      ? "hsl(152 55% 42%)"
+      : gatewayStatus === "offline"
+        ? "hsl(0 72% 55%)"
+        : gatewayStatus === "error"
+          ? "hsl(45 95% 50%)"
+          : "hsl(var(--muted-foreground))";
+
   // Realtime: Loxone broadcast (loxone-live-{tenantId}) – sub-sekündliche Updates
   const [broadcastByMeter, setBroadcastByMeter] = useState<Record<string, number>>({});
   const [broadcastSocByMeter, setBroadcastSocByMeter] = useState<Record<string, number>>({});
