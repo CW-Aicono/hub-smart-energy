@@ -460,11 +460,15 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
               nodes={config.energy_flow_nodes || []}
               connections={config.energy_flow_connections || []}
               meters={meters || []}
-              onChange={(nodes, connections) =>
+              locationId={config.energy_flow_location_id || ""}
+              gatewayDeviceIds={config.energy_flow_gateway_device_ids || []}
+              onChange={(nodes, connections, scope) =>
                 setConfig((prev) => ({
                   ...prev,
                   energy_flow_nodes: nodes,
                   energy_flow_connections: connections,
+                  energy_flow_location_id: scope.locationId,
+                  energy_flow_gateway_device_ids: scope.gatewayDeviceIds,
                   // Sync meter_ids from nodes for data queries
                   meter_ids: nodes.map((n) => n.meter_id).filter(Boolean),
                 }))

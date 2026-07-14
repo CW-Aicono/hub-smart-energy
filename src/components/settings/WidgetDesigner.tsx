@@ -32,6 +32,7 @@ const CHART_TYPE_LABELS: Record<string, string> = {
   gauge: "Gauge",
   kpi: "KPI-Kachel",
   table: "Tabelle",
+  energyflow: "Energieflussmonitor",
 };
 
 export function WidgetDesigner() {

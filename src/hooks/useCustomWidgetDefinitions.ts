@@ -46,6 +46,10 @@ export interface CustomWidgetConfig {
   /** Energy flow monitor topology */
   energy_flow_nodes?: EnergyFlowNode[];
   energy_flow_connections?: EnergyFlowConnection[];
+  /** Energy flow monitor: mandatory single location scope */
+  energy_flow_location_id?: string;
+  /** Energy flow monitor: at least one gateway of the selected location */
+  energy_flow_gateway_device_ids?: string[];
 }
 
 export interface CustomWidgetDefinition {

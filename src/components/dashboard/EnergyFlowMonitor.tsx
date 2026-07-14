@@ -53,6 +53,7 @@ import {
   Fan,
   PlugZap,
   SunMedium,
+  Router,
   Maximize2,
   type LucideIcon,
 } from "lucide-react";
@@ -143,15 +144,50 @@ function usePrefersReducedMotion() {
 interface EnergyFlowMonitorProps {
   nodes: EnergyFlowNode[];
   connections: EnergyFlowConnection[];
+  locationId?: string | null;
+  gatewayDeviceIds?: string[];
 }
 
-export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMonitorProps) {
+type GatewayStatus = "online" | "offline" | "error" | "unknown";
+
+function normalizeIntegrationStatus(row: any): GatewayStatus {
+  if (!row?.is_enabled) return "offline";
+  const syncStatus = String(row?.sync_status ?? "").toLowerCase();
+  if (syncStatus === "error" || syncStatus === "failed" || syncStatus === "faulted") return "error";
+  if (syncStatus === "success" || syncStatus === "online" || syncStatus === "connected") return "online";
+
+  const lastSyncMs = row?.last_sync_at ? new Date(row.last_sync_at).getTime() : 0;
+  const syncFresh = lastSyncMs > 0 && Date.now() - lastSyncMs < 30 * 60_000;
+  if (syncStatus === "syncing" && syncFresh) return "online";
+  if (syncFresh) return "online";
+
+  // Enabled non-heartbeat integrations such as Loxone can deliver live data
+  // without a gateway_devices row. Treat the configured data-source as linked.
+  return "online";
+}
+
+function normalizeGatewayDeviceStatus(row: any): GatewayStatus {
+  const raw = String(row?.status ?? "").toLowerCase();
+  if (raw === "error" || raw === "faulted" || raw === "failed") return "error";
+  const lastHeartbeat = row?.last_heartbeat_at ? new Date(row.last_heartbeat_at).getTime() : 0;
+  const stale = !lastHeartbeat || Date.now() - lastHeartbeat > 3 * 60_000;
+  if (raw === "online" && !stale) return "online";
+  return "offline";
+}
+
+export default function EnergyFlowMonitor({
+  nodes,
+  connections,
+  locationId,
+  gatewayDeviceIds: configuredGatewayDeviceIds = [],
+}: EnergyFlowMonitorProps) {
   const { selectedPeriod } = useDashboardFilter();
   const { meters } = useMeters();
   const svgRef = useRef<SVGSVGElement>(null);
   const [dims, setDims] = useState({ w: 500, h: 320 });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [detailNode, setDetailNode] = useState<EnergyFlowNode | null>(null);
+  const [gatewayDetailOpen, setGatewayDetailOpen] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
 
   const meterIds = useMemo(() => nodes.map((n) => n.meter_id).filter(Boolean), [nodes]);
@@ -314,6 +350,183 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
       return latest;
     },
   });
+
+  // Gateway-Status für den zentralen Knoten. Wir sammeln alle gateway_device_ids
+  // der beteiligten Zähler UND als Fallback alle location_ids, um Gateways derselben
+  // Location zu finden (bei manuellen/Loxone-Metern ohne direkte gateway_device_id).
+  const meterGatewayDeviceIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (relevantMeters as any[])
+            .map((m) => m.gateway_device_id)
+            .filter((v): v is string => !!v),
+        ),
+      ),
+    [relevantMeters],
+  );
+  const meterLocationIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (relevantMeters as any[])
+            .map((m) => m.location_id)
+            .filter((v): v is string => !!v),
+        ),
+      ),
+    [relevantMeters],
+  );
+  const configuredGatewayIds = useMemo(
+    () => Array.from(new Set((configuredGatewayDeviceIds || []).filter(Boolean))),
+    [configuredGatewayDeviceIds],
+  );
+  const scopedLocationIds = useMemo(
+    () => Array.from(new Set([locationId, ...meterLocationIds].filter(Boolean))) as string[],
+    [locationId, meterLocationIds],
+  );
+  const gatewayKey = useMemo(
+    () => Array.from(new Set([...meterGatewayDeviceIds, ...configuredGatewayIds])).sort().join(","),
+    [meterGatewayDeviceIds, configuredGatewayIds],
+  );
+  const locationKey = scopedLocationIds.slice().sort().join(",");
+  const { data: gatewayDevices = [] } = useQuery({
+    queryKey: ["energyflow-gateway-devices", gatewayKey, locationKey],
+    enabled: gatewayKey.length > 0 || scopedLocationIds.length > 0,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<Array<any>> => {
+      const byId = new Map<string, any>();
+      const integrationsById = new Map<string, any>();
+      const selectedIntegrationIds = new Set<string>();
+      const allScopeIds = Array.from(new Set([...meterGatewayDeviceIds, ...configuredGatewayIds]));
+
+      const addIntegrationRows = (rows: any[] | null) => {
+        for (const row of rows ?? []) {
+          integrationsById.set(row.id, row);
+          if (configuredGatewayIds.includes(row.id)) selectedIntegrationIds.add(row.id);
+        }
+      };
+
+      if (configuredGatewayIds.length > 0) {
+        const { data } = await supabase
+          .from("location_integrations")
+          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, integrations(name, type)")
+          .in("id", configuredGatewayIds);
+        addIntegrationRows(data as any[] | null);
+      }
+
+      if (scopedLocationIds.length > 0) {
+        const { data } = await supabase
+          .from("location_integrations")
+          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, integrations(name, type)")
+          .in("location_id", scopedLocationIds)
+          .eq("is_enabled", true);
+        addIntegrationRows(data as any[] | null);
+      }
+
+      const integrationIds = Array.from(integrationsById.keys());
+
+      const addGatewayDeviceRows = (rows: any[] | null) => {
+        for (const r of rows ?? []) {
+          if (
+            selectedIntegrationIds.size > 0 &&
+            r.location_integration_id &&
+            !selectedIntegrationIds.has(r.location_integration_id)
+          ) {
+            continue;
+          }
+          const integration = r.location_integration_id ? integrationsById.get(r.location_integration_id) : null;
+          const effectiveStatus = normalizeGatewayDeviceStatus(r);
+          byId.set(r.id, {
+            ...r,
+            source: "gateway_device",
+            status: r.status || effectiveStatus,
+            effective_status: effectiveStatus,
+            sync_status: integration?.sync_status ?? null,
+            last_sync_at: integration?.last_sync_at ?? null,
+          });
+        }
+      };
+
+      if (allScopeIds.length > 0) {
+        const { data } = await supabase
+          .from("gateway_devices")
+          .select("id, device_name, device_type, local_ip, mac_address, ha_version, addon_version, latest_available_version, status, last_heartbeat_at, offline_buffer_count, location_integration_id")
+          .in("id", allScopeIds);
+        addGatewayDeviceRows(data as any[] | null);
+      }
+
+      const gatewayDeviceIntegrationIds = selectedIntegrationIds.size > 0
+        ? Array.from(selectedIntegrationIds)
+        : integrationIds;
+
+      if (gatewayDeviceIntegrationIds.length > 0) {
+        const { data } = await supabase
+          .from("gateway_devices")
+          .select("id, device_name, device_type, local_ip, mac_address, ha_version, addon_version, latest_available_version, status, last_heartbeat_at, offline_buffer_count, location_integration_id")
+          .in("location_integration_id", gatewayDeviceIntegrationIds);
+        addGatewayDeviceRows(data as any[] | null);
+      }
+
+      const deviceIntegrationIds = new Set(
+        Array.from(byId.values())
+          .map((d: any) => d.location_integration_id)
+          .filter(Boolean),
+      );
+
+      for (const li of integrationsById.values()) {
+        if (deviceIntegrationIds.has(li.id)) continue;
+        if (selectedIntegrationIds.size > 0 && !selectedIntegrationIds.has(li.id)) continue;
+
+        const integrationName = li.integrations?.name || li.integrations?.type || "Integration";
+        const configName = (li.config as any)?.device_name || (li.config as any)?.name;
+        const effectiveStatus = normalizeIntegrationStatus(li);
+        byId.set(`integration:${li.id}`, {
+          id: li.id,
+          source: "location_integration",
+          location_integration_id: li.id,
+          device_name: configName || integrationName,
+          device_type: integrationName,
+          status: effectiveStatus,
+          effective_status: effectiveStatus,
+          local_ip: null,
+          mac_address: null,
+          ha_version: null,
+          addon_version: null,
+          latest_available_version: null,
+          last_heartbeat_at: null,
+          last_sync_at: li.last_sync_at ?? null,
+          sync_status: li.sync_status ?? null,
+          offline_buffer_count: 0,
+        });
+      }
+
+      return Array.from(byId.values());
+    },
+  });
+
+  const gatewayStatus: GatewayStatus = useMemo(() => {
+    if (gatewayDevices.length === 0) return "unknown";
+    const normalized = gatewayDevices.map((g: any) => {
+      if (g.effective_status) return g.effective_status as GatewayStatus;
+      const s = String(g.status ?? "").toLowerCase();
+      if (s === "online") return "online";
+      if (s === "error" || s === "faulted") return "error";
+      return "offline";
+    });
+    if (normalized.some((s) => s === "offline")) return "offline";
+    if (normalized.some((s) => s === "error")) return "error";
+    return "online";
+  }, [gatewayDevices]);
+
+  const gatewayStatusColor =
+    gatewayStatus === "online"
+      ? "hsl(152 55% 42%)"
+      : gatewayStatus === "offline"
+        ? "hsl(0 72% 55%)"
+        : gatewayStatus === "error"
+          ? "hsl(45 95% 50%)"
+          : "hsl(var(--muted-foreground))";
 
   // Realtime: Loxone broadcast (loxone-live-{tenantId}) – sub-sekündliche Updates
   const [broadcastByMeter, setBroadcastByMeter] = useState<Record<string, number>>({});
@@ -612,17 +825,35 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                 strokeOpacity={hasFlow ? 0.55 : 0.25}
               />
               {/* Ein einzelner Partikel; Geschwindigkeit spiegelt die Leistung wider.
-                  Ein neuer Partikel startet erst, wenn der vorherige das Ziel erreicht hat. */}
-              {hasFlow && !reducedMotion && (
-                <circle r={particleR} fill={sourceColor} opacity={0.95}>
-                  <animateMotion
-                    dur={`${dur}s`}
-                    repeatCount="indefinite"
-                    path={animPath}
-                    rotate="auto"
-                  />
-                </circle>
-              )}
+                  Fade-in 300ms am Start, Fade-out 300ms am Ziel; ein neuer Partikel
+                  startet erst nach Abschluss des Fadeouts. */}
+              {hasFlow && !reducedMotion && (() => {
+                const fade = 0.3; // Sekunden
+                const total = dur + fade * 2;
+                const t1 = (fade / total).toFixed(4);
+                const t2 = ((fade + dur) / total).toFixed(4);
+                return (
+                  <circle r={particleR} fill={sourceColor} opacity={0}>
+                    <animateMotion
+                      dur={`${total}s`}
+                      repeatCount="indefinite"
+                      path={animPath}
+                      rotate="auto"
+                      keyPoints="0;0;1;1"
+                      keyTimes={`0;${t1};${t2};1`}
+                      calcMode="linear"
+                    />
+                    <animate
+                      attributeName="opacity"
+                      dur={`${total}s`}
+                      repeatCount="indefinite"
+                      values="0;0.95;0.95;0"
+                      keyTimes={`0;${t1};${t2};1`}
+                      calcMode="linear"
+                    />
+                  </circle>
+                );
+              })()}
               {/* Flow label at midpoint */}
               {hasFlow && (
                 <g transform={`translate(${mx}, ${my})`}>
@@ -654,21 +885,55 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           }
         `}</style>
 
-        {/* Zentraler Knoten – implizit, ohne Icon/Label/Werte, nicht klickbar */}
+        {/* Zentraler Knoten – zeigt Gateway-Status (grün/rot/gelb). */}
         {(() => {
           const { x: ccx, y: ccy } = nodePos(centerNode);
+          const gwIconSize = Math.max(14, Math.round(centerRadius * 1.1));
+          const title =
+            gatewayStatus === "online" ? "Gateway online"
+            : gatewayStatus === "offline" ? "Gateway offline"
+            : gatewayStatus === "error" ? "Gateway-Fehler"
+            : "Gateway-Status unbekannt";
           return (
-            <circle
-              cx={ccx}
-              cy={ccy}
-              r={centerRadius}
-              fill="hsl(var(--muted))"
-              fillOpacity={0.35}
-              stroke="hsl(var(--muted-foreground))"
-              strokeOpacity={0.5}
-              strokeWidth={1.5}
-              className="pointer-events-none"
-            />
+            <g
+              className="cursor-pointer outline-none"
+              tabIndex={0}
+              role="button"
+              aria-label={title}
+              onClick={() => setGatewayDetailOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setGatewayDetailOpen(true);
+                }
+              }}
+            >
+              <title>{title}</title>
+              <circle
+                cx={ccx}
+                cy={ccy}
+                r={centerRadius}
+                fill={gatewayStatusColor}
+                fillOpacity={0.15}
+                stroke={gatewayStatusColor}
+                strokeOpacity={0.9}
+                strokeWidth={2}
+              />
+              <foreignObject
+                x={ccx - gwIconSize / 2}
+                y={ccy - gwIconSize / 2}
+                width={gwIconSize}
+                height={gwIconSize}
+                className="pointer-events-none"
+              >
+                <div
+                  style={{ color: gatewayStatusColor, width: gwIconSize, height: gwIconSize }}
+                  className="flex items-center justify-center"
+                >
+                  <Router size={Math.round(gwIconSize * 0.7)} />
+                </div>
+              </foreignObject>
+            </g>
           );
         })()}
 
@@ -824,6 +1089,15 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           allNodes={nodes}
           metersById={Object.fromEntries((relevantMeters as any[]).map((m) => [m.id, m]))}
           onClose={() => setDetailNode(null)}
+        />
+      )}
+
+      {gatewayDetailOpen && (
+        <GatewayDetailDialog
+          devices={gatewayDevices as any[]}
+          status={gatewayStatus}
+          statusColor={gatewayStatusColor}
+          onClose={() => setGatewayDetailOpen(false)}
         />
       )}
 
@@ -1710,4 +1984,112 @@ function HouseSelfSufficiencyPanel({
     </div>
   );
 }
+
+/* ─────────────────────────────────────────────────────── */
+/* Gateway Detail Dialog                                   */
+/* ─────────────────────────────────────────────────────── */
+
+interface GatewayDetailDialogProps {
+  devices: any[];
+  status: GatewayStatus;
+  statusColor: string;
+  onClose: () => void;
+}
+
+function GatewayDetailDialog({ devices, status, statusColor, onClose }: GatewayDetailDialogProps) {
+  const statusLabel =
+    status === "online" ? "Online"
+    : status === "offline" ? "Offline"
+    : status === "error" ? "Fehler"
+    : "Unbekannt";
+
+  const fmtBerlin = (iso: string | null) => {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleString("de-DE", {
+        timeZone: "Europe/Berlin",
+        dateStyle: "short",
+        timeStyle: "medium",
+      });
+    } catch { return iso; }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-start gap-3">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-full border-2"
+              style={{ color: statusColor, borderColor: statusColor, backgroundColor: `${statusColor}22` }}
+            >
+              <Router size={22} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <DialogTitle>Gateway</DialogTitle>
+              <DialogDescription className="flex items-center gap-2 mt-1">
+                <span
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ backgroundColor: statusColor }}
+                />
+                Status: {statusLabel}
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        {devices.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-6 text-center">
+            Kein Gateway mit den ausgewählten Zählern verknüpft.
+          </div>
+        ) : (
+          <div className="space-y-3 mt-2">
+            {devices.map((d) => {
+              const effectiveStatus = String(d.effective_status || d.status || "unknown").toLowerCase();
+              const color =
+                effectiveStatus === "online" ? "hsl(152 55% 42%)"
+                : effectiveStatus === "error" || effectiveStatus === "faulted" ? "hsl(45 95% 50%)"
+                : "hsl(0 72% 55%)";
+              return (
+                <div key={d.id} className="rounded-lg border p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold truncate">{d.device_name || "Gateway"}</div>
+                    <Badge variant="outline" style={{ color, borderColor: color }}>
+                      {effectiveStatus === "online" ? "Online"
+                        : effectiveStatus === "error" || effectiveStatus === "faulted" ? "Fehler"
+                        : "Offline"}
+                    </Badge>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                    {d.device_type && (<><dt className="text-muted-foreground">Typ</dt><dd className="tabular-nums">{d.device_type}</dd></>)}
+                    {d.local_ip && (<><dt className="text-muted-foreground">Lokale IP</dt><dd className="tabular-nums">{d.local_ip}</dd></>)}
+                    {d.mac_address && (<><dt className="text-muted-foreground">MAC</dt><dd className="tabular-nums text-xs">{d.mac_address}</dd></>)}
+                    {d.ha_version && (<><dt className="text-muted-foreground">HA-Version</dt><dd className="tabular-nums">{d.ha_version}</dd></>)}
+                    {d.addon_version && (
+                      <>
+                        <dt className="text-muted-foreground">Add-on-Version</dt>
+                        <dd className="tabular-nums">
+                          {d.addon_version}
+                          {d.latest_available_version && d.latest_available_version !== d.addon_version && (
+                            <span className="ml-1 text-xs text-muted-foreground">(verfügbar: {d.latest_available_version})</span>
+                          )}
+                        </dd>
+                      </>
+                    )}
+                    <dt className="text-muted-foreground">{d.last_heartbeat_at ? "Letzter Heartbeat" : "Letzter Sync"}</dt>
+                    <dd className="tabular-nums">{fmtBerlin(d.last_heartbeat_at || d.last_sync_at)}</dd>
+                    {typeof d.offline_buffer_count === "number" && d.offline_buffer_count > 0 && (
+                      <><dt className="text-muted-foreground">Offline-Puffer</dt><dd className="tabular-nums">{d.offline_buffer_count.toLocaleString("de-DE")}</dd></>
+                    )}
+                  </dl>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
