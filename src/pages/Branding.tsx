@@ -46,6 +46,7 @@ const Branding = () => {
 
         <div className="p-6 space-y-6">
           <WeekStartSetting />
+          <AutoLogoutSetting />
           <ManualMetersSetting />
           <BrandingSettings />
         </div>
