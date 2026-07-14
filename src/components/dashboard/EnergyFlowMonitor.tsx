@@ -144,9 +144,43 @@ function usePrefersReducedMotion() {
 interface EnergyFlowMonitorProps {
   nodes: EnergyFlowNode[];
   connections: EnergyFlowConnection[];
+  locationId?: string | null;
+  gatewayDeviceIds?: string[];
 }
 
-export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMonitorProps) {
+type GatewayStatus = "online" | "offline" | "error" | "unknown";
+
+function normalizeIntegrationStatus(row: any): GatewayStatus {
+  if (!row?.is_enabled) return "offline";
+  const syncStatus = String(row?.sync_status ?? "").toLowerCase();
+  if (syncStatus === "error" || syncStatus === "failed" || syncStatus === "faulted") return "error";
+  if (syncStatus === "success" || syncStatus === "online" || syncStatus === "connected") return "online";
+
+  const lastSyncMs = row?.last_sync_at ? new Date(row.last_sync_at).getTime() : 0;
+  const syncFresh = lastSyncMs > 0 && Date.now() - lastSyncMs < 30 * 60_000;
+  if (syncStatus === "syncing" && syncFresh) return "online";
+  if (syncFresh) return "online";
+
+  // Enabled non-heartbeat integrations such as Loxone can deliver live data
+  // without a gateway_devices row. Treat the configured data-source as linked.
+  return "online";
+}
+
+function normalizeGatewayDeviceStatus(row: any): GatewayStatus {
+  const raw = String(row?.status ?? "").toLowerCase();
+  if (raw === "error" || raw === "faulted" || raw === "failed") return "error";
+  const lastHeartbeat = row?.last_heartbeat_at ? new Date(row.last_heartbeat_at).getTime() : 0;
+  const stale = !lastHeartbeat || Date.now() - lastHeartbeat > 3 * 60_000;
+  if (raw === "online" && !stale) return "online";
+  return "offline";
+}
+
+export default function EnergyFlowMonitor({
+  nodes,
+  connections,
+  locationId,
+  gatewayDeviceIds: configuredGatewayDeviceIds = [],
+}: EnergyFlowMonitorProps) {
   const { selectedPeriod } = useDashboardFilter();
   const { meters } = useMeters();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -320,7 +354,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
   // Gateway-Status für den zentralen Knoten. Wir sammeln alle gateway_device_ids
   // der beteiligten Zähler UND als Fallback alle location_ids, um Gateways derselben
   // Location zu finden (bei manuellen/Loxone-Metern ohne direkte gateway_device_id).
-  const gatewayDeviceIds = useMemo(
+  const meterGatewayDeviceIds = useMemo(
     () =>
       Array.from(
         new Set(
@@ -331,7 +365,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
       ),
     [relevantMeters],
   );
-  const locationIds = useMemo(
+  const meterLocationIds = useMemo(
     () =>
       Array.from(
         new Set(
@@ -342,48 +376,128 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
       ),
     [relevantMeters],
   );
-  const gatewayKey = gatewayDeviceIds.slice().sort().join(",");
-  const locationKey = locationIds.slice().sort().join(",");
+  const configuredGatewayIds = useMemo(
+    () => Array.from(new Set((configuredGatewayDeviceIds || []).filter(Boolean))),
+    [configuredGatewayDeviceIds],
+  );
+  const scopedLocationIds = useMemo(
+    () => Array.from(new Set([locationId, ...meterLocationIds].filter(Boolean))) as string[],
+    [locationId, meterLocationIds],
+  );
+  const gatewayKey = useMemo(
+    () => Array.from(new Set([...meterGatewayDeviceIds, ...configuredGatewayIds])).sort().join(","),
+    [meterGatewayDeviceIds, configuredGatewayIds],
+  );
+  const locationKey = scopedLocationIds.slice().sort().join(",");
   const { data: gatewayDevices = [] } = useQuery({
     queryKey: ["energyflow-gateway-devices", gatewayKey, locationKey],
-    enabled: gatewayDeviceIds.length > 0 || locationIds.length > 0,
+    enabled: gatewayKey.length > 0 || scopedLocationIds.length > 0,
     staleTime: 30_000,
     refetchInterval: 60_000,
     queryFn: async (): Promise<Array<any>> => {
       const byId = new Map<string, any>();
-      if (gatewayDeviceIds.length > 0) {
+      const integrationsById = new Map<string, any>();
+      const selectedIntegrationIds = new Set<string>();
+      const allScopeIds = Array.from(new Set([...meterGatewayDeviceIds, ...configuredGatewayIds]));
+
+      const addIntegrationRows = (rows: any[] | null) => {
+        for (const row of rows ?? []) {
+          integrationsById.set(row.id, row);
+          if (configuredGatewayIds.includes(row.id)) selectedIntegrationIds.add(row.id);
+        }
+      };
+
+      if (configuredGatewayIds.length > 0) {
+        const { data } = await supabase
+          .from("location_integrations")
+          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, integrations(name, type)")
+          .in("id", configuredGatewayIds);
+        addIntegrationRows(data as any[] | null);
+      }
+
+      if (scopedLocationIds.length > 0) {
+        const { data } = await supabase
+          .from("location_integrations")
+          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, integrations(name, type)")
+          .in("location_id", scopedLocationIds)
+          .eq("is_enabled", true);
+        addIntegrationRows(data as any[] | null);
+      }
+
+      const integrationIds = Array.from(integrationsById.keys());
+
+      const addGatewayDeviceRows = (rows: any[] | null) => {
+        for (const r of rows ?? []) {
+          const integration = r.location_integration_id ? integrationsById.get(r.location_integration_id) : null;
+          const effectiveStatus = normalizeGatewayDeviceStatus(r);
+          byId.set(r.id, {
+            ...r,
+            source: "gateway_device",
+            status: r.status || effectiveStatus,
+            effective_status: effectiveStatus,
+            sync_status: integration?.sync_status ?? null,
+            last_sync_at: integration?.last_sync_at ?? null,
+          });
+        }
+      };
+
+      if (allScopeIds.length > 0) {
         const { data } = await supabase
           .from("gateway_devices")
           .select("id, device_name, device_type, local_ip, mac_address, ha_version, addon_version, latest_available_version, status, last_heartbeat_at, offline_buffer_count, location_integration_id")
-          .in("id", gatewayDeviceIds);
-        for (const r of data ?? []) byId.set(r.id, r);
+          .in("id", allScopeIds);
+        addGatewayDeviceRows(data as any[] | null);
       }
-      if (locationIds.length > 0) {
-        // Fallback: alle Gateways derselben Location(en) über location_integrations
-        const { data: lis } = await supabase
-          .from("location_integrations")
-          .select("id")
-          .in("location_id", locationIds);
-        const liIds = (lis ?? []).map((l: any) => l.id);
-        if (liIds.length > 0) {
-          const { data } = await supabase
-            .from("gateway_devices")
-            .select("id, device_name, device_type, local_ip, mac_address, ha_version, addon_version, latest_available_version, status, last_heartbeat_at, offline_buffer_count, location_integration_id")
-            .in("location_integration_id", liIds);
-          for (const r of data ?? []) if (!byId.has(r.id)) byId.set(r.id, r);
-        }
+
+      if (integrationIds.length > 0) {
+        const { data } = await supabase
+          .from("gateway_devices")
+          .select("id, device_name, device_type, local_ip, mac_address, ha_version, addon_version, latest_available_version, status, last_heartbeat_at, offline_buffer_count, location_integration_id")
+          .in("location_integration_id", integrationIds);
+        addGatewayDeviceRows(data as any[] | null);
       }
+
+      const deviceIntegrationIds = new Set(
+        Array.from(byId.values())
+          .map((d: any) => d.location_integration_id)
+          .filter(Boolean),
+      );
+
+      for (const li of integrationsById.values()) {
+        if (deviceIntegrationIds.has(li.id)) continue;
+        if (selectedIntegrationIds.size > 0 && !selectedIntegrationIds.has(li.id)) continue;
+
+        const integrationName = li.integrations?.name || li.integrations?.type || "Integration";
+        const configName = (li.config as any)?.device_name || (li.config as any)?.name;
+        const effectiveStatus = normalizeIntegrationStatus(li);
+        byId.set(`integration:${li.id}`, {
+          id: li.id,
+          source: "location_integration",
+          location_integration_id: li.id,
+          device_name: configName || integrationName,
+          device_type: integrationName,
+          status: effectiveStatus,
+          effective_status: effectiveStatus,
+          local_ip: null,
+          mac_address: null,
+          ha_version: null,
+          addon_version: null,
+          latest_available_version: null,
+          last_heartbeat_at: null,
+          last_sync_at: li.last_sync_at ?? null,
+          sync_status: li.sync_status ?? null,
+          offline_buffer_count: 0,
+        });
+      }
+
       return Array.from(byId.values());
     },
   });
 
-  const gatewayStatus: "online" | "offline" | "error" | "unknown" = useMemo(() => {
+  const gatewayStatus: GatewayStatus = useMemo(() => {
     if (gatewayDevices.length === 0) return "unknown";
-    const now = Date.now();
     const normalized = gatewayDevices.map((g: any) => {
-      const lastHb = g.last_heartbeat_at ? new Date(g.last_heartbeat_at).getTime() : 0;
-      const stale = now - lastHb > 3 * 60_000;
-      if (stale) return "offline";
+      if (g.effective_status) return g.effective_status as GatewayStatus;
       const s = String(g.status ?? "").toLowerCase();
       if (s === "online") return "online";
       if (s === "error" || s === "faulted") return "error";
