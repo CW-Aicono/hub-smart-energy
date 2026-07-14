@@ -72,7 +72,32 @@ async function validateApiKey(req: Request): Promise<Response | GatewayAuthConte
     return json({ error: "Unauthorized" }, 401);
   }
 
-  // 2) Global GATEWAY_API_KEY (legacy server-to-server)
+  // 2) Tenant-eigener API-Key (aic_live_...) → SHA-256 Lookup in tenant_api_keys
+  if (providedKey.startsWith("aic_live_")) {
+    try {
+      const hash = await sha256Hex(providedKey);
+      const supabase = getSupabase();
+      const { data: keyRow } = await supabase
+        .from("tenant_api_keys")
+        .select("id, tenant_id, revoked_at")
+        .eq("key_hash", hash)
+        .is("revoked_at", null)
+        .maybeSingle();
+      if (keyRow?.tenant_id) {
+        // fire-and-forget last_used_at
+        supabase.from("tenant_api_keys")
+          .update({ last_used_at: new Date().toISOString() })
+          .eq("id", keyRow.id)
+          .then(() => {});
+        return { tenantId: keyRow.tenant_id };
+      }
+    } catch (e) {
+      console.error("[gateway-ingest] tenant key lookup failed:", e);
+    }
+    return json({ error: "Unauthorized" }, 401);
+  }
+
+  // 3) Globaler GATEWAY_API_KEY (Hetzner-Worker / Bridge, server-to-server)
   if (providedKey === gatewayApiKey) {
     return { tenantId: null };
   }
