@@ -153,6 +153,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
   const [dims, setDims] = useState({ w: 500, h: 320 });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [detailNode, setDetailNode] = useState<EnergyFlowNode | null>(null);
+  const [gatewayDetailOpen, setGatewayDetailOpen] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
 
   const meterIds = useMemo(() => nodes.map((n) => n.meter_id).filter(Boolean), [nodes]);
@@ -317,8 +318,8 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
   });
 
   // Gateway-Status für den zentralen Knoten. Wir sammeln alle gateway_device_ids
-  // der beteiligten Zähler und lesen den aktuellen Status. Priorität für die
-  // Farbwahl: offline (rot) > error (gelb) > online (grün).
+  // der beteiligten Zähler UND als Fallback alle location_ids, um Gateways derselben
+  // Location zu finden (bei manuellen/Loxone-Metern ohne direkte gateway_device_id).
   const gatewayDeviceIds = useMemo(
     () =>
       Array.from(
@@ -330,32 +331,60 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
       ),
     [relevantMeters],
   );
+  const locationIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (relevantMeters as any[])
+            .map((m) => m.location_id)
+            .filter((v): v is string => !!v),
+        ),
+      ),
+    [relevantMeters],
+  );
   const gatewayKey = gatewayDeviceIds.slice().sort().join(",");
-  const { data: gatewayStatuses = [] } = useQuery({
-    queryKey: ["energyflow-gateway-status", gatewayKey],
-    enabled: gatewayDeviceIds.length > 0,
+  const locationKey = locationIds.slice().sort().join(",");
+  const { data: gatewayDevices = [] } = useQuery({
+    queryKey: ["energyflow-gateway-devices", gatewayKey, locationKey],
+    enabled: gatewayDeviceIds.length > 0 || locationIds.length > 0,
     staleTime: 30_000,
     refetchInterval: 60_000,
-    queryFn: async (): Promise<Array<{ status: string; lastHeartbeat: number }>> => {
-      const { data } = await supabase
-        .from("gateway_devices")
-        .select("status, last_heartbeat_at")
-        .in("id", gatewayDeviceIds);
-      return (data ?? []).map((r: any) => ({
-        status: String(r.status ?? "offline"),
-        lastHeartbeat: r.last_heartbeat_at ? new Date(r.last_heartbeat_at).getTime() : 0,
-      }));
+    queryFn: async (): Promise<Array<any>> => {
+      const byId = new Map<string, any>();
+      if (gatewayDeviceIds.length > 0) {
+        const { data } = await supabase
+          .from("gateway_devices")
+          .select("id, device_name, device_type, local_ip, mac_address, ha_version, addon_version, latest_available_version, status, last_heartbeat_at, offline_buffer_count, location_integration_id")
+          .in("id", gatewayDeviceIds);
+        for (const r of data ?? []) byId.set(r.id, r);
+      }
+      if (locationIds.length > 0) {
+        // Fallback: alle Gateways derselben Location(en) über location_integrations
+        const { data: lis } = await supabase
+          .from("location_integrations")
+          .select("id")
+          .in("location_id", locationIds);
+        const liIds = (lis ?? []).map((l: any) => l.id);
+        if (liIds.length > 0) {
+          const { data } = await supabase
+            .from("gateway_devices")
+            .select("id, device_name, device_type, local_ip, mac_address, ha_version, addon_version, latest_available_version, status, last_heartbeat_at, offline_buffer_count, location_integration_id")
+            .in("location_integration_id", liIds);
+          for (const r of data ?? []) if (!byId.has(r.id)) byId.set(r.id, r);
+        }
+      }
+      return Array.from(byId.values());
     },
   });
 
   const gatewayStatus: "online" | "offline" | "error" | "unknown" = useMemo(() => {
-    if (gatewayDeviceIds.length === 0) return "unknown";
-    if (gatewayStatuses.length === 0) return "unknown";
+    if (gatewayDevices.length === 0) return "unknown";
     const now = Date.now();
-    const normalized = gatewayStatuses.map((g) => {
-      const stale = now - g.lastHeartbeat > 3 * 60_000;
+    const normalized = gatewayDevices.map((g: any) => {
+      const lastHb = g.last_heartbeat_at ? new Date(g.last_heartbeat_at).getTime() : 0;
+      const stale = now - lastHb > 3 * 60_000;
       if (stale) return "offline";
-      const s = g.status.toLowerCase();
+      const s = String(g.status ?? "").toLowerCase();
       if (s === "online") return "online";
       if (s === "error" || s === "faulted") return "error";
       return "offline";
@@ -363,7 +392,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     if (normalized.some((s) => s === "offline")) return "offline";
     if (normalized.some((s) => s === "error")) return "error";
     return "online";
-  }, [gatewayStatuses, gatewayDeviceIds.length]);
+  }, [gatewayDevices]);
 
   const gatewayStatusColor =
     gatewayStatus === "online"
@@ -741,7 +770,19 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
             : gatewayStatus === "error" ? "Gateway-Fehler"
             : "Gateway-Status unbekannt";
           return (
-            <g className="pointer-events-none">
+            <g
+              className="cursor-pointer outline-none"
+              tabIndex={0}
+              role="button"
+              aria-label={title}
+              onClick={() => setGatewayDetailOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setGatewayDetailOpen(true);
+                }
+              }}
+            >
               <title>{title}</title>
               <circle
                 cx={ccx}
@@ -758,6 +799,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                 y={ccy - gwIconSize / 2}
                 width={gwIconSize}
                 height={gwIconSize}
+                className="pointer-events-none"
               >
                 <div
                   style={{ color: gatewayStatusColor, width: gwIconSize, height: gwIconSize }}
@@ -766,15 +808,6 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                   <Router size={Math.round(gwIconSize * 0.7)} />
                 </div>
               </foreignObject>
-              {/* kleiner Statuspunkt oben rechts am Zentralknoten */}
-              <circle
-                cx={ccx + centerRadius * 0.75}
-                cy={ccy - centerRadius * 0.75}
-                r={Math.max(3, centerRadius * 0.18)}
-                fill={gatewayStatusColor}
-                stroke="hsl(var(--background))"
-                strokeWidth={1.5}
-              />
             </g>
           );
         })()}
@@ -931,6 +964,15 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           allNodes={nodes}
           metersById={Object.fromEntries((relevantMeters as any[]).map((m) => [m.id, m]))}
           onClose={() => setDetailNode(null)}
+        />
+      )}
+
+      {gatewayDetailOpen && (
+        <GatewayDetailDialog
+          devices={gatewayDevices as any[]}
+          status={gatewayStatus}
+          statusColor={gatewayStatusColor}
+          onClose={() => setGatewayDetailOpen(false)}
         />
       )}
 
@@ -1817,4 +1859,115 @@ function HouseSelfSufficiencyPanel({
     </div>
   );
 }
+
+/* ─────────────────────────────────────────────────────── */
+/* Gateway Detail Dialog                                   */
+/* ─────────────────────────────────────────────────────── */
+
+interface GatewayDetailDialogProps {
+  devices: any[];
+  status: "online" | "offline" | "error" | "unknown";
+  statusColor: string;
+  onClose: () => void;
+}
+
+function GatewayDetailDialog({ devices, status, statusColor, onClose }: GatewayDetailDialogProps) {
+  const statusLabel =
+    status === "online" ? "Online"
+    : status === "offline" ? "Offline"
+    : status === "error" ? "Fehler"
+    : "Unbekannt";
+
+  const fmtBerlin = (iso: string | null) => {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleString("de-DE", {
+        timeZone: "Europe/Berlin",
+        dateStyle: "short",
+        timeStyle: "medium",
+      });
+    } catch { return iso; }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-start gap-3">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-full border-2"
+              style={{ color: statusColor, borderColor: statusColor, backgroundColor: `${statusColor}22` }}
+            >
+              <Router size={22} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <DialogTitle>Gateway</DialogTitle>
+              <DialogDescription className="flex items-center gap-2 mt-1">
+                <span
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ backgroundColor: statusColor }}
+                />
+                Status: {statusLabel}
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        {devices.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-6 text-center">
+            Kein Gateway mit den ausgewählten Zählern verknüpft.
+          </div>
+        ) : (
+          <div className="space-y-3 mt-2">
+            {devices.map((d) => {
+              const now = Date.now();
+              const lastHb = d.last_heartbeat_at ? new Date(d.last_heartbeat_at).getTime() : 0;
+              const stale = !lastHb || now - lastHb > 3 * 60_000;
+              const effectiveStatus = stale ? "offline" : String(d.status ?? "").toLowerCase();
+              const color =
+                effectiveStatus === "online" ? "hsl(152 55% 42%)"
+                : effectiveStatus === "error" || effectiveStatus === "faulted" ? "hsl(45 95% 50%)"
+                : "hsl(0 72% 55%)";
+              return (
+                <div key={d.id} className="rounded-lg border p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold truncate">{d.device_name || "Gateway"}</div>
+                    <Badge variant="outline" style={{ color, borderColor: color }}>
+                      {effectiveStatus === "online" ? "Online"
+                        : effectiveStatus === "error" || effectiveStatus === "faulted" ? "Fehler"
+                        : "Offline"}
+                    </Badge>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                    {d.device_type && (<><dt className="text-muted-foreground">Typ</dt><dd className="tabular-nums">{d.device_type}</dd></>)}
+                    {d.local_ip && (<><dt className="text-muted-foreground">Lokale IP</dt><dd className="tabular-nums">{d.local_ip}</dd></>)}
+                    {d.mac_address && (<><dt className="text-muted-foreground">MAC</dt><dd className="tabular-nums text-xs">{d.mac_address}</dd></>)}
+                    {d.ha_version && (<><dt className="text-muted-foreground">HA-Version</dt><dd className="tabular-nums">{d.ha_version}</dd></>)}
+                    {d.addon_version && (
+                      <>
+                        <dt className="text-muted-foreground">Add-on-Version</dt>
+                        <dd className="tabular-nums">
+                          {d.addon_version}
+                          {d.latest_available_version && d.latest_available_version !== d.addon_version && (
+                            <span className="ml-1 text-xs text-muted-foreground">(verfügbar: {d.latest_available_version})</span>
+                          )}
+                        </dd>
+                      </>
+                    )}
+                    <dt className="text-muted-foreground">Letzter Heartbeat</dt>
+                    <dd className="tabular-nums">{fmtBerlin(d.last_heartbeat_at)}</dd>
+                    {typeof d.offline_buffer_count === "number" && d.offline_buffer_count > 0 && (
+                      <><dt className="text-muted-foreground">Offline-Puffer</dt><dd className="tabular-nums">{d.offline_buffer_count.toLocaleString("de-DE")}</dd></>
+                    )}
+                  </dl>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 

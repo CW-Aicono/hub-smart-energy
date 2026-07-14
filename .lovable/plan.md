@@ -1,48 +1,36 @@
 ## Ziel
-Custom-Widget „Energieflussmonitor" bekommt ein **radiales Default-Layout** wie in der Loxone-App: fester, unbeschrifteter Zentralknoten in der Mitte, User-Knoten werden beim Hinzufügen automatisch gleichmäßig auf einem Kreis um das Zentrum verteilt. Verbindungen zum Zentrum werden automatisch gezeichnet. Der User kann äußere Knoten weiterhin per Drag & Drop frei umpositionieren; ein Reset-Button stellt die radiale Default-Anordnung wieder her.
+Die drei Rückfragen zum zentralen Knoten im Energieflussmonitor auflösen: Gateway-Status verlässlich anzeigen, den redundanten Statuspunkt entfernen und einen Detail-Dialog fürs Gateway anbieten.
 
-## Änderungen
+## Diagnose zum grauen Status
+Der Status wird aktuell nur über `gateway_devices.status` aufgelöst, und zwar ausschließlich für Meter, die eine `gateway_device_id` gesetzt haben (Zeile ~322 in `EnergyFlowMonitor.tsx`). Trifft das auf keinen der verknüpften Zähler zu (typisch bei Loxone-Sub-Outputs, manuellen Zählern oder Simulations-Metern, die stattdessen über `location_id` an ein Gateway hängen), fällt der Status auf `unknown` → grau.
 
-### 1. Datenmodell
-- Kein neues Feld, keine DB-Migration.
-- Zentralknoten ist **implizit** (nicht in `nodes[]`), wird immer in der Mitte gerendert, keine Beschriftung, keine Werte, nicht auswählbar.
-- `connections` werden **automatisch zur Laufzeit** aus den vorhandenen Knoten generiert (jeder User-Knoten ↔ Zentrum). Bestehende gespeicherte `connections` werden ignoriert.
-- `node.x` / `node.y` bleiben erhalten und speichern die (ggf. per Drag & Drop überschriebene) Position in Prozent des Container-Rechtecks. Beim Neuanlegen eines Knotens werden sie mit der radialen Default-Position vorbelegt.
+Deshalb ist im Screenshot alles grau, obwohl das Gateway online ist.
 
-### 2. Radiales Default-Layout (Utility)
-- Neue Helper-Funktion `computeRadialDefault(index, total)` → `{x, y}` in Prozent:
-  - Zentrum = (50, 50).
-  - Radius = 34 (Prozent, lässt Platz für Labels/Werte).
-  - Winkel = `-90° + index * (360°/total)` (erster Knoten oben, im Uhrzeigersinn).
-- Wird verwendet:
-  - beim **Anlegen** eines neuen Knotens (Designer).
-  - beim **Reset** (Designer).
-  - als Fallback, wenn ein bestehender Knoten weder gespeichertes `x` noch `y` hat.
+## Umsetzung
 
-### 3. `src/components/dashboard/EnergyFlowMonitor.tsx`
-- Zusätzlichen impliziten **Zentralknoten** rendern: Kreis mit dezenter Umrandung, kein Icon, kein Label, keine Werte, kein Click-Handler.
-- Verbindungen ignorieren die gespeicherte `connections`-Prop und werden zur Laufzeit als „jeder Node → Zentrum" erzeugt. Flow-Animation/Farblogik/Richtung nach Vorzeichen der Live-Leistung bleiben unverändert; der Zentrumsknoten ist neutrale Gegenseite jeder Linie.
-- `nodePos()` nutzt weiterhin `node.x/node.y` (jetzt radial vorbelegt).
-- Widget-Ansicht auf dem Dashboard bleibt **nicht** interaktiv (nur Anzeige).
+### 1) `src/components/dashboard/EnergyFlowMonitor.tsx` — Gateway-Status robuster auflösen
+- Zusätzlich zu `gateway_device_id` auch über `meters.location_id` alle `gateway_devices` derselben Location laden (Fallback, wenn keine direkte Verknüpfung existiert).
+- Wenn beides leer bleibt, greift weiterhin `unknown` (grau) — aber nur noch als echter „keine Daten"-Fall.
+- Bewertung wie bisher: `offline > error > online` (offline dominiert Farbe rot, error gelb, sonst grün). Stale-Heartbeat > 3 min = offline (bereits vorhanden).
 
-### 4. `src/components/settings/EnergyFlowDesigner.tsx`
-- **Beibehalten:** Drag & Drop der äußeren Knoten inkl. bestehendem `dragRef`/Mausevents; Knoten hinzufügen/entfernen; Rolle/Zähler/Label/Farbe editieren.
-- **Neu beim Hinzufügen:** neuer Knoten bekommt `x/y` aus `computeRadialDefault(newIndex, newTotal)` statt fest 50/50. Damit landet er automatisch auf gleichem Radius und gleichem Winkelabstand.
-- **Neu: Reset-Button** („Anordnung zurücksetzen") oben rechts über dem Layout-Panel:
-  - Setzt alle Knoten in `nodes[]` neu: `nodes.map((n, i) => ({ ...n, x, y: computeRadialDefault(i, nodes.length) }))`.
-  - Löst Bestätigung via `AlertDialog` aus („Alle manuellen Positionen werden zurückgesetzt.").
-- **Zentralknoten** wird als unbewegliche Vorschau in der Mitte gezeichnet, damit der User die radiale Anordnung sieht.
-- **Entfernt:** UI zum manuellen Anlegen/Löschen von Verbindungen (Connections sind jetzt implizit). Vorhandene Utility-Funktionen bleiben, werden nur nicht mehr aufgerufen.
+### 2) `src/components/dashboard/EnergyFlowMonitor.tsx` — Statuspunkt am Zentralknoten entfernen
+Der kleine Punkt oben rechts am Zentralknoten (Zeilen ~770–777) ist redundant, weil Ring und Icon-Farbe bereits den Gateway-Status kodieren. Er wird ersatzlos gestrichen. Damit verschwindet der auf der Kreisbahn sichtbare graue Punkt aus dem Screenshot.
 
-### 5. `src/components/settings/WidgetPreview.tsx`
-- Nutzt weiterhin denselben `EnergyFlowMonitor`; automatisch konsistent mit neuem Layout und Zentralknoten. Keine weitere Anpassung nötig.
+### 3) `src/components/dashboard/EnergyFlowMonitor.tsx` — Zentraler Knoten klickbar
+- Am Zentralknoten-`<g>` `pointer-events-none` entfernen, `cursor-pointer` setzen und `onClick` binden.
+- Neuer State `gatewayDetailOpen: boolean`. Klick öffnet einen neuen `GatewayDetailDialog` (analog zum bestehenden `MeterDetailDialog`, aber schmaler — `max-w-2xl`).
 
-### 6. Migration bestehender Widgets
-- Renderer ignoriert alte `connections`. Bestehende `x/y`-Werte bleiben respektiert (der User hatte sie bewusst gesetzt). Über den neuen Reset-Button kann er auf das radiale Default umschalten.
+### 4) Neuer Dialog `GatewayDetailDialog` (im selben File, wie `MeterDetailDialog`)
+Zeigt für die im Widget relevanten Gateways:
+- Gerätename, Typ, Status-Badge (online/offline/error/unknown) mit derselben Farbpalette wie am Knoten
+- Lokale IP, MAC, HA-Version, Add-on-Version, verfügbare Version
+- Letzter Heartbeat (Europe/Berlin), Offline-Puffer-Anzahl
+- Anzahl aktiver/gesamter Automationen (aus `useGatewayDevices`-Metriken bereits vorhanden — wir fetchen die Devices direkt per Query auf `gateway_devices`, die restlichen Metriken sind für diesen Dialog nicht nötig)
 
-## Nicht Teil dieser Änderung
-- Farb-/Icon-System, Live-Daten-Hooks, SOC-Logik, i18n bleiben unverändert.
-- Kein neues DB-Feld für Winkel/Radius.
+Bei mehreren Gateways (mehrere Locations im Widget): Liste als Karten untereinander. Bei genau einem: einzelne Karte.
 
-## Offene Rückfrage
-Reihenfolge der Knoten (= Default-Winkelreihenfolge, 12 Uhr → im Uhrzeigersinn) folgt der Einfügereihenfolge in `nodes[]`. Falls du stattdessen eine feste Rollen-Sortierung willst (z. B. Netz oben, Verbrauch rechts, Speicher unten, Produktion links wie im Loxone-Screenshot), sag Bescheid — dann sortiere ich vor dem Layout automatisch nach Rolle.
+Keine Änderungen an Backend, Layout-Persistenz, Drag & Drop, Partikel-Animation oder anderen Widgets.
+
+## Verifikation
+- Preview öffnen, Widget prüfen: Statusring & Icon farbig, kein orbitierender Punkt mehr, Klick auf zentralen Knoten öffnet den Gateway-Dialog mit korrekten Daten.
+- Falls im aktuellen Tenant tatsächlich kein Gateway existiert (rein manuelle Zähler): Ring bleibt grau, Dialog zeigt eine leere-Zustands-Meldung („Kein Gateway verknüpft").
