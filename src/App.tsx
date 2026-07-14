@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { TenantProvider } from "@/hooks/useTenant";
+import { AutoLogoutMount } from "@/hooks/useAutoLogout";
 import { UserPreferencesProvider } from "@/hooks/useUserPreferences";
 import { TranslationProvider } from "@/hooks/useTranslation";
 import { ThemeProvider } from "@/hooks/useTheme";
@@ -169,6 +170,7 @@ const App = () => (
                   <Toaster />
                   <Sonner />
                   <ConfirmDialogHost />
+                  <AutoLogoutMount />
                   <RecoveryGuard />
                   <MustChangePasswordGuard />
                   <SalesHostGuard />

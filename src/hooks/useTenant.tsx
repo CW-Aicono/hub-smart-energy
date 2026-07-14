@@ -38,6 +38,8 @@ export interface Tenant {
   report_settings: TenantReportSettings;
   week_start_day: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   show_manual_meters: boolean;
+  auto_logout_enabled: boolean;
+  auto_logout_minutes: 10 | 20 | 30 | 60 | 120;
   created_at: string;
   updated_at: string;
 }
@@ -140,6 +142,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         report_settings: { footer_text: "Stadtwerke Musterstadt GmbH", show_logo: true },
         week_start_day: 1,
         show_manual_meters: false,
+        auto_logout_enabled: true,
+        auto_logout_minutes: 30,
         created_at: "2025-01-01T00:00:00Z",
         updated_at: "2025-01-01T00:00:00Z",
       };
@@ -225,6 +229,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           report_settings: (data.report_settings as unknown as TenantReportSettings) || { footer_text: "", show_logo: true },
           week_start_day: (data.week_start_day as 0 | 1 | 2 | 3 | 4 | 5 | 6) ?? 1,
           show_manual_meters: data.show_manual_meters ?? false,
+          auto_logout_enabled: (data as any).auto_logout_enabled ?? true,
+          auto_logout_minutes: (((data as any).auto_logout_minutes ?? 30) as 10 | 20 | 30 | 60 | 120),
           logo_url: resolvedLogoUrl,
         };
         setTenant(tenantData);

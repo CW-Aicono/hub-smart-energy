@@ -9,6 +9,7 @@ import { BrandingSettings } from "@/components/settings/BrandingSettings";
 import { BackupSettings } from "@/components/settings/BackupSettings";
 import { WeekStartSetting } from "@/components/settings/WeekStartSetting";
 import { ManualMetersSetting } from "@/components/settings/ManualMetersSetting";
+import { AutoLogoutSetting } from "@/components/settings/AutoLogoutSetting";
 import { TenantInfoSettings } from "@/components/settings/TenantInfoSettings";
 import { WidgetDesigner } from "@/components/settings/WidgetDesigner";
 import { BoardThemesSettings } from "@/components/settings/BoardThemesSettings";
@@ -81,6 +82,7 @@ const Settings = () => {
             </TabsContent>
             <TabsContent value="branding" className="space-y-6">
               <WeekStartSetting />
+              <AutoLogoutSetting />
               <ManualMetersSetting />
               <BrandingSettings />
             </TabsContent>

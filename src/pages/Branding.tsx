@@ -5,6 +5,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { BrandingSettings } from "@/components/settings/BrandingSettings";
 import { WeekStartSetting } from "@/components/settings/WeekStartSetting";
+import { AutoLogoutSetting } from "@/components/settings/AutoLogoutSetting";
 import { ManualMetersSetting } from "@/components/settings/ManualMetersSetting";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Palette } from "lucide-react";
@@ -45,6 +46,7 @@ const Branding = () => {
 
         <div className="p-6 space-y-6">
           <WeekStartSetting />
+          <AutoLogoutSetting />
           <ManualMetersSetting />
           <BrandingSettings />
         </div>

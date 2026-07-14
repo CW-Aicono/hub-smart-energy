@@ -11969,6 +11969,8 @@ export type Database = {
       tenants: {
         Row: {
           address: string | null
+          auto_logout_enabled: boolean
+          auto_logout_minutes: number
           branding: Json
           city: string | null
           contact_email: string | null
@@ -12012,6 +12014,8 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          auto_logout_enabled?: boolean
+          auto_logout_minutes?: number
           branding?: Json
           city?: string | null
           contact_email?: string | null
@@ -12055,6 +12059,8 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          auto_logout_enabled?: boolean
+          auto_logout_minutes?: number
           branding?: Json
           city?: string | null
           contact_email?: string | null
