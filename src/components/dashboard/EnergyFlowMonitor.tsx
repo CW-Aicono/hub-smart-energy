@@ -317,8 +317,8 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
   });
 
   // Gateway-Status für den zentralen Knoten. Wir sammeln alle gateway_device_ids
-  // der beteiligten Zähler und lesen den aktuellen Status. Priorität für die
-  // Farbwahl: offline (rot) > error (gelb) > online (grün).
+  // der beteiligten Zähler UND als Fallback alle location_ids, um Gateways derselben
+  // Location zu finden (bei manuellen/Loxone-Metern ohne direkte gateway_device_id).
   const gatewayDeviceIds = useMemo(
     () =>
       Array.from(
@@ -330,32 +330,60 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
       ),
     [relevantMeters],
   );
+  const locationIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (relevantMeters as any[])
+            .map((m) => m.location_id)
+            .filter((v): v is string => !!v),
+        ),
+      ),
+    [relevantMeters],
+  );
   const gatewayKey = gatewayDeviceIds.slice().sort().join(",");
-  const { data: gatewayStatuses = [] } = useQuery({
-    queryKey: ["energyflow-gateway-status", gatewayKey],
-    enabled: gatewayDeviceIds.length > 0,
+  const locationKey = locationIds.slice().sort().join(",");
+  const { data: gatewayDevices = [] } = useQuery({
+    queryKey: ["energyflow-gateway-devices", gatewayKey, locationKey],
+    enabled: gatewayDeviceIds.length > 0 || locationIds.length > 0,
     staleTime: 30_000,
     refetchInterval: 60_000,
-    queryFn: async (): Promise<Array<{ status: string; lastHeartbeat: number }>> => {
-      const { data } = await supabase
-        .from("gateway_devices")
-        .select("status, last_heartbeat_at")
-        .in("id", gatewayDeviceIds);
-      return (data ?? []).map((r: any) => ({
-        status: String(r.status ?? "offline"),
-        lastHeartbeat: r.last_heartbeat_at ? new Date(r.last_heartbeat_at).getTime() : 0,
-      }));
+    queryFn: async (): Promise<Array<any>> => {
+      const byId = new Map<string, any>();
+      if (gatewayDeviceIds.length > 0) {
+        const { data } = await supabase
+          .from("gateway_devices")
+          .select("id, device_name, device_type, local_ip, mac_address, ha_version, addon_version, latest_available_version, status, last_heartbeat_at, offline_buffer_count, location_integration_id")
+          .in("id", gatewayDeviceIds);
+        for (const r of data ?? []) byId.set(r.id, r);
+      }
+      if (locationIds.length > 0) {
+        // Fallback: alle Gateways derselben Location(en) über location_integrations
+        const { data: lis } = await supabase
+          .from("location_integrations")
+          .select("id")
+          .in("location_id", locationIds);
+        const liIds = (lis ?? []).map((l: any) => l.id);
+        if (liIds.length > 0) {
+          const { data } = await supabase
+            .from("gateway_devices")
+            .select("id, device_name, device_type, local_ip, mac_address, ha_version, addon_version, latest_available_version, status, last_heartbeat_at, offline_buffer_count, location_integration_id")
+            .in("location_integration_id", liIds);
+          for (const r of data ?? []) if (!byId.has(r.id)) byId.set(r.id, r);
+        }
+      }
+      return Array.from(byId.values());
     },
   });
 
   const gatewayStatus: "online" | "offline" | "error" | "unknown" = useMemo(() => {
-    if (gatewayDeviceIds.length === 0) return "unknown";
-    if (gatewayStatuses.length === 0) return "unknown";
+    if (gatewayDevices.length === 0) return "unknown";
     const now = Date.now();
-    const normalized = gatewayStatuses.map((g) => {
-      const stale = now - g.lastHeartbeat > 3 * 60_000;
+    const normalized = gatewayDevices.map((g: any) => {
+      const lastHb = g.last_heartbeat_at ? new Date(g.last_heartbeat_at).getTime() : 0;
+      const stale = now - lastHb > 3 * 60_000;
       if (stale) return "offline";
-      const s = g.status.toLowerCase();
+      const s = String(g.status ?? "").toLowerCase();
       if (s === "online") return "online";
       if (s === "error" || s === "faulted") return "error";
       return "offline";
@@ -363,7 +391,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     if (normalized.some((s) => s === "offline")) return "offline";
     if (normalized.some((s) => s === "error")) return "error";
     return "online";
-  }, [gatewayStatuses, gatewayDeviceIds.length]);
+  }, [gatewayDevices]);
 
   const gatewayStatusColor =
     gatewayStatus === "online"
