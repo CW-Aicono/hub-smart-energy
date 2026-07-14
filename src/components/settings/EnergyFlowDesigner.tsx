@@ -209,7 +209,7 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
     queryFn: async () => {
       const { data: lis, error: liErr } = await supabase
         .from("location_integrations")
-        .select("id, integration_id, is_enabled, config, integrations(name, slug)")
+        .select("id, integration_id, is_enabled, config, integrations(name, type)")
         .eq("location_id", locationId)
         .eq("is_enabled", true);
       if (liErr) throw liErr;
@@ -227,7 +227,7 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
 
       const devices = (lis || []).map((li: any) => {
         const gw = byLi.get(li.id);
-        const integrationName = li.integrations?.name || li.integrations?.slug || "Integration";
+        const integrationName = li.integrations?.name || li.integrations?.type || "Integration";
         const configName = (li.config as any)?.device_name || (li.config as any)?.name;
         return {
           id: li.id, // location_integration.id — used as scope key
