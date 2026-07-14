@@ -1,48 +1,65 @@
-## Ziel
-Der Energieflussmonitor-Designer erzwingt künftig, dass **zuerst genau eine Liegenschaft** und **mindestens ein Gateway dieser Liegenschaft** ausgewählt werden, bevor Knoten hinzugefügt oder Zähler zugeordnet werden können. Zählerauswahl wird auf die ausgewählten Gateways beschränkt.
+## Beweis (aus `pg_stat_statements`, nicht geraten)
 
-## Umsetzung in `src/components/settings/EnergyFlowDesigner.tsx`
+Rangliste nach **physischen Disk-Reads** (nicht nach CPU-Zeit — Disk-Reads ist genau das, was das IO-Budget belastet):
 
-### 1) Pflicht-Auswahl oben im Designer
-Neuer, kompakter Konfigurationsblock ganz oben (vor Layout-Canvas):
+| Rang | Disk gelesen | Calls | ⌀ Zeit | Query |
+|-----:|-------------:|------:|-------:|-------|
+| **1** | **23 152 MB** | 768 | 2 321 ms | `SELECT id FROM meter_power_readings WHERE created_at >= $1 LIMIT $2 OFFSET $3` + `COUNT(*)` mit gleichem Filter |
+| 2 | 2 677 MB | 5,2 M | 5 ms | INSERT in `meter_power_readings` (nur Schreib-Volumen — unvermeidbar) |
+| 3 | 1 295 MB | 23 | 1 951 ms | `VACUUM (ANALYZE) meter_power_readings` (Wartung) |
+| 4 | 1 201 MB | 292 | 65 ms | Gleiche Query wie #1, andere Variante mit `LIMIT` im Count-Zweig |
+| 5 | 1 111 MB | 6 584 | 190 ms | INSERT in `meter_power_readings_5min` (Aggregator, korrekt) |
+| 6 | 505 MB | 8 946 | 343 ms | `EnergyGaugeWidget` Peak-Query (`ORDER BY power_value DESC`) |
+| 7 | 386 MB | 1 | 13 706 ms | `VACUUM FULL meter_power_readings` (einmalig, Wartung) |
 
-- **Liegenschaft** (Single-Select, Pflicht) — aus `useLocations()`. Nur eine Auswahl möglich. Kein „Alle Liegenschaften".
-- **Gateways** (Multi-Select, Pflicht, mindestens 1) — geladen via neue Query auf `gateway_devices` gefiltert nach `location_id` der gewählten Liegenschaft (analog zur Fallback-Auflösung im Monitor). Anzeige mit Statusfarbe & Gerätename.
-  - Wenn keine Gateways in der Liegenschaft existieren: Hinweis „Für diese Liegenschaft ist noch kein Gateway eingerichtet" + Deep-Link zur Integrations-Seite.
+**#1 + #4 zusammen = 24,3 GB — das sind ~80 % aller Disk-Reads.** Alles andere ist Rauschen im Vergleich.
 
-### 2) Speicherung der Auswahl
-Erweiterung des Widget-Configs (Typ `EnergyFlowNode[]`/`EnergyFlowConnection[]` bleibt), zusätzlicher Config-Bereich:
-- `location_id: string`
-- `gateway_device_ids: string[]`
+## Ursache — eindeutig
 
-Wird in `useCustomWidgetDefinitions` als Teil der Widget-Config persistiert. `onChange` bekommt die neuen Felder mit (Signatur um dritten Parameter oder ein Config-Objekt erweitern — konsistent zum aktuellen Aufrufer in `WidgetDesigner.tsx`; existierender Aufrufer wird mitgezogen).
+Die IO-Bombe ist eine Query mit Filter **ausschließlich auf `created_at`**. Auf `created_at` existiert nur ein **BRIN-Index** (`idx_meter_power_readings_created_at_brin`, angelegt Juni 2026). BRIN funktioniert nur, wenn die Zeilen physisch nach `created_at` sortiert liegen — bei einer Tabelle mit 5,2 Mio verteilten INSERTs pro Zyklus ist das nicht mehr der Fall, deshalb muss Postgres große Teile der Tabelle lesen (~30 MB pro Aufruf).
 
-### 3) Zählerauswahl auf gewählte Gateways einschränken
-- Beim Filtern der Zähler zusätzlich prüfen: Zähler ist relevant, wenn `meter.location_id === location_id` **und** entweder
-  - `meter.gateway_device_id ∈ gateway_device_ids`, **oder**
-  - Zähler hängt indirekt über `location_integration_id` an einer Integration, die zu einem der gewählten Gateways gehört (via `location_integrations` derselben Location — nur relevant für Loxone-Sub-Outputs / manuelle Zähler dieser Liegenschaft).
-- Der bestehende Liegenschafts-Filter im „Zähler-Filter"-Block entfällt (redundant, Location ist bereits fixiert). Kategorie- und Energieart-Filter bleiben erhalten.
+Woher der Aufruf stammt, ist im Codebase-Scan **nur eine Kandidat-Stelle**: die Edge Function `gateway-worker-status/index.ts` Zeile 62–65:
+```ts
+.from("meter_power_readings")
+.select("id", { count: "estimated", head: true })
+.gte("created_at", fiveMinAgo);
+```
+Der Query-Fingerprint in `pg_stat_statements` enthält allerdings `LIMIT/OFFSET` — das passt nicht zu `head: true`. Es gibt also **noch mindestens einen zweiten Aufruf** (Cron/Monitor/Backup-Job außerhalb unseres Repos, oder die Edge Function wird bei Fehlern in einen anderen Pfad umgeleitet). Das müssen wir vor dem Fix noch identifizieren, um sicher zu gehen.
 
-### 4) UI-Gating
-Solange keine Liegenschaft und kein Gateway gewählt ist:
-- „Knoten hinzufügen"-Button ist deaktiviert (Tooltip: „Erst Liegenschaft und mindestens ein Gateway auswählen").
-- Canvas zeigt eine leere-Zustands-Meldung statt Kreis.
-- Die Knotenliste + Zählerauswahl werden ausgeblendet.
+## Sicherheitsgrad meiner Diagnose
 
-Wenn die Liegenschaft nachträglich gewechselt wird:
-- Bestehende Knoten werden nicht automatisch gelöscht, aber Meter-IDs, die nicht mehr zur neuen Liegenschaft/Gateway-Auswahl passen, werden auf `""` zurückgesetzt (mit Hinweis-Toast).
-- Beim Entfernen aller Gateways gilt dieselbe Regel.
+- **Ursache-Query eindeutig identifiziert:** ✅ 100 % (harte Zahlen aus `pg_stat_statements`)
+- **Fix wirkt:** ✅ ~95 % — ein B-Tree-Index auf `created_at` reduziert 30 MB/Call auf wenige kB (klassischer Index-vs-Seq-Scan-Fall).
+- **Aufrufer im eigenen Code identifiziert:** ⚠️ 60 % — der Cloud-Code enthält nur einen passenden Aufruf, aber der Query-Fingerprint passt nicht 1:1. Vor dem Deploy müssen wir den Aufrufer klären.
 
-### 5) Übernahme im Monitor
-`EnergyFlowMonitor.tsx` bleibt funktional gleich. Er kann die neue `location_id` / `gateway_device_ids` aus der Config nutzen, um die Gateway-Detail-Query gezielt zu machen (statt Fallback über Meter). Das behebt zugleich den grauen Status-Fall aus dem Screenshot (falls kein Meter eine `gateway_device_id` hat, greifen jetzt die explizit ausgewählten Gateway-IDs).
+## Fix-Plan (in dieser Reihenfolge)
 
-## Nicht Teil der Änderung
-- Kein Umbau von Backend-Tabellen, keine Migration.
-- Keine Änderungen an Partikel-Animation, Layout-Persistenz, anderen Widgets.
-- Keine Änderungen an `useGatewayDevices` (der Designer nutzt eine eigene, schmalere Query).
+### Schritt 1 — Aufrufer eindeutig identifizieren (Verifikation vor jedem Codeeingriff)
+- `postgres_logs` via `supabase--analytics_query` nach genau dieser Query filtern (`event_message ILIKE '%meter_power_readings%created_at%'`), Zeitstempel + `application_name` prüfen. So sehen wir, ob es die Edge Function, ein pg_cron-Job oder ein externer Consumer ist.
+- Falls unser eigener Code: an der Aufrufstelle korrigieren (bei 5-Min-Fenster besser auf `recorded_at` filtern, da dort ein B-Tree-Index existiert).
 
-## Verifikation
-- Neues Widget anlegen: „Knoten hinzufügen" ist deaktiviert, bis Liegenschaft + ≥1 Gateway gewählt sind.
-- Liegenschaft ohne Gateway: klarer Hinweis, keine Knoten möglich.
-- Nach Auswahl: Zählerauswahl zeigt ausschließlich Zähler dieser Liegenschaft, deren Datenquelle zu den gewählten Gateways gehört.
-- Vorhandene Widgets ohne `location_id`/`gateway_device_ids`: rückwärtskompatibel — beim Öffnen des Designers werden die Felder als leer geführt, die Auswahl muss einmalig nachgezogen werden (Hinweisbanner im Designer).
+### Schritt 2 — B-Tree-Index auf `created_at`
+Migration:
+```sql
+CREATE INDEX IF NOT EXISTS idx_meter_power_readings_created_at
+  ON public.meter_power_readings (created_at DESC);
+```
+Wirkt sofort für **jeden** Aufrufer und macht die Query planmäßig unter 20 ms bei wenigen kB Read. Der bestehende BRIN kann parallel bleiben (oder Schritt 3).
+
+### Schritt 3 — Optional: BRIN-Index entfernen
+`DROP INDEX idx_meter_power_readings_created_at_brin;` falls Analyze bestätigt, dass er nach dem B-Tree-Fix nicht mehr verwendet wird.
+
+### Schritt 4 — Peak-Query im `EnergyGaugeWidget` (Rang 6)
+Nachrangig, aber lohnt sich noch (505 MB, 343 ms Mittel):
+- `src/components/dashboard/EnergyGaugeWidget.tsx` Zeilen 142–164: `ORDER BY power_value DESC` ohne LIMIT ersetzen durch RPC `get_meter_daily_peaks(meter_ids, day)` mit `MAX(power_value) GROUP BY meter_id`.
+
+### Schritt 5 — Verifikation
+- 30 min nach Deploy: `SELECT shared_blks_read FROM pg_stat_statements WHERE query ILIKE '%meter_power_readings%created_at%'` — muss auf ~0 sinken (relativ zur Vorher-Basis).
+- IO-Budget-Anzeige aktualisiert sich verzögert (Snapshot-Semantik).
+
+## Zurückgezogen aus der ersten Version
+Der **Detail-Dialog Paging-Fix** und der **`integration_errors` Composite-Index** stehen nicht mehr im kritischen Pfad — sie machen zusammen unter 5 % der IO-Last aus. Sinnvoll später, aber nicht Auslöser des 100-%-Budgets.
+
+## Technisches
+- Der neue B-Tree-Index auf `created_at` kostet einmalig Buildzeit (~1–3 min bei ~200 M Zeilen) und danach ca. 5–8 % zusätzlichen Schreib-Overhead pro INSERT — vernachlässigbar im Vergleich zu 23 GB Read-Ersparnis.
+- Kein Applikationscode muss zwingend geändert werden, wenn der Aufrufer außerhalb unseres Repos liegt — der Index wirkt für alle.
