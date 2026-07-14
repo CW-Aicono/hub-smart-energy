@@ -82,6 +82,7 @@ const Settings = () => {
             </TabsContent>
             <TabsContent value="branding" className="space-y-6">
               <WeekStartSetting />
+              <AutoLogoutSetting />
               <ManualMetersSetting />
               <BrandingSettings />
             </TabsContent>
