@@ -1860,3 +1860,114 @@ function HouseSelfSufficiencyPanel({
   );
 }
 
+/* ─────────────────────────────────────────────────────── */
+/* Gateway Detail Dialog                                   */
+/* ─────────────────────────────────────────────────────── */
+
+interface GatewayDetailDialogProps {
+  devices: any[];
+  status: "online" | "offline" | "error" | "unknown";
+  statusColor: string;
+  onClose: () => void;
+}
+
+function GatewayDetailDialog({ devices, status, statusColor, onClose }: GatewayDetailDialogProps) {
+  const statusLabel =
+    status === "online" ? "Online"
+    : status === "offline" ? "Offline"
+    : status === "error" ? "Fehler"
+    : "Unbekannt";
+
+  const fmtBerlin = (iso: string | null) => {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleString("de-DE", {
+        timeZone: "Europe/Berlin",
+        dateStyle: "short",
+        timeStyle: "medium",
+      });
+    } catch { return iso; }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <div className="flex items-start gap-3">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-full border-2"
+              style={{ color: statusColor, borderColor: statusColor, backgroundColor: `${statusColor}22` }}
+            >
+              <Router size={22} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <DialogTitle>Gateway</DialogTitle>
+              <DialogDescription className="flex items-center gap-2 mt-1">
+                <span
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{ backgroundColor: statusColor }}
+                />
+                Status: {statusLabel}
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        {devices.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-6 text-center">
+            Kein Gateway mit den ausgewählten Zählern verknüpft.
+          </div>
+        ) : (
+          <div className="space-y-3 mt-2">
+            {devices.map((d) => {
+              const now = Date.now();
+              const lastHb = d.last_heartbeat_at ? new Date(d.last_heartbeat_at).getTime() : 0;
+              const stale = !lastHb || now - lastHb > 3 * 60_000;
+              const effectiveStatus = stale ? "offline" : String(d.status ?? "").toLowerCase();
+              const color =
+                effectiveStatus === "online" ? "hsl(152 55% 42%)"
+                : effectiveStatus === "error" || effectiveStatus === "faulted" ? "hsl(45 95% 50%)"
+                : "hsl(0 72% 55%)";
+              return (
+                <div key={d.id} className="rounded-lg border p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold truncate">{d.device_name || "Gateway"}</div>
+                    <Badge variant="outline" style={{ color, borderColor: color }}>
+                      {effectiveStatus === "online" ? "Online"
+                        : effectiveStatus === "error" || effectiveStatus === "faulted" ? "Fehler"
+                        : "Offline"}
+                    </Badge>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                    {d.device_type && (<><dt className="text-muted-foreground">Typ</dt><dd className="tabular-nums">{d.device_type}</dd></>)}
+                    {d.local_ip && (<><dt className="text-muted-foreground">Lokale IP</dt><dd className="tabular-nums">{d.local_ip}</dd></>)}
+                    {d.mac_address && (<><dt className="text-muted-foreground">MAC</dt><dd className="tabular-nums text-xs">{d.mac_address}</dd></>)}
+                    {d.ha_version && (<><dt className="text-muted-foreground">HA-Version</dt><dd className="tabular-nums">{d.ha_version}</dd></>)}
+                    {d.addon_version && (
+                      <>
+                        <dt className="text-muted-foreground">Add-on-Version</dt>
+                        <dd className="tabular-nums">
+                          {d.addon_version}
+                          {d.latest_available_version && d.latest_available_version !== d.addon_version && (
+                            <span className="ml-1 text-xs text-muted-foreground">(verfügbar: {d.latest_available_version})</span>
+                          )}
+                        </dd>
+                      </>
+                    )}
+                    <dt className="text-muted-foreground">Letzter Heartbeat</dt>
+                    <dd className="tabular-nums">{fmtBerlin(d.last_heartbeat_at)}</dd>
+                    {typeof d.offline_buffer_count === "number" && d.offline_buffer_count > 0 && (
+                      <><dt className="text-muted-foreground">Offline-Puffer</dt><dd className="tabular-nums">{d.offline_buffer_count.toLocaleString("de-DE")}</dd></>
+                    )}
+                  </dl>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
