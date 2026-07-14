@@ -671,17 +671,35 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                 strokeOpacity={hasFlow ? 0.55 : 0.25}
               />
               {/* Ein einzelner Partikel; Geschwindigkeit spiegelt die Leistung wider.
-                  Ein neuer Partikel startet erst, wenn der vorherige das Ziel erreicht hat. */}
-              {hasFlow && !reducedMotion && (
-                <circle r={particleR} fill={sourceColor} opacity={0.95}>
-                  <animateMotion
-                    dur={`${dur}s`}
-                    repeatCount="indefinite"
-                    path={animPath}
-                    rotate="auto"
-                  />
-                </circle>
-              )}
+                  Fade-in 300ms am Start, Fade-out 300ms am Ziel; ein neuer Partikel
+                  startet erst nach Abschluss des Fadeouts. */}
+              {hasFlow && !reducedMotion && (() => {
+                const fade = 0.3; // Sekunden
+                const total = dur + fade * 2;
+                const t1 = (fade / total).toFixed(4);
+                const t2 = ((fade + dur) / total).toFixed(4);
+                return (
+                  <circle r={particleR} fill={sourceColor} opacity={0}>
+                    <animateMotion
+                      dur={`${total}s`}
+                      repeatCount="indefinite"
+                      path={animPath}
+                      rotate="auto"
+                      keyPoints="0;0;1;1"
+                      keyTimes={`0;${t1};${t2};1`}
+                      calcMode="linear"
+                    />
+                    <animate
+                      attributeName="opacity"
+                      dur={`${total}s`}
+                      repeatCount="indefinite"
+                      values="0;0.95;0.95;0"
+                      keyTimes={`0;${t1};${t2};1`}
+                      calcMode="linear"
+                    />
+                  </circle>
+                );
+              })()}
               {/* Flow label at midpoint */}
               {hasFlow && (
                 <g transform={`translate(${mx}, ${my})`}>
