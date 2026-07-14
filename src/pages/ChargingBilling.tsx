@@ -851,7 +851,43 @@ const ChargingBilling = () => {
                                   <TabsTrigger value="range">Zeitraum (von – bis)</TabsTrigger>
                                 </TabsList>
                                 <TabsContent value="month" className="mt-3">
-                                  <Input type="month" value={genMonth} onChange={(e) => setGenMonth(e.target.value)} />
+                                  {(() => {
+                                    const [yy, mm] = (genMonth || "").split("-");
+                                    const now = new Date();
+                                    const currentYear = now.getFullYear();
+                                    const years = Array.from({ length: 7 }, (_, i) => String(currentYear - 5 + i));
+                                    const months = [
+                                      "Januar", "Februar", "März", "April", "Mai", "Juni",
+                                      "Juli", "August", "September", "Oktober", "November", "Dezember",
+                                    ];
+                                    const setYear = (y: string) => setGenMonth(`${y}-${mm || String(now.getMonth() + 1).padStart(2, "0")}`);
+                                    const setMonth = (m: string) => setGenMonth(`${yy || String(currentYear)}-${m}`);
+                                    return (
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                          <Label className="text-xs text-muted-foreground">Monat</Label>
+                                          <Select value={mm || ""} onValueChange={setMonth}>
+                                            <SelectTrigger><SelectValue placeholder="Monat wählen" /></SelectTrigger>
+                                            <SelectContent>
+                                              {months.map((name, idx) => {
+                                                const val = String(idx + 1).padStart(2, "0");
+                                                return <SelectItem key={val} value={val}>{name}</SelectItem>;
+                                              })}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs text-muted-foreground">Jahr</Label>
+                                          <Select value={yy || ""} onValueChange={setYear}>
+                                            <SelectTrigger><SelectValue placeholder="Jahr wählen" /></SelectTrigger>
+                                            <SelectContent>
+                                              {years.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </TabsContent>
                                 <TabsContent value="range" className="mt-3">
                                   <div className="grid grid-cols-2 gap-3">
