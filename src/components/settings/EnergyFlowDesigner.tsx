@@ -240,32 +240,64 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
     <div className="space-y-4">
       {/* Visual canvas */}
       <div className="space-y-2">
-        <Label>Layout (Knoten per Drag & Drop positionieren)</Label>
+        <div className="flex items-center justify-between">
+          <Label>Layout (Knoten per Drag & Drop positionieren)</Label>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                disabled={nodes.length === 0}
+              >
+                <RotateCcw className="h-3 w-3" />
+                Anordnung zurücksetzen
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Anordnung zurücksetzen?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Alle manuell per Drag & Drop gesetzten Positionen werden verworfen und
+                  die Knoten wieder gleichmäßig um den Zentralknoten verteilt.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                <AlertDialogAction onClick={resetLayout}>Zurücksetzen</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
         <div
           ref={canvasRef}
           className="relative border rounded-lg bg-card aspect-video overflow-hidden select-none"
           style={{ touchAction: "none" }}
         >
-          {/* Connection lines */}
+          {/* Connection lines (auto: user-node ↔ center) */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none">
-            {connections.map((conn, i) => {
-              const f = nodes.find((n) => n.id === conn.from);
-              const t = nodes.find((n) => n.id === conn.to);
-              if (!f || !t) return null;
-              return (
-                <line
-                  key={i}
-                  x1={`${f.x}%`}
-                  y1={`${f.y}%`}
-                  x2={`${t.x}%`}
-                  y2={`${t.y}%`}
-                  stroke={f.color}
-                  strokeWidth={2}
-                  strokeOpacity={0.5}
-                />
-              );
-            })}
+            {nodes.map((node) => (
+              <line
+                key={node.id}
+                x1={`${node.x}%`}
+                y1={`${node.y}%`}
+                x2="50%"
+                y2="50%"
+                stroke={node.color}
+                strokeWidth={2}
+                strokeOpacity={0.4}
+              />
+            ))}
           </svg>
+
+          {/* Zentraler Knoten – fixed, unbeschriftet */}
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            aria-hidden
+          >
+            <div className="w-6 h-6 rounded-full bg-muted border border-muted-foreground/50" />
+          </div>
 
           {/* Draggable nodes */}
           {nodes.map((node) => (
@@ -279,7 +311,7 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
               onPointerDown={(e) => handlePointerDown(node.id, e)}
             >
               <div
-                className="w-10 h-10 rounded-full border-2 flex items-center justify-center text-[10px] font-semibold"
+                className="w-10 h-10 rounded-full border-2 flex items-center justify-center text-[10px] font-semibold bg-background"
                 style={{ borderColor: node.color, color: node.color }}
               >
                 {node.label.slice(0, 2)}
@@ -288,6 +320,8 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
           ))}
         </div>
       </div>
+
+
 
       {/* Node list */}
       <div className="space-y-2">
