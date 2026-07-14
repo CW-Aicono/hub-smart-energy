@@ -1332,19 +1332,20 @@ const RANGE_MS: Record<DetailRange, number> = {
   "30d": 30 * 24 * 3600_000,
 };
 
-function MeterDetailDialog({
+export function MeterDetailDialog({
   node,
   socPct,
-  allNodes,
-  metersById,
+  allNodes = [],
+  metersById = {},
   onClose,
 }: {
   node: EnergyFlowNode;
   socPct?: number | null;
-  allNodes: EnergyFlowNode[];
-  metersById: Record<string, any>;
+  allNodes?: EnergyFlowNode[];
+  metersById?: Record<string, any>;
   onClose: () => void;
 }) {
+
   const Icon = ROLE_ICON[node.role];
   const [range, setRange] = useState<DetailRange>("24h");
 
