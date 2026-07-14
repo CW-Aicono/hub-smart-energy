@@ -451,10 +451,18 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
                   <SelectContent>
                     <SelectItem value="__none__">Kein Zähler</SelectItem>
                     {(() => {
+                      // Bereits in anderen Knoten belegte Zähler ausblenden
+                      const usedByOthers = new Set(
+                        nodes
+                          .filter((n) => n.id !== node.id && n.meter_id)
+                          .map((n) => n.meter_id as string),
+                      );
+                      const visible = new Map<string, any>();
+                      filteredMeters.forEach((m: any) => {
+                        if (!usedByOthers.has(m.id)) visible.set(m.id, m);
+                      });
                       // Ensure the currently selected meter is always visible,
                       // even if it doesn't match the active filters
-                      const visible = new Map<string, any>();
-                      filteredMeters.forEach((m: any) => visible.set(m.id, m));
                       if (node.meter_id && !visible.has(node.meter_id)) {
                         const sel = (meters || []).find((m: any) => m.id === node.meter_id);
                         if (sel) visible.set(sel.id, sel);
