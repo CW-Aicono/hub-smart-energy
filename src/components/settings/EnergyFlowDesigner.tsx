@@ -298,11 +298,8 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
           </Button>
         </div>
 
-        {connectFrom && (
-          <div className="text-xs text-primary bg-primary/10 px-2 py-1 rounded">
-            Klicke auf einen zweiten Knoten, um eine Verbindung herzustellen/zu entfernen.
-          </div>
-        )}
+
+
 
         {/* Filter für die Zähler-Auswahl */}
         <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
