@@ -1980,7 +1980,7 @@ function HouseSelfSufficiencyPanel({
 
 interface GatewayDetailDialogProps {
   devices: any[];
-  status: "online" | "offline" | "error" | "unknown";
+  status: GatewayStatus;
   statusColor: string;
   onClose: () => void;
 }
@@ -2034,10 +2034,7 @@ function GatewayDetailDialog({ devices, status, statusColor, onClose }: GatewayD
         ) : (
           <div className="space-y-3 mt-2">
             {devices.map((d) => {
-              const now = Date.now();
-              const lastHb = d.last_heartbeat_at ? new Date(d.last_heartbeat_at).getTime() : 0;
-              const stale = !lastHb || now - lastHb > 3 * 60_000;
-              const effectiveStatus = stale ? "offline" : String(d.status ?? "").toLowerCase();
+              const effectiveStatus = String(d.effective_status || d.status || "unknown").toLowerCase();
               const color =
                 effectiveStatus === "online" ? "hsl(152 55% 42%)"
                 : effectiveStatus === "error" || effectiveStatus === "faulted" ? "hsl(45 95% 50%)"
@@ -2068,8 +2065,8 @@ function GatewayDetailDialog({ devices, status, statusColor, onClose }: GatewayD
                         </dd>
                       </>
                     )}
-                    <dt className="text-muted-foreground">Letzter Heartbeat</dt>
-                    <dd className="tabular-nums">{fmtBerlin(d.last_heartbeat_at)}</dd>
+                    <dt className="text-muted-foreground">{d.last_heartbeat_at ? "Letzter Heartbeat" : "Letzter Sync"}</dt>
+                    <dd className="tabular-nums">{fmtBerlin(d.last_heartbeat_at || d.last_sync_at)}</dd>
                     {typeof d.offline_buffer_count === "number" && d.offline_buffer_count > 0 && (
                       <><dt className="text-muted-foreground">Offline-Puffer</dt><dd className="tabular-nums">{d.offline_buffer_count.toLocaleString("de-DE")}</dd></>
                     )}
