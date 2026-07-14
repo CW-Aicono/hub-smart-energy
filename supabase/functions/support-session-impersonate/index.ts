@@ -141,6 +141,31 @@ Deno.serve(async (req) => {
       if (mapErr) return json({ error: `mapping failed: ${mapErr.message}` }, 500);
     }
 
+    // 3b) Sicherstellen, dass der Support-User Zugriff auf ALLE Locations des
+    //     Tenants hat. RLS auf `locations` und `pv_actual_hourly` prüft
+    //     zusätzlich zu `admin`-Rolle bzw. tenant_id auch `user_location_access`.
+    //     Damit werden Energy-Chart, PV-Actuals, Floor-Plan-Explorer usw. auch
+    //     für neu hinzugekommene Locations sichtbar.
+    try {
+      const { data: locs } = await admin
+        .from("locations")
+        .select("id")
+        .eq("tenant_id", targetTenantId);
+      if (locs && locs.length > 0) {
+        const rows = locs.map((l: { id: string }) => ({
+          user_id: supportUserId!,
+          location_id: l.id,
+        }));
+        await admin
+          .from("user_location_access")
+          .upsert(rows, { onConflict: "user_id,location_id", ignoreDuplicates: true });
+      }
+    } catch (e) {
+      // Kein harter Fehler – Sitzung darf trotzdem starten
+      console.error("user_location_access bootstrap failed:", (e as Error).message);
+    }
+
+
     // 4) support_sessions Eintrag
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
     const { data: session, error: sessErr } = await admin
