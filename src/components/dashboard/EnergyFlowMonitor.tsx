@@ -490,17 +490,19 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
       if (dist === 0) return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, dist: 0, mx: p1.x, my: p1.y };
       const ux = dx / dist;
       const uy = dy / dist;
+      const rFrom = fromNode.id === CENTER_NODE_ID ? centerRadius : nodeRadius;
+      const rTo = toNode.id === CENTER_NODE_ID ? centerRadius : nodeRadius;
       return {
-        x1: p1.x + ux * nodeRadius,
-        y1: p1.y + uy * nodeRadius,
-        x2: p2.x - ux * nodeRadius,
-        y2: p2.y - uy * nodeRadius,
-        dist: dist - 2 * nodeRadius,
+        x1: p1.x + ux * rFrom,
+        y1: p1.y + uy * rFrom,
+        x2: p2.x - ux * rTo,
+        y2: p2.y - uy * rTo,
+        dist: dist - rFrom - rTo,
         mx: (p1.x + p2.x) / 2,
         my: (p1.y + p2.y) / 2,
       };
     },
-    [nodePos, nodeRadius],
+    [nodePos, nodeRadius, centerRadius],
   );
 
   const getAnimDuration = useCallback((watts: number | null): number => {
@@ -595,41 +597,32 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
             ? `M${x2},${y2} L${x1},${y1}`
             : `M${x1},${y1} L${x2},${y2}`;
 
-          // Particle count scales with power (log)
-          const particleCount = hasFlow
-            ? Math.min(8, Math.max(3, Math.round(Math.log10(Math.abs(flowWatts!) + 10) * 1.6)))
-            : 0;
-          const particleR = hasFlow
-            ? Math.min(5, 2.5 + Math.log10(Math.abs(flowWatts!) + 10) * 0.5)
-            : 3;
-
-          const sourceColor = isReversed ? toNode.color : fromNode.color;
+          // Farbe der Linie & des Partikels = Farbe des äußeren (Nicht-Zentrum-)Knotens.
+          const outerNode = fromNode.id === CENTER_NODE_ID ? toNode : fromNode;
+          const sourceColor = outerNode.color;
+          const particleR = Math.min(5, 3 + Math.log10(Math.abs(flowWatts ?? 0) + 10) * 0.4);
 
           return (
             <g key={i}>
-              {/* Base line: always solid, colored by source when active, muted when idle */}
+              {/* Base line: always solid, colored by outer node when active, muted when idle */}
               <line
                 x1={x1} y1={y1} x2={x2} y2={y2}
                 stroke={hasFlow ? sourceColor : "hsl(var(--muted-foreground))"}
                 strokeWidth={hasFlow ? 2 : 1.5}
                 strokeOpacity={hasFlow ? 0.55 : 0.25}
               />
-              {/* Animated particles along the line */}
-              {hasFlow && !reducedMotion && Array.from({ length: particleCount }).map((_, di) => (
-                <circle
-                  key={di}
-                  r={particleR}
-                  fill={sourceColor}
-                  opacity={0.95}
-                >
+              {/* Ein einzelner Partikel; Geschwindigkeit spiegelt die Leistung wider.
+                  Ein neuer Partikel startet erst, wenn der vorherige das Ziel erreicht hat. */}
+              {hasFlow && !reducedMotion && (
+                <circle r={particleR} fill={sourceColor} opacity={0.95}>
                   <animateMotion
                     dur={`${dur}s`}
                     repeatCount="indefinite"
-                    begin={`-${(di / particleCount) * dur}s`}
                     path={animPath}
+                    rotate="auto"
                   />
                 </circle>
-              ))}
+              )}
               {/* Flow label at midpoint */}
               {hasFlow && (
                 <g transform={`translate(${mx}, ${my})`}>
