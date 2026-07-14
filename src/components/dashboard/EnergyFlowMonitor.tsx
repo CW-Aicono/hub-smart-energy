@@ -153,6 +153,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
   const [dims, setDims] = useState({ w: 500, h: 320 });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [detailNode, setDetailNode] = useState<EnergyFlowNode | null>(null);
+  const [gatewayDetailOpen, setGatewayDetailOpen] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
 
   const meterIds = useMemo(() => nodes.map((n) => n.meter_id).filter(Boolean), [nodes]);
