@@ -429,7 +429,48 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     return () => obs.disconnect();
   }, []);
   const nodeRadius = Math.min(dims.w, dims.h) * 0.09;
+  const centerRadius = Math.max(10, nodeRadius * 0.55);
   const iconSize = Math.round(nodeRadius * 1.1);
+
+  // Layout-Knoten: fehlende oder Default-Positionen (50/50) werden radial verteilt.
+  const layoutUserNodes = useMemo<EnergyFlowNode[]>(() => {
+    return nodes.map((n, i) => {
+      const missing =
+        typeof n.x !== "number" ||
+        typeof n.y !== "number" ||
+        (n.x === 50 && n.y === 50);
+      if (!missing) return n;
+      const p = computeRadialDefault(i, nodes.length);
+      return { ...n, x: p.x, y: p.y };
+    });
+  }, [nodes]);
+
+  // Zentraler Knoten (implizit, unbeschriftet, nicht klickbar).
+  const centerNode: EnergyFlowNode = useMemo(
+    () => ({
+      id: CENTER_NODE_ID,
+      role: "consumer",
+      label: "",
+      meter_id: "",
+      color: "hsl(var(--muted-foreground))",
+      x: 50,
+      y: 50,
+    }),
+    [],
+  );
+
+  const lookupNodes = useMemo(
+    () => [centerNode, ...layoutUserNodes],
+    [centerNode, layoutUserNodes],
+  );
+
+  // Verbindungen werden automatisch erzeugt: jeder User-Knoten ↔ Zentrum.
+  // Die gespeicherte `connections`-Prop wird bewusst ignoriert.
+  const derivedConnections = useMemo<EnergyFlowConnection[]>(
+    () => layoutUserNodes.map((n) => ({ from: n.id, to: CENTER_NODE_ID })),
+    [layoutUserNodes],
+  );
+
 
   const nodePos = useCallback(
     (node: EnergyFlowNode) => ({
