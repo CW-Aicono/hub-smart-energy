@@ -197,12 +197,48 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
 
   const { locations } = useLocations();
 
+  // Load gateways for the currently selected location
+  const gatewayQuery = useQuery({
+    queryKey: ["energyflow-gateways", tenant?.id, locationId],
+    enabled: !!tenant?.id && !!locationId,
+    staleTime: 60_000,
+    queryFn: async () => {
+      // gateway_devices are linked via location_integrations.location_id
+      const { data: lis, error: liErr } = await supabase
+        .from("location_integrations")
+        .select("id")
+        .eq("location_id", locationId);
+      if (liErr) throw liErr;
+      const liIds = (lis || []).map((r) => r.id);
+      if (liIds.length === 0) return { devices: [] as any[], integrationIds: [] as string[] };
+      const { data: devs, error: devErr } = await supabase
+        .from("gateway_devices")
+        .select("id, device_name, device_type, status, location_integration_id")
+        .eq("tenant_id", tenant!.id)
+        .in("location_integration_id", liIds)
+        .order("device_name");
+      if (devErr) throw devErr;
+      return { devices: devs || [], integrationIds: liIds };
+    },
+  });
+
+  const gateways = gatewayQuery.data?.devices ?? [];
+
+  // Integration IDs that belong to the *selected* gateways
+  const selectedGatewayIntegrationIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const g of gateways) {
+      if (gatewayDeviceIds.includes(g.id) && g.location_integration_id) {
+        set.add(g.location_integration_id);
+      }
+    }
+    return set;
+  }, [gateways, gatewayDeviceIds]);
+
   // Filter state for the meter picker inside each node card
-  const [filterLocation, setFilterLocation] = useState<string>("__all__");
   const [filterCategory, setFilterCategory] = useState<EnergyFlowNodeRole | "__all__">("__all__");
   const [filterEnergyType, setFilterEnergyType] = useState<string>("__all__");
 
-  // Keyword-based mapping of a meter to a node "category" (role)
   const CATEGORY_KEYWORDS: Record<EnergyFlowNodeRole, string[]> = {
     pv: ["pv", "solar", "photovoltaik", "wechselrichter", "inverter", "erzeug"],
     grid: ["netz", "grid", "einspei", "bezug", "hausanschluss", "zählpunkt"],
@@ -220,31 +256,73 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
     return kws.some((k) => hay.includes(k));
   };
 
+  // Meters restricted to the selected location and gateways
+  const scopedMeters = useMemo(() => {
+    if (!scopeReady) return [] as any[];
+    return (meters || []).filter((m: any) => {
+      if (m.location_id !== locationId) return false;
+      // Manual meters (no integration) always allowed within the location
+      if (!m.location_integration_id) return true;
+      return selectedGatewayIntegrationIds.has(m.location_integration_id);
+    });
+  }, [meters, locationId, selectedGatewayIntegrationIds, scopeReady]);
+
   const energyTypeOptions = useMemo(() => {
     const set = new Set<string>();
-    (meters || []).forEach((m: any) => m.energy_type && set.add(m.energy_type));
+    scopedMeters.forEach((m: any) => m.energy_type && set.add(m.energy_type));
     return Array.from(set).sort();
-  }, [meters]);
+  }, [scopedMeters]);
 
   const filteredMeters = useMemo(() => {
-    return (meters || []).filter((m: any) => {
-      if (filterLocation !== "__all__" && m.location_id !== filterLocation) return false;
+    return scopedMeters.filter((m: any) => {
       if (filterEnergyType !== "__all__" && m.energy_type !== filterEnergyType) return false;
       if (filterCategory !== "__all__" && !meterMatchesCategory(m, filterCategory)) return false;
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meters, filterLocation, filterEnergyType, filterCategory]);
+  }, [scopedMeters, filterEnergyType, filterCategory]);
 
   const locationName = (id: string) => locations.find((l) => l.id === id)?.name || "–";
 
-  // Group filtered meters by energy type for the picker
-  const meterGroups = filteredMeters.reduce<Record<string, any[]>>((acc, m: any) => {
-    const t = m.energy_type || "Sonstige";
-    if (!acc[t]) acc[t] = [];
-    acc[t].push(m);
-    return acc;
-  }, {});
+  // Reset invalid meter references whenever scope changes
+  useEffect(() => {
+    if (!scopeReady) return;
+    const validIds = new Set(scopedMeters.map((m: any) => m.id));
+    let mutated = false;
+    const cleaned = nodes.map((n) => {
+      if (n.meter_id && !validIds.has(n.meter_id)) {
+        mutated = true;
+        return { ...n, meter_id: "" };
+      }
+      return n;
+    });
+    if (mutated) {
+      toast.info("Einige Knoten wurden getrennt, weil ihre Zähler nicht mehr zur gewählten Liegenschaft/Gateway-Auswahl passen.");
+      onChange(cleaned, connections, scope);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationId, gatewayDeviceIds.join(",")]);
+
+  const toggleGateway = (id: string) => {
+    const next = gatewayDeviceIds.includes(id)
+      ? gatewayDeviceIds.filter((x) => x !== id)
+      : [...gatewayDeviceIds, id];
+    onChange(nodes, connections, { locationId, gatewayDeviceIds: next });
+  };
+
+  const setLocation = (id: string) => {
+    // Location change resets gateway selection
+    onChange(nodes, connections, { locationId: id, gatewayDeviceIds: [] });
+  };
+
+  const statusDot = (status?: string) => {
+    const color =
+      status === "online" ? "bg-emerald-500" :
+      status === "error" ? "bg-amber-500" :
+      status === "offline" ? "bg-red-500" : "bg-muted-foreground";
+    return <span className={`inline-block h-2 w-2 rounded-full ${color}`} />;
+  };
+
 
 
   return (
