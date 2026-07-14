@@ -662,6 +662,42 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
 
                 </Select>
               </div>
+
+              {node.meter_id && (() => {
+                const meter = (meters || []).find((m: any) => m.id === node.meter_id);
+                const conv =
+                  (meter?.flow_direction_convention as "negative_delivery" | "positive_delivery") ||
+                  "negative_delivery";
+                return (
+                  <div className="space-y-1 pt-1">
+                    <Label className="text-xs">Flussrichtungserkennung</Label>
+                    <Select
+                      value={conv}
+                      onValueChange={(v) =>
+                        updateMeterFlowConvention(
+                          node.meter_id,
+                          v as "negative_delivery" | "positive_delivery",
+                        )
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="negative_delivery">
+                          Lieferung = negativer Wert / Bezug = positiver Wert (Standard)
+                        </SelectItem>
+                        <SelectItem value="positive_delivery">
+                          Lieferung = positiver Wert / Bezug = negativer Wert
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Synchron mit der Einstellung in „Messstellen → Zähler bearbeiten".
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </div>
