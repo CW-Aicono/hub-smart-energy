@@ -72,6 +72,8 @@ const LiveValues = () => {
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [socByMeterId, setSocByMeterId] = useState<Map<string, { pct: number; updatedAt: string | null }>>(new Map());
   const [socUuidToMeterId, setSocUuidToMeterId] = useState<Map<string, string>>(new Map());
+  const [detailNode, setDetailNode] = useState<EnergyFlowNode | null>(null);
+
 
   // Fetch SOC values from energy_storages (linked via power_meter_id)
   useEffect(() => {
