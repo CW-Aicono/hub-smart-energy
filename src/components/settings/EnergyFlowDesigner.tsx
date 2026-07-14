@@ -11,7 +11,19 @@ import {
   EnergyFlowConnection,
   EnergyFlowNodeRole,
 } from "@/hooks/useCustomWidgetDefinitions";
-import { Plus, X, Link2, Trash2, Unlink } from "lucide-react";
+import { Plus, X, Trash2, RotateCcw } from "lucide-react";
+import { computeRadialDefault, applyRadialLayout } from "@/lib/energyFlowLayout";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const NODE_ROLES: { value: EnergyFlowNodeRole; label: string }[] = [
   { value: "pv", label: "PV / Solar" },
