@@ -731,21 +731,51 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           }
         `}</style>
 
-        {/* Zentraler Knoten – implizit, ohne Icon/Label/Werte, nicht klickbar */}
+        {/* Zentraler Knoten – zeigt Gateway-Status (grün/rot/gelb). */}
         {(() => {
           const { x: ccx, y: ccy } = nodePos(centerNode);
+          const gwIconSize = Math.max(14, Math.round(centerRadius * 1.1));
+          const title =
+            gatewayStatus === "online" ? "Gateway online"
+            : gatewayStatus === "offline" ? "Gateway offline"
+            : gatewayStatus === "error" ? "Gateway-Fehler"
+            : "Gateway-Status unbekannt";
           return (
-            <circle
-              cx={ccx}
-              cy={ccy}
-              r={centerRadius}
-              fill="hsl(var(--muted))"
-              fillOpacity={0.35}
-              stroke="hsl(var(--muted-foreground))"
-              strokeOpacity={0.5}
-              strokeWidth={1.5}
-              className="pointer-events-none"
-            />
+            <g className="pointer-events-none">
+              <title>{title}</title>
+              <circle
+                cx={ccx}
+                cy={ccy}
+                r={centerRadius}
+                fill={gatewayStatusColor}
+                fillOpacity={0.15}
+                stroke={gatewayStatusColor}
+                strokeOpacity={0.9}
+                strokeWidth={2}
+              />
+              <foreignObject
+                x={ccx - gwIconSize / 2}
+                y={ccy - gwIconSize / 2}
+                width={gwIconSize}
+                height={gwIconSize}
+              >
+                <div
+                  style={{ color: gatewayStatusColor, width: gwIconSize, height: gwIconSize }}
+                  className="flex items-center justify-center"
+                >
+                  <Router size={Math.round(gwIconSize * 0.7)} />
+                </div>
+              </foreignObject>
+              {/* kleiner Statuspunkt oben rechts am Zentralknoten */}
+              <circle
+                cx={ccx + centerRadius * 0.75}
+                cy={ccy - centerRadius * 0.75}
+                r={Math.max(3, centerRadius * 0.18)}
+                fill={gatewayStatusColor}
+                stroke="hsl(var(--background))"
+                strokeWidth={1.5}
+              />
+            </g>
           );
         })()}
 
