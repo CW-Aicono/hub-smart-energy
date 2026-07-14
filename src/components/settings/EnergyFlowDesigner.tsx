@@ -114,8 +114,26 @@ function NodeDeletePopover({
 
 export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gatewayDeviceIds, onChange }: Props) {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ nodeId: string; startX: number; startY: number } | null>(null);
+
+  const updateMeterFlowConvention = async (
+    meterId: string,
+    v: "negative_delivery" | "positive_delivery",
+  ) => {
+    const { error } = await supabase
+      .from("meters")
+      .update({ flow_direction_convention: v })
+      .eq("id", meterId);
+    if (error) {
+      toast.error("Flussrichtung konnte nicht gespeichert werden", { description: error.message });
+      return;
+    }
+    toast.success("Flussrichtung aktualisiert");
+    queryClient.invalidateQueries({ queryKey: ["meters"] });
+    queryClient.invalidateQueries({ queryKey: ["custom_widget_definitions"] });
+  };
 
   const scope = { locationId, gatewayDeviceIds };
   const scopeReady = !!locationId && gatewayDeviceIds.length > 0;
