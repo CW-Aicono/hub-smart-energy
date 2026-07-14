@@ -53,6 +53,7 @@ import {
   Fan,
   PlugZap,
   SunMedium,
+  Router,
   Maximize2,
   type LucideIcon,
 } from "lucide-react";
@@ -314,6 +315,64 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
       return latest;
     },
   });
+
+  // Gateway-Status für den zentralen Knoten. Wir sammeln alle gateway_device_ids
+  // der beteiligten Zähler und lesen den aktuellen Status. Priorität für die
+  // Farbwahl: offline (rot) > error (gelb) > online (grün).
+  const gatewayDeviceIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (relevantMeters as any[])
+            .map((m) => m.gateway_device_id)
+            .filter((v): v is string => !!v),
+        ),
+      ),
+    [relevantMeters],
+  );
+  const gatewayKey = gatewayDeviceIds.slice().sort().join(",");
+  const { data: gatewayStatuses = [] } = useQuery({
+    queryKey: ["energyflow-gateway-status", gatewayKey],
+    enabled: gatewayDeviceIds.length > 0,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<Array<{ status: string; lastHeartbeat: number }>> => {
+      const { data } = await supabase
+        .from("gateway_devices")
+        .select("status, last_heartbeat_at")
+        .in("id", gatewayDeviceIds);
+      return (data ?? []).map((r: any) => ({
+        status: String(r.status ?? "offline"),
+        lastHeartbeat: r.last_heartbeat_at ? new Date(r.last_heartbeat_at).getTime() : 0,
+      }));
+    },
+  });
+
+  const gatewayStatus: "online" | "offline" | "error" | "unknown" = useMemo(() => {
+    if (gatewayDeviceIds.length === 0) return "unknown";
+    if (gatewayStatuses.length === 0) return "unknown";
+    const now = Date.now();
+    const normalized = gatewayStatuses.map((g) => {
+      const stale = now - g.lastHeartbeat > 3 * 60_000;
+      if (stale) return "offline";
+      const s = g.status.toLowerCase();
+      if (s === "online") return "online";
+      if (s === "error" || s === "faulted") return "error";
+      return "offline";
+    });
+    if (normalized.some((s) => s === "offline")) return "offline";
+    if (normalized.some((s) => s === "error")) return "error";
+    return "online";
+  }, [gatewayStatuses, gatewayDeviceIds.length]);
+
+  const gatewayStatusColor =
+    gatewayStatus === "online"
+      ? "hsl(152 55% 42%)"
+      : gatewayStatus === "offline"
+        ? "hsl(0 72% 55%)"
+        : gatewayStatus === "error"
+          ? "hsl(45 95% 50%)"
+          : "hsl(var(--muted-foreground))";
 
   // Realtime: Loxone broadcast (loxone-live-{tenantId}) – sub-sekündliche Updates
   const [broadcastByMeter, setBroadcastByMeter] = useState<Record<string, number>>({});
@@ -612,17 +671,35 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                 strokeOpacity={hasFlow ? 0.55 : 0.25}
               />
               {/* Ein einzelner Partikel; Geschwindigkeit spiegelt die Leistung wider.
-                  Ein neuer Partikel startet erst, wenn der vorherige das Ziel erreicht hat. */}
-              {hasFlow && !reducedMotion && (
-                <circle r={particleR} fill={sourceColor} opacity={0.95}>
-                  <animateMotion
-                    dur={`${dur}s`}
-                    repeatCount="indefinite"
-                    path={animPath}
-                    rotate="auto"
-                  />
-                </circle>
-              )}
+                  Fade-in 300ms am Start, Fade-out 300ms am Ziel; ein neuer Partikel
+                  startet erst nach Abschluss des Fadeouts. */}
+              {hasFlow && !reducedMotion && (() => {
+                const fade = 0.3; // Sekunden
+                const total = dur + fade * 2;
+                const t1 = (fade / total).toFixed(4);
+                const t2 = ((fade + dur) / total).toFixed(4);
+                return (
+                  <circle r={particleR} fill={sourceColor} opacity={0}>
+                    <animateMotion
+                      dur={`${total}s`}
+                      repeatCount="indefinite"
+                      path={animPath}
+                      rotate="auto"
+                      keyPoints="0;0;1;1"
+                      keyTimes={`0;${t1};${t2};1`}
+                      calcMode="linear"
+                    />
+                    <animate
+                      attributeName="opacity"
+                      dur={`${total}s`}
+                      repeatCount="indefinite"
+                      values="0;0.95;0.95;0"
+                      keyTimes={`0;${t1};${t2};1`}
+                      calcMode="linear"
+                    />
+                  </circle>
+                );
+              })()}
               {/* Flow label at midpoint */}
               {hasFlow && (
                 <g transform={`translate(${mx}, ${my})`}>
@@ -654,21 +731,51 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           }
         `}</style>
 
-        {/* Zentraler Knoten – implizit, ohne Icon/Label/Werte, nicht klickbar */}
+        {/* Zentraler Knoten – zeigt Gateway-Status (grün/rot/gelb). */}
         {(() => {
           const { x: ccx, y: ccy } = nodePos(centerNode);
+          const gwIconSize = Math.max(14, Math.round(centerRadius * 1.1));
+          const title =
+            gatewayStatus === "online" ? "Gateway online"
+            : gatewayStatus === "offline" ? "Gateway offline"
+            : gatewayStatus === "error" ? "Gateway-Fehler"
+            : "Gateway-Status unbekannt";
           return (
-            <circle
-              cx={ccx}
-              cy={ccy}
-              r={centerRadius}
-              fill="hsl(var(--muted))"
-              fillOpacity={0.35}
-              stroke="hsl(var(--muted-foreground))"
-              strokeOpacity={0.5}
-              strokeWidth={1.5}
-              className="pointer-events-none"
-            />
+            <g className="pointer-events-none">
+              <title>{title}</title>
+              <circle
+                cx={ccx}
+                cy={ccy}
+                r={centerRadius}
+                fill={gatewayStatusColor}
+                fillOpacity={0.15}
+                stroke={gatewayStatusColor}
+                strokeOpacity={0.9}
+                strokeWidth={2}
+              />
+              <foreignObject
+                x={ccx - gwIconSize / 2}
+                y={ccy - gwIconSize / 2}
+                width={gwIconSize}
+                height={gwIconSize}
+              >
+                <div
+                  style={{ color: gatewayStatusColor, width: gwIconSize, height: gwIconSize }}
+                  className="flex items-center justify-center"
+                >
+                  <Router size={Math.round(gwIconSize * 0.7)} />
+                </div>
+              </foreignObject>
+              {/* kleiner Statuspunkt oben rechts am Zentralknoten */}
+              <circle
+                cx={ccx + centerRadius * 0.75}
+                cy={ccy - centerRadius * 0.75}
+                r={Math.max(3, centerRadius * 0.18)}
+                fill={gatewayStatusColor}
+                stroke="hsl(var(--background))"
+                strokeWidth={1.5}
+              />
+            </g>
           );
         })()}
 
