@@ -625,6 +625,7 @@ async function handleCompactDay(req: Request): Promise<Response> {
 async function handlePostReadings(req: Request): Promise<Response> {
   const _auth = await validateApiKey(req);
   if (isAuthError(_auth)) return _auth;
+  const scopeTenantId = _auth.tenantId; // wenn gesetzt: Tenant-Key → strikt scoped
 
   let body: { readings?: PowerReading[] };
   try {
@@ -644,6 +645,11 @@ async function handlePostReadings(req: Request): Promise<Response> {
   for (const r of readings) {
     if (!r.meter_id || !r.tenant_id || r.power_value === undefined || !r.energy_type) {
       skipped.push(`${r.meter_id ?? "unknown"}: missing required fields`);
+      continue;
+    }
+    // Tenant-scope enforcement: bei Tenant-Key MUSS jede reading.tenant_id passen
+    if (scopeTenantId && r.tenant_id !== scopeTenantId) {
+      skipped.push(`${r.meter_id}: tenant_id mismatch (key scoped to ${scopeTenantId})`);
       continue;
     }
     const powerValue = Number(r.power_value);
