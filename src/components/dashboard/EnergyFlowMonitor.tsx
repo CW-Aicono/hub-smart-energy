@@ -53,6 +53,7 @@ import {
   Fan,
   PlugZap,
   SunMedium,
+  Router,
   Maximize2,
   type LucideIcon,
 } from "lucide-react";
