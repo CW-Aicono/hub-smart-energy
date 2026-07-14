@@ -1,60 +1,27 @@
 ## Ziel
-Tenant-Admins können in den Tenant-Einstellungen (Route `/settings/branding`) einen automatischen Logout bei Inaktivität aktivieren/deaktivieren und die Zeitdauer einstellen. Angemeldete Nutzer werden nach Ablauf der eingestellten Zeit automatisch abgemeldet — auch wenn der Browser zwischenzeitlich geschlossen wurde.
+Klick auf eine Messstellen-Karte in `/live-values` öffnet denselben Detail-Dialog wie im Energieflussmonitor (Screenshot 2: Zeitraum-Tabs 1h/24h/7d/30d, Ø/Max/Min/Energie-Kacheln, „Leistungsverlauf", „Energie pro Stunde").
 
-## UI: Neue Karte „Auto-Logout"
-Neue Komponente `src/components/settings/AutoLogoutSetting.tsx`, eingebunden in `src/pages/Branding.tsx` **zwischen** `WeekStartSetting` und `ManualMetersSetting`.
+## Vorgehen
 
-Aufbau (analog zu `WeekStartSetting`, gleiches Card-Layout):
-- Titel „Auto-Logout" mit Icon (`LogOut` aus lucide-react).
-- Beschreibung: „Nutzer werden bei Inaktivität automatisch abgemeldet."
-- Switch „Auto-Logout aktiv" (Default: an).
-- Wenn aktiv: Select mit den Optionen **10, 20, 30, 60, 120 Minuten** (Default: 30).
-- Speichern-Button.
+1. **`MeterDetailDialog` extrahieren** aus `src/components/dashboard/EnergyFlowMonitor.tsx` (Zeilen ~1307–1860) in eine neue Datei `src/components/dashboard/MeterDetailDialog.tsx` und als named export bereitstellen. Alle mitverwendeten Konstanten (`RANGE_LABEL`, `RANGE_MS`, `ROLE_ICON`, `ROLE_LABEL`, `fmtDeNum` etc.) und Hilfsfunktionen mitnehmen bzw. importierbar machen. `EnergyFlowMonitor.tsx` importiert das Dialog anschließend aus der neuen Datei — keine Verhaltens­änderung im Energieflussmonitor.
 
-## Datenmodell
-Migration erweitert `public.tenants`:
-- `auto_logout_enabled boolean NOT NULL DEFAULT true`
-- `auto_logout_minutes integer NOT NULL DEFAULT 30 CHECK (auto_logout_minutes IN (10, 20, 30, 60, 120))`
+2. **Optionale Props für Nicht-Flow-Kontext**: `allNodes` und `metersById` werden nur für die Haus-Autarkie-Berechnung genutzt. In der neuen Datei werden sie zu `allNodes?: EnergyFlowNode[]` (default `[]`) und `metersById?: Record<string, any>` (default `{}`) — dann funktioniert das Dialog auch ohne Flow-Kontext (Autarkie-Block wird nur bei `role === "house"` und vorhandenen Daten gezeigt, ist damit still).
 
-Keine neuen RLS-Policies nötig — Tenants-Tabelle wird bereits vom Tenant-Admin (und Super-Admin) beschrieben, wie bei `week_start_day`.
+3. **In `src/pages/LiveValues.tsx` einbinden**:
+   - State `detailMeter: Meter | null` + `MeterDetailDialog` am Ende der Seite.
+   - Meter-`<Card>` wird klickbar (`role="button"`, `cursor-pointer`, `hover:shadow`, `onClick` setzt `detailMeter`, Keyboard-Handler für Enter/Space).
+   - Beim Öffnen wird der Meter in eine minimale `EnergyFlowNode`-Form gemappt: `{ id: meter.id, meter_id: meter.id, label: meter.name, role: <abgeleitet>, color: "", x: 0, y: 0 }`.
+   - Role-Ableitung: `battery` wenn `socByMeterId.get(meter.id)` gesetzt, sonst nach `meter.energy_type` / vorhandener Klassifikation (fallback `consumer`). SOC-Prozent (`socPct`) wird aus der bestehenden `socByMeterId`-Map übergeben.
+   - Manuelle/virtuelle Zähler ohne `meter_power_readings` zeigen die Zeitreihe leer — das ist okay, die Kacheln bleiben mit „–".
 
-## Logout-Logik (Frontend)
-Neuer Hook `src/hooks/useAutoLogout.ts`, global aktiviert in `src/App.tsx` innerhalb des bestehenden Auth-/Tenant-Contexts.
-
-**Inaktivitäts-Erkennung (offener Browser):**
-- Listener auf `mousemove`, `keydown`, `click`, `scroll`, `touchstart`, `visibilitychange`.
-- Bei jedem Event wird `localStorage["aicono.lastActivity"] = Date.now()` gesetzt (throttled auf 1×/Sekunde).
-- Ein Interval (alle 30 s) prüft `Date.now() - lastActivity > timeoutMs`. Wenn ja: `supabase.auth.signOut()` + Redirect auf `/auth`.
-- Timer nutzt die tenant-spezifische Dauer aus `tenant.auto_logout_minutes`; wenn `auto_logout_enabled = false`, ist der Hook no-op.
-
-**Session-Ablauf über Browser-Neustart (Kernanforderung):**
-- Beim App-Start (nach Hydrierung von Auth + Tenant) prüft der Hook **vor** jeder anderen Aktion:
-  ```
-  if (enabled && lastActivity && Date.now() - lastActivity > timeoutMs) {
-    await supabase.auth.signOut();
-    navigate("/auth");
-  }
-  ```
-- Damit greift der Auto-Logout auch, wenn der Nutzer den Browser gestern Abend einfach geschlossen hat und heute wieder öffnet — die Session wird sofort beim Laden invalidiert, bevor geschützte Inhalte gerendert werden.
-- `lastActivity` liegt in `localStorage` (überlebt Browser-Neustart, gebunden an Origin/Profil).
-
-**Cross-Tab-Konsistenz:**
-- Ein `storage`-Event-Listener synchronisiert `lastActivity` zwischen mehreren Tabs, sodass Aktivität in einem Tab die anderen Tabs am Leben hält und der Logout in allen Tabs gleichzeitig auslöst.
+4. **Kein Umbau der Daten-Queries**: `MeterDetailDialog` liest weiter aus `meter_power_readings` und `energy_storages`. Keine RLS-/Migrations­änderung nötig.
 
 ## Technische Details
-- Migration fügt die zwei Spalten hinzu; anschließend Typen-Regeneration (`src/integrations/supabase/types.ts` wird automatisch aktualisiert).
-- `useTenant` liefert die neuen Felder ohne Änderung mit (SELECT *).
-- i18n: Neue Keys `autoLogout.title/subtitle/enabled/minutes/saved/saveError` in allen 4 Sprachen (DE/EN/ES/NL).
-- Kein Eingriff in Edge Functions, keine Änderung an bestehenden Auth-Flows.
+- Dialog-Datei: `src/components/dashboard/MeterDetailDialog.tsx` (exportiert `MeterDetailDialog` + Types `DetailRange`).
+- `EnergyFlowMonitor.tsx`: ersetzt die interne Definition durch `import { MeterDetailDialog } from "./MeterDetailDialog";`. Alle bisherigen Aufrufparameter bleiben.
+- `LiveValues.tsx`: Card erhält `onClick`/`onKeyDown`, kein Layout­wechsel; interne Buttons (falls später ergänzt) müssen `e.stopPropagation()` bekommen — aktuell keine vorhanden.
+- Keine Übersetzungs­änderung (Dialog-Texte bleiben wie im bestehenden Dialog, deutsch).
 
-## Betroffene/neue Dateien
-- **Neu:** `supabase/migrations/<ts>_add_auto_logout_to_tenants.sql`
-- **Neu:** `src/components/settings/AutoLogoutSetting.tsx`
-- **Neu:** `src/hooks/useAutoLogout.ts`
-- **Edit:** `src/pages/Branding.tsx` — Karte einfügen
-- **Edit:** `src/App.tsx` — Hook global aktivieren
-- **Edit:** i18n-Dateien (DE/EN/ES/NL) — neue Übersetzungs-Keys
-
-## Hinweise / offene Punkte
-- Die Anforderung „auch wenn er den Browser geschlossen hat" wird über `localStorage` + Prüfung beim Reload gelöst. Es gibt technisch keine Möglichkeit, einen Server-seitigen Logout auszulösen, während der Browser komplett geschlossen ist — Supabase-Sessions laufen erst nach ihrer eigenen Refresh-Token-Lebensdauer ab. Der beschriebene Ansatz stellt aber sicher, dass der Nutzer nach Wiederöffnen **sofort und ohne Zugriff auf geschützte Inhalte** ausgeloggt wird, was den Sicherheitswunsch erfüllt.
-- Super-Admin-Impersonation-Sessions bleiben unberührt (der Hook prüft nur Tenant-Sessions).
+## Nicht im Scope
+- Keine Änderung an Filtern, Sortierung, Cards-Inhalten oder API/Backend.
+- Kein Redesign des Dialogs.
