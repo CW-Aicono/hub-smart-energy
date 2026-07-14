@@ -546,9 +546,9 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
         preserveAspectRatio="xMidYMid meet"
       >
         <defs>
-          {connections.map((conn, i) => {
-            const fromNode = nodes.find((n) => n.id === conn.from);
-            const toNode = nodes.find((n) => n.id === conn.to);
+          {derivedConnections.map((conn, i) => {
+            const fromNode = lookupNodes.find((n) => n.id === conn.from);
+            const toNode = lookupNodes.find((n) => n.id === conn.to);
             if (!fromNode || !toNode) return null;
             return (
               <linearGradient key={`grad-${i}`} id={`flow-grad-${i}`} gradientUnits="userSpaceOnUse"
@@ -561,10 +561,11 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           })}
         </defs>
 
-        {/* Connections */}
-        {connections.map((conn, i) => {
-          const fromNode = nodes.find((n) => n.id === conn.from);
-          const toNode = nodes.find((n) => n.id === conn.to);
+        {/* Connections (auto: user-node ↔ center) */}
+        {derivedConnections.map((conn, i) => {
+          const fromNode = lookupNodes.find((n) => n.id === conn.from);
+          const toNode = lookupNodes.find((n) => n.id === conn.to);
+
           if (!fromNode || !toNode) return null;
 
           const { x1, y1, x2, y2, dist, mx, my } = getClippedLine(fromNode, toNode);
