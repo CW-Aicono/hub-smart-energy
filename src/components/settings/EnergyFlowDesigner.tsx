@@ -54,14 +54,9 @@ interface Props {
 
 function NodeDeletePopover({
   node,
-  nodes,
-  connections,
   onRemoveNode,
-  onRemoveConnection,
 }: {
   node: EnergyFlowNode;
-  nodes: EnergyFlowNode[];
-  connections: EnergyFlowConnection[];
   onRemoveNode: () => void;
 }) {
   const [open, setOpen] = useState(false);
