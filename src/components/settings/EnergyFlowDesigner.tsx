@@ -11,7 +11,19 @@ import {
   EnergyFlowConnection,
   EnergyFlowNodeRole,
 } from "@/hooks/useCustomWidgetDefinitions";
-import { Plus, X, Link2, Trash2, Unlink } from "lucide-react";
+import { Plus, X, Trash2, RotateCcw } from "lucide-react";
+import { computeRadialDefault, applyRadialLayout } from "@/lib/energyFlowLayout";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const NODE_ROLES: { value: EnergyFlowNodeRole; label: string }[] = [
   { value: "pv", label: "PV / Solar" },
@@ -42,25 +54,12 @@ interface Props {
 
 function NodeDeletePopover({
   node,
-  nodes,
-  connections,
   onRemoveNode,
-  onRemoveConnection,
 }: {
   node: EnergyFlowNode;
-  nodes: EnergyFlowNode[];
-  connections: EnergyFlowConnection[];
   onRemoveNode: () => void;
-  onRemoveConnection: (connectionIndex: number) => void;
 }) {
   const [open, setOpen] = useState(false);
-
-  // Find connections involving this node (with their original index)
-  const nodeConnections = connections
-    .map((c, i) => ({ ...c, idx: i }))
-    .filter((c) => c.from === node.id || c.to === node.id);
-
-  const getLabel = (id: string) => nodes.find((n) => n.id === id)?.label || "?";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -97,54 +96,36 @@ function NodeDeletePopover({
           <Trash2 className="h-3.5 w-3.5" />
           Knoten löschen
         </Button>
-        {nodeConnections.length > 0 && (
-          <>
-            <div className="border-t my-1" />
-            <p className="text-[11px] text-muted-foreground px-2 py-0.5">Verbindungen:</p>
-            {nodeConnections.map((c) => {
-              const otherLabel = c.from === node.id ? getLabel(c.to) : getLabel(c.from);
-              return (
-                <Button
-                  key={c.idx}
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-start text-xs gap-2"
-                  onClick={() => {
-                    onRemoveConnection(c.idx);
-                    // Close if no more connections remain
-                    if (nodeConnections.length <= 1) setOpen(false);
-                  }}
-                >
-                  <Unlink className="h-3.5 w-3.5" />
-                  {node.label} → {otherLabel}
-                </Button>
-              );
-            })}
-          </>
-        )}
       </PopoverContent>
     </Popover>
   );
 }
 
 export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Props) {
-  const [connectFrom, setConnectFrom] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ nodeId: string; startX: number; startY: number } | null>(null);
 
   const addNode = () => {
     const id = crypto.randomUUID();
+    const newIndex = nodes.length;
+    const total = nodes.length + 1;
+    // Neuer Knoten radial platzieren und bestehende Knoten neu verteilen,
+    // damit gleiche Winkelabstände erhalten bleiben.
+    const rebalanced = nodes.map((n, i) => ({
+      ...n,
+      ...computeRadialDefault(i, total),
+    }));
+    const pos = computeRadialDefault(newIndex, total);
     const newNode: EnergyFlowNode = {
       id,
       role: "consumer",
       label: "Neu",
       meter_id: "",
       color: DEFAULT_COLORS.consumer,
-      x: 50,
-      y: 50,
+      x: pos.x,
+      y: pos.y,
     };
-    onChange([...nodes, newNode], connections);
+    onChange([...rebalanced, newNode], connections);
   };
 
   const updateNode = (id: string, patch: Partial<EnergyFlowNode>) => {
@@ -161,41 +142,18 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
   };
 
   const removeNode = (id: string) => {
-    onChange(
-      nodes.filter((n) => n.id !== id),
-      connections.filter((c) => c.from !== id && c.to !== id),
-    );
+    const remaining = nodes.filter((n) => n.id !== id);
+    // Neu verteilen, damit die Anordnung weiterhin gleichmäßig bleibt.
+    const relayed = applyRadialLayout(remaining);
+    onChange(relayed, connections.filter((c) => c.from !== id && c.to !== id));
   };
 
-  const toggleConnection = (nodeId: string) => {
-    if (!connectFrom) {
-      setConnectFrom(nodeId);
-      return;
-    }
-    if (connectFrom === nodeId) {
-      setConnectFrom(null);
-      return;
-    }
-    // Check if connection exists
-    const exists = connections.some(
-      (c) =>
-        (c.from === connectFrom && c.to === nodeId) ||
-        (c.from === nodeId && c.to === connectFrom),
-    );
-    if (exists) {
-      onChange(
-        nodes,
-        connections.filter(
-          (c) =>
-            !(c.from === connectFrom && c.to === nodeId) &&
-            !(c.from === nodeId && c.to === connectFrom),
-        ),
-      );
-    } else {
-      onChange(nodes, [...connections, { from: connectFrom, to: nodeId }]);
-    }
-    setConnectFrom(null);
+  const resetLayout = () => {
+    onChange(applyRadialLayout(nodes), connections);
   };
+
+
+
 
   // Drag handling on the visual canvas
   const handlePointerDown = useCallback(
@@ -282,32 +240,64 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
     <div className="space-y-4">
       {/* Visual canvas */}
       <div className="space-y-2">
-        <Label>Layout (Knoten per Drag & Drop positionieren)</Label>
+        <div className="flex items-center justify-between">
+          <Label>Layout (Knoten per Drag & Drop positionieren)</Label>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                disabled={nodes.length === 0}
+              >
+                <RotateCcw className="h-3 w-3" />
+                Anordnung zurücksetzen
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Anordnung zurücksetzen?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Alle manuell per Drag & Drop gesetzten Positionen werden verworfen und
+                  die Knoten wieder gleichmäßig um den Zentralknoten verteilt.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                <AlertDialogAction onClick={resetLayout}>Zurücksetzen</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
         <div
           ref={canvasRef}
           className="relative border rounded-lg bg-card aspect-video overflow-hidden select-none"
           style={{ touchAction: "none" }}
         >
-          {/* Connection lines */}
+          {/* Connection lines (auto: user-node ↔ center) */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none">
-            {connections.map((conn, i) => {
-              const f = nodes.find((n) => n.id === conn.from);
-              const t = nodes.find((n) => n.id === conn.to);
-              if (!f || !t) return null;
-              return (
-                <line
-                  key={i}
-                  x1={`${f.x}%`}
-                  y1={`${f.y}%`}
-                  x2={`${t.x}%`}
-                  y2={`${t.y}%`}
-                  stroke={f.color}
-                  strokeWidth={2}
-                  strokeOpacity={0.5}
-                />
-              );
-            })}
+            {nodes.map((node) => (
+              <line
+                key={node.id}
+                x1={`${node.x}%`}
+                y1={`${node.y}%`}
+                x2="50%"
+                y2="50%"
+                stroke={node.color}
+                strokeWidth={2}
+                strokeOpacity={0.4}
+              />
+            ))}
           </svg>
+
+          {/* Zentraler Knoten – fixed, unbeschriftet */}
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            aria-hidden
+          >
+            <div className="w-6 h-6 rounded-full bg-muted border border-muted-foreground/50" />
+          </div>
 
           {/* Draggable nodes */}
           {nodes.map((node) => (
@@ -321,7 +311,7 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
               onPointerDown={(e) => handlePointerDown(node.id, e)}
             >
               <div
-                className="w-10 h-10 rounded-full border-2 flex items-center justify-center text-[10px] font-semibold"
+                className="w-10 h-10 rounded-full border-2 flex items-center justify-center text-[10px] font-semibold bg-background"
                 style={{ borderColor: node.color, color: node.color }}
               >
                 {node.label.slice(0, 2)}
@@ -330,6 +320,8 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
           ))}
         </div>
       </div>
+
+
 
       {/* Node list */}
       <div className="space-y-2">
@@ -340,11 +332,8 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
           </Button>
         </div>
 
-        {connectFrom && (
-          <div className="text-xs text-primary bg-primary/10 px-2 py-1 rounded">
-            Klicke auf einen zweiten Knoten, um eine Verbindung herzustellen/zu entfernen.
-          </div>
-        )}
+
+
 
         {/* Filter für die Zähler-Auswahl */}
         <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
@@ -430,27 +419,12 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
                   onChange={(e) => updateNode(node.id, { color: e.target.value })}
                   className="h-8 w-8 p-0 border-0 cursor-pointer shrink-0"
                 />
-                <Button
-                  type="button"
-                  variant={connectFrom === node.id ? "default" : "outline"}
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => toggleConnection(node.id)}
-                  title="Verbindung erstellen"
-                >
-                  <Link2 className="h-3.5 w-3.5" />
-                </Button>
                 <NodeDeletePopover
                   node={node}
-                  nodes={nodes}
-                  connections={connections}
                   onRemoveNode={() => removeNode(node.id)}
-                  onRemoveConnection={(idx) => {
-                    const updated = connections.filter((_, i) => i !== idx);
-                    onChange(nodes, updated);
-                  }}
                 />
               </div>
+
 
               <div className="grid grid-cols-2 gap-2">
                 <Select
@@ -521,31 +495,6 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
         </div>
       </div>
 
-      {/* Connections summary */}
-      {connections.length > 0 && (
-        <div className="space-y-1">
-          <Label className="text-xs">Verbindungen ({connections.length})</Label>
-          <div className="flex flex-wrap gap-1">
-            {connections.map((c, i) => {
-              const f = nodes.find((n) => n.id === c.from);
-              const t = nodes.find((n) => n.id === c.to);
-              return (
-                <span key={i} className="text-xs bg-muted pl-2 pr-1 py-0.5 rounded-full inline-flex items-center gap-1">
-                  {f?.label || "?"} → {t?.label || "?"}
-                  <button
-                    type="button"
-                    aria-label="Verbindung entfernen"
-                    className="rounded-full p-0.5 hover:bg-destructive/10 hover:text-destructive transition-colors"
-                    onClick={() => onChange(nodes, connections.filter((_, idx) => idx !== i))}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

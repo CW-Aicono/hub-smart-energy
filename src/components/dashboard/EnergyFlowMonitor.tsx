@@ -13,6 +13,9 @@ import {
   EnergyFlowConnection,
   EnergyFlowNodeRole,
 } from "@/hooks/useCustomWidgetDefinitions";
+import { computeRadialDefault } from "@/lib/energyFlowLayout";
+
+const CENTER_NODE_ID = "__center__";
 import { buildLoxoneResolver } from "@/lib/loxoneUuidResolver";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -426,7 +429,48 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
     return () => obs.disconnect();
   }, []);
   const nodeRadius = Math.min(dims.w, dims.h) * 0.09;
+  const centerRadius = Math.max(10, nodeRadius * 0.55);
   const iconSize = Math.round(nodeRadius * 1.1);
+
+  // Layout-Knoten: fehlende oder Default-Positionen (50/50) werden radial verteilt.
+  const layoutUserNodes = useMemo<EnergyFlowNode[]>(() => {
+    return nodes.map((n, i) => {
+      const missing =
+        typeof n.x !== "number" ||
+        typeof n.y !== "number" ||
+        (n.x === 50 && n.y === 50);
+      if (!missing) return n;
+      const p = computeRadialDefault(i, nodes.length);
+      return { ...n, x: p.x, y: p.y };
+    });
+  }, [nodes]);
+
+  // Zentraler Knoten (implizit, unbeschriftet, nicht klickbar).
+  const centerNode: EnergyFlowNode = useMemo(
+    () => ({
+      id: CENTER_NODE_ID,
+      role: "consumer",
+      label: "",
+      meter_id: "",
+      color: "hsl(var(--muted-foreground))",
+      x: 50,
+      y: 50,
+    }),
+    [],
+  );
+
+  const lookupNodes = useMemo(
+    () => [centerNode, ...layoutUserNodes],
+    [centerNode, layoutUserNodes],
+  );
+
+  // Verbindungen werden automatisch erzeugt: jeder User-Knoten ↔ Zentrum.
+  // Die gespeicherte `connections`-Prop wird bewusst ignoriert.
+  const derivedConnections = useMemo<EnergyFlowConnection[]>(
+    () => layoutUserNodes.map((n) => ({ from: n.id, to: CENTER_NODE_ID })),
+    [layoutUserNodes],
+  );
+
 
   const nodePos = useCallback(
     (node: EnergyFlowNode) => ({
@@ -470,7 +514,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
   // nicht mehr live im Flow-Widget.
 
 
-  const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null;
+  const selectedNode = selectedNodeId ? layoutUserNodes.find((n) => n.id === selectedNodeId) ?? null : null;
 
   if (!nodes.length) {
     return (
@@ -502,9 +546,9 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
         preserveAspectRatio="xMidYMid meet"
       >
         <defs>
-          {connections.map((conn, i) => {
-            const fromNode = nodes.find((n) => n.id === conn.from);
-            const toNode = nodes.find((n) => n.id === conn.to);
+          {derivedConnections.map((conn, i) => {
+            const fromNode = lookupNodes.find((n) => n.id === conn.from);
+            const toNode = lookupNodes.find((n) => n.id === conn.to);
             if (!fromNode || !toNode) return null;
             return (
               <linearGradient key={`grad-${i}`} id={`flow-grad-${i}`} gradientUnits="userSpaceOnUse"
@@ -517,10 +561,11 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           })}
         </defs>
 
-        {/* Connections */}
-        {connections.map((conn, i) => {
-          const fromNode = nodes.find((n) => n.id === conn.from);
-          const toNode = nodes.find((n) => n.id === conn.to);
+        {/* Connections (auto: user-node ↔ center) */}
+        {derivedConnections.map((conn, i) => {
+          const fromNode = lookupNodes.find((n) => n.id === conn.from);
+          const toNode = lookupNodes.find((n) => n.id === conn.to);
+
           if (!fromNode || !toNode) return null;
 
           const { x1, y1, x2, y2, dist, mx, my } = getClippedLine(fromNode, toNode);
@@ -616,8 +661,26 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           }
         `}</style>
 
+        {/* Zentraler Knoten – implizit, ohne Icon/Label/Werte, nicht klickbar */}
+        {(() => {
+          const { x: ccx, y: ccy } = nodePos(centerNode);
+          return (
+            <circle
+              cx={ccx}
+              cy={ccy}
+              r={centerRadius}
+              fill="hsl(var(--muted))"
+              fillOpacity={0.35}
+              stroke="hsl(var(--muted-foreground))"
+              strokeOpacity={0.5}
+              strokeWidth={1.5}
+              className="pointer-events-none"
+            />
+          );
+        })()}
+
         {/* Nodes */}
-        {nodes.map((node) => {
+        {layoutUserNodes.map((node) => {
           const { x: cx, y: cy } = nodePos(node);
           const liveW = getLiveWatts(node.meter_id);
           const periodSum = periodSums[node.meter_id];
@@ -628,12 +691,12 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           // Label side: default "bottom"; flip to "top" if any adjacent connection
           // leaves this node downward (angle in [45°, 135°]) — avoids overlap with flow.
           let labelSide: "top" | "bottom" = "bottom";
-          for (const conn of connections) {
+          for (const conn of derivedConnections) {
             let neighborId: string | null = null;
             if (conn.from === node.id) neighborId = conn.to;
             else if (conn.to === node.id) neighborId = conn.from;
             if (!neighborId) continue;
-            const neighbor = nodes.find((n) => n.id === neighborId);
+            const neighbor = lookupNodes.find((n) => n.id === neighborId);
             if (!neighbor) continue;
             const np = nodePos(neighbor);
             const angleDeg = (Math.atan2(np.y - cy, np.x - cx) * 180) / Math.PI;
@@ -644,6 +707,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           }
           const labelY = labelSide === "bottom" ? cy + nodeRadius + 14 : cy - nodeRadius - 22;
           const sumY   = labelSide === "bottom" ? cy + nodeRadius + 28 : cy - nodeRadius - 8;
+
 
           return (
             <g
@@ -744,7 +808,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           periodSum={periodSums[selectedNode.meter_id]}
           periodLabel={PERIOD_SUM_LABEL[selectedPeriod]}
           socPct={getSocPct(selectedNode.meter_id)}
-          allNodes={nodes}
+          allNodes={layoutUserNodes}
           getLiveWatts={getLiveWatts}
           anchor={{
             x: (selectedNode.x / 100) * dims.w,
