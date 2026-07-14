@@ -170,6 +170,7 @@ const App = () => (
                   <Toaster />
                   <Sonner />
                   <ConfirmDialogHost />
+                  <AutoLogoutMount />
                   <RecoveryGuard />
                   <MustChangePasswordGuard />
                   <SalesHostGuard />
