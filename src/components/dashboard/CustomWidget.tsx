@@ -586,6 +586,8 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                 <EnergyFlowMonitor
                   nodes={config.energy_flow_nodes || []}
                   connections={config.energy_flow_connections || []}
+                  locationId={config.energy_flow_location_id}
+                  gatewayDeviceIds={config.energy_flow_gateway_device_ids || []}
                 />
               </Suspense>
             )}
