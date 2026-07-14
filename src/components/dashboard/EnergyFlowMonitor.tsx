@@ -1382,15 +1382,23 @@ function MeterDetailDialog({
     queryFn: async () => {
       if (!node.meter_id) return [];
       const since = new Date(visibleStartMs).toISOString();
-      const limit = range === "30d" ? 5000 : range === "7d" ? 3000 : 1500;
-      const { data } = await supabase
-        .from("meter_power_readings")
-        .select("recorded_at, power_value")
-        .eq("meter_id", node.meter_id)
-        .gte("recorded_at", since)
-        .order("recorded_at", { ascending: true })
-        .limit(limit);
-      return (data ?? []).map((r: any) => ({
+      const limit = range === "30d" ? 8000 : range === "7d" ? 5000 : 2000;
+      const pageSize = 1000;
+      const rows: any[] = [];
+      for (let offset = 0; offset < limit; offset += pageSize) {
+        const to = Math.min(offset + pageSize, limit) - 1;
+        const { data, error } = await supabase
+          .from("meter_power_readings")
+          .select("recorded_at, power_value")
+          .eq("meter_id", node.meter_id)
+          .gte("recorded_at", since)
+          .order("recorded_at", { ascending: true })
+          .range(offset, to);
+        if (error || !data || data.length === 0) break;
+        rows.push(...data);
+        if (data.length < to - offset + 1) break;
+      }
+      return rows.map((r: any) => ({
         t: new Date(r.recorded_at).getTime(),
         // kW aus der DB (power_value ist bereits kW)
         kw: Number(r.power_value),
@@ -1408,16 +1416,24 @@ function MeterDetailDialog({
     staleTime: 30_000,
     queryFn: async () => {
       const since = new Date(visibleStartMs).toISOString();
-      const limit = range === "30d" ? 5000 : range === "7d" ? 3000 : 1500;
-      const { data } = await ((supabase as any)
-        .from("storage_soc_readings")
-        .select("recorded_at, soc_pct")
-        .eq("storage_id", storageInfo!.id)
-        .gte("recorded_at", since)
-        .order("recorded_at", { ascending: true })
-        .limit(limit));
-      return ((data as any[]) ?? [])
-        .map((r) => ({ t: new Date(r.recorded_at).getTime(), soc: Number(r.soc_pct) }))
+      const limit = range === "30d" ? 8000 : range === "7d" ? 5000 : 2000;
+      const pageSize = 1000;
+      const rows: any[] = [];
+      for (let offset = 0; offset < limit; offset += pageSize) {
+        const to = Math.min(offset + pageSize, limit) - 1;
+        const { data, error } = await ((supabase as any)
+          .from("storage_soc_readings")
+          .select("recorded_at, soc_pct")
+          .eq("storage_id", storageInfo!.id)
+          .gte("recorded_at", since)
+          .order("recorded_at", { ascending: true })
+          .range(offset, to));
+        if (error || !data || data.length === 0) break;
+        rows.push(...data);
+        if (data.length < to - offset + 1) break;
+      }
+      return rows
+        .map((r: any) => ({ t: new Date(r.recorded_at).getTime(), soc: Number(r.soc_pct) }))
         .filter((d) => Number.isFinite(d.soc) && d.soc >= 0 && d.soc <= 100);
     },
   });
