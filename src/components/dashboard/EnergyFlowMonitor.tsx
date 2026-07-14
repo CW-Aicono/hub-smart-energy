@@ -967,6 +967,15 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
         />
       )}
 
+      {gatewayDetailOpen && (
+        <GatewayDetailDialog
+          devices={gatewayDevices as any[]}
+          status={gatewayStatus}
+          statusColor={gatewayStatusColor}
+          onClose={() => setGatewayDetailOpen(false)}
+        />
+      )}
+
     </div>
   );
 }
