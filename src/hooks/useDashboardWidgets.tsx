@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { useTenant } from "./useTenant";
 import { useDemoMode } from "@/contexts/DemoMode";
 import type { Database, Json } from "@/integrations/supabase/types";
 
