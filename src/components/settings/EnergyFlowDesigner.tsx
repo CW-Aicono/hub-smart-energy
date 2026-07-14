@@ -327,6 +327,71 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
 
   return (
     <div className="space-y-4">
+      {/* Scope: Liegenschaft + Gateways (Pflicht) */}
+      <div className="border rounded-lg p-3 bg-muted/30 space-y-3">
+        <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+          Datenbereich (Pflicht)
+        </Label>
+        <div className="space-y-2">
+          <Label className="text-xs">Liegenschaft</Label>
+          <Select value={locationId || ""} onValueChange={setLocation}>
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue placeholder="Liegenschaft wählen" />
+            </SelectTrigger>
+            <SelectContent>
+              {locations.map((l) => (
+                <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {locationId && (
+          <div className="space-y-2">
+            <Label className="text-xs">Gateways (mindestens eins)</Label>
+            {gatewayQuery.isLoading ? (
+              <p className="text-xs text-muted-foreground">Gateways werden geladen…</p>
+            ) : gateways.length === 0 ? (
+              <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  Für diese Liegenschaft ist noch kein Gateway eingerichtet.{" "}
+                  <a href="/integrations" className="underline underline-offset-2">
+                    Zur Integrationsverwaltung
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-h-40 overflow-auto pr-1">
+                {gateways.map((g: any) => (
+                  <label
+                    key={g.id}
+                    className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-sm cursor-pointer hover:bg-accent"
+                  >
+                    <Checkbox
+                      checked={gatewayDeviceIds.includes(g.id)}
+                      onCheckedChange={() => toggleGateway(g.id)}
+                    />
+                    {statusDot(g.status)}
+                    <span className="flex-1 truncate">{g.device_name}</span>
+                    <span className="text-xs text-muted-foreground">{g.device_type}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {!scopeReady && (
+        <div className="flex items-start gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          Bitte zuerst eine Liegenschaft und mindestens ein Gateway auswählen, bevor Knoten hinzugefügt werden können.
+        </div>
+      )}
+
+      {scopeReady && (
+      <>
       {/* Visual canvas */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -364,7 +429,6 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
           className="relative border rounded-lg bg-card aspect-video overflow-hidden select-none"
           style={{ touchAction: "none" }}
         >
-          {/* Connection lines (auto: user-node ↔ center) */}
           <svg className="absolute inset-0 w-full h-full pointer-events-none">
             {nodes.map((node) => (
               <line
@@ -380,7 +444,6 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
             ))}
           </svg>
 
-          {/* Zentraler Knoten – fixed, unbeschriftet */}
           <div
             className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
             aria-hidden
@@ -388,7 +451,6 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
             <div className="w-6 h-6 rounded-full bg-muted border border-muted-foreground/50" />
           </div>
 
-          {/* Draggable nodes */}
           {nodes.map((node) => (
             <div
               key={node.id}
@@ -410,8 +472,6 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
         </div>
       </div>
 
-
-
       {/* Node list */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -421,25 +481,19 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
           </Button>
         </div>
 
-
-
-
         {/* Filter für die Zähler-Auswahl */}
         <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
           <div className="flex items-center justify-between">
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
               Zähler-Filter
             </Label>
-            {(filterLocation !== "__all__" ||
-              filterCategory !== "__all__" ||
-              filterEnergyType !== "__all__") && (
+            {(filterCategory !== "__all__" || filterEnergyType !== "__all__") && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 className="h-6 text-xs"
                 onClick={() => {
-                  setFilterLocation("__all__");
                   setFilterCategory("__all__");
                   setFilterEnergyType("__all__");
                 }}
@@ -448,18 +502,7 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
               </Button>
             )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <Select value={filterLocation} onValueChange={setFilterLocation}>
-              <SelectTrigger className="h-8 text-sm">
-                <SelectValue placeholder="Liegenschaft" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Alle Liegenschaften</SelectItem>
-                {locations.map((l) => (
-                  <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <Select
               value={filterCategory}
               onValueChange={(v) => setFilterCategory(v as EnergyFlowNodeRole | "__all__")}
@@ -487,7 +530,8 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
             </Select>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            {filteredMeters.length} von {(meters || []).length} Zählern sichtbar
+            {filteredMeters.length} von {scopedMeters.length} Zählern sichtbar
+
           </p>
         </div>
 
