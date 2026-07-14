@@ -490,17 +490,19 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
       if (dist === 0) return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, dist: 0, mx: p1.x, my: p1.y };
       const ux = dx / dist;
       const uy = dy / dist;
+      const rFrom = fromNode.id === CENTER_NODE_ID ? centerRadius : nodeRadius;
+      const rTo = toNode.id === CENTER_NODE_ID ? centerRadius : nodeRadius;
       return {
-        x1: p1.x + ux * nodeRadius,
-        y1: p1.y + uy * nodeRadius,
-        x2: p2.x - ux * nodeRadius,
-        y2: p2.y - uy * nodeRadius,
-        dist: dist - 2 * nodeRadius,
+        x1: p1.x + ux * rFrom,
+        y1: p1.y + uy * rFrom,
+        x2: p2.x - ux * rTo,
+        y2: p2.y - uy * rTo,
+        dist: dist - rFrom - rTo,
         mx: (p1.x + p2.x) / 2,
         my: (p1.y + p2.y) / 2,
       };
     },
-    [nodePos, nodeRadius],
+    [nodePos, nodeRadius, centerRadius],
   );
 
   const getAnimDuration = useCallback((watts: number | null): number => {
