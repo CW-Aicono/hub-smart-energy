@@ -770,7 +770,19 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
             : gatewayStatus === "error" ? "Gateway-Fehler"
             : "Gateway-Status unbekannt";
           return (
-            <g className="pointer-events-none">
+            <g
+              className="cursor-pointer outline-none"
+              tabIndex={0}
+              role="button"
+              aria-label={title}
+              onClick={() => setGatewayDetailOpen(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setGatewayDetailOpen(true);
+                }
+              }}
+            >
               <title>{title}</title>
               <circle
                 cx={ccx}
@@ -787,6 +799,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                 y={ccy - gwIconSize / 2}
                 width={gwIconSize}
                 height={gwIconSize}
+                className="pointer-events-none"
               >
                 <div
                   style={{ color: gatewayStatusColor, width: gwIconSize, height: gwIconSize }}
@@ -795,15 +808,6 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
                   <Router size={Math.round(gwIconSize * 0.7)} />
                 </div>
               </foreignObject>
-              {/* kleiner Statuspunkt oben rechts am Zentralknoten */}
-              <circle
-                cx={ccx + centerRadius * 0.75}
-                cy={ccy - centerRadius * 0.75}
-                r={Math.max(3, centerRadius * 0.18)}
-                fill={gatewayStatusColor}
-                stroke="hsl(var(--background))"
-                strokeWidth={1.5}
-              />
             </g>
           );
         })()}
