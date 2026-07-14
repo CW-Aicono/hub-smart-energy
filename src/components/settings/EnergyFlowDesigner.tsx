@@ -112,16 +112,18 @@ function NodeDeletePopover({
   );
 }
 
-export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Props) {
+export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gatewayDeviceIds, onChange }: Props) {
+  const { tenant } = useTenant();
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ nodeId: string; startX: number; startY: number } | null>(null);
+
+  const scope = { locationId, gatewayDeviceIds };
+  const scopeReady = !!locationId && gatewayDeviceIds.length > 0;
 
   const addNode = () => {
     const id = crypto.randomUUID();
     const newIndex = nodes.length;
     const total = nodes.length + 1;
-    // Neuer Knoten radial platzieren und bestehende Knoten neu verteilen,
-    // damit gleiche Winkelabstände erhalten bleiben.
     const rebalanced = nodes.map((n, i) => ({
       ...n,
       ...computeRadialDefault(i, total),
@@ -136,31 +138,29 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
       x: pos.x,
       y: pos.y,
     };
-    onChange([...rebalanced, newNode], connections);
+    onChange([...rebalanced, newNode], connections, scope);
   };
 
   const updateNode = (id: string, patch: Partial<EnergyFlowNode>) => {
     const updated = nodes.map((n) => {
       if (n.id !== id) return n;
       const merged = { ...n, ...patch };
-      // Auto-set color when role changes
       if (patch.role && !patch.color) {
         merged.color = DEFAULT_COLORS[patch.role];
       }
       return merged;
     });
-    onChange(updated, connections);
+    onChange(updated, connections, scope);
   };
 
   const removeNode = (id: string) => {
     const remaining = nodes.filter((n) => n.id !== id);
-    // Neu verteilen, damit die Anordnung weiterhin gleichmäßig bleibt.
     const relayed = applyRadialLayout(remaining);
-    onChange(relayed, connections.filter((c) => c.from !== id && c.to !== id));
+    onChange(relayed, connections.filter((c) => c.from !== id && c.to !== id), scope);
   };
 
   const resetLayout = () => {
-    onChange(applyRadialLayout(nodes), connections);
+    onChange(applyRadialLayout(nodes), connections, scope);
   };
 
 
