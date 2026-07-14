@@ -1,36 +1,48 @@
 ## Ziel
-Die drei Rückfragen zum zentralen Knoten im Energieflussmonitor auflösen: Gateway-Status verlässlich anzeigen, den redundanten Statuspunkt entfernen und einen Detail-Dialog fürs Gateway anbieten.
+Der Energieflussmonitor-Designer erzwingt künftig, dass **zuerst genau eine Liegenschaft** und **mindestens ein Gateway dieser Liegenschaft** ausgewählt werden, bevor Knoten hinzugefügt oder Zähler zugeordnet werden können. Zählerauswahl wird auf die ausgewählten Gateways beschränkt.
 
-## Diagnose zum grauen Status
-Der Status wird aktuell nur über `gateway_devices.status` aufgelöst, und zwar ausschließlich für Meter, die eine `gateway_device_id` gesetzt haben (Zeile ~322 in `EnergyFlowMonitor.tsx`). Trifft das auf keinen der verknüpften Zähler zu (typisch bei Loxone-Sub-Outputs, manuellen Zählern oder Simulations-Metern, die stattdessen über `location_id` an ein Gateway hängen), fällt der Status auf `unknown` → grau.
+## Umsetzung in `src/components/settings/EnergyFlowDesigner.tsx`
 
-Deshalb ist im Screenshot alles grau, obwohl das Gateway online ist.
+### 1) Pflicht-Auswahl oben im Designer
+Neuer, kompakter Konfigurationsblock ganz oben (vor Layout-Canvas):
 
-## Umsetzung
+- **Liegenschaft** (Single-Select, Pflicht) — aus `useLocations()`. Nur eine Auswahl möglich. Kein „Alle Liegenschaften".
+- **Gateways** (Multi-Select, Pflicht, mindestens 1) — geladen via neue Query auf `gateway_devices` gefiltert nach `location_id` der gewählten Liegenschaft (analog zur Fallback-Auflösung im Monitor). Anzeige mit Statusfarbe & Gerätename.
+  - Wenn keine Gateways in der Liegenschaft existieren: Hinweis „Für diese Liegenschaft ist noch kein Gateway eingerichtet" + Deep-Link zur Integrations-Seite.
 
-### 1) `src/components/dashboard/EnergyFlowMonitor.tsx` — Gateway-Status robuster auflösen
-- Zusätzlich zu `gateway_device_id` auch über `meters.location_id` alle `gateway_devices` derselben Location laden (Fallback, wenn keine direkte Verknüpfung existiert).
-- Wenn beides leer bleibt, greift weiterhin `unknown` (grau) — aber nur noch als echter „keine Daten"-Fall.
-- Bewertung wie bisher: `offline > error > online` (offline dominiert Farbe rot, error gelb, sonst grün). Stale-Heartbeat > 3 min = offline (bereits vorhanden).
+### 2) Speicherung der Auswahl
+Erweiterung des Widget-Configs (Typ `EnergyFlowNode[]`/`EnergyFlowConnection[]` bleibt), zusätzlicher Config-Bereich:
+- `location_id: string`
+- `gateway_device_ids: string[]`
 
-### 2) `src/components/dashboard/EnergyFlowMonitor.tsx` — Statuspunkt am Zentralknoten entfernen
-Der kleine Punkt oben rechts am Zentralknoten (Zeilen ~770–777) ist redundant, weil Ring und Icon-Farbe bereits den Gateway-Status kodieren. Er wird ersatzlos gestrichen. Damit verschwindet der auf der Kreisbahn sichtbare graue Punkt aus dem Screenshot.
+Wird in `useCustomWidgetDefinitions` als Teil der Widget-Config persistiert. `onChange` bekommt die neuen Felder mit (Signatur um dritten Parameter oder ein Config-Objekt erweitern — konsistent zum aktuellen Aufrufer in `WidgetDesigner.tsx`; existierender Aufrufer wird mitgezogen).
 
-### 3) `src/components/dashboard/EnergyFlowMonitor.tsx` — Zentraler Knoten klickbar
-- Am Zentralknoten-`<g>` `pointer-events-none` entfernen, `cursor-pointer` setzen und `onClick` binden.
-- Neuer State `gatewayDetailOpen: boolean`. Klick öffnet einen neuen `GatewayDetailDialog` (analog zum bestehenden `MeterDetailDialog`, aber schmaler — `max-w-2xl`).
+### 3) Zählerauswahl auf gewählte Gateways einschränken
+- Beim Filtern der Zähler zusätzlich prüfen: Zähler ist relevant, wenn `meter.location_id === location_id` **und** entweder
+  - `meter.gateway_device_id ∈ gateway_device_ids`, **oder**
+  - Zähler hängt indirekt über `location_integration_id` an einer Integration, die zu einem der gewählten Gateways gehört (via `location_integrations` derselben Location — nur relevant für Loxone-Sub-Outputs / manuelle Zähler dieser Liegenschaft).
+- Der bestehende Liegenschafts-Filter im „Zähler-Filter"-Block entfällt (redundant, Location ist bereits fixiert). Kategorie- und Energieart-Filter bleiben erhalten.
 
-### 4) Neuer Dialog `GatewayDetailDialog` (im selben File, wie `MeterDetailDialog`)
-Zeigt für die im Widget relevanten Gateways:
-- Gerätename, Typ, Status-Badge (online/offline/error/unknown) mit derselben Farbpalette wie am Knoten
-- Lokale IP, MAC, HA-Version, Add-on-Version, verfügbare Version
-- Letzter Heartbeat (Europe/Berlin), Offline-Puffer-Anzahl
-- Anzahl aktiver/gesamter Automationen (aus `useGatewayDevices`-Metriken bereits vorhanden — wir fetchen die Devices direkt per Query auf `gateway_devices`, die restlichen Metriken sind für diesen Dialog nicht nötig)
+### 4) UI-Gating
+Solange keine Liegenschaft und kein Gateway gewählt ist:
+- „Knoten hinzufügen"-Button ist deaktiviert (Tooltip: „Erst Liegenschaft und mindestens ein Gateway auswählen").
+- Canvas zeigt eine leere-Zustands-Meldung statt Kreis.
+- Die Knotenliste + Zählerauswahl werden ausgeblendet.
 
-Bei mehreren Gateways (mehrere Locations im Widget): Liste als Karten untereinander. Bei genau einem: einzelne Karte.
+Wenn die Liegenschaft nachträglich gewechselt wird:
+- Bestehende Knoten werden nicht automatisch gelöscht, aber Meter-IDs, die nicht mehr zur neuen Liegenschaft/Gateway-Auswahl passen, werden auf `""` zurückgesetzt (mit Hinweis-Toast).
+- Beim Entfernen aller Gateways gilt dieselbe Regel.
 
-Keine Änderungen an Backend, Layout-Persistenz, Drag & Drop, Partikel-Animation oder anderen Widgets.
+### 5) Übernahme im Monitor
+`EnergyFlowMonitor.tsx` bleibt funktional gleich. Er kann die neue `location_id` / `gateway_device_ids` aus der Config nutzen, um die Gateway-Detail-Query gezielt zu machen (statt Fallback über Meter). Das behebt zugleich den grauen Status-Fall aus dem Screenshot (falls kein Meter eine `gateway_device_id` hat, greifen jetzt die explizit ausgewählten Gateway-IDs).
+
+## Nicht Teil der Änderung
+- Kein Umbau von Backend-Tabellen, keine Migration.
+- Keine Änderungen an Partikel-Animation, Layout-Persistenz, anderen Widgets.
+- Keine Änderungen an `useGatewayDevices` (der Designer nutzt eine eigene, schmalere Query).
 
 ## Verifikation
-- Preview öffnen, Widget prüfen: Statusring & Icon farbig, kein orbitierender Punkt mehr, Klick auf zentralen Knoten öffnet den Gateway-Dialog mit korrekten Daten.
-- Falls im aktuellen Tenant tatsächlich kein Gateway existiert (rein manuelle Zähler): Ring bleibt grau, Dialog zeigt eine leere-Zustands-Meldung („Kein Gateway verknüpft").
+- Neues Widget anlegen: „Knoten hinzufügen" ist deaktiviert, bis Liegenschaft + ≥1 Gateway gewählt sind.
+- Liegenschaft ohne Gateway: klarer Hinweis, keine Knoten möglich.
+- Nach Auswahl: Zählerauswahl zeigt ausschließlich Zähler dieser Liegenschaft, deren Datenquelle zu den gewählten Gateways gehört.
+- Vorhandene Widgets ohne `location_id`/`gateway_device_ids`: rückwärtskompatibel — beim Öffnen des Designers werden die Felder als leer geführt, die Auswahl muss einmalig nachgezogen werden (Hinweisbanner im Designer).
