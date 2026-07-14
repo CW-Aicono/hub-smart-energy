@@ -1,62 +1,86 @@
-## Diagnose
 
-In einer Support-Sitzung wird die Session des Super-Admins gegen die eines **technischen Support-Users** des Ziel-Tenants getauscht (`support-session-impersonate`). Für diesen Support-User gilt:
+# Per-Tenant Ingest-Keys + separater Worker-Key
 
-- Rolle: `admin` (setzt die Edge-Funktion beim Anlegen).
-- `tenant_id` in `profiles` = Ziel-Tenant.
-- **Keine** per-User-Datensätze in Tabellen wie `user_location_access`, `dashboard_widgets`, `board_user_layouts`, `user_preferences`, `pv_actual_hourly`-Zugriff usw.
+## Problem
 
-Damit funktioniert alles, was per RLS nur `tenant_id = get_user_tenant_id()` prüft (Meter, Meter-Readings, Locations mit Admin-Bypass, KPI-Kacheln oben im Dashboard). Alles, was zusätzlich per-User-Zeilen erwartet, ist unsichtbar oder leer.
+Aktuell teilen sich Hetzner-Worker (`loxone-ws-worker`) und alle Tenants **denselben** globalen `GATEWAY_API_KEY`. Der Tenant sieht diesen Key in `/integrations → API` und könnte damit theoretisch für andere Tenants pushen bzw. den Worker mit-rotieren. Der Tenant sollte den Worker-Key gar nicht kennen.
 
-## Betroffene Funktionen (Recherche-Ergebnis)
+## Zielbild
 
-Per RLS/Query auf `auth.uid()` gebunden — für den frisch erzeugten Support-User nicht vorhanden:
+- **Tenant-Key**: Jeder Tenant bekommt einen eigenen, tenant-gebundenen API-Key. Nur damit kann er in seine eigene `tenant_id` pushen. Sichtbar & rotierbar im Tenant-UI (`/integrations → API`).
+- **Worker-Key**: Der bestehende `GATEWAY_API_KEY` bleibt bestehen und wird zum reinen Worker-/Bridge-Key. Er kann in **alle** Tenants pushen (weil Hetzner-Bridges für mehrere Tenants senden). Nur im Super-Admin sichtbar/rotierbar.
+- Migration ohne Downtime: Hetzner-Worker laufen unverändert weiter, Tenants sehen ab sofort ihren neuen eigenen Key.
 
-1. **Dashboard-Widgets** (`dashboard_widgets.user_id = auth.uid()`) — bereits im letzten Fix automatisch angelegt (Defaults + Custom).
-2. **Aktueller Energieverbrauch / Energy-Chart** (`energy_chart`-Widget) — Widget-Zeile jetzt zwar vorhanden, aber Chart bleibt leer, weil der Support-User keine Layout-/Sichtbarkeits-Historie hat und die Standardgröße evtl. auf `is_visible=false` fällt bzw. das Widget beim Erst-Sync ohne `widget_size` angelegt wird (Höhe = 0). Zusätzlich betroffen von Punkt 3.
-3. **PV-Actuals** (`pv_actual_hourly`) — RLS: `has_location_access(auth.uid(), location_id)`. Der Support-User hat **keine** `user_location_access`-Einträge, daher kein PV-Ist im Chart und in KPIs.
-4. **Board-Layout** (`board_user_layouts.user_id = auth.uid()`) — persönliche Board-Anordnung startet leer.
-5. **User-Preferences** (`user_preferences`) — Sprache/Farbschema/Theme werden pro Support-User neu angelegt, nicht die des Kunden-Users.
-6. **Copilot-Prompt-Presets** (`copilot_prompt_presets.user_id`) — persönliche Copilot-Vorlagen fehlen.
-7. **Getting-Started-Fortschritt** (`profiles.onboarding_*` / `getting_started_progress`, `user_id`-gebunden) — Wizard springt evtl. erneut auf.
-8. **Sales-Projects** (`sales_projects.user_id`) — persönliche Angebote/Drafts unsichtbar.
-9. **Charging-User-RFID-Tags & Community-Members** (`charging_user_rfid_tags.user_id`, `community_members.user_id`) — persönliche Ladekarten/Community-Mitgliedschaft fehlen.
-10. **Copilot-Analytics-Queries** — tenant-scoped, funktioniert, aber „meine Verlaufsanfragen" fehlen (per user_id).
-11. **Aufgaben/Benachrichtigungen mit `assignee_id`/`user_id`-Filter** (Tasks „meine offenen") — sichtbar sind nur Tenant-Aggregate, keine persönliche Zuweisung.
+## Änderungen
 
-## Umsetzung
+### 1. Datenbank (Migration)
 
-Zwei Ebenen:
+Neue Tabelle `tenant_api_keys`:
 
-**A) Automatischer Support-Bootstrap beim Anlegen des Support-Users** (in `support-session-impersonate`, einmalig pro Tenant):
+```text
+id uuid pk
+tenant_id uuid -> tenants(id) on delete cascade
+key_hash text (SHA-256, unique)
+key_prefix text (erste 8 Zeichen, für UI-Anzeige "aic_xxxxxxxx...")
+label text (default 'default')
+created_by uuid -> auth.users
+created_at, last_used_at, revoked_at timestamptz
+```
 
-- Nach `UPDATE user_roles SET role='admin'` zusätzlich für alle Locations des Tenants Einträge in `user_location_access` anlegen:
-  ```sql
-  INSERT INTO user_location_access(user_id, location_id)
-  SELECT :support_user_id, id FROM locations WHERE tenant_id = :tenant_id
-  ON CONFLICT DO NOTHING;
-  ```
-- Vor jedem Session-Start (auch für bereits existierende Support-User) die fehlenden Location-Zugriffe nachziehen — deckt später hinzugefügte Standorte ab.
+- RLS: Tenant-User (admin/user) sehen nur `tenant_id = tenant_id_of(auth.uid())`. Super-Admin sieht alles.
+- GRANT SELECT/INSERT/UPDATE/DELETE an `authenticated`, ALL an `service_role`.
+- Klartext-Key existiert nur einmal (bei Generierung), Rest ist Hash. Prefix wie `aic_live_` erleichtert Erkennung.
 
-**B) Frontend-seitiger Bootstrap für per-User-Widgets/Layouts** (bereits vorhanden für `dashboard_widgets`):
+### 2. Edge Function `gateway-ingest` (Auth-Logik anpassen)
 
-- In `useDashboardWidgets` beim Auto-Insert `widget_size: 'full'` explizit für **alle** Defaults setzen (nicht nur Custom), damit der Energy-Chart und andere Widgets sichtbare Höhe bekommen. Aktuell fehlt `widget_size` bei `defaultInserts` → Default-Wert der Tabelle kann `1/3` oder NULL sein → Chart rendert zu klein/leer.
-- Board-Layout (`board_user_layouts`) erhält beim ersten Aufruf ein leeres Default-Objekt (kein Fix nötig, funktioniert bereits so).
+Neue Reihenfolge beim Auth-Check:
 
-**C) Keine Änderung** an:
-- `user_preferences`, `copilot_prompt_presets`, `sales_projects`, `charging_user_rfid_tags`, `community_members`: Das sind bewusst persönliche Daten. Support soll dem User nicht dessen private Vorlagen/Ladekarten „übernehmen"; Anzeige der leeren Sicht ist korrekt.
-- Bestehende RLS-Policies.
+1. Bearer-Token extrahieren.
+2. Hash bilden → `tenant_api_keys` lookup.
+   - Treffer: `tenant_id` fixieren. Payload-Readings müssen exakt diese `tenant_id` haben, sonst 403.
+   - `last_used_at` aktualisieren (fire-and-forget).
+3. Kein Treffer → Vergleich mit `GATEWAY_API_KEY` (Worker-Key).
+   - Treffer: `tenant_id` aus Payload/Meter-Zuordnung übernehmen (aktuelles Verhalten, keine Einschränkung).
+4. Sonst 401.
+
+Damit läuft der Hetzner-Worker unverändert weiter, und Tenant-Keys sind sauber tenant-scoped.
+
+### 3. Neue Edge Functions
+
+- `tenant-api-key-create` — generiert neuen Key (`aic_live_<32 rand>`), speichert Hash, gibt Klartext **einmalig** zurück. Nur für Admin des Tenants oder Super-Admin.
+- `tenant-api-key-list` — listet Prefix + Label + Zeitstempel (nie Klartext).
+- `tenant-api-key-revoke` — setzt `revoked_at` (Lookup ignoriert revoked Keys).
+
+### 4. Tenant-UI (`src/components/settings/ApiSettings.tsx`)
+
+- „API-Key"-Feld ersetzen durch Liste eigener Keys (Prefix, Label, letzter Zugriff, Revoke-Button).
+- Button „Neuen Key erzeugen" → Dialog, der den Klartext einmalig anzeigt (Copy-to-Clipboard + Warnung „wird nicht erneut angezeigt").
+- Bestehendes `api-key-info` liefert nicht mehr den Worker-Key, sondern nur noch Endpoint + Tenant-ID.
+
+### 5. Super-Admin-UI (neue Sektion)
+
+Unter Super-Admin → Infrastruktur → „Bridge-Worker-Keys":
+
+- Anzeige des aktuellen `GATEWAY_API_KEY` (maskiert, Reveal via Button, Copy).
+- Button „Worker-Key rotieren" → ruft `secrets--update_secret` Flow (Hinweis: erfordert danach Redeploy des Hetzner-Workers, wird im UI vermerkt).
+- Nur `super_admin`.
+
+### 6. Dokumentation
+
+- `docs/loxone-ws-worker/README` (falls vorhanden) klarstellen: Worker verwendet `GATEWAY_API_KEY` (globaler Bridge-Key), nicht Tenant-Key.
+- Kurze Notiz für Tenants: „Für eigene Push-Integrationen (Schneider Panel etc.) hier einen Key generieren."
+- Memory-Update: `mem://technical/security/ingest-key-model` mit dem neuen Zwei-Key-Modell.
 
 ## Technische Details
 
-- Edge-Funktion `support-session-impersonate/index.ts` erweitern:
-  - Block „für existierenden Support-User": zusätzlich `INSERT ... ON CONFLICT DO NOTHING` in `user_location_access` für alle aktuellen Tenant-Locations.
-  - Block „neuer Support-User" analog nach dem Rollen-Update.
-- Migration nicht erforderlich (nur Datenoperationen zur Laufzeit über Service-Role).
-- `src/hooks/useDashboardWidgets.tsx`: in `defaultInserts` und in `initializeDefaultWidgets` explizit `widget_size: "full"` mit übergeben.
+- **Key-Format**: `aic_live_` + 32 Zeichen base32 (kollisionssicher, gut erkennbar in Logs).
+- **Hashing**: SHA-256 (schnell genug für jeden Ingest-Call, kein bcrypt nötig da hoher Entropie-Input).
+- **Rate-Limiting**: unverändert (existiert nicht explizit, kein Scope-Creep).
+- **Payload-Validierung**: bei Tenant-Key MUSS jedes `reading.tenant_id === key.tenant_id` sein, sonst 403 mit klarer Fehlermeldung. Bei Worker-Key wie bisher.
+- **Backward-Compat**: Der Worker-Key funktioniert unverändert. Bestehende Kundenintegrationen, die noch den alten globalen Key verwenden, würden brechen — daher: Tenants explizit auffordern, in der UI einen neuen Key zu erzeugen, bevor wir den globalen Key aus dem Tenant-UI entfernen. (Cut-over-Zeitfenster als Kommunikation, nicht als Code.)
 
-## Verifikation
+## Nicht Teil dieses Plans
 
-1. Neue Support-Sitzung starten → `user_location_access` enthält für den Support-User alle Locations des Tenants.
-2. Dashboard lädt: Energy-Chart, PV-Forecast-Actuals, Location-Map, Floor-Plan-Explorer zeigen Daten.
-3. Nach Anlegen einer neuen Location im Tenant → nächste Support-Sitzung enthält den Zugriff auf die neue Location.
+- Per-Worker-Keys (User hat sich für einen globalen Worker-Key entschieden).
+- Automatische Rotation des Worker-Keys (manuell via Super-Admin bleibt).
+- OCPP/Simulator-Key-Modell (separates Thema).

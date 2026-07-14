@@ -15,6 +15,7 @@ ABSOLUTES RATEVERBOT: Niemals raten. Erst verifizieren (Code lesen, DB/Storage p
 Bei „IO budget hoch": NIEMALS zuerst Instance-Upgrade vorschlagen — erst Playbook abarbeiten (slow_queries → pg_stat_statements → Vollscan-Quelle finden).
 
 ## Memories
+- [Ingest Key Model](mem://technical/security/ingest-key-model) — Zwei-Key-Modell: Tenant-Keys (aic_live_*) in tenant_api_keys vs globaler GATEWAY_API_KEY nur für Hetzner-Bridges
 - [Support-Session Bootstrap Plan](mem://features/administration/support-session-bootstrap-plan) — Plan to fix missing features/data in support sessions caused by per-user RLS rows
 - [IO-Budget Playbook](mem://technical/performance/io-budget-investigation-playbook) — Schritt-für-Schritt-Analyse hoher Disk-IO-Last, typische Ursachen (count exact, fehlende Indizes)
 - [IO-Budget Anzeige-Semantik](mem://technical/performance/io-budget-indicator-semantics) — Lovable-Anzeige ist letzter Alert-Snapshot (max. 48h gehalten), kein Live-Wert; echte IOPS nur via Supabase-Metrics

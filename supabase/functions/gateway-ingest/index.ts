@@ -72,7 +72,32 @@ async function validateApiKey(req: Request): Promise<Response | GatewayAuthConte
     return json({ error: "Unauthorized" }, 401);
   }
 
-  // 2) Global GATEWAY_API_KEY (legacy server-to-server)
+  // 2) Tenant-eigener API-Key (aic_live_...) → SHA-256 Lookup in tenant_api_keys
+  if (providedKey.startsWith("aic_live_")) {
+    try {
+      const hash = await sha256Hex(providedKey);
+      const supabase = getSupabase();
+      const { data: keyRow } = await supabase
+        .from("tenant_api_keys")
+        .select("id, tenant_id, revoked_at")
+        .eq("key_hash", hash)
+        .is("revoked_at", null)
+        .maybeSingle();
+      if (keyRow?.tenant_id) {
+        // fire-and-forget last_used_at
+        supabase.from("tenant_api_keys")
+          .update({ last_used_at: new Date().toISOString() })
+          .eq("id", keyRow.id)
+          .then(() => {});
+        return { tenantId: keyRow.tenant_id };
+      }
+    } catch (e) {
+      console.error("[gateway-ingest] tenant key lookup failed:", e);
+    }
+    return json({ error: "Unauthorized" }, 401);
+  }
+
+  // 3) Globaler GATEWAY_API_KEY (Hetzner-Worker / Bridge, server-to-server)
   if (providedKey === gatewayApiKey) {
     return { tenantId: null };
   }
@@ -600,6 +625,7 @@ async function handleCompactDay(req: Request): Promise<Response> {
 async function handlePostReadings(req: Request): Promise<Response> {
   const _auth = await validateApiKey(req);
   if (isAuthError(_auth)) return _auth;
+  const scopeTenantId = _auth.tenantId; // wenn gesetzt: Tenant-Key → strikt scoped
 
   let body: { readings?: PowerReading[] };
   try {
@@ -619,6 +645,11 @@ async function handlePostReadings(req: Request): Promise<Response> {
   for (const r of readings) {
     if (!r.meter_id || !r.tenant_id || r.power_value === undefined || !r.energy_type) {
       skipped.push(`${r.meter_id ?? "unknown"}: missing required fields`);
+      continue;
+    }
+    // Tenant-scope enforcement: bei Tenant-Key MUSS jede reading.tenant_id passen
+    if (scopeTenantId && r.tenant_id !== scopeTenantId) {
+      skipped.push(`${r.meter_id}: tenant_id mismatch (key scoped to ${scopeTenantId})`);
       continue;
     }
     const powerValue = Number(r.power_value);
