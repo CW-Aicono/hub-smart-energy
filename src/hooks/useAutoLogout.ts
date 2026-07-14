@@ -45,16 +45,22 @@ export function useAutoLogout() {
       return Date.now() - last > timeoutMs;
     };
 
-    // Direkt nach Mount prüfen: greift auch nach Browser-Neustart.
-    if (isExpired()) {
+    const userKey = `${STORAGE_KEY}:user`;
+    const storedUser = localStorage.getItem(userKey);
+    if (storedUser !== user.id) {
+      // Anderer/erster User in diesem Browser -> Timer neu starten,
+      // alten Wert nicht als 'abgelaufen' werten.
+      localStorage.setItem(userKey, user.id);
+      localStorage.setItem(STORAGE_KEY, String(Date.now()));
+    } else if (isExpired()) {
+      // Gleicher User, Browser war zu lange geschlossen -> Logout.
       void doLogout();
       return;
-    }
-
-    // Initialisieren, falls noch nichts drin.
-    if (!localStorage.getItem(STORAGE_KEY)) {
+    } else if (!localStorage.getItem(STORAGE_KEY)) {
       localStorage.setItem(STORAGE_KEY, String(Date.now()));
     }
+
+
 
     let lastWrite = 0;
     const bump = () => {
