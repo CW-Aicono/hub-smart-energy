@@ -1,10 +1,14 @@
 ---
 name: hetzner-supabase-manual-sync
-description: Auf der separaten Hetzner-Supabase (OCPP/Wallbox-Stack hinter cp.aicono.org) werden NUR neue Edge Functions, pg_cron-Jobs und Postgres-Trigger/-Funktionen NICHT automatisch synchronisiert. DB-Migrationen und Frontend laufen über bestehende Pipelines des Hetzner-Programmierers und müssen NICHT extra gemeldet werden.
+description: Die LIVE-Umgebung von AICONO läuft vollständig auf Hetzner inklusive eigener Supabase-Datenbank. Lovable Cloud/Preview ist nicht die Live-Datenquelle. Für Hetzner gelten separate Deploy-/Sync-Regeln.
 type: preference
 ---
 
 ## Regel
+
+**Harte Grundregel:** Die AICONO-**Live-Umgebung** läuft komplett auf **Hetzner**, inklusive **eigener Supabase-Datenbank**. Lovable Cloud/Preview darf bei Live-Problemen nicht als Quelle der Wahrheit behandelt oder mit Hetzner-Live gleichgesetzt werden.
+
+Bei Live-Fehlern immer zuerst klären/prüfen, ob der betroffene Wert aus der Hetzner-Umgebung kommt. Lovable-Backend-Daten/Logs sind nur für Preview/Cloud relevant, außer es geht ausdrücklich um die Lovable-Umgebung.
 
 Beim Hetzner-Programmierer einen Hinweis nur dann ausgeben, wenn auf der Hetzner-Supabase **eine der folgenden drei Sachen neu/geändert** ist:
 
