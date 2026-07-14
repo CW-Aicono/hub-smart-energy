@@ -741,8 +741,43 @@ const LiveValues = () => {
                 const isFlowType = meter.energy_type === "wasser" || meter.energy_type === "gas";
                 const soc = socByMeterId.get(meter.id);
 
+                const openDetail = () => {
+                  const role: EnergyFlowNodeRole = soc ? "battery" : "consumer";
+                  const color = soc
+                    ? "hsl(152 55% 42%)"
+                    : meter.energy_type === "gas"
+                      ? "hsl(24 90% 55%)"
+                      : meter.energy_type === "waerme"
+                        ? "hsl(0 72% 55%)"
+                        : meter.energy_type === "wasser"
+                          ? "hsl(200 85% 50%)"
+                          : "hsl(217 91% 60%)";
+                  setDetailNode({
+                    id: meter.id,
+                    meter_id: meter.id,
+                    label: meter.name,
+                    role,
+                    color,
+                    x: 0,
+                    y: 0,
+                  });
+                };
+
                 return (
-                  <Card key={meter.id} className="relative overflow-hidden">
+                  <Card
+                    key={meter.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={openDetail}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openDetail();
+                      }
+                    }}
+                    className="relative overflow-hidden cursor-pointer transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2 min-w-0">
