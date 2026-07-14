@@ -158,35 +158,7 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
   };
 
 
-  const toggleConnection = (nodeId: string) => {
-    if (!connectFrom) {
-      setConnectFrom(nodeId);
-      return;
-    }
-    if (connectFrom === nodeId) {
-      setConnectFrom(null);
-      return;
-    }
-    // Check if connection exists
-    const exists = connections.some(
-      (c) =>
-        (c.from === connectFrom && c.to === nodeId) ||
-        (c.from === nodeId && c.to === connectFrom),
-    );
-    if (exists) {
-      onChange(
-        nodes,
-        connections.filter(
-          (c) =>
-            !(c.from === connectFrom && c.to === nodeId) &&
-            !(c.from === nodeId && c.to === connectFrom),
-        ),
-      );
-    } else {
-      onChange(nodes, [...connections, { from: connectFrom, to: nodeId }]);
-    }
-    setConnectFrom(null);
-  };
+
 
   // Drag handling on the visual canvas
   const handlePointerDown = useCallback(
