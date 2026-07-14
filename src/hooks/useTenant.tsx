@@ -38,6 +38,8 @@ export interface Tenant {
   report_settings: TenantReportSettings;
   week_start_day: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   show_manual_meters: boolean;
+  auto_logout_enabled: boolean;
+  auto_logout_minutes: 10 | 20 | 30 | 60 | 120;
   created_at: string;
   updated_at: string;
 }
