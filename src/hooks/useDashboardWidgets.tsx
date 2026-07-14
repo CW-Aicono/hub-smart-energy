@@ -107,8 +107,10 @@ export function useDashboardWidgets() {
           widget_type: w.widget_type,
           position: maxPosition + idx + 1,
           is_visible: w.is_visible,
+          widget_size: "full",
           config: {} as Json,
         }));
+
         const customInserts = missingCustom.map((d, idx) => ({
           user_id: user.id,
           widget_type: `custom_${d.id}`,
