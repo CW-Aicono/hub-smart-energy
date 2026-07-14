@@ -428,6 +428,13 @@ export default function EnergyFlowMonitor({
 
       const addGatewayDeviceRows = (rows: any[] | null) => {
         for (const r of rows ?? []) {
+          if (
+            selectedIntegrationIds.size > 0 &&
+            r.location_integration_id &&
+            !selectedIntegrationIds.has(r.location_integration_id)
+          ) {
+            continue;
+          }
           const integration = r.location_integration_id ? integrationsById.get(r.location_integration_id) : null;
           const effectiveStatus = normalizeGatewayDeviceStatus(r);
           byId.set(r.id, {
@@ -449,11 +456,15 @@ export default function EnergyFlowMonitor({
         addGatewayDeviceRows(data as any[] | null);
       }
 
-      if (integrationIds.length > 0) {
+      const gatewayDeviceIntegrationIds = selectedIntegrationIds.size > 0
+        ? Array.from(selectedIntegrationIds)
+        : integrationIds;
+
+      if (gatewayDeviceIntegrationIds.length > 0) {
         const { data } = await supabase
           .from("gateway_devices")
           .select("id, device_name, device_type, local_ip, mac_address, ha_version, addon_version, latest_available_version, status, last_heartbeat_at, offline_buffer_count, location_integration_id")
-          .in("location_integration_id", integrationIds);
+          .in("location_integration_id", gatewayDeviceIntegrationIds);
         addGatewayDeviceRows(data as any[] | null);
       }
 
