@@ -635,7 +635,8 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
           ))}
         </div>
       </div>
-
+      </>
+      )}
     </div>
   );
 }
