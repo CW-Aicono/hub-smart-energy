@@ -385,27 +385,12 @@ export function EnergyFlowDesigner({ nodes, connections, meters, onChange }: Pro
                   onChange={(e) => updateNode(node.id, { color: e.target.value })}
                   className="h-8 w-8 p-0 border-0 cursor-pointer shrink-0"
                 />
-                <Button
-                  type="button"
-                  variant={connectFrom === node.id ? "default" : "outline"}
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => toggleConnection(node.id)}
-                  title="Verbindung erstellen"
-                >
-                  <Link2 className="h-3.5 w-3.5" />
-                </Button>
                 <NodeDeletePopover
                   node={node}
-                  nodes={nodes}
-                  connections={connections}
                   onRemoveNode={() => removeNode(node.id)}
-                  onRemoveConnection={(idx) => {
-                    const updated = connections.filter((_, i) => i !== idx);
-                    onChange(nodes, updated);
-                  }}
                 />
               </div>
+
 
               <div className="grid grid-cols-2 gap-2">
                 <Select
