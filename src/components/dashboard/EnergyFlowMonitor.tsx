@@ -514,7 +514,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
   // nicht mehr live im Flow-Widget.
 
 
-  const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null;
+  const selectedNode = selectedNodeId ? layoutUserNodes.find((n) => n.id === selectedNodeId) ?? null : null;
 
   if (!nodes.length) {
     return (
