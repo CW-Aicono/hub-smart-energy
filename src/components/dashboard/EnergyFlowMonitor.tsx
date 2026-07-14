@@ -661,8 +661,26 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           }
         `}</style>
 
+        {/* Zentraler Knoten – implizit, ohne Icon/Label/Werte, nicht klickbar */}
+        {(() => {
+          const { x: ccx, y: ccy } = nodePos(centerNode);
+          return (
+            <circle
+              cx={ccx}
+              cy={ccy}
+              r={centerRadius}
+              fill="hsl(var(--muted))"
+              fillOpacity={0.35}
+              stroke="hsl(var(--muted-foreground))"
+              strokeOpacity={0.5}
+              strokeWidth={1.5}
+              className="pointer-events-none"
+            />
+          );
+        })()}
+
         {/* Nodes */}
-        {nodes.map((node) => {
+        {layoutUserNodes.map((node) => {
           const { x: cx, y: cy } = nodePos(node);
           const liveW = getLiveWatts(node.meter_id);
           const periodSum = periodSums[node.meter_id];
@@ -673,12 +691,12 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           // Label side: default "bottom"; flip to "top" if any adjacent connection
           // leaves this node downward (angle in [45°, 135°]) — avoids overlap with flow.
           let labelSide: "top" | "bottom" = "bottom";
-          for (const conn of connections) {
+          for (const conn of derivedConnections) {
             let neighborId: string | null = null;
             if (conn.from === node.id) neighborId = conn.to;
             else if (conn.to === node.id) neighborId = conn.from;
             if (!neighborId) continue;
-            const neighbor = nodes.find((n) => n.id === neighborId);
+            const neighbor = lookupNodes.find((n) => n.id === neighborId);
             if (!neighbor) continue;
             const np = nodePos(neighbor);
             const angleDeg = (Math.atan2(np.y - cy, np.x - cx) * 180) / Math.PI;
@@ -689,6 +707,7 @@ export default function EnergyFlowMonitor({ nodes, connections }: EnergyFlowMoni
           }
           const labelY = labelSide === "bottom" ? cy + nodeRadius + 14 : cy - nodeRadius - 22;
           const sumY   = labelSide === "bottom" ? cy + nodeRadius + 28 : cy - nodeRadius - 8;
+
 
           return (
             <g
