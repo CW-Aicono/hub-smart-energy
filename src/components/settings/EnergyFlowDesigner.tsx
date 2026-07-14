@@ -197,43 +197,56 @@ export function EnergyFlowDesigner({ nodes, connections, meters, locationId, gat
 
   const { locations } = useLocations();
 
-  // Load gateways for the currently selected location
+  // Load gateways (= data-source integrations) for the currently selected location.
+  // We treat every enabled location_integration as a "Gateway", because non-HA
+  // integrations (Loxone Miniserver, Shelly Cloud, Schneider, …) do not create
+  // rows in gateway_devices but still deliver meter data. Status is enriched
+  // from gateway_devices when a matching row exists.
   const gatewayQuery = useQuery({
     queryKey: ["energyflow-gateways", tenant?.id, locationId],
     enabled: !!tenant?.id && !!locationId,
     staleTime: 60_000,
     queryFn: async () => {
-      // gateway_devices are linked via location_integrations.location_id
       const { data: lis, error: liErr } = await supabase
         .from("location_integrations")
-        .select("id")
-        .eq("location_id", locationId);
+        .select("id, integration_id, is_enabled, config, integrations(name, type)")
+        .eq("location_id", locationId)
+        .eq("is_enabled", true);
       if (liErr) throw liErr;
-      const liIds = (lis || []).map((r) => r.id);
-      if (liIds.length === 0) return { devices: [] as any[], integrationIds: [] as string[] };
-      const { data: devs, error: devErr } = await supabase
+      const liIds = (lis || []).map((r: any) => r.id);
+      if (liIds.length === 0) return { devices: [] as any[] };
+
+      const { data: devs } = await supabase
         .from("gateway_devices")
         .select("id, device_name, device_type, status, location_integration_id")
         .eq("tenant_id", tenant!.id)
-        .in("location_integration_id", liIds)
-        .order("device_name");
-      if (devErr) throw devErr;
-      return { devices: devs || [], integrationIds: liIds };
+        .in("location_integration_id", liIds);
+
+      const byLi = new Map<string, any>();
+      (devs || []).forEach((d: any) => byLi.set(d.location_integration_id, d));
+
+      const devices = (lis || []).map((li: any) => {
+        const gw = byLi.get(li.id);
+        const integrationName = li.integrations?.name || li.integrations?.type || "Integration";
+        const configName = (li.config as any)?.device_name || (li.config as any)?.name;
+        return {
+          id: li.id, // location_integration.id — used as scope key
+          device_name: gw?.device_name || configName || integrationName,
+          device_type: gw?.device_type || integrationName,
+          status: gw?.status || "online",
+        };
+      });
+      return { devices };
     },
   });
 
   const gateways = gatewayQuery.data?.devices ?? [];
 
-  // Integration IDs that belong to the *selected* gateways
-  const selectedGatewayIntegrationIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const g of gateways) {
-      if (gatewayDeviceIds.includes(g.id) && g.location_integration_id) {
-        set.add(g.location_integration_id);
-      }
-    }
-    return set;
-  }, [gateways, gatewayDeviceIds]);
+  // gateway.id is already the location_integration.id, so this is a direct set.
+  const selectedGatewayIntegrationIds = useMemo(
+    () => new Set(gatewayDeviceIds),
+    [gatewayDeviceIds],
+  );
 
   // Filter state for the meter picker inside each node card
   const [filterCategory, setFilterCategory] = useState<EnergyFlowNodeRole | "__all__">("__all__");
