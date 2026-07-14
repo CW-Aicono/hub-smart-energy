@@ -54,7 +54,13 @@ interface Props {
   nodes: EnergyFlowNode[];
   connections: EnergyFlowConnection[];
   meters: any[];
-  onChange: (nodes: EnergyFlowNode[], connections: EnergyFlowConnection[]) => void;
+  locationId: string;
+  gatewayDeviceIds: string[];
+  onChange: (
+    nodes: EnergyFlowNode[],
+    connections: EnergyFlowConnection[],
+    scope: { locationId: string; gatewayDeviceIds: string[] },
+  ) => void;
 }
 
 function NodeDeletePopover({
