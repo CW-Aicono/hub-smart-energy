@@ -17,6 +17,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatEnergy, formatGasDual } from "@/lib/formatEnergy";
 import { cn } from "@/lib/utils";
 import { probeMark } from "@/lib/perfProbe"; // PERF-PROBE
+import { MeterDetailDialog } from "@/components/dashboard/EnergyFlowMonitor";
+import type { EnergyFlowNode, EnergyFlowNodeRole } from "@/hooks/useCustomWidgetDefinitions";
+
 
 interface MeterLiveValue {
   meterId: string;
