@@ -177,6 +177,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         .filter(m => !locationId || m.location_id === locationId)
         .map(m => m.id);
 
+      console.info("[energy-chart:effect-fired]", { metersLen: meters.length, mainMeterIdsLen: mainMeterIds.length });
+
       if (mainMeterIds.length === 0) {
         if (!stale) { setPowerReadings([]); setPowerLoading(false); }
         return;
