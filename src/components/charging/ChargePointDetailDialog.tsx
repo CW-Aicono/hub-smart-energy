@@ -200,10 +200,13 @@ export default function ChargePointDetailDialog({
                 </Badge>
               )}
             </div>
-            <Badge variant={cfg.variant} className="ml-2">
-              <StatusIcon className="h-3 w-3 mr-1" />
-              {cfg.label}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <DocumentBadge scope="charge_point" scopeId={cp.id} label={cp.name} />
+              <Badge variant={cfg.variant} className="ml-2">
+                <StatusIcon className="h-3 w-3 mr-1" />
+                {cfg.label}
+              </Badge>
+            </div>
           </div>
         </DialogHeader>
 
