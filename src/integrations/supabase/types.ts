@@ -3870,6 +3870,302 @@ export type Database = {
         }
         Relationships: []
       }
+      document_access_rules: {
+        Row: {
+          can_delete: boolean
+          can_download: boolean
+          can_edit: boolean
+          can_view: boolean
+          category_id: string | null
+          created_at: string
+          custom_role_id: string | null
+          document_id: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"] | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          can_delete?: boolean
+          can_download?: boolean
+          can_edit?: boolean
+          can_view?: boolean
+          category_id?: string | null
+          created_at?: string
+          custom_role_id?: string | null
+          document_id?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"] | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          can_delete?: boolean
+          can_download?: boolean
+          can_edit?: boolean
+          can_view?: boolean
+          category_id?: string | null
+          created_at?: string
+          custom_role_id?: string | null
+          document_id?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"] | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_access_rules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "document_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_access_rules_custom_role_id_fkey"
+            columns: ["custom_role_id"]
+            isOneToOne: false
+            referencedRelation: "custom_roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_access_rules_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_access_rules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_categories: {
+        Row: {
+          color: string | null
+          created_at: string
+          icon: string | null
+          id: string
+          is_system: boolean
+          name: string
+          slug: string
+          sort_order: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_system?: boolean
+          name: string
+          slug: string
+          sort_order?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_system?: boolean
+          name?: string
+          slug?: string
+          sort_order?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_categories_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_links: {
+        Row: {
+          created_at: string
+          document_id: string
+          id: string
+          location_id: string | null
+          scope: Database["public"]["Enums"]["document_scope"]
+          scope_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          id?: string
+          location_id?: string | null
+          scope: Database["public"]["Enums"]["document_scope"]
+          scope_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          id?: string
+          location_id?: string | null
+          scope?: Database["public"]["Enums"]["document_scope"]
+          scope_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_links_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_links_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_versions: {
+        Row: {
+          created_at: string
+          document_id: string
+          file_hash: string | null
+          file_size_bytes: number | null
+          filename: string
+          id: string
+          mime_type: string | null
+          notes: string | null
+          storage_path: string
+          uploaded_by: string | null
+          version_no: number
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          file_hash?: string | null
+          file_size_bytes?: number | null
+          filename: string
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          storage_path: string
+          uploaded_by?: string | null
+          version_no: number
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          file_hash?: string | null
+          file_size_bytes?: number | null
+          filename?: string
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          storage_path?: string
+          uploaded_by?: string | null
+          version_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_versions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          category_id: string | null
+          created_at: string
+          created_by: string | null
+          current_version_id: string | null
+          description: string | null
+          id: string
+          latest_version_no: number
+          tags: string[]
+          tenant_id: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          valid_from: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_version_id?: string | null
+          description?: string | null
+          id?: string
+          latest_version_no?: number
+          tags?: string[]
+          tenant_id: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_version_id?: string | null
+          description?: string | null
+          id?: string
+          latest_version_no?: number
+          tags?: string[]
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "document_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_current_version_fk"
+            columns: ["current_version_id"]
+            isOneToOne: false
+            referencedRelation: "document_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_send_audit: {
         Row: {
           created_at: string
@@ -12712,6 +13008,10 @@ export type Database = {
         Returns: Database["public"]["Enums"]["app_role"]
       }
       bridge_event_log_cleanup: { Args: never; Returns: undefined }
+      can_access_document: {
+        Args: { _action?: string; _doc_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_access_sales_project: {
         Args: { _project_id: string }
         Returns: boolean
@@ -13127,6 +13427,14 @@ export type Database = {
         | "heat_pump"
         | "battery"
         | "generic_actuator"
+      document_scope:
+        | "tenant"
+        | "location"
+        | "meter"
+        | "charge_point"
+        | "gateway_device"
+        | "energy_storage"
+        | "energy_supplier_invoice"
       energy_type: "strom" | "gas" | "waerme" | "wasser"
       location_type: "einzelgebaeude" | "gebaeudekomplex" | "sonstiges"
       location_usage_type:
@@ -13307,6 +13615,15 @@ export const Constants = {
         "heat_pump",
         "battery",
         "generic_actuator",
+      ],
+      document_scope: [
+        "tenant",
+        "location",
+        "meter",
+        "charge_point",
+        "gateway_device",
+        "energy_storage",
+        "energy_supplier_invoice",
       ],
       energy_type: ["strom", "gas", "waerme", "wasser"],
       location_type: ["einzelgebaeude", "gebaeudekomplex", "sonstiges"],

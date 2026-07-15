@@ -58,6 +58,7 @@ const SetPassword = lazy(() => import("./pages/SetPassword"));
 const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 const Help = lazy(() => import("./pages/Help"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Documents = lazy(() => import("./pages/Documents"));
 const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
 const SuperAdminTenants = lazy(() => import("./pages/SuperAdminTenants"));
 const SuperAdminPartners = lazy(() => import("./pages/SuperAdminPartners"));
@@ -228,6 +229,7 @@ const App = () => (
                       <Route path="/meters" element={<M><MetersOverview /></M>} />
                       <Route path="/live-values" element={<M><LiveValues /></M>} />
                       <Route path="/integrations" element={<M><Integrations /></M>} />
+                      <Route path="/documents" element={<M><Documents /></M>} />
                       <Route path="/profile" element={<Profile />} />
                       <Route path="/set-password" element={<SetPassword />} />
                       <Route path="/accept-invite" element={<AcceptInvite />} />

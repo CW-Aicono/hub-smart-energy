@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Wifi, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Gauge, Wrench } from "lucide-react";
+import { DocumentBadge } from "@/components/documents/DocumentBadge";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
@@ -200,10 +201,13 @@ export default function ChargePointDetailDialog({
                 </Badge>
               )}
             </div>
-            <Badge variant={cfg.variant} className="ml-2">
-              <StatusIcon className="h-3 w-3 mr-1" />
-              {cfg.label}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <DocumentBadge scope="charge_point" scopeId={cp.id} label={cp.name} />
+              <Badge variant={cfg.variant} className="ml-2">
+                <StatusIcon className="h-3 w-3 mr-1" />
+                {cfg.label}
+              </Badge>
+            </div>
           </div>
         </DialogHeader>
 
