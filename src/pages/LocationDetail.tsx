@@ -117,6 +117,7 @@ const LocationDetail = () => {
                 </p>
               </div>
             </div>
+            <DocumentBadge scope="location" scopeId={location.id} label={location.name} variant="inline" />
           </div>
         </header>
 
