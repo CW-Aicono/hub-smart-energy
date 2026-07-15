@@ -126,11 +126,11 @@ export function DocumentUploadDialog({ open, onOpenChange, fixedScope }: Props) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6">
           <DialogTitle>Dokument hochladen</DialogTitle>
         </DialogHeader>
-        <ScrollArea className="flex-1 pr-3">
+        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
           <div className="space-y-4">
             <div>
               <Label>Datei (max. 25 MB)</Label>
@@ -178,10 +178,21 @@ export function DocumentUploadDialog({ open, onOpenChange, fixedScope }: Props) 
               </div>
             )}
           </div>
-        </ScrollArea>
-        <DialogFooter>
+        </div>
+        <DialogFooter className="px-6 pb-6 pt-2 border-t">
+          <div className="flex-1 text-xs text-muted-foreground">
+            {!fixedScope && !tenantWide && selLoc.size + selMeter.size + selCp.size + selGw.size + selSt.size === 0 && (
+              <span className="text-destructive">Bitte mindestens eine Verknüpfung auswählen (Tenant-weit oder Standort/Gerät).</span>
+            )}
+          </div>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
-          <Button onClick={handleSubmit} disabled={!file || !title.trim() || upload.isPending}>
+          <Button
+            onClick={handleSubmit}
+            disabled={
+              !file || !title.trim() || upload.isPending ||
+              (!fixedScope && !tenantWide && selLoc.size + selMeter.size + selCp.size + selGw.size + selSt.size === 0)
+            }
+          >
             {upload.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
             Hochladen
           </Button>
