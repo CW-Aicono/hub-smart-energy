@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
 
   const bucket = body.bucket || "";
   const path = body.path || "";
-  if (!path || !["tenant-assets", "meter-photos"].includes(bucket)) {
+  if (!path || !["tenant-assets", "meter-photos", "tenant-documents"].includes(bucket)) {
     return json({ error: "Ungültiger Bildpfad" }, 400, corsHeaders);
   }
 
@@ -58,6 +58,30 @@ Deno.serve(async (req) => {
       .maybeSingle();
     allowed = !!data;
   }
+
+  if (!allowed && bucket === "tenant-documents") {
+    // Path: <tenant_id>/<document_id>/<version_no>_<file>
+    const parts = path.split("/");
+    const tenantId = parts[0];
+    const documentId = parts[1];
+    if (tenantId && documentId) {
+      const { data: profile } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (profile) {
+        const { data: canDl } = await admin.rpc("can_access_document", {
+          _user_id: userId,
+          _doc_id: documentId,
+          _action: "download",
+        });
+        allowed = canDl === true;
+      }
+    }
+  }
+
 
   if (!allowed && bucket === "meter-photos") {
     const chargePointId = getChargePointId(path);
