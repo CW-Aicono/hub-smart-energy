@@ -13305,6 +13305,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_document_category_in_tenant: {
+        Args: { _category_id: string; _tenant_id: string }
+        Returns: boolean
+      }
       is_own_profile: { Args: { profile_user_id: string }; Returns: boolean }
       is_partner_admin: { Args: { _user_id: string }; Returns: boolean }
       is_partner_member: {
