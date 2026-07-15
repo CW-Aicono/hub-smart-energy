@@ -198,10 +198,13 @@ export function useUploadDocument() {
       if (!ALLOWED_MIME.has(mime)) throw new Error(`Dateityp nicht erlaubt: ${mime}`);
       if (!params.links.length) throw new Error("Bitte mindestens eine Verknüpfung wählen");
 
-      // 1. Insert document row
-      const { data: doc, error: docErr } = await supabase
+      // 1. Insert document row. Generate the ID client-side so the upload flow
+      // does not depend on an immediate SELECT representation of the new row.
+      const docId = crypto.randomUUID();
+      const { error: docErr } = await supabase
         .from("documents")
         .insert({
+          id: docId,
           tenant_id: tenant.id,
           category_id: params.categoryId ?? null,
           title: params.title,
@@ -211,14 +214,12 @@ export function useUploadDocument() {
           valid_until: params.validUntil ?? null,
           created_by: user.id,
           updated_by: user.id,
-        })
-        .select("id")
-        .single();
+        });
       if (docErr) throw docErr;
 
       const versionNo = 1;
       const safeName = params.file.name.replace(/[^\w.\-]+/g, "_");
-      const path = `${tenant.id}/${doc.id}/${versionNo}_${safeName}`;
+      const path = `${tenant.id}/${docId}/${versionNo}_${safeName}`;
 
       // 2. Upload
       const { error: upErr } = await supabase.storage.from("tenant-documents").upload(path, params.file, {
@@ -226,7 +227,7 @@ export function useUploadDocument() {
         upsert: false,
       });
       if (upErr) {
-        await supabase.from("documents").delete().eq("id", doc.id);
+        await supabase.from("documents").delete().eq("id", docId);
         throw upErr;
       }
 
@@ -234,7 +235,7 @@ export function useUploadDocument() {
 
       // 3. Insert version
       const { error: verErr } = await supabase.from("document_versions").insert({
-        document_id: doc.id,
+        document_id: docId,
         version_no: versionNo,
         filename: params.file.name,
         storage_path: path,
@@ -247,7 +248,7 @@ export function useUploadDocument() {
 
       // 4. Insert links
       const linkRows = params.links.map((l) => ({
-        document_id: doc.id,
+        document_id: docId,
         tenant_id: tenant.id,
         scope: l.scope,
         scope_id: l.scope === "tenant" ? null : l.scope_id,
@@ -256,7 +257,7 @@ export function useUploadDocument() {
       const { error: linkErr } = await supabase.from("document_links").insert(linkRows);
       if (linkErr) throw linkErr;
 
-      return doc.id;
+      return docId;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["documents"] });
