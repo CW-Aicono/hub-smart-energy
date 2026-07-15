@@ -23,7 +23,9 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EditLocationDialog } from "@/components/locations/EditLocationDialog";
-import { ArrowLeft, Building2, MapPin, Mail, Phone, User, Star, Layers, ChevronDown, ChevronRight, Cpu, Pencil, Calendar, Ruler, Flame } from "lucide-react";
+import { ArrowLeft, Building2, MapPin, Mail, Phone, User, Star, Layers, ChevronDown, ChevronRight, Cpu, Pencil, Calendar, Ruler, Flame, FileText } from "lucide-react";
+import { DocumentBadge } from "@/components/documents/DocumentBadge";
+import { DocumentsPanel } from "@/components/documents/DocumentsPanel";
 
 const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetchFloors, t }: { locationId: string; isAdmin: boolean; floors: any[]; floorsLoading: boolean; refetchFloors: () => void; t: (key: any) => string }) => {
   const [isOpen, setIsOpen] = useState(false);
