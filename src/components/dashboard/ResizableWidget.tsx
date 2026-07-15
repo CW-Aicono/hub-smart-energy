@@ -68,6 +68,29 @@ export default function ResizableWidget({
         Math.max(minHeight, dragState.current.startHeight + delta),
       );
       setLocalHeight(next);
+
+      // Auto-scroll when dragging near viewport edges so users can keep
+      // enlarging past the current screen height.
+      const EDGE = 60;
+      const vh = window.innerHeight;
+      let scrollBy = 0;
+      if (e.clientY > vh - EDGE) scrollBy = Math.min(24, e.clientY - (vh - EDGE));
+      else if (e.clientY < EDGE) scrollBy = -Math.min(24, EDGE - e.clientY);
+      if (scrollBy !== 0) {
+        let el: HTMLElement | null = wrapperRef.current?.parentElement ?? null;
+        let scrolled = false;
+        while (el) {
+          const s = getComputedStyle(el);
+          if (/(auto|scroll)/.test(s.overflowY) && el.scrollHeight > el.clientHeight) {
+            const before = el.scrollTop;
+            el.scrollTop = before + scrollBy;
+            if (el.scrollTop !== before) { scrolled = true; break; }
+          }
+          el = el.parentElement;
+        }
+        if (!scrolled) window.scrollBy({ top: scrollBy });
+        dragState.current.startY -= scrollBy;
+      }
     },
     [minHeight, maxHeight],
   );
