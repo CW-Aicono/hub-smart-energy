@@ -1,7 +1,8 @@
 /**
- * api-key-info – Endpoint- und Tenant-Info für authentifizierte Admins.
- * Der frühere globale GATEWAY_API_KEY wird NICHT mehr an Tenants ausgeliefert.
- * Tenants verwalten stattdessen ihre eigenen Keys via tenant-api-key-* Funktionen.
+ * worker-key-info — Zeigt Super-Admins den aktuellen GATEWAY_API_KEY (Bridge-Worker-Key)
+ * der Cloud-Instanz im Klartext. Die self-hosted Supabase-Instanz auf Hetzner ist eine
+ * separate Deployment-Umgebung mit eigener Env — dieser Endpoint spiegelt NUR den Wert
+ * der Cloud-Umgebung, in der die Function läuft.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
@@ -12,7 +13,8 @@ Deno.serve(async (req) => {
 
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), {
-      status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   const authHeader = req.headers.get("Authorization");
@@ -33,9 +35,15 @@ Deno.serve(async (req) => {
   );
   const { data: roleData } = await svc
     .from("user_roles").select("role").eq("user_id", user.id)
-    .in("role", ["admin", "super_admin"]).maybeSingle();
-  if (!roleData) return json({ error: "Forbidden – admin role required" }, 403);
+    .eq("role", "super_admin").maybeSingle();
+  if (!roleData) return json({ error: "Forbidden – super_admin required" }, 403);
 
-  const endpoint = `${Deno.env.get("SUPABASE_URL")}/functions/v1/gateway-ingest`;
-  return json({ success: true, endpoint });
+  const key = Deno.env.get("GATEWAY_API_KEY") ?? "";
+  return json({
+    success: true,
+    is_set: key.length > 0,
+    key: key,
+    length: key.length,
+    environment: "cloud",
+  });
 });

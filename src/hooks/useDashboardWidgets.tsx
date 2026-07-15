@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { useTenant } from "./useTenant";
 import { useDemoMode } from "@/contexts/DemoMode";
 import type { Database, Json } from "@/integrations/supabase/types";
 
@@ -49,6 +50,7 @@ const DEFAULT_WIDGETS = [
 
 export function useDashboardWidgets() {
   const { user } = useAuth();
+  const { tenant } = useTenant();
   const isDemo = useDemoMode();
   const [widgets, setWidgets] = useState<DashboardWidget[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,6 +73,19 @@ export function useDashboardWidgets() {
     if (!user) return;
 
     setLoading(true);
+
+    // Fetch tenant's custom widget definitions so we can auto-provision
+    // dashboard_widgets rows for users who don't yet have them (e.g. remote
+    // support users impersonating a tenant, freshly-invited team members).
+    let customDefs: { id: string }[] = [];
+    if (tenant?.id) {
+      const { data: defs } = await supabase
+        .from("custom_widget_definitions")
+        .select("id")
+        .eq("tenant_id", tenant.id);
+      customDefs = defs ?? [];
+    }
+
     const { data, error } = await supabase
       .from("dashboard_widgets")
       .select("*")
@@ -82,23 +97,34 @@ export function useDashboardWidgets() {
       setWidgets([]);
     } else if (data && data.length > 0) {
       const existingTypes = new Set(data.map(w => w.widget_type));
-      const missingWidgets = DEFAULT_WIDGETS.filter(dw => !existingTypes.has(dw.widget_type));
-      
-      if (missingWidgets.length > 0) {
+      const missingDefaults = DEFAULT_WIDGETS.filter(dw => !existingTypes.has(dw.widget_type));
+      const missingCustom = customDefs.filter(d => !existingTypes.has(`custom_${d.id}`));
+
+      if (missingDefaults.length > 0 || missingCustom.length > 0) {
         const maxPosition = Math.max(...data.map(w => w.position), 0);
-        const widgetsToInsert = missingWidgets.map((w, idx) => ({
+        const defaultInserts = missingDefaults.map((w, idx) => ({
           user_id: user.id,
           widget_type: w.widget_type,
           position: maxPosition + idx + 1,
           is_visible: w.is_visible,
+          widget_size: "full",
           config: {} as Json,
         }));
-        
+
+        const customInserts = missingCustom.map((d, idx) => ({
+          user_id: user.id,
+          widget_type: `custom_${d.id}`,
+          position: maxPosition + missingDefaults.length + idx + 1,
+          is_visible: true,
+          widget_size: "full",
+          config: {} as Json,
+        }));
+
         const { data: newWidgets } = await supabase
           .from("dashboard_widgets")
-          .insert(widgetsToInsert)
+          .insert([...defaultInserts, ...customInserts])
           .select();
-        
+
         if (newWidgets) {
           setWidgets([...data, ...newWidgets] as DashboardWidget[]);
         } else {
@@ -108,21 +134,33 @@ export function useDashboardWidgets() {
         setWidgets(data as DashboardWidget[]);
       }
     } else {
-      await initializeDefaultWidgets();
+      await initializeDefaultWidgets(customDefs);
     }
     setLoading(false);
-  }, [user, isDemo]);
+  }, [user, isDemo, tenant?.id]);
 
-  const initializeDefaultWidgets = async () => {
+  const initializeDefaultWidgets = async (customDefs: { id: string }[] = []) => {
     if (!user) return;
 
-    const widgetsToInsert = DEFAULT_WIDGETS.map((w) => ({
-      user_id: user.id,
-      widget_type: w.widget_type,
-      position: w.position,
-      is_visible: w.is_visible,
-      config: {} as Json,
-    }));
+    const widgetsToInsert = [
+      ...DEFAULT_WIDGETS.map((w) => ({
+        user_id: user.id,
+        widget_type: w.widget_type,
+        position: w.position,
+        is_visible: w.is_visible,
+        widget_size: "full",
+        config: {} as Json,
+      })),
+      ...customDefs.map((d, idx) => ({
+        user_id: user.id,
+        widget_type: `custom_${d.id}`,
+        position: DEFAULT_WIDGETS.length + idx,
+        is_visible: true,
+        widget_size: "full",
+        config: {} as Json,
+      })),
+    ];
+
 
     const { data, error } = await supabase
       .from("dashboard_widgets")
@@ -135,6 +173,7 @@ export function useDashboardWidgets() {
       setWidgets(data as DashboardWidget[]);
     }
   };
+
 
   const toggleWidgetVisibility = async (widgetType: string) => {
     const widget = widgets.find((w) => w.widget_type === widgetType);

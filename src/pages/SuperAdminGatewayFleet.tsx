@@ -1,5 +1,6 @@
 import { Navigate, useSearchParams } from "react-router-dom";
 import WorkerControlsPanel from "@/components/super-admin/WorkerControlsPanel";
+import WorkerKeyPanel from "@/components/super-admin/WorkerKeyPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
@@ -618,6 +619,7 @@ const SuperAdminGatewayFleet = () => {
               <TabsTrigger value="jobs">Update-Jobs</TabsTrigger>
               <TabsTrigger value="channels">Release-Channels</TabsTrigger>
               <TabsTrigger value="workers">Worker-Steuerung</TabsTrigger>
+              <TabsTrigger value="worker-key">Worker-Key</TabsTrigger>
             </TabsList>
 
             <TabsContent value="fleet" className="mt-4 space-y-4">
@@ -918,6 +920,10 @@ const SuperAdminGatewayFleet = () => {
 
             <TabsContent value="workers" className="mt-4">
               <WorkerControlsPanel />
+            </TabsContent>
+
+            <TabsContent value="worker-key" className="mt-4">
+              <WorkerKeyPanel />
             </TabsContent>
           </Tabs>
         </div>
