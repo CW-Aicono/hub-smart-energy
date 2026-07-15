@@ -28,6 +28,7 @@ const ROUTE_MODULE_MAP: Record<string, string> = {
   "/ppa/onsite": "ppa_onsite",
   "/ppa/offsite": "ppa_offsite",
   "/super-admin/savings-share": "gain_sharing",
+  "/documents": "documentation",
 };
 
 /**
