@@ -96,6 +96,7 @@ export function MobileHeader() {
           { to: "/settings/branding", icon: Palette, labelKey: "nav.branding" as TranslationKey },
           { to: "/settings/email-templates", icon: Mail, labelKey: "nav.emailTemplates" as TranslationKey },
           { to: "/integrations", icon: Plug, labelKey: "nav.integrations" as TranslationKey },
+          { to: "/documents", icon: FileText, labelKey: "nav.documentation" as TranslationKey },
         ]
       },
     ] : []),
