@@ -225,18 +225,6 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       }
 
       if (!stale) {
-        // Temporäre Diagnose (cw@aicono.de empty-chart Ticket) — nach Fix entfernen.
-        console.info("[energy-chart:diag]", {
-          period,
-          offset,
-          locationId,
-          mainMeterIds,
-          rangeStart: rangeStart.toISOString(),
-          rangeEnd: rangeEnd.toISOString(),
-          rows: allData.length,
-          firstRow: allData[0],
-          lastRow: allData[allData.length - 1],
-        });
         setPowerReadings(allData);
         setPowerLoading(false);
       }
