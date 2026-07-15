@@ -229,6 +229,7 @@ const App = () => (
                       <Route path="/meters" element={<M><MetersOverview /></M>} />
                       <Route path="/live-values" element={<M><LiveValues /></M>} />
                       <Route path="/integrations" element={<M><Integrations /></M>} />
+                      <Route path="/documents" element={<M><Documents /></M>} />
                       <Route path="/profile" element={<Profile />} />
                       <Route path="/set-password" element={<SetPassword />} />
                       <Route path="/accept-invite" element={<AcceptInvite />} />
