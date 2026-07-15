@@ -58,22 +58,6 @@ export default function WorkerKeyPanel() {
 
   return (
     <div className="space-y-6">
-      <Alert>
-        <AlertTriangle className="h-4 w-4" />
-        <AlertTitle>Zwei getrennte Deployment-Umgebungen</AlertTitle>
-        <AlertDescription className="space-y-2 mt-2">
-          <p>
-            Die Live-Anwendung läuft auf <strong>Hetzner mit eigener self-hosted Supabase-Instanz</strong>.
-            Der hier angezeigte <code>GATEWAY_API_KEY</code> ist der Wert dieser <strong>Lovable-Cloud-Umgebung</strong>,
-            in der der ws-worker <em>nicht</em> läuft.
-          </p>
-          <p>
-            Der Hetzner-Worker verwendet den Key aus <code>supabase-docker/.env</code> auf dem Hetzner-Host.
-            Ein neuer Key muss dort manuell eingetragen und alle Bridge-Container neu gestartet werden.
-          </p>
-        </AlertDescription>
-      </Alert>
-
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
