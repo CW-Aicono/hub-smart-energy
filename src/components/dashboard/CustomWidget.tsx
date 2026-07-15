@@ -230,6 +230,16 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
           .range(0, 9999);
         if (aggError) throw aggError;
         if (aggData) aggregatedRows.push(...(aggData as Array<{ meter_id: string; power_avg: number; bucket: string }>));
+        // Temporäre Diagnose (cw@aicono.de empty-chart Ticket) — nach Fix entfernen.
+        console.info("[custom-widget:diag]", {
+          widgetId: definition.id,
+          widgetName: name,
+          meterIds: config.meter_ids,
+          period: selectedPeriod,
+          from: from.toISOString(),
+          to: to.toISOString(),
+          aggRows: aggregatedRows.length,
+        });
 
         let mergedRows = aggregatedRows.map((row) => ({
           meter_id: row.meter_id,
