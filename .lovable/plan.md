@@ -1,86 +1,60 @@
+## Ausgangslage
 
-# Per-Tenant Ingest-Keys + separater Worker-Key
+- User: **cw@aicono.de** (Admin, Tenant „Stadt Steinfurt", `0ce0c43a-…`).
+- Screenshot: Widget **„Energieverbrauch (kW)"**, Tag-Ansicht, Alle Liegenschaften, komplett leer.
+- Gleiche Beobachtung wie zuvor bei geteilten Custom-Widgets.
 
-## Problem
+## Was ich verifiziert habe
 
-Aktuell teilen sich Hetzner-Worker (`loxone-ws-worker`) und alle Tenants **denselben** globalen `GATEWAY_API_KEY`. Der Tenant sieht diesen Key in `/integrations → API` und könnte damit theoretisch für andere Tenants pushen bzw. den Worker mit-rotieren. Der Tenant sollte den Worker-Key gar nicht kennen.
+1. **DB hat Daten** für den heutigen Tag (Stadt-Steinfurt-Tenant):
+   - `meter_power_readings_5min_bridge` ≈ 260 Buckets/Meter (Strom-, Gas-, Wasser-Hauptzähler)
+   - Auch `meter_power_readings` (Roh) und Legacy-5min-Tabelle gefüllt.
+2. **RPC `get_power_readings_5min`** ist `SECURITY DEFINER` und `authenticated` hat `EXECUTE` → RLS ist hier keine Sperre.
+3. **RLS auf `meter_power_readings`** erlaubt Tenant-Users vollen Zugriff (`tenant_id = get_user_tenant_id()`) → cw ist Tenant-Mitglied, sollte lesen dürfen.
+4. **Playwright-Repro als cw@aicono.de** (via injizierter Session): Standard-Widget **„Energieverbrauch (kW)"** rendert **eine Kurve mit Daten** (Screenshot in `/tmp/browser/sc/1.png`). Der leere Zustand aus dem Screenshot ließ sich damit **nicht reproduzieren**.
 
-## Zielbild
+Ergebnis der Recherche: Das Standard-`EnergyChart`-Widget funktioniert für cw@aicono.de auf der aktuellen Preview-Sitzung. Bevor ich einen Fix baue, muss geklärt werden, welches Widget genau leer bleibt – sonst besteht das Risiko, an der falschen Stelle zu ändern (Verstoß gegen unser Rateverbot).
 
-- **Tenant-Key**: Jeder Tenant bekommt einen eigenen, tenant-gebundenen API-Key. Nur damit kann er in seine eigene `tenant_id` pushen. Sichtbar & rotierbar im Tenant-UI (`/integrations → API`).
-- **Worker-Key**: Der bestehende `GATEWAY_API_KEY` bleibt bestehen und wird zum reinen Worker-/Bridge-Key. Er kann in **alle** Tenants pushen (weil Hetzner-Bridges für mehrere Tenants senden). Nur im Super-Admin sichtbar/rotierbar.
-- Migration ohne Downtime: Hetzner-Worker laufen unverändert weiter, Tenants sehen ab sofort ihren neuen eigenen Key.
+## Andere möglicherweise betroffene Widgets (Kandidaten, gleicher Datenpfad)
 
-## Änderungen
+Alle greifen auf tenant-gescopte Zähler + `meter_power_readings*` / `energy_readings_daily` zu:
 
-### 1. Datenbank (Migration)
+- `EnergyChart` (Standard) — Kandidat
+- `CustomWidget` (line/bar für ausgewählte Meter) — geht direkt auf `meter_power_readings` (RLS-Pfad)
+- `EnergyFlowMonitor` (auch als Custom-Widget) — geht auf gleiche Rohdaten
+- `PieChartWidget`, `SankeyWidget`, `SustainabilityKPIs`, `CostOverview`
+- `ForecastWidget`, `AnomalyWidget`, `WeatherNormalizationWidget`
 
-Neue Tabelle `tenant_api_keys`:
+## Vorschlag: 2-Schritt-Vorgehen
 
-```text
-id uuid pk
-tenant_id uuid -> tenants(id) on delete cascade
-key_hash text (SHA-256, unique)
-key_prefix text (erste 8 Zeichen, für UI-Anzeige "aic_xxxxxxxx...")
-label text (default 'default')
-created_by uuid -> auth.users
-created_at, last_used_at, revoked_at timestamptz
+### Schritt 1 – Reproduktion sicherstellen (KEIN Code-Fix)
+
+Ich brauche vom User eine Info, sonst rate ich:
+
+1. Ist das Widget im Screenshot das **Standard-Widget „Energieverbrauch (kW)"** oder ein **Custom-Widget** mit gleichem Titel (Dashboard-Anpassen prüfen)?
+2. Reproduzierbar auch nach **Hard-Reload** (Cache leeren) und in einem **Inkognito-Fenster**?
+3. Bleibt es leer auch, wenn eine **einzelne Liegenschaft** statt „Alle Liegenschaften" gewählt wird?
+4. Welche **anderen Widgets** sind konkret leer (Kosten, Energieverteilung, Energiemonitor Rathaus, …)? Ist z. B. das Kosten-KPI korrekt (im Screenshot sind 141,54 €)?
+
+Parallel dazu füge ich – falls gewünscht – **temporäre Diagnostik** in `EnergyChart` und `CustomWidget` ein:
+
+```ts
+console.info("[energy-chart] meterIds", mainMeterIds, "rows", allData.length, "range", rangeStart, rangeEnd);
 ```
 
-- RLS: Tenant-User (admin/user) sehen nur `tenant_id = tenant_id_of(auth.uid())`. Super-Admin sieht alles.
-- GRANT SELECT/INSERT/UPDATE/DELETE an `authenticated`, ALL an `service_role`.
-- Klartext-Key existiert nur einmal (bei Generierung), Rest ist Hash. Prefix wie `aic_live_` erleichtert Erkennung.
+### Schritt 2 – Fix nach eindeutiger Diagnose
 
-### 2. Edge Function `gateway-ingest` (Auth-Logik anpassen)
+Je nach Ergebnis einer der folgenden Wege:
 
-Neue Reihenfolge beim Auth-Check:
+- **Fall A – RLS-Loch auf einer 5-min-Tabelle** (z. B. `meter_power_readings_5min_bridge` ohne Policy für authenticated): Migration mit `ENABLE RLS` + `SELECT`-Policy für Tenant-User + expliziten `GRANT SELECT … TO authenticated;`.
+- **Fall B – Fehlender GRANT auf einer RPC** (z. B. `get_meter_daily_totals_with_fallback`): `GRANT EXECUTE … TO authenticated;` per Migration.
+- **Fall C – Client-seitige Filter-Race** (z. B. `tenantMeterIds.length === 0` beim ersten Render → RPC wird nie erneut aufgerufen): Query-Key um `tenantMeterIds` erweitern bzw. `enabled`-Bedingung anpassen, damit sie nachrückt, sobald Zähler geladen sind.
+- **Fall D – Custom-Widget-Sichtbarkeit**: analog zum vorigen Trigger-Fix ggf. Config-Copy pro User oder Fallback in `CustomWidget`, wenn `config.meter_ids` Zähler enthält, auf die der User keinen Lesezugriff hat.
 
-1. Bearer-Token extrahieren.
-2. Hash bilden → `tenant_api_keys` lookup.
-   - Treffer: `tenant_id` fixieren. Payload-Readings müssen exakt diese `tenant_id` haben, sonst 403.
-   - `last_used_at` aktualisieren (fire-and-forget).
-3. Kein Treffer → Vergleich mit `GATEWAY_API_KEY` (Worker-Key).
-   - Treffer: `tenant_id` aus Payload/Meter-Zuordnung übernehmen (aktuelles Verhalten, keine Einschränkung).
-4. Sonst 401.
+Jede Änderung wird per Playwright-Session mit cw@aicono.de verifiziert (Screenshot + Netzwerk-Log der RPC-Aufrufe), bevor die Aufgabe als erledigt gemeldet wird.
 
-Damit läuft der Hetzner-Worker unverändert weiter, und Tenant-Keys sind sauber tenant-scoped.
+## Was ich NICHT tue, bis Schritt 1 abgeschlossen ist
 
-### 3. Neue Edge Functions
-
-- `tenant-api-key-create` — generiert neuen Key (`aic_live_<32 rand>`), speichert Hash, gibt Klartext **einmalig** zurück. Nur für Admin des Tenants oder Super-Admin.
-- `tenant-api-key-list` — listet Prefix + Label + Zeitstempel (nie Klartext).
-- `tenant-api-key-revoke` — setzt `revoked_at` (Lookup ignoriert revoked Keys).
-
-### 4. Tenant-UI (`src/components/settings/ApiSettings.tsx`)
-
-- „API-Key"-Feld ersetzen durch Liste eigener Keys (Prefix, Label, letzter Zugriff, Revoke-Button).
-- Button „Neuen Key erzeugen" → Dialog, der den Klartext einmalig anzeigt (Copy-to-Clipboard + Warnung „wird nicht erneut angezeigt").
-- Bestehendes `api-key-info` liefert nicht mehr den Worker-Key, sondern nur noch Endpoint + Tenant-ID.
-
-### 5. Super-Admin-UI (neue Sektion)
-
-Unter Super-Admin → Infrastruktur → „Bridge-Worker-Keys":
-
-- Anzeige des aktuellen `GATEWAY_API_KEY` (maskiert, Reveal via Button, Copy).
-- Button „Worker-Key rotieren" → ruft `secrets--update_secret` Flow (Hinweis: erfordert danach Redeploy des Hetzner-Workers, wird im UI vermerkt).
-- Nur `super_admin`.
-
-### 6. Dokumentation
-
-- `docs/loxone-ws-worker/README` (falls vorhanden) klarstellen: Worker verwendet `GATEWAY_API_KEY` (globaler Bridge-Key), nicht Tenant-Key.
-- Kurze Notiz für Tenants: „Für eigene Push-Integrationen (Schneider Panel etc.) hier einen Key generieren."
-- Memory-Update: `mem://technical/security/ingest-key-model` mit dem neuen Zwei-Key-Modell.
-
-## Technische Details
-
-- **Key-Format**: `aic_live_` + 32 Zeichen base32 (kollisionssicher, gut erkennbar in Logs).
-- **Hashing**: SHA-256 (schnell genug für jeden Ingest-Call, kein bcrypt nötig da hoher Entropie-Input).
-- **Rate-Limiting**: unverändert (existiert nicht explizit, kein Scope-Creep).
-- **Payload-Validierung**: bei Tenant-Key MUSS jedes `reading.tenant_id === key.tenant_id` sein, sonst 403 mit klarer Fehlermeldung. Bei Worker-Key wie bisher.
-- **Backward-Compat**: Der Worker-Key funktioniert unverändert. Bestehende Kundenintegrationen, die noch den alten globalen Key verwenden, würden brechen — daher: Tenants explizit auffordern, in der UI einen neuen Key zu erzeugen, bevor wir den globalen Key aus dem Tenant-UI entfernen. (Cut-over-Zeitfenster als Kommunikation, nicht als Code.)
-
-## Nicht Teil dieses Plans
-
-- Per-Worker-Keys (User hat sich für einen globalen Worker-Key entschieden).
-- Automatische Rotation des Worker-Keys (manuell via Super-Admin bleibt).
-- OCPP/Simulator-Key-Modell (separates Thema).
+- Keine RLS-/GRANT-Migrationen „auf Verdacht".
+- Keine Änderungen an `EnergyChart`/`CustomWidget`-Logik ohne reproduzierten Fehler.
+- Keine Trigger-Backfills wie beim Custom-Widget-Sharing – das Standard-Widget ist bereits tenant-weit sichtbar.
