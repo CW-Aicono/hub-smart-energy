@@ -31,6 +31,7 @@ export const ALL_MODULES = [
   { code: "support_billing", label: "Support (mit Berechnung)" },
   { code: "c_level_dashboard", label: "C-Level Dashboard (board.aicono.org)" },
   { code: "gain_sharing", label: "Gain-Sharing (Einsparbeteiligung)" },
+  { code: "documentation", label: "Dokumentation" },
 ] as const;
 
 export function useTenantModules(tenantId: string | null) {
