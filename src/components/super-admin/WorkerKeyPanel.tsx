@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, Copy, RefreshCw, KeyRound, AlertTriangle, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Copy, RefreshCw, KeyRound, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 interface WorkerKeyInfo {
