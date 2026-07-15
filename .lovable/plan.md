@@ -1,60 +1,140 @@
-## Ausgangslage
 
-- User: **cw@aicono.de** (Admin, Tenant „Stadt Steinfurt", `0ce0c43a-…`).
-- Screenshot: Widget **„Energieverbrauch (kW)"**, Tag-Ansicht, Alle Liegenschaften, komplett leer.
-- Gleiche Beobachtung wie zuvor bei geteilten Custom-Widgets.
+# Modul „Dokumentation"
 
-## Was ich verifiziert habe
+Ein eigenständiges Modul, mit dem Tenants Dokumente zentral, pro Liegenschaft oder direkt an einzelnen Assets (Zähler, Sensoren/Aktoren, Wallboxen, Gateways, PV/Speicher, Rechnungen) ablegen können. Zugriff über Rolle + Kategorie + optionalen Einzel-Dokument-Override. Versionierung ab MVP.
 
-1. **DB hat Daten** für den heutigen Tag (Stadt-Steinfurt-Tenant):
-   - `meter_power_readings_5min_bridge` ≈ 260 Buckets/Meter (Strom-, Gas-, Wasser-Hauptzähler)
-   - Auch `meter_power_readings` (Roh) und Legacy-5min-Tabelle gefüllt.
-2. **RPC `get_power_readings_5min`** ist `SECURITY DEFINER` und `authenticated` hat `EXECUTE` → RLS ist hier keine Sperre.
-3. **RLS auf `meter_power_readings`** erlaubt Tenant-Users vollen Zugriff (`tenant_id = get_user_tenant_id()`) → cw ist Tenant-Mitglied, sollte lesen dürfen.
-4. **Playwright-Repro als cw@aicono.de** (via injizierter Session): Standard-Widget **„Energieverbrauch (kW)"** rendert **eine Kurve mit Daten** (Screenshot in `/tmp/browser/sc/1.png`). Der leere Zustand aus dem Screenshot ließ sich damit **nicht reproduzieren**.
+## 1. Modul-Registrierung (Super-Admin)
 
-Ergebnis der Recherche: Das Standard-`EnergyChart`-Widget funktioniert für cw@aicono.de auf der aktuellen Preview-Sitzung. Bevor ich einen Fix baue, muss geklärt werden, welches Widget genau leer bleibt – sonst besteht das Risiko, an der falschen Stelle zu ändern (Verstoß gegen unser Rateverbot).
+- Neuer Modul-Code `documentation` in `ALL_MODULES` (`useTenantModules.tsx`) – Label: „Dokumentation".
+- Migration: Eintrag in `module_prices` (Standard/Industrie/Partner) mit sinnvollem Default (z.B. 9 €/Monat) – im Super-Admin über bestehendes Preis-UI editierbar.
+- Sichtbarkeit gesteuert über `ModuleGuard`.
+- Sales-Katalog: Modul erscheint automatisch im Angebots-Assistenten (nutzt `module_prices`).
 
-## Andere möglicherweise betroffene Widgets (Kandidaten, gleicher Datenpfad)
+## 2. Navigation – kein neuer Hauptmenüpunkt
 
-Alle greifen auf tenant-gescopte Zähler + `meter_power_readings*` / `energy_readings_daily` zu:
+- Bestehenden Hauptmenüpunkt **„Einstellungen"** in **„Verwaltung"** umbenennen (Sidebar Desktop + Mobile, alle 4 Sprachen: `nav.settings` → neuer Key `nav.administration` bzw. Wert anpassen).
+- Neuer Sub-Menüpunkt **„Dokumentation"** unter „Verwaltung" → Route `/documents`.
+- Bestehende Kinder von „Einstellungen" (Branding, E-Mail-Templates, Integrationen …) bleiben unverändert, „Dokumentation" wird eingereiht.
+- Menüpunkt nur sichtbar, wenn Modul `documentation` aktiv **und** aktueller User Permission `documents.view` hat.
 
-- `EnergyChart` (Standard) — Kandidat
-- `CustomWidget` (line/bar für ausgewählte Meter) — geht direkt auf `meter_power_readings` (RLS-Pfad)
-- `EnergyFlowMonitor` (auch als Custom-Widget) — geht auf gleiche Rohdaten
-- `PieChartWidget`, `SankeyWidget`, `SustainabilityKPIs`, `CostOverview`
-- `ForecastWidget`, `AnomalyWidget`, `WeatherNormalizationWidget`
+## 3. Datenmodell
 
-## Vorschlag: 2-Schritt-Vorgehen
+Neue Tabellen (`public`-Schema, RLS + GRANTs):
 
-### Schritt 1 – Reproduktion sicherstellen (KEIN Code-Fix)
+### `document_categories`
+Tenant-eigene Kategorien (Seed: „Allgemein", „Bedienungsanleitung", „Foto", „Rechnung", „Netzwerk/IP", „Vertrag", „Zertifikat").
+Felder: `tenant_id`, `name`, `slug`, `icon`, `color`, `sort_order`, `is_system`.
 
-Ich brauche vom User eine Info, sonst rate ich:
+### `documents`
+Metadatenkopf (eine Zeile pro logischem Dokument):
+- `tenant_id`, `category_id`, `title`, `description`, `tags text[]`
+- `current_version_id`, `latest_version_no`
+- `valid_from`, `valid_until` (für spätere Erinnerungen vorbereitet)
+- `created_by`, `updated_by`, Timestamps
 
-1. Ist das Widget im Screenshot das **Standard-Widget „Energieverbrauch (kW)"** oder ein **Custom-Widget** mit gleichem Titel (Dashboard-Anpassen prüfen)?
-2. Reproduzierbar auch nach **Hard-Reload** (Cache leeren) und in einem **Inkognito-Fenster**?
-3. Bleibt es leer auch, wenn eine **einzelne Liegenschaft** statt „Alle Liegenschaften" gewählt wird?
-4. Welche **anderen Widgets** sind konkret leer (Kosten, Energieverteilung, Energiemonitor Rathaus, …)? Ist z. B. das Kosten-KPI korrekt (im Screenshot sind 141,54 €)?
+### `document_links` (n:m – ein Dokument kann mehreren Geräten/Scopes zugeordnet werden)
+- `document_id`, `tenant_id`
+- `scope` enum (`tenant`, `location`, `meter`, `charge_point`, `gateway_device`, `energy_storage`, `energy_supplier_invoice`)
+- `scope_id uuid` (nullable bei `tenant`)
+- `location_id` optional als Denormalisierung für schnelle Standort-Filter
+- Unique `(document_id, scope, scope_id)`
+- Mind. ein Link pro Dokument (via Trigger geprüft)
 
-Parallel dazu füge ich – falls gewünscht – **temporäre Diagnostik** in `EnergyChart` und `CustomWidget` ein:
+### `document_versions`
+- `document_id`, `version_no`, `storage_path`, `filename`, `mime_type`, `file_size_bytes`, `file_hash`, `uploaded_by`, `notes`, `created_at`
+- Trigger: neuer Insert → `documents.current_version_id`/`latest_version_no` aktualisieren.
 
-```ts
-console.info("[energy-chart] meterIds", mainMeterIds, "rows", allData.length, "range", rangeStart, rangeEnd);
-```
+### `document_access_rules`
+Ein Regelsatz pro Dokument **oder** pro Kategorie (jeweils tenant_id-scoped):
+- `tenant_id`, `document_id` **oder** `category_id` (genau einer gesetzt, CHECK)
+- `role app_role` **oder** `custom_role_id` (genau einer gesetzt)
+- `can_view`, `can_download`, `can_edit`, `can_delete`
 
-### Schritt 2 – Fix nach eindeutiger Diagnose
+Auflösungspriorität (Security-Definer-Funktion `public.can_access_document(user, doc, action)`):
+1. Super-Admin → immer erlaubt
+2. Rolle mit Permission `documents.manage` → Vollzugriff
+3. Dokument-spezifische Regel (Rolle oder custom_role)
+4. Kategorie-Regel
+5. Fallback: nur Ersteller + Tenant-Admin
 
-Je nach Ergebnis einer der folgenden Wege:
+### Storage
+- Neuer privater Bucket `tenant-documents` (25 MB Limit, MIME-Whitelist: PDF, PNG/JPG/WEBP, Office-Formate, TXT/CSV/JSON, ZIP).
+- Pfad: `<tenant_id>/<document_id>/<version_no>_<safeFilename>`.
+- Download über bestehende Edge Function `secure-storage-download` (erweitert um Bucket `tenant-documents` + `can_access_document`-Check).
 
-- **Fall A – RLS-Loch auf einer 5-min-Tabelle** (z. B. `meter_power_readings_5min_bridge` ohne Policy für authenticated): Migration mit `ENABLE RLS` + `SELECT`-Policy für Tenant-User + expliziten `GRANT SELECT … TO authenticated;`.
-- **Fall B – Fehlender GRANT auf einer RPC** (z. B. `get_meter_daily_totals_with_fallback`): `GRANT EXECUTE … TO authenticated;` per Migration.
-- **Fall C – Client-seitige Filter-Race** (z. B. `tenantMeterIds.length === 0` beim ersten Render → RPC wird nie erneut aufgerufen): Query-Key um `tenantMeterIds` erweitern bzw. `enabled`-Bedingung anpassen, damit sie nachrückt, sobald Zähler geladen sind.
-- **Fall D – Custom-Widget-Sichtbarkeit**: analog zum vorigen Trigger-Fix ggf. Config-Copy pro User oder Fallback in `CustomWidget`, wenn `config.meter_ids` Zähler enthält, auf die der User keinen Lesezugriff hat.
+### Permissions (RBAC)
+Neue Einträge in `permissions` (Kategorie „documentation"): `documents.view`, `documents.upload`, `documents.edit`, `documents.delete`, `documents.manage_access`, `documents.manage_categories`.
 
-Jede Änderung wird per Playwright-Session mit cw@aicono.de verifiziert (Screenshot + Netzwerk-Log der RPC-Aufrufe), bevor die Aufgabe als erledigt gemeldet wird.
+## 4. UI / UX
 
-## Was ich NICHT tue, bis Schritt 1 abgeschlossen ist
+### Haupt-Route `/documents` (Verwaltung → Dokumentation)
+- Kopfzeile: Suchfeld (Titel/Tag/Filename), Filter (Kategorie, Standort, Scope, Datum), Upload-Button.
+- Tab-Umschalter: **Alle · Tenant-weit · Standorte · Geräte · Rechnungen**.
+- Karten-/Listenansicht mit Miniatur-Preview, Kategorie-Badge, Standort-Badge, Anzahl Verknüpfungen, Version, Ablaufdatum.
+- Klick → Detail-Sheet: Beschreibung, Versionen (Download je Version, „Als aktuell setzen", Notiz), Zugriffsregeln, **Verknüpfungen (Scopes hinzufügen/entfernen – Mehrfachauswahl von Geräten)**, Historie.
 
-- Keine RLS-/GRANT-Migrationen „auf Verdacht".
-- Keine Änderungen an `EnergyChart`/`CustomWidget`-Logik ohne reproduzierten Fehler.
-- Keine Trigger-Backfills wie beim Custom-Widget-Sharing – das Standard-Widget ist bereits tenant-weit sichtbar.
+### Upload-Dialog
+- Datei wählen, Kategorie, Titel, Beschreibung, Tags.
+- Abschnitt „Verknüpfen mit" – Multi-Select:
+  - Tenant-weit (Checkbox)
+  - Standorte (Multi-Select)
+  - Geräte (Multi-Select mit Typ-Filter: Zähler, Wallbox, Gateway, PV/Speicher, Sensor/Aktor)
+  - Optional: Rechnung
+- Zugriffsregeln (optional, sonst Kategorie-Defaults).
+
+### Kontextuelle Anzeige direkt an der Gerätekachel
+Neue wiederverwendbare Komponente `<DocumentBadge scope="meter" scopeId={id} />`:
+- Erscheint auf **Gerätekacheln/Detail-Sheets** von Wallbox, Zähler, Sensor/Aktor, Gateway, PV/Speicher, Location.
+- Zeigt Icon + Anzahl der zugeordneten Dokumente (nur die, die der User via `can_access_document` sehen darf).
+- Klick → Popover/Sheet „Dokumente zu diesem Gerät" mit Liste (Titel, Kategorie, Version, Download-Button). Ohne View-Recht: Badge wird ausgeblendet. Ohne Download-Recht: Download-Button disabled + Tooltip.
+- Zusätzlich `<DocumentsPanel scope=… scopeId=…>` als voller Tab in bestehenden Detailseiten (Location, Meter, Charge-Point, Gateway, Energy-Storage) mit Upload direkt im Kontext (setzt Verknüpfung automatisch).
+
+### Kategorien- & Zugriffsverwaltung
+- Unter „Verwaltung → Dokumentation → Einstellungen" (nur `documents.manage_categories`):
+  - CRUD Kategorien.
+  - Default-Zugriffsregeln pro Kategorie.
+- Im Dokument-Detail: Aktion „Zugriff bearbeiten" → Dialog mit Rollen/Custom-Rollen und Häkchen für view/download/edit/delete.
+
+## 5. Backend-Logik
+
+- Hooks (React Query, Tenant-Isolation nach bestehendem Muster):
+  - `useDocuments({ scope?, scopeId?, categoryId?, search? })`
+  - `useDocumentsForScope(scope, scopeId)` – für Gerätekacheln (leicht/gecached).
+  - `useUploadDocument` – SHA-256 Hash, Upload in Bucket, Insert `documents` + `document_versions` + `document_links`.
+  - `useAddDocumentVersion`, `useUpdateDocumentLinks`, `useDocumentAccess`.
+- Downloads via `secure-storage-download` (erweitert): Super-Admin ODER `public.can_access_document(user_id, doc_id, 'download')`.
+- Realtime-Invalidation auf `documents`, `document_versions`, `document_links`.
+
+## 6. Sicherheit
+
+- RLS: `SELECT` über `can_access_document(auth.uid(), id, 'view')`; `INSERT` verlangt `documents.upload` + Tenant-Match; `UPDATE/DELETE` über passende Permission bzw. Regel.
+- GRANTs: `SELECT/INSERT/UPDATE/DELETE` für `authenticated`; `ALL` für `service_role`; kein `anon`.
+- MIME-Whitelist client- **und** serverseitig (Trigger prüft `mime_type` + Größe).
+- Audit-Log (`writeAuditLog`) bei Upload, Delete, Rechteänderung, Link-Änderung, Kategorie-Änderung.
+
+## 7. Umsetzungsschritte
+
+1. **Migration 1** – Enums, Tabellen (`document_categories`, `documents`, `document_versions`, `document_links`, `document_access_rules`), Trigger, `can_access_document`, Grants, RLS, Permissions-Seed, Bucket, Modul-Preis-Eintrag.
+2. **Modul-Registrierung** in `useTenantModules.tsx` (Code `documentation`).
+3. **Sidebar-Umbenennung** „Einstellungen" → „Verwaltung" (Desktop + Mobile + i18n DE/EN/ES/NL) + Sub-Item „Dokumentation" (`/documents`) unter Verwaltung.
+4. **Edge-Function-Erweiterung** `secure-storage-download` für Bucket `tenant-documents`.
+5. **Hooks** implementieren.
+6. **UI Hauptseite** `/documents` inkl. Upload-Dialog mit Multi-Scope-Verknüpfung.
+7. **`<DocumentBadge>`** in Gerätekacheln einbinden (Location-Detail, MeterCard, ChargePointCard, GatewayCard, StorageCard).
+8. **`<DocumentsPanel>`-Tab** in den jeweiligen Detailseiten.
+9. **Kategorien- & Zugriffs-Settings** unter Dokumentation.
+10. **i18n** (DE/EN/ES/NL) & Audit-Log-Einträge.
+11. **Tests**: Vitest für Hooks und `can_access_document`-Regeln.
+
+## 8. Bewusste Nicht-Ziele im MVP
+
+- Kein Ablaufdatum-Task/E-Mail-Trigger (Felder vorbereitet, Erinnerungslogik später).
+- Keine Volltext-/OCR-Suche (nur Titel, Beschreibung, Tags, Dateiname).
+- Keine öffentlichen Freigabe-Links.
+- Kein Video/CAD (25 MB, gängige Formate).
+
+## Technischer Anhang
+
+- Enum `document_scope`: `tenant | location | meter | charge_point | gateway_device | energy_storage | energy_supplier_invoice`.
+- Funktion `public.can_access_document(_user uuid, _doc uuid, _action text) returns boolean` (SECURITY DEFINER, `search_path=public`).
+- Kompatibilität: bestehende `ppa_documents`, `sales_project_attachments`, `task_attachments`, `meter-photos` bleiben unverändert – das neue Modul ergänzt sie.
