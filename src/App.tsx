@@ -58,6 +58,7 @@ const SetPassword = lazy(() => import("./pages/SetPassword"));
 const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 const Help = lazy(() => import("./pages/Help"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Documents = lazy(() => import("./pages/Documents"));
 const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
 const SuperAdminTenants = lazy(() => import("./pages/SuperAdminTenants"));
 const SuperAdminPartners = lazy(() => import("./pages/SuperAdminPartners"));
