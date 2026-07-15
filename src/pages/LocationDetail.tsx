@@ -221,6 +221,17 @@ const LocationDetail = () => {
           {isModuleEnabled("automation_building") && <LocationAutomation locationId={location.id} />}
           {isModuleEnabled("integrations") && <LocationIntegrationsList locationId={location.id} />}
           {isModuleEnabled("brighthub_api") && <BrightHubSettings locationId={location.id} />}
+          {isModuleEnabled("documentation") && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" /> Dokumente</CardTitle>
+                <CardDescription>Standortbezogene Dokumente – sichtbar je nach Zugriffsregeln.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DocumentsPanel scope="location" scopeId={location.id} label={location.name} />
+              </CardContent>
+            </Card>
+          )}
         </div>
       </main>
     </div>
