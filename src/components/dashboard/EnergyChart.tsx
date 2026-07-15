@@ -687,6 +687,17 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     });
   }, [chartData, hiddenKeys]);
 
+  // Temp diag
+  useEffect(() => {
+    if (period === "day") {
+      const sample = (filteredChartData as any[]).filter((b, i) => (b.strom || b.gas || b.wasser || b.waerme) && i < 288).slice(0, 3);
+      console.info("[energy-chart:chartdata]", {
+        period, len: filteredChartData.length, visibleEnergyKeys, allowedTypes: Array.from(allowedTypes), sample,
+        b103: filteredChartData[103], b50: filteredChartData[50], hasData, powerReadingsLen: powerReadings.length,
+      });
+    }
+  }, [filteredChartData, period, visibleEnergyKeys, allowedTypes, hasData, powerReadings.length]);
+
   if (loading || powerLoading || dailyTotalsLoading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
 
   const unitLabel = getChartUnitLabel(period);
