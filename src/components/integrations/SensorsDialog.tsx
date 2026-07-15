@@ -226,7 +226,16 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
       setSensors(data.sensors || []);
     } catch (err) {
       console.error("Failed to fetch sensors:", err);
-      setError(err instanceof Error ? err.message : "Verbindung fehlgeschlagen");
+      const rawMsg = err instanceof Error ? err.message : "";
+      const isAbort =
+        (err instanceof DOMException && err.name === "AbortError") ||
+        /aborted|abort/i.test(rawMsg) ||
+        /timeout|timed out/i.test(rawMsg);
+      setError(
+        isAbort
+          ? "Zeitüberschreitung beim Abrufen der Geräte. Bitte prüfen Sie, ob der Miniserver erreichbar ist, und versuchen Sie es erneut."
+          : rawMsg || "Verbindung fehlgeschlagen",
+      );
       setSensors([]);
     } finally {
       setLoading(false);
