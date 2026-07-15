@@ -93,7 +93,12 @@ export default function ResizableWidget({
   }, [onHeightChange]);
 
   const controlled = typeof localHeight === "number";
-  const style: React.CSSProperties = controlled ? { height: `${localHeight}px` } : {};
+  // Always give the wrapper a definite height so Recharts' ResponsiveContainer
+  // measures a real size on first render. Without this, uncontrolled widgets
+  // (user never dragged the handle) can end up with the chart column resolving
+  // to 0px during initial layout — the chart data is loaded but no line paths
+  // are drawn until the user nudges the height by 1px.
+  const style: React.CSSProperties = { height: `${localHeight ?? minHeight}px` };
 
   return (
     <div
@@ -101,16 +106,13 @@ export default function ResizableWidget({
       data-widget-size={widgetSize}
       className={cn(
         "w-full min-w-0 relative group flex flex-col",
-        // With an explicit widget height, the lazy wrapper gets the remaining
-        // space above the resize handle and the Card stretches with it. Cards
-        // keep overflow contained while per-widget minHeight clamps prevent
-        // shrinking below usable content sizes.
-        controlled && [
-          "[&>[data-lazy]]:!h-auto [&>[data-lazy]]:flex-1 [&>[data-lazy]]:min-h-0",
-          "[&>[data-lazy]>[data-slot=card]]:h-full [&>[data-lazy]>[data-slot=card]]:min-h-0 [&>[data-lazy]>[data-slot=card]]:flex [&>[data-lazy]>[data-slot=card]]:flex-col [&>[data-lazy]>[data-slot=card]]:overflow-hidden",
-          "[&>[data-lazy]>[data-slot=card]>[data-slot=card-content]]:flex-1 [&>[data-lazy]>[data-slot=card]>[data-slot=card-content]]:min-h-0",
-          "[&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full",
-        ],
+        // Stretch the lazy wrapper → Card → CardContent chain so charts,
+        // gauges and maps inherit the wrapper's height. Applied unconditionally
+        // now that the wrapper always has a definite height (see style above).
+        "[&>[data-lazy]]:!h-auto [&>[data-lazy]]:flex-1 [&>[data-lazy]]:min-h-0",
+        "[&>[data-lazy]>[data-slot=card]]:h-full [&>[data-lazy]>[data-slot=card]]:min-h-0 [&>[data-lazy]>[data-slot=card]]:flex [&>[data-lazy]>[data-slot=card]]:flex-col [&>[data-lazy]>[data-slot=card]]:overflow-hidden",
+        "[&>[data-lazy]>[data-slot=card]>[data-slot=card-content]]:flex-1 [&>[data-lazy]>[data-slot=card]>[data-slot=card-content]]:min-h-0",
+        "[&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full",
         className,
       )}
       style={style}

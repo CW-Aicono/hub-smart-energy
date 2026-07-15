@@ -231,6 +231,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         if (aggError) throw aggError;
         if (aggData) aggregatedRows.push(...(aggData as Array<{ meter_id: string; power_avg: number; bucket: string }>));
 
+
         let mergedRows = aggregatedRows.map((row) => ({
           meter_id: row.meter_id,
           value: row.power_avg,

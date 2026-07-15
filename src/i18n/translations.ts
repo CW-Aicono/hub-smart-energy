@@ -129,10 +129,16 @@ export const translations = {
     nl: "Rollen & Rechten",
   },
   "nav.settings": {
-    de: "Einstellungen",
-    en: "Settings",
-    es: "Configuración",
-    nl: "Instellingen",
+    de: "Verwaltung",
+    en: "Administration",
+    es: "Administración",
+    nl: "Beheer",
+  },
+  "nav.documentation": {
+    de: "Dokumentation",
+    en: "Documentation",
+    es: "Documentación",
+    nl: "Documentatie",
   },
   "nav.integrations": {
     de: "Integrationen",

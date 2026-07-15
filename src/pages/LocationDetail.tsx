@@ -23,7 +23,9 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EditLocationDialog } from "@/components/locations/EditLocationDialog";
-import { ArrowLeft, Building2, MapPin, Mail, Phone, User, Star, Layers, ChevronDown, ChevronRight, Cpu, Pencil, Calendar, Ruler, Flame } from "lucide-react";
+import { ArrowLeft, Building2, MapPin, Mail, Phone, User, Star, Layers, ChevronDown, ChevronRight, Cpu, Pencil, Calendar, Ruler, Flame, FileText } from "lucide-react";
+import { DocumentBadge } from "@/components/documents/DocumentBadge";
+import { DocumentsPanel } from "@/components/documents/DocumentsPanel";
 
 const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetchFloors, t }: { locationId: string; isAdmin: boolean; floors: any[]; floorsLoading: boolean; refetchFloors: () => void; t: (key: any) => string }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -115,6 +117,7 @@ const LocationDetail = () => {
                 </p>
               </div>
             </div>
+            <DocumentBadge scope="location" scopeId={location.id} label={location.name} variant="inline" />
           </div>
         </header>
 
@@ -218,6 +221,17 @@ const LocationDetail = () => {
           {isModuleEnabled("automation_building") && <LocationAutomation locationId={location.id} />}
           {isModuleEnabled("integrations") && <LocationIntegrationsList locationId={location.id} />}
           {isModuleEnabled("brighthub_api") && <BrightHubSettings locationId={location.id} />}
+          {isModuleEnabled("documentation") && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" /> Dokumente</CardTitle>
+                <CardDescription>Standortbezogene Dokumente – sichtbar je nach Zugriffsregeln.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DocumentsPanel scope="location" scopeId={location.id} label={location.name} />
+              </CardContent>
+            </Card>
+          )}
         </div>
       </main>
     </div>
