@@ -126,11 +126,11 @@ export function DocumentUploadDialog({ open, onOpenChange, fixedScope }: Props) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6">
           <DialogTitle>Dokument hochladen</DialogTitle>
         </DialogHeader>
-        <ScrollArea className="flex-1 pr-3">
+        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
           <div className="space-y-4">
             <div>
               <Label>Datei (max. 25 MB)</Label>
