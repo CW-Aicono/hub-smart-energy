@@ -1,58 +1,69 @@
-## Diagnose (mit Datencheck bestätigt)
+## Echte Ursache (mit DB-Daten verifiziert)
 
-Ich habe die Cloud-DB (Lovable-Backend) direkt abgefragt für den Speicher-Zähler `9650d672…`:
+Der SOC hat in der Cloud-DB volle 24 h Historie (96 Zeilen alle 15 Min, 70–100 %). Trotzdem endet die SOC-Linie im Chart bei ~02:00 Uhr.
 
-| Quelle | Zeitraum verfügbar | Zeilen (7 d) |
-|---|---|---|
-| `meter_power_readings` (Leistung) | **nur 16.07. 00:00 UTC → jetzt** | 74 |
-| `storage_soc_readings` (SOC) | 13.07. → jetzt | 10 075 |
+Grund: In `src/components/dashboard/EnergyFlowMonitor.tsx` (Zeile ~1443) werden SOC- und Leistungs-Punkte per Map über **exakten Millisekunden-Timestamp** zusammengeführt. Aus der DB kommen die beiden Reihen aber ~500 ms versetzt (Power 00:00:27.677, SOC 00:00:28.147, usw.). Dadurch entsteht für jeden Zeitpunkt ein Datensatz mit **nur `kw` oder nur `soc`**, nie beides. Die SOC-`<Line>` läuft mit `connectNulls={false}` → Recharts unterbricht sie bei jedem `null`-Nachbarn.
 
-Damit lässt sich jedes Symptom eindeutig zuordnen:
+Ergebnis:
+- Zeitfenster mit nur SOC-Punkten (vor 02:00 CEST, bevor Power-Ingest startet) → SOC-Linie sichtbar.
+- Ab 02:00 wechseln sich SOC- und Power-Punkte ab → jeder SOC-Punkt ist von `null` umgeben → **SOC verschwindet**.
 
-### 1) „SOC und Leistung nicht parallel"
-Beide Reihen werden zwar über die gleiche X-Achse gerendert, aber die Leistungs-Reihe endet links bei 02:00 (= 00:00 UTC), weil in der **Cloud-DB nur ~24 h Power-Historie** liegt. Die SOC-Linie sollte dagegen mehrere Tage abdecken – wird aber im Chart auf denselben Ausschnitt reduziert.
+Punkt 3 (Einspeisung negativ) funktioniert im aktuellen Code bereits (Screenshot 1 zeigt grüne Balken unter der X-Achse) — hier keine weitere Änderung nötig.
 
-### 2) „Leistungs-Graph beginnt immer um 02:00"
-Kein Frontend-Bug, sondern **Retention**. Die Hetzner-Live-DB hält Power-Readings länger vor (dort korrekt), die Cloud-DB (dieses Lovable-Projekt) hat schlicht keine älteren Werte. 02:00 CEST = 00:00 UTC, der älteste vorhandene Datensatz.
+## Fix
 
-### 3) „Einspeisung unter X-Achse"
-Echter Code-Bug: `energyBuckets` liefert `import` und `export` **beide als positive kWh-Werte** und beide Bars werden oberhalb der X-Achse gestapelt. Bei bidirektionalen Zählern soll Einspeisung negativ dargestellt werden.
+Alles in `src/components/dashboard/EnergyFlowMonitor.tsx`, nur Frontend.
 
----
+### 1) Merge auf gemeinsame Zeit-Buckets statt exakter Millisekunden
 
-## Plan
+`mergedSeries` (~Zeile 1443) neu: SOC- und Power-Werte auf einen gemeinsamen Bucket runden, sodass "nahe" Zeitpunkte einen gemeinsamen Datensatz erzeugen.
 
-### A. Sofort-Fix im Frontend (`src/components/dashboard/EnergyFlowMonitor.tsx`)
+```ts
+const bucketMs =
+  range === "1h"  ? 60_000            // 1 min
+  : range === "24h" ? 5 * 60_000      // 5 min
+  : range === "7d"  ? 15 * 60_000     // 15 min
+  : 60 * 60_000;                      // 1 h
 
-1. **Einspeisung negativ darstellen** (Chart 2, ab Zeile ~1780)
-   - `energyBuckets` bleibt physisch positiv (KPI-Kacheln zeigen weiterhin Bezug / Einspeisung als Beträge).
-   - Für den BarChart eine abgeleitete Reihe `energyBucketsChart` bauen: `{ t, import, exportNeg: -export }`.
-   - `<Bar dataKey="import" …>` (Bezug, pink, oberhalb) und `<Bar dataKey="exportNeg" …>` (Einspeisung, grün, unterhalb).
-   - Y-Achse: `domain={[(dataMin) => Math.min(0, dataMin), (dataMax) => Math.max(0, dataMax)]}`, `ReferenceLine y={0}` bei bidirektionalen Speichern.
-   - Tooltip: `name === "exportNeg"` → Label „Einspeisung", Wert wieder als `Math.abs(v)` formatieren.
-   - Legende entsprechend anpassen.
+const map = new Map<number, { t: number; kw: number | null; soc: number | null }>();
+const put = (rawT: number, patch: Partial<{ kw: number; soc: number }>) => {
+  const key = Math.round(rawT / bucketMs) * bucketMs;
+  const cur = map.get(key) ?? { t: key, kw: null, soc: null };
+  if (patch.kw  != null) cur.kw  = patch.kw;
+  if (patch.soc != null) cur.soc = patch.soc;
+  map.set(key, cur);
+};
+for (const p of series)    put(p.t, { kw:  p.kw  });
+for (const s of socSeries) put(s.t, { soc: s.soc });
+const mergedSeries = Array.from(map.values()).sort((a, b) => a.t - b.t);
+```
 
-2. **SOC + Leistung visuell zusammenführen (Chart 1)**
-   - Wenn Power-Historie kürzer ist als SOC-Historie, den sichtbaren X-Bereich des Leistungscharts an den gemeinsam vorhandenen Bereich klemmen, damit klar wird, dass SOC weiter zurückreicht als Power. Konkret: unterhalb des Charts einen zweiten dezenten Hinweis „Leistungs-Historie ab HH:MM · SOC-Historie ab DD.MM." rendern (aktueller `gapHintText` deckt nur den früheren der beiden Starts ab).
-   - Kein Struktur-Umbau, Achsen bleiben wie sie sind.
+Damit stehen SOC und Power am gleichen X-Wert und die Chart-Achse ist implizit synchron.
 
-### B. Datenseite (Cloud-DB) – nur benennen, kein Code
+### 2) SOC-Linie `connectNulls={true}`
 
-Der eigentliche Grund für Punkt 2 ist die **Retention von `meter_power_readings`** in der Cloud-Instanz. Zwei Optionen zur Entscheidung (nicht Teil dieses Plans, nur Empfehlung):
+Kleinere Restlücken (z. B. Bucket ohne SOC, aber mit Power) sollen die SOC-Linie nicht unterbrechen. In der `<Line dataKey="soc" …>` (~Zeile 1786):
+```
+connectNulls={true}
+```
+Für die Power-`<Area>` bleibt `connectNulls` wie bisher — echte Power-Lücken sollen sichtbar bleiben.
 
-- Retention der Power-Readings in der Cloud-DB auf ≥ 7 Tage anheben (mehr Speicher, mehr IO), **oder**
-- Cloud bewusst als „letzte 24 h Live" behandeln und im UI-Header „Cloud-Preview – 24 h Historie" ausweisen.
+### 3) Gap-Hint neu bewerten
 
-Auf Hetzner ist bereits alles korrekt, dort ist nichts zu ändern.
+`firstPowerTs`/`firstSocTs` (~Zeile 1533/1534) auf die neuen `mergedSeries` beziehen: erster Bucket mit `kw != null` bzw. `soc != null`. Damit stimmt der Hinweistext („SOC ab … · Leistung ab …") wieder mit dem gezeichneten Chart überein.
 
-### Technische Details
+### 4) Verifikation
 
-- Datei: `src/components/dashboard/EnergyFlowMonitor.tsx`
-- Betroffene Blöcke: `energyBuckets` (~1471), BarChart-Render (~1780–1830), Header/Hint des Leistungscharts (~1625–1668).
-- Keine DB-Migration, keine Änderungen an Edge Functions, keine Änderungen am Hetzner-Frontend nötig.
+- In Lovable-Preview den Speicher-Node öffnen → SOC-Linie muss über 24 h durchgehen und bei ~100 % enden (statt bei 02:00 abbrechen).
+- 7-Tage-Ansicht: SOC-Linie muss die ~309 Zeilen der letzten 7 Tage abbilden (7–100 %).
+- Screenshot vergleichen mit Hetzner-Live.
 
-### Nicht im Scope
+## Nicht im Scope
 
-- Ändern der Retention-Policy in der Cloud-DB (separate Entscheidung).
-- Umbau der SOC-Persistenz oder des `storage_soc_readings`-Schemas.
-- Änderungen an der Hetzner-Instanz.
+- Retention/Ingest-Timing in der Cloud-DB (funktioniert korrekt).
+- Änderungen an `storage_soc_readings`-Schema oder Ingest-Pfad.
+- Hetzner-Frontend.
+
+## Aufwand
+
+~0,5 Personentag, isoliert in einer Datei.
