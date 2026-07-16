@@ -1540,8 +1540,8 @@ export function MeterDetailDialog({
     for (let t = start; t <= xDomain[1]; t += step) ticks.push(t);
     return ticks;
   }, [xDomain, range]);
-  const firstPowerTs = series[0]?.t;
-  const firstSocTs = socSeries[0]?.t;
+  const firstPowerTs = mergedSeries.find((d) => d.kw != null)?.t;
+  const firstSocTs = mergedSeries.find((d) => d.soc != null)?.t;
   const fmtHintTime = (t: number) => {
     const d = new Date(t);
     if (range === "1h" || range === "24h") {
