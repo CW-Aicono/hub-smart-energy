@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -6,13 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, LogOut } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import aiconoLogo from "@/assets/aicono-logo.png";
 import { usePartnerHostBranding } from "@/hooks/usePartnerHostBranding";
 import { isBoardHost } from "@/lib/hostname";
+import { AUTO_LOGOUT_FLAG_KEY } from "@/hooks/useAutoLogout";
 
 type AuthView = "login" | "forgotPassword";
 
@@ -26,6 +31,18 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showAutoLogoutNotice, setShowAutoLogoutNotice] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && localStorage.getItem(AUTO_LOGOUT_FLAG_KEY) === "1") {
+      setShowAutoLogoutNotice(true);
+    }
+  }, []);
+
+  const dismissAutoLogoutNotice = () => {
+    localStorage.removeItem(AUTO_LOGOUT_FLAG_KEY);
+    setShowAutoLogoutNotice(false);
+  };
 
   const brandLogo = partnerBranding?.logo_url || aiconoLogo;
   const brandName = partnerBranding?.brand_display_name || partnerBranding?.name || "AICONO";
@@ -98,6 +115,26 @@ const Auth = () => {
 
   return (
     <div className="flex min-h-screen">
+      <AlertDialog open={showAutoLogoutNotice}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <LogOut className="h-5 w-5" />
+              Sie wurden automatisch abgemeldet
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Aus Sicherheitsgründen wurde Ihre Sitzung nach längerer Inaktivität beendet.
+              Bitte bestätigen Sie diesen Hinweis, um sich erneut anzumelden.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={dismissAutoLogoutNotice}>
+              Verstanden
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Left branding panel */}
       <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-12" style={{ backgroundColor: brandPrimary }}>
         <div className="max-w-md text-center">
