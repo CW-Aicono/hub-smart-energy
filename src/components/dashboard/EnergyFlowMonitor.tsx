@@ -1785,7 +1785,10 @@ export function MeterDetailDialog({
             </div>
             <div className="h-[240px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={energyBuckets} margin={{ top: 8, right: showSocAxis ? 60 : 16, left: 8, bottom: 28 }}>
+                <BarChart
+                  data={energyBuckets.map((b) => ({ t: b.t, import: b.import, exportNeg: -b.export }))}
+                  margin={{ top: 8, right: showSocAxis ? 60 : 16, left: 8, bottom: 28 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                   <XAxis
                     dataKey="t"
@@ -1803,20 +1806,32 @@ export function MeterDetailDialog({
                   </XAxis>
                   <YAxis
                     tick={{ fontSize: 11 }}
-                    tickFormatter={(v) => v.toLocaleString("de-DE")}
+                    tickFormatter={(v) => Math.abs(Number(v)).toLocaleString("de-DE")}
+                    domain={[
+                      (dataMin: number) => (Number.isFinite(dataMin) ? Math.min(0, dataMin) : 0),
+                      (dataMax: number) => (Number.isFinite(dataMax) ? Math.max(0, dataMax) : 0),
+                    ]}
                     width={70}
                   >
                     <AxisLabel value="Energie (kWh)" angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
+                  {stats?.bidirectional && <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />}
                   <RTooltip
                     contentStyle={{ fontSize: 11 }}
                     labelFormatter={(v) => new Date(v as number).toLocaleString("de-DE")}
-                    formatter={(v: any, name: string) => [`${fmtDeNum(Number(v))} kWh`, name === "import" ? "Bezug" : "Einspeisung"]}
+                    formatter={(v: any, name: string) => [
+                      `${fmtDeNum(Math.abs(Number(v)))} kWh`,
+                      name === "import" ? "Bezug" : "Einspeisung",
+                    ]}
                   />
-                  <Legend verticalAlign="top" wrapperStyle={{ fontSize: 11, paddingBottom: 8 }} formatter={(v) => (v === "import" ? "Bezug" : "Einspeisung")} />
-                  <Bar dataKey="import" stackId="e" fill={node.color} />
+                  <Legend
+                    verticalAlign="top"
+                    wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
+                    formatter={(v) => (v === "import" ? "Bezug" : "Einspeisung")}
+                  />
+                  <Bar dataKey="import" fill={node.color} />
                   {stats?.bidirectional && (
-                    <Bar dataKey="export" stackId="e" fill="hsl(152 55% 42%)" />
+                    <Bar dataKey="exportNeg" fill="hsl(152 55% 42%)" />
                   )}
                 </BarChart>
               </ResponsiveContainer>
