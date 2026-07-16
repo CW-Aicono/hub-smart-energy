@@ -1530,12 +1530,29 @@ export function MeterDetailDialog({
     for (let t = start; t <= xDomain[1]; t += step) ticks.push(t);
     return ticks;
   }, [xDomain, range]);
-  const firstDataTs = series[0]?.t ?? socSeries[0]?.t;
-  const showGapHint =
-    firstDataTs != null && firstDataTs - xDomain[0] > 60 * 60_000;
-  const gapHintText = showGapHint
-    ? `Daten ab ${new Date(firstDataTs).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`
-    : "";
+  const firstPowerTs = series[0]?.t;
+  const firstSocTs = socSeries[0]?.t;
+  const fmtHintTime = (t: number) => {
+    const d = new Date(t);
+    if (range === "1h" || range === "24h") {
+      return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    }
+    return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+  };
+  const powerLate = firstPowerTs != null && firstPowerTs - xDomain[0] > 60 * 60_000;
+  const socLate = firstSocTs != null && firstSocTs - xDomain[0] > 60 * 60_000;
+  const gapHintText = (() => {
+    if (powerLate && socLate && hasSoc) {
+      return `Leistung ab ${fmtHintTime(firstPowerTs!)} · SOC ab ${fmtHintTime(firstSocTs!)}`;
+    }
+    if (powerLate && hasSoc) return `Leistung ab ${fmtHintTime(firstPowerTs!)} (SOC älter verfügbar)`;
+    const anyTs = firstPowerTs ?? firstSocTs;
+    if (anyTs != null && anyTs - xDomain[0] > 60 * 60_000) {
+      return `Daten ab ${fmtHintTime(anyTs)}`;
+    }
+    return "";
+  })();
+  const showGapHint = gapHintText.length > 0;
 
 
 
