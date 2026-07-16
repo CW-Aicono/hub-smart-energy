@@ -1793,7 +1793,7 @@ export function MeterDetailDialog({
                       dot={false}
                       activeDot={{ r: 3 }}
                       isAnimationActive={false}
-                      connectNulls={false}
+                      connectNulls
                       name="soc"
                     />
                   )}
