@@ -1,54 +1,58 @@
+## Diagnose (mit Datencheck bestätigt)
 
-# Plan: Diagnose-Runbook zum Hetzner-Abuse-Report
+Ich habe die Cloud-DB (Lovable-Backend) direkt abgefragt für den Speicher-Zähler `9650d672…`:
 
-## Ziel
+| Quelle | Zeitraum verfügbar | Zeilen (7 d) |
+|---|---|---|
+| `meter_power_readings` (Leistung) | **nur 16.07. 00:00 UTC → jetzt** | 74 |
+| `storage_soc_readings` (SOC) | 13.07. → jetzt | 10 075 |
 
-Ein neues Markdown-Dokument, das Schritt für Schritt (kopierbare SSH-Befehle, keine Vorkenntnisse) prüft, ob der OCPP-Server bei Hetzner (`178.105.45.225` / `ocpp.aicono.org`) kompromittiert wurde. Stilistisch am bestehenden `docs/HETZNER_TEST_ANLEITUNG.md` orientiert (nummerierte Schritte, graue Kopier-Kästen, ✅/❌-Blöcke, „Was tue ich, wenn…").
+Damit lässt sich jedes Symptom eindeutig zuordnen:
 
-## Neue Datei
+### 1) „SOC und Leistung nicht parallel"
+Beide Reihen werden zwar über die gleiche X-Achse gerendert, aber die Leistungs-Reihe endet links bei 02:00 (= 00:00 UTC), weil in der **Cloud-DB nur ~24 h Power-Historie** liegt. Die SOC-Linie sollte dagegen mehrere Tage abdecken – wird aber im Chart auf denselben Ausschnitt reduziert.
 
-`docs/ocpp-persistent-server/ABUSE_REPORT_DIAGNOSE.md`
+### 2) „Leistungs-Graph beginnt immer um 02:00"
+Kein Frontend-Bug, sondern **Retention**. Die Hetzner-Live-DB hält Power-Readings länger vor (dort korrekt), die Cloud-DB (dieses Lovable-Projekt) hat schlicht keine älteren Werte. 02:00 CEST = 00:00 UTC, der älteste vorhandene Datensatz.
 
-## Aufbau des Dokuments
+### 3) „Einspeisung unter X-Achse"
+Echter Code-Bug: `energyBuckets` liefert `import` und `export` **beide als positive kWh-Werte** und beide Bars werden oberhalb der X-Achse gestapelt. Bei bidirektionalen Zählern soll Einspeisung negativ dargestellt werden.
 
-1. **Kontext in 3 Sätzen** — was Hetzner/Skhron gemeldet hat, warum das ernst ist, was das Runbook leistet (Diagnose, noch keine Bereinigung).
-2. **Vorbereitung** — SSH-Login auf den Server (Verweis auf die bestehende Anleitung, damit nichts doppelt steht).
-3. **Schritt 1 — Aktive ausgehende SSH-Verbindungen prüfen**
-   `ss -tunap | grep -E ':(22|222|2022|2222) '`
-   Erwartung: leer. Treffer = akuter Scan läuft gerade.
-4. **Schritt 2 — Laufende Prozesse auf bekannte Scanner/Miner prüfen**
-   `ps auxf` und
-   `ps auxf | grep -iE 'masscan|zmap|pnscan|sshscan|kinsing|xmrig|kdevtmpfsi|xmr|monero'`
-5. **Schritt 3 — SSH-Login-Historie prüfen**
-   - `last -Fa | head -30` (erfolgreiche Logins, fremde IPs?)
-   - `lastb | head -30` (fehlgeschlagene Versuche — Menge/Herkunft)
-   - `journalctl -u ssh --since "14 days ago" | grep -iE 'accepted|invalid|failed' | tail -80`
-6. **Schritt 4 — Cronjobs & systemd-Timer auf unbekannte Einträge prüfen**
-   - `crontab -l` (root)
-   - `for u in $(cut -f1 -d: /etc/passwd); do crontab -u $u -l 2>/dev/null && echo "-- $u"; done`
-   - `ls -la /etc/cron.*/ /var/spool/cron/ 2>/dev/null`
-   - `systemctl list-timers --all`
-7. **Schritt 5 — Docker-Container & -Images inventarisieren**
-   - `docker ps -a` und `docker images`
-   - Whitelist: nur `ocpp` (unser Node-Server), `caddy`, optional `ocpp-simulator`. Alles andere = verdächtig.
-   - `docker inspect <container> | grep -iE 'cmd|entrypoint'` bei Unbekanntem.
-8. **Schritt 6 — Auth-relevante Dateien auf Manipulation prüfen**
-   - `ls -la /root/.ssh/authorized_keys` und Inhalt anzeigen
-   - `getent passwd | awk -F: '$3>=1000'` (unerwartete User?)
-   - `stat /etc/passwd /etc/shadow /etc/ssh/sshd_config` (Änderungsdatum plausibel?)
-9. **Schritt 7 — Kurz-Auswertung** — Entscheidungsbaum:
-   - **Alles unauffällig** → Verdacht auf Fehlalarm oder abgeschlossenen, kurzen Scan. Antwortentwurf an Hetzner (im Dokument enthalten), Härtung planen (Verweis auf späteres Hardening-Doku, das der User bei Bedarf separat anfordern kann).
-   - **Auffällig (unbekannter Prozess, unbekannter Container, unbekannter authorized_keys-Eintrag, unbekannter User)** → Klartext: Server als kompromittiert behandeln, keine Nachbesserung — Neuaufsetzen. Kurzer Ablauf: neuen Hetzner-Server bestellen, `docs/ocpp-persistent-server/` frisch deployen, Wallbox-URLs zeigen weiterhin auf die gleiche Subdomain (DNS umziehen), alter Server wird abgeschaltet.
-10. **Was ich (User) an Skhron/Hetzner zurückschreibe** — zwei fertige Textbausteine (deutsch + englisch), je nach Befund („untersucht, Ursache Y gefunden, Maßnahme Z ergriffen").
-11. **Was das Runbook NICHT tut** — expliziter Hinweis: keine Bereinigung, keine automatische Härtung, keine Änderung an der Lovable-App. Alles nur Lese-Befehle bis auf Cron/Docker-Inspect.
+---
 
-## Was NICHT Teil dieses Plans ist
+## Plan
 
-- Keine Änderungen an App-Code, an `docs/ocpp-persistent-server/src/**`, an Compose-Files oder am Caddyfile.
-- Kein Hardening-Skript (fail2ban, UFW, Key-only-SSH) — das war eine separate Option und wurde nicht gewählt. Kann später separat beauftragt werden.
-- Kein automatisiertes Diagnose-Skript — der User wünscht das Runbook zum manuellen Kopieren.
+### A. Sofort-Fix im Frontend (`src/components/dashboard/EnergyFlowMonitor.tsx`)
 
-## Technische Notiz
+1. **Einspeisung negativ darstellen** (Chart 2, ab Zeile ~1780)
+   - `energyBuckets` bleibt physisch positiv (KPI-Kacheln zeigen weiterhin Bezug / Einspeisung als Beträge).
+   - Für den BarChart eine abgeleitete Reihe `energyBucketsChart` bauen: `{ t, import, exportNeg: -export }`.
+   - `<Bar dataKey="import" …>` (Bezug, pink, oberhalb) und `<Bar dataKey="exportNeg" …>` (Einspeisung, grün, unterhalb).
+   - Y-Achse: `domain={[(dataMin) => Math.min(0, dataMin), (dataMax) => Math.max(0, dataMax)]}`, `ReferenceLine y={0}` bei bidirektionalen Speichern.
+   - Tooltip: `name === "exportNeg"` → Label „Einspeisung", Wert wieder als `Math.abs(v)` formatieren.
+   - Legende entsprechend anpassen.
 
-- Reine Doku-Änderung, keine TypeScript-Builds, keine Migrations, keine Edge Functions betroffen.
-- Zielgruppe = derselbe „Nicht-Terminal-Profi"-Nutzer wie bei `HETZNER_TEST_ANLEITUNG.md`; Sprache und Formatierung (grauer Kasten pro Befehl, ein Befehl pro Kasten, Erwartungswert direkt darunter) werden 1:1 übernommen.
+2. **SOC + Leistung visuell zusammenführen (Chart 1)**
+   - Wenn Power-Historie kürzer ist als SOC-Historie, den sichtbaren X-Bereich des Leistungscharts an den gemeinsam vorhandenen Bereich klemmen, damit klar wird, dass SOC weiter zurückreicht als Power. Konkret: unterhalb des Charts einen zweiten dezenten Hinweis „Leistungs-Historie ab HH:MM · SOC-Historie ab DD.MM." rendern (aktueller `gapHintText` deckt nur den früheren der beiden Starts ab).
+   - Kein Struktur-Umbau, Achsen bleiben wie sie sind.
+
+### B. Datenseite (Cloud-DB) – nur benennen, kein Code
+
+Der eigentliche Grund für Punkt 2 ist die **Retention von `meter_power_readings`** in der Cloud-Instanz. Zwei Optionen zur Entscheidung (nicht Teil dieses Plans, nur Empfehlung):
+
+- Retention der Power-Readings in der Cloud-DB auf ≥ 7 Tage anheben (mehr Speicher, mehr IO), **oder**
+- Cloud bewusst als „letzte 24 h Live" behandeln und im UI-Header „Cloud-Preview – 24 h Historie" ausweisen.
+
+Auf Hetzner ist bereits alles korrekt, dort ist nichts zu ändern.
+
+### Technische Details
+
+- Datei: `src/components/dashboard/EnergyFlowMonitor.tsx`
+- Betroffene Blöcke: `energyBuckets` (~1471), BarChart-Render (~1780–1830), Header/Hint des Leistungscharts (~1625–1668).
+- Keine DB-Migration, keine Änderungen an Edge Functions, keine Änderungen am Hetzner-Frontend nötig.
+
+### Nicht im Scope
+
+- Ändern der Retention-Policy in der Cloud-DB (separate Entscheidung).
+- Umbau der SOC-Persistenz oder des `storage_soc_readings`-Schemas.
+- Änderungen an der Hetzner-Instanz.
