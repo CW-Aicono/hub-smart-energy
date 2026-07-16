@@ -1439,18 +1439,28 @@ export function MeterDetailDialog({
     },
   });
 
-  // Power- und SOC-Reihen zu einer Datenreihe mergen (nach Zeit)
+  // Power- und SOC-Reihen auf gemeinsame Zeit-Buckets mergen. Die Ingest-Pfade
+  // für Power und SOC schreiben ~500 ms versetzt, daher würde ein Merge auf
+  // exakter Millisekunde jeden Punkt entweder nur mit `kw` oder nur mit `soc`
+  // füllen — mit `connectNulls={false}` wäre die SOC-Linie danach unsichtbar.
   const mergedSeries = useMemo(() => {
-    if (!socSeries.length) return series.map((d) => ({ ...d, soc: null as number | null }));
+    const bucketMs =
+      range === "1h" ? 60_000
+      : range === "24h" ? 5 * 60_000
+      : range === "7d" ? 15 * 60_000
+      : 60 * 60_000;
     const map = new Map<number, { t: number; kw: number | null; soc: number | null }>();
-    for (const p of series) map.set(p.t, { t: p.t, kw: p.kw, soc: null });
-    for (const s of socSeries) {
-      const cur = map.get(s.t) ?? { t: s.t, kw: null, soc: null };
-      cur.soc = s.soc;
-      map.set(s.t, cur);
-    }
+    const put = (rawT: number, patch: { kw?: number | null; soc?: number | null }) => {
+      const key = Math.round(rawT / bucketMs) * bucketMs;
+      const cur = map.get(key) ?? { t: key, kw: null, soc: null };
+      if (patch.kw != null && Number.isFinite(patch.kw)) cur.kw = patch.kw;
+      if (patch.soc != null && Number.isFinite(patch.soc)) cur.soc = patch.soc;
+      map.set(key, cur);
+    };
+    for (const p of series) put(p.t, { kw: p.kw });
+    for (const s of socSeries) put(s.t, { soc: s.soc });
     return Array.from(map.values()).sort((a, b) => a.t - b.t);
-  }, [series, socSeries]);
+  }, [series, socSeries, range]);
   const hasSoc = socSeries.length > 0;
   const hasSocLine = socSeries.length >= 2;
   // Rechte SOC-Achse auch dann anzeigen, wenn nur der aktuelle SOC bekannt ist.
@@ -1530,8 +1540,8 @@ export function MeterDetailDialog({
     for (let t = start; t <= xDomain[1]; t += step) ticks.push(t);
     return ticks;
   }, [xDomain, range]);
-  const firstPowerTs = series[0]?.t;
-  const firstSocTs = socSeries[0]?.t;
+  const firstPowerTs = mergedSeries.find((d) => d.kw != null)?.t;
+  const firstSocTs = mergedSeries.find((d) => d.soc != null)?.t;
   const fmtHintTime = (t: number) => {
     const d = new Date(t);
     if (range === "1h" || range === "24h") {
@@ -1783,7 +1793,7 @@ export function MeterDetailDialog({
                       dot={false}
                       activeDot={{ r: 3 }}
                       isAnimationActive={false}
-                      connectNulls={false}
+                      connectNulls
                       name="soc"
                     />
                   )}
