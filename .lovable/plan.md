@@ -1,140 +1,54 @@
 
-# Modul „Dokumentation"
+# Plan: Diagnose-Runbook zum Hetzner-Abuse-Report
 
-Ein eigenständiges Modul, mit dem Tenants Dokumente zentral, pro Liegenschaft oder direkt an einzelnen Assets (Zähler, Sensoren/Aktoren, Wallboxen, Gateways, PV/Speicher, Rechnungen) ablegen können. Zugriff über Rolle + Kategorie + optionalen Einzel-Dokument-Override. Versionierung ab MVP.
+## Ziel
 
-## 1. Modul-Registrierung (Super-Admin)
+Ein neues Markdown-Dokument, das Schritt für Schritt (kopierbare SSH-Befehle, keine Vorkenntnisse) prüft, ob der OCPP-Server bei Hetzner (`178.105.45.225` / `ocpp.aicono.org`) kompromittiert wurde. Stilistisch am bestehenden `docs/HETZNER_TEST_ANLEITUNG.md` orientiert (nummerierte Schritte, graue Kopier-Kästen, ✅/❌-Blöcke, „Was tue ich, wenn…").
 
-- Neuer Modul-Code `documentation` in `ALL_MODULES` (`useTenantModules.tsx`) – Label: „Dokumentation".
-- Migration: Eintrag in `module_prices` (Standard/Industrie/Partner) mit sinnvollem Default (z.B. 9 €/Monat) – im Super-Admin über bestehendes Preis-UI editierbar.
-- Sichtbarkeit gesteuert über `ModuleGuard`.
-- Sales-Katalog: Modul erscheint automatisch im Angebots-Assistenten (nutzt `module_prices`).
+## Neue Datei
 
-## 2. Navigation – kein neuer Hauptmenüpunkt
+`docs/ocpp-persistent-server/ABUSE_REPORT_DIAGNOSE.md`
 
-- Bestehenden Hauptmenüpunkt **„Einstellungen"** in **„Verwaltung"** umbenennen (Sidebar Desktop + Mobile, alle 4 Sprachen: `nav.settings` → neuer Key `nav.administration` bzw. Wert anpassen).
-- Neuer Sub-Menüpunkt **„Dokumentation"** unter „Verwaltung" → Route `/documents`.
-- Bestehende Kinder von „Einstellungen" (Branding, E-Mail-Templates, Integrationen …) bleiben unverändert, „Dokumentation" wird eingereiht.
-- Menüpunkt nur sichtbar, wenn Modul `documentation` aktiv **und** aktueller User Permission `documents.view` hat.
+## Aufbau des Dokuments
 
-## 3. Datenmodell
+1. **Kontext in 3 Sätzen** — was Hetzner/Skhron gemeldet hat, warum das ernst ist, was das Runbook leistet (Diagnose, noch keine Bereinigung).
+2. **Vorbereitung** — SSH-Login auf den Server (Verweis auf die bestehende Anleitung, damit nichts doppelt steht).
+3. **Schritt 1 — Aktive ausgehende SSH-Verbindungen prüfen**
+   `ss -tunap | grep -E ':(22|222|2022|2222) '`
+   Erwartung: leer. Treffer = akuter Scan läuft gerade.
+4. **Schritt 2 — Laufende Prozesse auf bekannte Scanner/Miner prüfen**
+   `ps auxf` und
+   `ps auxf | grep -iE 'masscan|zmap|pnscan|sshscan|kinsing|xmrig|kdevtmpfsi|xmr|monero'`
+5. **Schritt 3 — SSH-Login-Historie prüfen**
+   - `last -Fa | head -30` (erfolgreiche Logins, fremde IPs?)
+   - `lastb | head -30` (fehlgeschlagene Versuche — Menge/Herkunft)
+   - `journalctl -u ssh --since "14 days ago" | grep -iE 'accepted|invalid|failed' | tail -80`
+6. **Schritt 4 — Cronjobs & systemd-Timer auf unbekannte Einträge prüfen**
+   - `crontab -l` (root)
+   - `for u in $(cut -f1 -d: /etc/passwd); do crontab -u $u -l 2>/dev/null && echo "-- $u"; done`
+   - `ls -la /etc/cron.*/ /var/spool/cron/ 2>/dev/null`
+   - `systemctl list-timers --all`
+7. **Schritt 5 — Docker-Container & -Images inventarisieren**
+   - `docker ps -a` und `docker images`
+   - Whitelist: nur `ocpp` (unser Node-Server), `caddy`, optional `ocpp-simulator`. Alles andere = verdächtig.
+   - `docker inspect <container> | grep -iE 'cmd|entrypoint'` bei Unbekanntem.
+8. **Schritt 6 — Auth-relevante Dateien auf Manipulation prüfen**
+   - `ls -la /root/.ssh/authorized_keys` und Inhalt anzeigen
+   - `getent passwd | awk -F: '$3>=1000'` (unerwartete User?)
+   - `stat /etc/passwd /etc/shadow /etc/ssh/sshd_config` (Änderungsdatum plausibel?)
+9. **Schritt 7 — Kurz-Auswertung** — Entscheidungsbaum:
+   - **Alles unauffällig** → Verdacht auf Fehlalarm oder abgeschlossenen, kurzen Scan. Antwortentwurf an Hetzner (im Dokument enthalten), Härtung planen (Verweis auf späteres Hardening-Doku, das der User bei Bedarf separat anfordern kann).
+   - **Auffällig (unbekannter Prozess, unbekannter Container, unbekannter authorized_keys-Eintrag, unbekannter User)** → Klartext: Server als kompromittiert behandeln, keine Nachbesserung — Neuaufsetzen. Kurzer Ablauf: neuen Hetzner-Server bestellen, `docs/ocpp-persistent-server/` frisch deployen, Wallbox-URLs zeigen weiterhin auf die gleiche Subdomain (DNS umziehen), alter Server wird abgeschaltet.
+10. **Was ich (User) an Skhron/Hetzner zurückschreibe** — zwei fertige Textbausteine (deutsch + englisch), je nach Befund („untersucht, Ursache Y gefunden, Maßnahme Z ergriffen").
+11. **Was das Runbook NICHT tut** — expliziter Hinweis: keine Bereinigung, keine automatische Härtung, keine Änderung an der Lovable-App. Alles nur Lese-Befehle bis auf Cron/Docker-Inspect.
 
-Neue Tabellen (`public`-Schema, RLS + GRANTs):
+## Was NICHT Teil dieses Plans ist
 
-### `document_categories`
-Tenant-eigene Kategorien (Seed: „Allgemein", „Bedienungsanleitung", „Foto", „Rechnung", „Netzwerk/IP", „Vertrag", „Zertifikat").
-Felder: `tenant_id`, `name`, `slug`, `icon`, `color`, `sort_order`, `is_system`.
+- Keine Änderungen an App-Code, an `docs/ocpp-persistent-server/src/**`, an Compose-Files oder am Caddyfile.
+- Kein Hardening-Skript (fail2ban, UFW, Key-only-SSH) — das war eine separate Option und wurde nicht gewählt. Kann später separat beauftragt werden.
+- Kein automatisiertes Diagnose-Skript — der User wünscht das Runbook zum manuellen Kopieren.
 
-### `documents`
-Metadatenkopf (eine Zeile pro logischem Dokument):
-- `tenant_id`, `category_id`, `title`, `description`, `tags text[]`
-- `current_version_id`, `latest_version_no`
-- `valid_from`, `valid_until` (für spätere Erinnerungen vorbereitet)
-- `created_by`, `updated_by`, Timestamps
+## Technische Notiz
 
-### `document_links` (n:m – ein Dokument kann mehreren Geräten/Scopes zugeordnet werden)
-- `document_id`, `tenant_id`
-- `scope` enum (`tenant`, `location`, `meter`, `charge_point`, `gateway_device`, `energy_storage`, `energy_supplier_invoice`)
-- `scope_id uuid` (nullable bei `tenant`)
-- `location_id` optional als Denormalisierung für schnelle Standort-Filter
-- Unique `(document_id, scope, scope_id)`
-- Mind. ein Link pro Dokument (via Trigger geprüft)
-
-### `document_versions`
-- `document_id`, `version_no`, `storage_path`, `filename`, `mime_type`, `file_size_bytes`, `file_hash`, `uploaded_by`, `notes`, `created_at`
-- Trigger: neuer Insert → `documents.current_version_id`/`latest_version_no` aktualisieren.
-
-### `document_access_rules`
-Ein Regelsatz pro Dokument **oder** pro Kategorie (jeweils tenant_id-scoped):
-- `tenant_id`, `document_id` **oder** `category_id` (genau einer gesetzt, CHECK)
-- `role app_role` **oder** `custom_role_id` (genau einer gesetzt)
-- `can_view`, `can_download`, `can_edit`, `can_delete`
-
-Auflösungspriorität (Security-Definer-Funktion `public.can_access_document(user, doc, action)`):
-1. Super-Admin → immer erlaubt
-2. Rolle mit Permission `documents.manage` → Vollzugriff
-3. Dokument-spezifische Regel (Rolle oder custom_role)
-4. Kategorie-Regel
-5. Fallback: nur Ersteller + Tenant-Admin
-
-### Storage
-- Neuer privater Bucket `tenant-documents` (25 MB Limit, MIME-Whitelist: PDF, PNG/JPG/WEBP, Office-Formate, TXT/CSV/JSON, ZIP).
-- Pfad: `<tenant_id>/<document_id>/<version_no>_<safeFilename>`.
-- Download über bestehende Edge Function `secure-storage-download` (erweitert um Bucket `tenant-documents` + `can_access_document`-Check).
-
-### Permissions (RBAC)
-Neue Einträge in `permissions` (Kategorie „documentation"): `documents.view`, `documents.upload`, `documents.edit`, `documents.delete`, `documents.manage_access`, `documents.manage_categories`.
-
-## 4. UI / UX
-
-### Haupt-Route `/documents` (Verwaltung → Dokumentation)
-- Kopfzeile: Suchfeld (Titel/Tag/Filename), Filter (Kategorie, Standort, Scope, Datum), Upload-Button.
-- Tab-Umschalter: **Alle · Tenant-weit · Standorte · Geräte · Rechnungen**.
-- Karten-/Listenansicht mit Miniatur-Preview, Kategorie-Badge, Standort-Badge, Anzahl Verknüpfungen, Version, Ablaufdatum.
-- Klick → Detail-Sheet: Beschreibung, Versionen (Download je Version, „Als aktuell setzen", Notiz), Zugriffsregeln, **Verknüpfungen (Scopes hinzufügen/entfernen – Mehrfachauswahl von Geräten)**, Historie.
-
-### Upload-Dialog
-- Datei wählen, Kategorie, Titel, Beschreibung, Tags.
-- Abschnitt „Verknüpfen mit" – Multi-Select:
-  - Tenant-weit (Checkbox)
-  - Standorte (Multi-Select)
-  - Geräte (Multi-Select mit Typ-Filter: Zähler, Wallbox, Gateway, PV/Speicher, Sensor/Aktor)
-  - Optional: Rechnung
-- Zugriffsregeln (optional, sonst Kategorie-Defaults).
-
-### Kontextuelle Anzeige direkt an der Gerätekachel
-Neue wiederverwendbare Komponente `<DocumentBadge scope="meter" scopeId={id} />`:
-- Erscheint auf **Gerätekacheln/Detail-Sheets** von Wallbox, Zähler, Sensor/Aktor, Gateway, PV/Speicher, Location.
-- Zeigt Icon + Anzahl der zugeordneten Dokumente (nur die, die der User via `can_access_document` sehen darf).
-- Klick → Popover/Sheet „Dokumente zu diesem Gerät" mit Liste (Titel, Kategorie, Version, Download-Button). Ohne View-Recht: Badge wird ausgeblendet. Ohne Download-Recht: Download-Button disabled + Tooltip.
-- Zusätzlich `<DocumentsPanel scope=… scopeId=…>` als voller Tab in bestehenden Detailseiten (Location, Meter, Charge-Point, Gateway, Energy-Storage) mit Upload direkt im Kontext (setzt Verknüpfung automatisch).
-
-### Kategorien- & Zugriffsverwaltung
-- Unter „Verwaltung → Dokumentation → Einstellungen" (nur `documents.manage_categories`):
-  - CRUD Kategorien.
-  - Default-Zugriffsregeln pro Kategorie.
-- Im Dokument-Detail: Aktion „Zugriff bearbeiten" → Dialog mit Rollen/Custom-Rollen und Häkchen für view/download/edit/delete.
-
-## 5. Backend-Logik
-
-- Hooks (React Query, Tenant-Isolation nach bestehendem Muster):
-  - `useDocuments({ scope?, scopeId?, categoryId?, search? })`
-  - `useDocumentsForScope(scope, scopeId)` – für Gerätekacheln (leicht/gecached).
-  - `useUploadDocument` – SHA-256 Hash, Upload in Bucket, Insert `documents` + `document_versions` + `document_links`.
-  - `useAddDocumentVersion`, `useUpdateDocumentLinks`, `useDocumentAccess`.
-- Downloads via `secure-storage-download` (erweitert): Super-Admin ODER `public.can_access_document(user_id, doc_id, 'download')`.
-- Realtime-Invalidation auf `documents`, `document_versions`, `document_links`.
-
-## 6. Sicherheit
-
-- RLS: `SELECT` über `can_access_document(auth.uid(), id, 'view')`; `INSERT` verlangt `documents.upload` + Tenant-Match; `UPDATE/DELETE` über passende Permission bzw. Regel.
-- GRANTs: `SELECT/INSERT/UPDATE/DELETE` für `authenticated`; `ALL` für `service_role`; kein `anon`.
-- MIME-Whitelist client- **und** serverseitig (Trigger prüft `mime_type` + Größe).
-- Audit-Log (`writeAuditLog`) bei Upload, Delete, Rechteänderung, Link-Änderung, Kategorie-Änderung.
-
-## 7. Umsetzungsschritte
-
-1. **Migration 1** – Enums, Tabellen (`document_categories`, `documents`, `document_versions`, `document_links`, `document_access_rules`), Trigger, `can_access_document`, Grants, RLS, Permissions-Seed, Bucket, Modul-Preis-Eintrag.
-2. **Modul-Registrierung** in `useTenantModules.tsx` (Code `documentation`).
-3. **Sidebar-Umbenennung** „Einstellungen" → „Verwaltung" (Desktop + Mobile + i18n DE/EN/ES/NL) + Sub-Item „Dokumentation" (`/documents`) unter Verwaltung.
-4. **Edge-Function-Erweiterung** `secure-storage-download` für Bucket `tenant-documents`.
-5. **Hooks** implementieren.
-6. **UI Hauptseite** `/documents` inkl. Upload-Dialog mit Multi-Scope-Verknüpfung.
-7. **`<DocumentBadge>`** in Gerätekacheln einbinden (Location-Detail, MeterCard, ChargePointCard, GatewayCard, StorageCard).
-8. **`<DocumentsPanel>`-Tab** in den jeweiligen Detailseiten.
-9. **Kategorien- & Zugriffs-Settings** unter Dokumentation.
-10. **i18n** (DE/EN/ES/NL) & Audit-Log-Einträge.
-11. **Tests**: Vitest für Hooks und `can_access_document`-Regeln.
-
-## 8. Bewusste Nicht-Ziele im MVP
-
-- Kein Ablaufdatum-Task/E-Mail-Trigger (Felder vorbereitet, Erinnerungslogik später).
-- Keine Volltext-/OCR-Suche (nur Titel, Beschreibung, Tags, Dateiname).
-- Keine öffentlichen Freigabe-Links.
-- Kein Video/CAD (25 MB, gängige Formate).
-
-## Technischer Anhang
-
-- Enum `document_scope`: `tenant | location | meter | charge_point | gateway_device | energy_storage | energy_supplier_invoice`.
-- Funktion `public.can_access_document(_user uuid, _doc uuid, _action text) returns boolean` (SECURITY DEFINER, `search_path=public`).
-- Kompatibilität: bestehende `ppa_documents`, `sales_project_attachments`, `task_attachments`, `meter-photos` bleiben unverändert – das neue Modul ergänzt sie.
+- Reine Doku-Änderung, keine TypeScript-Builds, keine Migrations, keine Edge Functions betroffen.
+- Zielgruppe = derselbe „Nicht-Terminal-Profi"-Nutzer wie bei `HETZNER_TEST_ANLEITUNG.md`; Sprache und Formatierung (grauer Kasten pro Befehl, ein Befehl pro Kasten, Erwartungswert direkt darunter) werden 1:1 übernommen.
