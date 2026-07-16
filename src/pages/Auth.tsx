@@ -115,6 +115,26 @@ const Auth = () => {
 
   return (
     <div className="flex min-h-screen">
+      <AlertDialog open={showAutoLogoutNotice}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <LogOut className="h-5 w-5" />
+              Sie wurden automatisch abgemeldet
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Aus Sicherheitsgründen wurde Ihre Sitzung nach längerer Inaktivität beendet.
+              Bitte bestätigen Sie diesen Hinweis, um sich erneut anzumelden.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={dismissAutoLogoutNotice}>
+              Verstanden
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Left branding panel */}
       <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-12" style={{ backgroundColor: brandPrimary }}>
         <div className="max-w-md text-center">
