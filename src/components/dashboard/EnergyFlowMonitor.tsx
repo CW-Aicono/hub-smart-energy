@@ -1530,12 +1530,29 @@ export function MeterDetailDialog({
     for (let t = start; t <= xDomain[1]; t += step) ticks.push(t);
     return ticks;
   }, [xDomain, range]);
-  const firstDataTs = series[0]?.t ?? socSeries[0]?.t;
-  const showGapHint =
-    firstDataTs != null && firstDataTs - xDomain[0] > 60 * 60_000;
-  const gapHintText = showGapHint
-    ? `Daten ab ${new Date(firstDataTs).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`
-    : "";
+  const firstPowerTs = series[0]?.t;
+  const firstSocTs = socSeries[0]?.t;
+  const fmtHintTime = (t: number) => {
+    const d = new Date(t);
+    if (range === "1h" || range === "24h") {
+      return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    }
+    return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+  };
+  const powerLate = firstPowerTs != null && firstPowerTs - xDomain[0] > 60 * 60_000;
+  const socLate = firstSocTs != null && firstSocTs - xDomain[0] > 60 * 60_000;
+  const gapHintText = (() => {
+    if (powerLate && socLate && hasSoc) {
+      return `Leistung ab ${fmtHintTime(firstPowerTs!)} · SOC ab ${fmtHintTime(firstSocTs!)}`;
+    }
+    if (powerLate && hasSoc) return `Leistung ab ${fmtHintTime(firstPowerTs!)} (SOC älter verfügbar)`;
+    const anyTs = firstPowerTs ?? firstSocTs;
+    if (anyTs != null && anyTs - xDomain[0] > 60 * 60_000) {
+      return `Daten ab ${fmtHintTime(anyTs)}`;
+    }
+    return "";
+  })();
+  const showGapHint = gapHintText.length > 0;
 
 
 
@@ -1785,7 +1802,10 @@ export function MeterDetailDialog({
             </div>
             <div className="h-[240px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={energyBuckets} margin={{ top: 8, right: showSocAxis ? 60 : 16, left: 8, bottom: 28 }}>
+                <BarChart
+                  data={energyBuckets.map((b) => ({ t: b.t, import: b.import, exportNeg: -b.export }))}
+                  margin={{ top: 8, right: showSocAxis ? 60 : 16, left: 8, bottom: 28 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                   <XAxis
                     dataKey="t"
@@ -1803,20 +1823,32 @@ export function MeterDetailDialog({
                   </XAxis>
                   <YAxis
                     tick={{ fontSize: 11 }}
-                    tickFormatter={(v) => v.toLocaleString("de-DE")}
+                    tickFormatter={(v) => Math.abs(Number(v)).toLocaleString("de-DE")}
+                    domain={[
+                      (dataMin: number) => (Number.isFinite(dataMin) ? Math.min(0, dataMin) : 0),
+                      (dataMax: number) => (Number.isFinite(dataMax) ? Math.max(0, dataMax) : 0),
+                    ]}
                     width={70}
                   >
                     <AxisLabel value="Energie (kWh)" angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
+                  {stats?.bidirectional && <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />}
                   <RTooltip
                     contentStyle={{ fontSize: 11 }}
                     labelFormatter={(v) => new Date(v as number).toLocaleString("de-DE")}
-                    formatter={(v: any, name: string) => [`${fmtDeNum(Number(v))} kWh`, name === "import" ? "Bezug" : "Einspeisung"]}
+                    formatter={(v: any, name: string) => [
+                      `${fmtDeNum(Math.abs(Number(v)))} kWh`,
+                      name === "import" ? "Bezug" : "Einspeisung",
+                    ]}
                   />
-                  <Legend verticalAlign="top" wrapperStyle={{ fontSize: 11, paddingBottom: 8 }} formatter={(v) => (v === "import" ? "Bezug" : "Einspeisung")} />
-                  <Bar dataKey="import" stackId="e" fill={node.color} />
+                  <Legend
+                    verticalAlign="top"
+                    wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
+                    formatter={(v) => (v === "import" ? "Bezug" : "Einspeisung")}
+                  />
+                  <Bar dataKey="import" fill={node.color} />
                   {stats?.bidirectional && (
-                    <Bar dataKey="export" stackId="e" fill="hsl(152 55% 42%)" />
+                    <Bar dataKey="exportNeg" fill="hsl(152 55% 42%)" />
                   )}
                 </BarChart>
               </ResponsiveContainer>
