@@ -31,6 +31,18 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showAutoLogoutNotice, setShowAutoLogoutNotice] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && localStorage.getItem(AUTO_LOGOUT_FLAG_KEY) === "1") {
+      setShowAutoLogoutNotice(true);
+    }
+  }, []);
+
+  const dismissAutoLogoutNotice = () => {
+    localStorage.removeItem(AUTO_LOGOUT_FLAG_KEY);
+    setShowAutoLogoutNotice(false);
+  };
 
   const brandLogo = partnerBranding?.logo_url || aiconoLogo;
   const brandName = partnerBranding?.brand_display_name || partnerBranding?.name || "AICONO";
