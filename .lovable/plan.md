@@ -1,140 +1,69 @@
+## Echte Ursache (mit DB-Daten verifiziert)
 
-# Modul „Dokumentation"
+Der SOC hat in der Cloud-DB volle 24 h Historie (96 Zeilen alle 15 Min, 70–100 %). Trotzdem endet die SOC-Linie im Chart bei ~02:00 Uhr.
 
-Ein eigenständiges Modul, mit dem Tenants Dokumente zentral, pro Liegenschaft oder direkt an einzelnen Assets (Zähler, Sensoren/Aktoren, Wallboxen, Gateways, PV/Speicher, Rechnungen) ablegen können. Zugriff über Rolle + Kategorie + optionalen Einzel-Dokument-Override. Versionierung ab MVP.
+Grund: In `src/components/dashboard/EnergyFlowMonitor.tsx` (Zeile ~1443) werden SOC- und Leistungs-Punkte per Map über **exakten Millisekunden-Timestamp** zusammengeführt. Aus der DB kommen die beiden Reihen aber ~500 ms versetzt (Power 00:00:27.677, SOC 00:00:28.147, usw.). Dadurch entsteht für jeden Zeitpunkt ein Datensatz mit **nur `kw` oder nur `soc`**, nie beides. Die SOC-`<Line>` läuft mit `connectNulls={false}` → Recharts unterbricht sie bei jedem `null`-Nachbarn.
 
-## 1. Modul-Registrierung (Super-Admin)
+Ergebnis:
+- Zeitfenster mit nur SOC-Punkten (vor 02:00 CEST, bevor Power-Ingest startet) → SOC-Linie sichtbar.
+- Ab 02:00 wechseln sich SOC- und Power-Punkte ab → jeder SOC-Punkt ist von `null` umgeben → **SOC verschwindet**.
 
-- Neuer Modul-Code `documentation` in `ALL_MODULES` (`useTenantModules.tsx`) – Label: „Dokumentation".
-- Migration: Eintrag in `module_prices` (Standard/Industrie/Partner) mit sinnvollem Default (z.B. 9 €/Monat) – im Super-Admin über bestehendes Preis-UI editierbar.
-- Sichtbarkeit gesteuert über `ModuleGuard`.
-- Sales-Katalog: Modul erscheint automatisch im Angebots-Assistenten (nutzt `module_prices`).
+Punkt 3 (Einspeisung negativ) funktioniert im aktuellen Code bereits (Screenshot 1 zeigt grüne Balken unter der X-Achse) — hier keine weitere Änderung nötig.
 
-## 2. Navigation – kein neuer Hauptmenüpunkt
+## Fix
 
-- Bestehenden Hauptmenüpunkt **„Einstellungen"** in **„Verwaltung"** umbenennen (Sidebar Desktop + Mobile, alle 4 Sprachen: `nav.settings` → neuer Key `nav.administration` bzw. Wert anpassen).
-- Neuer Sub-Menüpunkt **„Dokumentation"** unter „Verwaltung" → Route `/documents`.
-- Bestehende Kinder von „Einstellungen" (Branding, E-Mail-Templates, Integrationen …) bleiben unverändert, „Dokumentation" wird eingereiht.
-- Menüpunkt nur sichtbar, wenn Modul `documentation` aktiv **und** aktueller User Permission `documents.view` hat.
+Alles in `src/components/dashboard/EnergyFlowMonitor.tsx`, nur Frontend.
 
-## 3. Datenmodell
+### 1) Merge auf gemeinsame Zeit-Buckets statt exakter Millisekunden
 
-Neue Tabellen (`public`-Schema, RLS + GRANTs):
+`mergedSeries` (~Zeile 1443) neu: SOC- und Power-Werte auf einen gemeinsamen Bucket runden, sodass "nahe" Zeitpunkte einen gemeinsamen Datensatz erzeugen.
 
-### `document_categories`
-Tenant-eigene Kategorien (Seed: „Allgemein", „Bedienungsanleitung", „Foto", „Rechnung", „Netzwerk/IP", „Vertrag", „Zertifikat").
-Felder: `tenant_id`, `name`, `slug`, `icon`, `color`, `sort_order`, `is_system`.
+```ts
+const bucketMs =
+  range === "1h"  ? 60_000            // 1 min
+  : range === "24h" ? 5 * 60_000      // 5 min
+  : range === "7d"  ? 15 * 60_000     // 15 min
+  : 60 * 60_000;                      // 1 h
 
-### `documents`
-Metadatenkopf (eine Zeile pro logischem Dokument):
-- `tenant_id`, `category_id`, `title`, `description`, `tags text[]`
-- `current_version_id`, `latest_version_no`
-- `valid_from`, `valid_until` (für spätere Erinnerungen vorbereitet)
-- `created_by`, `updated_by`, Timestamps
+const map = new Map<number, { t: number; kw: number | null; soc: number | null }>();
+const put = (rawT: number, patch: Partial<{ kw: number; soc: number }>) => {
+  const key = Math.round(rawT / bucketMs) * bucketMs;
+  const cur = map.get(key) ?? { t: key, kw: null, soc: null };
+  if (patch.kw  != null) cur.kw  = patch.kw;
+  if (patch.soc != null) cur.soc = patch.soc;
+  map.set(key, cur);
+};
+for (const p of series)    put(p.t, { kw:  p.kw  });
+for (const s of socSeries) put(s.t, { soc: s.soc });
+const mergedSeries = Array.from(map.values()).sort((a, b) => a.t - b.t);
+```
 
-### `document_links` (n:m – ein Dokument kann mehreren Geräten/Scopes zugeordnet werden)
-- `document_id`, `tenant_id`
-- `scope` enum (`tenant`, `location`, `meter`, `charge_point`, `gateway_device`, `energy_storage`, `energy_supplier_invoice`)
-- `scope_id uuid` (nullable bei `tenant`)
-- `location_id` optional als Denormalisierung für schnelle Standort-Filter
-- Unique `(document_id, scope, scope_id)`
-- Mind. ein Link pro Dokument (via Trigger geprüft)
+Damit stehen SOC und Power am gleichen X-Wert und die Chart-Achse ist implizit synchron.
 
-### `document_versions`
-- `document_id`, `version_no`, `storage_path`, `filename`, `mime_type`, `file_size_bytes`, `file_hash`, `uploaded_by`, `notes`, `created_at`
-- Trigger: neuer Insert → `documents.current_version_id`/`latest_version_no` aktualisieren.
+### 2) SOC-Linie `connectNulls={true}`
 
-### `document_access_rules`
-Ein Regelsatz pro Dokument **oder** pro Kategorie (jeweils tenant_id-scoped):
-- `tenant_id`, `document_id` **oder** `category_id` (genau einer gesetzt, CHECK)
-- `role app_role` **oder** `custom_role_id` (genau einer gesetzt)
-- `can_view`, `can_download`, `can_edit`, `can_delete`
+Kleinere Restlücken (z. B. Bucket ohne SOC, aber mit Power) sollen die SOC-Linie nicht unterbrechen. In der `<Line dataKey="soc" …>` (~Zeile 1786):
+```
+connectNulls={true}
+```
+Für die Power-`<Area>` bleibt `connectNulls` wie bisher — echte Power-Lücken sollen sichtbar bleiben.
 
-Auflösungspriorität (Security-Definer-Funktion `public.can_access_document(user, doc, action)`):
-1. Super-Admin → immer erlaubt
-2. Rolle mit Permission `documents.manage` → Vollzugriff
-3. Dokument-spezifische Regel (Rolle oder custom_role)
-4. Kategorie-Regel
-5. Fallback: nur Ersteller + Tenant-Admin
+### 3) Gap-Hint neu bewerten
 
-### Storage
-- Neuer privater Bucket `tenant-documents` (25 MB Limit, MIME-Whitelist: PDF, PNG/JPG/WEBP, Office-Formate, TXT/CSV/JSON, ZIP).
-- Pfad: `<tenant_id>/<document_id>/<version_no>_<safeFilename>`.
-- Download über bestehende Edge Function `secure-storage-download` (erweitert um Bucket `tenant-documents` + `can_access_document`-Check).
+`firstPowerTs`/`firstSocTs` (~Zeile 1533/1534) auf die neuen `mergedSeries` beziehen: erster Bucket mit `kw != null` bzw. `soc != null`. Damit stimmt der Hinweistext („SOC ab … · Leistung ab …") wieder mit dem gezeichneten Chart überein.
 
-### Permissions (RBAC)
-Neue Einträge in `permissions` (Kategorie „documentation"): `documents.view`, `documents.upload`, `documents.edit`, `documents.delete`, `documents.manage_access`, `documents.manage_categories`.
+### 4) Verifikation
 
-## 4. UI / UX
+- In Lovable-Preview den Speicher-Node öffnen → SOC-Linie muss über 24 h durchgehen und bei ~100 % enden (statt bei 02:00 abbrechen).
+- 7-Tage-Ansicht: SOC-Linie muss die ~309 Zeilen der letzten 7 Tage abbilden (7–100 %).
+- Screenshot vergleichen mit Hetzner-Live.
 
-### Haupt-Route `/documents` (Verwaltung → Dokumentation)
-- Kopfzeile: Suchfeld (Titel/Tag/Filename), Filter (Kategorie, Standort, Scope, Datum), Upload-Button.
-- Tab-Umschalter: **Alle · Tenant-weit · Standorte · Geräte · Rechnungen**.
-- Karten-/Listenansicht mit Miniatur-Preview, Kategorie-Badge, Standort-Badge, Anzahl Verknüpfungen, Version, Ablaufdatum.
-- Klick → Detail-Sheet: Beschreibung, Versionen (Download je Version, „Als aktuell setzen", Notiz), Zugriffsregeln, **Verknüpfungen (Scopes hinzufügen/entfernen – Mehrfachauswahl von Geräten)**, Historie.
+## Nicht im Scope
 
-### Upload-Dialog
-- Datei wählen, Kategorie, Titel, Beschreibung, Tags.
-- Abschnitt „Verknüpfen mit" – Multi-Select:
-  - Tenant-weit (Checkbox)
-  - Standorte (Multi-Select)
-  - Geräte (Multi-Select mit Typ-Filter: Zähler, Wallbox, Gateway, PV/Speicher, Sensor/Aktor)
-  - Optional: Rechnung
-- Zugriffsregeln (optional, sonst Kategorie-Defaults).
+- Retention/Ingest-Timing in der Cloud-DB (funktioniert korrekt).
+- Änderungen an `storage_soc_readings`-Schema oder Ingest-Pfad.
+- Hetzner-Frontend.
 
-### Kontextuelle Anzeige direkt an der Gerätekachel
-Neue wiederverwendbare Komponente `<DocumentBadge scope="meter" scopeId={id} />`:
-- Erscheint auf **Gerätekacheln/Detail-Sheets** von Wallbox, Zähler, Sensor/Aktor, Gateway, PV/Speicher, Location.
-- Zeigt Icon + Anzahl der zugeordneten Dokumente (nur die, die der User via `can_access_document` sehen darf).
-- Klick → Popover/Sheet „Dokumente zu diesem Gerät" mit Liste (Titel, Kategorie, Version, Download-Button). Ohne View-Recht: Badge wird ausgeblendet. Ohne Download-Recht: Download-Button disabled + Tooltip.
-- Zusätzlich `<DocumentsPanel scope=… scopeId=…>` als voller Tab in bestehenden Detailseiten (Location, Meter, Charge-Point, Gateway, Energy-Storage) mit Upload direkt im Kontext (setzt Verknüpfung automatisch).
+## Aufwand
 
-### Kategorien- & Zugriffsverwaltung
-- Unter „Verwaltung → Dokumentation → Einstellungen" (nur `documents.manage_categories`):
-  - CRUD Kategorien.
-  - Default-Zugriffsregeln pro Kategorie.
-- Im Dokument-Detail: Aktion „Zugriff bearbeiten" → Dialog mit Rollen/Custom-Rollen und Häkchen für view/download/edit/delete.
-
-## 5. Backend-Logik
-
-- Hooks (React Query, Tenant-Isolation nach bestehendem Muster):
-  - `useDocuments({ scope?, scopeId?, categoryId?, search? })`
-  - `useDocumentsForScope(scope, scopeId)` – für Gerätekacheln (leicht/gecached).
-  - `useUploadDocument` – SHA-256 Hash, Upload in Bucket, Insert `documents` + `document_versions` + `document_links`.
-  - `useAddDocumentVersion`, `useUpdateDocumentLinks`, `useDocumentAccess`.
-- Downloads via `secure-storage-download` (erweitert): Super-Admin ODER `public.can_access_document(user_id, doc_id, 'download')`.
-- Realtime-Invalidation auf `documents`, `document_versions`, `document_links`.
-
-## 6. Sicherheit
-
-- RLS: `SELECT` über `can_access_document(auth.uid(), id, 'view')`; `INSERT` verlangt `documents.upload` + Tenant-Match; `UPDATE/DELETE` über passende Permission bzw. Regel.
-- GRANTs: `SELECT/INSERT/UPDATE/DELETE` für `authenticated`; `ALL` für `service_role`; kein `anon`.
-- MIME-Whitelist client- **und** serverseitig (Trigger prüft `mime_type` + Größe).
-- Audit-Log (`writeAuditLog`) bei Upload, Delete, Rechteänderung, Link-Änderung, Kategorie-Änderung.
-
-## 7. Umsetzungsschritte
-
-1. **Migration 1** – Enums, Tabellen (`document_categories`, `documents`, `document_versions`, `document_links`, `document_access_rules`), Trigger, `can_access_document`, Grants, RLS, Permissions-Seed, Bucket, Modul-Preis-Eintrag.
-2. **Modul-Registrierung** in `useTenantModules.tsx` (Code `documentation`).
-3. **Sidebar-Umbenennung** „Einstellungen" → „Verwaltung" (Desktop + Mobile + i18n DE/EN/ES/NL) + Sub-Item „Dokumentation" (`/documents`) unter Verwaltung.
-4. **Edge-Function-Erweiterung** `secure-storage-download` für Bucket `tenant-documents`.
-5. **Hooks** implementieren.
-6. **UI Hauptseite** `/documents` inkl. Upload-Dialog mit Multi-Scope-Verknüpfung.
-7. **`<DocumentBadge>`** in Gerätekacheln einbinden (Location-Detail, MeterCard, ChargePointCard, GatewayCard, StorageCard).
-8. **`<DocumentsPanel>`-Tab** in den jeweiligen Detailseiten.
-9. **Kategorien- & Zugriffs-Settings** unter Dokumentation.
-10. **i18n** (DE/EN/ES/NL) & Audit-Log-Einträge.
-11. **Tests**: Vitest für Hooks und `can_access_document`-Regeln.
-
-## 8. Bewusste Nicht-Ziele im MVP
-
-- Kein Ablaufdatum-Task/E-Mail-Trigger (Felder vorbereitet, Erinnerungslogik später).
-- Keine Volltext-/OCR-Suche (nur Titel, Beschreibung, Tags, Dateiname).
-- Keine öffentlichen Freigabe-Links.
-- Kein Video/CAD (25 MB, gängige Formate).
-
-## Technischer Anhang
-
-- Enum `document_scope`: `tenant | location | meter | charge_point | gateway_device | energy_storage | energy_supplier_invoice`.
-- Funktion `public.can_access_document(_user uuid, _doc uuid, _action text) returns boolean` (SECURITY DEFINER, `search_path=public`).
-- Kompatibilität: bestehende `ppa_documents`, `sales_project_attachments`, `task_attachments`, `meter-photos` bleiben unverändert – das neue Modul ergänzt sie.
+~0,5 Personentag, isoliert in einer Datei.
