@@ -7,6 +7,7 @@ import { useTenantOptional } from "./useTenant";
 const STORAGE_KEY = "aicono.lastActivity";
 const CHECK_INTERVAL_MS = 30_000;
 const ACTIVITY_THROTTLE_MS = 1_000;
+export const AUTO_LOGOUT_FLAG_KEY = "aicono.autoLogoutNotice";
 
 /**
  * Auto-Logout bei Inaktivität.
