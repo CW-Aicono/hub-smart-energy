@@ -32,6 +32,7 @@ export function useAutoLogout() {
       loggingOutRef.current = true;
       try {
         localStorage.removeItem(STORAGE_KEY);
+        localStorage.setItem(AUTO_LOGOUT_FLAG_KEY, "1");
         await supabase.auth.signOut();
       } finally {
         navigate("/auth", { replace: true });
