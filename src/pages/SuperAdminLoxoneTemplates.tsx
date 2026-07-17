@@ -13,13 +13,14 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Download, RefreshCw, Puzzle, AlertTriangle, CheckCircle2, Package } from "lucide-react";
+import { Download, RefreshCw, Puzzle, AlertTriangle, CheckCircle2, Package, DatabaseZap } from "lucide-react";
 import { SNIPPET_GROUPS, SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCatalog";
 import {
   downloadGroupPackage,
   downloadAllSnippetsPackage,
   downloadSingleSnippet,
 } from "@/lib/loxone/snippetDownload";
+import { seedRegistryFromSnippets } from "@/lib/loxone/catalogSeed";
 
 interface RegistryEntry {
   id: string;
@@ -138,9 +139,23 @@ export default function SuperAdminLoxoneTemplates() {
               <h1 className="text-2xl font-bold flex items-center gap-2"><Puzzle className="h-6 w-6" /> Loxone-Templates</h1>
               <p className="text-sm text-muted-foreground">Katalog, Health-Report & Snippet-Rollout für die AICO_*-Bausteine.</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button variant="outline" onClick={load} disabled={loading}>
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Aktualisieren
+              </Button>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    const res = await seedRegistryFromSnippets();
+                    toast({ title: "Katalog befüllt", description: `${res.total} Templates upserted.` });
+                    await load();
+                  } catch (e: any) {
+                    toast({ title: "Fehler", description: e.message ?? String(e), variant: "destructive" });
+                  }
+                }}
+              >
+                <DatabaseZap className="h-4 w-4 mr-2" /> Katalog aus Snippet-Bibliothek befüllen
               </Button>
               <Button onClick={downloadAllSnippetsPackage}>
                 <Package className="h-4 w-4 mr-2" /> Gesamt-Paket A–F (.zip)
