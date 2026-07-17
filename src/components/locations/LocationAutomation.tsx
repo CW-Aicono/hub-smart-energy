@@ -65,6 +65,7 @@ import { AutomationRuleBuilder, AutomationRuleData } from "@/components/location
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
 
 function getSensorIcon(type: string) {
   switch (type) {
@@ -374,6 +375,21 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     setRuleBuilderOpen(true);
   };
 
+  const pushToLoxone = async (automationId: string) => {
+    try {
+      const { error } = await supabase.functions.invoke("loxone-template-sync", {
+        body: { action: "push", automation_id: automationId, source: "save" },
+      });
+      if (error) {
+        toast.warning("Regel gespeichert, Loxone-Push fehlgeschlagen: " + (error.message || "Unbekannt"));
+      } else {
+        toast.success("An Miniserver übertragen");
+      }
+    } catch (e: any) {
+      toast.warning("Regel gespeichert, Loxone-Push fehlgeschlagen: " + (e?.message || "Unbekannt"));
+    }
+  };
+
   const handleSaveRule = async (data: AutomationRuleData) => {
     if (!defaultIntegration) throw new Error(T("auto.noIntegration"));
 
@@ -397,8 +413,11 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
       } as any);
       if (error) throw error;
       toast.success(T("auto.updated"));
+      if (data.execution_mode && data.execution_mode !== "cloud" && data.is_active) {
+        await pushToLoxone(editAutomation.id);
+      }
     } else {
-      const { error } = await createAutomation({
+      const { data: created, error } = await createAutomation({
         location_id: locationId,
         location_integration_id: defaultIntegration.id,
         name: data.name,
@@ -416,6 +435,9 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
       });
       if (error) throw error;
       toast.success(T("auto.created"));
+      if (created?.id && data.execution_mode && data.execution_mode !== "cloud" && data.is_active) {
+        await pushToLoxone(created.id);
+      }
     }
   };
 

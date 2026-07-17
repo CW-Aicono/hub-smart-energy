@@ -26,6 +26,7 @@ import { EditLocationDialog } from "@/components/locations/EditLocationDialog";
 import { ArrowLeft, Building2, MapPin, Mail, Phone, User, Star, Layers, ChevronDown, ChevronRight, Cpu, Pencil, Calendar, Ruler, Flame, FileText } from "lucide-react";
 import { DocumentBadge } from "@/components/documents/DocumentBadge";
 import { DocumentsPanel } from "@/components/documents/DocumentsPanel";
+import { LoxoneTemplatesCard } from "@/components/locations/LoxoneTemplatesCard";
 
 const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetchFloors, t }: { locationId: string; isAdmin: boolean; floors: any[]; floorsLoading: boolean; refetchFloors: () => void; t: (key: any) => string }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -220,6 +221,7 @@ const LocationDetail = () => {
           {isModuleEnabled("ev_charging") && <GridComplianceCard locationId={location.id} />}
           {isModuleEnabled("automation_building") && <LocationAutomation locationId={location.id} />}
           {isModuleEnabled("integrations") && <LocationIntegrationsList locationId={location.id} />}
+          {isModuleEnabled("integrations") && <LoxoneTemplatesCard locationId={location.id} />}
           {isModuleEnabled("brighthub_api") && <BrightHubSettings locationId={location.id} />}
           {isModuleEnabled("documentation") && (
             <Card>
