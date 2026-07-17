@@ -794,6 +794,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
           actions: editAutomation.actions,
           logic_operator: editAutomation.logic_operator,
           is_active: editAutomation.is_active,
+          execution_mode: (editAutomation.execution_mode as any) || "cloud",
           actuator_uuid: editAutomation.actuator_uuid,
           actuator_name: editAutomation.actuator_name,
           actuator_control_type: editAutomation.actuator_control_type,
