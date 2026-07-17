@@ -36,6 +36,7 @@ import {
   Building2,
   Timer,
   AlarmClock,
+  Puzzle,
 } from "lucide-react";
 import { LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
@@ -80,6 +81,16 @@ export interface AutomationAction {
   gateway_id?: string;
 }
 
+export type AutomationExecutionMode = "cloud" | "loxone_local" | "hybrid";
+
+export interface InstalledLoxoneTemplate {
+  template_key: string;
+  instance_id: string | null;
+  installed_version: string | null;
+  title: string;
+  parameters: Array<{ name: string; type: string; description?: string }>;
+}
+
 export interface AutomationRuleData {
   name: string;
   description: string;
@@ -87,6 +98,11 @@ export interface AutomationRuleData {
   actions: AutomationAction[];
   logic_operator: "AND" | "OR";
   is_active: boolean;
+  execution_mode: AutomationExecutionMode;
+  /** Loxone-Template-Bindung (nur bei execution_mode != "cloud") */
+  loxone_template_key?: string | null;
+  loxone_template_instance_id?: string | null;
+  loxone_template_bindings?: Record<string, string | number | boolean> | null;
 }
 
 /** Gateway option for MLA mode – each gateway has its own sensor list */
@@ -110,6 +126,8 @@ interface AutomationRuleBuilderProps {
   gatewayOptions?: GatewayOption[];
   /** Authoritative device_type map from meters table (sensor_uuid -> "meter"|"sensor"|"actuator") */
   deviceTypeMap?: Map<string, string>;
+  /** Installierte AICO_-Templates in dieser Location (für execution_mode != "cloud") */
+  installedTemplates?: InstalledLoxoneTemplate[];
 }
 
 // ── Helpers ──
@@ -677,6 +695,7 @@ export function AutomationRuleBuilder({
   isEdit,
   gatewayOptions,
   deviceTypeMap,
+  installedTemplates,
 }: AutomationRuleBuilderProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -684,6 +703,10 @@ export function AutomationRuleBuilder({
   const [actions, setActions] = useState<AutomationAction[]>([]);
   const [logicOp, setLogicOp] = useState<"AND" | "OR">("AND");
   const [isActive, setIsActive] = useState(true);
+  const [executionMode, setExecutionMode] = useState<AutomationExecutionMode>("cloud");
+  const [templateKey, setTemplateKey] = useState<string>("");
+  const [templateInstance, setTemplateInstance] = useState<string>("");
+  const [templateParams, setTemplateParams] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [addConditionOpen, setAddConditionOpen] = useState(false);
 
@@ -695,6 +718,7 @@ export function AutomationRuleBuilder({
       setDescription(initialData.description || "");
       setLogicOp(initialData.logic_operator || "AND");
       setIsActive(initialData.is_active !== undefined ? initialData.is_active : true);
+      setExecutionMode((initialData.execution_mode as AutomationExecutionMode) || "cloud");
 
       if (initialData.conditions && initialData.conditions.length > 0) {
         setConditions(initialData.conditions);
@@ -717,6 +741,19 @@ export function AutomationRuleBuilder({
       } else {
         setActions([]);
       }
+
+      setTemplateKey((initialData.loxone_template_key as string) || "");
+      setTemplateInstance((initialData.loxone_template_instance_id as string) || "");
+      const rawBindings = (initialData.loxone_template_bindings as Record<string, unknown> | null | undefined) ?? null;
+      if (rawBindings && typeof rawBindings === "object") {
+        const stringified: Record<string, string> = {};
+        for (const [k, v] of Object.entries(rawBindings)) {
+          stringified[k] = v === null || v === undefined ? "" : String(v);
+        }
+        setTemplateParams(stringified);
+      } else {
+        setTemplateParams({});
+      }
     } else {
       setName("");
       setDescription("");
@@ -724,6 +761,10 @@ export function AutomationRuleBuilder({
       setActions([]);
       setLogicOp("AND");
       setIsActive(true);
+      setExecutionMode("cloud");
+      setTemplateKey("");
+      setTemplateInstance("");
+      setTemplateParams({});
     }
     setAddConditionOpen(false);
   }, [open, initialData]);
@@ -766,14 +807,57 @@ export function AutomationRuleBuilder({
     setActions((prev) => prev.filter((a) => a.id !== id));
   };
 
+  const isTemplateMode = executionMode !== "cloud" && !!templateKey;
+  const selectedInstalledTemplate = installedTemplates?.find(
+    (t) => t.template_key === templateKey && (t.instance_id ?? "") === (templateInstance ?? ""),
+  );
+
   const handleSave = async () => {
     if (!name.trim()) { toast.error("Name ist erforderlich"); return; }
-    if (actions.length === 0) { toast.error("Mindestens eine Aktion ist erforderlich"); return; }
-    if (actions.some((a) => !a.actuator_uuid)) { toast.error("Alle Aktionen benötigen einen Aktor"); return; }
+
+    if (executionMode !== "cloud") {
+      const hasInstalled = (installedTemplates?.length ?? 0) > 0;
+      if (hasInstalled) {
+        if (!templateKey) { toast.error("Bitte ein installiertes Loxone-Template auswählen"); return; }
+        if (!selectedInstalledTemplate) { toast.error("Ausgewähltes Template ist in dieser Location nicht (mehr) installiert"); return; }
+      }
+    }
+
+    if (!isTemplateMode) {
+      if (actions.length === 0) { toast.error("Mindestens eine Aktion ist erforderlich"); return; }
+      if (actions.some((a) => !a.actuator_uuid)) { toast.error("Alle Aktionen benötigen einen Aktor"); return; }
+    }
+
+    // Parameter-Werte in typisierte Bindings umwandeln
+    let bindings: Record<string, string | number | boolean> | null = null;
+    if (isTemplateMode && selectedInstalledTemplate) {
+      bindings = {};
+      for (const p of selectedInstalledTemplate.parameters) {
+        const raw = templateParams[p.name];
+        if (raw === undefined || raw === "") continue;
+        if (p.type === "Digital") {
+          bindings[p.name] = raw === "1" || raw === "true";
+        } else {
+          const num = Number(raw);
+          bindings[p.name] = Number.isFinite(num) ? num : raw;
+        }
+      }
+    }
 
     setSaving(true);
     try {
-      await onSave({ name, description, conditions, actions, logic_operator: logicOp, is_active: isActive });
+      await onSave({
+        name,
+        description,
+        conditions,
+        actions,
+        logic_operator: logicOp,
+        is_active: isActive,
+        execution_mode: executionMode,
+        loxone_template_key: isTemplateMode ? templateKey : null,
+        loxone_template_instance_id: isTemplateMode ? (templateInstance || null) : null,
+        loxone_template_bindings: bindings,
+      });
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Fehler beim Speichern");
@@ -816,9 +900,132 @@ export function AutomationRuleBuilder({
                 <Label className="text-xs">Beschreibung</Label>
                 <Textarea placeholder="Was macht diese Automation?" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
               </div>
+              <div className="space-y-2">
+                <Label className="text-xs flex items-center gap-1">
+                  <Server className="h-3 w-3" />
+                  Ausführungsort
+                </Label>
+                <Select value={executionMode} onValueChange={(v) => setExecutionMode(v as AutomationExecutionMode)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cloud">
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-medium">Cloud</span>
+                        <span className="text-[10px] text-muted-foreground">Ausführung durch AICONO EMS (Standard)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="loxone_local">
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-medium">Loxone lokal</span>
+                        <span className="text-[10px] text-muted-foreground">Regel läuft ausschließlich auf dem Miniserver</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="hybrid">
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-medium">Hybrid</span>
+                        <span className="text-[10px] text-muted-foreground">Loxone lokal, Cloud als Fallback</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {executionMode !== "cloud" && (
+                <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                  <div className="flex items-center gap-2">
+                    <Puzzle className="h-4 w-4 text-primary" />
+                    <h4 className="text-sm font-semibold">Loxone-Template</h4>
+                  </div>
+                  {(installedTemplates?.length ?? 0) === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Für diese Location sind noch keine AICO_-Templates installiert.
+                      Bitte zuerst ein Snippet in Loxone Config einspielen und in der Karte
+                      „Loxone-Templates" → „Neu scannen" ausführen.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Installiertes Template *</Label>
+                        <Select
+                          value={templateKey && templateInstance ? `${templateKey}::${templateInstance}` : ""}
+                          onValueChange={(v) => {
+                            const [k, i] = v.split("::");
+                            setTemplateKey(k || "");
+                            setTemplateInstance(i || "");
+                            setTemplateParams({});
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Template auswählen…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {installedTemplates!.map((t) => (
+                              <SelectItem
+                                key={`${t.template_key}::${t.instance_id ?? ""}`}
+                                value={`${t.template_key}::${t.instance_id ?? ""}`}
+                              >
+                                <div className="flex flex-col text-left">
+                                  <span className="text-sm">{t.title}</span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {t.template_key}
+                                    {t.instance_id ? ` · Instanz ${t.instance_id}` : ""}
+                                    {t.installed_version ? ` · v${t.installed_version}` : ""}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {selectedInstalledTemplate && selectedInstalledTemplate.parameters.length > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-xs text-muted-foreground">Parameter</Label>
+                          <div className="space-y-2">
+                            {selectedInstalledTemplate.parameters.map((p) => (
+                              <div key={p.name} className="grid grid-cols-[1fr_auto] items-center gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium truncate">{p.name}</p>
+                                  {p.description && (
+                                    <p className="text-[10px] text-muted-foreground truncate">{p.description}</p>
+                                  )}
+                                </div>
+                                {p.type === "Digital" ? (
+                                  <Switch
+                                    checked={templateParams[p.name] === "1" || templateParams[p.name] === "true"}
+                                    onCheckedChange={(v) =>
+                                      setTemplateParams((prev) => ({ ...prev, [p.name]: v ? "1" : "0" }))
+                                    }
+                                  />
+                                ) : (
+                                  <Input
+                                    type="number"
+                                    className="h-8 w-32 text-xs"
+                                    value={templateParams[p.name] ?? ""}
+                                    onChange={(e) =>
+                                      setTemplateParams((prev) => ({ ...prev, [p.name]: e.target.value }))
+                                    }
+                                  />
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            Werte werden bei „Speichern" per Push an den Miniserver übertragen.
+                            Bedingungen/Aktionen unten sind optional (nur Hybrid-Modus).
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             <Separator />
+
 
             {/* ── Conditions (WENN) ── */}
             <div className="space-y-3">
