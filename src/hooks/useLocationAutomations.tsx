@@ -31,6 +31,7 @@ export interface LocationAutomationRecord {
   schedule: unknown | null;
   scope_type?: string | null;
   target_location_ids?: string[] | null;
+  execution_mode?: string | null;
 }
 
 interface CreateAutomationInput {
@@ -47,6 +48,7 @@ interface CreateAutomationInput {
   actions?: AutomationAction[];
   logic_operator?: string;
   is_active?: boolean;
+  execution_mode?: string;
 }
 
 export interface AutomationLastError {

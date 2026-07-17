@@ -393,6 +393,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         actions: data.actions,
         logic_operator: data.logic_operator,
         is_active: data.is_active,
+        execution_mode: data.execution_mode,
       } as any);
       if (error) throw error;
       toast.success(T("auto.updated"));
@@ -411,6 +412,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         actions: data.actions,
         logic_operator: data.logic_operator,
         is_active: data.is_active,
+        execution_mode: data.execution_mode,
       });
       if (error) throw error;
       toast.success(T("auto.created"));
@@ -792,6 +794,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
           actions: editAutomation.actions,
           logic_operator: editAutomation.logic_operator,
           is_active: editAutomation.is_active,
+          execution_mode: (editAutomation.execution_mode as any) || "cloud",
           actuator_uuid: editAutomation.actuator_uuid,
           actuator_name: editAutomation.actuator_name,
           actuator_control_type: editAutomation.actuator_control_type,

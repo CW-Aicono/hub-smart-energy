@@ -80,6 +80,8 @@ export interface AutomationAction {
   gateway_id?: string;
 }
 
+export type AutomationExecutionMode = "cloud" | "loxone_local" | "hybrid";
+
 export interface AutomationRuleData {
   name: string;
   description: string;
@@ -87,6 +89,7 @@ export interface AutomationRuleData {
   actions: AutomationAction[];
   logic_operator: "AND" | "OR";
   is_active: boolean;
+  execution_mode: AutomationExecutionMode;
 }
 
 /** Gateway option for MLA mode – each gateway has its own sensor list */
@@ -684,6 +687,7 @@ export function AutomationRuleBuilder({
   const [actions, setActions] = useState<AutomationAction[]>([]);
   const [logicOp, setLogicOp] = useState<"AND" | "OR">("AND");
   const [isActive, setIsActive] = useState(true);
+  const [executionMode, setExecutionMode] = useState<AutomationExecutionMode>("cloud");
   const [saving, setSaving] = useState(false);
   const [addConditionOpen, setAddConditionOpen] = useState(false);
 
@@ -695,6 +699,7 @@ export function AutomationRuleBuilder({
       setDescription(initialData.description || "");
       setLogicOp(initialData.logic_operator || "AND");
       setIsActive(initialData.is_active !== undefined ? initialData.is_active : true);
+      setExecutionMode((initialData.execution_mode as AutomationExecutionMode) || "cloud");
 
       if (initialData.conditions && initialData.conditions.length > 0) {
         setConditions(initialData.conditions);
@@ -724,6 +729,7 @@ export function AutomationRuleBuilder({
       setActions([]);
       setLogicOp("AND");
       setIsActive(true);
+      setExecutionMode("cloud");
     }
     setAddConditionOpen(false);
   }, [open, initialData]);
@@ -773,7 +779,7 @@ export function AutomationRuleBuilder({
 
     setSaving(true);
     try {
-      await onSave({ name, description, conditions, actions, logic_operator: logicOp, is_active: isActive });
+      await onSave({ name, description, conditions, actions, logic_operator: logicOp, is_active: isActive, execution_mode: executionMode });
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Fehler beim Speichern");
@@ -815,6 +821,37 @@ export function AutomationRuleBuilder({
               <div className="space-y-2">
                 <Label className="text-xs">Beschreibung</Label>
                 <Textarea placeholder="Was macht diese Automation?" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs flex items-center gap-1">
+                  <Server className="h-3 w-3" />
+                  Ausführungsort
+                </Label>
+                <Select value={executionMode} onValueChange={(v) => setExecutionMode(v as AutomationExecutionMode)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cloud">
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-medium">Cloud</span>
+                        <span className="text-[10px] text-muted-foreground">Ausführung durch AICONO EMS (Standard)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="loxone_local">
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-medium">Loxone lokal</span>
+                        <span className="text-[10px] text-muted-foreground">Regel läuft ausschließlich auf dem Miniserver</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="hybrid">
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-medium">Hybrid</span>
+                        <span className="text-[10px] text-muted-foreground">Loxone lokal, Cloud als Fallback</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
