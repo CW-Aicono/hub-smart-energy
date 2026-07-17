@@ -170,7 +170,8 @@ export default function SuperAdminLoxoneTemplates() {
                   <div className="grid gap-2">
                     {items.map((r) => {
                       const h = health.get(r.template_key);
-                      const isEvGroupA = EV_GROUP_A_KEYS.has(r.template_key);
+                      const groupOfTpl = GROUP_BY_TEMPLATE_KEY[r.template_key];
+                      const hasSnippet = SNIPPET_KEYS.has(r.template_key);
                       return (
                         <Card key={r.id} className="cursor-pointer hover:border-primary" onClick={() => setDetail(r)}>
                           <CardContent className="p-3 flex items-center justify-between gap-3">
