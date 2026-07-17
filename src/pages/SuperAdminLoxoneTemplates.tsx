@@ -191,7 +191,7 @@ export default function SuperAdminLoxoneTemplates() {
                               ) : (
                                 <CheckCircle2 className="h-4 w-4 text-green-600" />
                               )}
-                              {isEvGroupA && (
+                              {hasSnippet && (
                                 <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); downloadSingleSnippet(r.template_key); }}>
                                   <Download className="h-3.5 w-3.5" />
                                 </Button>
