@@ -65,7 +65,7 @@ const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "300000"
 // Phase 6: Session-Heartbeat von 15s auf 60s erhöht (IO-Optimierung)
 const SESSION_HEARTBEAT_MS = parseInt(process.env.SESSION_HEARTBEAT_MS || "60000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.3-config-reload";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.4-heartbeat-only";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -152,6 +152,20 @@ async function ingestPost(action: string | null, body: any): Promise<any> {
   return r.json();
 }
 
+async function pushLoxoneStructureSnapshot(state: ConnState, structure: any): Promise<void> {
+  if (!structure?.controls) return;
+  try {
+    const r = await ingestPost("loxone-structure-snapshot", {
+      location_integration_id: state.locationIntegrationId,
+      serial_number: state.serialNumber,
+      structure,
+    });
+    log("info", `[WS] ${state.serialNumber} Struktur-Snapshot gespeichert (sensors=${r?.sensors ?? "?"})`);
+  } catch (err) {
+    log("warn", `[WS] ${state.serialNumber} Struktur-Snapshot fehlgeschlagen: ${describeError(err)}`);
+  }
+}
+
 // ─── Bridge-Worker (Phase 2): Heartbeat & Event-Log ──────────────────────────
 
 async function bridgeHeartbeat(status: "online" | "degraded" | "offline" = "online", lastError: string | null = null): Promise<void> {
@@ -205,13 +219,20 @@ interface WsMeter {
   id: string;
   name: string;
   energy_type: string;
-  sensor_uuid: string;
+  sensor_uuid: string | null;
   tenant_id: string;
   location_integration_id: string;
   location_integration: {
     id: string;
     config: { serial_number?: string; username?: string; password?: string };
   };
+}
+
+interface WsIntegration {
+  id: string;
+  tenant_id: string;
+  location_id: string;
+  config: { serial_number?: string; username?: string; password?: string };
 }
 
 // Rolle einer State-UUID innerhalb eines Loxone-Blocks
@@ -478,8 +499,9 @@ async function connect(state: ConnState): Promise<void> {
       }
       const controlCount = loxApp3?.controls ? Object.keys(loxApp3.controls).length : 0;
       log("info", `[WS] ${state.serialNumber} LoxAPP3.json geladen — Live-Updates aktiviert (controls=${controlCount})`);
+      await pushLoxoneStructureSnapshot(state, loxApp3);
     } catch (err) {
-      log("warn", `[WS] ${state.serialNumber} LoxAPP3.json fehlgeschlagen: ${(err as Error).message}`);
+      log("warn", `[WS] ${state.serialNumber} LoxAPP3.json fehlgeschlagen: ${describeError(err)}`);
     }
     await socket.send("jdev/sps/enablebinstatusupdate");
     // Phase 5.1: zusätzlich analoge Statusupdates abonnieren (kWh, Power, Temperatur, Zählerstände)
@@ -785,28 +807,46 @@ async function reloadMeters(): Promise<void> {
     return;
   }
   let meters: WsMeter[] = [];
+  let integrations: WsIntegration[] = [];
   try {
     const r = await ingestGet("list-loxone-ws-meters");
     meters = (r.meters || []) as WsMeter[];
+    integrations = (r.integrations || []) as WsIntegration[];
   } catch (err) {
     log("error", `[Reload] fehlgeschlagen: ${(err as Error).message}`);
     return;
   }
 
-  // Gruppieren pro Seriennummer
+  // Gruppieren pro Seriennummer. Seit Phase 7.4 kommen Standort-Integrationen
+  // zusätzlich unabhängig von Zähler-Zuordnungen aus dem Backend. Dadurch bleibt
+  // die WS-Session/Heartbeat auch dann aktiv, wenn noch kein Meter mit sensor_uuid
+  // angelegt oder nach einer Bereinigung alle Gerätezuordnungen entfernt wurden.
   const bySerial = new Map<string, { config: any; meters: WsMeter[]; tenantId: string; integrationId: string }>();
-  for (const m of meters) {
-    const cfg = m.location_integration?.config;
-    if (!cfg?.serial_number || !cfg.username || !cfg.password || !m.sensor_uuid) continue;
-    const serial = cfg.serial_number;
+
+  const ensureGroup = (serial: string, cfg: any, tenantId: string, integrationId: string) => {
     if (!bySerial.has(serial)) {
       bySerial.set(serial, {
-        config: cfg, meters: [],
-        tenantId: m.tenant_id,
-        integrationId: m.location_integration_id,
+        config: cfg,
+        meters: [],
+        tenantId,
+        integrationId,
       });
     }
-    bySerial.get(serial)!.meters.push(m);
+    return bySerial.get(serial)!;
+  };
+
+  for (const li of integrations) {
+    const cfg = li.config;
+    if (!cfg?.serial_number || !cfg.username || !cfg.password || !li.tenant_id) continue;
+    ensureGroup(cfg.serial_number, cfg, li.tenant_id, li.id);
+  }
+
+  for (const m of meters) {
+    const cfg = m.location_integration?.config;
+    if (!cfg?.serial_number || !cfg.username || !cfg.password) continue;
+    const serial = cfg.serial_number;
+    const group = ensureGroup(serial, cfg, m.tenant_id, m.location_integration_id);
+    if (m.sensor_uuid) group.meters.push(m);
   }
 
   // Neue + bestehende Verbindungen aktualisieren
@@ -867,9 +907,15 @@ async function reloadMeters(): Promise<void> {
     // mit State-UUIDs (pwr/today/total/...) bestückt. Ein clear() hier würde dieses
     // Mapping zerstören und alle eingehenden Binary-Status-Updates lautlos verwerfen
     // → genau das hat die Live-Updates exakt nach 5 Min (erster Reload) eingefroren.
-    if (!state.authenticated || !state.ws) {
+    if (group.meters.length === 0) {
+      if (state.uuidMap.size > 0) {
+        log("warn", `[Reload] ${serial}: keine zugeordneten sensor_uuid-Zähler — WS läuft im Heartbeat-only-Modus`);
+      }
+      state.uuidMap.clear();
+    } else if (!state.authenticated || !state.ws) {
       state.uuidMap.clear();
       for (const m of group.meters) {
+        if (!m.sensor_uuid) continue;
         const blockUuid = m.sensor_uuid.toLowerCase();
         state.uuidMap.set(blockUuid, {
           meter_id: m.id,
