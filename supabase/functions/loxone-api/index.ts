@@ -1078,6 +1078,28 @@ serve(async (req) => {
         const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
 
         if (!structureResponse.ok) {
+          if (structureResponse.status === 401 || structureResponse.status === 403) {
+            const snap = await readSensorSnapshot(supabase, locationIntegrationId);
+            if (snap?.sensors && Array.isArray(snap.sensors) && snap.sensors.length > 0) {
+              console.warn(`[loxone-api] HTTP ${structureResponse.status} for LoxAPP3.json — using worker snapshot with ${snap.sensors.length} sensors`);
+              if (shouldPersistReadings) {
+                await updateSyncStatus(supabase, locationIntegrationId, "success");
+              }
+              if (heldLock) await releaseRefreshLock(supabase, locationIntegrationId, lockOwner);
+              return new Response(
+                JSON.stringify({
+                  success: true,
+                  sensors: snap.sensors ?? [],
+                  systemMessages: snap.system_messages ?? [],
+                  cached: true,
+                  snapshotStatus: snap.status,
+                  fetchedAt: snap.fetched_at,
+                  source: "worker_snapshot_after_http_auth_error",
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+              );
+            }
+          }
           if (shouldPersistReadings) {
             await updateSyncStatus(supabase, locationIntegrationId, "error");
           }
