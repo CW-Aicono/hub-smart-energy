@@ -1,0 +1,396 @@
+// Loxone Template Sync
+// -----------------------------------------------------------------------------
+// Discovery + Parameter-Push für die AICONO Loxone-Template-Bibliothek.
+//
+// Naming-Konvention der VIs auf dem Miniserver:
+//   AICO_<TemplateKey>_<InstanceID>_<Param>
+//   Beispiel: AICO_WallboxDLM_Haus1_Cap_kW
+//
+// Aktionen:
+//   - discover  : liest LoxAPP3.json, füllt location_loxone_templates
+//   - push      : überträgt aktuelle Regel-Parameter auf den Miniserver
+//   - heartbeat : re-push aller aktiven loxone_local/hybrid Regeln (Cron)
+// -----------------------------------------------------------------------------
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getCorsHeaders } from "../_shared/cors.ts";
+
+const LOX_TIMEOUT_MS = 10_000;
+const AICO_PREFIX = "AICO_";
+
+interface LoxoneConfig {
+  serial_number: string;
+  username: string;
+  password: string;
+  local_host?: string;
+}
+
+interface LoxoneControl {
+  name: string;
+  type: string;
+  uuidAction: string;
+  states?: Record<string, string>;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = LOX_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function resolveCloudHost(serial: string): Promise<string | null> {
+  try {
+    const r = await fetchWithTimeout(`https://dns.loxonecloud.com/?getip&snr=${serial}&json=true`);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const ip = j?.IP || j?.ip;
+    if (!ip) return null;
+    return `http://${ip}`.replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
+async function resolveBaseUrl(cfg: LoxoneConfig): Promise<string | null> {
+  const local = cfg.local_host?.trim();
+  if (local) {
+    const n = local.startsWith("http") ? local : `http://${local}`;
+    return n.replace(/\/+$/, "");
+  }
+  return await resolveCloudHost(cfg.serial_number);
+}
+
+// Parse "AICO_<TemplateKey>_<InstanceID>_<Param>"
+// TemplateKey und InstanceID können Buchstaben/Ziffern enthalten. Param greift den REST bis Ende.
+function parseAicoName(name: string): { templateKey: string; instanceId: string; param: string } | null {
+  if (!name.startsWith(AICO_PREFIX)) return null;
+  const rest = name.slice(AICO_PREFIX.length);
+  const parts = rest.split("_");
+  if (parts.length < 3) return null;
+  const [templateKey, instanceId, ...paramParts] = parts;
+  if (!templateKey || !instanceId || paramParts.length === 0) return null;
+  return { templateKey, instanceId, param: paramParts.join("_") };
+}
+
+interface RunContext {
+  supabase: ReturnType<typeof createClient>;
+  isServiceRole: boolean;
+  userTenantId: string | null;
+}
+
+async function loadLocationIntegration(ctx: RunContext, locationIntegrationId: string) {
+  const { data, error } = await ctx.supabase
+    .from("location_integrations")
+    .select("id, config, location_id, location:locations!inner(tenant_id)")
+    .eq("id", locationIntegrationId)
+    .maybeSingle();
+  if (error || !data) throw new Error("Standort-Integration nicht gefunden");
+  const tenantId = (data as any).location?.tenant_id as string;
+  if (!ctx.isServiceRole && tenantId !== ctx.userTenantId) {
+    throw new Error("Zugriff verweigert");
+  }
+  return {
+    id: data.id as string,
+    config: (data as any).config as LoxoneConfig,
+    locationId: (data as any).location_id as string,
+    tenantId,
+  };
+}
+
+// ── DISCOVER ────────────────────────────────────────────────────────────────
+async function actionDiscover(ctx: RunContext, locationIntegrationId: string) {
+  const li = await loadLocationIntegration(ctx, locationIntegrationId);
+  if (!li.config?.serial_number || !li.config?.username || !li.config?.password) {
+    throw new Error("Loxone-Konfiguration unvollständig");
+  }
+  const baseUrl = await resolveBaseUrl(li.config);
+  if (!baseUrl) throw new Error("Miniserver nicht erreichbar");
+  const auth = `Basic ${btoa(`${li.config.username}:${li.config.password}`)}`;
+
+  const structRes = await fetchWithTimeout(`${baseUrl}/data/LoxAPP3.json`, {
+    headers: { Authorization: auth },
+  });
+  if (!structRes.ok) {
+    if (structRes.status === 401) throw new Error("Authentifizierung fehlgeschlagen");
+    throw new Error(`Struktur konnte nicht geladen werden: ${structRes.status}`);
+  }
+  const structure = (await structRes.json()) as { controls?: Record<string, LoxoneControl> };
+  const controls = structure.controls || {};
+
+  // group by templateKey + instanceId
+  const instances = new Map<string, {
+    templateKey: string;
+    instanceId: string;
+    bindings: Record<string, { uuid: string; controlType: string; name: string }>;
+  }>();
+
+  for (const [, ctrl] of Object.entries(controls)) {
+    const parsed = parseAicoName(ctrl.name || "");
+    if (!parsed) continue;
+    const key = `${parsed.templateKey}::${parsed.instanceId}`;
+    if (!instances.has(key)) {
+      instances.set(key, { templateKey: parsed.templateKey, instanceId: parsed.instanceId, bindings: {} });
+    }
+    instances.get(key)!.bindings[parsed.param] = {
+      uuid: ctrl.uuidAction,
+      controlType: ctrl.type,
+      name: ctrl.name,
+    };
+  }
+
+  // Registry-Versionen (für Vergleich neuer verfügbarer Versionen)
+  const templateKeys = Array.from(new Set(Array.from(instances.values()).map((i) => i.templateKey)));
+  const registryMap = new Map<string, string>();
+  if (templateKeys.length > 0) {
+    const { data: regs } = await ctx.supabase
+      .from("loxone_template_registry")
+      .select("template_key, version")
+      .in("template_key", templateKeys)
+      .eq("is_active", true);
+    for (const r of regs || []) registryMap.set((r as any).template_key, (r as any).version);
+  }
+
+  const now = new Date().toISOString();
+  const rows = Array.from(instances.values()).map((i) => ({
+    tenant_id: li.tenantId,
+    location_id: li.locationId,
+    template_key: i.templateKey,
+    instance_id: i.instanceId,
+    installed_version: registryMap.get(i.templateKey) || "unknown",
+    vi_bindings: i.bindings,
+    discovered_at: now,
+    last_seen_at: now,
+  }));
+
+  let upserted = 0;
+  if (rows.length > 0) {
+    const { error: upErr } = await ctx.supabase
+      .from("location_loxone_templates")
+      .upsert(rows, { onConflict: "location_id,template_key,instance_id" });
+    if (upErr) throw new Error(`Speichern fehlgeschlagen: ${upErr.message}`);
+    upserted = rows.length;
+  }
+
+  return {
+    success: true,
+    discovered: rows.length,
+    upserted,
+    instances: rows.map((r) => ({
+      template_key: r.template_key,
+      instance_id: r.instance_id,
+      installed_version: r.installed_version,
+      param_count: Object.keys(r.vi_bindings).length,
+    })),
+  };
+}
+
+// ── PUSH ────────────────────────────────────────────────────────────────────
+function formatLoxoneValue(v: unknown): string {
+  if (v === true) return "1";
+  if (v === false) return "0";
+  if (v === null || v === undefined) return "0";
+  if (typeof v === "number") return String(v);
+  return encodeURIComponent(String(v));
+}
+
+async function pushAutomation(ctx: RunContext, automationId: string, opts: { source: string }) {
+  const { data: auto, error: autoErr } = await ctx.supabase
+    .from("location_automations")
+    .select("id, tenant_id, location_id, location_integration_id, loxone_template_key, loxone_template_instance_id, loxone_template_bindings, execution_mode, is_active, name")
+    .eq("id", automationId)
+    .maybeSingle();
+  if (autoErr || !auto) throw new Error("Automation nicht gefunden");
+  const a = auto as any;
+  if (!ctx.isServiceRole && a.tenant_id !== ctx.userTenantId) throw new Error("Zugriff verweigert");
+  if (!a.loxone_template_key || !a.loxone_template_instance_id) {
+    throw new Error("Regel ist keinem Loxone-Template zugeordnet");
+  }
+  if (a.execution_mode === "cloud") {
+    throw new Error("Regel läuft im Cloud-Modus (kein Push nötig)");
+  }
+
+  // Bindings laden
+  const { data: tpl } = await ctx.supabase
+    .from("location_loxone_templates")
+    .select("vi_bindings, location_id")
+    .eq("location_id", a.location_id)
+    .eq("template_key", a.loxone_template_key)
+    .eq("instance_id", a.loxone_template_instance_id)
+    .maybeSingle();
+  if (!tpl) throw new Error("Template-Instanz auf dem Miniserver nicht gefunden — bitte Discovery ausführen");
+  const bindings = (tpl as any).vi_bindings as Record<string, { uuid: string }>;
+
+  // Loxone-Verbindung
+  const li = await loadLocationIntegration(ctx, a.location_integration_id);
+  const baseUrl = await resolveBaseUrl(li.config);
+  if (!baseUrl) throw new Error("Miniserver nicht erreichbar");
+  const auth = `Basic ${btoa(`${li.config.username}:${li.config.password}`)}`;
+
+  const params = (a.loxone_template_bindings || {}) as Record<string, unknown>;
+  const started = Date.now();
+  const results: Array<{ param: string; uuid?: string; ok: boolean; error?: string; value: unknown }> = [];
+
+  for (const [param, value] of Object.entries(params)) {
+    const bind = bindings[param];
+    if (!bind?.uuid) {
+      results.push({ param, ok: false, error: "VI nicht gefunden", value });
+      continue;
+    }
+    try {
+      const url = `${baseUrl}/jdev/sps/io/${bind.uuid}/${formatLoxoneValue(value)}`;
+      const r = await fetchWithTimeout(url, { headers: { Authorization: auth } }, 5_000);
+      if (!r.ok) {
+        results.push({ param, uuid: bind.uuid, ok: false, error: `HTTP ${r.status}`, value });
+      } else {
+        results.push({ param, uuid: bind.uuid, ok: true, value });
+      }
+    } catch (e) {
+      results.push({ param, uuid: bind.uuid, ok: false, error: (e as Error).message, value });
+    }
+  }
+
+  const okCount = results.filter((r) => r.ok).length;
+  const status = okCount === results.length ? "success" : okCount === 0 ? "error" : "partial";
+
+  await ctx.supabase.from("automation_execution_log").insert({
+    automation_id: a.id,
+    tenant_id: a.tenant_id,
+    trigger_type: opts.source,
+    execution_source: "loxone_local",
+    status,
+    duration_ms: Date.now() - started,
+    actions_executed: { pushed: results },
+    error_message: status === "success" ? null : results.filter((r) => !r.ok).map((r) => `${r.param}: ${r.error}`).join("; "),
+  });
+
+  await ctx.supabase
+    .from("location_loxone_templates")
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq("location_id", a.location_id)
+    .eq("template_key", a.loxone_template_key)
+    .eq("instance_id", a.loxone_template_instance_id);
+
+  return { success: status !== "error", status, pushed: okCount, total: results.length, results };
+}
+
+async function actionPush(ctx: RunContext, automationId: string) {
+  return await pushAutomation(ctx, automationId, { source: "manual_push" });
+}
+
+// ── HEARTBEAT (Cron) ────────────────────────────────────────────────────────
+async function actionHeartbeat(ctx: RunContext) {
+  if (!ctx.isServiceRole) throw new Error("Heartbeat nur mit Service-Role erlaubt");
+  const { data: autos, error } = await ctx.supabase
+    .from("location_automations")
+    .select("id, tenant_id, name")
+    .eq("is_active", true)
+    .in("execution_mode", ["loxone_local", "hybrid"])
+    .not("loxone_template_key", "is", null);
+  if (error) throw new Error(error.message);
+
+  const summary = { total: (autos || []).length, ok: 0, failed: 0, results: [] as any[] };
+  for (const a of autos || []) {
+    try {
+      const r = await pushAutomation(ctx, (a as any).id, { source: "heartbeat" });
+      if (r.status === "error") summary.failed++;
+      else summary.ok++;
+      summary.results.push({ automation_id: (a as any).id, name: (a as any).name, ...r });
+    } catch (e) {
+      summary.failed++;
+      summary.results.push({ automation_id: (a as any).id, name: (a as any).name, success: false, error: (e as Error).message });
+    }
+  }
+  return summary;
+}
+
+// ── HTTP-Entry ──────────────────────────────────────────────────────────────
+serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ success: false, error: "Nicht authentifiziert" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const token = authHeader.replace("Bearer ", "");
+
+    let isServiceRole = token === supabaseServiceKey;
+    if (!isServiceRole) {
+      try {
+        const part = token.split(".")[1];
+        if (part) {
+          const padded = part + "=".repeat((4 - (part.length % 4)) % 4);
+          const payload = JSON.parse(atob(padded.replace(/-/g, "+").replace(/_/g, "/")));
+          if (payload?.role === "service_role") isServiceRole = true;
+        }
+      } catch { /* ignore */ }
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    let userTenantId: string | null = null;
+
+    if (!isServiceRole) {
+      const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error: userErr } = await authClient.auth.getUser(token);
+      if (userErr || !user) {
+        return new Response(JSON.stringify({ success: false, error: "Ungültige Anmeldung" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", user.id).single();
+      const { data: roleRow } = await supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "super_admin").maybeSingle();
+      const isSuperAdmin = !!roleRow;
+      if (!profile?.tenant_id && !isSuperAdmin) {
+        return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      userTenantId = (profile as any)?.tenant_id ?? null;
+      if (isSuperAdmin) isServiceRole = true;
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const action = body?.action as string;
+    const ctx: RunContext = { supabase, isServiceRole, userTenantId };
+
+    let result: unknown;
+    switch (action) {
+      case "discover":
+        if (!body?.locationIntegrationId) throw new Error("locationIntegrationId erforderlich");
+        result = await actionDiscover(ctx, body.locationIntegrationId);
+        break;
+      case "push":
+        if (!body?.automationId) throw new Error("automationId erforderlich");
+        result = await actionPush(ctx, body.automationId);
+        break;
+      case "heartbeat":
+        result = await actionHeartbeat(ctx);
+        break;
+      default:
+        throw new Error(`Unbekannte Aktion: ${action}`);
+    }
+
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("loxone-template-sync error:", e);
+    return new Response(JSON.stringify({ success: false, error: (e as Error).message }), {
+      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
