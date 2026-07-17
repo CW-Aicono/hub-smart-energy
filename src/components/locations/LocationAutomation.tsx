@@ -393,6 +393,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         actions: data.actions,
         logic_operator: data.logic_operator,
         is_active: data.is_active,
+        execution_mode: data.execution_mode,
       } as any);
       if (error) throw error;
       toast.success(T("auto.updated"));
