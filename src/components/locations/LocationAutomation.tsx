@@ -305,6 +305,44 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation,
   } = useLocationAutomations(locationId);
 
+  // ── Installierte Loxone-Templates dieser Location (für Template-basierte Regeln) ──
+  const [installedTemplates, setInstalledTemplates] = useState<Array<{
+    template_key: string;
+    instance_id: string | null;
+    installed_version: string | null;
+    title: string;
+    parameters: Array<{ name: string; type: string; description?: string }>;
+  }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [{ data: inst }, { data: reg }] = await Promise.all([
+        supabase
+          .from("location_loxone_templates")
+          .select("template_key, instance_id, installed_version")
+          .eq("location_id", locationId),
+        supabase
+          .from("loxone_template_registry")
+          .select("template_key, title, parameters")
+          .eq("is_active", true),
+      ]);
+      if (cancelled) return;
+      const regMap = new Map((reg ?? []).map((r: any) => [r.template_key, r]));
+      const merged = ((inst as any[]) ?? []).map((row) => {
+        const r = regMap.get(row.template_key);
+        return {
+          template_key: row.template_key,
+          instance_id: row.instance_id,
+          installed_version: row.installed_version,
+          title: r?.title ?? row.template_key,
+          parameters: Array.isArray(r?.parameters) ? (r.parameters as any[]) : [],
+        };
+      });
+      setInstalledTemplates(merged);
+    })();
+    return () => { cancelled = true; };
+  }, [locationId]);
+
   // Use explicit device_type when available and fall back to the same gateway heuristics as the tabs.
   // IMPORTANT: Only show devices that the user has explicitly assigned via the
   // "Gefundene Geräte"-Dialog (= devices that have a corresponding meters row
