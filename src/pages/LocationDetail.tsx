@@ -221,6 +221,7 @@ const LocationDetail = () => {
           {isModuleEnabled("ev_charging") && <GridComplianceCard locationId={location.id} />}
           {isModuleEnabled("automation_building") && <LocationAutomation locationId={location.id} />}
           {isModuleEnabled("integrations") && <LocationIntegrationsList locationId={location.id} />}
+          {isModuleEnabled("integrations") && <LoxoneTemplatesCard locationId={location.id} />}
           {isModuleEnabled("brighthub_api") && <BrightHubSettings locationId={location.id} />}
           {isModuleEnabled("documentation") && (
             <Card>
