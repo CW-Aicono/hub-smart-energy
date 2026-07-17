@@ -930,9 +930,101 @@ export function AutomationRuleBuilder({
                   </SelectContent>
                 </Select>
               </div>
+
+              {executionMode !== "cloud" && (
+                <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                  <div className="flex items-center gap-2">
+                    <Puzzle className="h-4 w-4 text-primary" />
+                    <h4 className="text-sm font-semibold">Loxone-Template</h4>
+                  </div>
+                  {(installedTemplates?.length ?? 0) === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Für diese Location sind noch keine AICO_-Templates installiert.
+                      Bitte zuerst ein Snippet in Loxone Config einspielen und in der Karte
+                      „Loxone-Templates" → „Neu scannen" ausführen.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Installiertes Template *</Label>
+                        <Select
+                          value={templateKey && templateInstance ? `${templateKey}::${templateInstance}` : ""}
+                          onValueChange={(v) => {
+                            const [k, i] = v.split("::");
+                            setTemplateKey(k || "");
+                            setTemplateInstance(i || "");
+                            setTemplateParams({});
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Template auswählen…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {installedTemplates!.map((t) => (
+                              <SelectItem
+                                key={`${t.template_key}::${t.instance_id ?? ""}`}
+                                value={`${t.template_key}::${t.instance_id ?? ""}`}
+                              >
+                                <div className="flex flex-col text-left">
+                                  <span className="text-sm">{t.title}</span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {t.template_key}
+                                    {t.instance_id ? ` · Instanz ${t.instance_id}` : ""}
+                                    {t.installed_version ? ` · v${t.installed_version}` : ""}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {selectedInstalledTemplate && selectedInstalledTemplate.parameters.length > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-xs text-muted-foreground">Parameter</Label>
+                          <div className="space-y-2">
+                            {selectedInstalledTemplate.parameters.map((p) => (
+                              <div key={p.name} className="grid grid-cols-[1fr_auto] items-center gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium truncate">{p.name}</p>
+                                  {p.description && (
+                                    <p className="text-[10px] text-muted-foreground truncate">{p.description}</p>
+                                  )}
+                                </div>
+                                {p.type === "Digital" ? (
+                                  <Switch
+                                    checked={templateParams[p.name] === "1" || templateParams[p.name] === "true"}
+                                    onCheckedChange={(v) =>
+                                      setTemplateParams((prev) => ({ ...prev, [p.name]: v ? "1" : "0" }))
+                                    }
+                                  />
+                                ) : (
+                                  <Input
+                                    type="number"
+                                    className="h-8 w-32 text-xs"
+                                    value={templateParams[p.name] ?? ""}
+                                    onChange={(e) =>
+                                      setTemplateParams((prev) => ({ ...prev, [p.name]: e.target.value }))
+                                    }
+                                  />
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            Werte werden bei „Speichern" per Push an den Miniserver übertragen.
+                            Bedingungen/Aktionen unten sind optional (nur Hybrid-Modus).
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             <Separator />
+
 
             {/* ── Conditions (WENN) ── */}
             <div className="space-y-3">
