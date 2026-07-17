@@ -779,7 +779,7 @@ export function AutomationRuleBuilder({
 
     setSaving(true);
     try {
-      await onSave({ name, description, conditions, actions, logic_operator: logicOp, is_active: isActive });
+      await onSave({ name, description, conditions, actions, logic_operator: logicOp, is_active: isActive, execution_mode: executionMode });
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Fehler beim Speichern");
