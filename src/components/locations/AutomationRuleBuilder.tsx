@@ -822,6 +822,37 @@ export function AutomationRuleBuilder({
                 <Label className="text-xs">Beschreibung</Label>
                 <Textarea placeholder="Was macht diese Automation?" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
               </div>
+              <div className="space-y-2">
+                <Label className="text-xs flex items-center gap-1">
+                  <Server className="h-3 w-3" />
+                  Ausführungsort
+                </Label>
+                <Select value={executionMode} onValueChange={(v) => setExecutionMode(v as AutomationExecutionMode)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cloud">
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-medium">Cloud</span>
+                        <span className="text-[10px] text-muted-foreground">Ausführung durch AICONO EMS (Standard)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="loxone_local">
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-medium">Loxone lokal</span>
+                        <span className="text-[10px] text-muted-foreground">Regel läuft ausschließlich auf dem Miniserver</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="hybrid">
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-medium">Hybrid</span>
+                        <span className="text-[10px] text-muted-foreground">Loxone lokal, Cloud als Fallback</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <Separator />
