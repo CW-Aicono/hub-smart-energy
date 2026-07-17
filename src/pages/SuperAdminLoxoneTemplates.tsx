@@ -322,6 +322,10 @@ export default function SuperAdminLoxoneTemplates() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            <TabsContent value="master">
+              <LoxoneMasterProject />
+            </TabsContent>
           </Tabs>
 
           <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
