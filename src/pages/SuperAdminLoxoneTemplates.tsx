@@ -14,8 +14,12 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Download, RefreshCw, Puzzle, AlertTriangle, CheckCircle2, Package } from "lucide-react";
-import { EV_GROUP_A_SNIPPETS } from "@/lib/loxone/snippetsEvGroupA";
-import { downloadEvGroupAPackage, downloadSingleSnippet } from "@/lib/loxone/snippetDownload";
+import { SNIPPET_GROUPS, SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCatalog";
+import {
+  downloadGroupPackage,
+  downloadAllSnippetsPackage,
+  downloadSingleSnippet,
+} from "@/lib/loxone/snippetDownload";
 
 interface RegistryEntry {
   id: string;
