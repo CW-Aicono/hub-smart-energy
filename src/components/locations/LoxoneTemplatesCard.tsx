@@ -125,33 +125,36 @@ export const LoxoneTemplatesCard = ({ locationId }: LoxoneTemplatesCardProps) =>
         ) : (
           <div className="divide-y">
             {templates.map((tpl) => {
-              const latest = tpl.registry?.latest_version;
-              const outdated = latest && tpl.version && latest !== tpl.version;
+              const reg = registry[tpl.template_key];
+              const latest = reg?.version;
+              const installed = tpl.installed_version;
+              const outdated = !!(latest && installed && latest !== installed);
+              const seenAt = tpl.last_seen_at || tpl.discovered_at;
               return (
                 <div key={tpl.id} className="flex items-center justify-between py-2.5 gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm truncate">
-                        {tpl.registry?.label || tpl.template_key}
+                        {reg?.title || tpl.template_key}
                       </span>
                       {tpl.instance_id && (
                         <Badge variant="outline" className="text-[10px]">#{tpl.instance_id}</Badge>
                       )}
-                      {tpl.registry?.category && (
-                        <Badge variant="secondary" className="text-[10px]">{tpl.registry.category}</Badge>
+                      {reg?.category && (
+                        <Badge variant="secondary" className="text-[10px]">{reg.category}</Badge>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {tpl.template_key}
-                      {tpl.last_discovered_at && (
-                        <> · erkannt {formatDistanceToNow(new Date(tpl.last_discovered_at), { addSuffix: true, locale: de })}</>
+                      {seenAt && (
+                        <> · erkannt {formatDistanceToNow(new Date(seenAt), { addSuffix: true, locale: de })}</>
                       )}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {tpl.version && (
+                    {installed && (
                       <Badge variant={outdated ? "destructive" : "outline"} className="text-[10px]">
-                        v{tpl.version}
+                        v{installed}
                       </Badge>
                     )}
                     {outdated ? (
