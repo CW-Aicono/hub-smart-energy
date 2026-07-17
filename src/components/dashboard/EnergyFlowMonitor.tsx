@@ -2192,6 +2192,21 @@ function GatewayDetailDialog({ devices, status, statusColor, onClose }: GatewayD
                   </div>
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
                     {d.device_type && (<><dt className="text-muted-foreground">Typ</dt><dd className="tabular-nums">{d.device_type}</dd></>)}
+                    {(() => {
+                      const isWs = d.source === "gateway_device" || d.loxone_remote_connect_ws_enabled === true;
+                      const isHttps = d.loxone_remote_connect_ws_enabled === false;
+                      if (!isWs && !isHttps) return null;
+                      return (
+                        <>
+                          <dt className="text-muted-foreground">Verbindung</dt>
+                          <dd className="tabular-nums">
+                            <Badge variant="outline" className={isWs ? "text-primary border-primary/50" : "text-muted-foreground border-muted-foreground/50"}>
+                              {isWs ? "WebSocket" : "HTTPS"}
+                            </Badge>
+                          </dd>
+                        </>
+                      );
+                    })()}
                     {d.local_ip && (<><dt className="text-muted-foreground">Lokale IP</dt><dd className="tabular-nums">{d.local_ip}</dd></>)}
                     {d.mac_address && (<><dt className="text-muted-foreground">MAC</dt><dd className="tabular-nums text-xs">{d.mac_address}</dd></>)}
                     {d.ha_version && (<><dt className="text-muted-foreground">HA-Version</dt><dd className="tabular-nums">{d.ha_version}</dd></>)}
