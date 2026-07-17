@@ -3,12 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Puzzle, RefreshCw, CheckCircle2 } from "lucide-react";
+import { Puzzle, RefreshCw, CheckCircle2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
+import { downloadEvGroupAPackage } from "@/lib/loxone/snippetDownload";
 
 interface InstalledTemplate {
   id: string;
@@ -106,10 +107,15 @@ export const LoxoneTemplatesCard = ({ locationId }: LoxoneTemplatesCardProps) =>
             AICO_*-Bausteine aus <code className="text-xs">LoxAPP3.json</code> ein.
           </CardDescription>
         </div>
-        <Button variant="outline" size="sm" onClick={handleDiscover} disabled={scanning}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${scanning ? "animate-spin" : ""}`} />
-          Neu scannen
-        </Button>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={downloadEvGroupAPackage} title="Snippet-Paket Gruppe A (E-Mobilität) inkl. PDF-Kurzanleitung">
+            <Download className="h-4 w-4 mr-2" /> Snippets Gruppe A
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleDiscover} disabled={scanning}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${scanning ? "animate-spin" : ""}`} />
+            Neu scannen
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (

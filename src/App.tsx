@@ -117,6 +117,7 @@ const SuperAdminMonitoring = lazy(() => import("./pages/SuperAdminMonitoring"));
 const SuperAdminWorkerControls = lazy(() => import("./pages/SuperAdminWorkerControls"));
 const SuperAdminGatewayFleet = lazy(() => import("./pages/SuperAdminGatewayFleet"));
 const SuperAdminWallboxTemplates = lazy(() => import("./pages/SuperAdminWallboxTemplates"));
+const SuperAdminLoxoneTemplates = lazy(() => import("./pages/SuperAdminLoxoneTemplates"));
 const SuperAdminSalesCatalog = lazy(() => import("./pages/SuperAdminSalesCatalog"));
 const SuperAdminSalesRules = lazy(() => import("./pages/SuperAdminSalesRules"));
 const SalesProjects = lazy(() => import("./pages/SalesProjects"));
@@ -253,6 +254,7 @@ const App = () => (
                       <Route path="/super-admin/worker-controls" element={<SA><SuperAdminWorkerControls /></SA>} />
                       <Route path="/super-admin/gateways" element={<SA><SuperAdminGatewayFleet /></SA>} />
                       <Route path="/super-admin/wallbox-templates" element={<SA><SuperAdminWallboxTemplates /></SA>} />
+                      <Route path="/super-admin/loxone-templates" element={<SA><SuperAdminLoxoneTemplates /></SA>} />
                       <Route path="/super-admin/ocpp/integrations" element={<SA><SuperAdminOcppIntegrations /></SA>} />
                       <Route path="/super-admin/ocpp/control" element={<SA><SuperAdminOcppControl /></SA>} />
                       <Route path="/super-admin/ocpp/firmware" element={<SA><SuperAdminOcppFirmware /></SA>} />
