@@ -431,24 +431,40 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const handleSaveRule = async (data: AutomationRuleData) => {
     if (!defaultIntegration) throw new Error(T("auto.noIntegration"));
 
+    // Template-basierte Regel (execution_mode != cloud + template gewählt)
+    const isTemplateRule = !!data.loxone_template_key && data.execution_mode !== "cloud";
+
     // Use first action as primary actuator for backward compatibility
     const primary = data.actions[0];
+    // Bei Template-Regeln ohne freie Aktion: leere Platzhalter, damit NOT-NULL-Spalten befriedigt sind
+    const primaryOrPlaceholder = primary ?? {
+      actuator_uuid: `AICO_TEMPLATE::${data.loxone_template_key}`,
+      actuator_name: data.loxone_template_key || "Loxone-Template",
+      control_type: "loxone_template",
+      action_type: "command",
+      action_value: "template",
+    } as any;
+
+    const commonPayload: any = {
+      name: data.name,
+      description: data.description || undefined,
+      actuator_uuid: primaryOrPlaceholder.actuator_uuid,
+      actuator_name: primaryOrPlaceholder.actuator_name,
+      actuator_control_type: primaryOrPlaceholder.control_type,
+      action_type: primaryOrPlaceholder.action_type === "pulse" ? "pulse" : "command",
+      action_value: primaryOrPlaceholder.action_value || primaryOrPlaceholder.action_type,
+      conditions: data.conditions,
+      actions: data.actions,
+      logic_operator: data.logic_operator,
+      is_active: data.is_active,
+      execution_mode: data.execution_mode,
+      loxone_template_key: isTemplateRule ? data.loxone_template_key : null,
+      loxone_template_instance_id: isTemplateRule ? data.loxone_template_instance_id ?? null : null,
+      loxone_template_bindings: isTemplateRule ? (data.loxone_template_bindings ?? {}) : null,
+    };
 
     if (editAutomation) {
-      const { error } = await updateAutomation(editAutomation.id, {
-        name: data.name,
-        description: data.description || undefined,
-        actuator_uuid: primary.actuator_uuid,
-        actuator_name: primary.actuator_name,
-        actuator_control_type: primary.control_type,
-        action_type: primary.action_type === "pulse" ? "pulse" : "command",
-        action_value: primary.action_value || primary.action_type,
-        conditions: data.conditions,
-        actions: data.actions,
-        logic_operator: data.logic_operator,
-        is_active: data.is_active,
-        execution_mode: data.execution_mode,
-      } as any);
+      const { error } = await updateAutomation(editAutomation.id, commonPayload);
       if (error) throw error;
       toast.success(T("auto.updated"));
       if (data.execution_mode && data.execution_mode !== "cloud" && data.is_active) {
@@ -458,18 +474,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
       const { data: created, error } = await createAutomation({
         location_id: locationId,
         location_integration_id: defaultIntegration.id,
-        name: data.name,
-        description: data.description || undefined,
-        actuator_uuid: primary.actuator_uuid,
-        actuator_name: primary.actuator_name,
-        actuator_control_type: primary.control_type,
-        action_type: primary.action_type === "pulse" ? "pulse" : "command",
-        action_value: primary.action_value || primary.action_type,
-        conditions: data.conditions,
-        actions: data.actions,
-        logic_operator: data.logic_operator,
-        is_active: data.is_active,
-        execution_mode: data.execution_mode,
+        ...commonPayload,
       });
       if (error) throw error;
       toast.success(T("auto.created"));
