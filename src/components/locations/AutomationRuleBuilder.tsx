@@ -82,6 +82,14 @@ export interface AutomationAction {
 
 export type AutomationExecutionMode = "cloud" | "loxone_local" | "hybrid";
 
+export interface InstalledLoxoneTemplate {
+  template_key: string;
+  instance_id: string | null;
+  installed_version: string | null;
+  title: string;
+  parameters: Array<{ name: string; type: string; description?: string }>;
+}
+
 export interface AutomationRuleData {
   name: string;
   description: string;
@@ -90,6 +98,10 @@ export interface AutomationRuleData {
   logic_operator: "AND" | "OR";
   is_active: boolean;
   execution_mode: AutomationExecutionMode;
+  /** Loxone-Template-Bindung (nur bei execution_mode != "cloud") */
+  loxone_template_key?: string | null;
+  loxone_template_instance_id?: string | null;
+  loxone_template_bindings?: Record<string, string | number | boolean> | null;
 }
 
 /** Gateway option for MLA mode – each gateway has its own sensor list */
@@ -113,6 +125,8 @@ interface AutomationRuleBuilderProps {
   gatewayOptions?: GatewayOption[];
   /** Authoritative device_type map from meters table (sensor_uuid -> "meter"|"sensor"|"actuator") */
   deviceTypeMap?: Map<string, string>;
+  /** Installierte AICO_-Templates in dieser Location (für execution_mode != "cloud") */
+  installedTemplates?: InstalledLoxoneTemplate[];
 }
 
 // ── Helpers ──
