@@ -166,6 +166,46 @@ async function pushLoxoneStructureSnapshot(state: ConnState, structure: any): Pr
   }
 }
 
+/**
+ * Erkennt in einer Loxone-Fehlermeldung eine Anmelde-Ablehnung (falscher User/Passwort).
+ * Loxone antwortet je nach Firmware mit HTTP 401, HTTP 400 "Bad credentials" oder LL.Code=401/1000.
+ */
+function isAuthError(err: unknown): boolean {
+  const s = describeError(err).toLowerCase();
+  return (
+    s.includes("401") ||
+    s.includes("unauthorized") ||
+    s.includes("bad credentials") ||
+    s.includes("wrong user") ||
+    s.includes("wrong password") ||
+    s.includes("invalid user") ||
+    s.includes("invalid password") ||
+    s.includes("authentication failed") ||
+    /code=(?:401|1000)\b/.test(s)
+  );
+}
+
+/**
+ * Meldet dem Backend, ob die im Cloud-Config hinterlegten Zugangsdaten am
+ * Miniserver akzeptiert wurden. Bei "auth_failed" wird zusätzlich ein
+ * integration_errors-Eintrag angelegt, damit der Fehler im Tenant-UI sichtbar
+ * ist (rotes Badge auf der Integrations-Kachel) und nicht nur im Container-Log.
+ */
+async function markAuthStatus(state: ConnState, status: "success" | "auth_failed", reason?: string): Promise<void> {
+  try {
+    await ingestPost("mark-loxone-auth-status", {
+      location_integration_id: state.locationIntegrationId,
+      serial_number: state.serialNumber,
+      status,
+      reason: reason ?? null,
+      username_tried: state.username,
+    });
+  } catch (err) {
+    log("debug", `[Auth] mark-loxone-auth-status fehlgeschlagen: ${(err as Error).message}`);
+  }
+}
+
+
 // ─── Bridge-Worker (Phase 2): Heartbeat & Event-Log ──────────────────────────
 
 async function bridgeHeartbeat(status: "online" | "degraded" | "offline" = "online", lastError: string | null = null): Promise<void> {
