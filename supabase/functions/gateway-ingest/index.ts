@@ -1832,6 +1832,9 @@ async function handleMarkLoxoneAuthStatus(req: Request): Promise<Response> {
   }
 
   return json({ success: true, status: nextStatus });
+}
+
+
 
 
 /* ── Gateway backup handler ──────────────────────────────────────────────────── */
