@@ -699,6 +699,7 @@ export function AutomationRuleBuilder({
       setDescription(initialData.description || "");
       setLogicOp(initialData.logic_operator || "AND");
       setIsActive(initialData.is_active !== undefined ? initialData.is_active : true);
+      setExecutionMode((initialData.execution_mode as AutomationExecutionMode) || "cloud");
 
       if (initialData.conditions && initialData.conditions.length > 0) {
         setConditions(initialData.conditions);
