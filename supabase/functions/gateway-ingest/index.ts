@@ -1664,6 +1664,89 @@ async function handleWsSessionHeartbeat(req: Request): Promise<Response> {
   return json({ success: true });
 }
 
+/**
+ * POST ?action=loxone-structure-snapshot
+ * Persistiert die per WebSocket geladene Loxone-Struktur als Discovery-Fallback,
+ * falls der direkte HTTP-Abruf von /data/LoxAPP3.json am Miniserver 401/403 liefert.
+ */
+async function handleLoxoneStructureSnapshot(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: { location_integration_id?: string; serial_number?: string; structure?: any };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.location_integration_id || !body.serial_number || !body.structure?.controls) {
+    return json({ error: "location_integration_id, serial_number and structure.controls required" }, 400);
+  }
+
+  const supabase = getSupabase();
+  const { data: li, error: liError } = await supabase
+    .from("location_integrations")
+    .select("id, location_id, config, location:locations!location_integrations_location_id_fkey ( tenant_id )")
+    .eq("id", body.location_integration_id)
+    .maybeSingle();
+
+  if (liError || !li) {
+    console.error("[gateway-ingest] loxone-structure-snapshot lookup error:", liError?.message);
+    return json({ error: "Integration not found" }, 404);
+  }
+
+  const configuredSerial = String((li as any).config?.serial_number || "").toUpperCase();
+  const incomingSerial = String(body.serial_number || "").toUpperCase();
+  if (!configuredSerial || configuredSerial !== incomingSerial) {
+    return json({ error: "Serial number mismatch" }, 403);
+  }
+
+  const structure = body.structure;
+  const controls = structure.controls || {};
+  const rooms = structure.rooms || {};
+  const cats = structure.cats || {};
+  const sensors = Object.entries(controls).map(([uuid, controlAny]) => {
+    const control: any = controlAny || {};
+    const controlType = String(control.type || "");
+    const stateKeys = Object.keys(control.states || {});
+    const isPower = /meter|wallbox|energy|fronius|power/i.test(controlType) || stateKeys.some((k) => /pwr|power|cp|pf/i.test(k));
+    return {
+      id: uuid,
+      name: control.name || "Unbekannt",
+      type: isPower ? "power" : (/analog/i.test(controlType) ? "analog" : (/digital|switch|pushbutton/i.test(controlType) ? "digital" : "sensor")),
+      controlType,
+      room: control.room ? (rooms[control.room]?.name || "Unbekannt") : "Unbekannt",
+      category: control.cat ? (cats[control.cat]?.name || "Sonstige") : "Sonstige",
+      value: "-",
+      rawValue: null,
+      unit: isPower ? "kW" : "",
+      status: "online",
+      stateName: stateKeys[0] || "",
+      secondaryValue: "",
+      secondaryStateName: "",
+      secondaryUnit: "",
+    };
+  });
+
+  const { error } = await supabase
+    .from("gateway_sensor_snapshots")
+    .upsert({
+      location_integration_id: body.location_integration_id,
+      tenant_id: (li as any).location?.tenant_id,
+      location_id: (li as any).location_id,
+      sensors,
+      system_messages: [],
+      status: "fresh",
+      fetched_at: new Date().toISOString(),
+      error_message: null,
+      source: "loxone-ws-worker",
+    }, { onConflict: "location_integration_id" });
+
+  if (error) {
+    console.error("[gateway-ingest] loxone-structure-snapshot upsert error:", error.message);
+    return json({ error: "Database error", details: error.message }, 500);
+  }
+
+  return json({ success: true, sensors: sensors.length });
+}
+
 /* ── Gateway backup handler ──────────────────────────────────────────────────── */
 
 async function handleGatewayBackup(req: Request): Promise<Response> {
@@ -2178,6 +2261,7 @@ Deno.serve(async (req) => {
     if (action === "ws-session-start") return handleWsSessionStart(req);
     if (action === "ws-session-end") return handleWsSessionEnd(req);
     if (action === "ws-session-heartbeat") return handleWsSessionHeartbeat(req);
+    if (action === "loxone-structure-snapshot") return handleLoxoneStructureSnapshot(req);
     if (action === "compact-day") return handleCompactDay(req);
     if (action === "schneider-push") return handleSchneiderPush(req);
     if (action === "heartbeat") return handleHeartbeat(req);

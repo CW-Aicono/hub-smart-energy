@@ -152,6 +152,20 @@ async function ingestPost(action: string | null, body: any): Promise<any> {
   return r.json();
 }
 
+async function pushLoxoneStructureSnapshot(state: ConnState, structure: any): Promise<void> {
+  if (!structure?.controls) return;
+  try {
+    const r = await ingestPost("loxone-structure-snapshot", {
+      location_integration_id: state.locationIntegrationId,
+      serial_number: state.serialNumber,
+      structure,
+    });
+    log("info", `[WS] ${state.serialNumber} Struktur-Snapshot gespeichert (sensors=${r?.sensors ?? "?"})`);
+  } catch (err) {
+    log("warn", `[WS] ${state.serialNumber} Struktur-Snapshot fehlgeschlagen: ${describeError(err)}`);
+  }
+}
+
 // ─── Bridge-Worker (Phase 2): Heartbeat & Event-Log ──────────────────────────
 
 async function bridgeHeartbeat(status: "online" | "degraded" | "offline" = "online", lastError: string | null = null): Promise<void> {
@@ -485,8 +499,9 @@ async function connect(state: ConnState): Promise<void> {
       }
       const controlCount = loxApp3?.controls ? Object.keys(loxApp3.controls).length : 0;
       log("info", `[WS] ${state.serialNumber} LoxAPP3.json geladen — Live-Updates aktiviert (controls=${controlCount})`);
+      await pushLoxoneStructureSnapshot(state, loxApp3);
     } catch (err) {
-      log("warn", `[WS] ${state.serialNumber} LoxAPP3.json fehlgeschlagen: ${(err as Error).message}`);
+      log("warn", `[WS] ${state.serialNumber} LoxAPP3.json fehlgeschlagen: ${describeError(err)}`);
     }
     await socket.send("jdev/sps/enablebinstatusupdate");
     // Phase 5.1: zusätzlich analoge Statusupdates abonnieren (kWh, Power, Temperatur, Zählerstände)
