@@ -13,13 +13,14 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Download, RefreshCw, Puzzle, AlertTriangle, CheckCircle2, Package } from "lucide-react";
+import { Download, RefreshCw, Puzzle, AlertTriangle, CheckCircle2, Package, DatabaseZap } from "lucide-react";
 import { SNIPPET_GROUPS, SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCatalog";
 import {
   downloadGroupPackage,
   downloadAllSnippetsPackage,
   downloadSingleSnippet,
 } from "@/lib/loxone/snippetDownload";
+import { seedRegistryFromSnippets } from "@/lib/loxone/catalogSeed";
 
 interface RegistryEntry {
   id: string;
