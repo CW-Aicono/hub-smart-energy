@@ -57,7 +57,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   generic: "Baukasten",
 };
 
-const EV_GROUP_A_KEYS = new Set(EV_GROUP_A_SNIPPETS.map((s) => s.templateKey));
+const SNIPPET_KEYS = new Set(Object.keys(SNIPPET_BY_KEY));
 
 export default function SuperAdminLoxoneTemplates() {
   const { toast } = useToast();
