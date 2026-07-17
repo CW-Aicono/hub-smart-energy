@@ -664,12 +664,23 @@ async function connect(state: ConnState): Promise<void> {
     // zwingt das den nächsten Reconnect zu einer frischen Auflösung.
     dnsCache.delete(state.serialNumber);
     const reason = describeError(err);
-    log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${reason}`);
-    bridgeLog("error", "ws_connect_failed", `Verbindung fehlgeschlagen: ${reason}`, state.serialNumber, { reason });
+    const auth = isAuthError(err);
+    log(auth ? "error" : "warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${reason}${auth ? " (AUTH)" : ""}`);
+    bridgeLog(auth ? "error" : "error", auth ? "ws_auth_failed" : "ws_connect_failed",
+      auth ? `Anmeldung am Miniserver abgelehnt (User "${state.username}") — Zugangsdaten in Cloud-Config prüfen`
+           : `Verbindung fehlgeschlagen: ${reason}`,
+      state.serialNumber, { reason, username_tried: auth ? state.username : undefined });
     state.ws = null;
+    if (auth) {
+      // Backend über Auth-Fehler informieren → UI zeigt rotes Badge, Reconnect stark verlangsamt.
+      void markAuthStatus(state, "auth_failed", reason);
+      // Auth-Backoff: mindestens 5 Min, um den Miniserver nicht zu hämmern (Lockout-Risiko).
+      state.reconnectDelay = Math.max(state.reconnectDelay, 300000);
+    }
     scheduleReconnect(state, `connect-error: ${reason}`);
   }
 }
+
 
 function scheduleReconnect(state: ConnState, reason: string): void {
   if (workerPaused) {
