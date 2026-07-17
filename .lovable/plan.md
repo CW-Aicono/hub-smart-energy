@@ -1,69 +1,39 @@
-## Echte Ursache (mit DB-Daten verifiziert)
+## Analyse-Ergebnis
 
-Der SOC hat in der Cloud-DB volle 24 h Historie (96 Zeilen alle 15 Min, 70–100 %). Trotzdem endet die SOC-Linie im Chart bei ~02:00 Uhr.
+Die Ursache ist jetzt klarer: Die Codebasis kann identisch sein, aber die **Datenhaltung in Lovable** ist anders sichtbar als erwartet.
 
-Grund: In `src/components/dashboard/EnergyFlowMonitor.tsx` (Zeile ~1443) werden SOC- und Leistungs-Punkte per Map über **exakten Millisekunden-Timestamp** zusammengeführt. Aus der DB kommen die beiden Reihen aber ~500 ms versetzt (Power 00:00:27.677, SOC 00:00:28.147, usw.). Dadurch entsteht für jeden Zeitpunkt ein Datensatz mit **nur `kw` oder nur `soc`**, nie beides. Die SOC-`<Line>` läuft mit `connectNulls={false}` → Recharts unterbricht sie bei jedem `null`-Nachbarn.
+Für den betroffenen Speicher/Zähler zeigen die Backend-Daten aktuell:
 
-Ergebnis:
-- Zeitfenster mit nur SOC-Punkten (vor 02:00 CEST, bevor Power-Ingest startet) → SOC-Linie sichtbar.
-- Ab 02:00 wechseln sich SOC- und Power-Punkte ab → jeder SOC-Punkt ist von `null` umgeben → **SOC verschwindet**.
+- `meter_power_readings` Rohdaten: **erst ab 17.07. 02:00 CEST** vorhanden
+- `meter_power_readings_5min` verdichtete Historie: **ab 16.07. ca. 08:10 CEST** vorhanden
+- `storage_soc_readings`: **volle 24h SOC-Historie** vorhanden
 
-Punkt 3 (Einspeisung negativ) funktioniert im aktuellen Code bereits (Screenshot 1 zeigt grüne Balken unter der X-Achse) — hier keine weitere Änderung nötig.
+Der Detail-Dialog liest die Leistung aber aktuell nur aus `meter_power_readings`. Deshalb beginnt die Leistungsfläche in Lovable erst ab 02:00 Uhr. Auf Hetzner ist die Anzeige vermutlich korrekt, weil dort entweder die Rohdaten länger behalten werden oder die dortige Version bereits die verdichtete 5-Minuten-Tabelle nutzt.
 
-## Fix
+## Plan
 
-Alles in `src/components/dashboard/EnergyFlowMonitor.tsx`, nur Frontend.
+1. **Power-Query im Detail-Dialog erweitern**
+   - Für `24h`, `7d` und `30d` zusätzlich `meter_power_readings_5min` laden.
+   - Für `1h` weiterhin primär Rohdaten nutzen.
+   - Rohdaten und 5-Minuten-Daten nach Timestamp zusammenführen; neuere Rohwerte überschreiben verdichtete Werte im gleichen Zeitbucket.
 
-### 1) Merge auf gemeinsame Zeit-Buckets statt exakter Millisekunden
+2. **Getrennte Startzeiten einführen**
+   - `powerStartMs = now - range`
+   - `socStartMs = max(now - range, storage.created_at)` nur für SOC
+   - Damit wird die Leistung nicht versehentlich durch das Speicher-Erstellungsdatum gekappt.
 
-`mergedSeries` (~Zeile 1443) neu: SOC- und Power-Werte auf einen gemeinsamen Bucket runden, sodass "nahe" Zeitpunkte einen gemeinsamen Datensatz erzeugen.
+3. **Speicher-Zuordnung im Dialog angleichen**
+   - Dieselbe Fallback-Logik wie beim KPI verwenden: `power_meter_id` → `gateway_device_id` → `location_id`.
+   - Dadurch kann der SOC-KPI nicht korrekt sein, während der Dialog eine andere/falsche Storage-Historie nutzt.
 
-```ts
-const bucketMs =
-  range === "1h"  ? 60_000            // 1 min
-  : range === "24h" ? 5 * 60_000      // 5 min
-  : range === "7d"  ? 15 * 60_000     // 15 min
-  : 60 * 60_000;                      // 1 h
+4. **Chart-Daten sauber mergen**
+   - Power und SOC weiterhin auf gemeinsame Zeit-Buckets legen.
+   - SOC-Linie bleibt `connectNulls`, damit 15-Minuten-SOC mit 5-Minuten-Power sauber parallel sichtbar ist.
 
-const map = new Map<number, { t: number; kw: number | null; soc: number | null }>();
-const put = (rawT: number, patch: Partial<{ kw: number; soc: number }>) => {
-  const key = Math.round(rawT / bucketMs) * bucketMs;
-  const cur = map.get(key) ?? { t: key, kw: null, soc: null };
-  if (patch.kw  != null) cur.kw  = patch.kw;
-  if (patch.soc != null) cur.soc = patch.soc;
-  map.set(key, cur);
-};
-for (const p of series)    put(p.t, { kw:  p.kw  });
-for (const s of socSeries) put(s.t, { soc: s.soc });
-const mergedSeries = Array.from(map.values()).sort((a, b) => a.t - b.t);
-```
+5. **Energie-Balken und KPIs auf die neue Leistungsserie umstellen**
+   - Durchschnitt/Max/Min und Energie-Bezug/Einspeisung verwenden dieselbe kombinierte Leistungsserie.
+   - Bezug bleibt positiv, Einspeisung negativ im Balkendiagramm.
 
-Damit stehen SOC und Power am gleichen X-Wert und die Chart-Achse ist implizit synchron.
-
-### 2) SOC-Linie `connectNulls={true}`
-
-Kleinere Restlücken (z. B. Bucket ohne SOC, aber mit Power) sollen die SOC-Linie nicht unterbrechen. In der `<Line dataKey="soc" …>` (~Zeile 1786):
-```
-connectNulls={true}
-```
-Für die Power-`<Area>` bleibt `connectNulls` wie bisher — echte Power-Lücken sollen sichtbar bleiben.
-
-### 3) Gap-Hint neu bewerten
-
-`firstPowerTs`/`firstSocTs` (~Zeile 1533/1534) auf die neuen `mergedSeries` beziehen: erster Bucket mit `kw != null` bzw. `soc != null`. Damit stimmt der Hinweistext („SOC ab … · Leistung ab …") wieder mit dem gezeichneten Chart überein.
-
-### 4) Verifikation
-
-- In Lovable-Preview den Speicher-Node öffnen → SOC-Linie muss über 24 h durchgehen und bei ~100 % enden (statt bei 02:00 abbrechen).
-- 7-Tage-Ansicht: SOC-Linie muss die ~309 Zeilen der letzten 7 Tage abbilden (7–100 %).
-- Screenshot vergleichen mit Hetzner-Live.
-
-## Nicht im Scope
-
-- Retention/Ingest-Timing in der Cloud-DB (funktioniert korrekt).
-- Änderungen an `storage_soc_readings`-Schema oder Ingest-Pfad.
-- Hetzner-Frontend.
-
-## Aufwand
-
-~0,5 Personentag, isoliert in einer Datei.
+6. **Verifikation**
+   - Backend-Daten erneut prüfen: kombinierte Leistungsserie muss vor 02:00 starten.
+   - Preview prüfen: 24h-Detailansicht zeigt Leistung und SOC über denselben Zeitraum; 7 Tage nutzt ebenfalls 5-Minuten-Historie.
