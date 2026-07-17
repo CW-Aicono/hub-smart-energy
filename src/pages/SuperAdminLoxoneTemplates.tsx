@@ -14,8 +14,12 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Download, RefreshCw, Puzzle, AlertTriangle, CheckCircle2, Package } from "lucide-react";
-import { EV_GROUP_A_SNIPPETS } from "@/lib/loxone/snippetsEvGroupA";
-import { downloadEvGroupAPackage, downloadSingleSnippet } from "@/lib/loxone/snippetDownload";
+import { SNIPPET_GROUPS, SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCatalog";
+import {
+  downloadGroupPackage,
+  downloadAllSnippetsPackage,
+  downloadSingleSnippet,
+} from "@/lib/loxone/snippetDownload";
 
 interface RegistryEntry {
   id: string;
@@ -53,7 +57,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   generic: "Baukasten",
 };
 
-const EV_GROUP_A_KEYS = new Set(EV_GROUP_A_SNIPPETS.map((s) => s.templateKey));
+const SNIPPET_KEYS = new Set(Object.keys(SNIPPET_BY_KEY));
 
 export default function SuperAdminLoxoneTemplates() {
   const { toast } = useToast();
@@ -138,8 +142,8 @@ export default function SuperAdminLoxoneTemplates() {
               <Button variant="outline" onClick={load} disabled={loading}>
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Aktualisieren
               </Button>
-              <Button onClick={downloadEvGroupAPackage}>
-                <Package className="h-4 w-4 mr-2" /> Snippet-Paket Gruppe A (.zip)
+              <Button onClick={downloadAllSnippetsPackage}>
+                <Package className="h-4 w-4 mr-2" /> Gesamt-Paket A–F (.zip)
               </Button>
             </div>
           </div>
@@ -166,7 +170,8 @@ export default function SuperAdminLoxoneTemplates() {
                   <div className="grid gap-2">
                     {items.map((r) => {
                       const h = health.get(r.template_key);
-                      const isEvGroupA = EV_GROUP_A_KEYS.has(r.template_key);
+                      const groupOfTpl = GROUP_BY_TEMPLATE_KEY[r.template_key];
+                      const hasSnippet = SNIPPET_KEYS.has(r.template_key);
                       return (
                         <Card key={r.id} className="cursor-pointer hover:border-primary" onClick={() => setDetail(r)}>
                           <CardContent className="p-3 flex items-center justify-between gap-3">
@@ -175,7 +180,7 @@ export default function SuperAdminLoxoneTemplates() {
                                 <span className="font-medium">{r.title}</span>
                                 <Badge variant="outline" className="text-[10px]">v{r.version}</Badge>
                                 {!r.is_active && <Badge variant="secondary" className="text-[10px]">inaktiv</Badge>}
-                                {isEvGroupA && <Badge className="text-[10px]" variant="default">Snippet Gruppe A</Badge>}
+                                {groupOfTpl && <Badge className="text-[10px]" variant="default">Gruppe {groupOfTpl.key}</Badge>}
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5">{r.template_key}</p>
                             </div>
@@ -186,7 +191,7 @@ export default function SuperAdminLoxoneTemplates() {
                               ) : (
                                 <CheckCircle2 className="h-4 w-4 text-green-600" />
                               )}
-                              {isEvGroupA && (
+                              {hasSnippet && (
                                 <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); downloadSingleSnippet(r.template_key); }}>
                                   <Download className="h-3.5 w-3.5" />
                                 </Button>
@@ -255,38 +260,49 @@ export default function SuperAdminLoxoneTemplates() {
 
             <TabsContent value="snippets" className="space-y-4">
               <Card>
-                <CardHeader>
-                  <CardTitle>Gruppe A – E-Mobilität</CardTitle>
-                  <CardDescription>
-                    4 Loxone-Snippets (.xml) + PDF-Kurzanleitung. Wird im Tenant unter Standort → „Loxone-Templates" verlinkt und
-                    kann hier zusätzlich als Gesamt-Paket heruntergeladen werden.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Button onClick={downloadEvGroupAPackage}>
-                    <Package className="h-4 w-4 mr-2" /> Gesamt-Paket als ZIP
+                <CardHeader className="flex-row items-center justify-between space-y-0">
+                  <div>
+                    <CardTitle>Alle Snippet-Gruppen</CardTitle>
+                    <CardDescription>
+                      Loxone-XML-Vorlagen inkl. PDF-Kurzanleitung. Namenskonvention: AICO_&lt;TemplateKey&gt;__&lt;Instance&gt;__&lt;Parameter&gt;.
+                    </CardDescription>
+                  </div>
+                  <Button onClick={downloadAllSnippetsPackage}>
+                    <Package className="h-4 w-4 mr-2" /> Gesamt-Paket A–F
                   </Button>
-                  <div className="divide-y border rounded-md">
-                    {EV_GROUP_A_SNIPPETS.map((s) => (
-                      <div key={s.templateKey} className="p-3 flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium">{s.title}</p>
-                          <p className="text-xs text-muted-foreground truncate">{s.templateKey} · {s.parameters.length} Parameter</p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {SNIPPET_GROUPS.map((group) => (
+                    <div key={group.key} className="space-y-2">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                          <h3 className="text-sm font-semibold">{group.label}</h3>
+                          <p className="text-xs text-muted-foreground">
+                            {group.snippets.length} Bausteine · {group.zipName}
+                          </p>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => downloadSingleSnippet(s.templateKey)}>
-                          <Download className="h-3.5 w-3.5 mr-2" /> {s.filename}
+                        <Button size="sm" variant="outline" onClick={() => downloadGroupPackage(group.key)}>
+                          <Package className="h-3.5 w-3.5 mr-2" /> Gruppen-ZIP
                         </Button>
                       </div>
-                    ))}
-                  </div>
+                      <div className="divide-y border rounded-md">
+                        {group.snippets.map((s) => (
+                          <div key={s.templateKey} className="p-3 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{s.title}</p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {s.templateKey} · {s.parameters.length} Parameter
+                              </p>
+                            </div>
+                            <Button size="sm" variant="ghost" onClick={() => downloadSingleSnippet(s.templateKey)}>
+                              <Download className="h-3.5 w-3.5 mr-2" /> {s.filename}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Gruppen B–F</CardTitle>
-                  <CardDescription>Speicher/PV, Heizung, Komfort, Sicherheit, Baukasten – Snippets folgen nach PoC-Freigabe.</CardDescription>
-                </CardHeader>
               </Card>
             </TabsContent>
           </Tabs>
@@ -318,7 +334,7 @@ export default function SuperAdminLoxoneTemplates() {
                       {health.get(detail.template_key)?.outdated ?? 0} veraltet
                     </p>
                   </div>
-                  {EV_GROUP_A_KEYS.has(detail.template_key) && (
+                  {SNIPPET_KEYS.has(detail.template_key) && (
                     <Button size="sm" variant="outline" onClick={() => downloadSingleSnippet(detail.template_key)}>
                       <Download className="h-4 w-4 mr-2" /> Snippet herunterladen
                     </Button>
