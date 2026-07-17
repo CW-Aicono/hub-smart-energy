@@ -65,7 +65,7 @@ const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "300000"
 // Phase 6: Session-Heartbeat von 15s auf 60s erhöht (IO-Optimierung)
 const SESSION_HEARTBEAT_MS = parseInt(process.env.SESSION_HEARTBEAT_MS || "60000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.2-preserveuuidmap";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.3-config-reload";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -99,6 +99,18 @@ function log(level: keyof typeof LOG_LEVELS, msg: string, ...args: any[]) {
     const fn = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
     fn(`[${ts}] [${level.toUpperCase()}] ${msg}`, ...args);
   }
+}
+
+function describeError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    const anyErr = err as any;
+    const code = anyErr?.LL?.Code ?? anyErr?.Code ?? anyErr?.code;
+    const value = anyErr?.LL?.value ?? anyErr?.value ?? anyErr?.message;
+    if (code || value) return `code=${code ?? "?"} value=${value ?? "?"}`;
+    try { return JSON.stringify(err); } catch { return String(err); }
+  }
+  return String(err ?? "unknown");
 }
 
 // ─── Spike-Filter ────────────────────────────────────────────────────────────
@@ -574,21 +586,7 @@ async function connect(state: ConnState): Promise<void> {
         subscribedOk++;
       } catch (err) {
         subscribedErr++;
-        let reason: string;
-        if (err instanceof Error) {
-          reason = err.message;
-        } else if (err && typeof err === "object") {
-          const anyErr = err as any;
-          const code = anyErr?.LL?.Code ?? anyErr?.Code ?? anyErr?.code;
-          const val = anyErr?.LL?.value ?? anyErr?.value;
-          if (code || val) {
-            reason = `code=${code ?? "?"} value=${val ?? "?"}`;
-          } else {
-            try { reason = JSON.stringify(err); } catch { reason = String(err); }
-          }
-        } else {
-          reason = String(err);
-        }
+        const reason = describeError(err);
         failedBlocks.push({ block: blockUuid, reason });
         log("warn", `[WS] ${state.serialNumber} block-snapshot ${blockUuid} fehlgeschlagen: ${reason}`);
       }
@@ -599,10 +597,11 @@ async function connect(state: ConnState): Promise<void> {
     // DNS-Cache invalidieren: falls ein falscher Host gecacht wurde (z.B. dns.loxonecloud.com selbst),
     // zwingt das den nächsten Reconnect zu einer frischen Auflösung.
     dnsCache.delete(state.serialNumber);
-    log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${err}`);
-    bridgeLog("error", "ws_connect_failed", `Verbindung fehlgeschlagen: ${(err as Error).message ?? err}`, state.serialNumber);
+    const reason = describeError(err);
+    log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${reason}`);
+    bridgeLog("error", "ws_connect_failed", `Verbindung fehlgeschlagen: ${reason}`, state.serialNumber, { reason });
     state.ws = null;
-    scheduleReconnect(state, `connect-error: ${(err as Error).message ?? err}`);
+    scheduleReconnect(state, `connect-error: ${reason}`);
   }
 }
 
@@ -836,6 +835,32 @@ async function reloadMeters(): Promise<void> {
         diagCallbacksSeen: new Set<string>(),
       };
       connections.set(serial, state);
+    } else {
+      const usernameChanged = state.username !== group.config.username;
+      const passwordChanged = state.password !== group.config.password;
+      const integrationChanged = state.locationIntegrationId !== group.integrationId;
+      const tenantChanged = state.tenantId !== group.tenantId;
+
+      state.username = group.config.username;
+      state.password = group.config.password;
+      state.tenantId = group.tenantId;
+      state.locationIntegrationId = group.integrationId;
+
+      if (usernameChanged || passwordChanged || integrationChanged || tenantChanged) {
+        log("warn", `[Reload] ${serial}: Konfiguration geändert — baue WS mit neuen Zugangsdaten neu auf`);
+        bridgeLog("warn", "ws_config_changed", "Konfiguration geändert – WebSocket wird mit neuen Zugangsdaten neu aufgebaut", serial, {
+          username_changed: usernameChanged,
+          password_changed: passwordChanged,
+          integration_changed: integrationChanged,
+          tenant_changed: tenantChanged,
+        });
+        try { state.ws?.close(); } catch { /* ignore */ }
+        await sessionEnd(state, "config-changed");
+        state.ws = null;
+        state.authenticated = false;
+        state.reconnecting = false;
+        state.reconnectDelay = 1000;
+      }
     }
     // Phase 7.2: NUR neu befüllen, wenn die Verbindung noch nicht authentifiziert ist.
     // Bei bereits aktiver WS hat connect() die uuidMap mittels LoxAPP3-Expansion
