@@ -806,14 +806,57 @@ export function AutomationRuleBuilder({
     setActions((prev) => prev.filter((a) => a.id !== id));
   };
 
+  const isTemplateMode = executionMode !== "cloud" && !!templateKey;
+  const selectedInstalledTemplate = installedTemplates?.find(
+    (t) => t.template_key === templateKey && (t.instance_id ?? "") === (templateInstance ?? ""),
+  );
+
   const handleSave = async () => {
     if (!name.trim()) { toast.error("Name ist erforderlich"); return; }
-    if (actions.length === 0) { toast.error("Mindestens eine Aktion ist erforderlich"); return; }
-    if (actions.some((a) => !a.actuator_uuid)) { toast.error("Alle Aktionen benötigen einen Aktor"); return; }
+
+    if (executionMode !== "cloud") {
+      const hasInstalled = (installedTemplates?.length ?? 0) > 0;
+      if (hasInstalled) {
+        if (!templateKey) { toast.error("Bitte ein installiertes Loxone-Template auswählen"); return; }
+        if (!selectedInstalledTemplate) { toast.error("Ausgewähltes Template ist in dieser Location nicht (mehr) installiert"); return; }
+      }
+    }
+
+    if (!isTemplateMode) {
+      if (actions.length === 0) { toast.error("Mindestens eine Aktion ist erforderlich"); return; }
+      if (actions.some((a) => !a.actuator_uuid)) { toast.error("Alle Aktionen benötigen einen Aktor"); return; }
+    }
+
+    // Parameter-Werte in typisierte Bindings umwandeln
+    let bindings: Record<string, string | number | boolean> | null = null;
+    if (isTemplateMode && selectedInstalledTemplate) {
+      bindings = {};
+      for (const p of selectedInstalledTemplate.parameters) {
+        const raw = templateParams[p.name];
+        if (raw === undefined || raw === "") continue;
+        if (p.type === "Digital") {
+          bindings[p.name] = raw === "1" || raw === "true";
+        } else {
+          const num = Number(raw);
+          bindings[p.name] = Number.isFinite(num) ? num : raw;
+        }
+      }
+    }
 
     setSaving(true);
     try {
-      await onSave({ name, description, conditions, actions, logic_operator: logicOp, is_active: isActive, execution_mode: executionMode });
+      await onSave({
+        name,
+        description,
+        conditions,
+        actions,
+        logic_operator: logicOp,
+        is_active: isActive,
+        execution_mode: executionMode,
+        loxone_template_key: isTemplateMode ? templateKey : null,
+        loxone_template_instance_id: isTemplateMode ? (templateInstance || null) : null,
+        loxone_template_bindings: bindings,
+      });
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Fehler beim Speichern");
