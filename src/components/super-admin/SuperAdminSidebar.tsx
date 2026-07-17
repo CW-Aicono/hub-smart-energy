@@ -148,6 +148,7 @@ export default function SuperAdminSidebar() {
         { to: "/super-admin/sales/rules", icon: ListChecks, label: "Auswahl-Regeln" },
       ],
     },
+    { to: "/super-admin/loxone-templates", icon: Puzzle, label: "Loxone-Templates" },
     { to: "/super-admin/gateways", icon: Cpu, label: "Gateway-Flotte" },
     { to: "/super-admin/monitoring", icon: Activity, label: t("nav.monitoring") },
     { to: "/super-admin/support", icon: HeadsetIcon, label: t("nav.support") },
