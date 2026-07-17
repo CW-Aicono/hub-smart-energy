@@ -410,7 +410,7 @@ export default function EnergyFlowMonitor({
       if (configuredGatewayIds.length > 0) {
         const { data } = await supabase
           .from("location_integrations")
-          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, integrations(name, type)")
+          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, loxone_remote_connect_ws_enabled, integrations(name, type)")
           .in("id", configuredGatewayIds);
         addIntegrationRows(data as any[] | null);
       }
@@ -418,7 +418,7 @@ export default function EnergyFlowMonitor({
       if (scopedLocationIds.length > 0) {
         const { data } = await supabase
           .from("location_integrations")
-          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, integrations(name, type)")
+          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, loxone_remote_connect_ws_enabled, integrations(name, type)")
           .in("location_id", scopedLocationIds)
           .eq("is_enabled", true);
         addIntegrationRows(data as any[] | null);
@@ -497,6 +497,7 @@ export default function EnergyFlowMonitor({
           last_heartbeat_at: null,
           last_sync_at: li.last_sync_at ?? null,
           sync_status: li.sync_status ?? null,
+          loxone_remote_connect_ws_enabled: li.loxone_remote_connect_ws_enabled ?? null,
           offline_buffer_count: 0,
         });
       }
