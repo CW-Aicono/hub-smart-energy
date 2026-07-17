@@ -1506,7 +1506,45 @@ async function handleListLoxoneWsMeters(): Promise<Response> {
     return type === "loxone" || type === "loxone_miniserver";
   });
 
-  return json({ success: true, meters: filtered });
+  // Wichtig: Der WS-Worker muss auch dann verbinden und Heartbeats schreiben,
+  // wenn an einer Loxone-Integration aktuell noch kein aktiver Zähler mit
+  // sensor_uuid hängt. Sonst wird der Miniserver im Fleet-Monitor fälschlich
+  // "stale", obwohl Zugangsdaten und Remote-Connect grundsätzlich funktionieren.
+  const { data: integrations, error: liError } = await supabase
+    .from("location_integrations")
+    .select(`
+      id, location_id, config, loxone_remote_connect_ws_enabled, is_enabled,
+      integration:integrations!location_integrations_integration_id_fkey ( type ),
+      location:locations!location_integrations_location_id_fkey ( tenant_id )
+    `)
+    .eq("is_enabled", true)
+    .eq("loxone_remote_connect_ws_enabled", true);
+
+  if (liError) {
+    console.error("[gateway-ingest] list-loxone-ws-integrations error:", liError.message);
+    return json({ success: false, error: "Internal error" }, 500);
+  }
+
+  const wsIntegrations = (integrations || [])
+    .filter((li: any) => {
+      const type = li.integration?.type;
+      const cfg = li.config || {};
+      return (
+        (type === "loxone" || type === "loxone_miniserver") &&
+        !!cfg.serial_number &&
+        !!cfg.username &&
+        !!cfg.password &&
+        !!li.location?.tenant_id
+      );
+    })
+    .map((li: any) => ({
+      id: li.id,
+      location_id: li.location_id,
+      tenant_id: li.location.tenant_id,
+      config: li.config,
+    }));
+
+  return json({ success: true, meters: filtered, integrations: wsIntegrations });
 }
 
 /**
