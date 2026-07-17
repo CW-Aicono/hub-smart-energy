@@ -687,6 +687,7 @@ export function AutomationRuleBuilder({
   const [actions, setActions] = useState<AutomationAction[]>([]);
   const [logicOp, setLogicOp] = useState<"AND" | "OR">("AND");
   const [isActive, setIsActive] = useState(true);
+  const [executionMode, setExecutionMode] = useState<AutomationExecutionMode>("cloud");
   const [saving, setSaving] = useState(false);
   const [addConditionOpen, setAddConditionOpen] = useState(false);
 
