@@ -694,6 +694,7 @@ export function AutomationRuleBuilder({
   isEdit,
   gatewayOptions,
   deviceTypeMap,
+  installedTemplates,
 }: AutomationRuleBuilderProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -702,6 +703,9 @@ export function AutomationRuleBuilder({
   const [logicOp, setLogicOp] = useState<"AND" | "OR">("AND");
   const [isActive, setIsActive] = useState(true);
   const [executionMode, setExecutionMode] = useState<AutomationExecutionMode>("cloud");
+  const [templateKey, setTemplateKey] = useState<string>("");
+  const [templateInstance, setTemplateInstance] = useState<string>("");
+  const [templateParams, setTemplateParams] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [addConditionOpen, setAddConditionOpen] = useState(false);
 
