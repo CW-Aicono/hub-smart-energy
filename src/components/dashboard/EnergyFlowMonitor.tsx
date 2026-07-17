@@ -410,7 +410,7 @@ export default function EnergyFlowMonitor({
       if (configuredGatewayIds.length > 0) {
         const { data } = await supabase
           .from("location_integrations")
-          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, integrations(name, type)")
+          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, loxone_remote_connect_ws_enabled, integrations(name, type)")
           .in("id", configuredGatewayIds);
         addIntegrationRows(data as any[] | null);
       }
@@ -418,7 +418,7 @@ export default function EnergyFlowMonitor({
       if (scopedLocationIds.length > 0) {
         const { data } = await supabase
           .from("location_integrations")
-          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, integrations(name, type)")
+          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, loxone_remote_connect_ws_enabled, integrations(name, type)")
           .in("location_id", scopedLocationIds)
           .eq("is_enabled", true);
         addIntegrationRows(data as any[] | null);
@@ -497,6 +497,7 @@ export default function EnergyFlowMonitor({
           last_heartbeat_at: null,
           last_sync_at: li.last_sync_at ?? null,
           sync_status: li.sync_status ?? null,
+          loxone_remote_connect_ws_enabled: li.loxone_remote_connect_ws_enabled ?? null,
           offline_buffer_count: 0,
         });
       }
@@ -1316,6 +1317,8 @@ type StorageDetailInfo = {
   soc_sensor_uuid: string | null;
   soc_updated_at: string | null;
   power_meter_id: string | null;
+  gateway_device_id: string | null;
+  location_id: string | null;
 };
 
 const RANGE_LABEL: Record<DetailRange, string> = {
@@ -1351,43 +1354,110 @@ export function MeterDetailDialog({
 
   const isBattery = node.role === "battery";
   const isHouse = node.role === "house";
+  const nodeMeter = node.meter_id ? metersById[node.meter_id] : null;
+  const nodeGatewayDeviceId = nodeMeter?.gateway_device_id ?? null;
+  const nodeLocationId = nodeMeter?.location_id ?? null;
 
 
   const { data: storageInfo, isLoading: isStorageLoading } = useQuery({
-    queryKey: ["meter-detail-storage-info", node.meter_id],
-    enabled: isBattery && !!node.meter_id,
+    queryKey: ["meter-detail-storage-info", node.meter_id, nodeGatewayDeviceId, nodeLocationId, socPct],
+    enabled: isBattery && (!!node.meter_id || !!nodeGatewayDeviceId || !!nodeLocationId),
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<StorageDetailInfo | null> => {
+      const filters: string[] = [];
+      if (node.meter_id) filters.push(`power_meter_id.eq.${node.meter_id}`);
+      if (nodeGatewayDeviceId) filters.push(`gateway_device_id.eq.${nodeGatewayDeviceId}`);
+      if (nodeLocationId) filters.push(`location_id.eq.${nodeLocationId}`);
+      if (filters.length === 0) return null;
+
       const { data } = await supabase
         .from("energy_storages")
-        .select("id, created_at, current_soc_pct, soc_sensor_uuid, soc_updated_at, power_meter_id")
-        .eq("power_meter_id", node.meter_id)
-        .maybeSingle();
-      return (data as StorageDetailInfo | null) ?? null;
+        .select("id, created_at, current_soc_pct, soc_sensor_uuid, soc_updated_at, power_meter_id, gateway_device_id, location_id")
+        .or(filters.join(","))
+        .limit(50);
+
+      const rows = ((data ?? []) as StorageDetailInfo[]);
+      const byPowerMeter = rows.find((r) => r.power_meter_id && r.power_meter_id === node.meter_id);
+      if (byPowerMeter) return byPowerMeter;
+
+      const byGateway = rows.find((r) => r.gateway_device_id && r.gateway_device_id === nodeGatewayDeviceId);
+      if (byGateway) return byGateway;
+
+      const byLocation = rows.filter((r) => r.location_id && r.location_id === nodeLocationId);
+      if (byLocation.length === 1) return byLocation[0];
+      if (byLocation.length > 1 && socPct != null) {
+        const matchingSoc = byLocation.find((r) =>
+          r.current_soc_pct != null && Math.abs(Number(r.current_soc_pct) - Number(socPct)) < 0.5,
+        );
+        if (matchingSoc) return matchingSoc;
+      }
+
+      return byLocation[0] ?? rows[0] ?? null;
     },
   });
 
-  const visibleStartMs = useMemo(() => {
-    const rangeStart = Date.now() - RANGE_MS[range];
+  const powerStartMs = useMemo(() => Date.now() - RANGE_MS[range], [range]);
+
+  const socStartMs = useMemo(() => {
+    const rangeStart = powerStartMs;
     if (!isBattery || !storageInfo?.created_at) return rangeStart;
     const storageStart = new Date(storageInfo.created_at).getTime();
     return Number.isFinite(storageStart) ? Math.max(rangeStart, storageStart) : rangeStart;
-  }, [isBattery, range, storageInfo?.created_at]);
+  }, [isBattery, powerStartMs, storageInfo?.created_at]);
 
   const effectiveSocPct = storageInfo?.current_soc_pct != null
     ? Number(storageInfo.current_soc_pct)
     : socPct;
 
   const { data: series = [], isLoading } = useQuery({
-    queryKey: ["meter-detail-series", node.meter_id, range, visibleStartMs],
+    queryKey: ["meter-detail-series", node.meter_id, range, powerStartMs],
     queryFn: async () => {
       if (!node.meter_id) return [];
-      const since = new Date(visibleStartMs).toISOString();
-      const limit = range === "30d" ? 8000 : range === "7d" ? 5000 : 2000;
+      const since = new Date(powerStartMs).toISOString();
+      const bucketMs =
+        range === "1h" ? 60_000
+        : range === "24h" ? 5 * 60_000
+        : range === "7d" ? 15 * 60_000
+        : 60 * 60_000;
+      const rawLimit = range === "30d" ? 8000 : range === "7d" ? 5000 : 2000;
+      const aggregateLimit = range === "30d" ? 12_000 : range === "7d" ? 3500 : 1200;
       const pageSize = 1000;
-      const rows: any[] = [];
-      for (let offset = 0; offset < limit; offset += pageSize) {
-        const to = Math.min(offset + pageSize, limit) - 1;
+
+      const map = new Map<number, { sum: number; count: number; priority: number }>();
+      const put = (rawT: number, kw: number, priority: number) => {
+        if (!Number.isFinite(rawT) || !Number.isFinite(kw)) return;
+        const key = Math.round(rawT / bucketMs) * bucketMs;
+        const cur = map.get(key);
+        if (!cur || priority > cur.priority) {
+          map.set(key, { sum: kw, count: 1, priority });
+          return;
+        }
+        if (priority === cur.priority) {
+          cur.sum += kw;
+          cur.count += 1;
+        }
+      };
+
+      if (range !== "1h") {
+        for (let offset = 0; offset < aggregateLimit; offset += pageSize) {
+          const to = Math.min(offset + pageSize, aggregateLimit) - 1;
+          const { data, error } = await supabase
+            .from("meter_power_readings_5min")
+            .select("bucket, power_avg")
+            .eq("meter_id", node.meter_id)
+            .gte("bucket", since)
+            .order("bucket", { ascending: true })
+            .range(offset, to);
+          if (error || !data || data.length === 0) break;
+          for (const row of data as any[]) {
+            put(new Date(row.bucket).getTime(), Number(row.power_avg), 1);
+          }
+          if (data.length < to - offset + 1) break;
+        }
+      }
+
+      for (let offset = 0; offset < rawLimit; offset += pageSize) {
+        const to = Math.min(offset + pageSize, rawLimit) - 1;
         const { data, error } = await supabase
           .from("meter_power_readings")
           .select("recorded_at, power_value")
@@ -1396,14 +1466,15 @@ export function MeterDetailDialog({
           .order("recorded_at", { ascending: true })
           .range(offset, to);
         if (error || !data || data.length === 0) break;
-        rows.push(...data);
+        for (const row of data as any[]) {
+          put(new Date(row.recorded_at).getTime(), Number(row.power_value), 2);
+        }
         if (data.length < to - offset + 1) break;
       }
-      return rows.map((r: any) => ({
-        t: new Date(r.recorded_at).getTime(),
-        // kW aus der DB (power_value ist bereits kW)
-        kw: Number(r.power_value),
-      }));
+
+      return Array.from(map.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([t, v]) => ({ t, kw: v.sum / v.count }));
     },
     enabled: !!node.meter_id && (!isBattery || !isStorageLoading),
     staleTime: 30_000,
@@ -1412,11 +1483,11 @@ export function MeterDetailDialog({
   // Echte SOC-Historie: wird ab jetzt separat persistiert, damit Power/kW-Werte
   // nicht mehr fälschlich als Ladezustand (%) interpretiert werden.
   const { data: socSeries = [] } = useQuery({
-    queryKey: ["meter-detail-soc-readings", storageInfo?.id, range, visibleStartMs],
+    queryKey: ["meter-detail-soc-readings", storageInfo?.id, range, socStartMs],
     enabled: isBattery && !!storageInfo?.id && (!isStorageLoading),
     staleTime: 30_000,
     queryFn: async () => {
-      const since = new Date(visibleStartMs).toISOString();
+      const since = new Date(socStartMs).toISOString();
       const limit = range === "30d" ? 8000 : range === "7d" ? 5000 : 2000;
       const pageSize = 1000;
       const rows: any[] = [];
@@ -1485,7 +1556,7 @@ export function MeterDetailDialog({
       : range === "7d" ? 6 * 60 * 60_000
       : 24 * 60 * 60_000;
     const now = Date.now();
-    const startAligned = Math.floor(visibleStartMs / bucketMs) * bucketMs;
+    const startAligned = Math.floor(powerStartMs / bucketMs) * bucketMs;
     const endAligned = Math.floor(now / bucketMs) * bucketMs;
     const map = new Map<number, { import: number; export: number }>();
     // Alle Buckets vorab mit 0 initialisieren, damit keine Lücken entstehen
@@ -1508,7 +1579,7 @@ export function MeterDetailDialog({
     return Array.from(map.entries())
       .sort((a, b) => a[0] - b[0])
       .map(([t, v]) => ({ t, import: v.import, export: v.export }));
-  }, [series, range, visibleStartMs]);
+  }, [series, range, powerStartMs]);
 
   const fmtTime = (t: number) => {
     const d = new Date(t);
@@ -1642,7 +1713,7 @@ export function MeterDetailDialog({
           <HouseSelfSufficiencyPanel
             allNodes={allNodes}
             metersById={metersById}
-            visibleStartMs={visibleStartMs}
+            visibleStartMs={powerStartMs}
             rangeLabel={RANGE_LABEL[range]}
           />
         )}
@@ -1719,7 +1790,7 @@ export function MeterDetailDialog({
                   {showSocAxis && (socSeries.length === 1 || (!hasSoc && effectiveSocPct != null)) && (
                     <ReferenceDot
                       yAxisId="soc"
-                      x={socSeries[0]?.t ?? xDomain[1]}
+                      x={xDomain[1]}
                       y={Math.max(0, Math.min(100, socSeries[0]?.soc ?? effectiveSocPct ?? 0))}
                       r={5}
                       fill="hsl(217 91% 60%)"
@@ -2121,6 +2192,21 @@ function GatewayDetailDialog({ devices, status, statusColor, onClose }: GatewayD
                   </div>
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
                     {d.device_type && (<><dt className="text-muted-foreground">Typ</dt><dd className="tabular-nums">{d.device_type}</dd></>)}
+                    {(() => {
+                      const isWs = d.source === "gateway_device" || d.loxone_remote_connect_ws_enabled === true;
+                      const isHttps = d.loxone_remote_connect_ws_enabled === false;
+                      if (!isWs && !isHttps) return null;
+                      return (
+                        <>
+                          <dt className="text-muted-foreground">Verbindung</dt>
+                          <dd className="tabular-nums">
+                            <Badge variant="outline" className={isWs ? "text-primary border-primary/50" : "text-muted-foreground border-muted-foreground/50"}>
+                              {isWs ? "WebSocket" : "HTTPS"}
+                            </Badge>
+                          </dd>
+                        </>
+                      );
+                    })()}
                     {d.local_ip && (<><dt className="text-muted-foreground">Lokale IP</dt><dd className="tabular-nums">{d.local_ip}</dd></>)}
                     {d.mac_address && (<><dt className="text-muted-foreground">MAC</dt><dd className="tabular-nums text-xs">{d.mac_address}</dd></>)}
                     {d.ha_version && (<><dt className="text-muted-foreground">HA-Version</dt><dd className="tabular-nums">{d.ha_version}</dd></>)}
