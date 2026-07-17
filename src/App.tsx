@@ -117,6 +117,7 @@ const SuperAdminMonitoring = lazy(() => import("./pages/SuperAdminMonitoring"));
 const SuperAdminWorkerControls = lazy(() => import("./pages/SuperAdminWorkerControls"));
 const SuperAdminGatewayFleet = lazy(() => import("./pages/SuperAdminGatewayFleet"));
 const SuperAdminWallboxTemplates = lazy(() => import("./pages/SuperAdminWallboxTemplates"));
+const SuperAdminLoxoneTemplates = lazy(() => import("./pages/SuperAdminLoxoneTemplates"));
 const SuperAdminSalesCatalog = lazy(() => import("./pages/SuperAdminSalesCatalog"));
 const SuperAdminSalesRules = lazy(() => import("./pages/SuperAdminSalesRules"));
 const SalesProjects = lazy(() => import("./pages/SalesProjects"));
