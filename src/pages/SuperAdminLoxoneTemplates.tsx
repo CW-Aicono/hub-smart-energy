@@ -334,7 +334,7 @@ export default function SuperAdminLoxoneTemplates() {
                       {health.get(detail.template_key)?.outdated ?? 0} veraltet
                     </p>
                   </div>
-                  {EV_GROUP_A_KEYS.has(detail.template_key) && (
+                  {SNIPPET_KEYS.has(detail.template_key) && (
                     <Button size="sm" variant="outline" onClick={() => downloadSingleSnippet(detail.template_key)}>
                       <Download className="h-4 w-4 mr-2" /> Snippet herunterladen
                     </Button>
