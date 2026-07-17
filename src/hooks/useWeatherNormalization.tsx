@@ -232,12 +232,23 @@ export function useWeatherNormalization({
 
       // Fetch degree days (single call, ref location)
       const refLocation = locations[0];
+      // Session validieren – ein evtl. vorhandener, aber ungültiger Token
+      // führt sonst zu 401 in der Edge Function. Bei Fehler einmal refreshen.
       const { data: sessionData } = await supabase.auth.getSession();
       let validToken = sessionData?.session?.access_token;
+      if (validToken) {
+        const { error: userErr } = await supabase.auth.getUser(validToken);
+        if (userErr) validToken = undefined;
+      }
       if (!validToken) {
         const { data: refreshed } = await supabase.auth.refreshSession();
         validToken = refreshed.session?.access_token;
-        if (!validToken) throw new Error("Nicht authentifiziert – bitte neu anmelden");
+      }
+      if (!validToken) {
+        // Nicht (mehr) angemeldet – Witterungsbereinigung überspringen,
+        // statt einen Fehler zu werfen und den Screen zu blockieren.
+        console.warn("[weather-degree-days] Kein gültiger Auth-Token – überspringe Gradtage-Abfrage.");
+        return { perLoc: {}, degreeDays: [], wwInfo: [] as LocationHotWaterInfo[] };
       }
 
       const params = new URLSearchParams({
@@ -259,6 +270,10 @@ export function useWeatherNormalization({
           },
         },
       );
+      if (res.status === 401) {
+        console.warn("[weather-degree-days] 401 vom Server – überspringe Gradtage-Abfrage.");
+        return { perLoc: {}, degreeDays: [], wwInfo: [] as LocationHotWaterInfo[] };
+      }
       if (!res.ok) throw new Error(`Gradtage-Abfrage fehlgeschlagen: ${res.status}`);
       const degreeDays: DegreeDayData[] = await res.json();
 
