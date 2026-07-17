@@ -729,6 +729,7 @@ export function AutomationRuleBuilder({
       setActions([]);
       setLogicOp("AND");
       setIsActive(true);
+      setExecutionMode("cloud");
     }
     setAddConditionOpen(false);
   }, [open, initialData]);
