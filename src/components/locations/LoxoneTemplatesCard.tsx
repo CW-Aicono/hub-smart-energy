@@ -9,7 +9,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
-import { downloadEvGroupAPackage } from "@/lib/loxone/snippetDownload";
+import { downloadGroupPackage } from "@/lib/loxone/snippetDownload";
+import { SNIPPET_GROUPS } from "@/lib/loxone/snippetsCatalog";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
 interface InstalledTemplate {
   id: string;
