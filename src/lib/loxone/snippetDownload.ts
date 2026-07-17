@@ -41,8 +41,8 @@ function buildQuickGuidePdf(): Uint8Array {
   addLine("2. Virtuelle Eingänge exakt wie im Snippet benennen – Discovery matcht auf das Präfix AICO_<TemplateKey>__<Instance>__.", 10);
   addLine("3. Ausgänge mit der jeweiligen Hardware verdrahten (Modbus-Bridge, Relais, Wallbox).", 10);
   addLine("4. Miniserver speichern & übertragen.", 10);
-  addLine("5. In AICONO EMS: Standort → Karte „Loxone-Templates" → „Neu scannen". Die Templates erscheinen anschließend mit Instanz-ID und Version.", 10);
-  addLine("6. Regel im Automation-Editor anlegen und als Ausführungsort „Loxone lokal" oder „Hybrid" auswählen.", 10);
+  addLine('5. In AICONO EMS: Standort -> Karte Loxone-Templates -> Neu scannen. Die Templates erscheinen anschliessend mit Instanz-ID und Version.', 10);
+  addLine('6. Regel im Automation-Editor anlegen und als Ausfuehrungsort Loxone lokal oder Hybrid auswaehlen.', 10);
 
   y += 12;
   addLine("Enthaltene Bausteine", 13, true, 18);
