@@ -80,6 +80,8 @@ export interface AutomationAction {
   gateway_id?: string;
 }
 
+export type AutomationExecutionMode = "cloud" | "loxone_local" | "hybrid";
+
 export interface AutomationRuleData {
   name: string;
   description: string;
@@ -87,6 +89,7 @@ export interface AutomationRuleData {
   actions: AutomationAction[];
   logic_operator: "AND" | "OR";
   is_active: boolean;
+  execution_mode: AutomationExecutionMode;
 }
 
 /** Gateway option for MLA mode – each gateway has its own sensor list */
