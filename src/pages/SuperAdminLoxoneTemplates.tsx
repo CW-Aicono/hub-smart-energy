@@ -142,8 +142,8 @@ export default function SuperAdminLoxoneTemplates() {
               <Button variant="outline" onClick={load} disabled={loading}>
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Aktualisieren
               </Button>
-              <Button onClick={downloadEvGroupAPackage}>
-                <Package className="h-4 w-4 mr-2" /> Snippet-Paket Gruppe A (.zip)
+              <Button onClick={downloadAllSnippetsPackage}>
+                <Package className="h-4 w-4 mr-2" /> Gesamt-Paket A–F (.zip)
               </Button>
             </div>
           </div>
