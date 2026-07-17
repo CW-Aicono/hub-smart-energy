@@ -31,6 +31,7 @@ export interface LocationAutomationRecord {
   schedule: unknown | null;
   scope_type?: string | null;
   target_location_ids?: string[] | null;
+  execution_mode?: string | null;
 }
 
 interface CreateAutomationInput {
