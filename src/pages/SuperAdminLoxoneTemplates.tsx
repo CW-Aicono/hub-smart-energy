@@ -21,6 +21,7 @@ import {
   downloadSingleSnippet,
 } from "@/lib/loxone/snippetDownload";
 import { seedRegistryFromSnippets } from "@/lib/loxone/catalogSeed";
+import LoxoneMasterProject from "@/components/super-admin/LoxoneMasterProject";
 
 interface RegistryEntry {
   id: string;
