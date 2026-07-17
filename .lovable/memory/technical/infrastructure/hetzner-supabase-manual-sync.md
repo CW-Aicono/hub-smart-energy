@@ -8,6 +8,10 @@ type: preference
 
 **Harte Grundregel:** Die AICONO-**Live-Umgebung** läuft komplett auf **Hetzner**, inklusive **eigener Supabase-Datenbank**. Lovable Cloud/Preview darf bei Live-Problemen nicht als Quelle der Wahrheit behandelt oder mit Hetzner-Live gleichgesetzt werden.
 
+**Erklärpflicht:** Der Nutzer ist Laie. Bei jedem Hinweis zu Live/Hetzner muss zuerst erklärt werden: „Live“ = die echte AICONO-Seite für Kunden; „Lovable/Preview“ = Test-/Entwicklungsstand hier. Nie nur „Live-Env“ schreiben.
+
+**Anleitungspflicht:** Wenn der Nutzer etwas tun soll, immer eine Schritt-für-Schritt-Anleitung mit kopierbaren Befehlen oder Klickpfad geben. Keine knappen technischen Handlungsaufforderungen.
+
 Bei Live-Fehlern immer zuerst klären/prüfen, ob der betroffene Wert aus der Hetzner-Umgebung kommt. Lovable-Backend-Daten/Logs sind nur für Preview/Cloud relevant, außer es geht ausdrücklich um die Lovable-Umgebung.
 
 Beim Hetzner-Programmierer einen Hinweis nur dann ausgeben, wenn auf der Hetzner-Supabase **eine der folgenden drei Sachen neu/geändert** ist:
