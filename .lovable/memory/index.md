@@ -13,9 +13,11 @@ Super-Admin & Tenant sind strikt getrennte Bereiche – niemals vermischen. Supe
 Alle Zahlen IMMER im deutschen Format ausgeben: `toLocaleString("de-DE")` für Achsen, Tooltips, KPIs, Tabellen, Exports — auch ungefragt in neuen Widgets.
 ABSOLUTES RATEVERBOT: Niemals raten. Erst verifizieren (Code lesen, DB/Storage prüfen, Edge-Logs, Netzwerk, reproduzieren), dann handeln. Bei Unsicherheit fragen, nicht raten.
 Bei „IO budget hoch": NIEMALS zuerst Instance-Upgrade vorschlagen — erst Playbook abarbeiten (slow_queries → pg_stat_statements → Vollscan-Quelle finden).
+Bei Hetzner/Live/Server/DB/Worker-Themen immer laiengerecht: Alltagssprache, klare Ja/Nein-Aktion, Copy/Paste-Schritte.
 
 ## Memories
 - [Ingest Key Model](mem://technical/security/ingest-key-model) — Zwei-Key-Modell: Tenant-Keys (aic_live_*) in tenant_api_keys vs globaler GATEWAY_API_KEY nur für Hetzner-Bridges
+- [Layman Instructions Policy](mem://technical/infrastructure/layman-instructions-policy) — Immer laiengerechte Schritt-für-Schritt-Anleitungen bei Hetzner, Live, Docker, Datenbank, Worker, Updates und Keys
 - [Support-Session Bootstrap Plan](mem://features/administration/support-session-bootstrap-plan) — Plan to fix missing features/data in support sessions caused by per-user RLS rows
 - [IO-Budget Playbook](mem://technical/performance/io-budget-investigation-playbook) — Schritt-für-Schritt-Analyse hoher Disk-IO-Last, typische Ursachen (count exact, fehlende Indizes)
 - [IO-Budget Anzeige-Semantik](mem://technical/performance/io-budget-indicator-semantics) — Lovable-Anzeige ist letzter Alert-Snapshot (max. 48h gehalten), kein Live-Wert; echte IOPS nur via Supabase-Metrics
