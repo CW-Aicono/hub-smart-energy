@@ -740,6 +740,19 @@ export function AutomationRuleBuilder({
       } else {
         setActions([]);
       }
+
+      setTemplateKey((initialData.loxone_template_key as string) || "");
+      setTemplateInstance((initialData.loxone_template_instance_id as string) || "");
+      const rawBindings = (initialData.loxone_template_bindings as Record<string, unknown> | null | undefined) ?? null;
+      if (rawBindings && typeof rawBindings === "object") {
+        const stringified: Record<string, string> = {};
+        for (const [k, v] of Object.entries(rawBindings)) {
+          stringified[k] = v === null || v === undefined ? "" : String(v);
+        }
+        setTemplateParams(stringified);
+      } else {
+        setTemplateParams({});
+      }
     } else {
       setName("");
       setDescription("");
@@ -748,6 +761,9 @@ export function AutomationRuleBuilder({
       setLogicOp("AND");
       setIsActive(true);
       setExecutionMode("cloud");
+      setTemplateKey("");
+      setTemplateInstance("");
+      setTemplateParams({});
     }
     setAddConditionOpen(false);
   }, [open, initialData]);
