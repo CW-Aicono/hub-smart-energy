@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_bridge_raw_samples_tenant_recv ON public.bridge_raw_samples (tenant_id, received_at DESC);
