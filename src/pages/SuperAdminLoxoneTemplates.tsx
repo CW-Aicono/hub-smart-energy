@@ -180,7 +180,7 @@ export default function SuperAdminLoxoneTemplates() {
                                 <span className="font-medium">{r.title}</span>
                                 <Badge variant="outline" className="text-[10px]">v{r.version}</Badge>
                                 {!r.is_active && <Badge variant="secondary" className="text-[10px]">inaktiv</Badge>}
-                                {isEvGroupA && <Badge className="text-[10px]" variant="default">Snippet Gruppe A</Badge>}
+                                {groupOfTpl && <Badge className="text-[10px]" variant="default">Gruppe {groupOfTpl.key}</Badge>}
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5">{r.template_key}</p>
                             </div>
