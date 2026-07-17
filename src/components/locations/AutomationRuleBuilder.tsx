@@ -37,6 +37,7 @@ import {
   Timer,
   AlarmClock,
   Puzzle,
+} from "lucide-react";
 import { LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
 import { toast } from "sonner";
