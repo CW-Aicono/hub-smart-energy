@@ -852,6 +852,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         sensors={allSensors}
         sensorsLoading={sensorsLoading}
         deviceTypeMap={deviceTypeMap}
+        installedTemplates={installedTemplates}
         initialData={editAutomation ? {
           name: editAutomation.name,
           description: editAutomation.description || "",
@@ -865,6 +866,9 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
           actuator_control_type: editAutomation.actuator_control_type,
           action_type: editAutomation.action_type,
           action_value: editAutomation.action_value,
+          loxone_template_key: (editAutomation as any).loxone_template_key ?? null,
+          loxone_template_instance_id: (editAutomation as any).loxone_template_instance_id ?? null,
+          loxone_template_bindings: (editAutomation as any).loxone_template_bindings ?? null,
         } : undefined}
         onSave={handleSaveRule}
         isEdit={!!editAutomation}
