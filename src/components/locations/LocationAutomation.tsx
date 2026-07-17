@@ -65,6 +65,7 @@ import { AutomationRuleBuilder, AutomationRuleData } from "@/components/location
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
 
 function getSensorIcon(type: string) {
   switch (type) {
