@@ -112,9 +112,26 @@ export const LoxoneTemplatesCard = ({ locationId }: LoxoneTemplatesCardProps) =>
           </CardDescription>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Button variant="outline" size="sm" onClick={downloadEvGroupAPackage} title="Snippet-Paket Gruppe A (E-Mobilität) inkl. PDF-Kurzanleitung">
-            <Download className="h-4 w-4 mr-2" /> Snippets Gruppe A
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" title="Loxone-Snippet-Pakete inkl. PDF-Kurzanleitung">
+                <Download className="h-4 w-4 mr-2" /> Snippet-Pakete
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuLabel>Gruppe wählen</DropdownMenuLabel>
+              {SNIPPET_GROUPS.map((g) => (
+                <DropdownMenuItem key={g.key} onClick={() => downloadGroupPackage(g.key)}>
+                  <div className="flex flex-col">
+                    <span className="text-sm">{g.label}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {g.snippets.length} Bausteine · {g.zipName}
+                    </span>
+                  </div>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="outline" size="sm" onClick={handleDiscover} disabled={scanning}>
             <RefreshCw className={`h-4 w-4 mr-2 ${scanning ? "animate-spin" : ""}`} />
             Neu scannen
