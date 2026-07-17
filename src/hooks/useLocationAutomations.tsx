@@ -48,6 +48,7 @@ interface CreateAutomationInput {
   actions?: AutomationAction[];
   logic_operator?: string;
   is_active?: boolean;
+  execution_mode?: string;
 }
 
 export interface AutomationLastError {
