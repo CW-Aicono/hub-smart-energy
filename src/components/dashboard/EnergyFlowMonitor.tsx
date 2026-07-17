@@ -410,7 +410,7 @@ export default function EnergyFlowMonitor({
       if (configuredGatewayIds.length > 0) {
         const { data } = await supabase
           .from("location_integrations")
-          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, integrations(name, type)")
+          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, loxone_remote_connect_ws_enabled, integrations(name, type)")
           .in("id", configuredGatewayIds);
         addIntegrationRows(data as any[] | null);
       }
@@ -418,7 +418,7 @@ export default function EnergyFlowMonitor({
       if (scopedLocationIds.length > 0) {
         const { data } = await supabase
           .from("location_integrations")
-          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, integrations(name, type)")
+          .select("id, location_id, is_enabled, sync_status, last_sync_at, config, loxone_remote_connect_ws_enabled, integrations(name, type)")
           .in("location_id", scopedLocationIds)
           .eq("is_enabled", true);
         addIntegrationRows(data as any[] | null);
@@ -497,6 +497,7 @@ export default function EnergyFlowMonitor({
           last_heartbeat_at: null,
           last_sync_at: li.last_sync_at ?? null,
           sync_status: li.sync_status ?? null,
+          loxone_remote_connect_ws_enabled: li.loxone_remote_connect_ws_enabled ?? null,
           offline_buffer_count: 0,
         });
       }
@@ -2191,6 +2192,21 @@ function GatewayDetailDialog({ devices, status, statusColor, onClose }: GatewayD
                   </div>
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
                     {d.device_type && (<><dt className="text-muted-foreground">Typ</dt><dd className="tabular-nums">{d.device_type}</dd></>)}
+                    {(() => {
+                      const isWs = d.source === "gateway_device" || d.loxone_remote_connect_ws_enabled === true;
+                      const isHttps = d.loxone_remote_connect_ws_enabled === false;
+                      if (!isWs && !isHttps) return null;
+                      return (
+                        <>
+                          <dt className="text-muted-foreground">Verbindung</dt>
+                          <dd className="tabular-nums">
+                            <Badge variant="outline" className={isWs ? "text-primary border-primary/50" : "text-muted-foreground border-muted-foreground/50"}>
+                              {isWs ? "WebSocket" : "HTTPS"}
+                            </Badge>
+                          </dd>
+                        </>
+                      );
+                    })()}
                     {d.local_ip && (<><dt className="text-muted-foreground">Lokale IP</dt><dd className="tabular-nums">{d.local_ip}</dd></>)}
                     {d.mac_address && (<><dt className="text-muted-foreground">MAC</dt><dd className="tabular-nums text-xs">{d.mac_address}</dd></>)}
                     {d.ha_version && (<><dt className="text-muted-foreground">HA-Version</dt><dd className="tabular-nums">{d.ha_version}</dd></>)}
