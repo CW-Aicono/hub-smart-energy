@@ -206,7 +206,6 @@ export function EditIntegrationDialog({
                       <div className="flex items-center gap-2">
                         <Wifi className="h-4 w-4 text-amber-500" />
                         <span className="font-medium">Remote Connect WebSocket</span>
-                        <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-600">BETA</Badge>
                       </div>
                       {locationIntegration?.loxone_remote_connect_ws_enabled ? (
                         <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-500/30 text-xs">Aktiviert</Badge>
