@@ -26,6 +26,7 @@ import { EditLocationDialog } from "@/components/locations/EditLocationDialog";
 import { ArrowLeft, Building2, MapPin, Mail, Phone, User, Star, Layers, ChevronDown, ChevronRight, Cpu, Pencil, Calendar, Ruler, Flame, FileText } from "lucide-react";
 import { DocumentBadge } from "@/components/documents/DocumentBadge";
 import { DocumentsPanel } from "@/components/documents/DocumentsPanel";
+import { LoxoneTemplatesCard } from "@/components/locations/LoxoneTemplatesCard";
 
 const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetchFloors, t }: { locationId: string; isAdmin: boolean; floors: any[]; floorsLoading: boolean; refetchFloors: () => void; t: (key: any) => string }) => {
   const [isOpen, setIsOpen] = useState(false);
