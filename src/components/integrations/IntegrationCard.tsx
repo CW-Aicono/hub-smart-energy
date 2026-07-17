@@ -147,10 +147,12 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
     }
     switch (locationIntegration.sync_status) {
       case "success": return <Badge variant="outline" className="gap-1 bg-primary/10 text-primary border-primary/20"><CheckCircle2 className="h-3 w-3" />{t("intCard.connected" as any)}</Badge>;
+      case "auth_failed": return <Badge variant="outline" className="gap-1 bg-destructive/10 text-destructive border-destructive/20" title="Anmeldung am Miniserver abgelehnt — Zugangsdaten prüfen"><XCircle className="h-3 w-3" />Zugangsdaten prüfen</Badge>;
       case "error": return <Badge variant="outline" className="gap-1 bg-destructive/10 text-destructive border-destructive/20"><XCircle className="h-3 w-3" />{t("intCard.error" as any)}</Badge>;
       case "syncing": return <Badge variant="outline" className="gap-1 bg-secondary text-secondary-foreground border-border"><Loader2 className="h-3 w-3 animate-spin" />{t("intCard.syncing" as any)}</Badge>;
       default: return <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border"><Clock className="h-3 w-3" />{t("intCard.pending" as any)}</Badge>;
     }
+
   };
 
   return (
