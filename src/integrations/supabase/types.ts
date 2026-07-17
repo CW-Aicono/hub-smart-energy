@@ -6119,12 +6119,16 @@ export type Database = {
           created_at: string
           description: string | null
           estimated_savings_kwh: number | null
+          execution_mode: string
           id: string
           is_active: boolean
           last_executed_at: string | null
           location_id: string
           location_integration_id: string
           logic_operator: string
+          loxone_template_bindings: Json
+          loxone_template_instance_id: string | null
+          loxone_template_key: string | null
           name: string
           notify_email: string | null
           notify_on_error: boolean
@@ -6151,12 +6155,16 @@ export type Database = {
           created_at?: string
           description?: string | null
           estimated_savings_kwh?: number | null
+          execution_mode?: string
           id?: string
           is_active?: boolean
           last_executed_at?: string | null
           location_id: string
           location_integration_id: string
           logic_operator?: string
+          loxone_template_bindings?: Json
+          loxone_template_instance_id?: string | null
+          loxone_template_key?: string | null
           name: string
           notify_email?: string | null
           notify_on_error?: boolean
@@ -6183,12 +6191,16 @@ export type Database = {
           created_at?: string
           description?: string | null
           estimated_savings_kwh?: number | null
+          execution_mode?: string
           id?: string
           is_active?: boolean
           last_executed_at?: string | null
           location_id?: string
           location_integration_id?: string
           logic_operator?: string
+          loxone_template_bindings?: Json
+          loxone_template_instance_id?: string | null
+          loxone_template_key?: string | null
           name?: string
           notify_email?: string | null
           notify_on_error?: boolean
@@ -6465,6 +6477,63 @@ export type Database = {
           },
         ]
       }
+      location_loxone_templates: {
+        Row: {
+          created_at: string
+          discovered_at: string
+          id: string
+          installed_version: string
+          instance_id: string
+          last_seen_at: string
+          location_id: string
+          template_key: string
+          tenant_id: string
+          updated_at: string
+          vi_bindings: Json
+        }
+        Insert: {
+          created_at?: string
+          discovered_at?: string
+          id?: string
+          installed_version: string
+          instance_id: string
+          last_seen_at?: string
+          location_id: string
+          template_key: string
+          tenant_id: string
+          updated_at?: string
+          vi_bindings?: Json
+        }
+        Update: {
+          created_at?: string
+          discovered_at?: string
+          id?: string
+          installed_version?: string
+          instance_id?: string
+          last_seen_at?: string
+          location_id?: string
+          template_key?: string
+          tenant_id?: string
+          updated_at?: string
+          vi_bindings?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_loxone_templates_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_loxone_templates_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       locations: {
         Row: {
           address: string | null
@@ -6599,6 +6668,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      loxone_template_registry: {
+        Row: {
+          category: string
+          changelog: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          min_miniserver_fw: string | null
+          parameters: Json
+          snippet_url: string | null
+          template_key: string
+          title: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          category: string
+          changelog?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          min_miniserver_fw?: string | null
+          parameters?: Json
+          snippet_url?: string | null
+          template_key: string
+          title: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          category?: string
+          changelog?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          min_miniserver_fw?: string | null
+          parameters?: Json
+          snippet_url?: string | null
+          template_key?: string
+          title?: string
+          updated_at?: string
+          version?: string
+        }
+        Relationships: []
       }
       loxone_ws_session_log: {
         Row: {
