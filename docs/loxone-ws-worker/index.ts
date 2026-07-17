@@ -65,7 +65,7 @@ const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "300000"
 // Phase 6: Session-Heartbeat von 15s auf 60s erhöht (IO-Optimierung)
 const SESSION_HEARTBEAT_MS = parseInt(process.env.SESSION_HEARTBEAT_MS || "60000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.4-heartbeat-only";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.5-auth-status";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -165,6 +165,46 @@ async function pushLoxoneStructureSnapshot(state: ConnState, structure: any): Pr
     log("warn", `[WS] ${state.serialNumber} Struktur-Snapshot fehlgeschlagen: ${describeError(err)}`);
   }
 }
+
+/**
+ * Erkennt in einer Loxone-Fehlermeldung eine Anmelde-Ablehnung (falscher User/Passwort).
+ * Loxone antwortet je nach Firmware mit HTTP 401, HTTP 400 "Bad credentials" oder LL.Code=401/1000.
+ */
+function isAuthError(err: unknown): boolean {
+  const s = describeError(err).toLowerCase();
+  return (
+    s.includes("401") ||
+    s.includes("unauthorized") ||
+    s.includes("bad credentials") ||
+    s.includes("wrong user") ||
+    s.includes("wrong password") ||
+    s.includes("invalid user") ||
+    s.includes("invalid password") ||
+    s.includes("authentication failed") ||
+    /code=(?:401|1000)\b/.test(s)
+  );
+}
+
+/**
+ * Meldet dem Backend, ob die im Cloud-Config hinterlegten Zugangsdaten am
+ * Miniserver akzeptiert wurden. Bei "auth_failed" wird zusätzlich ein
+ * integration_errors-Eintrag angelegt, damit der Fehler im Tenant-UI sichtbar
+ * ist (rotes Badge auf der Integrations-Kachel) und nicht nur im Container-Log.
+ */
+async function markAuthStatus(state: ConnState, status: "success" | "auth_failed", reason?: string): Promise<void> {
+  try {
+    await ingestPost("mark-loxone-auth-status", {
+      location_integration_id: state.locationIntegrationId,
+      serial_number: state.serialNumber,
+      status,
+      reason: reason ?? null,
+      username_tried: state.username,
+    });
+  } catch (err) {
+    log("debug", `[Auth] mark-loxone-auth-status fehlgeschlagen: ${(err as Error).message}`);
+  }
+}
+
 
 // ─── Bridge-Worker (Phase 2): Heartbeat & Event-Log ──────────────────────────
 
@@ -512,6 +552,10 @@ async function connect(state: ConnState): Promise<void> {
     state.diagEventCount = 0;
     state.diagCallbacksSeen = new Set<string>();
     await sessionStart(state);
+    // Auth erfolgreich → falls die Integration vorher als "auth_failed" markiert war,
+    // Status im Backend auf "success" zurücksetzen und offene Auth-Fehler auflösen.
+    void markAuthStatus(state, "success");
+
 
     // ── Phase 7: State-UUIDs pro Block aus LoxAPP3 expandieren ───────────────
     // state.uuidMap enthält initial die Block-UUIDs (sensor_uuid aus DB) mit role="pwr".
@@ -620,12 +664,23 @@ async function connect(state: ConnState): Promise<void> {
     // zwingt das den nächsten Reconnect zu einer frischen Auflösung.
     dnsCache.delete(state.serialNumber);
     const reason = describeError(err);
-    log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${reason}`);
-    bridgeLog("error", "ws_connect_failed", `Verbindung fehlgeschlagen: ${reason}`, state.serialNumber, { reason });
+    const auth = isAuthError(err);
+    log(auth ? "error" : "warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${reason}${auth ? " (AUTH)" : ""}`);
+    bridgeLog(auth ? "error" : "error", auth ? "ws_auth_failed" : "ws_connect_failed",
+      auth ? `Anmeldung am Miniserver abgelehnt (User "${state.username}") — Zugangsdaten in Cloud-Config prüfen`
+           : `Verbindung fehlgeschlagen: ${reason}`,
+      state.serialNumber, { reason, username_tried: auth ? state.username : undefined });
     state.ws = null;
+    if (auth) {
+      // Backend über Auth-Fehler informieren → UI zeigt rotes Badge, Reconnect stark verlangsamt.
+      void markAuthStatus(state, "auth_failed", reason);
+      // Auth-Backoff: mindestens 5 Min, um den Miniserver nicht zu hämmern (Lockout-Risiko).
+      state.reconnectDelay = Math.max(state.reconnectDelay, 300000);
+    }
     scheduleReconnect(state, `connect-error: ${reason}`);
   }
 }
+
 
 function scheduleReconnect(state: ConnState, reason: string): void {
   if (workerPaused) {
