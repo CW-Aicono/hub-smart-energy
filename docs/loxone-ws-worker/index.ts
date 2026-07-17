@@ -552,6 +552,10 @@ async function connect(state: ConnState): Promise<void> {
     state.diagEventCount = 0;
     state.diagCallbacksSeen = new Set<string>();
     await sessionStart(state);
+    // Auth erfolgreich → falls die Integration vorher als "auth_failed" markiert war,
+    // Status im Backend auf "success" zurücksetzen und offene Auth-Fehler auflösen.
+    void markAuthStatus(state, "success");
+
 
     // ── Phase 7: State-UUIDs pro Block aus LoxAPP3 expandieren ───────────────
     // state.uuidMap enthält initial die Block-UUIDs (sensor_uuid aus DB) mit role="pwr".
