@@ -26,7 +26,7 @@ function buildQuickGuidePdf(): Uint8Array {
   addLine("AICONO EMS – Loxone Snippets Gruppe A (E-Mobilität)", 18, true, 26);
   addLine("Kurzanleitung zur Einrichtung", 12, false, 20);
   addLine(
-    "Diese Kurzanleitung beschreibt die Einbindung der vier AICONO-Loxone-Bausteine der Gruppe „E-Mobilität". Nach dem Einspielen erkennt die Cloud die Bausteine automatisch (Discovery) und pusht Regeländerungen bei Bedarf direkt an den Miniserver.",
+    'Diese Kurzanleitung beschreibt die Einbindung der vier AICONO-Loxone-Bausteine der Gruppe E-Mobilitaet. Nach dem Einspielen erkennt die Cloud die Bausteine automatisch (Discovery) und pusht Regelaenderungen bei Bedarf direkt an den Miniserver.',
     10, false, 14,
   );
   y += 8;
