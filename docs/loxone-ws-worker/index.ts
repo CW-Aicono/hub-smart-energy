@@ -586,21 +586,7 @@ async function connect(state: ConnState): Promise<void> {
         subscribedOk++;
       } catch (err) {
         subscribedErr++;
-        let reason: string;
-        if (err instanceof Error) {
-          reason = err.message;
-        } else if (err && typeof err === "object") {
-          const anyErr = err as any;
-          const code = anyErr?.LL?.Code ?? anyErr?.Code ?? anyErr?.code;
-          const val = anyErr?.LL?.value ?? anyErr?.value;
-          if (code || val) {
-            reason = `code=${code ?? "?"} value=${val ?? "?"}`;
-          } else {
-            try { reason = JSON.stringify(err); } catch { reason = String(err); }
-          }
-        } else {
-        reason = describeError(err);
-        }
+        const reason = describeError(err);
         failedBlocks.push({ block: blockUuid, reason });
         log("warn", `[WS] ${state.serialNumber} block-snapshot ${blockUuid} fehlgeschlagen: ${reason}`);
       }
