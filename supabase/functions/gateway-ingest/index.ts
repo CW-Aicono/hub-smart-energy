@@ -2349,6 +2349,8 @@ Deno.serve(async (req) => {
     if (action === "ws-session-end") return handleWsSessionEnd(req);
     if (action === "ws-session-heartbeat") return handleWsSessionHeartbeat(req);
     if (action === "loxone-structure-snapshot") return handleLoxoneStructureSnapshot(req);
+    if (action === "mark-loxone-auth-status") return handleMarkLoxoneAuthStatus(req);
+
     if (action === "compact-day") return handleCompactDay(req);
     if (action === "schneider-push") return handleSchneiderPush(req);
     if (action === "heartbeat") return handleHeartbeat(req);
