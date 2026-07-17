@@ -1747,6 +1747,96 @@ async function handleLoxoneStructureSnapshot(req: Request): Promise<Response> {
   return json({ success: true, sensors: sensors.length });
 }
 
+/* ── Loxone WS auth status handler ─────────────────────────────────────────────
+ * Wird vom Loxone-WS-Worker gerufen, sobald ein Anmeldeversuch am Miniserver
+ * entweder erfolgreich war ("success") oder wegen falscher Zugangsdaten
+ * abgelehnt wurde ("auth_failed"). Konsequenzen:
+ *   - location_integrations.sync_status wird gesetzt (auth_failed | success)
+ *   - Bei auth_failed: aktiver integration_errors-Eintrag (error_type='auth'),
+ *     dedupliziert per (location_integration_id, error_type, is_resolved=false)
+ *   - Bei success: alle offenen 'auth'-Fehler der Integration werden aufgelöst
+ */
+async function handleMarkLoxoneAuthStatus(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    location_integration_id?: string;
+    serial_number?: string;
+    status?: "success" | "auth_failed";
+    reason?: string | null;
+    username_tried?: string | null;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.location_integration_id || (body.status !== "success" && body.status !== "auth_failed")) {
+    return json({ error: "location_integration_id and status (success|auth_failed) required" }, 400);
+  }
+
+  const supabase = getSupabase();
+  const { data: li, error: liErr } = await supabase
+    .from("location_integrations")
+    .select("id, location_id, sync_status, location:locations!location_integrations_location_id_fkey ( tenant_id )")
+    .eq("id", body.location_integration_id)
+    .maybeSingle();
+  if (liErr || !li) return json({ error: "Integration not found" }, 404);
+
+  const tenantId = (li as any).location?.tenant_id as string | undefined;
+  const locationId = (li as any).location_id as string | undefined;
+
+  const nextStatus = body.status === "success" ? "success" : "auth_failed";
+  const { error: updErr } = await supabase
+    .from("location_integrations")
+    .update({ sync_status: nextStatus, last_sync_at: new Date().toISOString() })
+    .eq("id", body.location_integration_id);
+  if (updErr) return json({ error: "Failed to update integration", details: updErr.message }, 500);
+
+  if (body.status === "auth_failed" && tenantId) {
+    // Deduplizieren: falls bereits ein offener 'auth'-Fehler existiert, updaten statt neu einfügen.
+    const { data: existing } = await supabase
+      .from("integration_errors")
+      .select("id")
+      .eq("location_integration_id", body.location_integration_id)
+      .eq("error_type", "auth")
+      .eq("is_resolved", false)
+      .maybeSingle();
+
+    const msg = `Anmeldung am Loxone-Miniserver ${body.serial_number ?? ""} abgelehnt (User "${body.username_tried ?? "?"}"). Bitte Zugangsdaten in der Integration prüfen.`;
+    if (existing?.id) {
+      await supabase.from("integration_errors").update({
+        error_message: msg,
+        severity: "error",
+        updated_at: new Date().toISOString(),
+      }).eq("id", existing.id);
+    } else {
+      await supabase.from("integration_errors").insert({
+        tenant_id: tenantId,
+        location_id: locationId,
+        location_integration_id: body.location_integration_id,
+        integration_type: "loxone_miniserver",
+        error_type: "auth",
+        error_message: msg,
+        severity: "error",
+      });
+    }
+  }
+
+  if (body.status === "success") {
+    // Offene Auth-Fehler auflösen (self-healing bei korrigierten Credentials).
+    await supabase
+      .from("integration_errors")
+      .update({ is_resolved: true, resolved_at: new Date().toISOString() })
+      .eq("location_integration_id", body.location_integration_id)
+      .eq("error_type", "auth")
+      .eq("is_resolved", false);
+  }
+
+  return json({ success: true, status: nextStatus });
+}
+
+
+
+
 /* ── Gateway backup handler ──────────────────────────────────────────────────── */
 
 async function handleGatewayBackup(req: Request): Promise<Response> {
@@ -2262,6 +2352,8 @@ Deno.serve(async (req) => {
     if (action === "ws-session-end") return handleWsSessionEnd(req);
     if (action === "ws-session-heartbeat") return handleWsSessionHeartbeat(req);
     if (action === "loxone-structure-snapshot") return handleLoxoneStructureSnapshot(req);
+    if (action === "mark-loxone-auth-status") return handleMarkLoxoneAuthStatus(req);
+
     if (action === "compact-day") return handleCompactDay(req);
     if (action === "schneider-push") return handleSchneiderPush(req);
     if (action === "heartbeat") return handleHeartbeat(req);
