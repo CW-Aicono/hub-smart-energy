@@ -14,13 +14,16 @@ interface InstalledTemplate {
   id: string;
   template_key: string;
   instance_id: string | null;
-  version: string | null;
-  last_discovered_at: string | null;
-  registry?: {
-    label: string | null;
-    category: string | null;
-    latest_version: string | null;
-  } | null;
+  installed_version: string | null;
+  last_seen_at: string | null;
+  discovered_at: string | null;
+}
+
+interface RegistryEntry {
+  template_key: string;
+  title: string;
+  category: string;
+  version: string;
 }
 
 interface LoxoneTemplatesCardProps {
@@ -34,21 +37,29 @@ export const LoxoneTemplatesCard = ({ locationId }: LoxoneTemplatesCardProps) =>
   );
 
   const [templates, setTemplates] = useState<InstalledTemplate[]>([]);
+  const [registry, setRegistry] = useState<Record<string, RegistryEntry>>({});
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
 
   const load = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("location_loxone_templates")
-      .select("id, template_key, instance_id, version, last_discovered_at, registry:loxone_template_registry(label, category, latest_version)")
-      .eq("location_id", locationId)
-      .order("template_key");
-    if (error) {
-      toast.error("Templates konnten nicht geladen werden: " + error.message);
-    } else {
-      setTemplates((data as any) || []);
-    }
+    const [{ data: instData, error: instErr }, { data: regData, error: regErr }] = await Promise.all([
+      supabase
+        .from("location_loxone_templates")
+        .select("id, template_key, instance_id, installed_version, last_seen_at, discovered_at")
+        .eq("location_id", locationId)
+        .order("template_key"),
+      supabase
+        .from("loxone_template_registry")
+        .select("template_key, title, category, version")
+        .eq("is_active", true),
+    ]);
+    if (instErr) toast.error("Templates konnten nicht geladen werden: " + instErr.message);
+    if (regErr) toast.error("Katalog konnte nicht geladen werden: " + regErr.message);
+    setTemplates((instData as any) || []);
+    const map: Record<string, RegistryEntry> = {};
+    ((regData as any[]) || []).forEach((r) => { map[r.template_key] = r; });
+    setRegistry(map);
     setLoading(false);
   };
 
