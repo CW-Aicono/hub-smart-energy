@@ -9,6 +9,7 @@ import GatewayWorkerStatusCard from "@/components/super-admin/GatewayWorkerStatu
 import HetznerNodesCard from "@/components/super-admin/HetznerNodesCard";
 import LoxonePollingOverviewCard from "@/components/super-admin/LoxonePollingOverviewCard";
 import AlertRulesCard from "@/components/super-admin/AlertRulesCard";
+import AlertEventsHistoryCard from "@/components/super-admin/AlertEventsHistoryCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
