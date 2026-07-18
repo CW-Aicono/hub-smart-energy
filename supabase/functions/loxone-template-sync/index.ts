@@ -85,6 +85,10 @@ async function resolveBaseUrl(cfg: LoxoneConfig): Promise<string | null> {
   return await resolveCloudHost(cfg.serial_number);
 }
 
+type ViBinding = { uuid?: string; name?: string; controlType: string; source?: string };
+
+const ensureTemplateKey = (key: string) => key.startsWith(AICO_PREFIX) ? key : `${AICO_PREFIX}${key}`;
+
 // Parse "AICO_<TemplateKey>__<InstanceID>__<Param>" (Doppel-Unterstrich als Trenner
 // gemäß AICONO Multiplikator-Konzept). Fallback: legacy single-underscore Namen
 // "AICO_<TemplateKey>_<InstanceID>_<Param>" werden ebenfalls akzeptiert.
@@ -96,17 +100,101 @@ function parseAicoName(name: string): { templateKey: string; instanceId: string;
   if (rest.includes("__")) {
     const parts = rest.split("__");
     if (parts.length < 3) return null;
-    const [templateKey, instanceId, ...paramParts] = parts;
-    if (!templateKey || !instanceId || paramParts.length === 0) return null;
-    return { templateKey, instanceId, param: paramParts.join("__") };
+    const [rawTemplateKey, instanceId, ...paramParts] = parts;
+    if (!rawTemplateKey || !instanceId || paramParts.length === 0) return null;
+    return { templateKey: ensureTemplateKey(rawTemplateKey), instanceId, param: paramParts.join("__") };
   }
 
   // Legacy Fallback: einfacher Unterstrich
   const parts = rest.split("_");
   if (parts.length < 3) return null;
-  const [templateKey, instanceId, ...paramParts] = parts;
-  if (!templateKey || !instanceId || paramParts.length === 0) return null;
-  return { templateKey, instanceId, param: paramParts.join("_") };
+  const [rawTemplateKey, instanceId, ...paramParts] = parts;
+  if (!rawTemplateKey || !instanceId || paramParts.length === 0) return null;
+  return { templateKey: ensureTemplateKey(rawTemplateKey), instanceId, param: paramParts.join("_") };
+}
+
+// LoxAPP3.json enthält Virtual Inputs je nach Konfiguration/Firmware nicht,
+// weil sie keine App-Visualisierung haben. Deshalb prüfen wir bekannte
+// AICONO-VI-Namen zusätzlich direkt per Loxone-Webservice.
+const KNOWN_TEMPLATE_PARAM_FALLBACKS: Record<string, string[]> = {
+  AICO_GridProtect: ["GridLimitKW", "ReactionMs", "EnableProtection"],
+};
+
+function parameterNamesFromRegistry(parameters: unknown): string[] {
+  if (!Array.isArray(parameters)) return [];
+  return parameters
+    .map((p: any) => p?.name ?? p?.key)
+    .filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+}
+
+async function virtualInputExists(baseUrl: string, auth: string, name: string): Promise<boolean> {
+  const encodedName = encodeURIComponent(name);
+  const endpoints = [
+    `${baseUrl}/jdev/sps/io/${encodedName}/state`,
+    `${baseUrl}/dev/sps/io/${encodedName}/state`,
+  ];
+  for (const url of endpoints) {
+    try {
+      const res = await fetchWithTimeout(url, { headers: { Authorization: auth } }, 1_200);
+      if (res.ok) return true;
+      if (res.status === 401) throw new Error("Authentifizierung fehlgeschlagen");
+    } catch (e) {
+      if ((e as Error).message === "Authentifizierung fehlgeschlagen") throw e;
+    }
+  }
+  return false;
+}
+
+async function discoverKnownVirtualInputs(
+  ctx: RunContext,
+  baseUrl: string,
+  auth: string,
+): Promise<Map<string, { templateKey: string; instanceId: string; bindings: Record<string, ViBinding> }>> {
+  const { data: regs, error } = await ctx.supabase
+    .from("loxone_template_registry")
+    .select("template_key, parameters")
+    .eq("is_active", true)
+    .like("template_key", "AICO_%");
+  if (error) throw new Error(`Katalog konnte nicht geladen werden: ${error.message}`);
+
+  const found = new Map<string, { templateKey: string; instanceId: string; bindings: Record<string, ViBinding> }>();
+  const instanceIds = ["1", "2", "3"];
+
+  for (const reg of regs || []) {
+    const templateKey = ensureTemplateKey((reg as any).template_key as string);
+    const registryParams = parameterNamesFromRegistry((reg as any).parameters);
+    const fallbackParams = KNOWN_TEMPLATE_PARAM_FALLBACKS[templateKey] || [];
+    const allParams = Array.from(new Set([...fallbackParams, ...registryParams]));
+    if (allParams.length === 0) continue;
+
+    // Nur wenige Marker prüfen. Wenn ein Marker existiert, speichern wir alle
+    // erwarteten Parameternamen als direkte Namens-Bindings für spätere Pushes.
+    const probeParams = fallbackParams.length > 0 ? fallbackParams : allParams.slice(0, 1);
+    for (const instanceId of instanceIds) {
+      let detected = false;
+      for (const param of probeParams) {
+        const viName = `${templateKey}__${instanceId}__${param}`;
+        if (await virtualInputExists(baseUrl, auth, viName)) {
+          detected = true;
+          break;
+        }
+      }
+      if (!detected) continue;
+
+      const key = `${templateKey}::${instanceId}`;
+      const bindings: Record<string, ViBinding> = {};
+      for (const param of allParams) {
+        bindings[param] = {
+          name: `${templateKey}__${instanceId}__${param}`,
+          controlType: "VirtualInput",
+          source: "direct_name_probe",
+        };
+      }
+      found.set(key, { templateKey, instanceId, bindings });
+    }
+  }
+
+  return found;
 }
 
 interface RunContext {
