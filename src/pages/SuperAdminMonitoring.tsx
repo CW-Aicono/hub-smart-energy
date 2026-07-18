@@ -136,6 +136,10 @@ const SuperAdminMonitoring = () => {
               {/* Alert-Regeln */}
               <AlertRulesCard getLatest={getLatest} />
 
+              {/* Alert-Historie (Ursache + Zeitstempel) */}
+              <AlertEventsHistoryCard />
+
+
 
 
 
