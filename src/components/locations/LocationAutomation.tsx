@@ -302,7 +302,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
 
   const {
     automations, lastErrors, loading: autoLoading, executing,
-    createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation,
+    createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation, refetch,
   } = useLocationAutomations(locationId);
 
   // ── Installierte Loxone-Templates dieser Location (für Template-basierte Regeln) ──
@@ -423,6 +423,11 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
       if (error) {
         toast.warning("Regel gespeichert, Loxone-Push fehlgeschlagen: " + (error.message || "Unbekannt"));
       } else {
+        await supabase
+          .from("location_automations")
+          .update({ last_executed_at: new Date().toISOString() })
+          .eq("id", automationId);
+        await refetch();
         toast.success("An Miniserver übertragen");
       }
     } catch (e: any) {
