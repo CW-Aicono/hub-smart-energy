@@ -164,7 +164,9 @@ async function discoverKnownVirtualInputs(
     const templateKey = ensureTemplateKey((reg as any).template_key as string);
     const registryParams = parameterNamesFromRegistry((reg as any).parameters);
     const fallbackParams = KNOWN_TEMPLATE_PARAM_FALLBACKS[templateKey] || [];
-    const allParams = Array.from(new Set([...fallbackParams, ...registryParams]));
+    const allParams = fallbackParams.length > 0
+      ? fallbackParams
+      : Array.from(new Set(registryParams));
     if (allParams.length === 0) continue;
 
     // Nur wenige Marker prüfen. Wenn ein Marker existiert, speichern wir alle
