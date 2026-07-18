@@ -43,17 +43,37 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
   }
 }
 
+// Loxone Remote Connect resolver (connect.loxonecloud.com returns 307 with dyndns URL).
+// The legacy `dns.loxonecloud.com?getip` endpoint has been discontinued (2026-05).
 async function resolveCloudHost(serial: string): Promise<string | null> {
-  try {
-    const r = await fetchWithTimeout(`https://dns.loxonecloud.com/?getip&snr=${serial}&json=true`);
-    if (!r.ok) return null;
-    const j = await r.json();
-    const ip = j?.IP || j?.ip;
-    if (!ip) return null;
-    return `http://${ip}`.replace(/\/+$/, "");
-  } catch {
+  const tryEndpoint = async (url: string, follow: boolean): Promise<string | null> => {
+    const res = await fetchWithTimeout(url, { method: "GET", redirect: follow ? "follow" : "manual" });
+    if (!follow && res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location");
+      if (loc) {
+        const u = new URL(loc);
+        return `${u.protocol}//${u.host}`;
+      }
+    }
+    if (res.ok) {
+      const u = new URL(res.url);
+      return `${u.protocol}//${u.host}`;
+    }
     return null;
+  };
+  try {
+    const b = await tryEndpoint(`https://connect.loxonecloud.com/${serial}`, false);
+    if (b) return b;
+  } catch (e) {
+    console.warn(`Remote Connect resolve failed for ${serial}:`, e);
   }
+  try {
+    const b = await tryEndpoint(`http://dns.loxonecloud.com/${serial}`, true);
+    if (b) return b;
+  } catch (e) {
+    console.warn(`Legacy DNS resolve failed for ${serial}:`, e);
+  }
+  return null;
 }
 
 async function resolveBaseUrl(cfg: LoxoneConfig): Promise<string | null> {
