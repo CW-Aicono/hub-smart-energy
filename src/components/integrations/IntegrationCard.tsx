@@ -40,6 +40,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const [editOpen, setEditOpen] = useState(false);
   const [replaceGatewayOpen, setReplaceGatewayOpen] = useState(false);
   const [isBackfilling, setIsBackfilling] = useState(false);
+  const [isScanningTemplates, setIsScanningTemplates] = useState(false);
   const [backfillFrom, setBackfillFrom] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 2);
     return d.toISOString().slice(0, 10);
