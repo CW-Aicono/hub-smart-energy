@@ -74,6 +74,8 @@ const SuperAdminMonitoring = () => {
   const activeConns = getLatest("db_connections", "active_connections");
   const maxConns = getLatest("db_connections", "max_connections");
   const tableCount = getLatest("db_info", "table_count");
+  const walBytes = getLatest("wal", "current_size_bytes");
+  const cacheHit = getLatest("memory", "cache_hit_ratio_pct");
   const tableSizes = getTableSizes();
 
   const connTimeSeries = getTimeSeries("db_connections", "active_connections", 48).map((m) => ({
