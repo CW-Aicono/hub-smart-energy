@@ -85,11 +85,23 @@ async function resolveBaseUrl(cfg: LoxoneConfig): Promise<string | null> {
   return await resolveCloudHost(cfg.serial_number);
 }
 
-// Parse "AICO_<TemplateKey>_<InstanceID>_<Param>"
-// TemplateKey und InstanceID können Buchstaben/Ziffern enthalten. Param greift den REST bis Ende.
+// Parse "AICO_<TemplateKey>__<InstanceID>__<Param>" (Doppel-Unterstrich als Trenner
+// gemäß AICONO Multiplikator-Konzept). Fallback: legacy single-underscore Namen
+// "AICO_<TemplateKey>_<InstanceID>_<Param>" werden ebenfalls akzeptiert.
 function parseAicoName(name: string): { templateKey: string; instanceId: string; param: string } | null {
   if (!name.startsWith(AICO_PREFIX)) return null;
   const rest = name.slice(AICO_PREFIX.length);
+
+  // Bevorzugt: Doppel-Unterstrich (spezifiziertes Format)
+  if (rest.includes("__")) {
+    const parts = rest.split("__");
+    if (parts.length < 3) return null;
+    const [templateKey, instanceId, ...paramParts] = parts;
+    if (!templateKey || !instanceId || paramParts.length === 0) return null;
+    return { templateKey, instanceId, param: paramParts.join("__") };
+  }
+
+  // Legacy Fallback: einfacher Unterstrich
   const parts = rest.split("_");
   if (parts.length < 3) return null;
   const [templateKey, instanceId, ...paramParts] = parts;
