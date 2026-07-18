@@ -232,15 +232,18 @@ async function actionDiscover(ctx: RunContext, locationIntegrationId: string) {
   if (!baseUrl) throw new Error("Miniserver nicht erreichbar");
   const auth = `Basic ${btoa(`${li.config.username}:${li.config.password}`)}`;
 
+  let controls: Record<string, LoxoneControl> = {};
+  let structureWarning: string | undefined;
   const structRes = await fetchWithTimeout(`${baseUrl}/data/LoxAPP3.json`, {
     headers: { Authorization: auth },
   });
   if (!structRes.ok) {
     if (structRes.status === 401) throw new Error("Authentifizierung fehlgeschlagen");
-    throw new Error(`Struktur konnte nicht geladen werden: ${structRes.status}`);
+    structureWarning = `LoxAPP3.json konnte nicht geladen werden (${structRes.status}); direkte VI-Prüfung wurde verwendet.`;
+  } else {
+    const structure = (await structRes.json()) as { controls?: Record<string, LoxoneControl> };
+    controls = structure.controls || {};
   }
-  const structure = (await structRes.json()) as { controls?: Record<string, LoxoneControl> };
-  const controls = structure.controls || {};
 
   // group by templateKey + instanceId
   const instances = new Map<string, {
@@ -311,6 +314,7 @@ async function actionDiscover(ctx: RunContext, locationIntegrationId: string) {
     hint: rows.length === 0
       ? "Auf diesem Miniserver wurden keine AICO_-Bausteine gefunden. Hinweis: Virtuelle Eingänge ohne App-Visualisierung wurden zusätzlich direkt per Webservice geprüft."
       : undefined,
+    warning: structureWarning,
     instances: rows.map((r) => ({
       template_key: r.template_key,
       instance_id: r.instance_id,
