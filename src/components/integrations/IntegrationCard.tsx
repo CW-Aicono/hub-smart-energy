@@ -116,7 +116,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
     setIsScanningTemplates(true);
     try {
       const { data, error } = await supabase.functions.invoke("loxone-template-sync", {
-        body: { action: "discover", location_integration_id: locationIntegration.id },
+        body: { action: "discover", locationIntegrationId: locationIntegration.id },
       });
       if (error) throw error;
       const found = (data as any)?.discovered ?? (data as any)?.count ?? 0;

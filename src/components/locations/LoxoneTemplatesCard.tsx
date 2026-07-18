@@ -80,7 +80,7 @@ export const LoxoneTemplatesCard = ({ locationId }: LoxoneTemplatesCardProps) =>
     setScanning(true);
     try {
       const { data, error } = await supabase.functions.invoke("loxone-template-sync", {
-        body: { action: "discover", location_integration_id: loxoneIntegration.id },
+        body: { action: "discover", locationIntegrationId: loxoneIntegration.id },
       });
       if (error) throw error;
       const found = (data as any)?.discovered ?? (data as any)?.count ?? 0;
