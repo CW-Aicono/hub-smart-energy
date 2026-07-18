@@ -13,13 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Download, RefreshCw, Puzzle, AlertTriangle, CheckCircle2, Package, DatabaseZap } from "lucide-react";
-import { SNIPPET_GROUPS, SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCatalog";
-import {
-  downloadGroupPackage,
-  downloadAllSnippetsPackage,
-  downloadSingleSnippet,
-} from "@/lib/loxone/snippetDownload";
+import { RefreshCw, Puzzle, AlertTriangle, CheckCircle2, DatabaseZap } from "lucide-react";
+import { SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCatalog";
 import { seedRegistryFromSnippets } from "@/lib/loxone/catalogSeed";
 import LoxoneMasterProject from "@/components/super-admin/LoxoneMasterProject";
 
@@ -157,9 +152,6 @@ export default function SuperAdminLoxoneTemplates() {
                 }}
               >
                 <DatabaseZap className="h-4 w-4 mr-2" /> Katalog aus Snippet-Bibliothek befüllen
-              </Button>
-              <Button onClick={downloadAllSnippetsPackage}>
-                <Package className="h-4 w-4 mr-2" /> Gesamt-Paket A–F (.zip)
               </Button>
             </div>
           </div>
@@ -305,9 +297,7 @@ export default function SuperAdminLoxoneTemplates() {
                     </p>
                   </div>
                   {SNIPPET_KEYS.has(detail.template_key) && (
-                    <Button size="sm" variant="outline" onClick={() => downloadSingleSnippet(detail.template_key)}>
-                      <Download className="h-4 w-4 mr-2" /> Snippet herunterladen
-                    </Button>
+                    <Badge variant="outline" className="text-[10px]">im Master-Projekt enthalten</Badge>
                   )}
                 </div>
               )}
