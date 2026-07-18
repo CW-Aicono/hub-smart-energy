@@ -354,7 +354,7 @@ async function pushAutomation(ctx: RunContext, automationId: string, opts: { sou
     .eq("instance_id", a.loxone_template_instance_id)
     .maybeSingle();
   if (!tpl) throw new Error("Template-Instanz auf dem Miniserver nicht gefunden — bitte Discovery ausführen");
-  const bindings = (tpl as any).vi_bindings as Record<string, { uuid: string }>;
+  const bindings = (tpl as any).vi_bindings as Record<string, ViBinding>;
 
   // Loxone-Verbindung
   const li = await loadLocationIntegration(ctx, a.location_integration_id);
@@ -368,20 +368,21 @@ async function pushAutomation(ctx: RunContext, automationId: string, opts: { sou
 
   for (const [param, value] of Object.entries(params)) {
     const bind = bindings[param];
-    if (!bind?.uuid) {
+    const target = bind?.uuid || bind?.name;
+    if (!target) {
       results.push({ param, ok: false, error: "VI nicht gefunden", value });
       continue;
     }
     try {
-      const url = `${baseUrl}/jdev/sps/io/${bind.uuid}/${formatLoxoneValue(value)}`;
+      const url = `${baseUrl}/jdev/sps/io/${encodeURIComponent(target)}/${formatLoxoneValue(value)}`;
       const r = await fetchWithTimeout(url, { headers: { Authorization: auth } }, 5_000);
       if (!r.ok) {
-        results.push({ param, uuid: bind.uuid, ok: false, error: `HTTP ${r.status}`, value });
+        results.push({ param, uuid: bind.uuid || bind.name, ok: false, error: `HTTP ${r.status}`, value });
       } else {
-        results.push({ param, uuid: bind.uuid, ok: true, value });
+        results.push({ param, uuid: bind.uuid || bind.name, ok: true, value });
       }
     } catch (e) {
-      results.push({ param, uuid: bind.uuid, ok: false, error: (e as Error).message, value });
+      results.push({ param, uuid: bind.uuid || bind.name, ok: false, error: (e as Error).message, value });
     }
   }
 
