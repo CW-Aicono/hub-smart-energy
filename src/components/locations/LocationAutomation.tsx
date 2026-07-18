@@ -418,7 +418,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const pushToLoxone = async (automationId: string) => {
     try {
       const { error } = await supabase.functions.invoke("loxone-template-sync", {
-        body: { action: "push", automation_id: automationId, source: "save" },
+        body: { action: "push", automationId, source: "save" },
       });
       if (error) {
         toast.warning("Regel gespeichert, Loxone-Push fehlgeschlagen: " + (error.message || "Unbekannt"));
