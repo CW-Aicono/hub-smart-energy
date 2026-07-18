@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
-import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge, RefreshCw, ArrowRightLeft } from "lucide-react";
+import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge, RefreshCw, ArrowRightLeft, Puzzle } from "lucide-react";
 import { ReplaceGatewayDialog } from "./ReplaceGatewayDialog";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { SensorsDialog } from "./SensorsDialog";
