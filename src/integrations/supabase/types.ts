@@ -13422,16 +13422,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_app_tenant_user: { Args: { _user_id: string }; Returns: boolean }
       is_document_category_in_tenant: {
         Args: { _category_id: string; _tenant_id: string }
         Returns: boolean
       }
       is_own_profile: { Args: { profile_user_id: string }; Returns: boolean }
       is_partner_admin: { Args: { _user_id: string }; Returns: boolean }
-      is_partner_member: {
-        Args: { _partner_id: string; _user_id: string }
-        Returns: boolean
-      }
+      is_partner_member:
+        | { Args: { _user_id: string }; Returns: boolean }
+        | { Args: { _partner_id: string; _user_id: string }; Returns: boolean }
       is_support_user: { Args: { _user_id: string }; Returns: boolean }
       is_tenant_member: {
         Args: { _tenant_id: string; _user_id: string }
