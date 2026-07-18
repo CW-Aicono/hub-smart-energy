@@ -85,6 +85,10 @@ async function resolveBaseUrl(cfg: LoxoneConfig): Promise<string | null> {
   return await resolveCloudHost(cfg.serial_number);
 }
 
+type ViBinding = { uuid?: string; name?: string; controlType: string; source?: string };
+
+const ensureTemplateKey = (key: string) => key.startsWith(AICO_PREFIX) ? key : `${AICO_PREFIX}${key}`;
+
 // Parse "AICO_<TemplateKey>__<InstanceID>__<Param>" (Doppel-Unterstrich als Trenner
 // gemäß AICONO Multiplikator-Konzept). Fallback: legacy single-underscore Namen
 // "AICO_<TemplateKey>_<InstanceID>_<Param>" werden ebenfalls akzeptiert.
@@ -96,17 +100,103 @@ function parseAicoName(name: string): { templateKey: string; instanceId: string;
   if (rest.includes("__")) {
     const parts = rest.split("__");
     if (parts.length < 3) return null;
-    const [templateKey, instanceId, ...paramParts] = parts;
-    if (!templateKey || !instanceId || paramParts.length === 0) return null;
-    return { templateKey, instanceId, param: paramParts.join("__") };
+    const [rawTemplateKey, instanceId, ...paramParts] = parts;
+    if (!rawTemplateKey || !instanceId || paramParts.length === 0) return null;
+    return { templateKey: ensureTemplateKey(rawTemplateKey), instanceId, param: paramParts.join("__") };
   }
 
   // Legacy Fallback: einfacher Unterstrich
   const parts = rest.split("_");
   if (parts.length < 3) return null;
-  const [templateKey, instanceId, ...paramParts] = parts;
-  if (!templateKey || !instanceId || paramParts.length === 0) return null;
-  return { templateKey, instanceId, param: paramParts.join("_") };
+  const [rawTemplateKey, instanceId, ...paramParts] = parts;
+  if (!rawTemplateKey || !instanceId || paramParts.length === 0) return null;
+  return { templateKey: ensureTemplateKey(rawTemplateKey), instanceId, param: paramParts.join("_") };
+}
+
+// LoxAPP3.json enthält Virtual Inputs je nach Konfiguration/Firmware nicht,
+// weil sie keine App-Visualisierung haben. Deshalb prüfen wir bekannte
+// AICONO-VI-Namen zusätzlich direkt per Loxone-Webservice.
+const KNOWN_TEMPLATE_PARAM_FALLBACKS: Record<string, string[]> = {
+  AICO_GridProtect: ["GridLimitKW", "ReactionMs", "EnableProtection"],
+};
+
+function parameterNamesFromRegistry(parameters: unknown): string[] {
+  if (!Array.isArray(parameters)) return [];
+  return parameters
+    .map((p: any) => p?.name ?? p?.key)
+    .filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+}
+
+async function virtualInputExists(baseUrl: string, auth: string, name: string): Promise<boolean> {
+  const encodedName = encodeURIComponent(name);
+  const endpoints = [
+    `${baseUrl}/jdev/sps/io/${encodedName}/state`,
+    `${baseUrl}/dev/sps/io/${encodedName}/state`,
+  ];
+  for (const url of endpoints) {
+    try {
+      const res = await fetchWithTimeout(url, { headers: { Authorization: auth } }, 1_200);
+      if (res.ok) return true;
+      if (res.status === 401) throw new Error("Authentifizierung fehlgeschlagen");
+    } catch (e) {
+      if ((e as Error).message === "Authentifizierung fehlgeschlagen") throw e;
+    }
+  }
+  return false;
+}
+
+async function discoverKnownVirtualInputs(
+  ctx: RunContext,
+  baseUrl: string,
+  auth: string,
+): Promise<Map<string, { templateKey: string; instanceId: string; bindings: Record<string, ViBinding> }>> {
+  const { data: regs, error } = await ctx.supabase
+    .from("loxone_template_registry")
+    .select("template_key, parameters")
+    .eq("is_active", true)
+    .like("template_key", "AICO_%");
+  if (error) throw new Error(`Katalog konnte nicht geladen werden: ${error.message}`);
+
+  const found = new Map<string, { templateKey: string; instanceId: string; bindings: Record<string, ViBinding> }>();
+  const instanceIds = ["1", "2", "3"];
+
+  for (const reg of regs || []) {
+    const templateKey = ensureTemplateKey((reg as any).template_key as string);
+    const registryParams = parameterNamesFromRegistry((reg as any).parameters);
+    const fallbackParams = KNOWN_TEMPLATE_PARAM_FALLBACKS[templateKey] || [];
+    const allParams = fallbackParams.length > 0
+      ? fallbackParams
+      : Array.from(new Set(registryParams));
+    if (allParams.length === 0) continue;
+
+    // Nur wenige Marker prüfen. Wenn ein Marker existiert, speichern wir alle
+    // erwarteten Parameternamen als direkte Namens-Bindings für spätere Pushes.
+    const probeParams = fallbackParams.length > 0 ? fallbackParams : allParams.slice(0, 1);
+    for (const instanceId of instanceIds) {
+      let detected = false;
+      for (const param of probeParams) {
+        const viName = `${templateKey}__${instanceId}__${param}`;
+        if (await virtualInputExists(baseUrl, auth, viName)) {
+          detected = true;
+          break;
+        }
+      }
+      if (!detected) continue;
+
+      const key = `${templateKey}::${instanceId}`;
+      const bindings: Record<string, ViBinding> = {};
+      for (const param of allParams) {
+        bindings[param] = {
+          name: `${templateKey}__${instanceId}__${param}`,
+          controlType: "VirtualInput",
+          source: "direct_name_probe",
+        };
+      }
+      found.set(key, { templateKey, instanceId, bindings });
+    }
+  }
+
+  return found;
 }
 
 interface RunContext {
@@ -144,21 +234,24 @@ async function actionDiscover(ctx: RunContext, locationIntegrationId: string) {
   if (!baseUrl) throw new Error("Miniserver nicht erreichbar");
   const auth = `Basic ${btoa(`${li.config.username}:${li.config.password}`)}`;
 
+  let controls: Record<string, LoxoneControl> = {};
+  let structureWarning: string | undefined;
   const structRes = await fetchWithTimeout(`${baseUrl}/data/LoxAPP3.json`, {
     headers: { Authorization: auth },
   });
   if (!structRes.ok) {
     if (structRes.status === 401) throw new Error("Authentifizierung fehlgeschlagen");
-    throw new Error(`Struktur konnte nicht geladen werden: ${structRes.status}`);
+    structureWarning = `LoxAPP3.json konnte nicht geladen werden (${structRes.status}); direkte VI-Prüfung wurde verwendet.`;
+  } else {
+    const structure = (await structRes.json()) as { controls?: Record<string, LoxoneControl> };
+    controls = structure.controls || {};
   }
-  const structure = (await structRes.json()) as { controls?: Record<string, LoxoneControl> };
-  const controls = structure.controls || {};
 
   // group by templateKey + instanceId
   const instances = new Map<string, {
     templateKey: string;
     instanceId: string;
-    bindings: Record<string, { uuid: string; controlType: string; name: string }>;
+    bindings: Record<string, ViBinding>;
   }>();
 
   for (const [, ctrl] of Object.entries(controls)) {
@@ -172,7 +265,15 @@ async function actionDiscover(ctx: RunContext, locationIntegrationId: string) {
       uuid: ctrl.uuidAction,
       controlType: ctrl.type,
       name: ctrl.name,
+      source: "LoxAPP3",
     };
+  }
+
+  if (instances.size === 0) {
+    const directNameInstances = await discoverKnownVirtualInputs(ctx, baseUrl, auth);
+    for (const [key, instance] of directNameInstances) {
+      instances.set(key, instance);
+    }
   }
 
   // Registry-Versionen (für Vergleich neuer verfügbarer Versionen)
@@ -213,8 +314,9 @@ async function actionDiscover(ctx: RunContext, locationIntegrationId: string) {
     discovered: rows.length,
     upserted,
     hint: rows.length === 0
-      ? "Auf diesem Miniserver wurden keine AICO_-Bausteine gefunden. Der AICONO-Support muss die Bausteine über das Loxone Multiplikator-Projekt zuerst einspielen."
+      ? "Auf diesem Miniserver wurden keine AICO_-Bausteine gefunden. Hinweis: Virtuelle Eingänge ohne App-Visualisierung wurden zusätzlich direkt per Webservice geprüft."
       : undefined,
+    warning: structureWarning,
     instances: rows.map((r) => ({
       template_key: r.template_key,
       instance_id: r.instance_id,
@@ -258,7 +360,7 @@ async function pushAutomation(ctx: RunContext, automationId: string, opts: { sou
     .eq("instance_id", a.loxone_template_instance_id)
     .maybeSingle();
   if (!tpl) throw new Error("Template-Instanz auf dem Miniserver nicht gefunden — bitte Discovery ausführen");
-  const bindings = (tpl as any).vi_bindings as Record<string, { uuid: string }>;
+  const bindings = (tpl as any).vi_bindings as Record<string, ViBinding>;
 
   // Loxone-Verbindung
   const li = await loadLocationIntegration(ctx, a.location_integration_id);
@@ -272,20 +374,21 @@ async function pushAutomation(ctx: RunContext, automationId: string, opts: { sou
 
   for (const [param, value] of Object.entries(params)) {
     const bind = bindings[param];
-    if (!bind?.uuid) {
+    const target = bind?.uuid || bind?.name;
+    if (!target) {
       results.push({ param, ok: false, error: "VI nicht gefunden", value });
       continue;
     }
     try {
-      const url = `${baseUrl}/jdev/sps/io/${bind.uuid}/${formatLoxoneValue(value)}`;
+      const url = `${baseUrl}/jdev/sps/io/${encodeURIComponent(target)}/${formatLoxoneValue(value)}`;
       const r = await fetchWithTimeout(url, { headers: { Authorization: auth } }, 5_000);
       if (!r.ok) {
-        results.push({ param, uuid: bind.uuid, ok: false, error: `HTTP ${r.status}`, value });
+        results.push({ param, uuid: bind.uuid || bind.name, ok: false, error: `HTTP ${r.status}`, value });
       } else {
-        results.push({ param, uuid: bind.uuid, ok: true, value });
+        results.push({ param, uuid: bind.uuid || bind.name, ok: true, value });
       }
     } catch (e) {
-      results.push({ param, uuid: bind.uuid, ok: false, error: (e as Error).message, value });
+      results.push({ param, uuid: bind.uuid || bind.name, ok: false, error: (e as Error).message, value });
     }
   }
 

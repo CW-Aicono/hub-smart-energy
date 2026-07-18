@@ -46,6 +46,18 @@ export const LoxoneTemplatesCard = ({ locationId }: LoxoneTemplatesCardProps) =>
   const [templates, setTemplates] = useState<InstalledTemplate[]>([]);
   const [registry, setRegistry] = useState<Record<string, RegistryEntry>>({});
   const [loading, setLoading] = useState(true);
+  const [reloadSeq, setReloadSeq] = useState(0);
+
+  useEffect(() => {
+    const onScanComplete = (event: Event) => {
+      const detail = (event as CustomEvent<{ locationId?: string }>).detail;
+      if (!detail?.locationId || detail.locationId === locationId) {
+        setReloadSeq((v) => v + 1);
+      }
+    };
+    window.addEventListener("loxone-template-scan-complete", onScanComplete);
+    return () => window.removeEventListener("loxone-template-scan-complete", onScanComplete);
+  }, [locationId]);
 
   useEffect(() => {
     if (!loxoneIntegration) return;
@@ -73,7 +85,7 @@ export const LoxoneTemplatesCard = ({ locationId }: LoxoneTemplatesCardProps) =>
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [loxoneIntegration?.id, locationId]);
+  }, [loxoneIntegration?.id, locationId, reloadSeq]);
 
   // Karte nur einblenden, wenn a) eine Loxone-Integration existiert UND
   // b) bereits mindestens ein AICO_-Baustein erkannt wurde. Ansonsten zeigt

@@ -311,7 +311,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     instance_id: string | null;
     installed_version: string | null;
     title: string;
-    parameters: Array<{ name: string; type: string; description?: string }>;
+    parameters: Array<{ name: string; key?: string; type: string; description?: string }>;
   }>>([]);
   useEffect(() => {
     let cancelled = false;
@@ -335,7 +335,9 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
           instance_id: row.instance_id,
           installed_version: row.installed_version,
           title: r?.title ?? row.template_key,
-          parameters: Array.isArray(r?.parameters) ? (r.parameters as any[]) : [],
+          parameters: Array.isArray(r?.parameters)
+            ? (r.parameters as any[]).map((p) => ({ ...p, name: p.name ?? p.key }))
+            : [],
         };
       });
       setInstalledTemplates(merged);

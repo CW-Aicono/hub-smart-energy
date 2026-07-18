@@ -121,6 +121,9 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
       if (error) throw error;
       const found = (data as any)?.discovered ?? (data as any)?.count ?? 0;
       toast({ title: "Templates gescannt", description: `${found} Template-Instanz(en) auf dem Miniserver erkannt.` });
+      window.dispatchEvent(new CustomEvent("loxone-template-scan-complete", {
+        detail: { locationId: locationIntegration.location_id },
+      }));
     } catch (e: any) {
       toast({ title: "Scan fehlgeschlagen", description: e?.message || "Unbekannter Fehler", variant: "destructive" });
     } finally {
