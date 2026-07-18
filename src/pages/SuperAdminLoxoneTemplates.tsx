@@ -21,6 +21,7 @@ import {
   downloadSingleSnippet,
 } from "@/lib/loxone/snippetDownload";
 import { seedRegistryFromSnippets } from "@/lib/loxone/catalogSeed";
+import LoxoneMasterProject from "@/components/super-admin/LoxoneMasterProject";
 
 interface RegistryEntry {
   id: string;
@@ -175,6 +176,7 @@ export default function SuperAdminLoxoneTemplates() {
               <TabsTrigger value="catalog">Katalog</TabsTrigger>
               <TabsTrigger value="health">Health-Report</TabsTrigger>
               <TabsTrigger value="snippets">Snippet-Pakete</TabsTrigger>
+              <TabsTrigger value="master">Master-Projekt</TabsTrigger>
             </TabsList>
 
             <TabsContent value="catalog" className="space-y-4">
@@ -319,6 +321,10 @@ export default function SuperAdminLoxoneTemplates() {
                   ))}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="master">
+              <LoxoneMasterProject />
             </TabsContent>
           </Tabs>
 

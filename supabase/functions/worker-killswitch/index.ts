@@ -30,7 +30,11 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (error) {
-    return new Response(JSON.stringify({ enabled: true, fallback: true, error: error.message }), {
+    // Sicherheitslogik: Wenn die Datenbank unter Last nicht antwortet, darf der
+    // externe Worker nicht einfach weiterfeuern. Für den Loxone-WS-Worker gilt
+    // deshalb: im Zweifel pausieren, damit sich die Cloud erholen kann.
+    const failClosed = key === "loxone_ws_worker";
+    return new Response(JSON.stringify({ enabled: !failClosed, fallback: true, error: error.message }), {
       status: 200,
       headers: { ...cors, "Content-Type": "application/json" },
     });
