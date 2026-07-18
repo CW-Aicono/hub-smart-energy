@@ -21,8 +21,8 @@ export function startPing(ws: WebSocket, sessionId: string, chargePointId: strin
     } catch (e) {
       log.warn("ping failed", { sessionId, chargePointId, error: (e as Error).message });
     }
-    // Fire-and-forget Liveness-Update. Fehler als WARN (nicht debug),
-    // damit ein etwaiger DB-/Schema-Fehler sichtbar ist.
+    // Fire-and-forget Liveness-Update. Durch das längere Ping-Intervall in der
+    // Config wird hier nicht mehr alle paar Sekunden in die Cloud geschrieben.
     updateChargePoint(chargePointPk, {
       last_ws_pong_at: new Date().toISOString(),
     }).catch((e) => log.warn("ws liveness touch failed", { chargePointId, error: (e as Error).message }));
