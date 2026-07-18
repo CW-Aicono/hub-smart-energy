@@ -191,9 +191,8 @@ async function markConnectedWithRetry(chargePointPk: string, sessionId: string, 
   }
 }
 
-// Periodischer Re-Sync: alle 60 s wird für jede aktive Session ws_connected=true
-// in die DB geschrieben. Das schützt vor Edge-Cases, in denen Connect-Update UND
-// alle bisherigen Heartbeat-Updates an Backend-Fehlern gescheitert sind.
+// Periodischer Re-Sync: sparsam halten. Die echte WebSocket-Verbindung läuft im
+// OCPP-Server; dieser DB-Schreibvorgang ist nur eine Statusanzeige für die UI.
 const reconcileTimer = setInterval(() => {
   for (const s of listSessions()) {
     updateChargePoint(s.chargePointPk, { ws_connected: true }).catch((error) => {
@@ -202,7 +201,7 @@ const reconcileTimer = setInterval(() => {
       });
     });
   }
-}, 60_000);
+}, 300_000);
 
 const stopDispatcher = startCommandDispatcher();
 const sweeper = startIdleSweeper();
