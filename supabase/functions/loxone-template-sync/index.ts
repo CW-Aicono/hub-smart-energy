@@ -246,7 +246,7 @@ async function actionDiscover(ctx: RunContext, locationIntegrationId: string) {
   const instances = new Map<string, {
     templateKey: string;
     instanceId: string;
-    bindings: Record<string, { uuid: string; controlType: string; name: string }>;
+    bindings: Record<string, ViBinding>;
   }>();
 
   for (const [, ctrl] of Object.entries(controls)) {
@@ -260,7 +260,15 @@ async function actionDiscover(ctx: RunContext, locationIntegrationId: string) {
       uuid: ctrl.uuidAction,
       controlType: ctrl.type,
       name: ctrl.name,
+      source: "LoxAPP3",
     };
+  }
+
+  if (instances.size === 0) {
+    const directNameInstances = await discoverKnownVirtualInputs(ctx, baseUrl, auth);
+    for (const [key, instance] of directNameInstances) {
+      instances.set(key, instance);
+    }
   }
 
   // Registry-Versionen (für Vergleich neuer verfügbarer Versionen)
@@ -301,7 +309,7 @@ async function actionDiscover(ctx: RunContext, locationIntegrationId: string) {
     discovered: rows.length,
     upserted,
     hint: rows.length === 0
-      ? "Auf diesem Miniserver wurden keine AICO_-Bausteine gefunden. Der AICONO-Support muss die Bausteine über das Loxone Multiplikator-Projekt zuerst einspielen."
+      ? "Auf diesem Miniserver wurden keine AICO_-Bausteine gefunden. Hinweis: Virtuelle Eingänge ohne App-Visualisierung wurden zusätzlich direkt per Webservice geprüft."
       : undefined,
     instances: rows.map((r) => ({
       template_key: r.template_key,
