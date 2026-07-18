@@ -940,9 +940,10 @@ export function AutomationRuleBuilder({
                   </div>
                   {(installedTemplates?.length ?? 0) === 0 ? (
                     <p className="text-xs text-muted-foreground">
-                      Für diese Location sind noch keine AICO_-Templates installiert.
-                      Bitte zuerst ein Snippet in Loxone Config einspielen und in der Karte
-                      „Loxone-Templates" → „Neu scannen" ausführen.
+                      Auf diesem Miniserver wurden noch keine AICO_-Bausteine erkannt.
+                      Der AICONO-Support spielt die Bausteine zentral über das Loxone
+                      Multiplikator-Projekt ein. Danach kann in der Miniserver-Kachel unter
+                      „Integrationen" per Puzzle-Icon 🧩 ein Scan ausgelöst werden.
                     </p>
                   ) : (
                     <>
