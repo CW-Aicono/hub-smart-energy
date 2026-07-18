@@ -6126,7 +6126,7 @@ export type Database = {
           location_id: string
           location_integration_id: string
           logic_operator: string
-          loxone_template_bindings: Json
+          loxone_template_bindings: Json | null
           loxone_template_instance_id: string | null
           loxone_template_key: string | null
           name: string
@@ -6162,7 +6162,7 @@ export type Database = {
           location_id: string
           location_integration_id: string
           logic_operator?: string
-          loxone_template_bindings?: Json
+          loxone_template_bindings?: Json | null
           loxone_template_instance_id?: string | null
           loxone_template_key?: string | null
           name: string
@@ -6198,7 +6198,7 @@ export type Database = {
           location_id?: string
           location_integration_id?: string
           logic_operator?: string
-          loxone_template_bindings?: Json
+          loxone_template_bindings?: Json | null
           loxone_template_instance_id?: string | null
           loxone_template_key?: string | null
           name?: string
