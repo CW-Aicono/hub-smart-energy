@@ -38,7 +38,9 @@ interface LoxoneTemplatesCardProps {
 export const LoxoneTemplatesCard = ({ locationId }: LoxoneTemplatesCardProps) => {
   const { locationIntegrations } = useLocationIntegrations(locationId);
   const loxoneIntegration = locationIntegrations.find(
-    (li) => li.is_enabled && li.integration?.type === "loxone",
+    (li) =>
+      li.is_enabled &&
+      (li.integration?.type === "loxone" || li.integration?.type === "loxone_miniserver"),
   );
 
   const [templates, setTemplates] = useState<InstalledTemplate[]>([]);
