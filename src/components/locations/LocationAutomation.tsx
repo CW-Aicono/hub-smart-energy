@@ -302,7 +302,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
 
   const {
     automations, lastErrors, loading: autoLoading, executing,
-    createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation,
+    createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation, refetch,
   } = useLocationAutomations(locationId);
 
   // ── Installierte Loxone-Templates dieser Location (für Template-basierte Regeln) ──
