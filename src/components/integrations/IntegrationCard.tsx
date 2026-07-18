@@ -112,6 +112,22 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
     }
   };
 
+  const handleScanTemplates = async () => {
+    setIsScanningTemplates(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("loxone-template-sync", {
+        body: { action: "discover", location_integration_id: locationIntegration.id },
+      });
+      if (error) throw error;
+      const found = (data as any)?.discovered ?? (data as any)?.count ?? 0;
+      toast({ title: "Templates gescannt", description: `${found} Template-Instanz(en) auf dem Miniserver erkannt.` });
+    } catch (e: any) {
+      toast({ title: "Scan fehlgeschlagen", description: e?.message || "Unbekannter Fehler", variant: "destructive" });
+    } finally {
+      setIsScanningTemplates(false);
+    }
+  };
+
   const isConfigured = (() => {
     if (isAiconoGateway) return true;
     if (!gatewayDef || !config) return false;
