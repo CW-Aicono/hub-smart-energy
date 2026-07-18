@@ -113,11 +113,11 @@ export default function LoxoneMasterProject() {
         <Info className="h-4 w-4" />
         <AlertTitle>AICONO Master-Projekt (.Loxone)</AlertTitle>
         <AlertDescription>
-          Das Master-Projekt enthält alle AICO_*-Bausteine (Gruppen A–F) fertig verdrahtet.
-          Tenants öffnen die Datei parallel zum Kundenprojekt in Loxone Config und übernehmen die
-          benötigten Bausteine per Copy &amp; Paste (Strg+C / Strg+V). Namen der virtuellen Eingänge
-          dabei nicht ändern – nur die Instanz-Nummer anpassen. Neue Snippets werden zusätzlich
-          weiterhin als einzelne XML-Vorlagen unter „Snippet-Pakete" bereitgestellt.
+          Das Master-Projekt ist die zentrale Loxone-Config-Datei mit allen AICO_*-Bausteinen.
+          Rollout erfolgt ausschließlich über das <strong>Loxone Multiplikator-Projekt</strong>:
+          Kunden-Miniserver werden in Loxone Config zum Multiplikator hinzugefügt (Remote Connect
+          oder Netzwerk), anschließend „In alle Miniserver speichern". Ein manueller XML-Import
+          durch den Kunden ist nicht möglich (und nicht mehr vorgesehen).
         </AlertDescription>
       </Alert>
 

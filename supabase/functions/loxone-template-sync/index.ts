@@ -200,6 +200,9 @@ async function actionDiscover(ctx: RunContext, locationIntegrationId: string) {
     success: true,
     discovered: rows.length,
     upserted,
+    hint: rows.length === 0
+      ? "Auf diesem Miniserver wurden keine AICO_-Bausteine gefunden. Der AICONO-Support muss die Bausteine über das Loxone Multiplikator-Projekt zuerst einspielen."
+      : undefined,
     instances: rows.map((r) => ({
       template_key: r.template_key,
       instance_id: r.instance_id,
