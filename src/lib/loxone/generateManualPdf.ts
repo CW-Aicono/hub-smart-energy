@@ -108,11 +108,11 @@ function renderParameterTable(doc: jsPDF, templateKey: string, cursor: { y: numb
   doc.setFontSize(9.5);
   doc.setTextColor(30, 30, 30);
   for (const p of snippet.parameters) {
-    const descLines = doc.splitTextToSize(p.description || "", CONTENT_W - 75);
+    const descLines = doc.splitTextToSize(sanitizeForPdf(p.description || ""), CONTENT_W - 75);
     const rowH = Math.max(5, descLines.length * 4.5);
     ensureSpace(doc, cursor, rowH + 2);
-    doc.text(p.name, colX[0], cursor.y);
-    doc.text(p.type, colX[1], cursor.y);
+    doc.text(sanitizeForPdf(p.name), colX[0], cursor.y);
+    doc.text(sanitizeForPdf(p.type), colX[1], cursor.y);
     doc.text(descLines, colX[2], cursor.y);
     cursor.y += rowH + 1;
   }
