@@ -9,6 +9,7 @@ import GatewayWorkerStatusCard from "@/components/super-admin/GatewayWorkerStatu
 import HetznerNodesCard from "@/components/super-admin/HetznerNodesCard";
 import LoxonePollingOverviewCard from "@/components/super-admin/LoxonePollingOverviewCard";
 import AlertRulesCard from "@/components/super-admin/AlertRulesCard";
+import AlertEventsHistoryCard from "@/components/super-admin/AlertEventsHistoryCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -73,6 +74,8 @@ const SuperAdminMonitoring = () => {
   const activeConns = getLatest("db_connections", "active_connections");
   const maxConns = getLatest("db_connections", "max_connections");
   const tableCount = getLatest("db_info", "table_count");
+  const walBytes = getLatest("wal", "current_size_bytes");
+  const cacheHit = getLatest("memory", "cache_hit_ratio_pct");
   const tableSizes = getTableSizes();
 
   const connTimeSeries = getTimeSeries("db_connections", "active_connections", 48).map((m) => ({
@@ -132,6 +135,10 @@ const SuperAdminMonitoring = () => {
 
               {/* Alert-Regeln */}
               <AlertRulesCard getLatest={getLatest} />
+
+              {/* Alert-Historie (Ursache + Zeitstempel) */}
+              <AlertEventsHistoryCard />
+
 
 
 
@@ -230,7 +237,46 @@ const SuperAdminMonitoring = () => {
                     </p>
                   </CardContent>
                 </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <HardDrive className="h-4 w-4 text-muted-foreground" />
+                      WAL-Größe
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold">
+                      {walBytes ? formatBytes(walBytes.metric_value ?? 0) : "–"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">Write-Ahead-Log</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium flex items-center gap-2">
+                      <Activity className="h-4 w-4 text-muted-foreground" />
+                      Cache-Hit-Ratio
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold">
+                      {cacheHit?.metric_value != null
+                        ? `${Number(cacheHit.metric_value).toLocaleString("de-DE", { maximumFractionDigits: 2 })} %`
+                        : "–"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">RAM-Effizienz-Proxy</p>
+                  </CardContent>
+                </Card>
               </div>
+
+              <p className="text-xs text-muted-foreground -mt-2">
+                Hinweis: CPU- und Container-RAM-Werte der Datenbank sind in Lovable Cloud nicht direkt auslesbar.
+                Wir überwachen stattdessen WAL-Wachstum, DB-Größe, Verbindungen, IO-Zähler und Cache-Hit-Ratio
+                als aussagekräftige Ersatzsignale. Erfassung alle 5 Minuten automatisch.
+              </p>
+
 
               {/* Charts */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

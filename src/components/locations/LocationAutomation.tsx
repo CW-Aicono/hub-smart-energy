@@ -302,7 +302,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
 
   const {
     automations, lastErrors, loading: autoLoading, executing,
-    createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation,
+    createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation, refetch,
   } = useLocationAutomations(locationId);
 
   // ── Installierte Loxone-Templates dieser Location (für Template-basierte Regeln) ──
@@ -311,7 +311,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     instance_id: string | null;
     installed_version: string | null;
     title: string;
-    parameters: Array<{ name: string; type: string; description?: string }>;
+    parameters: Array<{ name: string; key?: string; type: string; description?: string }>;
   }>>([]);
   useEffect(() => {
     let cancelled = false;
@@ -335,7 +335,9 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
           instance_id: row.instance_id,
           installed_version: row.installed_version,
           title: r?.title ?? row.template_key,
-          parameters: Array.isArray(r?.parameters) ? (r.parameters as any[]) : [],
+          parameters: Array.isArray(r?.parameters)
+            ? (r.parameters as any[]).map((p) => ({ ...p, name: p.name ?? p.key }))
+            : [],
         };
       });
       setInstalledTemplates(merged);
@@ -416,11 +418,16 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const pushToLoxone = async (automationId: string) => {
     try {
       const { error } = await supabase.functions.invoke("loxone-template-sync", {
-        body: { action: "push", automation_id: automationId, source: "save" },
+        body: { action: "push", automationId, source: "save" },
       });
       if (error) {
         toast.warning("Regel gespeichert, Loxone-Push fehlgeschlagen: " + (error.message || "Unbekannt"));
       } else {
+        await supabase
+          .from("location_automations")
+          .update({ last_executed_at: new Date().toISOString() })
+          .eq("id", automationId);
+        await refetch();
         toast.success("An Miniserver übertragen");
       }
     } catch (e: any) {

@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
-import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge, RefreshCw, ArrowRightLeft } from "lucide-react";
+import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge, RefreshCw, ArrowRightLeft, Puzzle } from "lucide-react";
 import { ReplaceGatewayDialog } from "./ReplaceGatewayDialog";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { SensorsDialog } from "./SensorsDialog";
@@ -40,6 +40,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const [editOpen, setEditOpen] = useState(false);
   const [replaceGatewayOpen, setReplaceGatewayOpen] = useState(false);
   const [isBackfilling, setIsBackfilling] = useState(false);
+  const [isScanningTemplates, setIsScanningTemplates] = useState(false);
   const [backfillFrom, setBackfillFrom] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 2);
     return d.toISOString().slice(0, 10);
@@ -108,6 +109,25 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
       toast({ title: "Fehler", description: e.message, variant: "destructive" });
     } finally {
       setIsBackfilling(false);
+    }
+  };
+
+  const handleScanTemplates = async () => {
+    setIsScanningTemplates(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("loxone-template-sync", {
+        body: { action: "discover", locationIntegrationId: locationIntegration.id },
+      });
+      if (error) throw error;
+      const found = (data as any)?.discovered ?? (data as any)?.count ?? 0;
+      toast({ title: "Templates gescannt", description: `${found} Template-Instanz(en) auf dem Miniserver erkannt.` });
+      window.dispatchEvent(new CustomEvent("loxone-template-scan-complete", {
+        detail: { locationId: locationIntegration.location_id },
+      }));
+    } catch (e: any) {
+      toast({ title: "Scan fehlgeschlagen", description: e?.message || "Unbekannter Fehler", variant: "destructive" });
+    } finally {
+      setIsScanningTemplates(false);
     }
   };
 
@@ -197,6 +217,17 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
             </div>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" onClick={() => setSensorsOpen(true)} title={t("intCard.showSensors" as any)}><Gauge className="h-4 w-4" /></Button>
+              {isLoxone && isConfigured && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleScanTemplates}
+                  disabled={isScanningTemplates}
+                  title="Loxone-Templates auf dem Miniserver scannen"
+                >
+                  {isScanningTemplates ? <Loader2 className="h-4 w-4 animate-spin" /> : <Puzzle className="h-4 w-4" />}
+                </Button>
+              )}
               {/* Backfill Re-Sync Button */}
               {integration?.type === "loxone_miniserver" && isConfigured && (
                 <AlertDialog>

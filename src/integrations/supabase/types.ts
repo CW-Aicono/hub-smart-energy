@@ -6126,7 +6126,7 @@ export type Database = {
           location_id: string
           location_integration_id: string
           logic_operator: string
-          loxone_template_bindings: Json
+          loxone_template_bindings: Json | null
           loxone_template_instance_id: string | null
           loxone_template_key: string | null
           name: string
@@ -6162,7 +6162,7 @@ export type Database = {
           location_id: string
           location_integration_id: string
           logic_operator?: string
-          loxone_template_bindings?: Json
+          loxone_template_bindings?: Json | null
           loxone_template_instance_id?: string | null
           loxone_template_key?: string | null
           name: string
@@ -6198,7 +6198,7 @@ export type Database = {
           location_id?: string
           location_integration_id?: string
           logic_operator?: string
-          loxone_template_bindings?: Json
+          loxone_template_bindings?: Json | null
           loxone_template_instance_id?: string | null
           loxone_template_key?: string | null
           name?: string
@@ -7822,6 +7822,62 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      monitoring_alert_events: {
+        Row: {
+          comparator: string
+          created_at: string
+          id: string
+          message: string | null
+          metric_category: string
+          metric_name: string
+          metric_value: number
+          resolved_at: string | null
+          resolved_value: number | null
+          rule_id: string | null
+          severity: string
+          threshold: number
+          triggered_at: string
+        }
+        Insert: {
+          comparator: string
+          created_at?: string
+          id?: string
+          message?: string | null
+          metric_category: string
+          metric_name: string
+          metric_value: number
+          resolved_at?: string | null
+          resolved_value?: number | null
+          rule_id?: string | null
+          severity: string
+          threshold: number
+          triggered_at?: string
+        }
+        Update: {
+          comparator?: string
+          created_at?: string
+          id?: string
+          message?: string | null
+          metric_category?: string
+          metric_name?: string
+          metric_value?: number
+          resolved_at?: string | null
+          resolved_value?: number | null
+          rule_id?: string | null
+          severity?: string
+          threshold?: number
+          triggered_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monitoring_alert_events_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "monitoring_alert_rules"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       monitoring_alert_rules: {
         Row: {
@@ -13227,6 +13283,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      evaluate_monitoring_rules: { Args: never; Returns: number }
       get_auth_user_email: { Args: never; Returns: string }
       get_charge_point_daily_uptime: {
         Args: { p_charge_point_id: string; p_days?: number }

@@ -13,13 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Download, RefreshCw, Puzzle, AlertTriangle, CheckCircle2, Package, DatabaseZap } from "lucide-react";
-import { SNIPPET_GROUPS, SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCatalog";
-import {
-  downloadGroupPackage,
-  downloadAllSnippetsPackage,
-  downloadSingleSnippet,
-} from "@/lib/loxone/snippetDownload";
+import { RefreshCw, Puzzle, AlertTriangle, CheckCircle2, DatabaseZap } from "lucide-react";
+import { SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCatalog";
 import { seedRegistryFromSnippets } from "@/lib/loxone/catalogSeed";
 import LoxoneMasterProject from "@/components/super-admin/LoxoneMasterProject";
 
@@ -158,9 +153,6 @@ export default function SuperAdminLoxoneTemplates() {
               >
                 <DatabaseZap className="h-4 w-4 mr-2" /> Katalog aus Snippet-Bibliothek befüllen
               </Button>
-              <Button onClick={downloadAllSnippetsPackage}>
-                <Package className="h-4 w-4 mr-2" /> Gesamt-Paket A–F (.zip)
-              </Button>
             </div>
           </div>
 
@@ -175,7 +167,6 @@ export default function SuperAdminLoxoneTemplates() {
             <TabsList>
               <TabsTrigger value="catalog">Katalog</TabsTrigger>
               <TabsTrigger value="health">Health-Report</TabsTrigger>
-              <TabsTrigger value="snippets">Snippet-Pakete</TabsTrigger>
               <TabsTrigger value="master">Master-Projekt</TabsTrigger>
             </TabsList>
 
@@ -209,9 +200,7 @@ export default function SuperAdminLoxoneTemplates() {
                                 <CheckCircle2 className="h-4 w-4 text-green-600" />
                               )}
                               {hasSnippet && (
-                                <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); downloadSingleSnippet(r.template_key); }}>
-                                  <Download className="h-3.5 w-3.5" />
-                                </Button>
+                                <Badge variant="outline" className="text-[10px]">im Master-Projekt</Badge>
                               )}
                             </div>
                           </CardContent>
@@ -275,54 +264,6 @@ export default function SuperAdminLoxoneTemplates() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="snippets" className="space-y-4">
-              <Card>
-                <CardHeader className="flex-row items-center justify-between space-y-0">
-                  <div>
-                    <CardTitle>Alle Snippet-Gruppen</CardTitle>
-                    <CardDescription>
-                      Loxone-XML-Vorlagen inkl. PDF-Kurzanleitung. Namenskonvention: AICO_&lt;TemplateKey&gt;__&lt;Instance&gt;__&lt;Parameter&gt;.
-                    </CardDescription>
-                  </div>
-                  <Button onClick={downloadAllSnippetsPackage}>
-                    <Package className="h-4 w-4 mr-2" /> Gesamt-Paket A–F
-                  </Button>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {SNIPPET_GROUPS.map((group) => (
-                    <div key={group.key} className="space-y-2">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div>
-                          <h3 className="text-sm font-semibold">{group.label}</h3>
-                          <p className="text-xs text-muted-foreground">
-                            {group.snippets.length} Bausteine · {group.zipName}
-                          </p>
-                        </div>
-                        <Button size="sm" variant="outline" onClick={() => downloadGroupPackage(group.key)}>
-                          <Package className="h-3.5 w-3.5 mr-2" /> Gruppen-ZIP
-                        </Button>
-                      </div>
-                      <div className="divide-y border rounded-md">
-                        {group.snippets.map((s) => (
-                          <div key={s.templateKey} className="p-3 flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">{s.title}</p>
-                              <p className="text-xs text-muted-foreground truncate">
-                                {s.templateKey} · {s.parameters.length} Parameter
-                              </p>
-                            </div>
-                            <Button size="sm" variant="ghost" onClick={() => downloadSingleSnippet(s.templateKey)}>
-                              <Download className="h-3.5 w-3.5 mr-2" /> {s.filename}
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
             <TabsContent value="master">
               <LoxoneMasterProject />
             </TabsContent>
@@ -356,9 +297,7 @@ export default function SuperAdminLoxoneTemplates() {
                     </p>
                   </div>
                   {SNIPPET_KEYS.has(detail.template_key) && (
-                    <Button size="sm" variant="outline" onClick={() => downloadSingleSnippet(detail.template_key)}>
-                      <Download className="h-4 w-4 mr-2" /> Snippet herunterladen
-                    </Button>
+                    <Badge variant="outline" className="text-[10px]">im Master-Projekt enthalten</Badge>
                   )}
                 </div>
               )}

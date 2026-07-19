@@ -88,7 +88,7 @@ export interface InstalledLoxoneTemplate {
   instance_id: string | null;
   installed_version: string | null;
   title: string;
-  parameters: Array<{ name: string; type: string; description?: string }>;
+  parameters: Array<{ name: string; key?: string; type: string; description?: string }>;
 }
 
 export interface AutomationRuleData {
@@ -833,13 +833,15 @@ export function AutomationRuleBuilder({
     if (isTemplateMode && selectedInstalledTemplate) {
       bindings = {};
       for (const p of selectedInstalledTemplate.parameters) {
-        const raw = templateParams[p.name];
+        const paramName = p.name ?? p.key;
+        if (!paramName) continue;
+        const raw = templateParams[paramName];
         if (raw === undefined || raw === "") continue;
         if (p.type === "Digital") {
-          bindings[p.name] = raw === "1" || raw === "true";
+          bindings[paramName] = raw === "1" || raw === "true";
         } else {
           const num = Number(raw);
-          bindings[p.name] = Number.isFinite(num) ? num : raw;
+          bindings[paramName] = Number.isFinite(num) ? num : raw;
         }
       }
     }
@@ -940,9 +942,10 @@ export function AutomationRuleBuilder({
                   </div>
                   {(installedTemplates?.length ?? 0) === 0 ? (
                     <p className="text-xs text-muted-foreground">
-                      Für diese Location sind noch keine AICO_-Templates installiert.
-                      Bitte zuerst ein Snippet in Loxone Config einspielen und in der Karte
-                      „Loxone-Templates" → „Neu scannen" ausführen.
+                      Auf diesem Miniserver wurden noch keine AICO_-Bausteine erkannt.
+                      Der AICONO-Support spielt die Bausteine zentral über das Loxone
+                      Multiplikator-Projekt ein. Danach kann in der Miniserver-Kachel unter
+                      „Integrationen" per Puzzle-Icon 🧩 ein Scan ausgelöst werden.
                     </p>
                   ) : (
                     <>
@@ -984,33 +987,37 @@ export function AutomationRuleBuilder({
                         <div className="space-y-2">
                           <Label className="text-xs text-muted-foreground">Parameter</Label>
                           <div className="space-y-2">
-                            {selectedInstalledTemplate.parameters.map((p) => (
-                              <div key={p.name} className="grid grid-cols-[1fr_auto] items-center gap-2">
+                            {selectedInstalledTemplate.parameters.map((p) => {
+                              const paramName = p.name ?? p.key;
+                              if (!paramName) return null;
+                              return (
+                              <div key={paramName} className="grid grid-cols-[1fr_auto] items-center gap-2">
                                 <div className="min-w-0">
-                                  <p className="text-xs font-medium truncate">{p.name}</p>
+                                  <p className="text-xs font-medium truncate">{paramName}</p>
                                   {p.description && (
                                     <p className="text-[10px] text-muted-foreground truncate">{p.description}</p>
                                   )}
                                 </div>
                                 {p.type === "Digital" ? (
                                   <Switch
-                                    checked={templateParams[p.name] === "1" || templateParams[p.name] === "true"}
+                                    checked={templateParams[paramName] === "1" || templateParams[paramName] === "true"}
                                     onCheckedChange={(v) =>
-                                      setTemplateParams((prev) => ({ ...prev, [p.name]: v ? "1" : "0" }))
+                                      setTemplateParams((prev) => ({ ...prev, [paramName]: v ? "1" : "0" }))
                                     }
                                   />
                                 ) : (
                                   <Input
                                     type="number"
                                     className="h-8 w-32 text-xs"
-                                    value={templateParams[p.name] ?? ""}
+                                    value={templateParams[paramName] ?? ""}
                                     onChange={(e) =>
-                                      setTemplateParams((prev) => ({ ...prev, [p.name]: e.target.value }))
+                                      setTemplateParams((prev) => ({ ...prev, [paramName]: e.target.value }))
                                     }
                                   />
                                 )}
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                           <p className="text-[10px] text-muted-foreground">
                             Werte werden bei „Speichern" per Push an den Miniserver übertragen.
