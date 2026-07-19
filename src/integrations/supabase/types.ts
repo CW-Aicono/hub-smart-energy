@@ -6669,6 +6669,86 @@ export type Database = {
           },
         ]
       }
+      loxone_pending_writes: {
+        Row: {
+          acked_at: string | null
+          attempts: number
+          created_at: string
+          error_message: string | null
+          expires_at: string
+          id: string
+          instance: number
+          location_integration_id: string
+          max_attempts: number
+          parameter: string
+          priority: number
+          requested_at: string
+          sent_at: string | null
+          source: string
+          status: string
+          target_uuid: string | null
+          template_key: string
+          tenant_id: string
+          updated_at: string
+          value_bool: boolean | null
+          value_num: number | null
+        }
+        Insert: {
+          acked_at?: string | null
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string
+          id?: string
+          instance?: number
+          location_integration_id: string
+          max_attempts?: number
+          parameter: string
+          priority?: number
+          requested_at?: string
+          sent_at?: string | null
+          source?: string
+          status?: string
+          target_uuid?: string | null
+          template_key: string
+          tenant_id: string
+          updated_at?: string
+          value_bool?: boolean | null
+          value_num?: number | null
+        }
+        Update: {
+          acked_at?: string | null
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string
+          id?: string
+          instance?: number
+          location_integration_id?: string
+          max_attempts?: number
+          parameter?: string
+          priority?: number
+          requested_at?: string
+          sent_at?: string | null
+          source?: string
+          status?: string
+          target_uuid?: string | null
+          template_key?: string
+          tenant_id?: string
+          updated_at?: string
+          value_bool?: boolean | null
+          value_num?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loxone_pending_writes_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       loxone_snippet_manual_images: {
         Row: {
           caption: string | null
@@ -13273,6 +13353,7 @@ export type Database = {
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_cron_job_history: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
+      cleanup_loxone_pending_writes: { Args: never; Returns: number }
       cleanup_old_audit_logs: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
       cleanup_old_node_metrics: { Args: never; Returns: number }

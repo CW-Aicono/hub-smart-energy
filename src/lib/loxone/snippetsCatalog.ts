@@ -409,6 +409,99 @@ const ADVANCED_GROUP_G: LoxoneSnippet[] = [
   ),
 ];
 
+// ── Gruppe H – Wirtschaftlichkeit (Push-getrieben) ──
+const ECONOMY_GROUP_H: LoxoneSnippet[] = [
+  make(
+    "AICO_ArbitrageDispatch",
+    "Arbitrage-Fahrplan (Speicher)",
+    "Setzt AI-Arbitrage-Empfehlungen aus der Cloud lokal um: 15-min-genauer Lade-/Entlade-Fahrplan mit SoC-Grenzen und Preisschwelle. Cloud pusht TargetPowerKw/Mode alle 15 min via loxone_pending_writes.",
+    [
+      { name: "TargetPowerKw", type: "Analog", min: -100, max: 100, unit: "kW", description: "Sollleistung (+ Laden / - Entladen), von Cloud gepusht" },
+      { name: "Mode", type: "Analog", min: 0, max: 3, description: "0=Idle, 1=Charge, 2=Discharge, 3=Hold" },
+      { name: "MinSocPct", type: "Analog", min: 0, max: 100, unit: "%", description: "SoC-Untergrenze (%)" },
+      { name: "MaxSocPct", type: "Analog", min: 0, max: 100, unit: "%", description: "SoC-Obergrenze (%)" },
+      { name: "PriceThresholdCt", type: "Analog", min: -100, max: 500, unit: "ct", description: "Preisschwelle (ct/kWh) — nur Handel, wenn Spread überschritten" },
+      { name: "EnableArbitrage", type: "Digital", min: 0, max: 1, description: "Master-Schalter: 1=aktiv" },
+    ],
+    "Ausgang: DispatchKw -> Speicher-Wechselrichter. Fallback: bei Cloud-Ausfall > 30 min automatisch Mode=Idle.",
+  ),
+  make(
+    "AICO_PeakEventPrecharge",
+    "Peak-Event-Vorladen",
+    "Vorlade-Zustandsmaschine vor geplanten Peak-Events (angekündigt via Cloud). Lädt Speicher rechtzeitig auf Ziel-SoC, um während des Events entladen zu können.",
+    [
+      { name: "EventStartMin", type: "Analog", min: 0, max: 1440, unit: "min", description: "Event-Start (Minuten seit 00:00) — Cloud pusht" },
+      { name: "EventDurationMin", type: "Analog", min: 0, max: 480, unit: "min", description: "Event-Dauer (min)" },
+      { name: "PrechargeLeadMin", type: "Analog", min: 0, max: 240, unit: "min", description: "Vorlaufzeit für Ladung (min, default 60)" },
+      { name: "TargetSocPct", type: "Analog", min: 10, max: 100, unit: "%", description: "Ziel-SoC vor Event (%)" },
+      { name: "PrechargePowerKw", type: "Analog", min: 1, max: 100, unit: "kW", description: "Ladeleistung während Vorlauf (kW)" },
+      { name: "EnablePrecharge", type: "Digital", min: 0, max: 1, description: "Master-Schalter: 1=aktiv" },
+    ],
+    "Ausgang: PrechargeActive + ChargeKw. Übergibt an PeakShavingSoc, sobald Event beginnt.",
+  ),
+];
+
+// ── Gruppe I – Ausbau (DSO & Community) ──
+const EXPANSION_GROUP_I: LoxoneSnippet[] = [
+  make(
+    "AICO_GridOperatorSignal",
+    "DSO-/Netzbetreiber-Signal",
+    "Normalisierter Empfänger für Netzbetreiber-Signale (Curtailment / Demand-Response / Emergency). Cloud übersetzt diverse Protokolle (EEBUS, Rundsteuer, VDE-AR-N 4110) auf 3 Standardstufen.",
+    [
+      { name: "SignalType", type: "Analog", min: 0, max: 3, description: "0=kein Signal, 1=Curtailment, 2=Demand-Response, 3=Emergency" },
+      { name: "SignalLevelPct", type: "Analog", min: 0, max: 100, unit: "%", description: "Signal-Stärke (0=keine Reduktion, 100=voll)" },
+      { name: "DurationMin", type: "Analog", min: 0, max: 1440, unit: "min", description: "Erwartete Dauer (min)" },
+      { name: "ReceivedAtMin", type: "Analog", min: 0, max: 99999999, description: "Empfangszeit (Cloud-Zeitstempel als int)" },
+      { name: "EnableSignalRx", type: "Digital", min: 0, max: 1, description: "Master-Schalter: 1=aktiv" },
+    ],
+    "Ausgänge: CurtailReq (Digital), DrReq (Digital), EmergencyReq (Digital). Übergibt an GridCurtailment14a und PeakShaving.",
+  ),
+  make(
+    "AICO_CommunityAllocation",
+    "Energiegemeinschaft-Anteil",
+    "Empfängt 15-min-Anteil aus Energiegemeinschaft (community_allocations_15min) und gibt lokale Freigabe/Drosselung an Verbraucher weiter. Kein physischer Eingriff in Bilanzlogik.",
+    [
+      { name: "AllocationKw", type: "Analog", min: 0, max: 500, unit: "kW", description: "Zugeteilte Leistung aus Community (kW, alle 15 min)" },
+      { name: "ShareOfDemandPct", type: "Analog", min: 0, max: 100, unit: "%", description: "Anteil am aktuellen Bedarf (%)" },
+      { name: "CommunityPriceCt", type: "Analog", min: -50, max: 200, unit: "ct", description: "Aktueller Community-Preis (ct/kWh)" },
+      { name: "AllocationActive", type: "Digital", min: 0, max: 1, description: "1=Zuteilung liegt vor (grün), 0=keine Zuteilung" },
+      { name: "EnableCommunityRx", type: "Digital", min: 0, max: 1, description: "Master-Schalter: 1=aktiv" },
+    ],
+    "Ausgang: LedGreen (LED an, wenn Zuteilung > 0). Optional: SurplusAvailableKw an Wallbox als Freigabe.",
+  ),
+];
+
+// ── Gruppe J – Optional (CO2 & reines Trading) ──
+const OPTIONAL_GROUP_J: LoxoneSnippet[] = [
+  make(
+    "AICO_Co2LoadShift",
+    "CO₂-optimierte Lastverschiebung",
+    "Verschiebt schaltbare Lasten (Boiler, Wallbox, WP-Zwangslauf) in CO2-arme Zeitfenster. Cloud pusht CO2-Prognose der nächsten 24h als 15-min-Slots.",
+    [
+      { name: "CurrentGCo2PerKWh", type: "Analog", min: 0, max: 1500, unit: "g", description: "Aktueller CO2-Wert Netz (g/kWh)" },
+      { name: "GreenThreshold", type: "Analog", min: 0, max: 1500, unit: "g", description: "Grün-Schwelle (g/kWh, unterhalb = Freigabe)" },
+      { name: "RedThreshold", type: "Analog", min: 0, max: 1500, unit: "g", description: "Rot-Schwelle (g/kWh, oberhalb = Sperre)" },
+      { name: "ShiftWindowMin", type: "Analog", min: 0, max: 1440, unit: "min", description: "Aktuelles Verschiebefenster (min)" },
+      { name: "EnableCo2Shift", type: "Digital", min: 0, max: 1, description: "Master-Schalter: 1=aktiv" },
+    ],
+    "Ausgänge: GreenLightBoiler, GreenLightEv, GreenLightHp (jeweils Boolean). Priorität: Netzschutz überstimmt CO2 immer.",
+  ),
+  make(
+    "AICO_StorageArbitrageSoc",
+    "Speicher-Trading mit SoC-Grenzen",
+    "Reines Speicher-Trading auf Spotmarkt mit Mindest-Spread. Anders als ArbitrageDispatch nutzt es keine AI-Empfehlung, sondern arbeitet lokal mit gepushten Spot-Preisen der nächsten 24h.",
+    [
+      { name: "CurrentSpotCt", type: "Analog", min: -100, max: 500, unit: "ct", description: "Aktueller Spot-Preis (ct/kWh, Cloud pusht)" },
+      { name: "MinSpreadCt", type: "Analog", min: 1, max: 100, unit: "ct", description: "Mindest-Spread zwischen Kauf/Verkauf (ct)" },
+      { name: "MinSocPct", type: "Analog", min: 0, max: 100, unit: "%", description: "SoC-Untergrenze (%)" },
+      { name: "MaxSocPct", type: "Analog", min: 0, max: 100, unit: "%", description: "SoC-Obergrenze (%)" },
+      { name: "MaxCyclesPerDay", type: "Analog", min: 0, max: 10, description: "Max. Vollzyklen/Tag (Batterie-Schutz)" },
+      { name: "EnableTrading", type: "Digital", min: 0, max: 1, description: "Master-Schalter: 1=aktiv" },
+    ],
+    "Ausgang: TradeKw (Analog). Zykluszähler wird täglich um 00:00 zurückgesetzt.",
+  ),
+];
+
 export const SNIPPET_GROUPS: SnippetGroup[] = [
   { key: "A", label: "Gruppe A – E-Mobilität", categories: ["ev"], zipName: "AICONO_Loxone_EV_GroupA.zip", snippets: EV_GROUP_A },
   { key: "B", label: "Gruppe B – Speicher & PV", categories: ["storage", "pv"], zipName: "AICONO_Loxone_StoragePV_GroupB.zip", snippets: STORAGE_PV_GROUP_B },
@@ -417,7 +510,11 @@ export const SNIPPET_GROUPS: SnippetGroup[] = [
   { key: "E", label: "Gruppe E – Sicherheit", categories: ["safety"], zipName: "AICONO_Loxone_Safety_GroupE.zip", snippets: SAFETY_GROUP_E },
   { key: "F", label: "Gruppe F – Baukasten", categories: ["generic"], zipName: "AICONO_Loxone_Toolkit_GroupF.zip", snippets: GENERIC_GROUP_F },
   { key: "G", label: "Gruppe G – Erweiterte Steuerung", categories: ["advanced"], zipName: "AICONO_Loxone_Advanced_GroupG.zip", snippets: ADVANCED_GROUP_G },
+  { key: "H", label: "Gruppe H – Wirtschaftlichkeit", categories: ["economy"], zipName: "AICONO_Loxone_Economy_GroupH.zip", snippets: ECONOMY_GROUP_H },
+  { key: "I", label: "Gruppe I – Ausbau (DSO & Community)", categories: ["grid", "community"], zipName: "AICONO_Loxone_Expansion_GroupI.zip", snippets: EXPANSION_GROUP_I },
+  { key: "J", label: "Gruppe J – Optional (CO₂ & Trading)", categories: ["optional"], zipName: "AICONO_Loxone_Optional_GroupJ.zip", snippets: OPTIONAL_GROUP_J },
 ];
+
 
 export const ALL_SNIPPETS: LoxoneSnippet[] = SNIPPET_GROUPS.flatMap((g) => g.snippets);
 export const SNIPPET_BY_KEY: Record<string, LoxoneSnippet> = Object.fromEntries(
