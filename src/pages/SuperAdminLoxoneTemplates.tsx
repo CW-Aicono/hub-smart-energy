@@ -18,6 +18,7 @@ import { SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCata
 import { seedRegistryFromSnippets } from "@/lib/loxone/catalogSeed";
 import LoxoneMasterProject from "@/components/super-admin/LoxoneMasterProject";
 import LoxoneInjector from "@/components/super-admin/LoxoneInjector";
+import LoxoneManualsEditor from "@/components/super-admin/LoxoneManualsEditor";
 
 interface RegistryEntry {
   id: string;
@@ -170,6 +171,7 @@ export default function SuperAdminLoxoneTemplates() {
               <TabsTrigger value="health">Health-Report</TabsTrigger>
               <TabsTrigger value="master">Master-Projekt</TabsTrigger>
               <TabsTrigger value="injector">Injektor</TabsTrigger>
+              <TabsTrigger value="manuals">Anleitungen</TabsTrigger>
             </TabsList>
 
             <TabsContent value="catalog" className="space-y-4">
@@ -272,6 +274,10 @@ export default function SuperAdminLoxoneTemplates() {
 
             <TabsContent value="injector">
               <LoxoneInjector />
+            </TabsContent>
+
+            <TabsContent value="manuals">
+              <LoxoneManualsEditor />
             </TabsContent>
           </Tabs>
 

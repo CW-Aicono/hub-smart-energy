@@ -6669,6 +6669,39 @@ export type Database = {
           },
         ]
       }
+      loxone_snippet_manuals: {
+        Row: {
+          purpose_md: string
+          template_key: string
+          test_md: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+          wiring_md: string
+        }
+        Insert: {
+          purpose_md?: string
+          template_key: string
+          test_md?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+          wiring_md?: string
+        }
+        Update: {
+          purpose_md?: string
+          template_key?: string
+          test_md?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+          wiring_md?: string
+        }
+        Relationships: []
+      }
       loxone_template_registry: {
         Row: {
           category: string
