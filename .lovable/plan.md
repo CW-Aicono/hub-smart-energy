@@ -1,46 +1,43 @@
-# Plan: 28 AICO_-Interface-Stubs im Master-Projekt ergänzen
+# Baustein-Anleitungen: v1 automatisch + Editor + PDF-Download an Integration
 
-## Ziel
-Für alle 28 noch fehlenden AICO_-Bausteine aus `src/lib/loxone/snippetsCatalog.ts` einmalig Virtual Inputs/Outputs mit korrekter Namenskonvention `AICO_<Type>__1__<Param>` in die Master-`.Loxone`-Datei einspleißen. Nach diesem Schritt funktioniert **Discovery** (🧩) und **Injektor** (Vervielfachung) für alle 29 Bausteine end-to-end.
+## Bereits erledigt
+- Bug behoben: `AICO_TITLE_RE` erlaubt jetzt Unterstriche im Typnamen. `PVSurplus_EV` wird ab sofort im **ersten** Stub-Lauf erkannt und mit-generiert.
 
-**Wichtig — Grenze:** Diese Stubs enthalten nur das Interface (Werte-Austausch AICONO ↔ Miniserver). Die eigentliche Loxone-Programmlogik pro Baustein (Verdrahtung, Formeln, Timer) muss danach separat in Loxone Config einmal pro Typ ergänzt und die Datei erneut ins Master-Projekt geladen werden. Das ist ausdrücklich als späterer Schritt vorgesehen.
+## Umsetzung — Anleitungen (Hybrid)
 
-## Umsetzung
+### 1. Datenmodell (Migration)
+Neue Tabelle `loxone_snippet_manuals` (global, Super-Admin-verwaltet):
+- `template_key` (PK, z. B. `AICO_PVSurplus_EV`)
+- `title`, `purpose_md`, `wiring_md`, `test_md`, `version`, `updated_at`, `updated_by`
+- RLS: Read für alle authentifizierten User, Write nur für `super_admin`
+- Seed-Migration füllt für alle 29 Katalog-Einträge:
+  - `purpose_md` = Beschreibung + Parameter-Tabelle aus `snippetsCatalog.ts` (automatisch)
+  - `wiring_md`, `test_md` = generisches Skelett („1. Baustein in Loxone Config öffnen …", Platzhalter für konkrete Verdrahtung)
 
-### 1. Generator-Skript (neu)
-`src/lib/loxone/masterStubGenerator.ts`
-- Liest alle Typen aus `snippetsCatalog.ts` (die 29 AICO_-Bausteine inkl. Parameter, Datentyp Digital/Analog, Richtung Input/Output).
-- Erzeugt pro Typ Instanz `__1__` als Referenz-Block (dasselbe Muster wie das existierende `AICO_GridProtect`).
-- Nutzt bereits vorhandene UUID-Utilities aus `src/lib/loxone/injector.ts` (Loxone-konforme UUIDs, keine Duplikate).
-- Vergibt eigene Kategorie „AICONO" und Raum „AICONO_System", falls noch nicht vorhanden.
+### 2. Editor im Super-Admin
+Neuer Sub-Tab **Anleitungen** unter `Super-Admin → Loxone-Templates`:
+- Liste aller 29 Bausteine mit Status („v1-Skelett" / „bearbeitet")
+- Detail-Ansicht mit drei Markdown-Editoren (Zweck / Verdrahtung / Test) + Live-PDF-Vorschau
+- Speichern erhöht `version`, setzt `updated_by`
 
-### 2. Neuer Sub-Aktion im Injektor-Tab
-`src/components/super-admin/LoxoneInjector.tsx`
-- Zusätzlicher Button **„Fehlende AICO_-Bausteine ergänzen (Stubs)"** oben.
-- Workflow:
-  1. Neueste Master-Datei aus Bucket `loxone-master` laden.
-  2. `scanTarget()` liefert bereits vorhandene Typen (aktuell: nur `GridProtect`).
-  3. Delta zu `snippetsCatalog` bilden → 28 fehlende Typen.
-  4. Für jeden fehlenden Typ Stub `__1__` einfügen (bestehendes `executeInjection`-Muster wiederverwenden, aber mit synthetischem Referenz-Block statt Kopie).
-  5. `validate()` + `verifyOriginalPreserved()` (nur Ergänzungen, keine Änderungen an Bestandsblöcken).
-  6. Ergebnis: Download `AICONO_Master_v1.x_stubs.Loxone` **und** direkter Upload in Bucket `loxone-master` als neue Version.
+### 3. PDF-Generator
+- Client-seitig via `jsPDF` (bereits im Projekt für EV-Rechnungen genutzt) — kein Edge-Function-Call nötig
+- Layout: AICONO-CI Header, Titel, drei Abschnitte, Parameter-Tabelle, Footer mit Version + Datum + Baustein-Key
+- Dateiname: `AICONO_<TemplateKey>_v<version>.pdf`
 
-### 3. Validierung
-- UUID-Uniqueness über gesamte Datei.
-- XML-Wohlgeformtheit.
-- Byte-Diff: Nur Additionen, keine Modifikationen bestehender Bytes.
-- Report-Datei mit Liste aller 28 hinzugefügten Bausteine + Parameter.
+### 4. Download-Button an der Integration
+- `src/components/integrations/IntegrationCard.tsx` (bzw. die Detailansicht der Miniserver-Integration): pro erkanntem Template-Typ ein Button „📄 Anleitung" neben dem Puzzle-Icon
+- Klick → `jsPDF` erzeugt PDF aus `loxone_snippet_manuals`-Eintrag und öffnet Download
+- Sichtbar nur, wenn Template auf diesem Miniserver via Discovery gefunden wurde (nur installierte Bausteine)
 
-### 4. Katalog-Konsistenz-Prüfung (parallel)
-Vor Generierung einmal alle 29 Katalog-Einträge in `snippetsCatalog.ts` gegen die dokumentierten Parameter (aus dem Konzept-PDF) abgleichen. Falls Abweichungen: Katalog vorher korrigieren, dann Stubs bauen — damit der Bauplan der Referenz entspricht.
-
-## Ergebnis für dich
-1. Ein Klick im Super-Admin → Loxone-Templates → Injektor → „Stubs ergänzen".
-2. Neue Master-Datei mit allen 29 Bausteinen (je 1 Referenz-Instanz) liegt im Bucket.
-3. Discovery (🧩) findet ab sofort alle 29 Typen auf einem Miniserver, sobald diese Master-Datei aufgespielt wurde.
-4. Injektor kann jeden Typ auf N Instanzen vervielfachen.
-5. **Danach separat**: Loxone-Partner ergänzt die echte Programmlogik pro Typ und lädt die finale Datei wieder in den Master-Tab.
+### 5. Rechte
+- Sichtbar für Rollen mit Zugriff auf Integrationen (bestehende Rechte-Prüfung, keine neue Rolle nötig)
 
 ## Nicht Teil dieses Plans
-- Erzeugung echter Loxone-Programmbausteine/Verdrahtung (technisch aus Lovable nicht möglich).
-- Änderungen am Discovery-Parser oder Rule Builder (funktioniert bereits, siehe GridProtect-Test).
+- Ablage in Dokumentations-Modul (bewusst weggelassen — laut deiner Wahl nur an Integration).
+- Multi-Language: v1 nur Deutsch (Übersetzung später einfach nachrüstbar, Struktur ist vorbereitet).
+
+## Ergebnis für dich
+1. Sofort nach dem Deploy: an jedem Miniserver-Baustein (via 🧩 erkannt) erscheint ein 📄-Button → PDF-Download mit v1-Skelett.
+2. Im Super-Admin verfeinerst du pro Baustein die Verdrahtungs- und Test-Anleitung ohne Code-Deploy.
+3. Nächster Download-Klick liefert die aktuelle Version.
