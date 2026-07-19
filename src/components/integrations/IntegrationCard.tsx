@@ -219,15 +219,18 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" onClick={() => setSensorsOpen(true)} title={t("intCard.showSensors" as any)}><Gauge className="h-4 w-4" /></Button>
               {isLoxone && isConfigured && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleScanTemplates}
-                  disabled={isScanningTemplates}
-                  title="Loxone-Templates auf dem Miniserver scannen"
-                >
-                  {isScanningTemplates ? <Loader2 className="h-4 w-4 animate-spin" /> : <Puzzle className="h-4 w-4" />}
-                </Button>
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleScanTemplates}
+                    disabled={isScanningTemplates}
+                    title="Loxone-Templates auf dem Miniserver scannen"
+                  >
+                    {isScanningTemplates ? <Loader2 className="h-4 w-4 animate-spin" /> : <Puzzle className="h-4 w-4" />}
+                  </Button>
+                  <LoxoneManualDownloadButton locationId={locationIntegration.location_id} />
+                </>
               )}
               {/* Backfill Re-Sync Button */}
               {integration?.type === "loxone_miniserver" && isConfigured && (
