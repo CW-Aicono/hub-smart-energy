@@ -195,7 +195,24 @@ export default function LoxoneManualsEditor() {
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => downloadManualPdf(selected)}>
+                  <Button variant="outline" size="sm" onClick={async () => {
+                    const { data: rows } = await supabase
+                      .from("loxone_snippet_manual_images")
+                      .select("*")
+                      .eq("template_key", selected.template_key)
+                      .order("section", { ascending: true })
+                      .order("sort_order", { ascending: true });
+                    const list = (rows ?? []) as ManualImage[];
+                    const withUrls = await Promise.all(
+                      list.map(async (img) => {
+                        const { data } = await supabase.storage
+                          .from("loxone-manuals")
+                          .createSignedUrl(img.storage_path, 300);
+                        return { ...img, signed_url: data?.signedUrl ?? null };
+                      }),
+                    );
+                    await downloadManualPdf(selected, withUrls);
+                  }}>
                     <Download className="h-3.5 w-3.5 mr-1.5" /> PDF-Vorschau
                   </Button>
                   <Button size="sm" onClick={save} disabled={saving}>
