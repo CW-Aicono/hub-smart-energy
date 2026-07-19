@@ -275,6 +275,10 @@ export default function SuperAdminLoxoneTemplates() {
             <TabsContent value="injector">
               <LoxoneInjector />
             </TabsContent>
+
+            <TabsContent value="manuals">
+              <LoxoneManualsEditor />
+            </TabsContent>
           </Tabs>
 
           <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
