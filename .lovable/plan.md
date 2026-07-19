@@ -1,103 +1,46 @@
+# Plan: 28 AICO_-Interface-Stubs im Master-Projekt ergänzen
+
 ## Ziel
+Für alle 28 noch fehlenden AICO_-Bausteine aus `src/lib/loxone/snippetsCatalog.ts` einmalig Virtual Inputs/Outputs mit korrekter Namenskonvention `AICO_<Type>__1__<Param>` in die Master-`.Loxone`-Datei einspleißen. Nach diesem Schritt funktioniert **Discovery** (🧩) und **Injektor** (Vervielfachung) für alle 29 Bausteine end-to-end.
 
-Neuer Sub-Tab **„Injektor"** unter `/super-admin/loxone-templates`. Nutzer lädt eine `.Loxone`-Datei (XML) hoch, wählt pro AICO-Baustein die gewünschte Instanz-Anzahl, bekommt eine Vorschau, und lädt eine erweiterte `.Loxone`-Datei herunter. Bestehende Objekte in der Ziel-Datei bleiben **byteidentisch**.
+**Wichtig — Grenze:** Diese Stubs enthalten nur das Interface (Werte-Austausch AICONO ↔ Miniserver). Die eigentliche Loxone-Programmlogik pro Baustein (Verdrahtung, Formeln, Timer) muss danach separat in Loxone Config einmal pro Typ ergänzt und die Datei erneut ins Master-Projekt geladen werden. Das ist ausdrücklich als späterer Schritt vorgesehen.
 
-## Machbarkeit
+## Umsetzung
 
-Ja, vollständig umsetzbar. Die Beispieldatei ist reines UTF-8-XML mit BOM/CRLF. Die beschriebene Python-Referenzlogik lässt sich 1:1 in TypeScript als reine String-/Regex-Verarbeitung im Browser abbilden — kein Backend, kein XML-DOM-Rewrite nötig. Die Datei bleibt clientseitig (kein Upload in die Cloud, kein DSGVO-Risiko).
+### 1. Generator-Skript (neu)
+`src/lib/loxone/masterStubGenerator.ts`
+- Liest alle Typen aus `snippetsCatalog.ts` (die 29 AICO_-Bausteine inkl. Parameter, Datentyp Digital/Analog, Richtung Input/Output).
+- Erzeugt pro Typ Instanz `__1__` als Referenz-Block (dasselbe Muster wie das existierende `AICO_GridProtect`).
+- Nutzt bereits vorhandene UUID-Utilities aus `src/lib/loxone/injector.ts` (Loxone-konforme UUIDs, keine Duplikate).
+- Vergibt eigene Kategorie „AICONO" und Raum „AICONO_System", falls noch nicht vorhanden.
 
-## Architektur
+### 2. Neuer Sub-Aktion im Injektor-Tab
+`src/components/super-admin/LoxoneInjector.tsx`
+- Zusätzlicher Button **„Fehlende AICO_-Bausteine ergänzen (Stubs)"** oben.
+- Workflow:
+  1. Neueste Master-Datei aus Bucket `loxone-master` laden.
+  2. `scanTarget()` liefert bereits vorhandene Typen (aktuell: nur `GridProtect`).
+  3. Delta zu `snippetsCatalog` bilden → 28 fehlende Typen.
+  4. Für jeden fehlenden Typ Stub `__1__` einfügen (bestehendes `executeInjection`-Muster wiederverwenden, aber mit synthetischem Referenz-Block statt Kopie).
+  5. `validate()` + `verifyOriginalPreserved()` (nur Ergänzungen, keine Änderungen an Bestandsblöcken).
+  6. Ergebnis: Download `AICONO_Master_v1.x_stubs.Loxone` **und** direkter Upload in Bucket `loxone-master` als neue Version.
 
-Alles clientseitig in React/TS. Keine neuen Tabellen, keine Edge Function.
+### 3. Validierung
+- UUID-Uniqueness über gesamte Datei.
+- XML-Wohlgeformtheit.
+- Byte-Diff: Nur Additionen, keine Modifikationen bestehender Bytes.
+- Report-Datei mit Liste aller 28 hinzugefügten Bausteine + Parameter.
 
-```text
-Super-Admin
-└── Loxone-Templates
-    ├── Katalog (bestehend)
-    ├── Health-Report (bestehend)
-    ├── Master-Projekt (bestehend)
-    └── Injektor  ← NEU
-         │
-         ├── 1. Bibliothek (AICONO_Master.Loxone)
-         │      Quelle A: aus Storage-Bucket "loxone-master"
-         │                (neueste Version automatisch)
-         │      Quelle B: optionaler manueller Upload (Override)
-         │
-         ├── 2. Ziel-Datei Upload (.Loxone)
-         │
-         ├── 3. Auto-Scan
-         │      → erkennt alle "AICO_*__1__"-Präfixe in Bibliothek
-         │      → erkennt bereits vorhandene Instanzen in Ziel-Datei
-         │      → zeigt Formular: pro Baustein-Typ Zähler (0–N)
-         │
-         ├── 4. Vorschau
-         │      → "AICO_GridProtect: fügt Instanz 2, 3 hinzu (9 Objekte je Instanz)"
-         │      → Warnung bei Kollision
-         │
-         ├── 5. Verarbeitung + Validierung
-         │      → UUID-Eindeutigkeit prüfen
-         │      → XML-Wohlgeformtheit prüfen (DOMParser)
-         │      → Byte-Diff gegen Original (alles außerhalb neuer Blöcke identisch)
-         │
-         └── 6. Download
-                Kundenprojekt_erweitert_YYYY-MM-DD.Loxone
-                + Validierungs-Report (.txt)
-```
+### 4. Katalog-Konsistenz-Prüfung (parallel)
+Vor Generierung einmal alle 29 Katalog-Einträge in `snippetsCatalog.ts` gegen die dokumentierten Parameter (aus dem Konzept-PDF) abgleichen. Falls Abweichungen: Katalog vorher korrigieren, dann Stubs bauen — damit der Bauplan der Referenz entspricht.
 
-## Kern-Modul: `src/lib/loxone/injector.ts`
+## Ergebnis für dich
+1. Ein Klick im Super-Admin → Loxone-Templates → Injektor → „Stubs ergänzen".
+2. Neue Master-Datei mit allen 29 Bausteinen (je 1 Referenz-Instanz) liegt im Bucket.
+3. Discovery (🧩) findet ab sofort alle 29 Typen auf einem Miniserver, sobald diese Master-Datei aufgespielt wurde.
+4. Injektor kann jeden Typ auf N Instanzen vervielfachen.
+5. **Danach separat**: Loxone-Partner ergänzt die echte Programmlogik pro Typ und lädt die finale Datei wieder in den Master-Tab.
 
-Reine TypeScript-Portierung der Python-Referenz. Keine Framework-Abhängigkeiten, damit unit-testbar.
-
-Öffentliche API:
-
-```ts
-scanLibrary(xml: string): TemplateType[]         // findet AICO_*__1__-Blöcke
-scanTarget(xml: string): Map<string, number[]>   // welche Instanzen schon da sind
-planInjection(target, lib, wishes): InjectionPlan
-executeInjection(target, plan): { xml, report }
-validate(xml): { ok, errors }
-```
-
-Die Traversal-Logik (transitiv über `<In Input="UUID"/>` alle abhängigen Objekte einsammeln, referenzierte-aber-nicht-instanz-spezifische Objekte NICHT mitkopieren) wird 1:1 aus `loxone_duplicate_instance.py` übernommen. UUID-Generierung im Loxone-Format `xxxxxxxx-xxxx-xxxx-xxxxxxxxxxxxxxxx`.
-
-**Wichtig:** Verarbeitung als String-Splicing, damit CRLF/BOM/Whitespace des Originals byteweise erhalten bleibt. Neue Blöcke werden direkt hinter den `__1__`-Original-Blöcken eingefügt.
-
-## UI-Komponente
-
-`src/components/super-admin/LoxoneInjector.tsx` — eingebunden als 4. Tab in der bestehenden Loxone-Templates-Seite.
-
-- Datei-Upload via `<input type="file" accept=".Loxone">`
-- Bibliothek wird per `supabase.storage.from("loxone-master").download(...)` geladen (neueste Version, wie im bestehenden `LoxoneMasterProject.tsx`)
-- Fallback: manueller Upload einer alternativen Bibliothek
-- Formular mit Nummer-Inputs pro erkanntem Baustein-Typ
-- Vorschau-Card
-- Prominenter Warn-Alert: „Vor Kunden-Rollout auf Test-Miniserver verifizieren."
-- Download-Button erst aktiv nach erfolgreicher Validierung
-
-## Sicherheitsregeln (hart durchgesetzt)
-
-1. **Kein Silent-Overwrite:** bei existierender Instanz-Nummer → Fehlermeldung, kein Download.
-2. **Kein Download bei fehlgeschlagener Validierung** (UUID-Kollision oder XML-Fehler).
-3. **Byte-Diff-Check:** Original-Zeilen außerhalb neuer Blöcke müssen identisch sein — sonst Abbruch.
-4. **Nur Super-Admin** (via `useSuperAdmin`) sieht den Tab.
-
-## Nicht-Ziele (bewusst V1)
-
-- Kein Upload auf Miniserver (bleibt manuell in Loxone Config)
-- Keine per-Instanz-Parameterwerte im Formular (kommt evtl. in V2)
-- Keine neue Automatisierungslogik — reine Vervielfältigung
-
-## Tests
-
-`src/lib/loxone/__tests__/injector.test.ts` mit der hochgeladenen `AICONO_Master.Loxone` als Fixture:
-
-- Erkennt korrekt alle `AICO_*__1__`-Bausteine
-- Fügt Instanz 2 hinzu, alle UUIDs neu und eindeutig
-- Original-Bytes außerhalb der Ergänzung unverändert (Diff-Test)
-- Ausgabe ist wohlgeformtes XML
-
-## Offene Frage
-
-Die hochgeladene Beispieldatei „AICONO_Master_v1.0" — soll die als **initiale Bibliothek** in den Storage-Bucket `loxone-master` gelegt werden (falls noch nicht vorhanden), damit der Injektor sofort einsatzbereit ist? Oder ist sie nur als Referenz für die XML-Struktur gedacht?  
-  
-Die hochgeladene Datei diente lediglich als Referenz.
+## Nicht Teil dieses Plans
+- Erzeugung echter Loxone-Programmbausteine/Verdrahtung (technisch aus Lovable nicht möglich).
+- Änderungen am Discovery-Parser oder Rule Builder (funktioniert bereits, siehe GridProtect-Test).
