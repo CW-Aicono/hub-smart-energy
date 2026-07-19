@@ -23,10 +23,13 @@ export async function seedRegistryFromSnippets(): Promise<{ inserted: number; to
         parameters: s.parameters as any,
         min_miniserver_fw: "12.0",
         changelog: "v1.2.0: Phase 2–4 hinzugefügt — Gruppen H (ArbitrageDispatch, PeakEventPrecharge), I (GridOperatorSignal, CommunityAllocation), J (Co2LoadShift, StorageArbitrageSoc). Push-Kanal loxone_pending_writes.",
-        description: s.description,
-        parameters: s.parameters as any,
-        min_miniserver_fw: "12.0",
-        changelog: "v1.1.0: Gruppe G (Erweiterte Steuerung) hinzugefügt — GridCurtailment14a, PeakShavingSoc, DlmFallback",
+        is_active: true,
+      });
+    }
+  }
+
+  // Alt-Zeile entfernt — Duplikat-Properties
+
         is_active: true,
       });
     }
