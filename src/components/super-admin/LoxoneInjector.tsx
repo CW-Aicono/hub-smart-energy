@@ -16,6 +16,8 @@ import {
   verifyOriginalPreserved,
   type TemplateBlock,
 } from "@/lib/loxone/injector";
+import { generateMissingStubs } from "@/lib/loxone/masterStubGenerator";
+import { ALL_SNIPPETS } from "@/lib/loxone/snippetsCatalog";
 
 const BUCKET = "loxone-master";
 
