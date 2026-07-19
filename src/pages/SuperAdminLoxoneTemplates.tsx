@@ -17,6 +17,7 @@ import { RefreshCw, Puzzle, AlertTriangle, CheckCircle2, DatabaseZap } from "luc
 import { SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCatalog";
 import { seedRegistryFromSnippets } from "@/lib/loxone/catalogSeed";
 import LoxoneMasterProject from "@/components/super-admin/LoxoneMasterProject";
+import LoxoneInjector from "@/components/super-admin/LoxoneInjector";
 
 interface RegistryEntry {
   id: string;
