@@ -35,6 +35,89 @@ export default function LoxoneInjector() {
   const [blocks, setBlocks] = useState<TemplateBlock[]>([]);
   const [wishes, setWishes] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
+  const [stubResult, setStubResult] = useState<{ added: number; skipped: number } | null>(null);
+
+  const missingSnippets = useMemo(() => {
+    if (!targetXml) return [];
+    const existing = new Set(blocks.map((b) => b.type));
+    return ALL_SNIPPETS
+      .map((s) => s.templateKey.replace(/^AICO_/, ""))
+      .filter((t) => !existing.has(t));
+  }, [targetXml, blocks]);
+
+  const handleGenerateStubs = async () => {
+    if (!targetXml) return;
+    setBusy(true);
+    try {
+      const result = generateMissingStubs(targetXml);
+      if (!result.validation.ok) {
+        toast({
+          title: "Validierung fehlgeschlagen",
+          description: result.validation.errors.join(" | "),
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!result.bytesPreserved) {
+        toast({
+          title: "Byte-Diff fehlgeschlagen",
+          description: "Original-Bytes wurden verändert. Abbruch.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Download der erweiterten Master-Datei + Report
+      const stamp = new Date().toISOString().slice(0, 10);
+      const base = (targetName.replace(/\.Loxone$/i, "") || "AICONO_Master") + `_stubs_${stamp}`;
+      const outName = `${base}.Loxone`;
+      const blob = new Blob([result.xml], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = outName;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const rBlob = new Blob([result.report], { type: "text/plain" });
+      const rUrl = URL.createObjectURL(rBlob);
+      const rA = document.createElement("a");
+      rA.href = rUrl;
+      rA.download = `${base}_report.txt`;
+      rA.click();
+      URL.revokeObjectURL(rUrl);
+
+      // Upload als neue Version in den Master-Bucket
+      const uploadName = `${outName}`;
+      const { error: upErr } = await supabase.storage
+        .from(BUCKET)
+        .upload(uploadName, blob, { upsert: true, contentType: "application/octet-stream" });
+      if (upErr) {
+        toast({
+          title: "Download OK, Upload fehlgeschlagen",
+          description: `Datei lokal gespeichert, konnte aber nicht in den Master-Bucket geladen werden: ${upErr.message}`,
+          variant: "destructive",
+        });
+      }
+
+      setStubResult({ added: result.addedTypes.length, skipped: result.skippedTypes.length });
+      // Erneut scannen, damit UI die neuen Typen zeigt
+      const newBlocks = scanTarget(result.xml);
+      setBlocks(newBlocks);
+      setTargetXml(result.xml);
+
+      toast({
+        title: `${result.addedTypes.length} Stub(s) ergänzt`,
+        description: result.skippedTypes.length
+          ? `${result.skippedTypes.length} übersprungen — siehe Report.`
+          : "Alle fehlenden Bausteine wurden ergänzt.",
+      });
+    } catch (e: any) {
+      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleUpload = useCallback(async (file: File) => {
     setBusy(true);
