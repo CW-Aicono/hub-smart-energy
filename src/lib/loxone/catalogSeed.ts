@@ -2,12 +2,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { SNIPPET_GROUPS } from "./snippetsCatalog";
 
 /**
- * Befüllt/aktualisiert `loxone_template_registry` aus der im Frontend gepflegten
- * Snippet-Bibliothek. So ist sichergestellt, dass Preview- und Live-Datenbank
- * (Lovable-Cloud bzw. self-hosted Supabase auf Hetzner) den gleichen Katalog
- * kennen — ohne dass jemand SQL laufen lassen muss.
- *
- * Idempotent: verwendet `template_key` + `version` als Upsert-Schlüssel.
+ * Befüllt/aktualisiert `loxone_template_registry` aus der im Frontend
+ * gepflegten Snippet-Bibliothek. Idempotent via (template_key, version).
  */
 export async function seedRegistryFromSnippets(): Promise<{ inserted: number; total: number }> {
   const rows: any[] = [];
@@ -22,14 +18,8 @@ export async function seedRegistryFromSnippets(): Promise<{ inserted: number; to
         description: s.description,
         parameters: s.parameters as any,
         min_miniserver_fw: "12.0",
-        changelog: "v1.2.0: Phase 2–4 hinzugefügt — Gruppen H (ArbitrageDispatch, PeakEventPrecharge), I (GridOperatorSignal, CommunityAllocation), J (Co2LoadShift, StorageArbitrageSoc). Push-Kanal loxone_pending_writes.",
-        is_active: true,
-      });
-    }
-  }
-
-  // Alt-Zeile entfernt — Duplikat-Properties
-
+        changelog:
+          "v1.2.0: Phase 2–4 hinzugefügt — Gruppen H (ArbitrageDispatch, PeakEventPrecharge), I (GridOperatorSignal, CommunityAllocation), J (Co2LoadShift, StorageArbitrageSoc). Push-Kanal loxone_pending_writes.",
         is_active: true,
       });
     }
