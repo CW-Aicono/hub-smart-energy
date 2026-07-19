@@ -59,15 +59,34 @@ export function LoxoneManualDownloadButton({ locationId, triggerVariant = "icon"
     if (open) loadData();
   }, [open, locationId]);
 
-  const download = (key: string) => {
+  const loadImagesFor = async (key: string): Promise<ManualImage[]> => {
+    const { data: rows } = await supabase
+      .from("loxone_snippet_manual_images")
+      .select("*")
+      .eq("template_key", key)
+      .order("section", { ascending: true })
+      .order("sort_order", { ascending: true });
+    const list = (rows ?? []) as ManualImage[];
+    const withUrls = await Promise.all(
+      list.map(async (img) => {
+        const { data } = await supabase.storage
+          .from("loxone-manuals")
+          .createSignedUrl(img.storage_path, 300);
+        return { ...img, signed_url: data?.signedUrl ?? null };
+      }),
+    );
+    return withUrls;
+  };
+
+  const download = async (key: string) => {
+    const images = await loadImagesFor(key);
     const doc = manuals[key];
     if (doc) {
-      downloadManualPdf(doc);
+      await downloadManualPdf(doc, images);
       return;
     }
-    // Fallback: Wenn Super-Admin noch keine Anleitung gepflegt hat, PDF aus Katalog-Skelett erzeugen
     const skel = buildManualSkeleton(key);
-    downloadManualPdf({ ...skel, updated_at: new Date().toISOString() });
+    await downloadManualPdf({ ...skel, updated_at: new Date().toISOString() }, images);
   };
 
   return (
