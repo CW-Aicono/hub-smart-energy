@@ -129,7 +129,7 @@ export default function LoxoneInjector() {
       if (error) throw error;
       const latest = (list ?? []).find((f) => f.name && !f.name.startsWith("."));
       if (!latest) {
-        toast({ title: "Keine Master-Datei vorhanden", description: "Bitte im Tab „Master-Projekt" hochladen.", variant: "destructive" });
+        toast({ title: "Keine Master-Datei vorhanden", description: "Bitte im Tab Master-Projekt hochladen.", variant: "destructive" });
         return;
       }
       const { data: blob, error: dlErr } = await supabase.storage.from(BUCKET).download(latest.name);
