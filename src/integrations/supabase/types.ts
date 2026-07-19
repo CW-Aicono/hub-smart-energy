@@ -6669,6 +6669,53 @@ export type Database = {
           },
         ]
       }
+      loxone_snippet_manual_images: {
+        Row: {
+          caption: string | null
+          created_at: string
+          id: string
+          section: string
+          sort_order: number
+          storage_path: string
+          template_key: string
+          updated_at: string
+          updated_by: string | null
+          width: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          section: string
+          sort_order?: number
+          storage_path: string
+          template_key: string
+          updated_at?: string
+          updated_by?: string | null
+          width?: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          section?: string
+          sort_order?: number
+          storage_path?: string
+          template_key?: string
+          updated_at?: string
+          updated_by?: string | null
+          width?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loxone_snippet_manual_images_template_key_fkey"
+            columns: ["template_key"]
+            isOneToOne: false
+            referencedRelation: "loxone_snippet_manuals"
+            referencedColumns: ["template_key"]
+          },
+        ]
+      }
       loxone_snippet_manuals: {
         Row: {
           purpose_md: string

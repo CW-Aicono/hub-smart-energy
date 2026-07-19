@@ -12,7 +12,9 @@ import {
   buildManualSkeleton,
   downloadManualPdf,
   type ManualDoc,
+  type ManualImage,
 } from "@/lib/loxone/generateManualPdf";
+import { ManualSectionImages } from "./ManualSectionImages";
 
 export default function LoxoneManualsEditor() {
   const { toast } = useToast();
@@ -193,7 +195,24 @@ export default function LoxoneManualsEditor() {
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => downloadManualPdf(selected)}>
+                  <Button variant="outline" size="sm" onClick={async () => {
+                    const { data: rows } = await supabase
+                      .from("loxone_snippet_manual_images")
+                      .select("*")
+                      .eq("template_key", selected.template_key)
+                      .order("section", { ascending: true })
+                      .order("sort_order", { ascending: true });
+                    const list = (rows ?? []) as ManualImage[];
+                    const withUrls = await Promise.all(
+                      list.map(async (img) => {
+                        const { data } = await supabase.storage
+                          .from("loxone-manuals")
+                          .createSignedUrl(img.storage_path, 300);
+                        return { ...img, signed_url: data?.signedUrl ?? null };
+                      }),
+                    );
+                    await downloadManualPdf(selected, withUrls);
+                  }}>
                     <Download className="h-3.5 w-3.5 mr-1.5" /> PDF-Vorschau
                   </Button>
                   <Button size="sm" onClick={save} disabled={saving}>
@@ -208,29 +227,50 @@ export default function LoxoneManualsEditor() {
                 <label className="text-xs font-medium">Titel</label>
                 <Input value={selected.title} onChange={(e) => updateField("title", e.target.value)} />
               </div>
-              <div>
+              <div className="space-y-2">
                 <label className="text-xs font-medium">Zweck des Bausteins</label>
                 <Textarea
                   rows={5}
                   value={selected.purpose_md}
                   onChange={(e) => updateField("purpose_md", e.target.value)}
                 />
+                {manuals[selected.template_key] && (
+                  <ManualSectionImages
+                    templateKey={selected.template_key}
+                    section="purpose"
+                    label="Zweck"
+                  />
+                )}
               </div>
-              <div>
+              <div className="space-y-2">
                 <label className="text-xs font-medium">Einrichtung im Miniserver (Verdrahtung)</label>
                 <Textarea
                   rows={8}
                   value={selected.wiring_md}
                   onChange={(e) => updateField("wiring_md", e.target.value)}
                 />
+                {manuals[selected.template_key] && (
+                  <ManualSectionImages
+                    templateKey={selected.template_key}
+                    section="wiring"
+                    label="Verdrahtung"
+                  />
+                )}
               </div>
-              <div>
+              <div className="space-y-2">
                 <label className="text-xs font-medium">Test & Inbetriebnahme</label>
                 <Textarea
                   rows={6}
                   value={selected.test_md}
                   onChange={(e) => updateField("test_md", e.target.value)}
                 />
+                {manuals[selected.template_key] && (
+                  <ManualSectionImages
+                    templateKey={selected.template_key}
+                    section="test"
+                    label="Test"
+                  />
+                )}
               </div>
             </CardContent>
           </>
