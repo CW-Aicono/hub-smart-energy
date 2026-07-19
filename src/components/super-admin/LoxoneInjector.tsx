@@ -276,6 +276,57 @@ export default function LoxoneInjector() {
         </CardContent>
       </Card>
 
+      {targetXml && missingSnippets.length > 0 && (
+        <Card className="border-primary/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" /> Fehlende AICO_-Bausteine automatisch ergänzen
+            </CardTitle>
+            <CardDescription>
+              Es sind aktuell <strong>{blocks.length}</strong> von <strong>{ALL_SNIPPETS.length}</strong> Baustein-Typen in
+              der Datei vorhanden. Ich kann die fehlenden{" "}
+              <strong>{missingSnippets.length}</strong> Typen als Interface-Stubs
+              (Virtual Inputs/Outputs mit korrekten Namen) automatisch erzeugen. Grundlage: einer der
+              bereits vorhandenen Bausteine dient als Vorlage; die Original-Bytes bleiben unverändert.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Alert variant="default">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Was das kann — und was nicht</AlertTitle>
+              <AlertDescription>
+                <strong>Enthält:</strong> Alle Namen im Schema{" "}
+                <code>AICO_&lt;Type&gt;__1__&lt;Param&gt;</code> — damit funktionieren
+                Discovery (🧩) und Injektor sofort. <br />
+                <strong>Enthält NICHT:</strong> die eigentliche Loxone-Programmlogik
+                (Verdrahtung, Formeln, Timer). Die muss danach einmal pro Baustein-Typ in Loxone
+                Config nachgerüstet werden.
+              </AlertDescription>
+            </Alert>
+            <div className="text-xs text-muted-foreground">
+              Fehlend:{" "}
+              {missingSnippets.slice(0, 8).map((t) => (
+                <Badge key={t} variant="outline" className="mr-1 mb-1 font-mono text-[10px]">
+                  {t}
+                </Badge>
+              ))}
+              {missingSnippets.length > 8 && <span>… + {missingSnippets.length - 8} weitere</span>}
+            </div>
+            <Button onClick={handleGenerateStubs} disabled={busy}>
+              {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+              {missingSnippets.length} Stub(s) generieren, herunterladen & in Master-Bucket speichern
+            </Button>
+            {stubResult && (
+              <p className="text-xs text-muted-foreground">
+                Letzter Lauf: {stubResult.added} hinzugefügt
+                {stubResult.skipped > 0 && ` · ${stubResult.skipped} übersprungen`}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+
       {blocks.length > 0 && (
         <Card>
           <CardHeader>
