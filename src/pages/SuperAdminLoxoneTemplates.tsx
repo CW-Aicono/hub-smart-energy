@@ -18,6 +18,7 @@ import { SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCata
 import { seedRegistryFromSnippets } from "@/lib/loxone/catalogSeed";
 import LoxoneMasterProject from "@/components/super-admin/LoxoneMasterProject";
 import LoxoneInjector from "@/components/super-admin/LoxoneInjector";
+import LoxoneManualsEditor from "@/components/super-admin/LoxoneManualsEditor";
 
 interface RegistryEntry {
   id: string;
