@@ -2366,6 +2366,9 @@ Deno.serve(async (req) => {
     if (action === "push-execution-logs") return handlePushExecutionLogs(req);
     if (action === "sync-automations") return handleSyncAutomations(url, req);
     if (action === "device-snapshot") return handleDeviceSnapshot(req);
+    if (action === "list-pending-writes") return handleListPendingWrites(req);
+    if (action === "ack-pending-write") return handleAckPendingWrite(req);
+
 
     // Check if the body contains a getSensors action (called by frontend for all integration types).
     // Push-based gateways don't support sensor discovery — return empty list gracefully.
