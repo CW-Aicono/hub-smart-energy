@@ -53,7 +53,9 @@ export interface ValidationResult {
   errors: string[];
 }
 
-const AICO_TITLE_RE = /^AICO_([A-Za-z0-9]+)__(\d+)__(.+)$/;
+// Type darf Unterstriche enthalten (z. B. "PVSurplus_EV"). Non-greedy, damit
+// das erste `__<Zahl>__` als Instanz-Trenner erkannt wird.
+const AICO_TITLE_RE = /^AICO_(.+?)__(\d+)__(.+)$/;
 
 // ---------- Utilities ----------
 

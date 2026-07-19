@@ -30,7 +30,7 @@ import {
 } from "./injector";
 import { ALL_SNIPPETS, type LoxoneSnippet, type SnippetParameter } from "./snippetsCatalog";
 
-const AICO_TITLE_RE = /^AICO_([A-Za-z0-9]+)__(\d+)__(.+)$/;
+const AICO_TITLE_RE = /^AICO_(.+?)__(\d+)__(.+)$/;
 
 export interface StubGenerationResult {
   xml: string;
