@@ -137,7 +137,7 @@ export function generateManualPdf(manual: ManualDoc): jsPDF {
   doc.setTextColor(20, 40, 90);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
-  doc.text(manual.title, MARGIN, cursor.y);
+  doc.text(sanitizeForPdf(manual.title), MARGIN, cursor.y);
   cursor.y += 7;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9.5);
