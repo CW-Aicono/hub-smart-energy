@@ -171,6 +171,7 @@ export default function SuperAdminLoxoneTemplates() {
               <TabsTrigger value="health">Health-Report</TabsTrigger>
               <TabsTrigger value="master">Master-Projekt</TabsTrigger>
               <TabsTrigger value="injector">Injektor</TabsTrigger>
+              <TabsTrigger value="manuals">Anleitungen</TabsTrigger>
             </TabsList>
 
             <TabsContent value="catalog" className="space-y-4">
