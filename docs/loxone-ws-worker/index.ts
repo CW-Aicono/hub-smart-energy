@@ -1115,7 +1115,15 @@ async function main() {
   } else {
     log("info", `[Keepalive] deaktiviert (KEEPALIVE_INTERVAL_MS=0)`);
   }
+
+  // Pending Writes (Cloud → Miniserver): alle 5s Warteschlange abfragen und
+  // via bestehender WS-Session an den Miniserver senden. Namensschema:
+  //   AICO_<TemplateKey>__<Instance>__<Parameter>
+  // Loxone akzeptiert `jdev/sps/io/<Name>/<Wert>` bei benannten Virtual Inputs.
+  setInterval(() => { processPendingWrites().catch((e) => log("error", "pending-writes:", e)); }, 5000);
+  log("info", "[PendingWrites] aktiv: poll alle 5s (Cloud → Miniserver Push-Kanal)");
 }
+
 
 main().catch((err) => {
   console.error("[FATAL]", err);
