@@ -12,7 +12,9 @@ import {
   buildManualSkeleton,
   downloadManualPdf,
   type ManualDoc,
+  type ManualImage,
 } from "@/lib/loxone/generateManualPdf";
+import { ManualSectionImages } from "./ManualSectionImages";
 
 export default function LoxoneManualsEditor() {
   const { toast } = useToast();
