@@ -16,6 +16,8 @@ import {
   verifyOriginalPreserved,
   type TemplateBlock,
 } from "@/lib/loxone/injector";
+import { generateMissingStubs } from "@/lib/loxone/masterStubGenerator";
+import { ALL_SNIPPETS } from "@/lib/loxone/snippetsCatalog";
 
 const BUCKET = "loxone-master";
 
@@ -33,6 +35,89 @@ export default function LoxoneInjector() {
   const [blocks, setBlocks] = useState<TemplateBlock[]>([]);
   const [wishes, setWishes] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
+  const [stubResult, setStubResult] = useState<{ added: number; skipped: number } | null>(null);
+
+  const missingSnippets = useMemo(() => {
+    if (!targetXml) return [];
+    const existing = new Set(blocks.map((b) => b.type));
+    return ALL_SNIPPETS
+      .map((s) => s.templateKey.replace(/^AICO_/, ""))
+      .filter((t) => !existing.has(t));
+  }, [targetXml, blocks]);
+
+  const handleGenerateStubs = async () => {
+    if (!targetXml) return;
+    setBusy(true);
+    try {
+      const result = generateMissingStubs(targetXml);
+      if (!result.validation.ok) {
+        toast({
+          title: "Validierung fehlgeschlagen",
+          description: result.validation.errors.join(" | "),
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!result.bytesPreserved) {
+        toast({
+          title: "Byte-Diff fehlgeschlagen",
+          description: "Original-Bytes wurden verändert. Abbruch.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Download der erweiterten Master-Datei + Report
+      const stamp = new Date().toISOString().slice(0, 10);
+      const base = (targetName.replace(/\.Loxone$/i, "") || "AICONO_Master") + `_stubs_${stamp}`;
+      const outName = `${base}.Loxone`;
+      const blob = new Blob([result.xml], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = outName;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const rBlob = new Blob([result.report], { type: "text/plain" });
+      const rUrl = URL.createObjectURL(rBlob);
+      const rA = document.createElement("a");
+      rA.href = rUrl;
+      rA.download = `${base}_report.txt`;
+      rA.click();
+      URL.revokeObjectURL(rUrl);
+
+      // Upload als neue Version in den Master-Bucket
+      const uploadName = `${outName}`;
+      const { error: upErr } = await supabase.storage
+        .from(BUCKET)
+        .upload(uploadName, blob, { upsert: true, contentType: "application/octet-stream" });
+      if (upErr) {
+        toast({
+          title: "Download OK, Upload fehlgeschlagen",
+          description: `Datei lokal gespeichert, konnte aber nicht in den Master-Bucket geladen werden: ${upErr.message}`,
+          variant: "destructive",
+        });
+      }
+
+      setStubResult({ added: result.addedTypes.length, skipped: result.skippedTypes.length });
+      // Erneut scannen, damit UI die neuen Typen zeigt
+      const newBlocks = scanTarget(result.xml);
+      setBlocks(newBlocks);
+      setTargetXml(result.xml);
+
+      toast({
+        title: `${result.addedTypes.length} Stub(s) ergänzt`,
+        description: result.skippedTypes.length
+          ? `${result.skippedTypes.length} übersprungen — siehe Report.`
+          : "Alle fehlenden Bausteine wurden ergänzt.",
+      });
+    } catch (e: any) {
+      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleUpload = useCallback(async (file: File) => {
     setBusy(true);
@@ -190,6 +275,57 @@ export default function LoxoneInjector() {
           )}
         </CardContent>
       </Card>
+
+      {targetXml && missingSnippets.length > 0 && (
+        <Card className="border-primary/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" /> Fehlende AICO_-Bausteine automatisch ergänzen
+            </CardTitle>
+            <CardDescription>
+              Es sind aktuell <strong>{blocks.length}</strong> von <strong>{ALL_SNIPPETS.length}</strong> Baustein-Typen in
+              der Datei vorhanden. Ich kann die fehlenden{" "}
+              <strong>{missingSnippets.length}</strong> Typen als Interface-Stubs
+              (Virtual Inputs/Outputs mit korrekten Namen) automatisch erzeugen. Grundlage: einer der
+              bereits vorhandenen Bausteine dient als Vorlage; die Original-Bytes bleiben unverändert.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Alert variant="default">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Was das kann — und was nicht</AlertTitle>
+              <AlertDescription>
+                <strong>Enthält:</strong> Alle Namen im Schema{" "}
+                <code>AICO_&lt;Type&gt;__1__&lt;Param&gt;</code> — damit funktionieren
+                Discovery (🧩) und Injektor sofort. <br />
+                <strong>Enthält NICHT:</strong> die eigentliche Loxone-Programmlogik
+                (Verdrahtung, Formeln, Timer). Die muss danach einmal pro Baustein-Typ in Loxone
+                Config nachgerüstet werden.
+              </AlertDescription>
+            </Alert>
+            <div className="text-xs text-muted-foreground">
+              Fehlend:{" "}
+              {missingSnippets.slice(0, 8).map((t) => (
+                <Badge key={t} variant="outline" className="mr-1 mb-1 font-mono text-[10px]">
+                  {t}
+                </Badge>
+              ))}
+              {missingSnippets.length > 8 && <span>… + {missingSnippets.length - 8} weitere</span>}
+            </div>
+            <Button onClick={handleGenerateStubs} disabled={busy}>
+              {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+              {missingSnippets.length} Stub(s) generieren, herunterladen & in Master-Bucket speichern
+            </Button>
+            {stubResult && (
+              <p className="text-xs text-muted-foreground">
+                Letzter Lauf: {stubResult.added} hinzugefügt
+                {stubResult.skipped > 0 && ` · ${stubResult.skipped} übersprungen`}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
 
       {blocks.length > 0 && (
         <Card>
