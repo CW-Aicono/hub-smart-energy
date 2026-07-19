@@ -416,6 +416,7 @@ export const SNIPPET_GROUPS: SnippetGroup[] = [
   { key: "D", label: "Gruppe D – Komfort & Beschattung", categories: ["comfort"], zipName: "AICONO_Loxone_Comfort_GroupD.zip", snippets: COMFORT_GROUP_D },
   { key: "E", label: "Gruppe E – Sicherheit", categories: ["safety"], zipName: "AICONO_Loxone_Safety_GroupE.zip", snippets: SAFETY_GROUP_E },
   { key: "F", label: "Gruppe F – Baukasten", categories: ["generic"], zipName: "AICONO_Loxone_Toolkit_GroupF.zip", snippets: GENERIC_GROUP_F },
+  { key: "G", label: "Gruppe G – Erweiterte Steuerung", categories: ["advanced"], zipName: "AICONO_Loxone_Advanced_GroupG.zip", snippets: ADVANCED_GROUP_G },
 ];
 
 export const ALL_SNIPPETS: LoxoneSnippet[] = SNIPPET_GROUPS.flatMap((g) => g.snippets);
