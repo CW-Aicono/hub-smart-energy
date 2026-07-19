@@ -11,6 +11,7 @@ import {
   buildManualSkeleton,
   downloadManualPdf,
   type ManualDoc,
+  type ManualImage,
 } from "@/lib/loxone/generateManualPdf";
 
 interface Props {
