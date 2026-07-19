@@ -20,6 +20,34 @@ const PAGE_W = 210; // A4 mm
 const PAGE_H = 297;
 const CONTENT_W = PAGE_W - 2 * MARGIN;
 
+/**
+ * jsPDF/Helvetica (WinAnsi) kann keine Emojis oder Zeichen außerhalb von Latin-1 rendern.
+ * Wir ersetzen bekannte Emojis durch Klartext und strippen den Rest, damit keine
+ * kaputten Byte-Sequenzen ("&2&.& &A&u&f& ...") im PDF landen.
+ */
+const EMOJI_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/🧩/g, "[Puzzle-Icon]"],
+  [/📄/g, "[PDF-Icon]"],
+  [/🔄/g, "[Neu-Scannen-Icon]"],
+  [/✅/g, "[OK]"],
+  [/❌/g, "[Fehler]"],
+  [/⚠️?/g, "[Achtung]"],
+  [/→/g, "->"],
+  [/←/g, "<-"],
+  [/–/g, "-"],
+  [/—/g, "-"],
+  [/„|"/g, '"'],
+  [/'|'/g, "'"],
+];
+
+function sanitizeForPdf(text: string): string {
+  let out = text || "";
+  for (const [re, rep] of EMOJI_REPLACEMENTS) out = out.replace(re, rep);
+  // Alles außerhalb Latin-1 (WinAnsi) durch "?" ersetzen, damit jsPDF nicht scrambled.
+  out = out.replace(/[^\x00-\xFF]/g, "?");
+  return out;
+}
+
 function renderSection(
   doc: jsPDF,
   title: string,
@@ -30,13 +58,13 @@ function renderSection(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
   doc.setTextColor(20, 40, 90);
-  doc.text(title, MARGIN, cursor.y);
+  doc.text(sanitizeForPdf(title), MARGIN, cursor.y);
   cursor.y += 6;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
   doc.setTextColor(30, 30, 30);
-  const text = (bodyMd || "—").trim();
+  const text = sanitizeForPdf((bodyMd || "—").trim());
   const lines = doc.splitTextToSize(text, CONTENT_W);
   for (const line of lines) {
     ensureSpace(doc, cursor, 6);
