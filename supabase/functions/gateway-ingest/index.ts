@@ -2344,6 +2344,8 @@ Deno.serve(async (req) => {
     if (action === "addon-version") return handleAddonVersion();
     if (action === "sync-automations") return handleSyncAutomations(url, req);
     if (action === "list-loxone-ws-meters") return handleListLoxoneWsMeters();
+    if (action === "list-pending-writes") return handleListPendingWrites(req);
+
   }
 
   // POST routes
