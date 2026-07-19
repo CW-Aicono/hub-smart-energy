@@ -227,29 +227,50 @@ export default function LoxoneManualsEditor() {
                 <label className="text-xs font-medium">Titel</label>
                 <Input value={selected.title} onChange={(e) => updateField("title", e.target.value)} />
               </div>
-              <div>
+              <div className="space-y-2">
                 <label className="text-xs font-medium">Zweck des Bausteins</label>
                 <Textarea
                   rows={5}
                   value={selected.purpose_md}
                   onChange={(e) => updateField("purpose_md", e.target.value)}
                 />
+                {manuals[selected.template_key] && (
+                  <ManualSectionImages
+                    templateKey={selected.template_key}
+                    section="purpose"
+                    label="Zweck"
+                  />
+                )}
               </div>
-              <div>
+              <div className="space-y-2">
                 <label className="text-xs font-medium">Einrichtung im Miniserver (Verdrahtung)</label>
                 <Textarea
                   rows={8}
                   value={selected.wiring_md}
                   onChange={(e) => updateField("wiring_md", e.target.value)}
                 />
+                {manuals[selected.template_key] && (
+                  <ManualSectionImages
+                    templateKey={selected.template_key}
+                    section="wiring"
+                    label="Verdrahtung"
+                  />
+                )}
               </div>
-              <div>
+              <div className="space-y-2">
                 <label className="text-xs font-medium">Test & Inbetriebnahme</label>
                 <Textarea
                   rows={6}
                   value={selected.test_md}
                   onChange={(e) => updateField("test_md", e.target.value)}
                 />
+                {manuals[selected.template_key] && (
+                  <ManualSectionImages
+                    templateKey={selected.template_key}
+                    section="test"
+                    label="Test"
+                  />
+                )}
               </div>
             </CardContent>
           </>
