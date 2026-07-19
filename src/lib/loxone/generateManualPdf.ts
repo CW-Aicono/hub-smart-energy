@@ -194,7 +194,7 @@ export function buildManualSkeleton(templateKey: string): Omit<ManualDoc, "updat
   ].join("\n");
   const test = [
     "1. In AICONO EMS eine Automation mit diesem Template anlegen und speichern.",
-    "2. Auf der Miniserver-Kachel das Puzzle-Icon 🧩 klicken → der Baustein muss als 'erkannt' erscheinen.",
+    "2. Auf der Miniserver-Kachel das Puzzle-Icon (Symbol Puzzleteil) klicken -> der Baustein muss als 'erkannt' erscheinen.",
     "3. In Loxone Config im Live-Modus prüfen, ob die gesendeten Werte an den Eingängen ankommen.",
     "4. Ausgangs-Werte (falls vorhanden) sollten in AICONO wieder sichtbar werden.",
     "",
