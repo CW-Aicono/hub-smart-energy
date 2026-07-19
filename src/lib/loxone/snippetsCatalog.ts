@@ -365,6 +365,50 @@ const GENERIC_GROUP_F: LoxoneSnippet[] = [
   ),
 ];
 
+// ── Gruppe G – Erweiterte Steuerung (Compliance & Sicherheit) ──
+const ADVANCED_GROUP_G: LoxoneSnippet[] = [
+  make(
+    "AICO_GridCurtailment14a",
+    "§14a EnWG Netz-Drosselung (SteuVE)",
+    "Gerätescharfe Drosselung nach §14a EnWG für steuerbare Verbrauchseinrichtungen (Wallbox, Wärmepumpe, Speicher). Setzt gesetzlichen Mindestbezug (4,2 kW pro SteuVE) und respektiert Prioritätsliste. Wird durch DSO-Signal oder Cloud-Push ausgelöst.",
+    [
+      { name: "CurtailActive", type: "Digital", min: 0, max: 1, description: "1=Drosselung aktiv (vom Netzbetreiber oder Cloud gesetzt)" },
+      { name: "PrioOverride", type: "Analog", min: 0, max: 999, description: "Prio-Overlay: 3-stellig CP-HP-Batt (Default 123 = CP>HP>Batt)" },
+      { name: "MinKwWallbox", type: "Analog", min: 0, max: 22, unit: "kW", description: "Gesetzl. Mindestleistung Wallbox (kW), default 4.2" },
+      { name: "MinKwHeatPump", type: "Analog", min: 0, max: 22, unit: "kW", description: "Gesetzl. Mindestleistung Wärmepumpe (kW), default 4.2" },
+      { name: "MinKwBattery", type: "Analog", min: 0, max: 22, unit: "kW", description: "Gesetzl. Mindestleistung Speicher-Ladung (kW), default 4.2" },
+      { name: "EnableCurtailment", type: "Digital", min: 0, max: 1, description: "Master-Schalter: 1=aktiv" },
+    ],
+    "Ausgänge: LimitKwWallbox / LimitKwHeatPump / LimitKwBattery -> jeweilige Regler. Cloud pusht CurtailActive + PrioOverride bei §14a-Ereignis.",
+  ),
+  make(
+    "AICO_PeakShavingSoc",
+    "Peak-Shaving mit SoC-Reserve",
+    "Kappt Lastspitzen am Hausanschluss durch Speicher-Entladung. Berücksichtigt SoC-Reserve, Hysterese und Idempotenz (kein Flattern). Bildet die AICONO-Backend-Logik lokal ab, läuft auch bei Cloud-Ausfall.",
+    [
+      { name: "PeakTargetKw", type: "Analog", min: 0, max: 500, unit: "kW", description: "Ziel-Peak in kW (Bezug am Hausanschluss)" },
+      { name: "SocReservePct", type: "Analog", min: 0, max: 100, unit: "%", description: "SoC-Reserve, unterhalb keine Entladung (%)" },
+      { name: "HysteresisKw", type: "Analog", min: 0, max: 20, unit: "kW", description: "Hysterese, um Flattern zu vermeiden (kW)" },
+      { name: "GridImportKw", type: "Analog", min: 0, max: 500, unit: "kW", description: "Aktueller Netzbezug (Eingang von Hausanschluss-Zähler)" },
+      { name: "BatterySoc", type: "Analog", min: 0, max: 100, unit: "%", description: "Aktueller Speicher-SoC (%)" },
+      { name: "EnablePeakShaving", type: "Digital", min: 0, max: 1, description: "Master-Schalter: 1=aktiv" },
+    ],
+    "Ausgang: DischargeKw -> Speicher-Wechselrichter (Ziel-Entladeleistung). Interne Zustandsmaschine mit 30s Mindestlaufzeit gegen Flattern.",
+  ),
+  make(
+    "AICO_DlmFallback",
+    "DLM-Sicherheits-Fallback",
+    "Watchdog für Wallbox-DLM: prüft, ob der Hausanschluss-Messwert aktuell ist (max. 60s alt). Bei stalem Wert wird auf konservativen Fallback-Strom umgeschaltet, um Netz-Überlastung zu verhindern.",
+    [
+      { name: "MeterHeartbeatSec", type: "Analog", min: 1, max: 3600, unit: "s", description: "Sekunden seit letztem Hausanschluss-Update" },
+      { name: "MaxStaleSec", type: "Analog", min: 5, max: 300, unit: "s", description: "Ab dieser Alter (s) gilt Messwert als stale (default 60)" },
+      { name: "FallbackCurrentA", type: "Analog", min: 6, max: 32, unit: "A", description: "Konservativer Ladestrom bei stalem Messwert (A)" },
+      { name: "EnableWatchdog", type: "Digital", min: 0, max: 1, description: "Master-Schalter: 1=aktiv" },
+    ],
+    "Ausgang: FallbackActive (Digital) + SafeCurrentA (Analog) -> überschreibt DLM-Regler. Cloud loggt Fallback-Ereignisse via StatusMirror.",
+  ),
+];
+
 export const SNIPPET_GROUPS: SnippetGroup[] = [
   { key: "A", label: "Gruppe A – E-Mobilität", categories: ["ev"], zipName: "AICONO_Loxone_EV_GroupA.zip", snippets: EV_GROUP_A },
   { key: "B", label: "Gruppe B – Speicher & PV", categories: ["storage", "pv"], zipName: "AICONO_Loxone_StoragePV_GroupB.zip", snippets: STORAGE_PV_GROUP_B },
@@ -372,6 +416,7 @@ export const SNIPPET_GROUPS: SnippetGroup[] = [
   { key: "D", label: "Gruppe D – Komfort & Beschattung", categories: ["comfort"], zipName: "AICONO_Loxone_Comfort_GroupD.zip", snippets: COMFORT_GROUP_D },
   { key: "E", label: "Gruppe E – Sicherheit", categories: ["safety"], zipName: "AICONO_Loxone_Safety_GroupE.zip", snippets: SAFETY_GROUP_E },
   { key: "F", label: "Gruppe F – Baukasten", categories: ["generic"], zipName: "AICONO_Loxone_Toolkit_GroupF.zip", snippets: GENERIC_GROUP_F },
+  { key: "G", label: "Gruppe G – Erweiterte Steuerung", categories: ["advanced"], zipName: "AICONO_Loxone_Advanced_GroupG.zip", snippets: ADVANCED_GROUP_G },
 ];
 
 export const ALL_SNIPPETS: LoxoneSnippet[] = SNIPPET_GROUPS.flatMap((g) => g.snippets);

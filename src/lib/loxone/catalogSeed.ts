@@ -16,13 +16,13 @@ export async function seedRegistryFromSnippets(): Promise<{ inserted: number; to
     for (const s of group.snippets) {
       rows.push({
         template_key: s.templateKey,
-        version: "1.0.0",
+        version: "1.1.0",
         category: primaryCategory,
         title: s.title,
         description: s.description,
         parameters: s.parameters as any,
         min_miniserver_fw: "12.0",
-        changelog: "Initial-Rollout aus Snippet-Bibliothek",
+        changelog: "v1.1.0: Gruppe G (Erweiterte Steuerung) hinzugefügt — GridCurtailment14a, PeakShavingSoc, DlmFallback",
         is_active: true,
       });
     }
