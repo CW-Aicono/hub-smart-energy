@@ -15,15 +15,34 @@ export interface ManualDoc {
   updated_at: string;
 }
 
+export type ManualSection = "purpose" | "wiring" | "test";
+export type ManualImageWidth = "small" | "medium" | "full";
+
+export interface ManualImage {
+  id: string;
+  template_key: string;
+  section: ManualSection;
+  storage_path: string;
+  caption: string | null;
+  width: ManualImageWidth;
+  sort_order: number;
+  /** Signierte URL — muss vom Aufrufer vor generatePdf gesetzt werden. */
+  signed_url?: string | null;
+}
+
 const MARGIN = 15;
 const PAGE_W = 210; // A4 mm
 const PAGE_H = 297;
 const CONTENT_W = PAGE_W - 2 * MARGIN;
 
+const WIDTH_MM: Record<ManualImageWidth, number> = {
+  small: 60,
+  medium: 110,
+  full: CONTENT_W,
+};
+
 /**
  * jsPDF/Helvetica (WinAnsi) kann keine Emojis oder Zeichen außerhalb von Latin-1 rendern.
- * Wir ersetzen bekannte Emojis durch Klartext und strippen den Rest, damit keine
- * kaputten Byte-Sequenzen ("&2&.& &A&u&f& ...") im PDF landen.
  */
 const EMOJI_REPLACEMENTS: Array<[RegExp, string]> = [
   [/🧩/g, "[Puzzle-Icon]"],
@@ -43,12 +62,18 @@ const EMOJI_REPLACEMENTS: Array<[RegExp, string]> = [
 function sanitizeForPdf(text: string): string {
   let out = text || "";
   for (const [re, rep] of EMOJI_REPLACEMENTS) out = out.replace(re, rep);
-  // Alles außerhalb Latin-1 (WinAnsi) durch "?" ersetzen, damit jsPDF nicht scrambled.
   out = out.replace(/[^\x00-\xFF]/g, "?");
   return out;
 }
 
-function renderSection(
+function ensureSpace(doc: jsPDF, cursor: { y: number }, needed: number) {
+  if (cursor.y + needed > PAGE_H - 20) {
+    doc.addPage();
+    cursor.y = MARGIN + 5;
+  }
+}
+
+function renderSectionText(
   doc: jsPDF,
   title: string,
   bodyMd: string,
@@ -71,13 +96,73 @@ function renderSection(
     doc.text(line, MARGIN, cursor.y);
     cursor.y += 5;
   }
-  cursor.y += 4;
+  cursor.y += 3;
 }
 
-function ensureSpace(doc: jsPDF, cursor: { y: number }, needed: number) {
-  if (cursor.y + needed > PAGE_H - 20) {
-    doc.addPage();
-    cursor.y = MARGIN + 5;
+interface LoadedImage {
+  dataUrl: string;
+  format: "PNG" | "JPEG";
+  natW: number;
+  natH: number;
+}
+
+async function loadImage(url: string): Promise<LoadedImage | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+    const dims = await new Promise<{ w: number; h: number }>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+    const mime = (blob.type || "").toLowerCase();
+    const format: "PNG" | "JPEG" =
+      mime.includes("png") || dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+    return { dataUrl, format, natW: dims.w, natH: dims.h };
+  } catch {
+    return null;
+  }
+}
+
+async function renderImagesForSection(
+  doc: jsPDF,
+  images: ManualImage[],
+  cursor: { y: number },
+) {
+  for (const img of images) {
+    if (!img.signed_url) continue;
+    const loaded = await loadImage(img.signed_url);
+    if (!loaded) continue;
+    const wMm = WIDTH_MM[img.width] ?? CONTENT_W;
+    const ratio = loaded.natH / loaded.natW;
+    const hMm = Math.min(wMm * ratio, PAGE_H - 40);
+    ensureSpace(doc, cursor, hMm + (img.caption ? 8 : 4));
+    try {
+      doc.addImage(loaded.dataUrl, loaded.format, MARGIN, cursor.y, wMm, hMm);
+    } catch {
+      continue;
+    }
+    cursor.y += hMm + 2;
+    if (img.caption) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(9);
+      doc.setTextColor(110);
+      const cap = doc.splitTextToSize(sanitizeForPdf(img.caption), CONTENT_W);
+      for (const line of cap) {
+        ensureSpace(doc, cursor, 5);
+        doc.text(line, MARGIN, cursor.y);
+        cursor.y += 4.5;
+      }
+      cursor.y += 2;
+    }
   }
 }
 
@@ -119,7 +204,10 @@ function renderParameterTable(doc: jsPDF, templateKey: string, cursor: { y: numb
   cursor.y += 4;
 }
 
-export function generateManualPdf(manual: ManualDoc): jsPDF {
+export async function generateManualPdf(
+  manual: ManualDoc,
+  images: ManualImage[] = [],
+): Promise<jsPDF> {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
 
   // Header-Band
@@ -149,12 +237,22 @@ export function generateManualPdf(manual: ManualDoc): jsPDF {
   );
   cursor.y += 9;
 
-  renderSection(doc, "Zweck des Bausteins", manual.purpose_md, cursor);
-  renderParameterTable(doc, manual.template_key, cursor);
-  renderSection(doc, "Einrichtung im Miniserver (Verdrahtung)", manual.wiring_md, cursor);
-  renderSection(doc, "Test & Inbetriebnahme", manual.test_md, cursor);
+  const bySection = (sec: ManualSection) =>
+    images
+      .filter((i) => i.section === sec)
+      .sort((a, b) => a.sort_order - b.sort_order);
 
-  // Footer auf jeder Seite
+  renderSectionText(doc, "Zweck des Bausteins", manual.purpose_md, cursor);
+  await renderImagesForSection(doc, bySection("purpose"), cursor);
+
+  renderParameterTable(doc, manual.template_key, cursor);
+
+  renderSectionText(doc, "Einrichtung im Miniserver (Verdrahtung)", manual.wiring_md, cursor);
+  await renderImagesForSection(doc, bySection("wiring"), cursor);
+
+  renderSectionText(doc, "Test & Inbetriebnahme", manual.test_md, cursor);
+  await renderImagesForSection(doc, bySection("test"), cursor);
+
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
     doc.setPage(i);
@@ -170,8 +268,8 @@ export function generateManualPdf(manual: ManualDoc): jsPDF {
   return doc;
 }
 
-export function downloadManualPdf(manual: ManualDoc) {
-  const doc = generateManualPdf(manual);
+export async function downloadManualPdf(manual: ManualDoc, images: ManualImage[] = []) {
+  const doc = await generateManualPdf(manual, images);
   doc.save(`AICONO_${manual.template_key}_v${manual.version}.pdf`);
 }
 
