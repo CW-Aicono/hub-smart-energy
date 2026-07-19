@@ -16,9 +16,13 @@ export async function seedRegistryFromSnippets(): Promise<{ inserted: number; to
     for (const s of group.snippets) {
       rows.push({
         template_key: s.templateKey,
-        version: "1.1.0",
+        version: "1.2.0",
         category: primaryCategory,
         title: s.title,
+        description: s.description,
+        parameters: s.parameters as any,
+        min_miniserver_fw: "12.0",
+        changelog: "v1.2.0: Phase 2–4 hinzugefügt — Gruppen H (ArbitrageDispatch, PeakEventPrecharge), I (GridOperatorSignal, CommunityAllocation), J (Co2LoadShift, StorageArbitrageSoc). Push-Kanal loxone_pending_writes.",
         description: s.description,
         parameters: s.parameters as any,
         min_miniserver_fw: "12.0",
