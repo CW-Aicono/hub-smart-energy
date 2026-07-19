@@ -17,6 +17,7 @@ import { RefreshCw, Puzzle, AlertTriangle, CheckCircle2, DatabaseZap } from "luc
 import { SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCatalog";
 import { seedRegistryFromSnippets } from "@/lib/loxone/catalogSeed";
 import LoxoneMasterProject from "@/components/super-admin/LoxoneMasterProject";
+import LoxoneInjector from "@/components/super-admin/LoxoneInjector";
 
 interface RegistryEntry {
   id: string;
@@ -168,6 +169,7 @@ export default function SuperAdminLoxoneTemplates() {
               <TabsTrigger value="catalog">Katalog</TabsTrigger>
               <TabsTrigger value="health">Health-Report</TabsTrigger>
               <TabsTrigger value="master">Master-Projekt</TabsTrigger>
+              <TabsTrigger value="injector">Injektor</TabsTrigger>
             </TabsList>
 
             <TabsContent value="catalog" className="space-y-4">
@@ -266,6 +268,10 @@ export default function SuperAdminLoxoneTemplates() {
 
             <TabsContent value="master">
               <LoxoneMasterProject />
+            </TabsContent>
+
+            <TabsContent value="injector">
+              <LoxoneInjector />
             </TabsContent>
           </Tabs>
 

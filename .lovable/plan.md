@@ -1,125 +1,103 @@
-# Loxone-Automationen: Umsetzungsplan
+## Ziel
 
-## Verifikation gegen offizielle Loxone-Doku
+Neuer Sub-Tab **„Injektor"** unter `/super-admin/loxone-templates`. Nutzer lädt eine `.Loxone`-Datei (XML) hoch, wählt pro AICO-Baustein die gewünschte Instanz-Anzahl, bekommt eine Vorschau, und lädt eine erweiterte `.Loxone`-Datei herunter. Bestehende Objekte in der Ziel-Datei bleiben **byteidentisch**.
 
-Die Recherche gegen loxone.com/dede/kb bestätigt das Konzept vollständig:
+## Machbarkeit
 
+Ja, vollständig umsetzbar. Die Beispieldatei ist reines UTF-8-XML mit BOM/CRLF. Die beschriebene Python-Referenzlogik lässt sich 1:1 in TypeScript als reine String-/Regex-Verarbeitung im Browser abbilden — kein Backend, kein XML-DOM-Rewrite nötig. Die Datei bleibt clientseitig (kein Upload in die Cloud, kein DSGVO-Risiko).
 
-| Behauptung                                                                                    | Status                              | Quelle                                |
-| --------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------- |
-| Multiplikator-Projekt: eine Datei → Flotten-Deployment via "Miniserver Verwalten"             | ✅ bestätigt                         | kb/multiplikator-projekt              |
-| Nur Miniserver / Go / Compact, kein Gen1                                                      | ✅ bestätigt                         | dito                                  |
-| Nur eine Miniserver-Variante pro Projekt                                                      | ✅ bestätigt                         | dito                                  |
-| Hinzufügen per Netzwerksuche **oder** Remote Connect (externe Adresse)                        | ✅ bestätigt                         | dito                                  |
-| Individuelle Bearbeitung, lila Abweichungs-Markierung, pro-Gerät zurücksetzbar                | ✅ bestätigt                         | dito                                  |
-| Seiten/Geräte auf Teilmenge beschränkbar                                                      | ✅ bestätigt                         | dito                                  |
-| Erst-Login mit bestehenden Credentials, danach Überschreibung durch zentrale User             | ✅ bestätigt                         | dito                                  |
-| Seriennummer = MAC ohne Doppelpunkte (OUI `504F94…`)                                          | ✅ bestätigt                         | kb/remote-connect                     |
-| WS-API `jdev/sps/io/<uuid>/…` nur read/write auf existierende Objekte, keine Strukturänderung | ✅ bestätigt                         | Communicating-with-the-Miniserver.pdf |
-| Remote Connect ohne Portforwarding                                                            | ✅ bestätigt                         | kb/remote-connect                     |
-| Failsafe lokal am Miniserver, kein AICONO-Hub vor Ort nötig                                   | ✅ konsistent mit Loxone-Kernprinzip | &nbsp;                                |
+## Architektur
 
+Alles clientseitig in React/TS. Keine neuen Tabellen, keine Edge Function.
 
-**Ein offener Punkt** (Konzept-Abschnitt 3.3): Ob **pro Miniserver individuelle Zugangsdaten** als lila Abweichung vom Grundprogramm dauerhaft bestehen bleiben, ist offiziell nicht dokumentiert. Loxone empfiehlt für flottenübergreifende Benutzerverwaltung stattdessen das **Trust-System** (Zitat KB: „Alle lokalen Benutzer können durch Trust Benutzer ersetzt werden" / „Der Trust Manager darf nicht Teil des Multiplikator-Projekts sein"). Muss vor Rollout praktisch getestet werden.
+```text
+Super-Admin
+└── Loxone-Templates
+    ├── Katalog (bestehend)
+    ├── Health-Report (bestehend)
+    ├── Master-Projekt (bestehend)
+    └── Injektor  ← NEU
+         │
+         ├── 1. Bibliothek (AICONO_Master.Loxone)
+         │      Quelle A: aus Storage-Bucket "loxone-master"
+         │                (neueste Version automatisch)
+         │      Quelle B: optionaler manueller Upload (Override)
+         │
+         ├── 2. Ziel-Datei Upload (.Loxone)
+         │
+         ├── 3. Auto-Scan
+         │      → erkennt alle "AICO_*__1__"-Präfixe in Bibliothek
+         │      → erkennt bereits vorhandene Instanzen in Ziel-Datei
+         │      → zeigt Formular: pro Baustein-Typ Zähler (0–N)
+         │
+         ├── 4. Vorschau
+         │      → "AICO_GridProtect: fügt Instanz 2, 3 hinzu (9 Objekte je Instanz)"
+         │      → Warnung bei Kollision
+         │
+         ├── 5. Verarbeitung + Validierung
+         │      → UUID-Eindeutigkeit prüfen
+         │      → XML-Wohlgeformtheit prüfen (DOMParser)
+         │      → Byte-Diff gegen Original (alles außerhalb neuer Blöcke identisch)
+         │
+         └── 6. Download
+                Kundenprojekt_erweitert_YYYY-MM-DD.Loxone
+                + Validierungs-Report (.txt)
+```
 
-**Exosphere**: laut KB nur Monitoring/Analytics-Layer, **kein** Ersatz für Multiplikator und **kein** dokumentiertes Credential-/Firmware-Management. Für unseren Zweck nicht relevant.
+## Kern-Modul: `src/lib/loxone/injector.ts`
 
-**Fazit:** Konzept ist technisch tragfähig und funktioniert ohne AICONO-Hardware vor Ort.
+Reine TypeScript-Portierung der Python-Referenz. Keine Framework-Abhängigkeiten, damit unit-testbar.
 
----
+Öffentliche API:
 
-## Umsetzungsplan
+```ts
+scanLibrary(xml: string): TemplateType[]         // findet AICO_*__1__-Blöcke
+scanTarget(xml: string): Map<string, number[]>   // welche Instanzen schon da sind
+planInjection(target, lib, wishes): InjectionPlan
+executeInjection(target, plan): { xml, report }
+validate(xml): { ok, errors }
+```
 
-### Phase 0 – Aufräumen im bestehenden Code (halber Tag)
+Die Traversal-Logik (transitiv über `<In Input="UUID"/>` alle abhängigen Objekte einsammeln, referenzierte-aber-nicht-instanz-spezifische Objekte NICHT mitkopieren) wird 1:1 aus `loxone_duplicate_instance.py` übernommen. UUID-Generierung im Loxone-Format `xxxxxxxx-xxxx-xxxx-xxxxxxxxxxxxxxxx`.
 
-Aktuell verspricht die App Dinge, die es so nicht gibt (XML-Import-Snippets, Discovery ohne installiertes Template):
+**Wichtig:** Verarbeitung als String-Splicing, damit CRLF/BOM/Whitespace des Originals byteweise erhalten bleibt. Neue Blöcke werden direkt hinter den `__1__`-Original-Blöcken eingefügt.
 
-- **Karte „Loxone-Templates"** auf der Location-Detailseite: reduzieren auf einen **read-only Status-Chip** in der Miniserver-Integrationskachel („12 AICO-Bausteine erkannt · zuletzt vor 3 min").
-- **Puzzle-Icon** auf der Miniserver-Kachel bleibt der einzige Auslöser für den Discovery-Scan.
-- **Snippet-Pakete-Download / ZIP-Downloads** aus Karte + Super-Admin **entfernen** (funktionieren nicht — es gibt keinen Import-Mechanismus in Loxone Config).
-- **Word-Doku** `AICONO_Loxone_Einrichtung_v1.0.docx` als **veraltet** kennzeichnen (nicht löschen, damit bestehende Links nicht brechen — neue Doku ersetzt sie in Phase 4).
-- `snippetsCatalog.ts` + `snippetDownload.ts` als deprecated markieren, aber vorerst im Code lassen (Discovery/Registry-Keys werden weiterverwendet).
+## UI-Komponente
 
-### Phase 1 – Multiplikator-Projekt aufsetzen (intern, kein Code)
+`src/components/super-admin/LoxoneInjector.tsx` — eingebunden als 4. Tab in der bestehenden Loxone-Templates-Seite.
 
-Einmalige, manuelle Arbeit im Loxone Config:
+- Datei-Upload via `<input type="file" accept=".Loxone">`
+- Bibliothek wird per `supabase.storage.from("loxone-master").download(...)` geladen (neueste Version, wie im bestehenden `LoxoneMasterProject.tsx`)
+- Fallback: manueller Upload einer alternativen Bibliothek
+- Formular mit Nummer-Inputs pro erkanntem Baustein-Typ
+- Vorschau-Card
+- Prominenter Warn-Alert: „Vor Kunden-Rollout auf Test-Miniserver verifizieren."
+- Download-Button erst aktiv nach erfolgreicher Validierung
 
-1. Neues Projekt „AICONO_MASTER_Go_v1" anlegen (Miniserver-Variante: **Go**).
-2. Alle bereits spezifizierten AICO-Bausteine (`AICO_GridProtect`, `AICO_WindStormProtect`) als **virtuelle Eingänge + Logik** in der Grundprogrammierung anlegen — strikt gemäß Namensschema `AICO_<TemplateKey>__<Instanz>__<Parameter>`.
-3. Speichern als Master-Datei im Super-Admin-Storage-Bucket `loxone-master` (Upload-UI existiert bereits: `src/components/super-admin/LoxoneMasterProject.tsx`).
-4. **Kritischer Vorab-Test** (offener Punkt 3.3): Auf einem Test-Miniserver einen individuellen User `aicono-worker` mit Gerät-spezifischem Passwort als lila Abweichung setzen, dann Multiplikator erneut deployen und prüfen, ob die Abweichung erhalten bleibt. Falls **nein** → Trust-System evaluieren, bevor produktiv ausgerollt wird.
+## Sicherheitsregeln (hart durchgesetzt)
 
-### Phase 2 – Discovery-Pfad korrekt an LoxAPP3.json ausrichten (1–2 Tage Code)
+1. **Kein Silent-Overwrite:** bei existierender Instanz-Nummer → Fehlermeldung, kein Download.
+2. **Kein Download bei fehlgeschlagener Validierung** (UUID-Kollision oder XML-Fehler).
+3. **Byte-Diff-Check:** Original-Zeilen außerhalb neuer Blöcke müssen identisch sein — sonst Abbruch.
+4. **Nur Super-Admin** (via `useSuperAdmin`) sieht den Tab.
 
-Bereits weitgehend implementiert, aber verifiziert werden muss:
+## Nicht-Ziele (bewusst V1)
 
-- `supabase/functions/loxone-template-sync/index.ts`: Discovery liest LoxAPP3.json über den bestehenden Remote-Connect-Resolver (jüngster Fix aus dieser Session), sucht nach Controls, deren Name mit `AICO_` beginnt, parst `<TemplateKey>__<Instanz>__<Parameter>` und schreibt Instanzen + UUIDs nach `location_loxone_templates` (Tabelle existiert).
-- Registry-Einträge (`loxone_template_registry`) auf den finalen Satz der Bausteine reduzieren, die tatsächlich im Master-Projekt existieren (aktuell 24 Katalog-Einträge sind Wunschzustand, real gebaut sind erst 2).
-- Fehlerfall „keine AICO_-Bausteine gefunden" mit klarer Nutzermeldung: „Auf diesem Miniserver ist noch kein AICONO-Master-Programm installiert. Bitte über die Loxone Config den Miniserver in das Multiplikator-Projekt aufnehmen."
+- Kein Upload auf Miniserver (bleibt manuell in Loxone Config)
+- Keine per-Instanz-Parameterwerte im Formular (kommt evtl. in V2)
+- Keine neue Automatisierungslogik — reine Vervielfältigung
 
-### Phase 3 – Automation-Builder auf real vorhandene Templates begrenzen (1 Tag Code)
+## Tests
 
-`AutomationRuleBuilder.tsx` filtert bereits auf installierte Templates. Ergänzen:
+`src/lib/loxone/__tests__/injector.test.ts` mit der hochgeladenen `AICONO_Master.Loxone` als Fixture:
 
-- Wenn für die Location noch keine Template-Instanzen erkannt wurden → Builder zeigt statt „Neu scannen"-Hinweis den **klaren Text**: „Auf diesem Miniserver ist noch kein AICONO-Baustein installiert. Bitte über euren AICONO-Ansprechpartner (bzw. das interne Multiplikator-Projekt) einspielen lassen."
-- Kein „Puzzle-Icon" oder „Snippet-Download" mehr vorschlagen — der Kunde kann das nicht selbst installieren.
+- Erkennt korrekt alle `AICO_*__1__`-Bausteine
+- Fügt Instanz 2 hinzu, alle UUIDs neu und eindeutig
+- Original-Bytes außerhalb der Ergänzung unverändert (Diff-Test)
+- Ausgabe ist wohlgeformtes XML
 
-### Phase 4 – Neue Doku für Laien (halber Tag)
+## Offene Frage
 
-Neue Word-Datei `AICONO_Loxone_Rollout_v2.0.docx` — **interne** Anleitung (nicht für Endkunden), Zielgruppe: unser Techniker / Partner mit Loxone-Config-Kenntnis:
-
-1. Kunden-Miniserver in AICONO anlegen (Integrationen → Loxone Miniserver Go).
-2. Seriennummer + aktuelle Zugangsdaten notieren.
-3. Multiplikator-Projekt `AICONO_MASTER_Go_v1` in Loxone Config öffnen → „Miniserver Verwalten" → Miniserver manuell per Remote Connect hinzufügen → aktuelle Zugangsdaten eintragen.
-4. „In alle Miniserver speichern" → Wartungsfenster ca. 30–60 s pro Gerät (Neustart).
-5. In AICONO-App: Location öffnen → auf Miniserver-Kachel „AICO-Bausteine scannen" → sollte alle Instanzen zeigen.
-6. Fehlerfälle (falscher User, Miniserver offline, Firmware-Mismatch) + Lösungen.
-
-### Phase 5 – Migration der 3 Bestandskunden (koordiniert, kein reiner Code)
-
-1. Snapshot des jeweiligen Kunden-Projekts sichern.
-2. Kunde in das Multiplikator-Projekt aufnehmen; **individuelle Zusatz-Programmierung des Kunden** als lila Abweichung erhalten.
-3. Wartungsfenster mit Kunde absprechen (Neustart 20–40 s).
-4. Nach Deployment: Discovery-Scan in AICONO, Sichtprüfung der erkannten Bausteine.
-
-### Phase 6 – Fachspezifikation der offenen ~22 Bausteine (extern zu diesem Plan)
-
-Kein Code-Aufwand aus diesem Plan — reine Fachspezifikation, die dann jeweils als zusätzliche Bausteine ins Multiplikator-Projekt einfließen und nach Deployment automatisch von der bestehenden Discovery erkannt werden. Kein weiterer Cloud-Code nötig.
-
----
-
-## Technische Details
-
-**Betroffene Dateien (Phase 0–3):**
-
-- `src/components/locations/LoxoneTemplatesCard.tsx` — reduzieren oder in Miniserver-Kachel integrieren
-- `src/components/integrations/IntegrationCard.tsx` — Status-Chip + Scan-Button (bleibt)
-- `src/components/locations/AutomationRuleBuilder.tsx` — Fehlermeldung anpassen
-- `src/pages/Integrations.tsx` — Hinweistext („Snippet-Pakete" → weg)
-- `src/components/super-admin/LoxoneMasterProject.tsx` — bleibt, ist der richtige Ort
-- `src/lib/loxone/snippetsCatalog.ts`, `src/lib/loxone/snippetDownload.ts` — als deprecated markieren
-- `supabase/functions/loxone-template-sync/index.ts` — Fehlermeldungen präzisieren, ansonsten unverändert
-- `docs/loxone-ws-worker/index.ts` — **unverändert** (Worker ist produktiv und korrekt)
-
-**Was nicht geändert wird:**
-
-- DB-Schema (`location_loxone_templates`, `loxone_template_registry`) bleibt.
-- Worker-Code, Remote-Connect-Auflösung, WebSocket-Auth bleiben.
-- Super-Admin `LoxoneMasterProject`-Upload bleibt (ist genau der richtige Ort für die Multiplikator-Datei).
-
-## Aufwand
-
-- Phase 0–3 (Code): **2–3 Tage**
-- Phase 1 (Master-Projekt bauen in Loxone Config): **0,5–1 Tag** — nicht Lovable
-- Phase 4 (Doku): **0,5 Tag**
-- Phase 5 (Migration Bestandskunden): pro Kunde **~30 min** + Wartungsfenster
-- Phase 6 (22 Bausteine spezifizieren): extern, nicht Teil dieses Plans
-
-## Voraussetzungen vor Umsetzung
-
-1. **Test von Punkt 3.3** durch dich (individuelle User als Abweichung): entscheidet, ob wir mit Multiplikator-User arbeiten oder Trust-System dazu nehmen müssen.
-2. Freigabe, dass Snippet-Download/XML-Doku aus der App entfernt werden darf.
-
-Sobald das geklärt ist, kann Phase 0–3 direkt umgesetzt werden.  
+Die hochgeladene Beispieldatei „AICONO_Master_v1.0" — soll die als **initiale Bibliothek** in den Storage-Bucket `loxone-master` gelegt werden (falls noch nicht vorhanden), damit der Injektor sofort einsatzbereit ist? Oder ist sie nur als Referenz für die XML-Struktur gedacht?  
   
-Antwort: Wir arbeiten mit Multiplikator-User. Bitte jetzt den Plan so umsetzen
+Die hochgeladene Datei diente lediglich als Referenz.
