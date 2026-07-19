@@ -20,6 +20,34 @@ const PAGE_W = 210; // A4 mm
 const PAGE_H = 297;
 const CONTENT_W = PAGE_W - 2 * MARGIN;
 
+/**
+ * jsPDF/Helvetica (WinAnsi) kann keine Emojis oder Zeichen außerhalb von Latin-1 rendern.
+ * Wir ersetzen bekannte Emojis durch Klartext und strippen den Rest, damit keine
+ * kaputten Byte-Sequenzen ("&2&.& &A&u&f& ...") im PDF landen.
+ */
+const EMOJI_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/🧩/g, "[Puzzle-Icon]"],
+  [/📄/g, "[PDF-Icon]"],
+  [/🔄/g, "[Neu-Scannen-Icon]"],
+  [/✅/g, "[OK]"],
+  [/❌/g, "[Fehler]"],
+  [/⚠️?/g, "[Achtung]"],
+  [/→/g, "->"],
+  [/←/g, "<-"],
+  [/–/g, "-"],
+  [/—/g, "-"],
+  [/„|"/g, '"'],
+  [/'|'/g, "'"],
+];
+
+function sanitizeForPdf(text: string): string {
+  let out = text || "";
+  for (const [re, rep] of EMOJI_REPLACEMENTS) out = out.replace(re, rep);
+  // Alles außerhalb Latin-1 (WinAnsi) durch "?" ersetzen, damit jsPDF nicht scrambled.
+  out = out.replace(/[^\x00-\xFF]/g, "?");
+  return out;
+}
+
 function renderSection(
   doc: jsPDF,
   title: string,
@@ -30,13 +58,13 @@ function renderSection(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
   doc.setTextColor(20, 40, 90);
-  doc.text(title, MARGIN, cursor.y);
+  doc.text(sanitizeForPdf(title), MARGIN, cursor.y);
   cursor.y += 6;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
   doc.setTextColor(30, 30, 30);
-  const text = (bodyMd || "—").trim();
+  const text = sanitizeForPdf((bodyMd || "—").trim());
   const lines = doc.splitTextToSize(text, CONTENT_W);
   for (const line of lines) {
     ensureSpace(doc, cursor, 6);
@@ -80,11 +108,11 @@ function renderParameterTable(doc: jsPDF, templateKey: string, cursor: { y: numb
   doc.setFontSize(9.5);
   doc.setTextColor(30, 30, 30);
   for (const p of snippet.parameters) {
-    const descLines = doc.splitTextToSize(p.description || "", CONTENT_W - 75);
+    const descLines = doc.splitTextToSize(sanitizeForPdf(p.description || ""), CONTENT_W - 75);
     const rowH = Math.max(5, descLines.length * 4.5);
     ensureSpace(doc, cursor, rowH + 2);
-    doc.text(p.name, colX[0], cursor.y);
-    doc.text(p.type, colX[1], cursor.y);
+    doc.text(sanitizeForPdf(p.name), colX[0], cursor.y);
+    doc.text(sanitizeForPdf(p.type), colX[1], cursor.y);
     doc.text(descLines, colX[2], cursor.y);
     cursor.y += rowH + 1;
   }
@@ -109,7 +137,7 @@ export function generateManualPdf(manual: ManualDoc): jsPDF {
   doc.setTextColor(20, 40, 90);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
-  doc.text(manual.title, MARGIN, cursor.y);
+  doc.text(sanitizeForPdf(manual.title), MARGIN, cursor.y);
   cursor.y += 7;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9.5);
@@ -166,7 +194,7 @@ export function buildManualSkeleton(templateKey: string): Omit<ManualDoc, "updat
   ].join("\n");
   const test = [
     "1. In AICONO EMS eine Automation mit diesem Template anlegen und speichern.",
-    "2. Auf der Miniserver-Kachel das Puzzle-Icon 🧩 klicken → der Baustein muss als 'erkannt' erscheinen.",
+    "2. Auf der Miniserver-Kachel das Puzzle-Icon (Symbol Puzzleteil) klicken -> der Baustein muss als 'erkannt' erscheinen.",
     "3. In Loxone Config im Live-Modus prüfen, ob die gesendeten Werte an den Eingängen ankommen.",
     "4. Ausgangs-Werte (falls vorhanden) sollten in AICONO wieder sichtbar werden.",
     "",
