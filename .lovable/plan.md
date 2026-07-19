@@ -1,5 +1,8 @@
 # Erweiterung der Loxone-Steuerung: 9 neue AICO-Bausteine
 
+**Status:** Phasen 1–4 umgesetzt (Katalog v1.2.0, Push-Kanal `loxone_pending_writes`, Edge Function `loxone-parameter-push`, Worker v1.4).
+
+
 ## Ausgangslage
 
 Der aktuelle Loxone-Katalog (Gruppen A–F, 24+ Bausteine) deckt Basisfälle ab: Wallbox-DLM, PV-Überschussladen, statischer Tarif-Deckel, generisches Peak-Shaving, Speicher-Fahrplan, Netzschutz, Heizung/Komfort. Die Analyse der AICONO-Backend-Logik zeigt **7 substantielle Lücken**, bei denen AICONO heute serverseitig steuert oder empfiehlt, ohne dass Loxone lokal mitlaufen kann.
