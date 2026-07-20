@@ -8,8 +8,9 @@ import { useLocations } from "@/hooks/useLocations";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { useTenant } from "@/hooks/useTenant";
 import { useLoxoneSensorsMulti, LoxoneSensor } from "@/hooks/useLoxoneSensors";
+import { useInstalledTemplatesMulti } from "@/hooks/useInstalledTemplatesMulti";
 import { supabase } from "@/integrations/supabase/client";
-import { AutomationRuleBuilder, AutomationRuleData, GatewayOption } from "@/components/locations/AutomationRuleBuilder";
+import { AutomationRuleBuilder, AutomationRuleData, GatewayOption, CrossLocationTarget } from "@/components/locations/AutomationRuleBuilder";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -152,6 +153,29 @@ const Automation = () => {
 
   const sensorsLoading = sensorQueries.some((q) => q.isLoading);
 
+  // ── Installed AICO_-Templates aggregated across ALL locations (MLA template mode) ──
+  const allLocationIds = useMemo(() => locations.map((l) => l.id), [locations]);
+  const {
+    installedTemplates: mlaInstalledTemplates,
+    availabilityByKey: mlaTemplateAvailability,
+  } = useInstalledTemplatesMulti(allLocationIds);
+
+  const crossLocationTargets: CrossLocationTarget[] = useMemo(() => {
+    const byLoc = new Map<string, { locationName: string; locationIntegrationId: string }>();
+    for (const g of gateways) {
+      if (!g.isEnabled) continue;
+      if (g.type !== "loxone_miniserver" && g.type !== "loxone_miniserver_go") continue;
+      if (!byLoc.has(g.locationId)) {
+        byLoc.set(g.locationId, { locationName: g.locationName, locationIntegrationId: g.locationIntegrationId });
+      }
+    }
+    return Array.from(byLoc.entries()).map(([locationId, v]) => ({
+      locationId,
+      locationIntegrationId: v.locationIntegrationId,
+      locationName: v.locationName,
+    }));
+  }, [gateways]);
+
   // Filters
   const [filterLocation, setFilterLocation] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
@@ -210,30 +234,138 @@ const Automation = () => {
     setRuleBuilderOpen(true);
   };
 
+  /**
+   * Push aktueller Template-Parameter parallel an alle Ziel-Miniserver
+   * über die `loxone_pending_writes`-Warteschlange (Worker v1.4).
+   */
+  const pushTemplateParams = async (params: {
+    tenantId: string;
+    templateKey: string;
+    instanceIdStr: string | null;
+    bindings: Record<string, string | number | boolean> | null;
+    targets: Array<{ locationId: string; locationIntegrationId: string; locationName: string }>;
+    parametersMeta: Array<{ name: string; key?: string; type: string }>;
+  }) => {
+    if (!params.bindings || Object.keys(params.bindings).length === 0) return { ok: 0, failed: 0 };
+    const instance = params.instanceIdStr ? Number(params.instanceIdStr) : 1;
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+    const results = await Promise.all(
+      params.targets.map(async (tgt) => {
+        const rows = Object.entries(params.bindings!).map(([paramName, val]) => {
+          const meta = params.parametersMeta.find((p) => (p.name ?? p.key) === paramName);
+          const isDigital = meta?.type === "Digital";
+          return {
+            tenant_id: params.tenantId,
+            location_integration_id: tgt.locationIntegrationId,
+            template_key: params.templateKey,
+            instance: Number.isFinite(instance) ? instance : 1,
+            parameter: paramName,
+            value_num: isDigital ? null : (typeof val === "number" ? val : Number(val)),
+            value_bool: isDigital ? (val === true || val === "1" || val === "true") : null,
+            source: "mla_ui",
+            priority: 5,
+            status: "queued",
+            expires_at: expiresAt,
+          };
+        });
+        const { error } = await supabase.from("loxone_pending_writes").insert(rows);
+        return { locationName: tgt.locationName, ok: !error, error: error?.message };
+      }),
+    );
+    const ok = results.filter((r) => r.ok).length;
+    const failed = results.length - ok;
+    return { ok, failed, results };
+  };
+
   const handleSaveRule = async (data: AutomationRuleData) => {
-    if (!editTarget) {
-      toast.info("Bitte erstellen Sie neue Regeln über die Standort-Detailseite.");
-      return;
-    }
+    if (!tenant?.id) throw new Error("Kein Mandant");
     const primary = data.actions[0];
+    const isTemplate = !!data.loxone_template_key && data.execution_mode !== "cloud";
+
     if (editTarget) {
       const { error } = await updateAutomation(editTarget.id, {
         name: data.name,
         description: data.description || undefined,
-        actuator_uuid: primary.actuator_uuid,
-        actuator_name: primary.actuator_name,
-        actuator_control_type: primary.control_type,
-        action_type: primary.action_type === "pulse" ? "pulse" : "command",
-        action_value: primary.action_value || primary.action_type,
+        ...(primary ? {
+          actuator_uuid: primary.actuator_uuid,
+          actuator_name: primary.actuator_name,
+          actuator_control_type: primary.control_type,
+          action_type: primary.action_type === "pulse" ? "pulse" : "command",
+          action_value: primary.action_value || primary.action_type,
+        } : {}),
         conditions: data.conditions,
         actions: data.actions,
         logic_operator: data.logic_operator,
         is_active: data.is_active,
+        execution_mode: data.execution_mode,
+        loxone_template_key: data.loxone_template_key,
+        loxone_template_instance_id: data.loxone_template_instance_id,
+        loxone_template_bindings: data.loxone_template_bindings,
+        target_location_ids: data.target_location_ids,
       });
       if (error) throw error;
       toast.success(T("automation.updated"));
     } else {
-      toast.info("Bitte erstellen Sie neue Regeln über die Standort-Detailseite.");
+      // NEW: Cross-Location Template-Automation
+      if (!isTemplate) {
+        toast.info("Neue Nicht-Template-Automationen bitte weiterhin über die Standort-Detailseite anlegen.");
+        return;
+      }
+      const targetIds = data.target_location_ids ?? [];
+      if (targetIds.length === 0) {
+        toast.error("Bitte mindestens einen Ziel-Standort auswählen");
+        return;
+      }
+      // Primary location/integration = first target
+      const primaryTarget = crossLocationTargets.find((t) => t.locationId === targetIds[0]);
+      if (!primaryTarget) {
+        toast.error("Ziel-Standort nicht gefunden");
+        return;
+      }
+      const tplMeta = mlaInstalledTemplates.find(
+        (t) => t.template_key === data.loxone_template_key && (t.instance_id ?? "") === (data.loxone_template_instance_id ?? ""),
+      );
+
+      const { error: insError } = await supabase.from("location_automations").insert({
+        tenant_id: tenant.id,
+        location_id: primaryTarget.locationId,
+        location_integration_id: primaryTarget.locationIntegrationId,
+        scope_type: "cross_location",
+        target_location_ids: targetIds,
+        name: data.name,
+        description: data.description || null,
+        actuator_uuid: data.loxone_template_key!,
+        actuator_name: tplMeta?.title || data.loxone_template_key!,
+        actuator_control_type: "loxone_template",
+        action_type: "template_push",
+        action_value: null,
+        conditions: data.conditions as any,
+        actions: data.actions as any,
+        logic_operator: data.logic_operator,
+        is_active: data.is_active,
+        execution_mode: data.execution_mode,
+        loxone_template_key: data.loxone_template_key,
+        loxone_template_instance_id: data.loxone_template_instance_id,
+        loxone_template_bindings: (data.loxone_template_bindings ?? {}) as any,
+      });
+      if (insError) throw insError;
+
+      // Push parameters to all target miniservers in parallel
+      const targets = crossLocationTargets.filter((t) => targetIds.includes(t.locationId));
+      const pushRes = await pushTemplateParams({
+        tenantId: tenant.id,
+        templateKey: data.loxone_template_key!,
+        instanceIdStr: data.loxone_template_instance_id ?? null,
+        bindings: data.loxone_template_bindings ?? null,
+        targets,
+        parametersMeta: tplMeta?.parameters ?? [],
+      });
+
+      toast.success(
+        `Automation angelegt · Push an ${pushRes.ok}/${targets.length} Standort(e)${pushRes.failed > 0 ? ` (${pushRes.failed} Fehler)` : ""}`,
+      );
+      await refetch();
     }
   };
 
@@ -689,6 +821,15 @@ const Automation = () => {
         sensors={allSensors}
         sensorsLoading={sensorsLoading}
         gatewayOptions={gatewayOptionsForBuilder.length > 0 ? gatewayOptionsForBuilder : undefined}
+        installedTemplates={mlaInstalledTemplates}
+        crossLocationTargets={crossLocationTargets}
+        templateAvailability={(() => {
+          const m = new Map<string, Set<string>>();
+          mlaTemplateAvailability.forEach((bindings, key) => {
+            m.set(key, new Set(bindings.map((b) => b.locationId)));
+          });
+          return m;
+        })()}
         initialData={editTarget ? {
           name: editTarget.name,
           description: editTarget.description || "",
@@ -696,6 +837,11 @@ const Automation = () => {
           actions: editTarget.actions,
           logic_operator: editTarget.logic_operator,
           is_active: editTarget.is_active,
+          execution_mode: (editTarget as any).execution_mode as any,
+          loxone_template_key: (editTarget as any).loxone_template_key ?? null,
+          loxone_template_instance_id: (editTarget as any).loxone_template_instance_id ?? null,
+          loxone_template_bindings: (editTarget as any).loxone_template_bindings ?? null,
+          target_location_ids: editTarget.target_location_ids,
         } : undefined}
         onSave={handleSaveRule}
         isEdit={!!editTarget}
