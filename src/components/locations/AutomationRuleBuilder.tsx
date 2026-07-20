@@ -813,6 +813,15 @@ export function AutomationRuleBuilder({
   const selectedInstalledTemplate = installedTemplates?.find(
     (t) => t.template_key === templateKey && (t.instance_id ?? "") === (templateInstance ?? ""),
   );
+  const templateRequiresCloud = isCloudRequiredTemplate(templateKey);
+
+  // Auto-Korrektur: Cloud-abhängige Bausteine dürfen nicht "loxone_local" laufen
+  useEffect(() => {
+    if (templateRequiresCloud && executionMode === "loxone_local") {
+      setExecutionMode("hybrid");
+    }
+  }, [templateRequiresCloud, executionMode]);
+
 
   const handleSave = async () => {
     if (!name.trim()) { toast.error("Name ist erforderlich"); return; }
