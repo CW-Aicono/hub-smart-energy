@@ -153,6 +153,29 @@ const Automation = () => {
 
   const sensorsLoading = sensorQueries.some((q) => q.isLoading);
 
+  // ── Installed AICO_-Templates aggregated across ALL locations (MLA template mode) ──
+  const allLocationIds = useMemo(() => locations.map((l) => l.id), [locations]);
+  const {
+    installedTemplates: mlaInstalledTemplates,
+    availabilityByKey: mlaTemplateAvailability,
+  } = useInstalledTemplatesMulti(allLocationIds);
+
+  const crossLocationTargets: CrossLocationTarget[] = useMemo(() => {
+    const byLoc = new Map<string, { locationName: string; locationIntegrationId: string }>();
+    for (const g of gateways) {
+      if (!g.isEnabled) continue;
+      if (g.type !== "loxone_miniserver" && g.type !== "loxone_miniserver_go") continue;
+      if (!byLoc.has(g.locationId)) {
+        byLoc.set(g.locationId, { locationName: g.locationName, locationIntegrationId: g.locationIntegrationId });
+      }
+    }
+    return Array.from(byLoc.entries()).map(([locationId, v]) => ({
+      locationId,
+      locationIntegrationId: v.locationIntegrationId,
+      locationName: v.locationName,
+    }));
+  }, [gateways]);
+
   // Filters
   const [filterLocation, setFilterLocation] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
