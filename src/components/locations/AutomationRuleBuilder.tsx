@@ -1098,6 +1098,59 @@ export function AutomationRuleBuilder({
                           </p>
                         </div>
                       )}
+
+                      {isMlaMode && crossLocationTargets && (
+                        <div className="space-y-2 pt-2 border-t border-primary/20">
+                          <Label className="text-xs flex items-center gap-1">
+                            <Building2 className="h-3 w-3" />
+                            Ziel-Standorte
+                          </Label>
+                          <div className="space-y-1.5 max-h-56 overflow-y-auto rounded-md border p-2 bg-background">
+                            {crossLocationTargets.map((tgt) => {
+                              const availSet = templateAvailability?.get(`${templateKey}::${templateInstance ?? ""}`);
+                              const isInstalled = !templateKey || !availSet || availSet.has(tgt.locationId);
+                              const isChecked = targetLocationIds.includes(tgt.locationId);
+                              return (
+                                <label
+                                  key={tgt.locationId}
+                                  className={`flex items-center gap-2 text-xs cursor-pointer rounded px-1.5 py-1 hover:bg-muted/50 ${
+                                    !isInstalled ? "opacity-60" : ""
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    disabled={!isInstalled}
+                                    onChange={(e) => {
+                                      setTargetLocationIds((prev) =>
+                                        e.target.checked
+                                          ? [...prev, tgt.locationId]
+                                          : prev.filter((id) => id !== tgt.locationId),
+                                      );
+                                    }}
+                                    className="h-3.5 w-3.5"
+                                  />
+                                  <span className="flex-1 truncate">{tgt.locationName}</span>
+                                  {isInstalled ? (
+                                    <Badge variant="outline" className="text-[9px] border-emerald-500/40 text-emerald-700 dark:text-emerald-400">
+                                      installiert
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-700 dark:text-amber-400">
+                                      Baustein fehlt
+                                    </Badge>
+                                  )}
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            Die Werte werden beim Speichern an alle ausgewählten Miniserver gepusht.
+                            Standorte ohne Baustein können später über die Standort-Detailseite
+                            per Puzzle-Icon 🧩 nachinstalliert werden.
+                          </p>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
