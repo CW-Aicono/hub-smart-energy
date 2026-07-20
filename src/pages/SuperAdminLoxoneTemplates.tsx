@@ -146,7 +146,7 @@ export default function SuperAdminLoxoneTemplates() {
                 onClick={async () => {
                   try {
                     const res = await seedRegistryFromSnippets();
-                    toast({ title: "Katalog befüllt", description: `${res.total} Templates upserted.` });
+                    toast({ title: "Katalog befüllt", description: `${res.total} aktuelle Bausteine (v1.2.0) upserted, ${res.deactivated} veraltete Versionen deaktiviert.` });
                     await load();
                   } catch (e: any) {
                     toast({ title: "Fehler", description: e.message ?? String(e), variant: "destructive" });
