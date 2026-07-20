@@ -821,6 +821,9 @@ const Automation = () => {
         sensors={allSensors}
         sensorsLoading={sensorsLoading}
         gatewayOptions={gatewayOptionsForBuilder.length > 0 ? gatewayOptionsForBuilder : undefined}
+        installedTemplates={mlaInstalledTemplates}
+        crossLocationTargets={crossLocationTargets}
+        templateAvailability={mlaTemplateAvailability}
         initialData={editTarget ? {
           name: editTarget.name,
           description: editTarget.description || "",
@@ -828,6 +831,11 @@ const Automation = () => {
           actions: editTarget.actions,
           logic_operator: editTarget.logic_operator,
           is_active: editTarget.is_active,
+          execution_mode: (editTarget as any).execution_mode as any,
+          loxone_template_key: (editTarget as any).loxone_template_key ?? null,
+          loxone_template_instance_id: (editTarget as any).loxone_template_instance_id ?? null,
+          loxone_template_bindings: (editTarget as any).loxone_template_bindings ?? null,
+          target_location_ids: editTarget.target_location_ids,
         } : undefined}
         onSave={handleSaveRule}
         isEdit={!!editTarget}
