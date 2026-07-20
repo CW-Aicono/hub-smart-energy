@@ -523,3 +523,22 @@ export const SNIPPET_BY_KEY: Record<string, LoxoneSnippet> = Object.fromEntries(
 export const GROUP_BY_TEMPLATE_KEY: Record<string, SnippetGroup> = Object.fromEntries(
   SNIPPET_GROUPS.flatMap((g) => g.snippets.map((s) => [s.templateKey, g])),
 );
+
+/**
+ * Bausteine, deren Werte ausschließlich in der Cloud entstehen und die
+ * dauerhaft eine Online-Verbindung zum Miniserver benötigen. Diese Bausteine
+ * sind NICHT offline-fähig und dürfen im Automation-Editor nicht mit
+ * Ausführungsort „Loxone lokal" konfiguriert werden.
+ */
+export const CLOUD_REQUIRED_TEMPLATE_KEYS: ReadonlySet<string> = new Set([
+  "AICO_ArbitrageDispatch",
+  "AICO_PeakEventPrecharge",
+  "AICO_GridOperatorSignal",
+  "AICO_CommunityAllocation",
+  "AICO_Co2LoadShift",
+  "AICO_StorageArbitrageSoc",
+]);
+
+export const isCloudRequiredTemplate = (templateKey: string | null | undefined): boolean =>
+  !!templateKey && CLOUD_REQUIRED_TEMPLATE_KEYS.has(templateKey);
+
