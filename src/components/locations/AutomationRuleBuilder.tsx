@@ -777,6 +777,8 @@ export function AutomationRuleBuilder({
       } else {
         setTemplateParams({});
       }
+
+      setTargetLocationIds(Array.isArray(initialData.target_location_ids) ? initialData.target_location_ids : []);
     } else {
       setName("");
       setDescription("");
@@ -788,6 +790,7 @@ export function AutomationRuleBuilder({
       setTemplateKey("");
       setTemplateInstance("");
       setTemplateParams({});
+      setTargetLocationIds(isMlaMode ? (crossLocationTargets?.map((t) => t.locationId) ?? []) : []);
     }
     setAddConditionOpen(false);
   }, [open, initialData]);
