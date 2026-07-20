@@ -6839,6 +6839,7 @@ export type Database = {
           is_active: boolean
           min_miniserver_fw: string | null
           parameters: Json
+          requires_cloud: boolean
           snippet_url: string | null
           template_key: string
           title: string
@@ -6854,6 +6855,7 @@ export type Database = {
           is_active?: boolean
           min_miniserver_fw?: string | null
           parameters?: Json
+          requires_cloud?: boolean
           snippet_url?: string | null
           template_key: string
           title: string
@@ -6869,6 +6871,7 @@ export type Database = {
           is_active?: boolean
           min_miniserver_fw?: string | null
           parameters?: Json
+          requires_cloud?: boolean
           snippet_url?: string | null
           template_key?: string
           title?: string

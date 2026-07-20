@@ -37,9 +37,11 @@ import {
   Timer,
   AlarmClock,
   Puzzle,
+  Cloud,
 } from "lucide-react";
 import { LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
+import { isCloudRequiredTemplate } from "@/lib/loxone/snippetsCatalog";
 import { toast } from "sonner";
 
 // ── Types ──
@@ -811,6 +813,15 @@ export function AutomationRuleBuilder({
   const selectedInstalledTemplate = installedTemplates?.find(
     (t) => t.template_key === templateKey && (t.instance_id ?? "") === (templateInstance ?? ""),
   );
+  const templateRequiresCloud = isCloudRequiredTemplate(templateKey);
+
+  // Auto-Korrektur: Cloud-abhängige Bausteine dürfen nicht "loxone_local" laufen
+  useEffect(() => {
+    if (templateRequiresCloud && executionMode === "loxone_local") {
+      setExecutionMode("hybrid");
+    }
+  }, [templateRequiresCloud, executionMode]);
+
 
   const handleSave = async () => {
     if (!name.trim()) { toast.error("Name ist erforderlich"); return; }
@@ -918,10 +929,14 @@ export function AutomationRuleBuilder({
                         <span className="text-[10px] text-muted-foreground">Ausführung durch AICONO EMS (Standard)</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value="loxone_local">
+                    <SelectItem value="loxone_local" disabled={templateRequiresCloud}>
                       <div className="flex flex-col text-left">
                         <span className="text-sm font-medium">Loxone lokal</span>
-                        <span className="text-[10px] text-muted-foreground">Regel läuft ausschließlich auf dem Miniserver</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {templateRequiresCloud
+                            ? "Nicht verfügbar – dieser Baustein benötigt Cloud-Werte"
+                            : "Regel läuft ausschließlich auf dem Miniserver"}
+                        </span>
                       </div>
                     </SelectItem>
                     <SelectItem value="hybrid">
@@ -932,6 +947,16 @@ export function AutomationRuleBuilder({
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                {templateRequiresCloud && (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-[11px] text-amber-900 dark:text-amber-200">
+                    <Cloud className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <span>
+                      Dieser Baustein wird von der Cloud mit Werten versorgt (z. B. Arbitrage-Fahrplan,
+                      CO₂-Fenster). „Loxone lokal" ist nicht möglich – bei Internet-Ausfall pausiert die
+                      Aktualisierung und der Miniserver behält den zuletzt empfangenen Wert.
+                    </span>
+                  </div>
+                )}
               </div>
 
               {executionMode !== "cloud" && (
@@ -970,7 +995,12 @@ export function AutomationRuleBuilder({
                                 value={`${t.template_key}::${t.instance_id ?? ""}`}
                               >
                                 <div className="flex flex-col text-left">
-                                  <span className="text-sm">{t.title}</span>
+                                  <span className="text-sm flex items-center gap-1.5">
+                                    {t.title}
+                                    {isCloudRequiredTemplate(t.template_key) && (
+                                      <Cloud className="h-3 w-3 text-amber-600 dark:text-amber-400" aria-label="Cloud erforderlich" />
+                                    )}
+                                  </span>
                                   <span className="text-[10px] text-muted-foreground">
                                     {t.template_key}
                                     {t.instance_id ? ` · Instanz ${t.instance_id}` : ""}
