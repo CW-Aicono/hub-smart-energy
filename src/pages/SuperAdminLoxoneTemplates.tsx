@@ -193,6 +193,16 @@ export default function SuperAdminLoxoneTemplates() {
                                 <Badge variant="outline" className="text-[10px]">v{r.version}</Badge>
                                 {!r.is_active && <Badge variant="secondary" className="text-[10px]">inaktiv</Badge>}
                                 {groupOfTpl && <Badge className="text-[10px]" variant="default">Gruppe {groupOfTpl.key}</Badge>}
+                                {isCloudRequiredTemplate(r.template_key) && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] border-amber-500/50 text-amber-700 dark:text-amber-400 gap-1"
+                                    title="Benötigt aktive Cloud-Verbindung zum Miniserver – nicht offline-fähig"
+                                  >
+                                    <Cloud className="h-3 w-3" />
+                                    Cloud erforderlich
+                                  </Badge>
+                                )}
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5">{r.template_key}</p>
                             </div>
