@@ -1,42 +1,66 @@
+## Ausgangslage (verifiziert)
+
+- `**src/pages/Automation.tsx**` (Multi-Location-Automation) übergibt dem `AutomationRuleBuilder` **kein** `installedTemplates`-Prop. Der Builder zeigt daher konsequent den Hinweis „Auf diesem Miniserver wurden noch keine AICO_-Bausteine erkannt" – egal ob auf irgendeinem Standort Templates installiert sind.
+- In `src/components/locations/LocationAutomation.tsx` (Zeilen 308–346) werden die installierten Templates **pro Location** aus `location_loxone_templates` + `loxone_template_registry` geladen und dort korrekt in den Builder gereicht.
+- Ergebnis: Template-Automation funktioniert heute **ausschließlich** in der Standort-Detailansicht, nicht im übergreifenden `/automation`-Editor.
+
 ## Ziel
 
-Bausteine, deren Werte ausschließlich in der Cloud entstehen (Arbitrage-Fahrplan, Peak-Event-Vorladen, Community-Anteil, CO₂-Fenster, Grid-Operator-Signal, Storage-Arbitrage-SoC), benötigen eine dauerhafte Online-Verbindung zwischen Miniserver und AICONO-Cloud. Nutzer müssen das an **zwei Stellen** sofort erkennen:
+Liegenschaftsübergreifende Template-Automation: Ein Baustein (z. B. `AICO_GridProtect`) wird einmal im Multi-Location-Editor konfiguriert und automatisch auf **alle** ausgewählten Standorte gespielt, auf denen dieser Baustein installiert ist.
 
-1. **Baustein-Katalog** (Super-Admin + Anleitung/Tenant-Ansicht) → klares Tag „Cloud erforderlich · nicht offline-fähig"
-2. **Automation-Editor in der Liegenschaft** → Ausführungsort „Loxone lokal" wird für diese Bausteine gesperrt bzw. mit Warnung versehen
+## Plan
 
-## Umsetzung
+### 1. Datenquelle „Templates über alle Standorte" (Frontend-Hook)
 
-### 1. Datenmodell — Katalog erweitern
-- Neues Feld `requires_cloud: boolean` in `src/lib/loxone/snippetsCatalog.ts` pro Snippet.
-  - `true` für: `ArbitrageDispatch`, `PeakEventPrecharge`, `GridOperatorSignal`, `CommunityAllocation`, `Co2LoadShift`, `StorageArbitrageSoc` (Gruppen H/I/J) — alle Push-Kanal-Bausteine.
-  - `false` (Default) für lokal autarke Bausteine (GridProtect, DLM etc.).
-- Katalog-Version → **v1.2.1**, in `catalogSeed.ts` Feld mit-upserten (DB-Spalte `requires_cloud` per Migration ergänzen, Default `false`).
+Neuer Hook `useInstalledTemplatesMulti(locationIds)` in `src/hooks/`:
 
-### 2. Super-Admin — Loxone-Templates
-- Tag „Cloud erforderlich" (Icon ☁️ + Tooltip „Benötigt aktive Verbindung zum Miniserver — nicht offline-fähig") in der Bausteinliste `SuperAdminLoxoneTemplates.tsx`.
-- Gleiche Kennzeichnung im Anleitungs-Editor (`LoxoneManualsEditor.tsx`) sowie automatisch als Hinweis-Absatz im generierten PDF (`generateManualPdf.ts`).
+- Lädt aus `location_loxone_templates` alle Zeilen für die angegebenen Locations.
+- Joint mit `loxone_template_registry` (nur `is_active`).
+- Gruppiert nach `(template_key, instance_id)` und liefert:
+  ```
+  { template_key, instance_id, title, parameters,
+    locations: [{ locationId, locationIntegrationId, installedVersion }] }
+  ```
+- Ein Template gilt für den MLA-Editor als „verfügbar", wenn es auf **mindestens einem** Standort installiert ist. Standorte ohne Installation werden im Editor grau markiert („Baustein fehlt – bitte auf Miniserver aufspielen").
 
-### 3. Tenant — Integrationskachel & Automation-Editor
-- **`AutomationRuleBuilder.tsx`** (Ausführungsort-Dropdown, siehe Screenshot):
-  - Wenn die gewählte Automation an ein `requires_cloud=true`-Template gebunden ist:
-    - Option „Loxone lokal" wird **disabled** angezeigt mit Sublabel „Nicht verfügbar — Cloud-Werte erforderlich".
-    - Default wird auf `hybrid` (empfohlen) gesetzt, `cloud` bleibt wählbar.
-    - Info-Alert oberhalb: „Dieser Baustein wird von der Cloud mit Werten versorgt (z. B. Arbitrage-Fahrplan). Bei Internet-Ausfall pausiert die Aktualisierung — der Miniserver behält den letzten Wert."
-- **Integrationskachel / Baustein-Badge** (`LoxoneManualDownloadButton.tsx` bzw. umliegende Chip-Zeile): Chip „Cloud" neben dem Template-Namen anzeigen.
+### 2. Multi-Location-Editor erweitern (`src/pages/Automation.tsx`)
 
-### 4. Übersetzungen
-- Neue Keys in `src/i18n/*` (DE/EN/ES/NL): `loxone.requiresCloud.tag`, `loxone.requiresCloud.tooltip`, `loxone.requiresCloud.automationHint`, `loxone.executionMode.localDisabledReason`.
+- Hook aus Schritt 1 mit den `gatewayIds`/`locationIds` aufrufen.
+- Neues Prop `installedTemplates` an `AutomationRuleBuilder` durchreichen (aggregierte Liste).
+- Zusätzlich neues optionales Prop `templateAvailability` (Map `template_key → Set<locationId>`), damit der Builder pro ausgewähltem Ziel-Standort einen Badge zeigen kann („installiert" / „fehlt").
 
-### 5. Migration & Seed
-- Migration: `ALTER TABLE loxone_snippet_registry ADD COLUMN requires_cloud boolean NOT NULL DEFAULT false;`
-- Nach Deploy: Button „Katalog aus Snippet-Bibliothek befüllen" erneut klicken → v1.2.1 upserted die Flag.
+### 3. Builder anpassen (`src/components/locations/AutomationRuleBuilder.tsx`)
 
-## Nicht Teil dieses Plans
-- Umbau 5-s-Poll → Realtime-Subscription (separater Vorschlag, unabhängig).
-- Änderungen am Worker oder an der Push-Logik.
+- Wenn `installedTemplates.length > 0` und der Editor im **Multi-Location-Modus** läuft (erkennbar an bereits vorhandenem `scope_type === "cross_location"` bzw. `targetLocationIds`):
+  - Template-Auswahl freischalten.
+  - Unter der Ziel-Standortliste: bei jeder Location visuell anzeigen, ob der gewählte Baustein dort installiert ist. Nicht-installierte Standorte werden beim Speichern **automatisch ausgeschlossen** (mit Toast-Hinweis).
+- Für `requires_cloud`-Bausteine bleibt bestehende Sperre auf „Loxone lokal" gültig, unverändert.
 
-## Für Sie danach (Laien-Schritte)
-1. Im Super-Admin → Loxone-Templates → „Katalog aus Snippet-Bibliothek befüllen" klicken.
-2. In einer Liegenschaft eine Test-Automation vom Typ „ArbitrageDispatch" öffnen → prüfen, dass „Loxone lokal" ausgegraut ist und der Cloud-Hinweis erscheint.
-3. Im Baustein-Katalog prüfen, dass ☁️-Chip bei den 6 Cloud-Bausteinen sichtbar ist.
+### 4. Persistenz & Push
+
+- `location_automations` mit `scope_type = "cross_location"` und `target_location_ids = [...]` existiert bereits – kein Schema-Change nötig.
+- Speicherung legt **pro Ziel-Standort einen Eintrag** in `loxone_pending_writes` an (Push-Kanal aus v1.4), sobald Parameter geändert werden. Alternativ: einen aggregierten Eintrag pro Location beim Speichern der Automation.
+- Die vorhandene Edge Function `loxone-parameter-push` wird so erweitert, dass sie beim Auslösen einer Cross-Location-Automation die Zielwerte für alle betroffenen `location_integration_id`s in die Warteschlange schreibt.
+
+### 5. UI-Hinweise für Laien
+
+- Wenn im MLA-Editor gar keine Templates aggregiert werden können: klarer Hinweis mit Link/Anleitung „So installieren Sie einen AICO-Baustein auf einem Miniserver" (verweist auf die Standort-Detailseite → Puzzle-Icon 🧩).
+- Nach dem Speichern: Toast „Automation für X von Y Standorten aktiviert. Z Standorte übersprungen (Baustein nicht installiert)".
+
+### 6. Tests / Abnahme
+
+- Manueller Test: 2 Standorte, auf beiden `AICO_GridProtect` installiert → Automation in `/automation` anlegen, beide Standorte auswählen, speichern, „Jetzt ausführen" → Werte landen in `loxone_pending_writes` für beide `location_integration_id`s.
+- Regressionscheck: Standort-Detailansicht unverändert.
+
+## Technische Details
+
+- **Neue Datei:** `src/hooks/useInstalledTemplatesMulti.tsx`
+- **Editiert:** `src/pages/Automation.tsx` (Hook einbinden + Prop übergeben), `src/components/locations/AutomationRuleBuilder.tsx` (Availability-Badges + Filter beim Save), optional `supabase/functions/loxone-parameter-push/index.ts` (Multi-Location-Push).
+- **Kein DB-Migrationsbedarf**; `location_loxone_templates`, `loxone_template_registry`, `location_automations.target_location_ids` und `loxone_pending_writes` sind ausreichend.
+- **Keine Änderung** an `useLocationAutomations` / `useMLAutomations`-Signaturen.
+
+## Offene Frage
+
+Soll bei „Jetzt ausführen" einer Cross-Location-Automation **parallel** für alle Standorte gepusht werden (schneller, schwerer zu debuggen) oder **sequenziell** mit Fortschrittsanzeige (langsamer, klarere Fehlermeldungen pro Standort)? Vorschlag: parallel, mit Ergebnistabelle im Toast.  
+  
+Antwort: Ja, parallel, also so wie von dir vorgeschlagen.
