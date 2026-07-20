@@ -863,6 +863,24 @@ export function AutomationRuleBuilder({
       if (actions.some((a) => !a.actuator_uuid)) { toast.error("Alle Aktionen benötigen einen Aktor"); return; }
     }
 
+    // MLA-Ziel-Standorte: Nur Standorte behalten, auf denen der Baustein tatsächlich installiert ist
+    let effectiveTargetIds = targetLocationIds;
+    if (isMlaMode) {
+      if (targetLocationIds.length === 0) { toast.error("Bitte mindestens einen Ziel-Standort auswählen"); return; }
+      if (isTemplateMode && templateAvailability) {
+        const availSet = templateAvailability.get(`${templateKey}::${templateInstance ?? ""}`) ?? new Set<string>();
+        effectiveTargetIds = targetLocationIds.filter((id) => availSet.has(id));
+        const skipped = targetLocationIds.length - effectiveTargetIds.length;
+        if (effectiveTargetIds.length === 0) {
+          toast.error("Keiner der ausgewählten Standorte hat diesen Baustein installiert");
+          return;
+        }
+        if (skipped > 0) {
+          toast.warning(`${skipped} Standort(e) übersprungen – Baustein dort nicht installiert`);
+        }
+      }
+    }
+
     // Parameter-Werte in typisierte Bindings umwandeln
     let bindings: Record<string, string | number | boolean> | null = null;
     if (isTemplateMode && selectedInstalledTemplate) {
@@ -894,6 +912,7 @@ export function AutomationRuleBuilder({
         loxone_template_key: isTemplateMode ? templateKey : null,
         loxone_template_instance_id: isTemplateMode ? (templateInstance || null) : null,
         loxone_template_bindings: bindings,
+        target_location_ids: isMlaMode ? effectiveTargetIds : undefined,
       });
       onOpenChange(false);
     } catch (err) {
