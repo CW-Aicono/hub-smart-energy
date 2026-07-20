@@ -995,7 +995,12 @@ export function AutomationRuleBuilder({
                                 value={`${t.template_key}::${t.instance_id ?? ""}`}
                               >
                                 <div className="flex flex-col text-left">
-                                  <span className="text-sm">{t.title}</span>
+                                  <span className="text-sm flex items-center gap-1.5">
+                                    {t.title}
+                                    {isCloudRequiredTemplate(t.template_key) && (
+                                      <Cloud className="h-3 w-3 text-amber-600 dark:text-amber-400" aria-label="Cloud erforderlich" />
+                                    )}
+                                  </span>
                                   <span className="text-[10px] text-muted-foreground">
                                     {t.template_key}
                                     {t.instance_id ? ` · Instanz ${t.instance_id}` : ""}
