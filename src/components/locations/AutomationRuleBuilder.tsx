@@ -105,6 +105,8 @@ export interface AutomationRuleData {
   loxone_template_key?: string | null;
   loxone_template_instance_id?: string | null;
   loxone_template_bindings?: Record<string, string | number | boolean> | null;
+  /** MLA: Ziel-Standorte für standortübergreifende Automation */
+  target_location_ids?: string[];
 }
 
 /** Gateway option for MLA mode – each gateway has its own sensor list */
@@ -114,6 +116,13 @@ export interface GatewayOption {
   locationName: string;    // location name
   sensors: LoxoneSensor[]; // sensors for this specific gateway
   isOnline: boolean;
+}
+
+/** MLA-Modus: Auswählbare Ziel-Standorte für eine Cross-Location-Automation */
+export interface CrossLocationTarget {
+  locationId: string;
+  locationIntegrationId: string;
+  locationName: string;
 }
 
 interface AutomationRuleBuilderProps {
@@ -130,6 +139,13 @@ interface AutomationRuleBuilderProps {
   deviceTypeMap?: Map<string, string>;
   /** Installierte AICO_-Templates in dieser Location (für execution_mode != "cloud") */
   installedTemplates?: InstalledLoxoneTemplate[];
+  /** MLA: Verfügbare Ziel-Standorte mit Loxone-Miniserver */
+  crossLocationTargets?: CrossLocationTarget[];
+  /**
+   * MLA: Map `${template_key}::${instance_id ?? ""}` → Set<locationId>,
+   * um pro Standort zu markieren, ob der gewählte Baustein installiert ist.
+   */
+  templateAvailability?: Map<string, Set<string>>;
 }
 
 // ── Helpers ──
