@@ -37,9 +37,11 @@ import {
   Timer,
   AlarmClock,
   Puzzle,
+  Cloud,
 } from "lucide-react";
 import { LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
+import { isCloudRequiredTemplate } from "@/lib/loxone/snippetsCatalog";
 import { toast } from "sonner";
 
 // ── Types ──
