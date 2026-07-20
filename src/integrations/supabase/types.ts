@@ -6669,6 +6669,166 @@ export type Database = {
           },
         ]
       }
+      loxone_pending_writes: {
+        Row: {
+          acked_at: string | null
+          attempts: number
+          created_at: string
+          error_message: string | null
+          expires_at: string
+          id: string
+          instance: number
+          location_integration_id: string
+          max_attempts: number
+          parameter: string
+          priority: number
+          requested_at: string
+          sent_at: string | null
+          source: string
+          status: string
+          target_uuid: string | null
+          template_key: string
+          tenant_id: string
+          updated_at: string
+          value_bool: boolean | null
+          value_num: number | null
+        }
+        Insert: {
+          acked_at?: string | null
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string
+          id?: string
+          instance?: number
+          location_integration_id: string
+          max_attempts?: number
+          parameter: string
+          priority?: number
+          requested_at?: string
+          sent_at?: string | null
+          source?: string
+          status?: string
+          target_uuid?: string | null
+          template_key: string
+          tenant_id: string
+          updated_at?: string
+          value_bool?: boolean | null
+          value_num?: number | null
+        }
+        Update: {
+          acked_at?: string | null
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string
+          id?: string
+          instance?: number
+          location_integration_id?: string
+          max_attempts?: number
+          parameter?: string
+          priority?: number
+          requested_at?: string
+          sent_at?: string | null
+          source?: string
+          status?: string
+          target_uuid?: string | null
+          template_key?: string
+          tenant_id?: string
+          updated_at?: string
+          value_bool?: boolean | null
+          value_num?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loxone_pending_writes_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loxone_snippet_manual_images: {
+        Row: {
+          caption: string | null
+          created_at: string
+          id: string
+          section: string
+          sort_order: number
+          storage_path: string
+          template_key: string
+          updated_at: string
+          updated_by: string | null
+          width: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          section: string
+          sort_order?: number
+          storage_path: string
+          template_key: string
+          updated_at?: string
+          updated_by?: string | null
+          width?: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          section?: string
+          sort_order?: number
+          storage_path?: string
+          template_key?: string
+          updated_at?: string
+          updated_by?: string | null
+          width?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loxone_snippet_manual_images_template_key_fkey"
+            columns: ["template_key"]
+            isOneToOne: false
+            referencedRelation: "loxone_snippet_manuals"
+            referencedColumns: ["template_key"]
+          },
+        ]
+      }
+      loxone_snippet_manuals: {
+        Row: {
+          purpose_md: string
+          template_key: string
+          test_md: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+          wiring_md: string
+        }
+        Insert: {
+          purpose_md?: string
+          template_key: string
+          test_md?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+          wiring_md?: string
+        }
+        Update: {
+          purpose_md?: string
+          template_key?: string
+          test_md?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+          wiring_md?: string
+        }
+        Relationships: []
+      }
       loxone_template_registry: {
         Row: {
           category: string
@@ -6679,6 +6839,7 @@ export type Database = {
           is_active: boolean
           min_miniserver_fw: string | null
           parameters: Json
+          requires_cloud: boolean
           snippet_url: string | null
           template_key: string
           title: string
@@ -6694,6 +6855,7 @@ export type Database = {
           is_active?: boolean
           min_miniserver_fw?: string | null
           parameters?: Json
+          requires_cloud?: boolean
           snippet_url?: string | null
           template_key: string
           title: string
@@ -6709,6 +6871,7 @@ export type Database = {
           is_active?: boolean
           min_miniserver_fw?: string | null
           parameters?: Json
+          requires_cloud?: boolean
           snippet_url?: string | null
           template_key?: string
           title?: string
@@ -13193,6 +13356,7 @@ export type Database = {
       cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
       cleanup_cron_job_history: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
+      cleanup_loxone_pending_writes: { Args: never; Returns: number }
       cleanup_old_audit_logs: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
       cleanup_old_node_metrics: { Args: never; Returns: number }

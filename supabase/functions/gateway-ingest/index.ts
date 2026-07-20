@@ -2344,6 +2344,8 @@ Deno.serve(async (req) => {
     if (action === "addon-version") return handleAddonVersion();
     if (action === "sync-automations") return handleSyncAutomations(url, req);
     if (action === "list-loxone-ws-meters") return handleListLoxoneWsMeters();
+    if (action === "list-pending-writes") return handleListPendingWrites(req);
+
   }
 
   // POST routes
@@ -2366,6 +2368,9 @@ Deno.serve(async (req) => {
     if (action === "push-execution-logs") return handlePushExecutionLogs(req);
     if (action === "sync-automations") return handleSyncAutomations(url, req);
     if (action === "device-snapshot") return handleDeviceSnapshot(req);
+    if (action === "list-pending-writes") return handleListPendingWrites(req);
+    if (action === "ack-pending-write") return handleAckPendingWrite(req);
+
 
     // Check if the body contains a getSensors action (called by frontend for all integration types).
     // Push-based gateways don't support sensor discovery — return empty list gracefully.
@@ -2394,3 +2399,70 @@ Deno.serve(async (req) => {
 
   return json({ error: "Method not allowed" }, 405);
 });
+
+/* ── Loxone Pending Writes (Cloud → Worker → Miniserver) ───────────────────── */
+
+async function handleListPendingWrites(req: Request): Promise<Response> {
+  try {
+    const supabase = createServiceClient();
+    const url = new URL(req.url);
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200);
+    const integrationId = url.searchParams.get("location_integration_id");
+
+    let q = supabase
+      .from("loxone_pending_writes")
+      .select("id, tenant_id, location_integration_id, template_key, instance, parameter, target_uuid, value_num, value_bool, priority, attempts, max_attempts")
+      .eq("status", "queued")
+      .lte("attempts", 3)
+      .gt("expires_at", new Date().toISOString())
+      .order("priority", { ascending: true })
+      .order("requested_at", { ascending: true })
+      .limit(limit);
+    if (integrationId) q = q.eq("location_integration_id", integrationId);
+
+    const { data, error } = await q;
+    if (error) return json({ success: false, error: error.message }, 500);
+    return json({ success: true, writes: data ?? [] });
+  } catch (e) {
+    return json({ success: false, error: (e as Error).message }, 500);
+  }
+}
+
+async function handleAckPendingWrite(req: Request): Promise<Response> {
+  try {
+    const supabase = createServiceClient();
+    const body = await req.json().catch(() => ({}));
+    const id = String(body?.id ?? "");
+    const ok = Boolean(body?.success);
+    const errorMessage = body?.error_message ? String(body.error_message).slice(0, 500) : null;
+    const targetUuid = body?.target_uuid ? String(body.target_uuid) : null;
+    if (!id) return json({ success: false, error: "id required" }, 400);
+
+    if (ok) {
+      const patch: any = { status: "sent", sent_at: new Date().toISOString(), acked_at: new Date().toISOString(), error_message: null };
+      if (targetUuid) patch.target_uuid = targetUuid;
+      const { error } = await supabase.from("loxone_pending_writes").update(patch).eq("id", id);
+      if (error) return json({ success: false, error: error.message }, 500);
+      return json({ success: true });
+    }
+
+    // Fehlerfall: attempts +1, ggf. auf 'failed'
+    const { data: cur } = await supabase.from("loxone_pending_writes").select("attempts, max_attempts").eq("id", id).maybeSingle();
+    const attempts = (cur?.attempts ?? 0) + 1;
+    const failed = attempts >= (cur?.max_attempts ?? 3);
+    const { error } = await supabase.from("loxone_pending_writes").update({
+      attempts,
+      status: failed ? "failed" : "queued",
+      error_message: errorMessage,
+    }).eq("id", id);
+    if (error) return json({ success: false, error: error.message }, 500);
+    return json({ success: true, retried: !failed });
+  } catch (e) {
+    return json({ success: false, error: (e as Error).message }, 500);
+  }
+}
+
+function createServiceClient() {
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+}
+

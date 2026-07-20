@@ -37,9 +37,11 @@ import {
   Timer,
   AlarmClock,
   Puzzle,
+  Cloud,
 } from "lucide-react";
 import { LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
+import { isCloudRequiredTemplate } from "@/lib/loxone/snippetsCatalog";
 import { toast } from "sonner";
 
 // ── Types ──
@@ -103,6 +105,8 @@ export interface AutomationRuleData {
   loxone_template_key?: string | null;
   loxone_template_instance_id?: string | null;
   loxone_template_bindings?: Record<string, string | number | boolean> | null;
+  /** MLA: Ziel-Standorte für standortübergreifende Automation */
+  target_location_ids?: string[];
 }
 
 /** Gateway option for MLA mode – each gateway has its own sensor list */
@@ -112,6 +116,13 @@ export interface GatewayOption {
   locationName: string;    // location name
   sensors: LoxoneSensor[]; // sensors for this specific gateway
   isOnline: boolean;
+}
+
+/** MLA-Modus: Auswählbare Ziel-Standorte für eine Cross-Location-Automation */
+export interface CrossLocationTarget {
+  locationId: string;
+  locationIntegrationId: string;
+  locationName: string;
 }
 
 interface AutomationRuleBuilderProps {
@@ -128,6 +139,13 @@ interface AutomationRuleBuilderProps {
   deviceTypeMap?: Map<string, string>;
   /** Installierte AICO_-Templates in dieser Location (für execution_mode != "cloud") */
   installedTemplates?: InstalledLoxoneTemplate[];
+  /** MLA: Verfügbare Ziel-Standorte mit Loxone-Miniserver */
+  crossLocationTargets?: CrossLocationTarget[];
+  /**
+   * MLA: Map `${template_key}::${instance_id ?? ""}` → Set<locationId>,
+   * um pro Standort zu markieren, ob der gewählte Baustein installiert ist.
+   */
+  templateAvailability?: Map<string, Set<string>>;
 }
 
 // ── Helpers ──
@@ -696,6 +714,8 @@ export function AutomationRuleBuilder({
   gatewayOptions,
   deviceTypeMap,
   installedTemplates,
+  crossLocationTargets,
+  templateAvailability,
 }: AutomationRuleBuilderProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -707,8 +727,11 @@ export function AutomationRuleBuilder({
   const [templateKey, setTemplateKey] = useState<string>("");
   const [templateInstance, setTemplateInstance] = useState<string>("");
   const [templateParams, setTemplateParams] = useState<Record<string, string>>({});
+  const [targetLocationIds, setTargetLocationIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [addConditionOpen, setAddConditionOpen] = useState(false);
+
+  const isMlaMode = !!crossLocationTargets && crossLocationTargets.length > 0;
 
   // Init from initialData
   useEffect(() => {
@@ -754,6 +777,8 @@ export function AutomationRuleBuilder({
       } else {
         setTemplateParams({});
       }
+
+      setTargetLocationIds(Array.isArray(initialData.target_location_ids) ? initialData.target_location_ids : []);
     } else {
       setName("");
       setDescription("");
@@ -765,6 +790,7 @@ export function AutomationRuleBuilder({
       setTemplateKey("");
       setTemplateInstance("");
       setTemplateParams({});
+      setTargetLocationIds(isMlaMode ? (crossLocationTargets?.map((t) => t.locationId) ?? []) : []);
     }
     setAddConditionOpen(false);
   }, [open, initialData]);
@@ -811,6 +837,15 @@ export function AutomationRuleBuilder({
   const selectedInstalledTemplate = installedTemplates?.find(
     (t) => t.template_key === templateKey && (t.instance_id ?? "") === (templateInstance ?? ""),
   );
+  const templateRequiresCloud = isCloudRequiredTemplate(templateKey);
+
+  // Auto-Korrektur: Cloud-abhängige Bausteine dürfen nicht "loxone_local" laufen
+  useEffect(() => {
+    if (templateRequiresCloud && executionMode === "loxone_local") {
+      setExecutionMode("hybrid");
+    }
+  }, [templateRequiresCloud, executionMode]);
+
 
   const handleSave = async () => {
     if (!name.trim()) { toast.error("Name ist erforderlich"); return; }
@@ -826,6 +861,24 @@ export function AutomationRuleBuilder({
     if (!isTemplateMode) {
       if (actions.length === 0) { toast.error("Mindestens eine Aktion ist erforderlich"); return; }
       if (actions.some((a) => !a.actuator_uuid)) { toast.error("Alle Aktionen benötigen einen Aktor"); return; }
+    }
+
+    // MLA-Ziel-Standorte: Nur Standorte behalten, auf denen der Baustein tatsächlich installiert ist
+    let effectiveTargetIds = targetLocationIds;
+    if (isMlaMode) {
+      if (targetLocationIds.length === 0) { toast.error("Bitte mindestens einen Ziel-Standort auswählen"); return; }
+      if (isTemplateMode && templateAvailability) {
+        const availSet = templateAvailability.get(`${templateKey}::${templateInstance ?? ""}`) ?? new Set<string>();
+        effectiveTargetIds = targetLocationIds.filter((id) => availSet.has(id));
+        const skipped = targetLocationIds.length - effectiveTargetIds.length;
+        if (effectiveTargetIds.length === 0) {
+          toast.error("Keiner der ausgewählten Standorte hat diesen Baustein installiert");
+          return;
+        }
+        if (skipped > 0) {
+          toast.warning(`${skipped} Standort(e) übersprungen – Baustein dort nicht installiert`);
+        }
+      }
     }
 
     // Parameter-Werte in typisierte Bindings umwandeln
@@ -859,6 +912,7 @@ export function AutomationRuleBuilder({
         loxone_template_key: isTemplateMode ? templateKey : null,
         loxone_template_instance_id: isTemplateMode ? (templateInstance || null) : null,
         loxone_template_bindings: bindings,
+        target_location_ids: isMlaMode ? effectiveTargetIds : undefined,
       });
       onOpenChange(false);
     } catch (err) {
@@ -918,10 +972,14 @@ export function AutomationRuleBuilder({
                         <span className="text-[10px] text-muted-foreground">Ausführung durch AICONO EMS (Standard)</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value="loxone_local">
+                    <SelectItem value="loxone_local" disabled={templateRequiresCloud}>
                       <div className="flex flex-col text-left">
                         <span className="text-sm font-medium">Loxone lokal</span>
-                        <span className="text-[10px] text-muted-foreground">Regel läuft ausschließlich auf dem Miniserver</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {templateRequiresCloud
+                            ? "Nicht verfügbar – dieser Baustein benötigt Cloud-Werte"
+                            : "Regel läuft ausschließlich auf dem Miniserver"}
+                        </span>
                       </div>
                     </SelectItem>
                     <SelectItem value="hybrid">
@@ -932,6 +990,16 @@ export function AutomationRuleBuilder({
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                {templateRequiresCloud && (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-[11px] text-amber-900 dark:text-amber-200">
+                    <Cloud className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <span>
+                      Dieser Baustein wird von der Cloud mit Werten versorgt (z. B. Arbitrage-Fahrplan,
+                      CO₂-Fenster). „Loxone lokal" ist nicht möglich – bei Internet-Ausfall pausiert die
+                      Aktualisierung und der Miniserver behält den zuletzt empfangenen Wert.
+                    </span>
+                  </div>
+                )}
               </div>
 
               {executionMode !== "cloud" && (
@@ -942,10 +1010,9 @@ export function AutomationRuleBuilder({
                   </div>
                   {(installedTemplates?.length ?? 0) === 0 ? (
                     <p className="text-xs text-muted-foreground">
-                      Auf diesem Miniserver wurden noch keine AICO_-Bausteine erkannt.
-                      Der AICONO-Support spielt die Bausteine zentral über das Loxone
-                      Multiplikator-Projekt ein. Danach kann in der Miniserver-Kachel unter
-                      „Integrationen" per Puzzle-Icon 🧩 ein Scan ausgelöst werden.
+                      {isMlaMode
+                        ? "Auf keinem der Standorte wurden AICO_-Bausteine erkannt. Öffnen Sie eine Liegenschaft mit Loxone-Miniserver → Karte 'Integrationen' → Puzzle-Icon 🧩, um Bausteine zu scannen. Sobald mindestens ein Standort einen Baustein installiert hat, erscheint dieser hier."
+                        : "Auf diesem Miniserver wurden noch keine AICO_-Bausteine erkannt. Der AICONO-Support spielt die Bausteine zentral über das Loxone Multiplikator-Projekt ein. Danach kann in der Miniserver-Kachel unter 'Integrationen' per Puzzle-Icon 🧩 ein Scan ausgelöst werden."}
                     </p>
                   ) : (
                     <>
@@ -970,7 +1037,12 @@ export function AutomationRuleBuilder({
                                 value={`${t.template_key}::${t.instance_id ?? ""}`}
                               >
                                 <div className="flex flex-col text-left">
-                                  <span className="text-sm">{t.title}</span>
+                                  <span className="text-sm flex items-center gap-1.5">
+                                    {t.title}
+                                    {isCloudRequiredTemplate(t.template_key) && (
+                                      <Cloud className="h-3 w-3 text-amber-600 dark:text-amber-400" aria-label="Cloud erforderlich" />
+                                    )}
+                                  </span>
                                   <span className="text-[10px] text-muted-foreground">
                                     {t.template_key}
                                     {t.instance_id ? ` · Instanz ${t.instance_id}` : ""}
@@ -1022,6 +1094,59 @@ export function AutomationRuleBuilder({
                           <p className="text-[10px] text-muted-foreground">
                             Werte werden bei „Speichern" per Push an den Miniserver übertragen.
                             Bedingungen/Aktionen unten sind optional (nur Hybrid-Modus).
+                          </p>
+                        </div>
+                      )}
+
+                      {isMlaMode && crossLocationTargets && (
+                        <div className="space-y-2 pt-2 border-t border-primary/20">
+                          <Label className="text-xs flex items-center gap-1">
+                            <Building2 className="h-3 w-3" />
+                            Ziel-Standorte
+                          </Label>
+                          <div className="space-y-1.5 max-h-56 overflow-y-auto rounded-md border p-2 bg-background">
+                            {crossLocationTargets.map((tgt) => {
+                              const availSet = templateAvailability?.get(`${templateKey}::${templateInstance ?? ""}`);
+                              const isInstalled = !templateKey || !availSet || availSet.has(tgt.locationId);
+                              const isChecked = targetLocationIds.includes(tgt.locationId);
+                              return (
+                                <label
+                                  key={tgt.locationId}
+                                  className={`flex items-center gap-2 text-xs cursor-pointer rounded px-1.5 py-1 hover:bg-muted/50 ${
+                                    !isInstalled ? "opacity-60" : ""
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    disabled={!isInstalled}
+                                    onChange={(e) => {
+                                      setTargetLocationIds((prev) =>
+                                        e.target.checked
+                                          ? [...prev, tgt.locationId]
+                                          : prev.filter((id) => id !== tgt.locationId),
+                                      );
+                                    }}
+                                    className="h-3.5 w-3.5"
+                                  />
+                                  <span className="flex-1 truncate">{tgt.locationName}</span>
+                                  {isInstalled ? (
+                                    <Badge variant="outline" className="text-[9px] border-emerald-500/40 text-emerald-700 dark:text-emerald-400">
+                                      installiert
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-700 dark:text-amber-400">
+                                      Baustein fehlt
+                                    </Badge>
+                                  )}
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            Die Werte werden beim Speichern an alle ausgewählten Miniserver gepusht.
+                            Standorte ohne Baustein können später über die Standort-Detailseite
+                            per Puzzle-Icon 🧩 nachinstalliert werden.
                           </p>
                         </div>
                       )}

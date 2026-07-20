@@ -1047,9 +1047,76 @@ function startHealthServer(): void {
   server.listen(HEALTH_PORT, () => log("info", `[Health] HTTP-Endpoint auf Port ${HEALTH_PORT} (GET /healthz, /state)`));
 }
 
+// ─── Pending Writes (Cloud → Miniserver Push-Kanal, Phase 2) ─────────────────
+
+interface PendingWrite {
+  id: string;
+  tenant_id: string;
+  location_integration_id: string;
+  template_key: string;
+  instance: number;
+  parameter: string;
+  target_uuid: string | null;
+  value_num: number | null;
+  value_bool: boolean | null;
+  priority: number;
+  attempts: number;
+  max_attempts: number;
+}
+
+async function processPendingWrites(): Promise<void> {
+  let list: PendingWrite[];
+  try {
+    const r = await ingestGet("list-pending-writes&limit=50");
+    list = r?.writes ?? [];
+  } catch (err) {
+    log("debug", `[PendingWrites] Abruf fehlgeschlagen: ${describeError(err)}`);
+    return;
+  }
+  if (list.length === 0) return;
+
+  // Nach location_integration_id gruppieren → richtige WS-Verbindung finden
+  const byIntegration = new Map<string, PendingWrite[]>();
+  for (const w of list) {
+    if (!byIntegration.has(w.location_integration_id)) byIntegration.set(w.location_integration_id, []);
+    byIntegration.get(w.location_integration_id)!.push(w);
+  }
+
+  for (const [locIntId, writes] of byIntegration) {
+    const state = [...connections.values()].find((s) => s.locationIntegrationId === locIntId);
+    if (!state || !state.authenticated || !state.ws) {
+      for (const w of writes) {
+        await ackPendingWrite(w.id, false, "no active WS connection").catch(() => null);
+      }
+      continue;
+    }
+    for (const w of writes) {
+      try {
+        const value = w.value_bool != null ? (w.value_bool ? 1 : 0) : (w.value_num ?? 0);
+        const inputName = w.target_uuid && w.target_uuid.length > 0
+          ? w.target_uuid
+          : `AICO_${w.template_key.replace(/^AICO_/, "")}__${w.instance}__${w.parameter}`;
+        await state.ws.send(`jdev/sps/io/${inputName}/${value}`);
+        state.eventsReceived++;
+        await ackPendingWrite(w.id, true).catch(() => null);
+        log("info", `[PendingWrites] ${state.serialNumber} ${inputName}=${value} ok`);
+      } catch (err) {
+        const msg = describeError(err).slice(0, 400);
+        await ackPendingWrite(w.id, false, msg).catch(() => null);
+        log("warn", `[PendingWrites] ${state.serialNumber} write failed: ${msg}`);
+      }
+    }
+  }
+}
+
+async function ackPendingWrite(id: string, success: boolean, errorMessage?: string): Promise<void> {
+  await ingestPost("ack-pending-write", { id, success, error_message: errorMessage ?? null });
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
+
   log("info", `Loxone WS Worker startet — worker=${BRIDGE_WORKER_NAME} host=${WORKER_HOST} version=${WORKER_VERSION}`);
   log("info", `  SUPABASE_URL=${SUPABASE_URL}`);
   log("info", `  FLUSH_INTERVAL_MS=${FLUSH_INTERVAL_MS}  RELOAD_INTERVAL_MS=${RELOAD_INTERVAL_MS}  BRIDGE_HEARTBEAT_MS=${BRIDGE_HEARTBEAT_MS}`);
@@ -1115,7 +1182,15 @@ async function main() {
   } else {
     log("info", `[Keepalive] deaktiviert (KEEPALIVE_INTERVAL_MS=0)`);
   }
+
+  // Pending Writes (Cloud → Miniserver): alle 5s Warteschlange abfragen und
+  // via bestehender WS-Session an den Miniserver senden. Namensschema:
+  //   AICO_<TemplateKey>__<Instance>__<Parameter>
+  // Loxone akzeptiert `jdev/sps/io/<Name>/<Wert>` bei benannten Virtual Inputs.
+  setInterval(() => { processPendingWrites().catch((e) => log("error", "pending-writes:", e)); }, 5000);
+  log("info", "[PendingWrites] aktiv: poll alle 5s (Cloud → Miniserver Push-Kanal)");
 }
+
 
 main().catch((err) => {
   console.error("[FATAL]", err);

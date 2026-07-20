@@ -13,10 +13,12 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Puzzle, AlertTriangle, CheckCircle2, DatabaseZap } from "lucide-react";
-import { SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCatalog";
+import { RefreshCw, Puzzle, AlertTriangle, CheckCircle2, DatabaseZap, Cloud } from "lucide-react";
+import { SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY, isCloudRequiredTemplate } from "@/lib/loxone/snippetsCatalog";
 import { seedRegistryFromSnippets } from "@/lib/loxone/catalogSeed";
 import LoxoneMasterProject from "@/components/super-admin/LoxoneMasterProject";
+import LoxoneInjector from "@/components/super-admin/LoxoneInjector";
+import LoxoneManualsEditor from "@/components/super-admin/LoxoneManualsEditor";
 
 interface RegistryEntry {
   id: string;
@@ -67,7 +69,7 @@ export default function SuperAdminLoxoneTemplates() {
   const load = async () => {
     setLoading(true);
     const [regRes, instRes, locRes, tenRes] = await Promise.all([
-      supabase.from("loxone_template_registry").select("*").order("category").order("template_key"),
+      supabase.from("loxone_template_registry").select("*").eq("is_active", true).order("category").order("template_key"),
       supabase
         .from("location_loxone_templates")
         .select("id, tenant_id, location_id, template_key, instance_id, installed_version, last_seen_at")
@@ -144,7 +146,7 @@ export default function SuperAdminLoxoneTemplates() {
                 onClick={async () => {
                   try {
                     const res = await seedRegistryFromSnippets();
-                    toast({ title: "Katalog befüllt", description: `${res.total} Templates upserted.` });
+                    toast({ title: "Katalog befüllt", description: `${res.total} aktuelle Bausteine (v1.2.0) upserted, ${res.deactivated} veraltete Versionen deaktiviert.` });
                     await load();
                   } catch (e: any) {
                     toast({ title: "Fehler", description: e.message ?? String(e), variant: "destructive" });
@@ -168,6 +170,8 @@ export default function SuperAdminLoxoneTemplates() {
               <TabsTrigger value="catalog">Katalog</TabsTrigger>
               <TabsTrigger value="health">Health-Report</TabsTrigger>
               <TabsTrigger value="master">Master-Projekt</TabsTrigger>
+              <TabsTrigger value="injector">Injektor</TabsTrigger>
+              <TabsTrigger value="manuals">Anleitungen</TabsTrigger>
             </TabsList>
 
             <TabsContent value="catalog" className="space-y-4">
@@ -189,6 +193,16 @@ export default function SuperAdminLoxoneTemplates() {
                                 <Badge variant="outline" className="text-[10px]">v{r.version}</Badge>
                                 {!r.is_active && <Badge variant="secondary" className="text-[10px]">inaktiv</Badge>}
                                 {groupOfTpl && <Badge className="text-[10px]" variant="default">Gruppe {groupOfTpl.key}</Badge>}
+                                {isCloudRequiredTemplate(r.template_key) && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px] border-amber-500/50 text-amber-700 dark:text-amber-400 gap-1"
+                                    title="Benötigt aktive Cloud-Verbindung zum Miniserver – nicht offline-fähig"
+                                  >
+                                    <Cloud className="h-3 w-3" />
+                                    Cloud erforderlich
+                                  </Badge>
+                                )}
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5">{r.template_key}</p>
                             </div>
@@ -266,6 +280,14 @@ export default function SuperAdminLoxoneTemplates() {
 
             <TabsContent value="master">
               <LoxoneMasterProject />
+            </TabsContent>
+
+            <TabsContent value="injector">
+              <LoxoneInjector />
+            </TabsContent>
+
+            <TabsContent value="manuals">
+              <LoxoneManualsEditor />
             </TabsContent>
           </Tabs>
 
