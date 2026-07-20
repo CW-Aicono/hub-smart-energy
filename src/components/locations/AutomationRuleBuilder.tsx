@@ -714,6 +714,8 @@ export function AutomationRuleBuilder({
   gatewayOptions,
   deviceTypeMap,
   installedTemplates,
+  crossLocationTargets,
+  templateAvailability,
 }: AutomationRuleBuilderProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -725,8 +727,11 @@ export function AutomationRuleBuilder({
   const [templateKey, setTemplateKey] = useState<string>("");
   const [templateInstance, setTemplateInstance] = useState<string>("");
   const [templateParams, setTemplateParams] = useState<Record<string, string>>({});
+  const [targetLocationIds, setTargetLocationIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [addConditionOpen, setAddConditionOpen] = useState(false);
+
+  const isMlaMode = !!crossLocationTargets && crossLocationTargets.length > 0;
 
   // Init from initialData
   useEffect(() => {
