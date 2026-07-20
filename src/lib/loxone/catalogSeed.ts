@@ -1,11 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
-import { SNIPPET_GROUPS } from "./snippetsCatalog";
+import { SNIPPET_GROUPS, CLOUD_REQUIRED_TEMPLATE_KEYS } from "./snippetsCatalog";
 
 /**
  * Befüllt/aktualisiert `loxone_template_registry` aus der im Frontend
  * gepflegten Snippet-Bibliothek. Idempotent via (template_key, version).
  */
-const CURRENT_VERSION = "1.2.0";
+const CURRENT_VERSION = "1.2.1";
 
 export async function seedRegistryFromSnippets(): Promise<{
   inserted: number;
@@ -26,12 +26,14 @@ export async function seedRegistryFromSnippets(): Promise<{
         description: s.description,
         parameters: s.parameters as any,
         min_miniserver_fw: "12.0",
+        requires_cloud: CLOUD_REQUIRED_TEMPLATE_KEYS.has(s.templateKey),
         changelog:
-          "v1.2.0: Phase 2–4 hinzugefügt — Gruppen H (ArbitrageDispatch, PeakEventPrecharge), I (GridOperatorSignal, CommunityAllocation), J (Co2LoadShift, StorageArbitrageSoc). Push-Kanal loxone_pending_writes.",
+          "v1.2.1: Kennzeichen requires_cloud für Bausteine ohne Offline-Fähigkeit (Gruppen H/I/J: Arbitrage, Peak-Event, DSO, Community, CO₂, Storage-Trading).",
         is_active: true,
       });
     }
   }
+
 
   // 1) aktuelle Version einspielen/aktualisieren
   const { error, count } = await supabase
