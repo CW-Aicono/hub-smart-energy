@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Puzzle, AlertTriangle, CheckCircle2, DatabaseZap } from "lucide-react";
-import { SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY } from "@/lib/loxone/snippetsCatalog";
+import { RefreshCw, Puzzle, AlertTriangle, CheckCircle2, DatabaseZap, Cloud } from "lucide-react";
+import { SNIPPET_BY_KEY, GROUP_BY_TEMPLATE_KEY, isCloudRequiredTemplate } from "@/lib/loxone/snippetsCatalog";
 import { seedRegistryFromSnippets } from "@/lib/loxone/catalogSeed";
 import LoxoneMasterProject from "@/components/super-admin/LoxoneMasterProject";
 import LoxoneInjector from "@/components/super-admin/LoxoneInjector";
