@@ -69,7 +69,7 @@ export default function SuperAdminLoxoneTemplates() {
   const load = async () => {
     setLoading(true);
     const [regRes, instRes, locRes, tenRes] = await Promise.all([
-      supabase.from("loxone_template_registry").select("*").order("category").order("template_key"),
+      supabase.from("loxone_template_registry").select("*").eq("is_active", true).order("category").order("template_key"),
       supabase
         .from("location_loxone_templates")
         .select("id, tenant_id, location_id, template_key, instance_id, installed_version, last_seen_at")
