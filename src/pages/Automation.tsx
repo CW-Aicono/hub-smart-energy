@@ -823,7 +823,13 @@ const Automation = () => {
         gatewayOptions={gatewayOptionsForBuilder.length > 0 ? gatewayOptionsForBuilder : undefined}
         installedTemplates={mlaInstalledTemplates}
         crossLocationTargets={crossLocationTargets}
-        templateAvailability={mlaTemplateAvailability}
+        templateAvailability={(() => {
+          const m = new Map<string, Set<string>>();
+          mlaTemplateAvailability.forEach((bindings, key) => {
+            m.set(key, new Set(bindings.map((b) => b.locationId)));
+          });
+          return m;
+        })()}
         initialData={editTarget ? {
           name: editTarget.name,
           description: editTarget.description || "",
