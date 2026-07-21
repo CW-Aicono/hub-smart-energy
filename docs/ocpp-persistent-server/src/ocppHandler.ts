@@ -15,6 +15,9 @@ import { probeChargePointConfiguration } from "./configurationProbe";
 import { isLegacyWallbe } from "./wallboxCompat";
 
 
+/** IO-Reduktion: pro Charge-Point-PK Zeitstempel des letzten DB-Touches (ms). */
+const HEARTBEAT_TOUCH = new Map<string, number>();
+
 type OcppCall = [2, string, string, Record<string, unknown>];
 type OcppCallResult = [3, string, Record<string, unknown>];
 type OcppCallError = [4, string, string, string, Record<string, unknown>];
