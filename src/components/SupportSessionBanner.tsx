@@ -30,6 +30,18 @@ export default function SupportSessionBanner() {
     if (!session) return;
     setEnding(true);
     try {
+      // Wenn eine Super-Admin-Impersonation aktiv ist, sauber zurück in den
+      // Super-Admin (Original-Session wiederherstellen + Hard-Reload).
+      if (isImpersonating()) {
+        toast.success("Remote-Support beendet");
+        await endImpersonationAndReturn(supabase, {
+          sessionId: getActiveSupportSessionId() ?? session.id,
+          tenantId: getActiveSupportTenantId(),
+        });
+        return; // Hard-Reload – kein Code danach
+      }
+
+      // Fallback (keine Impersonation, nur Session-Marker beenden)
       await supabase
         .from("support_sessions")
         .update({ ended_at: new Date().toISOString() } as any)
