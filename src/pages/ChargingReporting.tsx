@@ -159,6 +159,7 @@ const ChargingReporting = () => {
   const [dimension, setDimension] = useState<Dimension>("charge_point");
   const [metric, setMetric] = useState<Metric>("energy_kwh");
   const [statusFilter, setStatusFilter] = useState<"all" | "paid" | "open">("all");
+  const [compareEnabled, setCompareEnabled] = useState<boolean>(false);
 
   // Layout state (persisted)
   const [layout, setLayout] = useState<WidgetId[]>(() => {
