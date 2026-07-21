@@ -5599,6 +5599,7 @@ export const translations = {
   "fl.updateError": { de: "Fehler beim Aktualisieren der Etage", en: "Error updating floor", es: "Error al actualizar la planta", nl: "Fout bij bijwerken verdieping" },
   "fl.floorPlanUploadFailed": { de: "Grundriss konnte nicht hochgeladen werden", en: "Floor plan could not be uploaded", es: "El plano no se pudo subir", nl: "Plattegrond kon niet worden geüpload" },
   "fl.uploadingFloorPlan": { de: "Grundriss wird hochgeladen…", en: "Uploading floor plan…", es: "Subiendo plano…", nl: "Plattegrond uploaden…" },
+  "fl.floorPlanUploaded": { de: "Grundriss erfolgreich hochgeladen", en: "Floor plan uploaded successfully", es: "Plano subido correctamente", nl: "Plattegrond succesvol geüpload" },
   "fl.savingData": { de: "Etagendaten werden gespeichert…", en: "Saving floor data…", es: "Guardando datos de planta…", nl: "Verdiepingsgegevens opslaan…" },
   "fl.uploading3d": { de: "3D-Modell wird hochgeladen…", en: "Uploading 3D model…", es: "Subiendo modelo 3D…", nl: "3D-model uploaden…" },
   "fl.3dUploadFailed": { de: "Etage aktualisiert, aber 3D-Modell konnte nicht hochgeladen werden", en: "Floor updated but 3D model could not be uploaded", es: "Planta actualizada pero el modelo 3D no se pudo subir", nl: "Verdieping bijgewerkt maar 3D-model kon niet worden geüpload" },
