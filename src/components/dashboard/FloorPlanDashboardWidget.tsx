@@ -10,6 +10,7 @@ import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { useFloorSensorPositions } from "@/hooks/useFloorSensorPositions";
 import { ENERGY_CARD_CLASSES, ENERGY_ICON_CLASSES } from "@/lib/energyTypeColors";
 import { supabase } from "@/integrations/supabase/client";
+import { withFloorPlanCacheBuster } from "@/lib/floorPlanUrl";
 import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
 
 const FloorPlan3DViewer = lazy(() => import("@/components/locations/FloorPlan3DViewer").then(m => ({ default: m.FloorPlan3DViewer })));
