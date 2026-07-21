@@ -8,6 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { resendFrom } from "../_shared/resend-from.ts";
+import { buildAllocations } from "../_shared/charging-reporting.ts";
 
 type Frequency = "daily" | "weekly" | "monthly";
 type Dimension =
@@ -125,63 +126,86 @@ serve(async (req) => {
       const fromISO = from.toISOString();
       const toISO = to.toISOString();
 
-      const [sessRes, invRes] = await Promise.all([
+      const [sessRes, invRes, tariffRes, usersRes, groupsRes, rfidRes] = await Promise.all([
         supabase.from("charging_sessions")
           .select("id, charge_point_id, id_tag, start_time, stop_time, energy_kwh, status")
           .eq("tenant_id", s.tenant_id)
           .gte("start_time", fromISO).lte("start_time", toISO),
         supabase.from("charging_invoices")
-          .select("id, session_id, user_id, billing_group_id, total_amount, net_amount, idle_fee_amount, status, invoice_date")
+          .select("id, session_id, user_id, billing_group_id, total_amount, net_amount, idle_fee_amount, total_energy_kwh, status, invoice_date")
           .eq("tenant_id", s.tenant_id)
           .gte("invoice_date", fromISO.slice(0, 10))
           .lte("invoice_date", toISO.slice(0, 10)),
+        supabase.from("charging_tariffs")
+          .select("id, price_per_kwh, idle_fee_per_minute, idle_fee_grace_minutes, tax_rate_percent, price_includes_vat, is_default")
+          .eq("tenant_id", s.tenant_id),
+        supabase.from("charging_users").select("id, group_id, tariff_id").eq("tenant_id", s.tenant_id),
+        supabase.from("charging_user_groups").select("id, tariff_id").eq("tenant_id", s.tenant_id),
+        supabase.from("charging_user_rfid_tags").select("tag, user_id").eq("tenant_id", s.tenant_id),
       ]);
       if (sessRes.error) throw sessRes.error;
       if (invRes.error) throw invRes.error;
 
-      const invBySess = new Map<string, { total: number; net: number; idle: number; status?: string }>();
-      let revGross = 0, revNet = 0, idle = 0;
-      for (const inv of invRes.data ?? []) {
-        if (inv.session_id) invBySess.set(inv.session_id, {
-          total: Number(inv.total_amount ?? 0),
-          net: Number(inv.net_amount ?? 0),
-          idle: Number(inv.idle_fee_amount ?? 0),
-          status: inv.status ?? undefined,
-        });
-        revGross += Number(inv.total_amount ?? 0);
-        revNet += Number(inv.net_amount ?? 0);
-        idle += Number(inv.idle_fee_amount ?? 0);
+      const invoiceIds = (invRes.data ?? []).map((i: { id: string }) => i.id);
+      let invoiceLinks: { invoice_id: string; session_id: string }[] = [];
+      if (invoiceIds.length > 0) {
+        const { data: linkData } = await supabase
+          .from("charging_invoice_sessions")
+          .select("invoice_id, session_id")
+          .in("invoice_id", invoiceIds);
+        invoiceLinks = linkData ?? [];
       }
 
-      const sessions = (sessRes.data ?? []).filter((row) => {
-        if (cfg.statusFilter === "paid") return invBySess.get(row.id)?.status === "paid";
-        if (cfg.statusFilter === "open") {
-          const inv = invBySess.get(row.id);
-          return !inv || inv.status !== "paid";
-        }
+      const rfidToUser = new Map(
+        ((rfidRes.data ?? []) as { tag: string; user_id: string }[])
+          .map((r) => [String(r.tag ?? "").toLowerCase(), r.user_id]),
+      );
+
+      const { allocations } = buildAllocations({
+        sessions: (sessRes.data ?? []) as Parameters<typeof buildAllocations>[0]["sessions"],
+        invoices: (invRes.data ?? []) as Parameters<typeof buildAllocations>[0]["invoices"],
+        invoiceLinks,
+        tariffs: (tariffRes.data ?? []) as Parameters<typeof buildAllocations>[0]["tariffs"],
+        users: ((usersRes.data ?? []) as { id: string; group_id: string | null; tariff_id: string | null }[]),
+        userGroups: ((groupsRes.data ?? []) as { id: string; tariff_id: string | null }[]),
+        rfidToUser,
+      });
+
+      const sessions = (sessRes.data ?? []).filter((row: { id: string }) => {
+        const a = allocations.get(row.id);
+        if (cfg.statusFilter === "paid") return a?.source === "invoice" && a.invoice_status === "paid";
+        if (cfg.statusFilter === "open") return !a || a.source !== "invoice" || a.invoice_status !== "paid";
         return true;
       });
 
-      let energy = 0, durationH = 0;
+      let energy = 0, durationH = 0, revGross = 0, revNet = 0, idle = 0, revInvoice = 0, revCalc = 0;
       for (const r of sessions) {
         energy += Number(r.energy_kwh ?? 0);
         if (r.start_time && r.stop_time) {
           durationH += (new Date(r.stop_time).getTime() - new Date(r.start_time).getTime()) / 3_600_000;
         }
+        const a = allocations.get(r.id);
+        if (!a) continue;
+        revGross += a.revenue_gross;
+        revNet += a.revenue_net;
+        idle += a.idle_fee;
+        if (a.source === "invoice") revInvoice += a.revenue_gross;
+        else if (a.source === "calculated") revCalc += a.revenue_gross;
       }
 
       const dimension: Dimension = cfg.dimension ?? "charge_point";
       const metric: Metric = cfg.metric ?? "revenue_gross";
 
       const detailRows: (string | number)[][] = [
-        ["Session-ID", "Ladepunkt-ID", "Start", "Stop", "Energie (kWh)", "Umsatz brutto (EUR)", "Status Session", "Status Rechnung"],
-        ...sessions.map((r) => {
-          const inv = invBySess.get(r.id);
+        ["Session-ID", "Ladepunkt-ID", "Start", "Stop", "Energie (kWh)", "Umsatz brutto (EUR)", "Quelle", "Status Session", "Status Rechnung"],
+        ...sessions.map((r: { id: string; charge_point_id: string | null; start_time: string; stop_time: string | null; energy_kwh: number | null; status: string | null }) => {
+          const a = allocations.get(r.id);
           return [
             r.id, r.charge_point_id ?? "", r.start_time ?? "", r.stop_time ?? "",
             Number((Number(r.energy_kwh ?? 0)).toFixed(2)),
-            Number((inv?.total ?? 0).toFixed(2)),
-            r.status ?? "", inv?.status ?? "offen",
+            Number((a?.revenue_gross ?? 0).toFixed(2)),
+            a?.source ?? "none",
+            r.status ?? "", a?.invoice_status ?? (a?.source === "calculated" ? "kalkulatorisch" : "offen"),
           ];
         }),
       ];
@@ -197,6 +221,8 @@ serve(async (req) => {
         ["Sessions", sessions.length],
         ["Energie (kWh)", Number(energy.toFixed(2))],
         ["Umsatz brutto (EUR)", Number(revGross.toFixed(2))],
+        ["davon abgerechnet (EUR)", Number(revInvoice.toFixed(2))],
+        ["davon kalkulatorisch (EUR)", Number(revCalc.toFixed(2))],
         ["Umsatz netto (EUR)", Number(revNet.toFixed(2))],
         ["Standzeit-Gebühren (EUR)", Number(idle.toFixed(2))],
         ["Ø Ladedauer (h)", sessions.length ? Number((durationH / sessions.length).toFixed(2)) : 0],
