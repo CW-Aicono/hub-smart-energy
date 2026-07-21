@@ -999,6 +999,13 @@ const ChargingReporting = () => {
             <Button variant="outline" size="sm" onClick={exportXlsx} disabled={loading || grouped.length === 0}>
               <FileSpreadsheet className="h-4 w-4 mr-2" /> XLSX
             </Button>
+            <Button variant="outline" size="sm" onClick={exportPdf} disabled={loading || grouped.length === 0}>
+              <FileText className="h-4 w-4 mr-2" /> PDF
+            </Button>
+            <div className="flex items-center gap-2 pl-2 border-l ml-1">
+              <Switch id="compare-toggle" checked={compareEnabled} onCheckedChange={setCompareEnabled} />
+              <Label htmlFor="compare-toggle" className="text-xs cursor-pointer">Vergleich Vorperiode</Label>
+            </div>
           </div>
         </div>
 
