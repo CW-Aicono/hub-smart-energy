@@ -2723,6 +2723,12 @@ export const translations = {
     es: "Facturación",
     nl: "Facturering",
   },
+  "nav.chargingReporting": {
+    de: "Reporting",
+    en: "Reporting",
+    es: "Informes",
+    nl: "Rapportage",
+  },
   "nav.chargingUsers": {
     de: "Lade-Nutzer",
     en: "Charging Users",
