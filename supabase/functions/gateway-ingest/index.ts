@@ -1392,12 +1392,22 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
         ?? (storages ?? []).find((s: any) => !s.power_meter_id);
       if (!storage) continue;
 
+      // IO-Reduktion: SOC nur schreiben, wenn Delta ≥ 0.5% ODER letzte
+      // Aktualisierung >5 Min alt. Vorher: 9k Updates/Tag auf 3 Zeilen.
+      const currentSoc = (storage as any).current_soc_pct as number | null;
+      const currentSocAt = (storage as any).soc_updated_at as string | null;
+      const delta = currentSoc == null ? Infinity : Math.abs(currentSoc - row.value);
+      const ageMs = currentSocAt ? Date.now() - new Date(currentSocAt).getTime() : Infinity;
+      const uuidChanged = storage.soc_sensor_uuid !== row.uuid;
+      const meterLinkChanged = storage.power_meter_id !== meter.id;
+      if (!uuidChanged && !meterLinkChanged && delta < 0.5 && ageMs < 5 * 60_000) continue;
+
       const patch: Record<string, unknown> = {
         current_soc_pct: row.value,
         soc_updated_at: row.at,
       };
-      if (storage.soc_sensor_uuid !== row.uuid) patch.soc_sensor_uuid = row.uuid;
-      if (storage.power_meter_id !== meter.id) patch.power_meter_id = meter.id;
+      if (uuidChanged) patch.soc_sensor_uuid = row.uuid;
+      if (meterLinkChanged) patch.power_meter_id = meter.id;
 
       const { error: socErr } = await supabase
         .from("energy_storages")
@@ -1416,6 +1426,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
         });
         socUpdated++;
       }
+
     }
   }
 
