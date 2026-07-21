@@ -107,7 +107,7 @@ const FloorPlanDashboardWidget = ({ locationId, onExpand, onCollapse }: FloorPla
             name: f.name,
             location_id: f.location_id,
             location_name: loc?.name || "",
-            floor_plan_url: f.floor_plan_url,
+            floor_plan_url: withFloorPlanCacheBuster(f.floor_plan_url, f.updated_at),
             floor_number: f.floor_number,
             model_3d_url: f.model_3d_url,
             model_3d_mtl_url: f.model_3d_mtl_url,
