@@ -150,6 +150,7 @@ const PRESETS_STORAGE_KEY = "charging-reporting.presets.v1";
 
 const ChargingReporting = () => {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
   const tenantId = tenant?.id;
 
   // Filter state
