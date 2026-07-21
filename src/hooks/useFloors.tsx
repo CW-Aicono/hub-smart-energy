@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { withFloorPlanCacheBuster } from "@/lib/floorPlanUrl";
 
 type FloorInsertDB = Database["public"]["Tables"]["floors"]["Insert"];
 type FloorUpdateDB = Database["public"]["Tables"]["floors"]["Update"];
