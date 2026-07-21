@@ -1741,6 +1741,18 @@ async function handleLoxoneStructureSnapshot(req: Request): Promise<Response> {
     };
   });
 
+  // IO-Reduktion: nur schreiben, wenn sich `sensors` tatsächlich geändert hat.
+  // Vorher: bei jedem Struktur-Snapshot Upsert → 10k Updates/Tag auf 8 Zeilen.
+  const { data: prevSnap } = await supabase
+    .from("gateway_sensor_snapshots")
+    .select("sensors")
+    .eq("location_integration_id", body.location_integration_id)
+    .maybeSingle();
+  const sameSensors = prevSnap && JSON.stringify(prevSnap.sensors) === JSON.stringify(sensors);
+  if (sameSensors) {
+    return json({ success: true, sensors: sensors.length, unchanged: true });
+  }
+
   const { error } = await supabase
     .from("gateway_sensor_snapshots")
     .upsert({
@@ -1754,6 +1766,7 @@ async function handleLoxoneStructureSnapshot(req: Request): Promise<Response> {
       error_message: null,
       source: "loxone-ws-worker",
     }, { onConflict: "location_integration_id" });
+
 
   if (error) {
     console.error("[gateway-ingest] loxone-structure-snapshot upsert error:", error.message);
