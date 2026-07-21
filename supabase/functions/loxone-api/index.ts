@@ -1810,23 +1810,24 @@ serve(async (req) => {
             const dates2 = Array.from(new Set(dailySnapshotInserts.map((s: any) => s.snapshot_date)));
             const { data: existingSnaps } = await supabase
               .from("meter_loxone_daily_snapshots")
-              .select("meter_id, snapshot_date, total_kwh, cumulative_kwh")
+              .select("meter_id, snapshot_date, energy_total_kwh, energy_today_kwh")
               .in("meter_id", meterIds2)
               .in("snapshot_date", dates2);
-            const snapMap = new Map<string, { total_kwh: number | null; cumulative_kwh: number | null }>();
+            const snapMap = new Map<string, { total: number | null; today: number | null }>();
             for (const r of existingSnaps ?? []) {
               snapMap.set(`${r.meter_id}|${r.snapshot_date}`, {
-                total_kwh: r.total_kwh == null ? null : Number(r.total_kwh),
-                cumulative_kwh: r.cumulative_kwh == null ? null : Number(r.cumulative_kwh),
+                total: r.energy_total_kwh == null ? null : Number(r.energy_total_kwh),
+                today: r.energy_today_kwh == null ? null : Number(r.energy_today_kwh),
               });
             }
             const toWrite = dailySnapshotInserts.filter((s: any) => {
               const prev = snapMap.get(`${s.meter_id}|${s.snapshot_date}`);
               if (!prev) return true;
-              const totalChanged = Number(prev.total_kwh ?? NaN) !== Number(s.total_kwh ?? NaN);
-              const cumChanged = Number(prev.cumulative_kwh ?? NaN) !== Number(s.cumulative_kwh ?? NaN);
-              return totalChanged || cumChanged;
+              const totalChanged = Number(prev.total ?? NaN) !== Number(s.energy_total_kwh ?? NaN);
+              const todayChanged = Number(prev.today ?? NaN) !== Number(s.energy_today_kwh ?? NaN);
+              return totalChanged || todayChanged;
             });
+
             if (toWrite.length > 0) {
               const { error: snapErr } = await supabase
                 .from("meter_loxone_daily_snapshots")
