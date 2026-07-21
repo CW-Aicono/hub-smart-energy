@@ -142,8 +142,9 @@ const WIDGET_META: Record<WidgetId, { label: string; icon: React.ReactNode }> = 
   trend:   { label: "Zeitverlauf", icon: <LineChartIcon className="h-4 w-4" /> },
   heatmap: { label: "Heatmap (Wochentag × Stunde)", icon: <Flame className="h-4 w-4" /> },
   table:   { label: "Detailtabelle", icon: <TableIcon className="h-4 w-4" /> },
+  roaming: { label: "Roaming (nach Partner)", icon: <Globe2 className="h-4 w-4" /> },
 };
-const DEFAULT_LAYOUT: WidgetId[] = ["ranking", "trend", "heatmap", "table"];
+const DEFAULT_LAYOUT: WidgetId[] = ["ranking", "trend", "heatmap", "table", "roaming"];
 const LAYOUT_STORAGE_KEY = "charging-reporting.layout.v1";
 const PRESETS_STORAGE_KEY = "charging-reporting.presets.v1";
 
