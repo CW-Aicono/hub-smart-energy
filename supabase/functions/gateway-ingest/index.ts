@@ -1383,7 +1383,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
 
       const { data: storages } = await supabase
         .from("energy_storages")
-        .select("id, power_meter_id, soc_sensor_uuid")
+        .select("id, power_meter_id, soc_sensor_uuid, current_soc_pct, soc_updated_at")
         .eq("tenant_id", row.tenant_id)
         .eq("location_id", meter.location_id);
 
