@@ -13443,6 +13443,13 @@ export type Database = {
           status: string
         }[]
       }
+      email_exists_anywhere: {
+        Args: { _email: string }
+        Returns: {
+          context: string
+          exists_flag: boolean
+        }[]
+      }
       ensure_at_least_one_admin: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
