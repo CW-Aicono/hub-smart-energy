@@ -16,9 +16,14 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Download, BarChart3, Users as UsersIcon, Zap, Euro, Clock, PlugZap,
   GripVertical, Star, Save, Trash2, FileSpreadsheet, Flame, LineChart as LineChartIcon, Table as TableIcon,
+  FileText, CalendarClock, Plus, ChevronDown, Send, TrendingUp, TrendingDown, Globe2,
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
