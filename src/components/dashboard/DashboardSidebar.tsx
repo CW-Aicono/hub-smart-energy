@@ -158,7 +158,7 @@ const DashboardSidebar = () => {
         { to: "/charging/points", icon: PlugZap, labelKey: "nav.chargingPoints" as TranslationKey },
         { to: "/charging/users", icon: Users, labelKey: "nav.chargingUsers" as TranslationKey },
         { to: "/charging/billing", icon: Receipt, labelKey: "nav.chargingBilling" as TranslationKey },
-        { to: "/charging/app", icon: Smartphone, labelKey: "nav.chargingApp" as TranslationKey },
+        
         { to: "/charging/settings", icon: Settings, labelKey: "nav.chargingSettings" as TranslationKey },
       ]
     },
