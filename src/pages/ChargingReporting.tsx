@@ -82,7 +82,7 @@ interface ReportPreset {
   customTo?: string;
   dimension: Dimension;
   metric: Metric;
-  statusFilter: "all" | "paid" | "open";
+  statusFilter: "all" | "paid" | "open" | "calculated";
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -162,7 +162,7 @@ const ChargingReporting = () => {
   const [customTo, setCustomTo] = useState<string>(toISODate(new Date()));
   const [dimension, setDimension] = useState<Dimension>("charge_point");
   const [metric, setMetric] = useState<Metric>("energy_kwh");
-  const [statusFilter, setStatusFilter] = useState<"all" | "paid" | "open">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "paid" | "open" | "calculated">("all");
   const [compareEnabled, setCompareEnabled] = useState<boolean>(false);
 
   // Layout state (persisted)
@@ -371,7 +371,7 @@ const ChargingReporting = () => {
     enabled: !!tenantId,
     staleTime: 10 * 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase.from("charging_users").select("id, name, group_id").eq("tenant_id", tenantId!);
+      const { data, error } = await supabase.from("charging_users").select("id, name, group_id, tariff_id").eq("tenant_id", tenantId!);
       if (error) throw error;
       return data ?? [];
     },
@@ -382,7 +382,7 @@ const ChargingReporting = () => {
     enabled: !!tenantId,
     staleTime: 10 * 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase.from("charging_user_groups").select("id, name").eq("tenant_id", tenantId!);
+      const { data, error } = await supabase.from("charging_user_groups").select("id, name, tariff_id").eq("tenant_id", tenantId!);
       if (error) throw error;
       return data ?? [];
     },
@@ -405,6 +405,36 @@ const ChargingReporting = () => {
     staleTime: 10 * 60_000,
     queryFn: async () => {
       const { data, error } = await supabase.from("charging_user_rfid_tags").select("tag, user_id").eq("tenant_id", tenantId!);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const tariffsQ = useQuery({
+    queryKey: ["cr-tariffs", tenantId],
+    enabled: !!tenantId,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charging_tariffs")
+        .select("id, price_per_kwh, idle_fee_per_minute, idle_fee_grace_minutes, tax_rate_percent, price_includes_vat, is_default")
+        .eq("tenant_id", tenantId!);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const invoiceLinksQ = useQuery({
+    queryKey: ["cr-invoice-links", tenantId, fromISO, toISO],
+    enabled: !!tenantId && !!invoicesQ.data,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const ids = (invoicesQ.data ?? []).map((i) => i.id);
+      if (ids.length === 0) return [];
+      const { data, error } = await supabase
+        .from("charging_invoice_sessions")
+        .select("invoice_id, session_id")
+        .in("invoice_id", ids);
       if (error) throw error;
       return data ?? [];
     },
