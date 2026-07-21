@@ -450,6 +450,56 @@ const ChargingReporting = () => {
     return { energy, durationH, count, revenueGross, revenueNet, idleFee, avgKwh, avgPrice, invoicedKwh };
   }, [sessions, invoicesQ.data, invoiceBySession]);
 
+  // KPI Vorperiode (nur wenn Vergleich aktiv)
+  const kpiPrev = useMemo(() => {
+    if (!compareEnabled) return null;
+    const prevSess = prevSessionsQ.data ?? [];
+    const prevInvs = prevInvoicesQ.data ?? [];
+    const prevInvSet = new Set(prevInvs.map((i) => i.session_id).filter(Boolean) as string[]);
+    let energy = 0, count = 0, invoicedKwh = 0;
+    for (const s of prevSess) {
+      const kwh = Number(s.energy_kwh ?? 0);
+      energy += kwh;
+      count += 1;
+      if (prevInvSet.has(s.id)) invoicedKwh += kwh;
+    }
+    let revenueGross = 0, revenueNet = 0, idleFee = 0;
+    for (const inv of prevInvs) {
+      revenueGross += Number(inv.total_amount ?? 0);
+      revenueNet += Number(inv.net_amount ?? 0);
+      idleFee += Number(inv.idle_fee_amount ?? 0);
+    }
+    return { energy, count, revenueGross, revenueNet, idleFee, invoicedKwh };
+  }, [compareEnabled, prevSessionsQ.data, prevInvoicesQ.data]);
+
+  function delta(current: number, previous: number | undefined | null): { pct: number; up: boolean } | null {
+    if (!compareEnabled || previous == null) return null;
+    if (previous === 0) return current === 0 ? { pct: 0, up: true } : { pct: 100, up: current > 0 };
+    const pct = ((current - previous) / Math.abs(previous)) * 100;
+    return { pct, up: pct >= 0 };
+  }
+
+  // Roaming Aggregation nach Partner + Richtung
+  const roamingByPartner = useMemo(() => {
+    const partners = new Map((roamingPartnersQ.data ?? []).map((p) => [p.id, p.name]));
+    const acc = new Map<string, { key: string; partner: string; direction: string; sessions: number; kwh: number; amount: number }>();
+    for (const r of roamingSessionsQ.data ?? []) {
+      const key = `${r.partner_id ?? "unknown"}::${r.direction ?? "inbound"}`;
+      const cur = acc.get(key) ?? {
+        key,
+        partner: partners.get(r.partner_id ?? "") ?? "Unbekannter Partner",
+        direction: r.direction ?? "inbound",
+        sessions: 0, kwh: 0, amount: 0,
+      };
+      cur.sessions += 1;
+      cur.kwh += Number(r.energy_kwh ?? 0);
+      cur.amount += Number(r.cost_amount ?? 0);
+      acc.set(key, cur);
+    }
+    return Array.from(acc.values()).sort((a, b) => b.amount - a.amount);
+  }, [roamingSessionsQ.data, roamingPartnersQ.data]);
+
+
   // ── Grouping ───────────────────────────────────────────────────────────────
   function groupKey(s: SessionRow): { key: string; label: string } {
     const inv = invoiceBySession.get(s.id);
