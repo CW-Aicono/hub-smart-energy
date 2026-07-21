@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
+export { default as ChargingAppContent } from "./ChargingAppContent";
 import { useChargingUsers, useChargingUserGroups } from "@/hooks/useChargingUsers";
 import { useTenant } from "@/hooks/useTenant";
 import { Card, CardContent } from "@/components/ui/card";
