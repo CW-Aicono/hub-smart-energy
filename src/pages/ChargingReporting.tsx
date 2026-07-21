@@ -676,7 +676,7 @@ const ChargingReporting = () => {
       const key = toISODate(new Date(s.start_time));
       const inv = invoiceBySession.get(s.id);
       const cur = m.get(key) ?? { kwh: 0, revenue: 0, sessions: 0 };
-      cur.kwh += Number(s.energy_kwh ?? 0);
+      cur.kwh += inv && inv.total_energy_kwh != null ? Number(inv.total_energy_kwh) : Number(s.energy_kwh ?? 0);
       cur.revenue += Number(inv?.total_amount ?? 0);
       cur.sessions += 1;
       m.set(key, cur);
