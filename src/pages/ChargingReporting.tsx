@@ -1004,11 +1004,20 @@ const ChargingReporting = () => {
 };
 
 // ── Presentation components ────────────────────────────────────────────────
-const KpiTile = ({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) => (
+const KpiTile = ({ icon, label, value, delta }: {
+  icon: React.ReactNode; label: string; value: string;
+  delta?: { pct: number; up: boolean } | null;
+}) => (
   <Card>
     <CardContent className="p-4">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">{icon}{label}</div>
       <div className="text-lg font-semibold mt-1 truncate" title={value}>{value}</div>
+      {delta && (
+        <div className={`text-[11px] mt-0.5 flex items-center gap-1 ${delta.up ? "text-emerald-600" : "text-red-500"}`}>
+          {delta.up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+          {delta.up ? "+" : ""}{delta.pct.toFixed(1).replace(".", ",")}% vs. Vorperiode
+        </div>
+      )}
     </CardContent>
   </Card>
 );
