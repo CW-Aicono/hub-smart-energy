@@ -80,6 +80,7 @@ const OcppIntegration = lazy(() => import("./pages/OcppIntegration"));
 const ChargingSettings = lazy(() => import("./pages/ChargingSettings"));
 const ChargePointDetail = lazy(() => import("./pages/ChargePointDetail"));
 const ChargingBilling = lazy(() => import("./pages/ChargingBilling"));
+const ChargingReporting = lazy(() => import("./pages/ChargingReporting"));
 const ChargingUsersPage = lazy(() => import("./pages/ChargingUsersPage"));
 const Automation = lazy(() => import("./pages/Automation"));
 const EmailTemplates = lazy(() => import("./pages/EmailTemplates"));
