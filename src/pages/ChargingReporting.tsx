@@ -346,15 +346,19 @@ const ChargingReporting = () => {
 
   // ── Aggregation ────────────────────────────────────────────────────────────
   const grouped = useMemo(() => {
-    const m = new Map<string, { label: string; value: number; sessions: number; kwh: number; revenue: number }>();
+    const m = new Map<string, { label: string; value: number; sessions: number; kwh: number; invoicedKwh: number; revenue: number }>();
     for (const s of sessions) {
       const { key, label } = groupKey(s);
       const inv = invoiceBySession.get(s.id);
-      const cur = m.get(key) ?? { label, value: 0, sessions: 0, kwh: 0, revenue: 0 };
+      const cur = m.get(key) ?? { label, value: 0, sessions: 0, kwh: 0, invoicedKwh: 0, revenue: 0 };
       cur.value += metricValue(s);
       cur.sessions += 1;
-      cur.kwh += Number(s.energy_kwh ?? 0);
-      cur.revenue += Number(inv?.total_amount ?? 0);
+      const kwh = Number(s.energy_kwh ?? 0);
+      cur.kwh += kwh;
+      if (inv) {
+        cur.invoicedKwh += kwh;
+        cur.revenue += Number(inv.total_amount ?? 0);
+      }
       m.set(key, cur);
     }
     const rows = Array.from(m.entries()).map(([key, v]) => ({ key, ...v }));
