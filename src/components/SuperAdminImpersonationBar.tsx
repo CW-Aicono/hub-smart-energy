@@ -39,29 +39,16 @@ export default function SuperAdminImpersonationBar() {
   if (location.pathname.startsWith("/auth")) return null;
 
   const handleEnd = async () => {
-    const sessionId = getActiveSupportSessionId();
     setEnding(true);
     try {
-      if (sessionId) {
-        await supabase.functions.invoke("support-session-end", {
-          body: { session_id: sessionId },
-        });
-      }
-      const tid = tenantId;
-      // Original-Session des Super-Admins wiederherstellen
-      const orig = getOriginalSession();
-      if (orig) {
-        await supabase.auth.setSession({
-          access_token: orig.access_token,
-          refresh_token: orig.refresh_token,
-        });
-      }
-      clearImpersonation();
       toast.success("Remote-Support beendet");
-      navigate(tid ? `/super-admin/tenants/${tid}` : "/super-admin/tenants");
+      await endImpersonationAndReturn(supabase, {
+        sessionId: getActiveSupportSessionId(),
+        tenantId,
+      });
+      // hard reload — kein Code danach
     } catch (e: any) {
       toast.error("Beenden fehlgeschlagen: " + (e?.message ?? ""));
-    } finally {
       setEnding(false);
     }
   };
