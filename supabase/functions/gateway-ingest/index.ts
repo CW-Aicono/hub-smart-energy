@@ -1647,6 +1647,9 @@ async function handleWsSessionHeartbeat(req: Request): Promise<Response> {
   if (!body.session_id) return json({ error: "session_id required" }, 400);
 
   const supabase = getSupabase();
+  // IO-Reduktion: Heartbeat nur schreiben, wenn seit letztem Update >60s vergangen.
+  // Vorher: pro Worker-Tick ein Update auf loxone_ws_session_log (13k Updates/Tag).
+  const cutoff = new Date(Date.now() - 60_000).toISOString();
   const { error } = await supabase
     .from("loxone_ws_session_log")
     .update({
@@ -1655,7 +1658,9 @@ async function handleWsSessionHeartbeat(req: Request): Promise<Response> {
       reconnect_count: body.reconnect_count ?? 0,
     })
     .eq("id", body.session_id)
-    .is("ended_at", null);
+    .is("ended_at", null)
+    .lt("updated_at", cutoff);
+
 
   if (error) {
     console.error("[gateway-ingest] ws-session-heartbeat error:", error.message);
