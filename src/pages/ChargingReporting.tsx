@@ -35,6 +35,11 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import * as XLSX from "@e965/xlsx";
 import { jsPDF } from "jspdf";
+import {
+  buildAllocations, passesStatusFilter,
+  type SessionAllocation, type DiagnosticsReport,
+} from "@/lib/chargingReporting";
+import { AlertTriangle } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type Dimension =
