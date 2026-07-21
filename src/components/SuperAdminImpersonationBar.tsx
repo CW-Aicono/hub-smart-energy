@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useTenant } from "@/hooks/useTenant";
 import {
   getActiveSupportSessionId,
   getActiveSupportTenantId,
-  clearImpersonation,
   onImpersonationChanged,
   endImpersonationAndReturn,
 } from "@/lib/supportView";
@@ -22,7 +21,6 @@ import { toast } from "sonner";
 export default function SuperAdminImpersonationBar() {
   const { isSuperAdmin } = useSuperAdmin();
   const { tenant } = useTenant();
-  const navigate = useNavigate();
   const location = useLocation();
 
   const [tenantId, setTenantId] = useState<string | null>(() => getActiveSupportTenantId());
