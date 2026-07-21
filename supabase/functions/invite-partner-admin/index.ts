@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { resendFrom } from "../_shared/resend-from.ts";
+import { checkInviteConflict } from "../_shared/invite-conflict.ts";
 
 const handler = async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
@@ -105,18 +106,24 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (!adminEmail.includes("@")) throw new Error("E-Mail ungültig.");
 
-    // 2) Auth-User erstellen oder bestehenden wiederverwenden
-    let newUserId: string;
-    const { data: lookupUsers } = await supabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 200,
+    // 2) Systemweite E-Mail-Sperre: keine Doppel-Accounts (Tenant/Partner/Super-Admin)
+    const conflict = await checkInviteConflict({
+      supabase,
+      email: adminEmail,
+      intent: "partner_invite",
+      partnerId: partner.id,
+      callerIsSuper: true,
     });
-    const existingUser = lookupUsers?.users?.find(
-      (u) => u.email?.toLowerCase() === adminEmail,
-    );
+    if (!conflict.ok) {
+      return new Response(
+        JSON.stringify({ success: false, error: conflict.error }),
+        { status: conflict.status ?? 409, headers: { "Content-Type": "application/json", ...corsHeaders } },
+      );
+    }
 
-    if (existingUser) {
-      newUserId = existingUser.id;
+    let newUserId: string;
+    if (conflict.existingUserId) {
+      newUserId = conflict.existingUserId;
     } else {
       const tempPassword = crypto.randomUUID() + "Aa1!";
       const { data: newUserData, error: createError } =
