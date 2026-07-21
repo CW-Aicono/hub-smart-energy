@@ -1,17 +1,45 @@
-## Problem
-In der Raumliste (`RoomPolygonEditor.tsx`) sind die Aktions-Icons (Bearbeiten/Löschen/Platzieren) nur bei Hover sichtbar (`opacity-0 group-hover:opacity-100`). Bei langen Raumnamen bleibt zwar durch `truncate` genug Platz, aber:
-- Auf Touch-Geräten (Tablet/Handy) gibt es keinen Hover → Icons sind **nie erreichbar**.
-- Auf Desktop wirkt es, als „passten die Icons nicht mehr rein", weil der lange Name die volle Zeile visuell füllt, bis man hovert.
+## Ursache
 
-## Lösung (nur UI, klein)
-Datei: `src/components/locations/RoomPolygonEditor.tsx` (Zeilen ~290–353)
+In `src/components/locations/LocationTree.tsx` (Zeile 291–295) wird entschieden, ob Etagen/Räume/Zähler unter einer Liegenschaft angezeigt werden:
 
-1. **Icons dauerhaft sichtbar machen** — `opacity-0 group-hover:opacity-100` entfernen. Auf Desktop optional dezenter (`opacity-70 hover:opacity-100`) statt komplett unsichtbar.
-2. **Icon-Container vor Verdrängung schützen** — `flex-shrink-0` am Aktions-`<div>` ergänzen, damit der lange Name die Buttons nicht überschieben kann.
-3. **Textblock sicher kürzen** — sicherstellen, dass sowohl `{room.name}` als auch `„Platziert / Nicht platziert"` mit `truncate` + `min-w-0` sauber abgeschnitten werden (Zeile 308 hat aktuell kein `truncate`).
-4. Als Tooltip/`title` weiterhin den vollständigen Namen anzeigen, damit lange Namen lesbar bleiben.
+```ts
+const isEinzelgebaeude = location.type === "einzelgebaeude";
+const isChildOfComplex = level > 0;
+const shouldShowFloors = isEinzelgebaeude || isChildOfComplex;
+```
 
-Keine Änderungen an DB, Logik, Overlay oder anderen Komponenten.
+Damit gilt:
 
-## Ergebnis
-Bearbeiten- und Löschen-Icons sind bei jedem Raum – unabhängig von Namenslänge und Eingabegerät – immer erreichbar; der lange Name wird sauber mit „…" abgeschnitten.
+- **Einzelgebäude** auf Root-Ebene → Etagen werden geladen und angezeigt ✅
+- **Gebäudekomplex** auf Root-Ebene ohne Kind-Standorte → `shouldShowFloors = false`, `useFloors` wird nie aufgerufen, kein Expand-Chevron ❌
+
+Auf Lovable (Screenshot 1) sind alle sichtbaren Liegenschaften vom Typ **Einzelgebäude** — deshalb funktioniert die Baumdarstellung dort.
+Auf Hetzner (Screenshot 2) ist „Zentrale Jüke" vom Typ **Gebäudekomplex** und hat keine Kind-Locations, sondern Etagen/Räume/Zähler direkt an der Liegenschaft hängen (Screenshot 3 bestätigt: EG mit Räumen und Zählern, OG etc.). Der Baum erwartet aber, dass ein Gebäudekomplex ausschließlich als Container für weitere Standorte dient — deshalb wird nichts angezeigt und der Ordner ist nicht aufklappbar.
+
+Es ist **kein** Sync-, Cache- oder RLS-Problem. Die gleichen Daten würden auch auf Lovable so aussehen, wenn dort eine Root-Location als „Gebäudekomplex" ohne Kinder existierte.
+
+## Fix
+
+Regel korrigieren, sodass Etagen immer geladen werden, wenn die Liegenschaft keine Kind-Standorte hat — egal welcher Typ:
+
+```ts
+const hasChildren = location.children && location.children.length > 0;
+const shouldShowFloors = isEinzelgebaeude || isChildOfComplex || !hasChildren;
+```
+
+Damit:
+
+- Einzelgebäude → wie bisher Etagen direkt
+- Gebäudekomplex **mit** Kind-Standorten → wie bisher nur die Kinder (Etagen hängen an den Kindern)
+- Gebäudekomplex **ohne** Kind-Standorte (Fall Hetzner „Zentrale Jüke") → Etagen/Räume/Zähler werden direkt angezeigt
+- Kind-Standorte innerhalb eines Komplexes → wie bisher Etagen
+
+## Betroffene Datei
+
+- `src/components/locations/LocationTree.tsx` — nur die Berechnung von `shouldShowFloors` in `LocationNode` (eine Zeile).
+
+## Verifizierung nach der Umsetzung
+
+1. Bestehender Test `src/components/__tests__/LocationTree.test.tsx` läuft unverändert.
+2. Manuell im Preview: eine Root-Liegenschaft auf „Gebäudekomplex" umstellen, die Etagen enthält — Baum muss aufklappbar sein und Etagen/Räume/Zähler zeigen.
+3. Auf Hetzner nach Deploy: „Zentrale Jüke" zeigt EG/OG samt Räumen und Zählern wie im Screenshot 3 sichtbar.
