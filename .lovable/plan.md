@@ -1,105 +1,89 @@
-# IO-Budget-Analyse & Gegenmaßnahmen
+# Plan: Modul "Reporting" für Ladeinfrastruktur
 
-## Was ich in den letzten 8-10h gemessen habe
+## Ziel
+Neuer Menüpunkt **Reporting** unter *Ladeinfrastruktur*, zwischen *Abrechnung* und *Einstellungen*. Er erlaubt frei kombinierbare Auswertungen über Ladepunkte, Ladepunktgruppen, Nutzer, Nutzergruppen, Rechnungsgruppen und Zeiträume.
 
-### Keine Volumen-Spitze bei Rohdaten
+## Menü & Routing
+- Sidebar (`DashboardSidebar.tsx` + `MobileSidebar.tsx`): neuer Eintrag `/charging/reporting` mit Icon *BarChart3*, Label `nav.chargingReporting`, positioniert **zwischen** `chargingBilling` und `chargingSettings`.
+- Neue Route in `App.tsx` (auch Demo-Variante): `/charging/reporting` → `<M><ChargingReporting/></M>` (Modul-Guard).
+- ModuleGuard: bestehender `charging`-Modul-Key wird wiederverwendet (kein neues billbares Modul — reine Reporting-Erweiterung des Ladeinfra-Moduls). Falls später gewünscht, kann ein Sub-Modul-Flag ergänzt werden.
 
-Stündliche Insert-Raten sind stabil (kein Ausreißer):
+## Seitenaufbau `ChargingReporting.tsx`
+Ein einzelner Screen mit drei Blöcken:
 
-- `bridge_raw_samples`: ~1.750/h (Loxone-WS läuft normal)
-- `meter_power_readings`: ~1.070/h
-- `meter_power_readings_5min`: ~370/h
-- `ocpp_meter_samples`, `ocpp_message_log`, `storage_soc_readings`, `automation_execution_log`: konstant
+### 1. Filterleiste (persistente Sticky-Bar)
+- **Zeitraum**: DateRangePicker mit Presets (Heute, Diese Woche, Diesen Monat, YTD, Letzte 30/90 Tage, Frei wählbar) + Vergleichszeitraum (optional).
+- **Granularität**: Stunde / Tag / Woche / Monat.
+- **Gruppierung (Dimension)**: Ladepunkt, Ladepunktgruppe, Standort, Nutzer, Nutzergruppe, Rechnungsgruppe, Tarif, RFID-Tag.
+- **Filter (Multi-Select)**: gleiche Entitäten wie Gruppierung, jeweils mit Suche.
+- **Status-Filter**: nur bezahlte / nur offene / alle Sessions.
+- **Metrik-Auswahl**: kWh, Umsatz (netto/brutto), Standzeit-Gebühr, Dauer, Anzahl Sessions, Ø kWh/Session, Ø €/kWh, Auslastung (%), Peak-Leistung kW, Idle-Anteil, CO₂-Ersparnis.
 
-→ Die Insert-Last selbst ist **nicht** die Ursache des Sprungs von 50 % → 76 %.
+Filter-Zustand wird in URL-Query-Params gespiegelt (teilbar/bookmarkbar) und in `localStorage` gecached.
 
-### Ursache: Update-Churn auf sehr kleinen Hot-Tabellen
+### 2. KPI-Kacheln (oben)
+Fixe Kennzahlen für den aktuellen Filterschnitt vs. Vergleichszeitraum (Δ%):
+- Sessions gesamt • kWh gesamt • Umsatz brutto • Ø Ladedauer • Auslastung • Ø €/kWh.
 
-`pg_stat_user_tables` zeigt massive UPDATE-Zahlen gegen winzige Tabellen — jeder Update schreibt Row + alle Indizes + WAL. Das ist der dominante IO-Verursacher:
+### 3. Frei konfigurierbare Analyse-Widgets
+Nutzer legt eine Liste von Widgets an (Add-Button). Jedes Widget hat:
+- Titel, Typ (**Balken, Linie, Fläche, Stacked-Bar, Donut, Heatmap Wochentag×Stunde, Tabelle mit Sortierung/Pagination**).
+- Metrik + Dimension + optional Sekundär-Dimension (Serien-Split).
+- Top-N-Cutoff, Sortierung.
+- Reihenfolge per Drag-and-Drop; Layout wird pro User in `dashboard_widgets` (Kategorie `charging_report`) gespeichert — bestehende Tabelle nutzbar, kein neues Schema.
 
+### Vordefinierte "Report-Presets"
+Als Startpunkt zum Ein-Klick-Laden:
+1. **Nutzer-Report** – Sessions/kWh/Umsatz je Nutzer, Ranking, Trend.
+2. **Nutzergruppen-Report** – Vergleich Gruppen (z. B. Mitarbeiter vs. Gäste).
+3. **Rechnungsgruppen-Report** – Umsatz pro Billing-Group, offene vs. bezahlte Rechnungen.
+4. **Ladepunkt-Report** – kWh/Auslastung/Fehler je CP, Ranking, Ausfallzeiten (aus `charge_point_uptime_snapshots`).
+5. **Ladepunktgruppen-Report** – Gruppenvergleich, Peak-Last, Gleichzeitigkeitsfaktor.
+6. **Tarif-Report** – Umsatz/kWh je Tarif, Idle-Fee-Anteil.
+7. **Zeit-Report** – Heatmap Wochentag×Stunde, Peak-Hours-Analyse.
+8. **Roaming-Report** – Sessions/Umsatz aus `roaming_sessions`.
 
-| Tabelle                        | Live-Rows | Updates seit Statsreset | Verhältnis                                     |
-| ------------------------------ | --------- | ----------------------- | ---------------------------------------------- |
-| `location_integrations`        | 10        | **37.729**              | 3.700×/Row                                     |
-| `charge_points`                | 6         | **29.997**              | 5.000×/Row (`last_ws_pong_at`, `ws_connected`) |
-| `meter_period_totals`          | 7.548     | **143.273**             | 19×/Row (ständige Upserts)                     |
-| `energy_storages`              | 3         | 9.366                   | 3.100×/Row (`current_soc_pct`)                 |
-| `gateway_sensor_snapshots`     | 8         | 10.023                  | 1.250×/Row (Upsert)                            |
-| `meter_loxone_daily_snapshots` | 1.259     | 44.835                  | 36×/Row                                        |
-| `loxone_ws_session_log`        | 8.023     | 13.027                  | Events-Counter-Update                          |
-| `tasks`                        | 115.932   | 74.561                  | Hoch, siehe unten                              |
+Presets speichern Filter + Widget-Set und können vom User dupliziert, umbenannt, geteilt (tenant-weit oder privat) und als Standard markiert werden.
 
+## Export
+- **CSV** (Client-seitig, alle sichtbaren Widget-Daten).
+- **XLSX** über `@e965/xlsx` (bereits im Projekt) — ein Sheet je Widget + ein "Filter"-Sheet mit den Auswahl-Parametern.
+- **PDF** über bestehende Report-Renderer-Pipeline (analog `EnergyReport.tsx`): serverseitig via Edge Function `charging-report-pdf` (neu, minimal — rendert HTML mit den Aggregaten).
+- **Geplanter Versand**: Wiederverwendung `report_schedules` (existiert), neuer `report_type = 'charging'` mit gespeichertem Preset + Empfängerliste; Cron-Job `charging-report-scheduler` (neu, klein).
 
-### Zusatzfund: fehlender Autovacuum auf großer Tabelle
+## Daten & Performance
+Alle Auswertungen laufen client-seitig gegen bestehende Tabellen — keine neuen Kern-Tabellen nötig:
+- `charging_sessions` (kWh, Dauer, CP, User via `id_tag`/RFID).
+- `charging_invoices` (Umsatz, Idle-Fee, Status, `billing_group_id`).
+- `charging_session_meter_records` (Peak-Leistung, Idle-Erkennung).
+- `charge_points`, `charge_point_groups`, `charge_point_uptime_snapshots` (Auslastung/Stabilität).
+- `charging_users`, `charging_user_groups`, `charging_user_rfid_tags` (Nutzer-Dimension).
+- `charging_billing_groups`, `charging_billing_group_members` (Rechnungsgruppen).
+- `charging_tariffs` (Tarif-Zuordnung).
+- `roaming_sessions` (Roaming-Preset).
 
-- `meter_power_readings_5min` = **586 MB**, `last_autovacuum = NULL` (noch nie), 7.245 Dead-Tuples → braucht Vacuum + tuning.
-- `bridge_raw_samples` hat 133k Deletes bei nur 40k Live-Rows → gesundes Delete-Muster, aber Vacuum-Last hoch.
+Für schwere Aggregate (Multi-Monats-Reports) neue **SQL-RPC-Funktionen** (SECURITY DEFINER, `tenant_id`-scoped) statt Rohdaten-Pulls:
+- `report_charging_by_dimension(_tenant, _from, _to, _dimension, _metric, _filters jsonb)` – liefert bereits aggregierte Rows.
+- `report_charging_heatmap(_tenant, _from, _to, _filters jsonb)` – Wochentag×Stunde.
+- `report_charging_kpis(_tenant, _from, _to, _filters jsonb, _compare_from, _compare_to)` – KPI-Kacheln inkl. Vergleich.
 
-### Anzeige-Semantik beachten
+Aggregation im PL/pgSQL mit `date_trunc`, `filter (where …)`, Joins über CP/User/Group. So bleibt Netzwerk-Payload und Browser-Last klein.
 
-Die Lovable-Anzeige „76 %" ist ein bis zu 48 h alter Alert-Snapshot (siehe Memory *IO-Budget Anzeige-Semantik*), kein Live-Wert. Der reale IO-Druck kann jetzt bereits niedriger sein — die *Ursachen* oben sind aber real und dauerhaft.
+## Zugriffskontrolle
+- Sichtbar nur mit Rolle `admin`, `manager` oder Custom-Rolle mit Permission `charging.view` (bestehend). Neue Permission `charging.report.export` für Export/Schedule (nur admin/manager per Default).
+- Alle RPCs prüfen `tenant_id = get_current_tenant_id()` und Rollen-Zugehörigkeit → keine Datenlecks über Preset-Sharing.
 
----
+## Umsetzung in Phasen
+1. **Phase 1 (MVP)**: Menüpunkt, Route, ModuleGuard, Filterleiste, KPI-Kacheln, 3 Basis-Widgets (Tabelle Nutzer, Balken Ladepunkte, Zeit-Linie), CSV-Export. Presets "Nutzer-Report" + "Ladepunkt-Report".
+2. **Phase 2**: Drag-and-Drop-Layout, Speicherung Presets, alle 8 Presets, Heatmap, XLSX-Export.
+3. **Phase 3**: PDF-Export, geplanter Versand via `report_schedules`, Vergleichszeiträume, Roaming-Preset.
 
-## Gegenmaßnahmen (priorisiert)
-
-### P1 – Charge-Point-Heartbeat-Writes drosseln (größter Hebel)
-
-Zwei Slow-Queries: `UPDATE charge_points SET last_ws_pong_at = …` (21.109 calls) und `SET ws_connected = …` (4.401 calls). Ziel: **nur schreiben wenn sich Wert relevant ändert**.
-
-- Im OCPP-Persistent-Server (`docs/ocpp-persistent-server/src/keepAlive.ts` / `chargePointRegistry.ts`): `last_ws_pong_at` maximal alle 60 s persistieren (In-Memory throtteln), statt bei jedem Pong.
-- `ws_connected` nur schreiben bei tatsächlichem State-Wechsel (Boolean-Vergleich gegen letzten geschriebenen Wert).
-
-### P2 – `location_integrations`-Updates reduzieren
-
-37k Updates auf 10 Zeilen deuten auf `last_seen_at`/Sync-Metadaten-Writes bei jedem Poll-Zyklus. 
-
-- Update nur alle 60 s je Integration schreiben (Debounce im Ingest-Path/Worker).
-- Prüfen, welcher Caller (Loxone-WS-Worker, gateway-ingest, MQTT-Bridge) schreibt und dort die Frequenz kappen.
-
-### P3 – Storage-SoC + Gateway-Snapshot-Updates poolen
-
-- `energy_storages.current_soc_pct`: nur updaten wenn |Δ| ≥ 1 % oder alle 5 min.
-- `gateway_sensor_snapshots`: bereits Upsert; prüfen ob Push-Frequenz auf 1/min statt <1 s liegt.
-
-### P4 – `meter_period_totals`/`meter_loxone_daily_snapshots` Upserts bündeln
-
-143k Upserts auf 7.548 Rows = derselbe Tages-/Monatstotal wird ständig überschrieben. 
-
-- Aggregations-Job (Cron/Realtime-Trigger) so ändern, dass Totals nur bei tatsächlicher Änderung geschrieben werden (Vergleich vor UPSERT), oder gebatcht am Ende eines Intervalls.
-
-### P5 – `meter_power_readings_5min` Autovacuum aktivieren
-
-Tabelle wurde nie autovacuumed. Migration:
-
-```sql
-ALTER TABLE public.meter_power_readings_5min SET (
-  autovacuum_vacuum_scale_factor = 0.05,
-  autovacuum_analyze_scale_factor = 0.05,
-  autovacuum_vacuum_cost_delay = 10
-);
-VACUUM (ANALYZE) public.meter_power_readings_5min;
-```
-
-Analog für `meter_power_readings_5min_bridge`, `meter_cumulative_readings`, `tasks`.
-
-### P6 – `tasks`-Update-Storm analysieren
-
-115k Rows, 74k Updates. Vermutlich Auto-Resolve-Loop der Integration-Errors. Prüfen, ob `updated_at`-Trigger + Status-Recalc unnötig oft feuert; ggf. WHERE-Guard vor UPDATE.
-
----
-
-## Technische Umsetzung (in dieser Reihenfolge)
-
-1. **Analyse-Migration + Vacuum-Tuning** (P5) — schnell, sofort messbar.
-2. **Code-Fixes Worker-Seite**: OCPP-Server + Loxone-WS-Worker Heartbeat-Throttling (P1, P2).
-3. **Aggregations-Guards** in Edge Functions (P3, P4, P6) — WHERE-Vergleiche vor UPDATE.
-4. Nach ~1 h erneut `slow_queries` + `pg_stat_user_tables` messen, um Effekt zu belegen.
-
-**Kein Instance-Upgrade** vorgeschlagen — das ist Update-Frequenz, kein Kapazitäts-Problem.
-
-## Was ich als Nächstes brauche
-
-Freigabe zur Umsetzung — soll ich mit **P1 + P5** starten (größter Hebel, geringstes Risiko), oder alle Punkte in einem Rutsch?  
-  
-Antwort: Gerne alle Punkte in einem Rutsch umsetzen.
+## Technisches (Kurz)
+- Neue Datei: `src/pages/ChargingReporting.tsx`.
+- Neuer Ordner `src/components/charging/reporting/` mit `FilterBar.tsx`, `KpiTiles.tsx`, `WidgetGrid.tsx`, `WidgetRenderer.tsx`, `PresetSelector.tsx`, `ExportMenu.tsx`.
+- Neuer Hook: `src/hooks/useChargingReport.tsx` (kapselt RPC-Calls + React-Query-Caching, `staleTime: 5min`).
+- i18n-Keys (`nav.chargingReporting`, `chargingReport.*`) für DE/EN/ES/NL.
+- Charts: `recharts` (bereits genutzt), Heatmap als eigenes SVG-Grid.
+- Zahlen konsequent `toLocaleString("de-DE")` (Core-Regel).
+- Neue Migration: 3 RPC-Funktionen + `GRANT EXECUTE … TO authenticated`.
+- Keine neuen billbaren Module — reine Erweiterung des `charging`-Moduls.

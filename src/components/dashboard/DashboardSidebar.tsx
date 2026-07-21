@@ -8,7 +8,7 @@ import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { useDemoMode, useDemoPath } from "@/contexts/DemoMode";
 import { Button } from "@/components/ui/button";
 import { MobileHeader } from "@/components/dashboard/MobileSidebar";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText, Sparkles, Sun, Share2, FileSignature, Euro } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText, Sparkles, Sun, Share2, FileSignature, Euro, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -158,7 +158,7 @@ const DashboardSidebar = () => {
         { to: "/charging/points", icon: PlugZap, labelKey: "nav.chargingPoints" as TranslationKey },
         { to: "/charging/users", icon: Users, labelKey: "nav.chargingUsers" as TranslationKey },
         { to: "/charging/billing", icon: Receipt, labelKey: "nav.chargingBilling" as TranslationKey },
-        
+        { to: "/charging/reporting", icon: BarChart3, labelKey: "nav.chargingReporting" as TranslationKey },
         { to: "/charging/settings", icon: Settings, labelKey: "nav.chargingSettings" as TranslationKey },
       ]
     },
