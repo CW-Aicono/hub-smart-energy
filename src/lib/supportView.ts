@@ -69,6 +69,58 @@ export function clearImpersonation() {
   } catch { /* noop */ }
 }
 
+/**
+ * Beendet eine laufende Support-Sitzung sauber:
+ * 1) markiert die Session serverseitig als beendet,
+ * 2) stellt die Original-Session des Super-Admins wieder her (oder loggt aus),
+ * 3) räumt Impersonations-Flags auf,
+ * 4) macht einen HARTEN Redirect ins Super-Admin, damit Tenant-Context,
+ *    React-Query-Caches und Realtime-Kanäle komplett neu aufgebaut werden.
+ */
+export async function endImpersonationAndReturn(
+  supabase: {
+    functions: { invoke: (name: string, opts?: any) => Promise<any> };
+    auth: {
+      setSession: (s: { access_token: string; refresh_token: string }) => Promise<any>;
+      signOut: () => Promise<any>;
+    };
+  },
+  opts: { sessionId?: string | null; tenantId?: string | null } = {},
+): Promise<void> {
+  const sessionId = opts.sessionId ?? getActiveSupportSessionId();
+  const tenantId = opts.tenantId ?? getActiveSupportTenantId();
+
+  try {
+    if (sessionId) {
+      await supabase.functions.invoke("support-session-end", {
+        body: { session_id: sessionId },
+      });
+    }
+  } catch (e) {
+    console.error("support-session-end failed", e);
+  }
+
+  const orig = getOriginalSession();
+  try {
+    if (orig?.access_token && orig?.refresh_token) {
+      await supabase.auth.setSession({
+        access_token: orig.access_token,
+        refresh_token: orig.refresh_token,
+      });
+    } else {
+      await supabase.auth.signOut();
+    }
+  } catch (e) {
+    console.error("restore original session failed", e);
+    try { await supabase.auth.signOut(); } catch { /* noop */ }
+  }
+
+  clearImpersonation();
+
+  const target = tenantId ? `/super-admin/tenants/${tenantId}` : "/super-admin/tenants";
+  window.location.replace(target);
+}
+
 export function onImpersonationChanged(cb: () => void): () => void {
   const handler = () => cb();
   window.addEventListener(EVENT_NAME, handler);
