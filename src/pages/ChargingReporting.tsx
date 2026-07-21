@@ -902,8 +902,8 @@ function Heatmap({ grid, max, fmt }: { grid: number[][]; max: number; fmt: (n: n
             </div>
           ))}
           {grid.map((row, wd) => (
-            <>
-              <div key={`wd-${wd}`} className="text-[11px] text-muted-foreground pr-2 flex items-center justify-end">
+            <div key={`row-${wd}`} style={{ display: "contents" }}>
+              <div className="text-[11px] text-muted-foreground pr-2 flex items-center justify-end">
                 {weekdays[wd]}
               </div>
               {row.map((v, h) => {
@@ -920,7 +920,7 @@ function Heatmap({ grid, max, fmt }: { grid: number[][]; max: number; fmt: (n: n
                   />
                 );
               })}
-            </>
+            </div>
           ))}
         </div>
         <div className="flex items-center gap-2 mt-3 text-[11px] text-muted-foreground">
