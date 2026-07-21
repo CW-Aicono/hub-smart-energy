@@ -1207,6 +1207,7 @@ const ChargingReporting = () => {
                     <SelectItem value="all">Alle Sessions</SelectItem>
                     <SelectItem value="paid">Nur bezahlt</SelectItem>
                     <SelectItem value="open">Nur offen</SelectItem>
+                    <SelectItem value="calculated">Nur kalkulatorisch</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1215,15 +1216,42 @@ const ChargingReporting = () => {
         </Card>
 
         {/* KPI tiles */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           <KpiTile icon={<PlugZap className="h-4 w-4" />} label="Sessions" value={fmtNum(kpi.count)} delta={delta(kpi.count, kpiPrev?.count)} />
           <KpiTile icon={<Zap className="h-4 w-4" />} label="Energie" value={fmtKwh(kpi.energy)} delta={delta(kpi.energy, kpiPrev?.energy)} />
           <KpiTile icon={<Euro className="h-4 w-4" />} label="Umsatz brutto" value={fmtEur(kpi.revenueGross)} delta={delta(kpi.revenueGross, kpiPrev?.revenueGross)} />
+          <KpiTile icon={<Euro className="h-4 w-4" />} label="Ø €/kWh" value={kpi.avgPrice > 0 ? `${fmtNum(kpi.avgPrice, 3)} €` : "—"} />
+          <KpiTile icon={<Euro className="h-4 w-4" />} label="davon abgerechnet" value={fmtEur(kpi.revenueInvoice)} />
+          <KpiTile icon={<Euro className="h-4 w-4" />} label="davon kalkulatorisch" value={fmtEur(kpi.revenueCalc)} />
           <KpiTile icon={<Clock className="h-4 w-4" />} label="Ø Ladedauer" value={kpi.count > 0 ? `${fmtNum(kpi.durationH / kpi.count, 1)} h` : "—"} />
           <KpiTile icon={<Zap className="h-4 w-4" />} label="Ø kWh/Session" value={fmtNum(kpi.avgKwh, 1)} />
-          <KpiTile icon={<Euro className="h-4 w-4" />} label="Ø €/kWh" value={kpi.avgPrice > 0 ? `${fmtNum(kpi.avgPrice, 3)} €` : "—"} />
-
         </div>
+
+        {/* Datenqualität */}
+        {(diagnostics.duplicate_invoice_sessions.length > 0 ||
+          diagnostics.invoices_without_link.length > 0 ||
+          diagnostics.sessions_without_tariff.length > 0 ||
+          diagnostics.invoice_energy_mismatch.length > 0) && (
+          <Card className="border-amber-500/40 bg-amber-500/5">
+            <CardContent className="pt-4 text-xs space-y-1">
+              <div className="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="h-3.5 w-3.5" /> Datenqualitäts-Hinweise
+              </div>
+              {diagnostics.duplicate_invoice_sessions.length > 0 && (
+                <div>{fmtNum(diagnostics.duplicate_invoice_sessions.length)} Session(s) mit mehreren Rechnungen — Umsatz wird nur einmal gezählt.</div>
+              )}
+              {diagnostics.invoices_without_link.length > 0 && (
+                <div>{fmtNum(diagnostics.invoices_without_link.length)} Rechnung(en) ohne Session-Verknüpfung — fließen nicht in Gruppen ein.</div>
+              )}
+              {diagnostics.sessions_without_tariff.length > 0 && (
+                <div>{fmtNum(diagnostics.sessions_without_tariff.length)} Session(s) ohne Tarifzuordnung — kein kalkulatorischer Umsatz.</div>
+              )}
+              {diagnostics.invoice_energy_mismatch.length > 0 && (
+                <div>{fmtNum(diagnostics.invoice_energy_mismatch.length)} Rechnung(en) mit &gt; 5&nbsp;% kWh-Abweichung zu den Session-Zählern.</div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Reorderable widgets */}
         <div className="text-xs text-muted-foreground flex items-center gap-1.5">
