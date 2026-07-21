@@ -653,6 +653,38 @@ const ChargingReporting = () => {
         </Table>
       </div>
     ),
+    roaming: () => (
+      roamingLoading ? <EmptyBox text="Lade Roaming-Daten…" /> :
+      roamingByPartner.length === 0 ? <EmptyBox text="Keine Roaming-Sessions im Zeitraum" /> :
+      <div className="overflow-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Partner</TableHead>
+              <TableHead>Richtung</TableHead>
+              <TableHead className="text-right">Sessions</TableHead>
+              <TableHead className="text-right">Energie (kWh)</TableHead>
+              <TableHead className="text-right">Kosten / Umsatz</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {roamingByPartner.map((r) => (
+              <TableRow key={r.key}>
+                <TableCell className="font-medium">{r.partner}</TableCell>
+                <TableCell>
+                  <Badge variant={r.direction === "inbound" ? "default" : "secondary"} className="text-[10px]">
+                    {r.direction === "inbound" ? "eingehend" : "ausgehend"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">{fmtNum(r.sessions)}</TableCell>
+                <TableCell className="text-right">{fmtNum(r.kwh, 1)}</TableCell>
+                <TableCell className="text-right">{fmtEur(r.amount)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    ),
   };
 
   const widgetTitle = (id: WidgetId): string => {
