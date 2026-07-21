@@ -690,6 +690,98 @@ const ChargingReporting = () => {
     toast.success("XLSX-Datei erstellt");
   };
 
+  const exportPdf = () => {
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    let y = 48;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("AICONO EMS · Ladeinfrastruktur-Report", 40, y);
+    y += 20;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Zeitraum: ${fromISO.slice(0, 10)} bis ${toISO.slice(0, 10)}`, 40, y); y += 14;
+    doc.text(`Gruppierung: ${DIMENSION_LABEL[dimension]} · Metrik: ${METRIC_META[metric].label} · Status: ${statusFilter}`, 40, y); y += 20;
+    if (compareEnabled) {
+      doc.text(`Vergleichszeitraum: ${prevFromISO.slice(0, 10)} bis ${prevToISO.slice(0, 10)}`, 40, y); y += 20;
+    }
+
+    // KPI Block
+    doc.setTextColor(0);
+    doc.setFont("helvetica", "bold");
+    doc.text("Kennzahlen", 40, y); y += 16;
+    doc.setFont("helvetica", "normal");
+    const kpiLines: [string, string][] = [
+      ["Sessions", fmtNum(kpi.count)],
+      ["Energie", fmtKwh(kpi.energy)],
+      ["Umsatz brutto", fmtEur(kpi.revenueGross)],
+      ["Umsatz netto", fmtEur(kpi.revenueNet)],
+      ["Standzeit-Gebühren", fmtEur(kpi.idleFee)],
+      ["Ø kWh/Session", fmtNum(kpi.avgKwh, 1)],
+      ["Ø €/kWh (abgerechnet)", kpi.avgPrice > 0 ? `${fmtNum(kpi.avgPrice, 3)} €` : "—"],
+    ];
+    for (const [k, v] of kpiLines) {
+      doc.text(k, 40, y);
+      doc.text(v, 260, y);
+      if (compareEnabled && kpiPrev) {
+        const map: Record<string, number | undefined> = {
+          "Sessions": kpiPrev.count, "Energie": kpiPrev.energy,
+          "Umsatz brutto": kpiPrev.revenueGross, "Umsatz netto": kpiPrev.revenueNet,
+          "Standzeit-Gebühren": kpiPrev.idleFee,
+        };
+        const prev = map[k];
+        if (prev != null) {
+          const d = delta(k === "Sessions" ? kpi.count : k === "Energie" ? kpi.energy : k === "Umsatz brutto" ? kpi.revenueGross : k === "Umsatz netto" ? kpi.revenueNet : kpi.idleFee, prev);
+          if (d) {
+            doc.setTextColor(d.up ? 0 : 200, d.up ? 140 : 0, 0);
+            doc.text(`${d.up ? "+" : ""}${d.pct.toFixed(1).replace(".", ",")}%`, 400, y);
+            doc.setTextColor(0);
+          }
+        }
+      }
+      y += 14;
+    }
+    y += 8;
+
+    // Detailtabelle (Top 30)
+    doc.setFont("helvetica", "bold");
+    doc.text(`Detail nach ${DIMENSION_LABEL[dimension]} (Top 30)`, 40, y); y += 14;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    const cols = [DIMENSION_LABEL[dimension], "Sess.", "kWh", "Umsatz €", "Ø €/kWh"];
+    const colX = [40, 260, 320, 400, 480];
+    cols.forEach((c, i) => doc.text(c, colX[i], y));
+    y += 12;
+    doc.setDrawColor(200);
+    doc.line(40, y - 8, pageW - 40, y - 8);
+
+    for (const r of grouped.slice(0, 30)) {
+      if (y > pageH - 60) { doc.addPage(); y = 48; }
+      doc.text(String(r.label).slice(0, 45), colX[0], y);
+      doc.text(fmtNum(r.sessions), colX[1], y);
+      doc.text(fmtNum(r.kwh, 1), colX[2], y);
+      doc.text(fmtEur(r.revenue), colX[3], y);
+      doc.text(r.invoicedKwh > 0 ? fmtNum(r.revenue / r.invoicedKwh, 3) : "—", colX[4], y);
+      y += 12;
+    }
+
+    // Footer
+    const total = doc.getNumberOfPages();
+    for (let i = 1; i <= total; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(140);
+      doc.text(`Erstellt am ${new Date().toLocaleString("de-DE")} · Seite ${i}/${total}`, 40, pageH - 24);
+    }
+
+    doc.save(`ladeinfrastruktur-report_${dimension}_${metric}_${stamp()}.pdf`);
+    toast.success("PDF erstellt");
+  };
+
+
   // ── Widgets ────────────────────────────────────────────────────────────────
   const widgetRenderers: Record<WidgetId, () => React.ReactNode> = {
     ranking: () => (
