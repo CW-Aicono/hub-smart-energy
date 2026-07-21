@@ -332,7 +332,75 @@ const ChargingReporting = () => {
     },
   });
 
+  // ── Roaming (separate Datentopf) ──────────────────────────────────────────
+  const roamingSessionsQ = useQuery({
+    queryKey: ["cr-roaming", tenantId, fromISO, toISO],
+    enabled: !!tenantId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("roaming_sessions")
+        .select("id, partner_id, direction, started_at, ended_at, energy_kwh, cost_amount, currency, status")
+        .eq("tenant_id", tenantId!)
+        .gte("started_at", fromISO)
+        .lte("started_at", toISO);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const roamingPartnersQ = useQuery({
+    queryKey: ["cr-roaming-partners", tenantId],
+    enabled: !!tenantId,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("roaming_partners").select("id, name").eq("tenant_id", tenantId!);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  // ── Vergleichszeitraum (Vorperiode gleicher Länge) ────────────────────────
+  const { prevFromISO, prevToISO } = useMemo(() => {
+    const spanMs = new Date(toISO).getTime() - new Date(fromISO).getTime();
+    const prevTo = new Date(new Date(fromISO).getTime() - 1);
+    const prevFrom = new Date(prevTo.getTime() - spanMs);
+    return { prevFromISO: prevFrom.toISOString(), prevToISO: prevTo.toISOString() };
+  }, [fromISO, toISO]);
+
+  const prevSessionsQ = useQuery({
+    queryKey: ["cr-sessions-prev", tenantId, prevFromISO, prevToISO],
+    enabled: !!tenantId && compareEnabled,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<SessionRow[]> => {
+      const { data, error } = await supabase
+        .from("charging_sessions")
+        .select("id, charge_point_id, id_tag, start_time, stop_time, energy_kwh, status")
+        .eq("tenant_id", tenantId!)
+        .gte("start_time", prevFromISO).lte("start_time", prevToISO);
+      if (error) throw error;
+      return (data ?? []) as SessionRow[];
+    },
+  });
+
+  const prevInvoicesQ = useQuery({
+    queryKey: ["cr-invoices-prev", tenantId, prevFromISO, prevToISO],
+    enabled: !!tenantId && compareEnabled,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<InvoiceRow[]> => {
+      const { data, error } = await supabase
+        .from("charging_invoices")
+        .select("id, session_id, user_id, billing_group_id, total_amount, net_amount, idle_fee_amount, total_energy_kwh, status, invoice_date")
+        .eq("tenant_id", tenantId!)
+        .gte("invoice_date", prevFromISO.slice(0, 10))
+        .lte("invoice_date", prevToISO.slice(0, 10));
+      if (error) throw error;
+      return (data ?? []) as InvoiceRow[];
+    },
+  });
+
   const loading = sessionsQ.isLoading || invoicesQ.isLoading;
+  const roamingLoading = roamingSessionsQ.isLoading;
 
   // Lookup maps
   const cpMap = useMemo(() => new Map((chargePointsQ.data ?? []).map((c) => [c.id, c])), [chargePointsQ.data]);
