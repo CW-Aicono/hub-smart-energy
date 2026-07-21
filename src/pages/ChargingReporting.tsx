@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/hooks/useTenant";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,9 +16,12 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Download, BarChart3, Users as UsersIcon, Zap, Euro, Clock, PlugZap,
   GripVertical, Star, Save, Trash2, FileSpreadsheet, Flame, LineChart as LineChartIcon, Table as TableIcon,
+  FileText, CalendarClock, Plus, Send, TrendingUp, TrendingDown, Globe2,
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
@@ -31,6 +34,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import * as XLSX from "@e965/xlsx";
+import { jsPDF } from "jspdf";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type Dimension =
@@ -40,7 +44,7 @@ type Dimension =
 
 type Metric = "energy_kwh" | "revenue_gross" | "revenue_net" | "sessions" | "duration_h" | "idle_fee";
 
-type WidgetId = "ranking" | "trend" | "heatmap" | "table";
+type WidgetId = "ranking" | "trend" | "heatmap" | "table" | "roaming";
 
 interface SessionRow {
   id: string;
@@ -128,6 +132,7 @@ const BUILTIN_PRESETS: ReportPreset[] = [
   { key: "b6", label: "Standzeit-Gebühr nach Nutzer (90 T.)",builtIn: true, rangePreset: "90d",  dimension: "user",               metric: "idle_fee",      statusFilter: "paid" },
   { key: "b7", label: "Energie je Woche (90 T.)",            builtIn: true, rangePreset: "90d",  dimension: "week",               metric: "energy_kwh",    statusFilter: "all" },
   { key: "b8", label: "Umsatz je Monat (12 M.)",             builtIn: true, rangePreset: "365d", dimension: "month",              metric: "revenue_gross", statusFilter: "all" },
+  { key: "b9", label: "Roaming-Fokus (30 T.)",               builtIn: true, rangePreset: "30d",  dimension: "charge_point",       metric: "revenue_gross", statusFilter: "all" },
 ];
 
 const WIDGET_META: Record<WidgetId, { label: string; icon: React.ReactNode }> = {
@@ -135,13 +140,15 @@ const WIDGET_META: Record<WidgetId, { label: string; icon: React.ReactNode }> = 
   trend:   { label: "Zeitverlauf", icon: <LineChartIcon className="h-4 w-4" /> },
   heatmap: { label: "Heatmap (Wochentag × Stunde)", icon: <Flame className="h-4 w-4" /> },
   table:   { label: "Detailtabelle", icon: <TableIcon className="h-4 w-4" /> },
+  roaming: { label: "Roaming (nach Partner)", icon: <Globe2 className="h-4 w-4" /> },
 };
-const DEFAULT_LAYOUT: WidgetId[] = ["ranking", "trend", "heatmap", "table"];
+const DEFAULT_LAYOUT: WidgetId[] = ["ranking", "trend", "heatmap", "table", "roaming"];
 const LAYOUT_STORAGE_KEY = "charging-reporting.layout.v1";
 const PRESETS_STORAGE_KEY = "charging-reporting.presets.v1";
 
 const ChargingReporting = () => {
   const { tenant } = useTenant();
+  const queryClient = useQueryClient();
   const tenantId = tenant?.id;
 
   // Filter state
@@ -151,6 +158,7 @@ const ChargingReporting = () => {
   const [dimension, setDimension] = useState<Dimension>("charge_point");
   const [metric, setMetric] = useState<Metric>("energy_kwh");
   const [statusFilter, setStatusFilter] = useState<"all" | "paid" | "open">("all");
+  const [compareEnabled, setCompareEnabled] = useState<boolean>(false);
 
   // Layout state (persisted)
   const [layout, setLayout] = useState<WidgetId[]>(() => {
@@ -183,6 +191,80 @@ const ChargingReporting = () => {
 
   const [presetDialogOpen, setPresetDialogOpen] = useState(false);
   const [newPresetName, setNewPresetName] = useState("");
+
+  // ── Geplante Reports (persistiert in charging_report_schedules) ───────────
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [scheduleName, setScheduleName] = useState("");
+  const [scheduleFrequency, setScheduleFrequency] = useState<"daily" | "weekly" | "monthly">("weekly");
+  const [scheduleRecipients, setScheduleRecipients] = useState("");
+  const [scheduleFormat, setScheduleFormat] = useState<"csv" | "xlsx" | "pdf">("pdf");
+
+  const schedulesQ = useQuery({
+    queryKey: ["cr-schedules", tenant?.id],
+    enabled: !!tenant?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charging_report_schedules")
+        .select("*")
+        .eq("tenant_id", tenant!.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  async function createSchedule() {
+    if (!tenant?.id) return;
+    const { data: userRes } = await supabase.auth.getUser();
+    const uid = userRes.user?.id;
+    if (!uid) { toast.error("Nicht angemeldet"); return; }
+    const recipients = scheduleRecipients.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!scheduleName.trim() || recipients.length === 0) {
+      toast.error("Name und mind. ein Empfänger erforderlich");
+      return;
+    }
+    const { error } = await supabase.from("charging_report_schedules").insert({
+      tenant_id: tenant.id,
+      created_by: uid,
+      name: scheduleName.trim(),
+      frequency: scheduleFrequency,
+      format: scheduleFormat,
+      recipients,
+      config: { dimension, metric, statusFilter, rangePreset },
+      is_active: true,
+    });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Geplanter Report angelegt");
+    setScheduleDialogOpen(false);
+    setScheduleName(""); setScheduleRecipients("");
+    queryClient.invalidateQueries({ queryKey: ["cr-schedules", tenant.id] });
+  }
+
+  async function toggleSchedule(id: string, active: boolean) {
+    const { error } = await supabase.from("charging_report_schedules").update({ is_active: active }).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    queryClient.invalidateQueries({ queryKey: ["cr-schedules", tenant?.id] });
+  }
+
+  async function deleteSchedule(id: string) {
+    const { error } = await supabase.from("charging_report_schedules").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Geplanter Report gelöscht");
+    queryClient.invalidateQueries({ queryKey: ["cr-schedules", tenant?.id] });
+  }
+
+  async function sendScheduleNow(id: string) {
+    const { data, error } = await supabase.functions.invoke("charging-report-scheduler", {
+      body: { schedule_id: id },
+    });
+    if (error) { toast.error(error.message); return; }
+    const result = (data as { results?: Array<{ status: string; message?: string }> })?.results?.[0];
+    if (result?.status === "sent") toast.success("Report versendet");
+    else if (result?.status === "failed") toast.error(result.message ?? "Versand fehlgeschlagen");
+    else toast.info(result?.message ?? "Verarbeitet");
+    queryClient.invalidateQueries({ queryKey: ["cr-schedules", tenant?.id] });
+  }
+
 
   function applyPreset(p: ReportPreset) {
     setRangePreset(p.rangePreset);
@@ -323,7 +405,75 @@ const ChargingReporting = () => {
     },
   });
 
+  // ── Roaming (separate Datentopf) ──────────────────────────────────────────
+  const roamingSessionsQ = useQuery({
+    queryKey: ["cr-roaming", tenantId, fromISO, toISO],
+    enabled: !!tenantId,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("roaming_sessions")
+        .select("id, partner_id, direction, started_at, ended_at, energy_kwh, cost_amount, currency, status")
+        .eq("tenant_id", tenantId!)
+        .gte("started_at", fromISO)
+        .lte("started_at", toISO);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const roamingPartnersQ = useQuery({
+    queryKey: ["cr-roaming-partners", tenantId],
+    enabled: !!tenantId,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("roaming_partners").select("id, name").eq("tenant_id", tenantId!);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  // ── Vergleichszeitraum (Vorperiode gleicher Länge) ────────────────────────
+  const { prevFromISO, prevToISO } = useMemo(() => {
+    const spanMs = new Date(toISO).getTime() - new Date(fromISO).getTime();
+    const prevTo = new Date(new Date(fromISO).getTime() - 1);
+    const prevFrom = new Date(prevTo.getTime() - spanMs);
+    return { prevFromISO: prevFrom.toISOString(), prevToISO: prevTo.toISOString() };
+  }, [fromISO, toISO]);
+
+  const prevSessionsQ = useQuery({
+    queryKey: ["cr-sessions-prev", tenantId, prevFromISO, prevToISO],
+    enabled: !!tenantId && compareEnabled,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<SessionRow[]> => {
+      const { data, error } = await supabase
+        .from("charging_sessions")
+        .select("id, charge_point_id, id_tag, start_time, stop_time, energy_kwh, status")
+        .eq("tenant_id", tenantId!)
+        .gte("start_time", prevFromISO).lte("start_time", prevToISO);
+      if (error) throw error;
+      return (data ?? []) as SessionRow[];
+    },
+  });
+
+  const prevInvoicesQ = useQuery({
+    queryKey: ["cr-invoices-prev", tenantId, prevFromISO, prevToISO],
+    enabled: !!tenantId && compareEnabled,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<InvoiceRow[]> => {
+      const { data, error } = await supabase
+        .from("charging_invoices")
+        .select("id, session_id, user_id, billing_group_id, total_amount, net_amount, idle_fee_amount, total_energy_kwh, status, invoice_date")
+        .eq("tenant_id", tenantId!)
+        .gte("invoice_date", prevFromISO.slice(0, 10))
+        .lte("invoice_date", prevToISO.slice(0, 10));
+      if (error) throw error;
+      return (data ?? []) as InvoiceRow[];
+    },
+  });
+
   const loading = sessionsQ.isLoading || invoicesQ.isLoading;
+  const roamingLoading = roamingSessionsQ.isLoading;
 
   // Lookup maps
   const cpMap = useMemo(() => new Map((chargePointsQ.data ?? []).map((c) => [c.id, c])), [chargePointsQ.data]);
@@ -372,6 +522,56 @@ const ChargingReporting = () => {
     const avgPrice = invoicedKwh > 0 ? revenueGross / invoicedKwh : 0;
     return { energy, durationH, count, revenueGross, revenueNet, idleFee, avgKwh, avgPrice, invoicedKwh };
   }, [sessions, invoicesQ.data, invoiceBySession]);
+
+  // KPI Vorperiode (nur wenn Vergleich aktiv)
+  const kpiPrev = useMemo(() => {
+    if (!compareEnabled) return null;
+    const prevSess = prevSessionsQ.data ?? [];
+    const prevInvs = prevInvoicesQ.data ?? [];
+    const prevInvSet = new Set(prevInvs.map((i) => i.session_id).filter(Boolean) as string[]);
+    let energy = 0, count = 0, invoicedKwh = 0;
+    for (const s of prevSess) {
+      const kwh = Number(s.energy_kwh ?? 0);
+      energy += kwh;
+      count += 1;
+      if (prevInvSet.has(s.id)) invoicedKwh += kwh;
+    }
+    let revenueGross = 0, revenueNet = 0, idleFee = 0;
+    for (const inv of prevInvs) {
+      revenueGross += Number(inv.total_amount ?? 0);
+      revenueNet += Number(inv.net_amount ?? 0);
+      idleFee += Number(inv.idle_fee_amount ?? 0);
+    }
+    return { energy, count, revenueGross, revenueNet, idleFee, invoicedKwh };
+  }, [compareEnabled, prevSessionsQ.data, prevInvoicesQ.data]);
+
+  function delta(current: number, previous: number | undefined | null): { pct: number; up: boolean } | null {
+    if (!compareEnabled || previous == null) return null;
+    if (previous === 0) return current === 0 ? { pct: 0, up: true } : { pct: 100, up: current > 0 };
+    const pct = ((current - previous) / Math.abs(previous)) * 100;
+    return { pct, up: pct >= 0 };
+  }
+
+  // Roaming Aggregation nach Partner + Richtung
+  const roamingByPartner = useMemo(() => {
+    const partners = new Map((roamingPartnersQ.data ?? []).map((p) => [p.id, p.name]));
+    const acc = new Map<string, { key: string; partner: string; direction: string; sessions: number; kwh: number; amount: number }>();
+    for (const r of roamingSessionsQ.data ?? []) {
+      const key = `${r.partner_id ?? "unknown"}::${r.direction ?? "inbound"}`;
+      const cur = acc.get(key) ?? {
+        key,
+        partner: partners.get(r.partner_id ?? "") ?? "Unbekannter Partner",
+        direction: r.direction ?? "inbound",
+        sessions: 0, kwh: 0, amount: 0,
+      };
+      cur.sessions += 1;
+      cur.kwh += Number(r.energy_kwh ?? 0);
+      cur.amount += Number(r.cost_amount ?? 0);
+      acc.set(key, cur);
+    }
+    return Array.from(acc.values()).sort((a, b) => b.amount - a.amount);
+  }, [roamingSessionsQ.data, roamingPartnersQ.data]);
+
 
   // ── Grouping ───────────────────────────────────────────────────────────────
   function groupKey(s: SessionRow): { key: string; label: string } {
@@ -563,6 +763,98 @@ const ChargingReporting = () => {
     toast.success("XLSX-Datei erstellt");
   };
 
+  const exportPdf = () => {
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    let y = 48;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("AICONO EMS · Ladeinfrastruktur-Report", 40, y);
+    y += 20;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Zeitraum: ${fromISO.slice(0, 10)} bis ${toISO.slice(0, 10)}`, 40, y); y += 14;
+    doc.text(`Gruppierung: ${DIMENSION_LABEL[dimension]} · Metrik: ${METRIC_META[metric].label} · Status: ${statusFilter}`, 40, y); y += 20;
+    if (compareEnabled) {
+      doc.text(`Vergleichszeitraum: ${prevFromISO.slice(0, 10)} bis ${prevToISO.slice(0, 10)}`, 40, y); y += 20;
+    }
+
+    // KPI Block
+    doc.setTextColor(0);
+    doc.setFont("helvetica", "bold");
+    doc.text("Kennzahlen", 40, y); y += 16;
+    doc.setFont("helvetica", "normal");
+    const kpiLines: [string, string][] = [
+      ["Sessions", fmtNum(kpi.count)],
+      ["Energie", fmtKwh(kpi.energy)],
+      ["Umsatz brutto", fmtEur(kpi.revenueGross)],
+      ["Umsatz netto", fmtEur(kpi.revenueNet)],
+      ["Standzeit-Gebühren", fmtEur(kpi.idleFee)],
+      ["Ø kWh/Session", fmtNum(kpi.avgKwh, 1)],
+      ["Ø €/kWh (abgerechnet)", kpi.avgPrice > 0 ? `${fmtNum(kpi.avgPrice, 3)} €` : "—"],
+    ];
+    for (const [k, v] of kpiLines) {
+      doc.text(k, 40, y);
+      doc.text(v, 260, y);
+      if (compareEnabled && kpiPrev) {
+        const map: Record<string, number | undefined> = {
+          "Sessions": kpiPrev.count, "Energie": kpiPrev.energy,
+          "Umsatz brutto": kpiPrev.revenueGross, "Umsatz netto": kpiPrev.revenueNet,
+          "Standzeit-Gebühren": kpiPrev.idleFee,
+        };
+        const prev = map[k];
+        if (prev != null) {
+          const d = delta(k === "Sessions" ? kpi.count : k === "Energie" ? kpi.energy : k === "Umsatz brutto" ? kpi.revenueGross : k === "Umsatz netto" ? kpi.revenueNet : kpi.idleFee, prev);
+          if (d) {
+            doc.setTextColor(d.up ? 0 : 200, d.up ? 140 : 0, 0);
+            doc.text(`${d.up ? "+" : ""}${d.pct.toFixed(1).replace(".", ",")}%`, 400, y);
+            doc.setTextColor(0);
+          }
+        }
+      }
+      y += 14;
+    }
+    y += 8;
+
+    // Detailtabelle (Top 30)
+    doc.setFont("helvetica", "bold");
+    doc.text(`Detail nach ${DIMENSION_LABEL[dimension]} (Top 30)`, 40, y); y += 14;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    const cols = [DIMENSION_LABEL[dimension], "Sess.", "kWh", "Umsatz €", "Ø €/kWh"];
+    const colX = [40, 260, 320, 400, 480];
+    cols.forEach((c, i) => doc.text(c, colX[i], y));
+    y += 12;
+    doc.setDrawColor(200);
+    doc.line(40, y - 8, pageW - 40, y - 8);
+
+    for (const r of grouped.slice(0, 30)) {
+      if (y > pageH - 60) { doc.addPage(); y = 48; }
+      doc.text(String(r.label).slice(0, 45), colX[0], y);
+      doc.text(fmtNum(r.sessions), colX[1], y);
+      doc.text(fmtNum(r.kwh, 1), colX[2], y);
+      doc.text(fmtEur(r.revenue), colX[3], y);
+      doc.text(r.invoicedKwh > 0 ? fmtNum(r.revenue / r.invoicedKwh, 3) : "—", colX[4], y);
+      y += 12;
+    }
+
+    // Footer
+    const total = doc.getNumberOfPages();
+    for (let i = 1; i <= total; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(140);
+      doc.text(`Erstellt am ${new Date().toLocaleString("de-DE")} · Seite ${i}/${total}`, 40, pageH - 24);
+    }
+
+    doc.save(`ladeinfrastruktur-report_${dimension}_${metric}_${stamp()}.pdf`);
+    toast.success("PDF erstellt");
+  };
+
+
   // ── Widgets ────────────────────────────────────────────────────────────────
   const widgetRenderers: Record<WidgetId, () => React.ReactNode> = {
     ranking: () => (
@@ -641,6 +933,38 @@ const ChargingReporting = () => {
                 </TableRow>
               ))
             )}
+          </TableBody>
+        </Table>
+      </div>
+    ),
+    roaming: () => (
+      roamingLoading ? <EmptyBox text="Lade Roaming-Daten…" /> :
+      roamingByPartner.length === 0 ? <EmptyBox text="Keine Roaming-Sessions im Zeitraum" /> :
+      <div className="overflow-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Partner</TableHead>
+              <TableHead>Richtung</TableHead>
+              <TableHead className="text-right">Sessions</TableHead>
+              <TableHead className="text-right">Energie (kWh)</TableHead>
+              <TableHead className="text-right">Kosten / Umsatz</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {roamingByPartner.map((r) => (
+              <TableRow key={r.key}>
+                <TableCell className="font-medium">{r.partner}</TableCell>
+                <TableCell>
+                  <Badge variant={r.direction === "inbound" ? "default" : "secondary"} className="text-[10px]">
+                    {r.direction === "inbound" ? "eingehend" : "ausgehend"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">{fmtNum(r.sessions)}</TableCell>
+                <TableCell className="text-right">{fmtNum(r.kwh, 1)}</TableCell>
+                <TableCell className="text-right">{fmtEur(r.amount)}</TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </div>
@@ -748,6 +1072,13 @@ const ChargingReporting = () => {
             <Button variant="outline" size="sm" onClick={exportXlsx} disabled={loading || grouped.length === 0}>
               <FileSpreadsheet className="h-4 w-4 mr-2" /> XLSX
             </Button>
+            <Button variant="outline" size="sm" onClick={exportPdf} disabled={loading || grouped.length === 0}>
+              <FileText className="h-4 w-4 mr-2" /> PDF
+            </Button>
+            <div className="flex items-center gap-2 pl-2 border-l ml-1">
+              <Switch id="compare-toggle" checked={compareEnabled} onCheckedChange={setCompareEnabled} />
+              <Label htmlFor="compare-toggle" className="text-xs cursor-pointer">Vergleich Vorperiode</Label>
+            </div>
           </div>
         </div>
 
@@ -816,12 +1147,13 @@ const ChargingReporting = () => {
 
         {/* KPI tiles */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <KpiTile icon={<PlugZap className="h-4 w-4" />} label="Sessions" value={fmtNum(kpi.count)} />
-          <KpiTile icon={<Zap className="h-4 w-4" />} label="Energie" value={fmtKwh(kpi.energy)} />
-          <KpiTile icon={<Euro className="h-4 w-4" />} label="Umsatz brutto" value={fmtEur(kpi.revenueGross)} />
+          <KpiTile icon={<PlugZap className="h-4 w-4" />} label="Sessions" value={fmtNum(kpi.count)} delta={delta(kpi.count, kpiPrev?.count)} />
+          <KpiTile icon={<Zap className="h-4 w-4" />} label="Energie" value={fmtKwh(kpi.energy)} delta={delta(kpi.energy, kpiPrev?.energy)} />
+          <KpiTile icon={<Euro className="h-4 w-4" />} label="Umsatz brutto" value={fmtEur(kpi.revenueGross)} delta={delta(kpi.revenueGross, kpiPrev?.revenueGross)} />
           <KpiTile icon={<Clock className="h-4 w-4" />} label="Ø Ladedauer" value={kpi.count > 0 ? `${fmtNum(kpi.durationH / kpi.count, 1)} h` : "—"} />
           <KpiTile icon={<Zap className="h-4 w-4" />} label="Ø kWh/Session" value={fmtNum(kpi.avgKwh, 1)} />
           <KpiTile icon={<Euro className="h-4 w-4" />} label="Ø €/kWh" value={kpi.avgPrice > 0 ? `${fmtNum(kpi.avgPrice, 3)} €` : "—"} />
+
         </div>
 
         {/* Reorderable widgets */}
@@ -839,17 +1171,156 @@ const ChargingReporting = () => {
             </div>
           </SortableContext>
         </DndContext>
+
+        {/* Geplante Reports */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <CalendarClock className="h-4 w-4" /> Geplante Reports
+            </CardTitle>
+            <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                  <Plus className="h-4 w-4 mr-1" /> Neu planen
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Report planen</DialogTitle>
+                  <DialogDescription>
+                    Der Report wird mit den aktuellen Filtern (Zeitraum-Preset, Gruppierung, Metrik, Status)
+                    im gewählten Rhythmus automatisch per E-Mail versendet.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs">Name</Label>
+                    <Input value={scheduleName} onChange={(e) => setScheduleName(e.target.value)}
+                      placeholder="z. B. Monatsreport Rechnungsgruppen" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Rhythmus</Label>
+                      <Select value={scheduleFrequency} onValueChange={(v) => setScheduleFrequency(v as typeof scheduleFrequency)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Täglich</SelectItem>
+                          <SelectItem value="weekly">Wöchentlich</SelectItem>
+                          <SelectItem value="monthly">Monatlich</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Format</Label>
+                      <Select value={scheduleFormat} onValueChange={(v) => setScheduleFormat(v as typeof scheduleFormat)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="csv">CSV</SelectItem>
+                          <SelectItem value="xlsx">XLSX</SelectItem>
+                          <SelectItem value="pdf">PDF</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Empfänger (Kommagetrennt)</Label>
+                    <Input value={scheduleRecipients} onChange={(e) => setScheduleRecipients(e.target.value)}
+                      placeholder="max@example.com, buero@example.com" />
+                  </div>
+                  <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                    Aktuelle Konfiguration: {DIMENSION_LABEL[dimension]} · {METRIC_META[metric].label} · {rangePreset}
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setScheduleDialogOpen(false)}>Abbrechen</Button>
+                  <Button onClick={createSchedule}>Anlegen</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </CardHeader>
+          <CardContent>
+            {schedulesQ.isLoading ? (
+              <div className="text-sm text-muted-foreground py-4 text-center">Lade…</div>
+            ) : (schedulesQ.data ?? []).length === 0 ? (
+              <div className="text-sm text-muted-foreground py-4 text-center">
+                Noch keine geplanten Reports. Lege einen Zeitplan an, um Berichte automatisch per E-Mail zu erhalten.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Rhythmus</TableHead>
+                    <TableHead>Format</TableHead>
+                    <TableHead>Empfänger</TableHead>
+                    <TableHead>Nächster Lauf</TableHead>
+                    <TableHead>Zuletzt</TableHead>
+                    <TableHead className="text-right">Aktionen</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(schedulesQ.data ?? []).map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-medium">
+                        {s.name}
+                        {s.last_error && (
+                          <div className="text-[10px] text-red-500 truncate max-w-[280px]" title={s.last_error}>
+                            {s.last_error}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="text-[10px]">{s.frequency}</Badge>
+                      </TableCell>
+                      <TableCell><Badge variant="outline" className="text-[10px]">{s.format}</Badge></TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {(s.recipients ?? []).slice(0, 2).join(", ")}
+                        {(s.recipients?.length ?? 0) > 2 ? ` +${(s.recipients?.length ?? 0) - 2}` : ""}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {s.next_run_at ? new Date(s.next_run_at).toLocaleString("de-DE") : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {s.last_sent_at ? new Date(s.last_sent_at).toLocaleString("de-DE") : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Switch checked={s.is_active} onCheckedChange={(v) => toggleSchedule(s.id, v)} />
+                          <Button size="sm" variant="ghost" onClick={() => sendScheduleNow(s.id)} title="Jetzt testen">
+                            <Send className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => deleteSchedule(s.id)} title="Löschen">
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   );
 };
 
 // ── Presentation components ────────────────────────────────────────────────
-const KpiTile = ({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) => (
+const KpiTile = ({ icon, label, value, delta }: {
+  icon: React.ReactNode; label: string; value: string;
+  delta?: { pct: number; up: boolean } | null;
+}) => (
   <Card>
     <CardContent className="p-4">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">{icon}{label}</div>
       <div className="text-lg font-semibold mt-1 truncate" title={value}>{value}</div>
+      {delta && (
+        <div className={`text-[11px] mt-0.5 flex items-center gap-1 ${delta.up ? "text-emerald-600" : "text-red-500"}`}>
+          {delta.up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+          {delta.up ? "+" : ""}{delta.pct.toFixed(1).replace(".", ",")}% vs. Vorperiode
+        </div>
+      )}
     </CardContent>
   </Card>
 );

@@ -1786,6 +1786,65 @@ export type Database = {
           },
         ]
       }
+      charging_report_schedules: {
+        Row: {
+          config: Json
+          created_at: string
+          created_by: string
+          format: string
+          frequency: string
+          id: string
+          is_active: boolean
+          last_error: string | null
+          last_sent_at: string | null
+          name: string
+          next_run_at: string | null
+          recipients: string[]
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          created_by: string
+          format?: string
+          frequency: string
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_sent_at?: string | null
+          name: string
+          next_run_at?: string | null
+          recipients?: string[]
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          created_by?: string
+          format?: string
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_sent_at?: string | null
+          name?: string
+          next_run_at?: string | null
+          recipients?: string[]
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_report_schedules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charging_session_meter_records: {
         Row: {
           charge_point_id: string | null
