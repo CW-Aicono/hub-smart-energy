@@ -74,6 +74,7 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
           return;
         }
         floorPlanUrl = url;
+        toast.success(T("fl.floorPlanUploaded"));
       }
 
       setUploadLabel(T("fl.savingData"));
