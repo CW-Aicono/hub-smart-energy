@@ -238,7 +238,7 @@ export default function LoxoneMiniserverMonitorCard() {
         <CardTitle className="text-base flex items-center gap-2">
           <Server className="h-4 w-4" />
           Loxone Miniserver – WebSocket-Monitor
-          <Badge variant="outline" className="ml-2">BETA</Badge>
+          
           <span className="ml-auto text-xs text-muted-foreground font-normal">
             Aktuelle Sitzung + Statistik der letzten 24 h
           </span>

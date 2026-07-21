@@ -290,7 +290,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
                 return (
                   <div
                     key={room.id}
-                    className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors group ${
+                    className={`grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 overflow-hidden p-2 rounded-md cursor-pointer transition-colors group ${
                       selectedRoom?.id === room.id || editingRoom?.id === room.id
                         ? "bg-primary/10 border border-primary"
                         : "hover:bg-muted border border-transparent"
@@ -303,13 +303,13 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
                       className="w-3 h-3 rounded-full border flex-shrink-0"
                       style={{ backgroundColor: room.color || "#3b82f6" }}
                     />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{room.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                    <div className="min-w-0 overflow-hidden">
+                      <p className="text-sm font-medium truncate" title={room.name}>{room.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
                         {hasPolygon ? "Platziert" : "Nicht platziert"}
                       </p>
                     </div>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex h-7 w-[3.5rem] flex-shrink-0 items-center justify-end gap-0.5 opacity-100">
                       {!hasPolygon && (
                         <Button
                           variant="ghost"
@@ -346,10 +346,12 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
                           e.stopPropagation();
                           handleDeleteRoom(room);
                         }}
+                        title="Raum löschen"
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
+
                   </div>
                 );
               })
