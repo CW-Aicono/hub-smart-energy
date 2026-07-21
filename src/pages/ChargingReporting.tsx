@@ -731,7 +731,7 @@ const ChargingReporting = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <Input
-                  autoFocus placeholder="z. B. „Monatsbericht Rechnungsgruppen"" value={newPresetName}
+                  autoFocus placeholder="z. B. Monatsbericht Rechnungsgruppen" value={newPresetName}
                   onChange={(e) => setNewPresetName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") saveCurrentAsPreset(); }}
                 />
