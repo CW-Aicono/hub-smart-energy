@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { withFloorPlanCacheBuster } from "@/lib/floorPlanUrl";
 
 type FloorInsertDB = Database["public"]["Tables"]["floors"]["Insert"];
 type FloorUpdateDB = Database["public"]["Tables"]["floors"]["Update"];
@@ -139,7 +140,11 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
       if (fetchError) {
         setError(fetchError.message);
       } else {
-        setFloors((data as Floor[]) || []);
+        const rows = ((data as Floor[]) || []).map((f) => ({
+          ...f,
+          floor_plan_url: withFloorPlanCacheBuster(f.floor_plan_url, f.updated_at),
+        }));
+        setFloors(rows);
       }
     } catch (err) {
       setError("Failed to fetch floors");
@@ -234,7 +239,7 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
 
     // Cache-Buster anhängen: Datei wird per upsert unter gleichem Pfad überschrieben,
     // ohne Query-Param liefert der CDN/Browser-Cache (z.B. auf Hetzner) den alten Plan.
-    const bustedUrl = publicUrl ? `${publicUrl}?v=${Date.now()}` : null;
+    const bustedUrl = withFloorPlanCacheBuster(publicUrl, Date.now());
     return { url: bustedUrl, error };
   };
 
