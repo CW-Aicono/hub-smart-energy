@@ -304,10 +304,9 @@ const SuperAdminTenantDetail = () => {
     const sessionId = getActiveSupportSessionId() ?? activeSession?.id;
     if (!sessionId) return;
     try {
-      await supabase.functions.invoke("support-session-end", { body: { session_id: sessionId } });
-      clearImpersonation();
-      queryClient.invalidateQueries({ queryKey: ["tenant-support-sessions", id] });
       toast.success("Remote-Support beendet");
+      await endImpersonationAndReturn(supabase, { sessionId, tenantId: id });
+      // hard reload — kein Code danach
     } catch (e: any) {
       toast.error("Beenden fehlgeschlagen: " + (e?.message ?? ""));
     }
