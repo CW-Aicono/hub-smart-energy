@@ -1,56 +1,44 @@
-## Ziel
+## Problem
 
-Verhindern, dass eine E-Mail-Adresse mehrfach im System angelegt wird (z. B. gleichzeitig als Partner-Mitglied und Tenant-User). Bestehende Login-Konflikte werden dadurch dauerhaft ausgeschlossen. Der Einzelfall `h.verst@esb-metelen.de` wird manuell bereinigt (nicht Teil dieses Plans).
+Beim Beenden einer Support-Sitzung bleibt der Super-Admin scheinbar im Tenant angemeldet. Ursachen:
 
-## Umsetzung
+1. `SuperAdminImpersonationBar.handleEnd` ruft zwar `supabase.auth.setSession(orig)` auf und navigiert dann mit React-Router — dabei bleiben aber alle bereits gemounteten Tenant-Hooks (Tenant-Context, React-Query-Caches, Realtime-Kanäle) mit den Daten des Support-Users bestehen. Ergebnis: der User sieht weiterhin die Tenant-Sicht.
+2. `SuperAdminTenantDetail.handleEndRemoteSupport` (Button „Beenden" direkt in der Tenant-Detailseite im Super-Admin) ruft nur `support-session-end` + `clearImpersonation` — die im Browser aktive Support-User-Session wird **gar nicht** durch die Original-Session ersetzt. Wird die Sitzung von hier beendet, ist der Super-Admin danach noch als Support-User eingeloggt.
 
-### 1. Zentrale Prüf-Funktion (DB)
+## Lösung
 
-Neue Security-Definer-Funktion `public.email_exists_anywhere(_email text)` mit Suchpfad über:
-- `auth.users` (existierender Account)
-- `public.partner_members` (via Join auf `auth.users`)
-- `public.user_invitations` (offene Tenant-Einladungen)
-- ggf. `public.tenant_support_users`
+Beide End-Pfade vereinheitlichen: Original-Session zurückschreiben und einen **harten** Redirect ins Super-Admin ausführen, damit Caches, Tenant-Context und Realtime-Verbindungen komplett neu aufgebaut werden.
 
-Rückgabe: `{ exists: boolean, context: 'auth' | 'partner' | 'invitation' | null }`. Aufrufbar von `authenticated` und `service_role`.
+### Änderungen
 
-### 2. Edge Functions absichern
+`**src/lib/supportView.ts**`
 
-In allen Anlage-/Einladungs-Funktionen wird vor dem Insert `email_exists_anywhere` geprüft. Bei Treffer wird ein sprechender Fehler zurückgegeben (`email_already_in_use` inkl. Kontext-Hinweis: „E-Mail ist bereits als Partner-Mitglied registriert" o. ä.):
+- Neue Helper-Funktion `endImpersonationAndReturn(sessionId, tenantId)`:
+  1. `supabase.functions.invoke("support-session-end", { body: { session_id } })`
+  2. Original-Session lesen; falls vorhanden `supabase.auth.setSession(...)`, sonst `supabase.auth.signOut()` als Fallback.
+  3. `clearImpersonation()`
+  4. `window.location.replace(tenantId ? \`/super-admin/tenants/{tenantId} : "/super-admin/tenants")` — harter Reload, kein SPA-Navigate.
+- Bei Fehler in Schritt 1/2 trotzdem versuchen, die Original-Session zu setzen und einen Toast auszulösen (Aufrufer entscheidet).
 
-- `invite-tenant-admin` (Tenant-Admin-Einladung)
-- `invite-user` / User-Einladung im Tenant
-- `partner-invite-member` (Partner-Mitglied einladen)
-- `partner-create-tenant` (nur `contact_email`, falls diese später zum Login-User wird)
-- Super-Admin User-Anlage (sofern via Edge Function)
+`**src/components/SuperAdminImpersonationBar.tsx**`
 
-### 3. Frontend-Feedback
+- `handleEnd` durch Aufruf von `endImpersonationAndReturn` ersetzen. Toast + `setEnding` bleiben.
 
-Anpassung der Aufrufer-Dialoge (Partner-Mitglied hinzufügen, Tenant-User einladen, Super-Admin User anlegen), damit der neue Fehler als Toast mit Klartext angezeigt wird:
+`**src/pages/SuperAdminTenantDetail.tsx**`
 
-> „Diese E-Mail ist bereits im System registriert (als {Partner-Mitglied | Tenant-User | offene Einladung}). Bitte eine andere Adresse verwenden oder den bestehenden Account nutzen."
+- `handleEndRemoteSupport` ebenfalls über `endImpersonationAndReturn` laufen lassen. Damit funktioniert der Beenden-Button auch, wenn er innerhalb der Tenant-Detailseite geklickt wird, während der Browser noch als Support-User eingeloggt ist.
+- `queryClient.invalidateQueries` entfällt (hard reload macht es überflüssig).
 
-Der ursprüngliche Screenshot-Dialog (Super-Admin → Partner → Benutzer bearbeiten) wird zusätzlich so angepasst, dass beim **Ändern** der E-Mail dieselbe Prüfung greift.
+`**src/components/SupportSessionBanner.tsx**` (nur Tenant-User-Pfad, kein Super-Admin)
 
-### 4. Optionale Absicherung auf DB-Ebene
+- Unverändert — dieser Banner wird für Super-Admins nicht angezeigt (`if (isSuperAdmin) return null`).
 
-Zusätzlicher `BEFORE INSERT`-Trigger auf `partner_members` und `user_invitations`, der `email_exists_anywhere` ruft und bei Konflikt `RAISE EXCEPTION`. Damit werden auch direkte DB-Inserts (z. B. Migrationen, Support-Skripte) abgefangen.
+## Warum harter Reload
 
-### 5. Kein Auto-Merge, kein Login-Kontext-Switch
+- Der Tenant-Context, `useTenant`, `useSuperAdmin`, alle React-Query-Caches und Supabase-Realtime-Kanäle wurden mit `auth.uid()` des Support-Users initialisiert. Ein `setSession` allein tauscht nur die JWTs; die gecachten Daten und offenen Subscriptions bleiben. Ein `window.location.replace` garantiert einen kompletten Neustart mit der Super-Admin-Session — analog zum Login-Flow.
 
-Bewusst ausgeschlossen (gemäß Entscheidung): keine Post-Login-Kontextauswahl, kein automatisches Zusammenführen bestehender Duplikate. Bestehende Duplikate bleiben funktionsfähig bis manuelle Bereinigung.
+## Verifikation
 
-## Technische Details
-
-- Migration: `public.email_exists_anywhere(text)` als `STABLE SECURITY DEFINER`, `search_path = public, auth`.
-- Grants: `EXECUTE` an `authenticated`, `service_role`.
-- Trigger-Funktionen ebenfalls `SECURITY DEFINER`; auf `TG_OP = 'INSERT'` und (für Update-Fall) `NEW.email IS DISTINCT FROM OLD.email`.
-- Case-insensitive Vergleich (`lower(email)`).
-- Edge-Function-Fehlerformat bleibt konsistent (`{ success: false, error, code: 'email_already_in_use', context }`).
-- Keine Änderung an `auth.users` selbst (Supabase-managed).
-
-## Nicht enthalten
-
-- Manuelle Bereinigung des Einzelfalls `h.verst@esb-metelen.de` (erfolgt separat auf Wunsch).
-- Migration bestehender Duplikate.
-- UI zur Anzeige aller vorhandenen Duplikate.
+1. Als Super-Admin Support-Sitzung starten → in Tenant-Sicht wechseln.
+2. Über die rote Impersonation-Leiste „Remote-Support beenden" klicken → landet auf `/super-admin/tenants/:id`, Sidebar zeigt Super-Admin, kein Tenant-Kontext mehr sichtbar.
+3. Erneut Support-Sitzung starten, dann in der Tenant-Detailseite (nicht in der Bar) „Beenden" klicken → gleiches Ergebnis.
