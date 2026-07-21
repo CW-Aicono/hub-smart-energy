@@ -194,6 +194,80 @@ const ChargingReporting = () => {
   const [presetDialogOpen, setPresetDialogOpen] = useState(false);
   const [newPresetName, setNewPresetName] = useState("");
 
+  // ── Geplante Reports (persistiert in charging_report_schedules) ───────────
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [scheduleName, setScheduleName] = useState("");
+  const [scheduleFrequency, setScheduleFrequency] = useState<"daily" | "weekly" | "monthly">("weekly");
+  const [scheduleRecipients, setScheduleRecipients] = useState("");
+  const [scheduleFormat, setScheduleFormat] = useState<"csv" | "xlsx" | "pdf">("pdf");
+
+  const schedulesQ = useQuery({
+    queryKey: ["cr-schedules", tenant?.id],
+    enabled: !!tenant?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charging_report_schedules")
+        .select("*")
+        .eq("tenant_id", tenant!.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  async function createSchedule() {
+    if (!tenant?.id) return;
+    const { data: userRes } = await supabase.auth.getUser();
+    const uid = userRes.user?.id;
+    if (!uid) { toast.error("Nicht angemeldet"); return; }
+    const recipients = scheduleRecipients.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!scheduleName.trim() || recipients.length === 0) {
+      toast.error("Name und mind. ein Empfänger erforderlich");
+      return;
+    }
+    const { error } = await supabase.from("charging_report_schedules").insert({
+      tenant_id: tenant.id,
+      created_by: uid,
+      name: scheduleName.trim(),
+      frequency: scheduleFrequency,
+      format: scheduleFormat,
+      recipients,
+      config: { dimension, metric, statusFilter, rangePreset },
+      is_active: true,
+    });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Geplanter Report angelegt");
+    setScheduleDialogOpen(false);
+    setScheduleName(""); setScheduleRecipients("");
+    queryClient.invalidateQueries({ queryKey: ["cr-schedules", tenant.id] });
+  }
+
+  async function toggleSchedule(id: string, active: boolean) {
+    const { error } = await supabase.from("charging_report_schedules").update({ is_active: active }).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    queryClient.invalidateQueries({ queryKey: ["cr-schedules", tenant?.id] });
+  }
+
+  async function deleteSchedule(id: string) {
+    const { error } = await supabase.from("charging_report_schedules").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Geplanter Report gelöscht");
+    queryClient.invalidateQueries({ queryKey: ["cr-schedules", tenant?.id] });
+  }
+
+  async function sendScheduleNow(id: string) {
+    const { data, error } = await supabase.functions.invoke("charging-report-scheduler", {
+      body: { schedule_id: id },
+    });
+    if (error) { toast.error(error.message); return; }
+    const result = (data as { results?: Array<{ status: string; message?: string }> })?.results?.[0];
+    if (result?.status === "sent") toast.success("Report versendet");
+    else if (result?.status === "failed") toast.error(result.message ?? "Versand fehlgeschlagen");
+    else toast.info(result?.message ?? "Verarbeitet");
+    queryClient.invalidateQueries({ queryKey: ["cr-schedules", tenant?.id] });
+  }
+
+
   function applyPreset(p: ReportPreset) {
     setRangePreset(p.rangePreset);
     if (p.customFrom) setCustomFrom(p.customFrom);
