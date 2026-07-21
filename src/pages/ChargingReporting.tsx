@@ -134,6 +134,7 @@ const BUILTIN_PRESETS: ReportPreset[] = [
   { key: "b6", label: "Standzeit-Gebühr nach Nutzer (90 T.)",builtIn: true, rangePreset: "90d",  dimension: "user",               metric: "idle_fee",      statusFilter: "paid" },
   { key: "b7", label: "Energie je Woche (90 T.)",            builtIn: true, rangePreset: "90d",  dimension: "week",               metric: "energy_kwh",    statusFilter: "all" },
   { key: "b8", label: "Umsatz je Monat (12 M.)",             builtIn: true, rangePreset: "365d", dimension: "month",              metric: "revenue_gross", statusFilter: "all" },
+  { key: "b9", label: "Roaming-Fokus (30 T.)",               builtIn: true, rangePreset: "30d",  dimension: "charge_point",       metric: "revenue_gross", statusFilter: "all" },
 ];
 
 const WIDGET_META: Record<WidgetId, { label: string; icon: React.ReactNode }> = {
