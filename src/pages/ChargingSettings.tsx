@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { OcppIntegrationContent } from "./OcppIntegration";
 import ChargingInvoiceSettingsForm from "@/components/charging/ChargingInvoiceSettingsForm";
 import RoamingTab from "@/components/charging/RoamingTab";
+import ChargingAppContent from "./ChargingAppContent";
 
 const ChargingSettings = () => {
   return (
@@ -12,7 +13,7 @@ const ChargingSettings = () => {
         <div className="min-w-0">
           <h1 className="text-xl font-bold tracking-tight">Einstellungen</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            OCPP-Integration, Rechnungsdesign und Roaming für Ihre Ladeinfrastruktur
+            OCPP-Integration, Rechnungsdesign, Roaming und Lade-App für Ihre Ladeinfrastruktur
           </p>
         </div>
 
@@ -22,6 +23,7 @@ const ChargingSettings = () => {
             <TabsTrigger value="ocpp">OCPP Integration</TabsTrigger>
             <TabsTrigger value="invoice">Rechnungsdesign</TabsTrigger>
             <TabsTrigger value="roaming">Roaming</TabsTrigger>
+            <TabsTrigger value="app">Lade-App</TabsTrigger>
           </TabsList>
 
           <TabsContent value="ocpp" className="mt-4">
@@ -39,6 +41,10 @@ const ChargingSettings = () => {
           <TabsContent value="roaming" className="mt-4">
             <RoamingTab />
           </TabsContent>
+
+          <TabsContent value="app" className="mt-4">
+            <ChargingAppContent />
+          </TabsContent>
         </Tabs>
       </div>
     </AppLayout>
@@ -46,3 +52,4 @@ const ChargingSettings = () => {
 };
 
 export default ChargingSettings;
+
