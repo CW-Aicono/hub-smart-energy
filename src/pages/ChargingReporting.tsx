@@ -518,75 +518,83 @@ const ChargingReporting = () => {
   const billingGroupMap = useMemo(() => new Map((billingGroupsQ.data ?? []).map((g) => [g.id, g.name])), [billingGroupsQ.data]);
   const rfidToUser = useMemo(() => new Map((rfidQ.data ?? []).map((r) => [String(r.tag ?? "").toLowerCase(), r.user_id])), [rfidQ.data]);
 
-  const invoiceBySession = useMemo(() => {
-    const m = new Map<string, InvoiceRow>();
-    for (const inv of invoicesQ.data ?? []) if (inv.session_id) m.set(inv.session_id, inv);
-    return m;
-  }, [invoicesQ.data]);
+  // ── Zentrale Allocation: Sessions ↔ Rechnungen ↔ Tarife ──────────────────
+  const { allocations, diagnostics } = useMemo(() => {
+    return buildAllocations({
+      sessions: (sessionsQ.data ?? []).map((s) => ({
+        id: s.id, id_tag: s.id_tag, start_time: s.start_time, stop_time: s.stop_time,
+        energy_kwh: s.energy_kwh, charge_point_id: s.charge_point_id,
+      })),
+      invoices: invoicesQ.data ?? [],
+      invoiceLinks: invoiceLinksQ.data ?? [],
+      tariffs: (tariffsQ.data ?? []) as Parameters<typeof buildAllocations>[0]["tariffs"],
+      users: (usersQ.data ?? []).map((u) => ({ id: u.id, group_id: u.group_id ?? null, tariff_id: (u as { tariff_id?: string | null }).tariff_id ?? null })),
+      userGroups: (userGroupsQ.data ?? []).map((g) => ({ id: g.id, tariff_id: (g as { tariff_id?: string | null }).tariff_id ?? null })),
+      rfidToUser,
+    });
+  }, [sessionsQ.data, invoicesQ.data, invoiceLinksQ.data, tariffsQ.data, usersQ.data, userGroupsQ.data, rfidToUser]);
 
   const sessions = useMemo(() => {
     const all = sessionsQ.data ?? [];
     if (statusFilter === "all") return all;
-    return all.filter((s) => {
-      const inv = invoiceBySession.get(s.id);
-      if (statusFilter === "paid") return inv?.status === "paid";
-      if (statusFilter === "open") return !inv || inv.status !== "paid";
-      return true;
-    });
-  }, [sessionsQ.data, statusFilter, invoiceBySession]);
+    return all.filter((s) => passesStatusFilter(allocations.get(s.id), statusFilter));
+  }, [sessionsQ.data, statusFilter, allocations]);
 
   // ── KPI ────────────────────────────────────────────────────────────────────
   const kpi = useMemo(() => {
-    let energy = 0, durationH = 0, count = 0, invoicedKwh = 0;
+    let energy = 0, durationH = 0, count = 0;
+    let revenueGross = 0, revenueNet = 0, idleFee = 0;
+    let revenueInvoice = 0, revenueCalc = 0;
+    let billedKwh = 0;
     for (const s of sessions) {
-      const inv = invoiceBySession.get(s.id);
-      // Authoritative billed energy: prefer invoice.total_energy_kwh over session meter delta
-      const kwh = inv && inv.total_energy_kwh != null
-        ? Number(inv.total_energy_kwh)
-        : Number(s.energy_kwh ?? 0);
-      energy += kwh;
+      energy += Number(s.energy_kwh ?? 0);
       if (s.start_time && s.stop_time) {
         durationH += (new Date(s.stop_time).getTime() - new Date(s.start_time).getTime()) / 3_600_000;
       }
       count += 1;
-      if (inv) invoicedKwh += kwh;
-    }
-    let revenueGross = 0, revenueNet = 0, idleFee = 0;
-    for (const inv of invoicesQ.data ?? []) {
-      revenueGross += Number(inv.total_amount ?? 0);
-      revenueNet += Number(inv.net_amount ?? 0);
-      idleFee += Number(inv.idle_fee_amount ?? 0);
+      const a = allocations.get(s.id);
+      if (!a) continue;
+      revenueGross += a.revenue_gross;
+      revenueNet += a.revenue_net;
+      idleFee += a.idle_fee;
+      billedKwh += a.billed_kwh;
+      if (a.source === "invoice") revenueInvoice += a.revenue_gross;
+      else if (a.source === "calculated") revenueCalc += a.revenue_gross;
     }
     const avgKwh = count > 0 ? energy / count : 0;
-    const avgPrice = invoicedKwh > 0 ? revenueGross / invoicedKwh : 0;
-    return { energy, durationH, count, revenueGross, revenueNet, idleFee, avgKwh, avgPrice, invoicedKwh };
-  }, [sessions, invoicesQ.data, invoiceBySession]);
+    const avgPrice = billedKwh > 0 ? revenueGross / billedKwh : 0;
+    return { energy, durationH, count, revenueGross, revenueNet, idleFee, avgKwh, avgPrice, billedKwh, revenueInvoice, revenueCalc };
+  }, [sessions, allocations]);
 
   // KPI Vorperiode (nur wenn Vergleich aktiv)
   const kpiPrev = useMemo(() => {
     if (!compareEnabled) return null;
     const prevSess = prevSessionsQ.data ?? [];
     const prevInvs = prevInvoicesQ.data ?? [];
-    const prevInvBySession = new Map<string, InvoiceRow>();
-    for (const i of prevInvs) if (i.session_id) prevInvBySession.set(i.session_id, i);
-    let energy = 0, count = 0, invoicedKwh = 0;
+    const { allocations: prevAlloc } = buildAllocations({
+      sessions: prevSess.map((s) => ({
+        id: s.id, id_tag: s.id_tag, start_time: s.start_time, stop_time: s.stop_time,
+        energy_kwh: s.energy_kwh, charge_point_id: s.charge_point_id,
+      })),
+      invoices: prevInvs,
+      invoiceLinks: [], // im Vergleichszeitraum ohne N:M-Detail (Approximation über legacy session_id)
+      tariffs: (tariffsQ.data ?? []) as Parameters<typeof buildAllocations>[0]["tariffs"],
+      users: (usersQ.data ?? []).map((u) => ({ id: u.id, group_id: u.group_id ?? null, tariff_id: (u as { tariff_id?: string | null }).tariff_id ?? null })),
+      userGroups: (userGroupsQ.data ?? []).map((g) => ({ id: g.id, tariff_id: (g as { tariff_id?: string | null }).tariff_id ?? null })),
+      rfidToUser,
+    });
+    let energy = 0, count = 0, revenueGross = 0, revenueNet = 0, idleFee = 0;
     for (const s of prevSess) {
-      const inv = prevInvBySession.get(s.id);
-      const kwh = inv && inv.total_energy_kwh != null
-        ? Number(inv.total_energy_kwh)
-        : Number(s.energy_kwh ?? 0);
-      energy += kwh;
+      energy += Number(s.energy_kwh ?? 0);
       count += 1;
-      if (inv) invoicedKwh += kwh;
+      const a = prevAlloc.get(s.id);
+      if (!a) continue;
+      revenueGross += a.revenue_gross;
+      revenueNet += a.revenue_net;
+      idleFee += a.idle_fee;
     }
-    let revenueGross = 0, revenueNet = 0, idleFee = 0;
-    for (const inv of prevInvs) {
-      revenueGross += Number(inv.total_amount ?? 0);
-      revenueNet += Number(inv.net_amount ?? 0);
-      idleFee += Number(inv.idle_fee_amount ?? 0);
-    }
-    return { energy, count, revenueGross, revenueNet, idleFee, invoicedKwh };
-  }, [compareEnabled, prevSessionsQ.data, prevInvoicesQ.data]);
+    return { energy, count, revenueGross, revenueNet, idleFee };
+  }, [compareEnabled, prevSessionsQ.data, prevInvoicesQ.data, tariffsQ.data, usersQ.data, userGroupsQ.data, rfidToUser]);
 
   function delta(current: number, previous: number | undefined | null): { pct: number; up: boolean } | null {
     if (!compareEnabled || previous == null) return null;
@@ -618,7 +626,7 @@ const ChargingReporting = () => {
 
   // ── Grouping ───────────────────────────────────────────────────────────────
   function groupKey(s: SessionRow): { key: string; label: string } {
-    const inv = invoiceBySession.get(s.id);
+    const alloc = allocations.get(s.id);
     switch (dimension) {
       case "charge_point": {
         const cp = s.charge_point_id ? cpMap.get(s.charge_point_id) : null;
@@ -630,16 +638,16 @@ const ChargingReporting = () => {
         return { key: gid ?? "none", label: gid ? cpGroupMap.get(gid) ?? "—" : "Ohne Gruppe" };
       }
       case "user": {
-        const uid = inv?.user_id ?? rfidToUser.get(String(s.id_tag ?? "").toLowerCase()) ?? null;
+        const uid = alloc?.user_id ?? rfidToUser.get(String(s.id_tag ?? "").toLowerCase()) ?? null;
         return { key: uid ?? "anon", label: uid ? userMap.get(uid)?.name ?? "—" : "Unbekannt" };
       }
       case "user_group": {
-        const uid = inv?.user_id ?? rfidToUser.get(String(s.id_tag ?? "").toLowerCase()) ?? null;
+        const uid = alloc?.user_id ?? rfidToUser.get(String(s.id_tag ?? "").toLowerCase()) ?? null;
         const gid = uid ? userMap.get(uid)?.group_id ?? null : null;
         return { key: gid ?? "none", label: gid ? userGroupMap.get(gid) ?? "—" : "Ohne Gruppe" };
       }
       case "billing_group": {
-        const gid = inv?.billing_group_id ?? null;
+        const gid = alloc?.billing_group_id ?? null;
         return { key: gid ?? "none", label: gid ? billingGroupMap.get(gid) ?? "—" : "Ohne Gruppe" };
       }
       case "day": {
@@ -662,36 +670,35 @@ const ChargingReporting = () => {
   }
 
   function metricValue(s: SessionRow): number {
-    const inv = invoiceBySession.get(s.id);
+    const a = allocations.get(s.id);
     switch (metric) {
-      case "energy_kwh":
-        return inv && inv.total_energy_kwh != null
-          ? Number(inv.total_energy_kwh)
-          : Number(s.energy_kwh ?? 0);
-      case "revenue_gross": return Number(inv?.total_amount ?? 0);
-      case "revenue_net": return Number(inv?.net_amount ?? 0);
+      case "energy_kwh": return Number(s.energy_kwh ?? 0);
+      case "revenue_gross": return a?.revenue_gross ?? 0;
+      case "revenue_net": return a?.revenue_net ?? 0;
       case "sessions": return 1;
       case "duration_h":
         return s.start_time && s.stop_time
           ? (new Date(s.stop_time).getTime() - new Date(s.start_time).getTime()) / 3_600_000 : 0;
-      case "idle_fee": return Number(inv?.idle_fee_amount ?? 0);
+      case "idle_fee": return a?.idle_fee ?? 0;
     }
   }
 
   const grouped = useMemo(() => {
-    const m = new Map<string, { label: string; value: number; sessions: number; kwh: number; invoicedKwh: number; revenue: number }>();
+    type Row = { label: string; value: number; sessions: number; kwh: number; billedKwh: number; revenue: number; revenueCalc: number; revenueInvoice: number };
+    const m = new Map<string, Row>();
     for (const s of sessions) {
       const { key, label } = groupKey(s);
-      const inv = invoiceBySession.get(s.id);
-      const cur = m.get(key) ?? { label, value: 0, sessions: 0, kwh: 0, invoicedKwh: 0, revenue: 0 };
+      const a = allocations.get(s.id);
+      const cur = m.get(key) ?? { label, value: 0, sessions: 0, kwh: 0, billedKwh: 0, revenue: 0, revenueCalc: 0, revenueInvoice: 0 };
       cur.value += metricValue(s);
       cur.sessions += 1;
-      // Authoritative billed energy: prefer invoice.total_energy_kwh
-      const kwh = inv && inv.total_energy_kwh != null
-        ? Number(inv.total_energy_kwh)
-        : Number(s.energy_kwh ?? 0);
-      cur.kwh += kwh;
-      if (inv) { cur.invoicedKwh += kwh; cur.revenue += Number(inv.total_amount ?? 0); }
+      cur.kwh += Number(s.energy_kwh ?? 0);
+      if (a) {
+        cur.billedKwh += a.billed_kwh;
+        cur.revenue += a.revenue_gross;
+        if (a.source === "invoice") cur.revenueInvoice += a.revenue_gross;
+        else if (a.source === "calculated") cur.revenueCalc += a.revenue_gross;
+      }
       m.set(key, cur);
     }
     const rows = Array.from(m.entries()).map(([key, v]) => ({ key, ...v }));
@@ -701,42 +708,45 @@ const ChargingReporting = () => {
       rows.sort((a, b) => b.value - a.value);
     }
     return rows;
-  }, [sessions, dimension, metric, invoiceBySession]);
+  }, [sessions, dimension, metric, allocations]);
 
   const chartData = useMemo(() => grouped.slice(0, 20).map((r) => ({ name: r.label, value: r.value })), [grouped]);
 
   const timeSeries = useMemo(() => {
-    const m = new Map<string, { kwh: number; revenue: number; sessions: number }>();
+    const m = new Map<string, { kwh: number; revenue: number; revenueCalc: number; revenueInvoice: number; sessions: number }>();
     for (const s of sessions) {
       const key = toISODate(new Date(s.start_time));
-      const inv = invoiceBySession.get(s.id);
-      const cur = m.get(key) ?? { kwh: 0, revenue: 0, sessions: 0 };
-      cur.kwh += inv && inv.total_energy_kwh != null ? Number(inv.total_energy_kwh) : Number(s.energy_kwh ?? 0);
-      cur.revenue += Number(inv?.total_amount ?? 0);
+      const a = allocations.get(s.id);
+      const cur = m.get(key) ?? { kwh: 0, revenue: 0, revenueCalc: 0, revenueInvoice: 0, sessions: 0 };
+      cur.kwh += Number(s.energy_kwh ?? 0);
+      cur.revenue += a?.revenue_gross ?? 0;
+      if (a?.source === "invoice") cur.revenueInvoice += a.revenue_gross;
+      else if (a?.source === "calculated") cur.revenueCalc += a.revenue_gross;
       cur.sessions += 1;
       m.set(key, cur);
     }
     return Array.from(m.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([date, v]) => ({ date, label: new Date(date).toLocaleDateString("de-DE"), ...v }));
-  }, [sessions, invoiceBySession]);
+  }, [sessions, allocations]);
 
   // ── Heatmap: Wochentag (Mo-So) × Stunde (0-23) ─────────────────────────────
   const heatmap = useMemo(() => {
-    // grid[weekday 0=Mo..6=So][hour 0..23]
     const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
     let max = 0;
     for (const s of sessions) {
       const d = new Date(s.start_time);
-      const jsDay = d.getDay(); // 0=So..6=Sa
-      const wd = (jsDay + 6) % 7; // 0=Mo..6=So
+      const jsDay = d.getDay();
+      const wd = (jsDay + 6) % 7;
       const hr = d.getHours();
       const v = metricValue(s);
       grid[wd][hr] += v;
       if (grid[wd][hr] > max) max = grid[wd][hr];
     }
     return { grid, max };
-  }, [sessions, metric, invoiceBySession]);
+  }, [sessions, metric, allocations]);
+
+
 
   // ── Exports ────────────────────────────────────────────────────────────────
   function csvEscape(v: unknown) {
