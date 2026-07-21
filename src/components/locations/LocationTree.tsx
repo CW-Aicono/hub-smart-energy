@@ -291,7 +291,7 @@ function LocationNode({ location, level, selectedId, onSelect, onRefresh, isAdmi
   const isEinzelgebaeude = location.type === "einzelgebaeude";
   const isChildOfComplex = level > 0;
   
-  const shouldShowFloors = isEinzelgebaeude || isChildOfComplex;
+  const shouldShowFloors = isEinzelgebaeude || isChildOfComplex || !hasChildren;
   const hasExpandableContent = hasChildren || (shouldShowFloors && hasFloors);
 
   const status = locationStatuses?.get(location.id);
