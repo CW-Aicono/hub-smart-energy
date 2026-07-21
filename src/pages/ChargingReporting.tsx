@@ -1271,9 +1271,9 @@ const ChargingReporting = () => {
           <GripVertical className="h-3.5 w-3.5" /> Widgets per Drag &amp; Drop neu anordnen — Layout wird pro Nutzer gespeichert.
         </div>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={layout} strategy={verticalListSortingStrategy}>
+          <SortableContext items={layout.filter((id) => id !== "roaming" || showRoaming)} strategy={verticalListSortingStrategy}>
             <div className="space-y-4">
-              {layout.map((id) => (
+              {layout.filter((id) => id !== "roaming" || showRoaming).map((id) => (
                 <SortableWidget key={id} id={id} title={widgetTitle(id)}>
                   {widgetRenderers[id]()}
                 </SortableWidget>
