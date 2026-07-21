@@ -629,7 +629,10 @@ const ChargingReporting = () => {
   function metricValue(s: SessionRow): number {
     const inv = invoiceBySession.get(s.id);
     switch (metric) {
-      case "energy_kwh": return Number(s.energy_kwh ?? 0);
+      case "energy_kwh":
+        return inv && inv.total_energy_kwh != null
+          ? Number(inv.total_energy_kwh)
+          : Number(s.energy_kwh ?? 0);
       case "revenue_gross": return Number(inv?.total_amount ?? 0);
       case "revenue_net": return Number(inv?.net_amount ?? 0);
       case "sessions": return 1;
