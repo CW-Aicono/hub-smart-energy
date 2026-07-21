@@ -1,66 +1,56 @@
-## Ausgangslage (verifiziert)
-
-- `**src/pages/Automation.tsx**` (Multi-Location-Automation) übergibt dem `AutomationRuleBuilder` **kein** `installedTemplates`-Prop. Der Builder zeigt daher konsequent den Hinweis „Auf diesem Miniserver wurden noch keine AICO_-Bausteine erkannt" – egal ob auf irgendeinem Standort Templates installiert sind.
-- In `src/components/locations/LocationAutomation.tsx` (Zeilen 308–346) werden die installierten Templates **pro Location** aus `location_loxone_templates` + `loxone_template_registry` geladen und dort korrekt in den Builder gereicht.
-- Ergebnis: Template-Automation funktioniert heute **ausschließlich** in der Standort-Detailansicht, nicht im übergreifenden `/automation`-Editor.
-
 ## Ziel
 
-Liegenschaftsübergreifende Template-Automation: Ein Baustein (z. B. `AICO_GridProtect`) wird einmal im Multi-Location-Editor konfiguriert und automatisch auf **alle** ausgewählten Standorte gespielt, auf denen dieser Baustein installiert ist.
+Verhindern, dass eine E-Mail-Adresse mehrfach im System angelegt wird (z. B. gleichzeitig als Partner-Mitglied und Tenant-User). Bestehende Login-Konflikte werden dadurch dauerhaft ausgeschlossen. Der Einzelfall `h.verst@esb-metelen.de` wird manuell bereinigt (nicht Teil dieses Plans).
 
-## Plan
+## Umsetzung
 
-### 1. Datenquelle „Templates über alle Standorte" (Frontend-Hook)
+### 1. Zentrale Prüf-Funktion (DB)
 
-Neuer Hook `useInstalledTemplatesMulti(locationIds)` in `src/hooks/`:
+Neue Security-Definer-Funktion `public.email_exists_anywhere(_email text)` mit Suchpfad über:
+- `auth.users` (existierender Account)
+- `public.partner_members` (via Join auf `auth.users`)
+- `public.user_invitations` (offene Tenant-Einladungen)
+- ggf. `public.tenant_support_users`
 
-- Lädt aus `location_loxone_templates` alle Zeilen für die angegebenen Locations.
-- Joint mit `loxone_template_registry` (nur `is_active`).
-- Gruppiert nach `(template_key, instance_id)` und liefert:
-  ```
-  { template_key, instance_id, title, parameters,
-    locations: [{ locationId, locationIntegrationId, installedVersion }] }
-  ```
-- Ein Template gilt für den MLA-Editor als „verfügbar", wenn es auf **mindestens einem** Standort installiert ist. Standorte ohne Installation werden im Editor grau markiert („Baustein fehlt – bitte auf Miniserver aufspielen").
+Rückgabe: `{ exists: boolean, context: 'auth' | 'partner' | 'invitation' | null }`. Aufrufbar von `authenticated` und `service_role`.
 
-### 2. Multi-Location-Editor erweitern (`src/pages/Automation.tsx`)
+### 2. Edge Functions absichern
 
-- Hook aus Schritt 1 mit den `gatewayIds`/`locationIds` aufrufen.
-- Neues Prop `installedTemplates` an `AutomationRuleBuilder` durchreichen (aggregierte Liste).
-- Zusätzlich neues optionales Prop `templateAvailability` (Map `template_key → Set<locationId>`), damit der Builder pro ausgewähltem Ziel-Standort einen Badge zeigen kann („installiert" / „fehlt").
+In allen Anlage-/Einladungs-Funktionen wird vor dem Insert `email_exists_anywhere` geprüft. Bei Treffer wird ein sprechender Fehler zurückgegeben (`email_already_in_use` inkl. Kontext-Hinweis: „E-Mail ist bereits als Partner-Mitglied registriert" o. ä.):
 
-### 3. Builder anpassen (`src/components/locations/AutomationRuleBuilder.tsx`)
+- `invite-tenant-admin` (Tenant-Admin-Einladung)
+- `invite-user` / User-Einladung im Tenant
+- `partner-invite-member` (Partner-Mitglied einladen)
+- `partner-create-tenant` (nur `contact_email`, falls diese später zum Login-User wird)
+- Super-Admin User-Anlage (sofern via Edge Function)
 
-- Wenn `installedTemplates.length > 0` und der Editor im **Multi-Location-Modus** läuft (erkennbar an bereits vorhandenem `scope_type === "cross_location"` bzw. `targetLocationIds`):
-  - Template-Auswahl freischalten.
-  - Unter der Ziel-Standortliste: bei jeder Location visuell anzeigen, ob der gewählte Baustein dort installiert ist. Nicht-installierte Standorte werden beim Speichern **automatisch ausgeschlossen** (mit Toast-Hinweis).
-- Für `requires_cloud`-Bausteine bleibt bestehende Sperre auf „Loxone lokal" gültig, unverändert.
+### 3. Frontend-Feedback
 
-### 4. Persistenz & Push
+Anpassung der Aufrufer-Dialoge (Partner-Mitglied hinzufügen, Tenant-User einladen, Super-Admin User anlegen), damit der neue Fehler als Toast mit Klartext angezeigt wird:
 
-- `location_automations` mit `scope_type = "cross_location"` und `target_location_ids = [...]` existiert bereits – kein Schema-Change nötig.
-- Speicherung legt **pro Ziel-Standort einen Eintrag** in `loxone_pending_writes` an (Push-Kanal aus v1.4), sobald Parameter geändert werden. Alternativ: einen aggregierten Eintrag pro Location beim Speichern der Automation.
-- Die vorhandene Edge Function `loxone-parameter-push` wird so erweitert, dass sie beim Auslösen einer Cross-Location-Automation die Zielwerte für alle betroffenen `location_integration_id`s in die Warteschlange schreibt.
+> „Diese E-Mail ist bereits im System registriert (als {Partner-Mitglied | Tenant-User | offene Einladung}). Bitte eine andere Adresse verwenden oder den bestehenden Account nutzen."
 
-### 5. UI-Hinweise für Laien
+Der ursprüngliche Screenshot-Dialog (Super-Admin → Partner → Benutzer bearbeiten) wird zusätzlich so angepasst, dass beim **Ändern** der E-Mail dieselbe Prüfung greift.
 
-- Wenn im MLA-Editor gar keine Templates aggregiert werden können: klarer Hinweis mit Link/Anleitung „So installieren Sie einen AICO-Baustein auf einem Miniserver" (verweist auf die Standort-Detailseite → Puzzle-Icon 🧩).
-- Nach dem Speichern: Toast „Automation für X von Y Standorten aktiviert. Z Standorte übersprungen (Baustein nicht installiert)".
+### 4. Optionale Absicherung auf DB-Ebene
 
-### 6. Tests / Abnahme
+Zusätzlicher `BEFORE INSERT`-Trigger auf `partner_members` und `user_invitations`, der `email_exists_anywhere` ruft und bei Konflikt `RAISE EXCEPTION`. Damit werden auch direkte DB-Inserts (z. B. Migrationen, Support-Skripte) abgefangen.
 
-- Manueller Test: 2 Standorte, auf beiden `AICO_GridProtect` installiert → Automation in `/automation` anlegen, beide Standorte auswählen, speichern, „Jetzt ausführen" → Werte landen in `loxone_pending_writes` für beide `location_integration_id`s.
-- Regressionscheck: Standort-Detailansicht unverändert.
+### 5. Kein Auto-Merge, kein Login-Kontext-Switch
+
+Bewusst ausgeschlossen (gemäß Entscheidung): keine Post-Login-Kontextauswahl, kein automatisches Zusammenführen bestehender Duplikate. Bestehende Duplikate bleiben funktionsfähig bis manuelle Bereinigung.
 
 ## Technische Details
 
-- **Neue Datei:** `src/hooks/useInstalledTemplatesMulti.tsx`
-- **Editiert:** `src/pages/Automation.tsx` (Hook einbinden + Prop übergeben), `src/components/locations/AutomationRuleBuilder.tsx` (Availability-Badges + Filter beim Save), optional `supabase/functions/loxone-parameter-push/index.ts` (Multi-Location-Push).
-- **Kein DB-Migrationsbedarf**; `location_loxone_templates`, `loxone_template_registry`, `location_automations.target_location_ids` und `loxone_pending_writes` sind ausreichend.
-- **Keine Änderung** an `useLocationAutomations` / `useMLAutomations`-Signaturen.
+- Migration: `public.email_exists_anywhere(text)` als `STABLE SECURITY DEFINER`, `search_path = public, auth`.
+- Grants: `EXECUTE` an `authenticated`, `service_role`.
+- Trigger-Funktionen ebenfalls `SECURITY DEFINER`; auf `TG_OP = 'INSERT'` und (für Update-Fall) `NEW.email IS DISTINCT FROM OLD.email`.
+- Case-insensitive Vergleich (`lower(email)`).
+- Edge-Function-Fehlerformat bleibt konsistent (`{ success: false, error, code: 'email_already_in_use', context }`).
+- Keine Änderung an `auth.users` selbst (Supabase-managed).
 
-## Offene Frage
+## Nicht enthalten
 
-Soll bei „Jetzt ausführen" einer Cross-Location-Automation **parallel** für alle Standorte gepusht werden (schneller, schwerer zu debuggen) oder **sequenziell** mit Fortschrittsanzeige (langsamer, klarere Fehlermeldungen pro Standort)? Vorschlag: parallel, mit Ergebnistabelle im Toast.  
-  
-Antwort: Ja, parallel, also so wie von dir vorgeschlagen.
+- Manuelle Bereinigung des Einzelfalls `h.verst@esb-metelen.de` (erfolgt separat auf Wunsch).
+- Migration bestehender Duplikate.
+- UI zur Anzeige aller vorhandenen Duplikate.
