@@ -124,7 +124,7 @@ export function EditIntegrationDialog({
     } else {
       toast({
         title: "Remote Connect WebSocket aktiviert",
-        description: "Die BETA-Funktion ist jetzt für diesen Standort freigeschaltet.",
+        description: "Echtzeit-Daten sind jetzt für diesen Standort freigeschaltet.",
       });
     }
   };
