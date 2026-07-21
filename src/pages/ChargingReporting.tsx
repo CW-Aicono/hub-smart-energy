@@ -261,13 +261,15 @@ const ChargingReporting = () => {
 
   // ── KPI ────────────────────────────────────────────────────────────────────
   const kpi = useMemo(() => {
-    let energy = 0, durationH = 0, count = 0;
+    let energy = 0, durationH = 0, count = 0, invoicedKwh = 0;
     for (const s of sessions) {
-      energy += Number(s.energy_kwh ?? 0);
+      const kwh = Number(s.energy_kwh ?? 0);
+      energy += kwh;
       if (s.start_time && s.stop_time) {
         durationH += (new Date(s.stop_time).getTime() - new Date(s.start_time).getTime()) / 3_600_000;
       }
       count += 1;
+      if (invoiceBySession.has(s.id)) invoicedKwh += kwh;
     }
     let revenueGross = 0, revenueNet = 0, idleFee = 0;
     for (const inv of invoicesQ.data ?? []) {
@@ -276,9 +278,10 @@ const ChargingReporting = () => {
       idleFee += Number(inv.idle_fee_amount ?? 0);
     }
     const avgKwh = count > 0 ? energy / count : 0;
-    const avgPrice = energy > 0 ? revenueGross / energy : 0;
-    return { energy, durationH, count, revenueGross, revenueNet, idleFee, avgKwh, avgPrice };
-  }, [sessions, invoicesQ.data]);
+    // Ø €/kWh nur über abgerechnete Energie – offene Sessions würden sonst den Preis verwässern
+    const avgPrice = invoicedKwh > 0 ? revenueGross / invoicedKwh : 0;
+    return { energy, durationH, count, revenueGross, revenueNet, idleFee, avgKwh, avgPrice, invoicedKwh };
+  }, [sessions, invoicesQ.data, invoiceBySession]);
 
   // ── Grouping key resolver ──────────────────────────────────────────────────
   function groupKey(s: SessionRow): { key: string; label: string } {
