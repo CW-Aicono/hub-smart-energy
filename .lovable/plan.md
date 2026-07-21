@@ -1,89 +1,106 @@
-# Plan: Modul "Reporting" für Ladeinfrastruktur
+## Befund
 
-## Ziel
-Neuer Menüpunkt **Reporting** unter *Ladeinfrastruktur*, zwischen *Abrechnung* und *Einstellungen*. Er erlaubt frei kombinierbare Auswertungen über Ladepunkte, Ladepunktgruppen, Nutzer, Nutzergruppen, Rechnungsgruppen und Zeiträume.
+Die Reporting-Zahlen weichen ab, weil mehrere Effekte zusammenkommen:
 
-## Menü & Routing
-- Sidebar (`DashboardSidebar.tsx` + `MobileSidebar.tsx`): neuer Eintrag `/charging/reporting` mit Icon *BarChart3*, Label `nav.chargingReporting`, positioniert **zwischen** `chargingBilling` und `chargingSettings`.
-- Neue Route in `App.tsx` (auch Demo-Variante): `/charging/reporting` → `<M><ChargingReporting/></M>` (Modul-Guard).
-- ModuleGuard: bestehender `charging`-Modul-Key wird wiederverwendet (kein neues billbares Modul — reine Reporting-Erweiterung des Ladeinfra-Moduls). Falls später gewünscht, kann ein Sub-Modul-Flag ergänzt werden.
+1. **1:1-Annahme statt N:M-Verknüpfung.** Der Code mappt `session → invoice` als 1:1, obwohl Rechnungen über `charging_invoice_sessions` mehrere Sessions umfassen können und mehrere Rechnungen dieselbe Session referenzieren.
+2. **Duplikate.** In der DB gibt es Sessions mit 2–3 Rechnungszeilen. Der aktuelle Map-Aufbau überschreibt zufällig — das Ergebnis ist reihenfolgenabhängig.
+3. **Umsatz vs. Nenner passen nicht zusammen.** KPI-Umsatz summiert alle Rechnungen, Ø €/kWh teilt aber nur durch die gemappte Session-Energie → Artefakte wie „0,751 €/kWh".
+4. **Fix von letzter Runde überkorrigiert.** `invoice.total_energy_kwh` wird 1:1 einer Session zugerechnet — bei Sammelrechnungen falsch.
+5. **Kein Fallback ohne Rechnung.** Tenants ohne Rechnungsstellung sehen aktuell 0 € Umsatz.
+6. **Geplanter E-Mail-Report** nutzt ähnliche Logik → gleiche Probleme.
 
-## Seitenaufbau `ChargingReporting.tsx`
-Ein einzelner Screen mit drei Blöcken:
+## Zielbild
 
-### 1. Filterleiste (persistente Sticky-Bar)
-- **Zeitraum**: DateRangePicker mit Presets (Heute, Diese Woche, Diesen Monat, YTD, Letzte 30/90 Tage, Frei wählbar) + Vergleichszeitraum (optional).
-- **Granularität**: Stunde / Tag / Woche / Monat.
-- **Gruppierung (Dimension)**: Ladepunkt, Ladepunktgruppe, Standort, Nutzer, Nutzergruppe, Rechnungsgruppe, Tarif, RFID-Tag.
-- **Filter (Multi-Select)**: gleiche Entitäten wie Gruppierung, jeweils mit Suche.
-- **Status-Filter**: nur bezahlte / nur offene / alle Sessions.
-- **Metrik-Auswahl**: kWh, Umsatz (netto/brutto), Standzeit-Gebühr, Dauer, Anzahl Sessions, Ø kWh/Session, Ø €/kWh, Auslastung (%), Peak-Leistung kW, Idle-Anteil, CO₂-Ersparnis.
+Eine zentrale, saubere Berechnungsbasis für UI, CSV, XLSX, PDF und geplante Reports. **Hybrider Umsatz**: echte Rechnung wenn vorhanden, sonst kalkulatorisch aus Tarif × Session-kWh. **Transparente Ausweisung**: Zusatz-KPI/-Spalte „davon kalkulatorisch".
 
-Filter-Zustand wird in URL-Query-Params gespiegelt (teilbar/bookmarkbar) und in `localStorage` gecached.
+## Umsetzung
 
-### 2. KPI-Kacheln (oben)
-Fixe Kennzahlen für den aktuellen Filterschnitt vs. Vergleichszeitraum (Δ%):
-- Sessions gesamt • kWh gesamt • Umsatz brutto • Ø Ladedauer • Auslastung • Ø €/kWh.
+### 1. Zentrales Reporting-Datenmodell
 
-### 3. Frei konfigurierbare Analyse-Widgets
-Nutzer legt eine Liste von Widgets an (Add-Button). Jedes Widget hat:
-- Titel, Typ (**Balken, Linie, Fläche, Stacked-Bar, Donut, Heatmap Wochentag×Stunde, Tabelle mit Sortierung/Pagination**).
-- Metrik + Dimension + optional Sekundär-Dimension (Serien-Split).
-- Top-N-Cutoff, Sortierung.
-- Reihenfolge per Drag-and-Drop; Layout wird pro User in `dashboard_widgets` (Kategorie `charging_report`) gespeichert — bestehende Tabelle nutzbar, kein neues Schema.
+Neuer Hook / Utility, der einmalig aufbereitet:
 
-### Vordefinierte "Report-Presets"
-Als Startpunkt zum Ein-Klick-Laden:
-1. **Nutzer-Report** – Sessions/kWh/Umsatz je Nutzer, Ranking, Trend.
-2. **Nutzergruppen-Report** – Vergleich Gruppen (z. B. Mitarbeiter vs. Gäste).
-3. **Rechnungsgruppen-Report** – Umsatz pro Billing-Group, offene vs. bezahlte Rechnungen.
-4. **Ladepunkt-Report** – kWh/Auslastung/Fehler je CP, Ranking, Ausfallzeiten (aus `charge_point_uptime_snapshots`).
-5. **Ladepunktgruppen-Report** – Gruppenvergleich, Peak-Last, Gleichzeitigkeitsfaktor.
-6. **Tarif-Report** – Umsatz/kWh je Tarif, Idle-Fee-Anteil.
-7. **Zeit-Report** – Heatmap Wochentag×Stunde, Peak-Hours-Analyse.
-8. **Roaming-Report** – Sessions/Umsatz aus `roaming_sessions`.
+- `charging_sessions` im Zeitraum,
+- `charging_invoices` + `charging_invoice_sessions` (N:M),
+- Legacy `charging_invoices.session_id` nur als Fallback,
+- `charging_tariffs` + Zuordnung Nutzer/Gruppe/Ladepunkt inkl. Gültigkeitsdatum,
+- Ergebnis pro Session:
+  - `energy_kwh` (aus Session),
+  - `duration_h`,
+  - `revenue_source: "invoice" | "calculated"`,
+  - `revenue_gross`, `revenue_net`, `idle_fee`,
+  - `billed_energy_kwh` (nur bei `invoice`),
+  - `applied_tariff_id` (nur bei `calculated`).
 
-Presets speichern Filter + Widget-Set und können vom User dupliziert, umbenannt, geteilt (tenant-weit oder privat) und als Standard markiert werden.
+Sammelrechnungen werden proportional nach `session.energy_kwh` auf ihre verknüpften Sessions verteilt (Fallback gleichmäßig, wenn alle 0 kWh).
 
-## Export
-- **CSV** (Client-seitig, alle sichtbaren Widget-Daten).
-- **XLSX** über `@e965/xlsx` (bereits im Projekt) — ein Sheet je Widget + ein "Filter"-Sheet mit den Auswahl-Parametern.
-- **PDF** über bestehende Report-Renderer-Pipeline (analog `EnergyReport.tsx`): serverseitig via Edge Function `charging-report-pdf` (neu, minimal — rendert HTML mit den Aggregaten).
-- **Geplanter Versand**: Wiederverwendung `report_schedules` (existiert), neuer `report_type = 'charging'` mit gespeichertem Preset + Empfängerliste; Cron-Job `charging-report-scheduler` (neu, klein).
+### 2. Hybride Kostenberechnung
 
-## Daten & Performance
-Alle Auswertungen laufen client-seitig gegen bestehende Tabellen — keine neuen Kern-Tabellen nötig:
-- `charging_sessions` (kWh, Dauer, CP, User via `id_tag`/RFID).
-- `charging_invoices` (Umsatz, Idle-Fee, Status, `billing_group_id`).
-- `charging_session_meter_records` (Peak-Leistung, Idle-Erkennung).
-- `charge_points`, `charge_point_groups`, `charge_point_uptime_snapshots` (Auslastung/Stabilität).
-- `charging_users`, `charging_user_groups`, `charging_user_rfid_tags` (Nutzer-Dimension).
-- `charging_billing_groups`, `charging_billing_group_members` (Rechnungsgruppen).
-- `charging_tariffs` (Tarif-Zuordnung).
-- `roaming_sessions` (Roaming-Preset).
+Reihenfolge pro Session:
 
-Für schwere Aggregate (Multi-Monats-Reports) neue **SQL-RPC-Funktionen** (SECURITY DEFINER, `tenant_id`-scoped) statt Rohdaten-Pulls:
-- `report_charging_by_dimension(_tenant, _from, _to, _dimension, _metric, _filters jsonb)` – liefert bereits aggregierte Rows.
-- `report_charging_heatmap(_tenant, _from, _to, _filters jsonb)` – Wochentag×Stunde.
-- `report_charging_kpis(_tenant, _from, _to, _filters jsonb, _compare_from, _compare_to)` – KPI-Kacheln inkl. Vergleich.
+1. Gibt es eine über `charging_invoice_sessions` verknüpfte Rechnung → Anteil dieser Rechnung nehmen (`revenue_source = "invoice"`).
+2. Sonst: Legacy `invoices.session_id` (dedupliziert, jüngste gewinnt).
+3. Sonst: **kalkulatorisch** = gültiger Tarif × `session.energy_kwh` + Leerlaufgebühr nach Tarifregel (`revenue_source = "calculated"`).
+4. Kein Tarif ermittelbar → Session zählt bei Energie/Anzahl, aber €-Wert bleibt 0 und wird als „ohne Tarif" markiert.
 
-Aggregation im PL/pgSQL mit `date_trunc`, `filter (where …)`, Joins über CP/User/Group. So bleibt Netzwerk-Payload und Browser-Last klein.
+### 3. KPI-Kacheln neu
 
-## Zugriffskontrolle
-- Sichtbar nur mit Rolle `admin`, `manager` oder Custom-Rolle mit Permission `charging.view` (bestehend). Neue Permission `charging.report.export` für Export/Schedule (nur admin/manager per Default).
-- Alle RPCs prüfen `tenant_id = get_current_tenant_id()` und Rollen-Zugehörigkeit → keine Datenlecks über Preset-Sharing.
+- **Sessions**: Anzahl eindeutiger Sessions.
+- **Energie**: Summe `session.energy_kwh`.
+- **Umsatz brutto (gesamt)**: Summe aus Schritt 2.
+- **davon kalkulatorisch**: separate KPI, Summe der `calculated`-Anteile.
+- **davon abgerechnet**: Summe der `invoice`-Anteile.
+- **Ø €/kWh**: Umsatz gesamt / Summe der zugeordneten kWh (konsistenter Zähler & Nenner).
+- **Ø Ladedauer**, **Ø kWh/Session**: aus Sessions.
+- **Idle-Gebühr**: separat.
 
-## Umsetzung in Phasen
-1. **Phase 1 (MVP)**: Menüpunkt, Route, ModuleGuard, Filterleiste, KPI-Kacheln, 3 Basis-Widgets (Tabelle Nutzer, Balken Ladepunkte, Zeit-Linie), CSV-Export. Presets "Nutzer-Report" + "Ladepunkt-Report".
-2. **Phase 2**: Drag-and-Drop-Layout, Speicherung Presets, alle 8 Presets, Heatmap, XLSX-Export.
-3. **Phase 3**: PDF-Export, geplanter Versand via `report_schedules`, Vergleichszeiträume, Roaming-Preset.
+### 4. Detailtabelle / Gruppierungen
 
-## Technisches (Kurz)
-- Neue Datei: `src/pages/ChargingReporting.tsx`.
-- Neuer Ordner `src/components/charging/reporting/` mit `FilterBar.tsx`, `KpiTiles.tsx`, `WidgetGrid.tsx`, `WidgetRenderer.tsx`, `PresetSelector.tsx`, `ExportMenu.tsx`.
-- Neuer Hook: `src/hooks/useChargingReport.tsx` (kapselt RPC-Calls + React-Query-Caching, `staleTime: 5min`).
-- i18n-Keys (`nav.chargingReporting`, `chargingReport.*`) für DE/EN/ES/NL.
-- Charts: `recharts` (bereits genutzt), Heatmap als eigenes SVG-Grid.
-- Zahlen konsequent `toLocaleString("de-DE")` (Core-Regel).
-- Neue Migration: 3 RPC-Funktionen + `GRANT EXECUTE … TO authenticated`.
-- Keine neuen billbaren Module — reine Erweiterung des `charging`-Moduls.
+Für alle Gruppierungen (Ladepunkt, Nutzer, Nutzergruppe, Rechnungsgruppe, Tag/Woche/Monat):
+
+- Session-Werte aus eindeutigen Sessions.
+- Umsatz aus Schritt 2.
+- Neue Spalte **„davon kalkulatorisch"** (€) bzw. Badge „kalkulatorisch" pro Zeile bei rein kalkulatorischen Gruppen.
+- Sammelrechnungen werden nicht mehr komplett dem ersten Ladepunkt zugeschlagen.
+
+### 5. Statusfilter präzisieren
+
+Filter „Alle / bezahlt / offen / kalkulatorisch":
+
+- „bezahlt/offen" filtert nur die Rechnungs-Anteile.
+- „kalkulatorisch" zeigt nur unabgerechnete Sessions.
+- „Alle" zeigt beides.
+- UI-Beschriftung entsprechend anpassen.
+
+### 6. Charts, Heatmap, Vergleichszeitraum
+
+Nutzen dieselbe zentrale Basis inkl. Δ%-Berechnung. Kalkulatorische Anteile werden in Charts optisch getrennt (z. B. gestapelter Balken „Abgerechnet / Kalkulatorisch").
+
+### 7. Exporte & geplanter Versand
+
+CSV, XLSX (Multi-Sheet), PDF und `charging-report-scheduler` verwenden dieselbe Berechnungsbasis. XLSX und PDF bekommen die Spalte „davon kalkulatorisch". Kein zweiter Berechnungspfad mehr.
+
+### 8. Datenqualitäts-Hinweise im UI
+
+Diskreter Info-Block, wenn erkannt:
+
+- mehrere Rechnungen auf derselben Session,
+- Rechnung ohne N:M-Verknüpfung,
+- Session ohne Tarifzuordnung,
+- Rechnungs-kWh weicht > 5 % von Summe der Session-kWh ab.
+
+Ein-Klick-Link zur betroffenen Rechnung/Session zur schnellen Prüfung.
+
+### 9. Keine automatische Datenbereinigung
+
+Doppelte Rechnungen werden nicht automatisch gelöscht. Ich schlage nach dem Fix separat einen Bereinigungs-Plan vor mit klaren Regeln (welche Rechnung bleibt, was mit bezahlten Duplikaten passiert etc.).
+
+## Validierung
+
+- Tabellen-Summen entsprechen den KPI-Werten.
+- Umsatz und Ø €/kWh nutzen konsistenten Zähler/Nenner.
+- „davon kalkulatorisch" + „davon abgerechnet" = Umsatz gesamt.
+- Statusfilter wirkt konsistent auf Umsatz & Ø €/kWh.
+- Sammelrechnung: Umsatz verteilt sich korrekt auf beteiligte Ladepunkte.
+- Tenant ohne Rechnungen: Reporting zeigt kalkulatorische Kosten korrekt.
+- CSV, XLSX, PDF und geplanter E-Mail-Report liefern dieselben Zahlen wie die UI.
+- Die konkreten Screenshot-Differenzen (34,4 kWh / 4,145 €/kWh, 80,4 kWh / 0,751 €/kWh, 383,077 €/kWh) sind rechnerisch nachvollziehbar behoben.
