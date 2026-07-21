@@ -201,10 +201,10 @@ export function EditIntegrationDialog({
                 )}
 
                 {isLoxone && (
-                  <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                  <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Wifi className="h-4 w-4 text-amber-500" />
+                        <Wifi className="h-4 w-4 text-primary" />
                         <span className="font-medium">Remote Connect WebSocket</span>
                       </div>
                       {locationIntegration?.loxone_remote_connect_ws_enabled ? (
@@ -224,7 +224,6 @@ export function EditIntegrationDialog({
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Ermöglicht Echtzeit-Daten über Loxone Remote Connect WebSocket.
-                      Nur für Test-Standorte vorgesehen. Bitte nicht auf Produktiv-Systemen aktivieren.
                     </p>
                   </div>
                 )}
