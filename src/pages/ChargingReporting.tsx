@@ -261,13 +261,15 @@ const ChargingReporting = () => {
 
   // ── KPI ────────────────────────────────────────────────────────────────────
   const kpi = useMemo(() => {
-    let energy = 0, durationH = 0, count = 0;
+    let energy = 0, durationH = 0, count = 0, invoicedKwh = 0;
     for (const s of sessions) {
-      energy += Number(s.energy_kwh ?? 0);
+      const kwh = Number(s.energy_kwh ?? 0);
+      energy += kwh;
       if (s.start_time && s.stop_time) {
         durationH += (new Date(s.stop_time).getTime() - new Date(s.start_time).getTime()) / 3_600_000;
       }
       count += 1;
+      if (invoiceBySession.has(s.id)) invoicedKwh += kwh;
     }
     let revenueGross = 0, revenueNet = 0, idleFee = 0;
     for (const inv of invoicesQ.data ?? []) {
@@ -276,9 +278,10 @@ const ChargingReporting = () => {
       idleFee += Number(inv.idle_fee_amount ?? 0);
     }
     const avgKwh = count > 0 ? energy / count : 0;
-    const avgPrice = energy > 0 ? revenueGross / energy : 0;
-    return { energy, durationH, count, revenueGross, revenueNet, idleFee, avgKwh, avgPrice };
-  }, [sessions, invoicesQ.data]);
+    // Ø €/kWh nur über abgerechnete Energie – offene Sessions würden sonst den Preis verwässern
+    const avgPrice = invoicedKwh > 0 ? revenueGross / invoicedKwh : 0;
+    return { energy, durationH, count, revenueGross, revenueNet, idleFee, avgKwh, avgPrice, invoicedKwh };
+  }, [sessions, invoicesQ.data, invoiceBySession]);
 
   // ── Grouping key resolver ──────────────────────────────────────────────────
   function groupKey(s: SessionRow): { key: string; label: string } {
@@ -343,15 +346,19 @@ const ChargingReporting = () => {
 
   // ── Aggregation ────────────────────────────────────────────────────────────
   const grouped = useMemo(() => {
-    const m = new Map<string, { label: string; value: number; sessions: number; kwh: number; revenue: number }>();
+    const m = new Map<string, { label: string; value: number; sessions: number; kwh: number; invoicedKwh: number; revenue: number }>();
     for (const s of sessions) {
       const { key, label } = groupKey(s);
       const inv = invoiceBySession.get(s.id);
-      const cur = m.get(key) ?? { label, value: 0, sessions: 0, kwh: 0, revenue: 0 };
+      const cur = m.get(key) ?? { label, value: 0, sessions: 0, kwh: 0, invoicedKwh: 0, revenue: 0 };
       cur.value += metricValue(s);
       cur.sessions += 1;
-      cur.kwh += Number(s.energy_kwh ?? 0);
-      cur.revenue += Number(inv?.total_amount ?? 0);
+      const kwh = Number(s.energy_kwh ?? 0);
+      cur.kwh += kwh;
+      if (inv) {
+        cur.invoicedKwh += kwh;
+        cur.revenue += Number(inv.total_amount ?? 0);
+      }
       m.set(key, cur);
     }
     const rows = Array.from(m.entries()).map(([key, v]) => ({ key, ...v }));
@@ -593,7 +600,7 @@ const ChargingReporting = () => {
                             <TableCell className="text-right">{fmtNum(r.kwh, 1)}</TableCell>
                             <TableCell className="text-right">{fmtEur(r.revenue)}</TableCell>
                             <TableCell className="text-right">{r.sessions > 0 ? fmtNum(r.kwh / r.sessions, 1) : "—"}</TableCell>
-                            <TableCell className="text-right">{r.kwh > 0 ? fmtNum(r.revenue / r.kwh, 3) : "—"}</TableCell>
+                            <TableCell className="text-right" title={`Ø-Preis über ${fmtNum(r.invoicedKwh, 1)} kWh mit Rechnung`}>{r.invoicedKwh > 0 ? fmtNum(r.revenue / r.invoicedKwh, 3) : "—"}</TableCell>
                           </TableRow>
                         ))
                       )}
