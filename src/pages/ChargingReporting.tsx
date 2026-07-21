@@ -465,6 +465,22 @@ const ChargingReporting = () => {
     },
   });
 
+  // Roaming nur einblenden, wenn aktiv oder jemals genutzt
+  const roamingRelevantQ = useQuery({
+    queryKey: ["cr-roaming-relevant", tenantId],
+    enabled: !!tenantId,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const [settings, anySession] = await Promise.all([
+        supabase.from("roaming_settings").select("enabled").eq("tenant_id", tenantId!).maybeSingle(),
+        supabase.from("roaming_sessions").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId!).limit(1),
+      ]);
+      return !!settings.data?.enabled || (anySession.count ?? 0) > 0;
+    },
+  });
+  const showRoaming = roamingRelevantQ.data === true;
+
+
   // ── Vergleichszeitraum (Vorperiode gleicher Länge) ────────────────────────
   const { prevFromISO, prevToISO } = useMemo(() => {
     const spanMs = new Date(toISO).getTime() - new Date(fromISO).getTime();
