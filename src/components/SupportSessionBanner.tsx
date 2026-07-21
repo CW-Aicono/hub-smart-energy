@@ -7,7 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ShieldAlert, RefreshCw, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { clearImpersonation, getActiveSupportSessionId } from "@/lib/supportView";
+import { clearImpersonation, getActiveSupportSessionId, getActiveSupportTenantId, isImpersonating, endImpersonationAndReturn } from "@/lib/supportView";
 
 export default function SupportSessionBanner() {
   const { isActive, session, secondsLeft, showCountdown, extendSession } = useSupportSession();
