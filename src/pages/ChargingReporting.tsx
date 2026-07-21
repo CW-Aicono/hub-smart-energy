@@ -46,7 +46,7 @@ type Dimension =
 
 type Metric = "energy_kwh" | "revenue_gross" | "revenue_net" | "sessions" | "duration_h" | "idle_fee";
 
-type WidgetId = "ranking" | "trend" | "heatmap" | "table";
+type WidgetId = "ranking" | "trend" | "heatmap" | "table" | "roaming";
 
 interface SessionRow {
   id: string;
