@@ -36,6 +36,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import * as XLSX from "@e965/xlsx";
+import { jsPDF } from "jspdf";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type Dimension =
