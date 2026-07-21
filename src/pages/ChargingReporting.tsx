@@ -648,7 +648,10 @@ const ChargingReporting = () => {
       const cur = m.get(key) ?? { label, value: 0, sessions: 0, kwh: 0, invoicedKwh: 0, revenue: 0 };
       cur.value += metricValue(s);
       cur.sessions += 1;
-      const kwh = Number(s.energy_kwh ?? 0);
+      // Authoritative billed energy: prefer invoice.total_energy_kwh
+      const kwh = inv && inv.total_energy_kwh != null
+        ? Number(inv.total_energy_kwh)
+        : Number(s.energy_kwh ?? 0);
       cur.kwh += kwh;
       if (inv) { cur.invoicedKwh += kwh; cur.revenue += Number(inv.total_amount ?? 0); }
       m.set(key, cur);
