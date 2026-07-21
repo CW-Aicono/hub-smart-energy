@@ -1803,16 +1803,44 @@ serve(async (req) => {
           }
 
           // Phase 7: Tagessnapshot upserten (1 Zeile pro Meter+Tag, mehrfach pro Tag überschrieben)
+          // IO-Reduktion: vorher lesen und nur schreiben, wenn sich Werte tatsächlich
+          // geändert haben. Quelle der ~44k Updates/Tag auf 1.259 Zeilen.
           if (dailySnapshotInserts.length > 0) {
-            const { error: snapErr } = await supabase
+            const meterIds2 = Array.from(new Set(dailySnapshotInserts.map((s: any) => s.meter_id)));
+            const dates2 = Array.from(new Set(dailySnapshotInserts.map((s: any) => s.snapshot_date)));
+            const { data: existingSnaps } = await supabase
               .from("meter_loxone_daily_snapshots")
-              .upsert(dailySnapshotInserts, { onConflict: "meter_id,snapshot_date" });
-            if (snapErr) {
-              console.error("Error upserting daily snapshots:", snapErr);
+              .select("meter_id, snapshot_date, total_kwh, cumulative_kwh")
+              .in("meter_id", meterIds2)
+              .in("snapshot_date", dates2);
+            const snapMap = new Map<string, { total_kwh: number | null; cumulative_kwh: number | null }>();
+            for (const r of existingSnaps ?? []) {
+              snapMap.set(`${r.meter_id}|${r.snapshot_date}`, {
+                total_kwh: r.total_kwh == null ? null : Number(r.total_kwh),
+                cumulative_kwh: r.cumulative_kwh == null ? null : Number(r.cumulative_kwh),
+              });
+            }
+            const toWrite = dailySnapshotInserts.filter((s: any) => {
+              const prev = snapMap.get(`${s.meter_id}|${s.snapshot_date}`);
+              if (!prev) return true;
+              const totalChanged = Number(prev.total_kwh ?? NaN) !== Number(s.total_kwh ?? NaN);
+              const cumChanged = Number(prev.cumulative_kwh ?? NaN) !== Number(s.cumulative_kwh ?? NaN);
+              return totalChanged || cumChanged;
+            });
+            if (toWrite.length > 0) {
+              const { error: snapErr } = await supabase
+                .from("meter_loxone_daily_snapshots")
+                .upsert(toWrite, { onConflict: "meter_id,snapshot_date" });
+              if (snapErr) {
+                console.error("Error upserting daily snapshots:", snapErr);
+              } else {
+                console.log(`Upserted ${toWrite.length}/${dailySnapshotInserts.length} daily Loxone snapshots (skipped ${dailySnapshotInserts.length - toWrite.length} unchanged)`);
+              }
             } else {
-              console.log(`Upserted ${dailySnapshotInserts.length} daily Loxone snapshots`);
+              console.log(`Skipped all ${dailySnapshotInserts.length} daily snapshots (no changes)`);
             }
           }
+
         }
 
       } catch (archiveErr) {
