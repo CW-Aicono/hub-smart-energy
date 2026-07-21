@@ -504,13 +504,17 @@ const ChargingReporting = () => {
   const kpi = useMemo(() => {
     let energy = 0, durationH = 0, count = 0, invoicedKwh = 0;
     for (const s of sessions) {
-      const kwh = Number(s.energy_kwh ?? 0);
+      const inv = invoiceBySession.get(s.id);
+      // Authoritative billed energy: prefer invoice.total_energy_kwh over session meter delta
+      const kwh = inv && inv.total_energy_kwh != null
+        ? Number(inv.total_energy_kwh)
+        : Number(s.energy_kwh ?? 0);
       energy += kwh;
       if (s.start_time && s.stop_time) {
         durationH += (new Date(s.stop_time).getTime() - new Date(s.start_time).getTime()) / 3_600_000;
       }
       count += 1;
-      if (invoiceBySession.has(s.id)) invoicedKwh += kwh;
+      if (inv) invoicedKwh += kwh;
     }
     let revenueGross = 0, revenueNet = 0, idleFee = 0;
     for (const inv of invoicesQ.data ?? []) {
@@ -528,13 +532,17 @@ const ChargingReporting = () => {
     if (!compareEnabled) return null;
     const prevSess = prevSessionsQ.data ?? [];
     const prevInvs = prevInvoicesQ.data ?? [];
-    const prevInvSet = new Set(prevInvs.map((i) => i.session_id).filter(Boolean) as string[]);
+    const prevInvBySession = new Map<string, InvoiceRow>();
+    for (const i of prevInvs) if (i.session_id) prevInvBySession.set(i.session_id, i);
     let energy = 0, count = 0, invoicedKwh = 0;
     for (const s of prevSess) {
-      const kwh = Number(s.energy_kwh ?? 0);
+      const inv = prevInvBySession.get(s.id);
+      const kwh = inv && inv.total_energy_kwh != null
+        ? Number(inv.total_energy_kwh)
+        : Number(s.energy_kwh ?? 0);
       energy += kwh;
       count += 1;
-      if (prevInvSet.has(s.id)) invoicedKwh += kwh;
+      if (inv) invoicedKwh += kwh;
     }
     let revenueGross = 0, revenueNet = 0, idleFee = 0;
     for (const inv of prevInvs) {
