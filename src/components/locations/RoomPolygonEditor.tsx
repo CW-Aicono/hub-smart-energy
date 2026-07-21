@@ -304,12 +304,12 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
                       style={{ backgroundColor: room.color || "#3b82f6" }}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{room.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm font-medium truncate" title={room.name}>{room.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
                         {hasPolygon ? "Platziert" : "Nicht platziert"}
                       </p>
                     </div>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-0.5 flex-shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
                       {!hasPolygon && (
                         <Button
                           variant="ghost"
@@ -346,10 +346,12 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
                           e.stopPropagation();
                           handleDeleteRoom(room);
                         }}
+                        title="Raum löschen"
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
+
                   </div>
                 );
               })
