@@ -600,7 +600,7 @@ const ChargingReporting = () => {
                             <TableCell className="text-right">{fmtNum(r.kwh, 1)}</TableCell>
                             <TableCell className="text-right">{fmtEur(r.revenue)}</TableCell>
                             <TableCell className="text-right">{r.sessions > 0 ? fmtNum(r.kwh / r.sessions, 1) : "—"}</TableCell>
-                            <TableCell className="text-right">{r.kwh > 0 ? fmtNum(r.revenue / r.kwh, 3) : "—"}</TableCell>
+                            <TableCell className="text-right" title={`Ø-Preis über ${fmtNum(r.invoicedKwh, 1)} kWh mit Rechnung`}>{r.invoicedKwh > 0 ? fmtNum(r.revenue / r.invoicedKwh, 3) : "—"}</TableCell>
                           </TableRow>
                         ))
                       )}
