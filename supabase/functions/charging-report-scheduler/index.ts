@@ -20,7 +20,7 @@ interface ScheduleConfig {
   dimension?: Dimension;
   metric?: Metric;
   statusFilter?: "all" | "paid" | "open";
-  rangeDays?: number; // optional Override
+  rangePreset?: string;
 }
 
 const DIM_LABEL: Record<Dimension, string> = {
@@ -92,16 +92,21 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
   const resend = new Resend(RESEND_KEY);
 
-  // Optional: manueller Testlauf via ?schedule_id=…
-  const url = new URL(req.url);
-  const scheduleId = url.searchParams.get("schedule_id");
+  // Optional: manueller Testlauf via body { schedule_id }
+  let scheduleId: string | null = null;
+  try {
+    if (req.method === "POST") {
+      const body = await req.json().catch(() => null);
+      if (body && typeof body.schedule_id === "string") scheduleId = body.schedule_id;
+    }
+  } catch { /* ignore */ }
 
-  const query = supabase
+  let query = supabase
     .from("charging_report_schedules")
     .select("*")
     .eq("is_active", true);
-  if (scheduleId) query.eq("id", scheduleId);
-  else query.or(`next_run_at.is.null,next_run_at.lte.${new Date().toISOString()}`);
+  if (scheduleId) query = query.eq("id", scheduleId);
+  else query = query.or(`next_run_at.is.null,next_run_at.lte.${new Date().toISOString()}`);
 
   const { data: schedules, error: sErr } = await query;
   if (sErr) {
@@ -134,7 +139,7 @@ serve(async (req) => {
       if (sessRes.error) throw sessRes.error;
       if (invRes.error) throw invRes.error;
 
-      const invBySess = new Map<string, { total: number; net: number; idle: number; status?: string; user_id?: string; billing_group_id?: string }>();
+      const invBySess = new Map<string, { total: number; net: number; idle: number; status?: string }>();
       let revGross = 0, revNet = 0, idle = 0;
       for (const inv of invRes.data ?? []) {
         if (inv.session_id) invBySess.set(inv.session_id, {
@@ -142,8 +147,6 @@ serve(async (req) => {
           net: Number(inv.net_amount ?? 0),
           idle: Number(inv.idle_fee_amount ?? 0),
           status: inv.status ?? undefined,
-          user_id: inv.user_id ?? undefined,
-          billing_group_id: inv.billing_group_id ?? undefined,
         });
         revGross += Number(inv.total_amount ?? 0);
         revNet += Number(inv.net_amount ?? 0);
@@ -170,7 +173,6 @@ serve(async (req) => {
       const dimension: Dimension = cfg.dimension ?? "charge_point";
       const metric: Metric = cfg.metric ?? "revenue_gross";
 
-      // Simpler CSV detail: pro Session eine Zeile
       const detailRows: (string | number)[][] = [
         ["Session-ID", "Ladepunkt-ID", "Start", "Stop", "Energie (kWh)", "Umsatz brutto (EUR)", "Status Session", "Status Rechnung"],
         ...sessions.map((r) => {
@@ -198,8 +200,6 @@ serve(async (req) => {
         ["Umsatz netto (EUR)", Number(revNet.toFixed(2))],
         ["Standzeit-Gebühren (EUR)", Number(idle.toFixed(2))],
         ["Ø Ladedauer (h)", sessions.length ? Number((durationH / sessions.length).toFixed(2)) : 0],
-        [],
-        ["— Detail (pro Session) siehe zweite Datei / weiter unten —"],
       ];
 
       const overviewCsv = toCsv(overviewRows);
@@ -224,14 +224,15 @@ serve(async (req) => {
       if (!s.recipients || s.recipients.length === 0) {
         results.push({ id: s.id, status: "skipped", message: "no recipients" });
       } else {
+        const safeLabel = label.replace(/[^0-9-]/g, "_");
         const sendRes = await resend.emails.send({
           from: resendFrom("AICONO Reporting"),
           to: s.recipients,
           subject: `Ladeinfrastruktur-Report · ${s.name} · ${label}`,
           html,
           attachments: [
-            { filename: `report_${label.replace(/[^0-9-]/g, "_")}_uebersicht.csv`, content: btoa(unescape(encodeURIComponent(overviewCsv))) },
-            { filename: `report_${label.replace(/[^0-9-]/g, "_")}_detail.csv`, content: btoa(unescape(encodeURIComponent(detailCsv))) },
+            { filename: `report_${safeLabel}_uebersicht.csv`, content: btoa(unescape(encodeURIComponent(overviewCsv))) },
+            { filename: `report_${safeLabel}_detail.csv`, content: btoa(unescape(encodeURIComponent(detailCsv))) },
           ],
         });
         if ((sendRes as { error?: unknown }).error) throw (sendRes as { error: Error }).error;
