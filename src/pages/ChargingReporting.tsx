@@ -975,12 +975,13 @@ const ChargingReporting = () => {
 
         {/* KPI tiles */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <KpiTile icon={<PlugZap className="h-4 w-4" />} label="Sessions" value={fmtNum(kpi.count)} />
-          <KpiTile icon={<Zap className="h-4 w-4" />} label="Energie" value={fmtKwh(kpi.energy)} />
-          <KpiTile icon={<Euro className="h-4 w-4" />} label="Umsatz brutto" value={fmtEur(kpi.revenueGross)} />
+          <KpiTile icon={<PlugZap className="h-4 w-4" />} label="Sessions" value={fmtNum(kpi.count)} delta={delta(kpi.count, kpiPrev?.count)} />
+          <KpiTile icon={<Zap className="h-4 w-4" />} label="Energie" value={fmtKwh(kpi.energy)} delta={delta(kpi.energy, kpiPrev?.energy)} />
+          <KpiTile icon={<Euro className="h-4 w-4" />} label="Umsatz brutto" value={fmtEur(kpi.revenueGross)} delta={delta(kpi.revenueGross, kpiPrev?.revenueGross)} />
           <KpiTile icon={<Clock className="h-4 w-4" />} label="Ø Ladedauer" value={kpi.count > 0 ? `${fmtNum(kpi.durationH / kpi.count, 1)} h` : "—"} />
           <KpiTile icon={<Zap className="h-4 w-4" />} label="Ø kWh/Session" value={fmtNum(kpi.avgKwh, 1)} />
           <KpiTile icon={<Euro className="h-4 w-4" />} label="Ø €/kWh" value={kpi.avgPrice > 0 ? `${fmtNum(kpi.avgPrice, 3)} €` : "—"} />
+
         </div>
 
         {/* Reorderable widgets */}
