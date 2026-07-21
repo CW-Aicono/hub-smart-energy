@@ -83,17 +83,19 @@ function handleConnection(ws: WebSocket, chargePointId: string, chargePointPk: s
   void markConnectedWithRetry(chargePointPk, sessionId, chargePointId);
 
   const pingTimer = startPing(ws, sessionId, chargePointId, chargePointPk);
-  // Echter Pong vom Charger ist das direkteste Lebenszeichen — wenn er kommt,
-  // überschreibt er den serverseitigen Liveness-Tick aus startPing().
-  // Viele Wallboxen (Compleo u. a.) antworten allerdings nicht zuverlässig
-  // auf WS-Pings; deshalb ist der Tick die eigentliche Liveness-Quelle.
+  // Echter Pong vom Charger ist das direkteste Lebenszeichen. IO-Reduktion:
+  // DB-Touch pro Session max. alle 60 s (vorher: bei jedem Pong).
+  let lastPongDbTouch = 0;
   ws.on("pong", () => {
     session.lastIncomingAt = Date.now();
     log.info("pong from charger", { sessionId, chargePointId });
+    if (Date.now() - lastPongDbTouch < 60_000) return;
+    lastPongDbTouch = Date.now();
     updateChargePoint(chargePointPk, {
       last_ws_pong_at: new Date().toISOString(),
     }).catch((e) => log.warn("ws pong touch failed", { chargePointId, error: (e as Error).message }));
   });
+
 
   ws.on("message", async (raw) => {
     const text = raw.toString();

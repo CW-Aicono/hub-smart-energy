@@ -1383,7 +1383,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
 
       const { data: storages } = await supabase
         .from("energy_storages")
-        .select("id, power_meter_id, soc_sensor_uuid")
+        .select("id, power_meter_id, soc_sensor_uuid, current_soc_pct, soc_updated_at")
         .eq("tenant_id", row.tenant_id)
         .eq("location_id", meter.location_id);
 
@@ -1392,12 +1392,22 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
         ?? (storages ?? []).find((s: any) => !s.power_meter_id);
       if (!storage) continue;
 
+      // IO-Reduktion: SOC nur schreiben, wenn Delta ≥ 0.5% ODER letzte
+      // Aktualisierung >5 Min alt. Vorher: 9k Updates/Tag auf 3 Zeilen.
+      const currentSoc = (storage as any).current_soc_pct as number | null;
+      const currentSocAt = (storage as any).soc_updated_at as string | null;
+      const delta = currentSoc == null ? Infinity : Math.abs(currentSoc - row.value);
+      const ageMs = currentSocAt ? Date.now() - new Date(currentSocAt).getTime() : Infinity;
+      const uuidChanged = storage.soc_sensor_uuid !== row.uuid;
+      const meterLinkChanged = storage.power_meter_id !== meter.id;
+      if (!uuidChanged && !meterLinkChanged && delta < 0.5 && ageMs < 5 * 60_000) continue;
+
       const patch: Record<string, unknown> = {
         current_soc_pct: row.value,
         soc_updated_at: row.at,
       };
-      if (storage.soc_sensor_uuid !== row.uuid) patch.soc_sensor_uuid = row.uuid;
-      if (storage.power_meter_id !== meter.id) patch.power_meter_id = meter.id;
+      if (uuidChanged) patch.soc_sensor_uuid = row.uuid;
+      if (meterLinkChanged) patch.power_meter_id = meter.id;
 
       const { error: socErr } = await supabase
         .from("energy_storages")
@@ -1416,6 +1426,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
         });
         socUpdated++;
       }
+
     }
   }
 
@@ -1647,6 +1658,9 @@ async function handleWsSessionHeartbeat(req: Request): Promise<Response> {
   if (!body.session_id) return json({ error: "session_id required" }, 400);
 
   const supabase = getSupabase();
+  // IO-Reduktion: Heartbeat nur schreiben, wenn seit letztem Update >60s vergangen.
+  // Vorher: pro Worker-Tick ein Update auf loxone_ws_session_log (13k Updates/Tag).
+  const cutoff = new Date(Date.now() - 60_000).toISOString();
   const { error } = await supabase
     .from("loxone_ws_session_log")
     .update({
@@ -1655,7 +1669,9 @@ async function handleWsSessionHeartbeat(req: Request): Promise<Response> {
       reconnect_count: body.reconnect_count ?? 0,
     })
     .eq("id", body.session_id)
-    .is("ended_at", null);
+    .is("ended_at", null)
+    .lt("updated_at", cutoff);
+
 
   if (error) {
     console.error("[gateway-ingest] ws-session-heartbeat error:", error.message);
@@ -1725,6 +1741,18 @@ async function handleLoxoneStructureSnapshot(req: Request): Promise<Response> {
     };
   });
 
+  // IO-Reduktion: nur schreiben, wenn sich `sensors` tatsächlich geändert hat.
+  // Vorher: bei jedem Struktur-Snapshot Upsert → 10k Updates/Tag auf 8 Zeilen.
+  const { data: prevSnap } = await supabase
+    .from("gateway_sensor_snapshots")
+    .select("sensors")
+    .eq("location_integration_id", body.location_integration_id)
+    .maybeSingle();
+  const sameSensors = prevSnap && JSON.stringify(prevSnap.sensors) === JSON.stringify(sensors);
+  if (sameSensors) {
+    return json({ success: true, sensors: sensors.length, unchanged: true });
+  }
+
   const { error } = await supabase
     .from("gateway_sensor_snapshots")
     .upsert({
@@ -1738,6 +1766,7 @@ async function handleLoxoneStructureSnapshot(req: Request): Promise<Response> {
       error_message: null,
       source: "loxone-ws-worker",
     }, { onConflict: "location_integration_id" });
+
 
   if (error) {
     console.error("[gateway-ingest] loxone-structure-snapshot upsert error:", error.message);
