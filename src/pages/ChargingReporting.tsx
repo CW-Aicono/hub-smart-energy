@@ -796,11 +796,12 @@ const ChargingReporting = () => {
 
     // Detail
     const detail = [
-      [DIMENSION_LABEL[dimension], "Sessions", "Energie (kWh)", "Umsatz brutto (€)", "Ø kWh/Session", "Ø €/kWh"],
+      [DIMENSION_LABEL[dimension], "Sessions", "Energie (kWh)", "Umsatz brutto (€)", "davon abgerechnet (€)", "davon kalkulatorisch (€)", "Ø kWh/Session", "Ø €/kWh"],
       ...grouped.map((r) => [
         r.label, r.sessions, Number(r.kwh.toFixed(2)), Number(r.revenue.toFixed(2)),
+        Number(r.revenueInvoice.toFixed(2)), Number(r.revenueCalc.toFixed(2)),
         r.sessions > 0 ? Number((r.kwh / r.sessions).toFixed(2)) : "",
-        r.invoicedKwh > 0 ? Number((r.revenue / r.invoicedKwh).toFixed(4)) : "",
+        r.billedKwh > 0 ? Number((r.revenue / r.billedKwh).toFixed(4)) : "",
       ]),
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detail), "Detail");
@@ -896,7 +897,7 @@ const ChargingReporting = () => {
       doc.text(fmtNum(r.sessions), colX[1], y);
       doc.text(fmtNum(r.kwh, 1), colX[2], y);
       doc.text(fmtEur(r.revenue), colX[3], y);
-      doc.text(r.invoicedKwh > 0 ? fmtNum(r.revenue / r.invoicedKwh, 3) : "—", colX[4], y);
+      doc.text(r.billedKwh > 0 ? fmtNum(r.revenue / r.billedKwh, 3) : "—", colX[4], y);
       y += 12;
     }
 
@@ -967,6 +968,7 @@ const ChargingReporting = () => {
               <TableHead className="text-right">Sessions</TableHead>
               <TableHead className="text-right">Energie (kWh)</TableHead>
               <TableHead className="text-right">Umsatz brutto</TableHead>
+              <TableHead className="text-right">davon kalk.</TableHead>
               <TableHead className="text-right">Ø kWh/Session</TableHead>
               <TableHead className="text-right">Ø €/kWh</TableHead>
             </TableRow>
@@ -974,20 +976,28 @@ const ChargingReporting = () => {
           <TableBody>
             {grouped.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   {loading ? "Lade Daten…" : "Keine Daten im Zeitraum"}
                 </TableCell>
               </TableRow>
             ) : (
               grouped.map((r) => (
                 <TableRow key={r.key}>
-                  <TableCell className="font-medium">{r.label}</TableCell>
+                  <TableCell className="font-medium">
+                    {r.label}
+                    {r.revenueInvoice === 0 && r.revenueCalc > 0 && (
+                      <Badge variant="outline" className="ml-2 text-[10px]">kalkulatorisch</Badge>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">{fmtNum(r.sessions)}</TableCell>
                   <TableCell className="text-right">{fmtNum(r.kwh, 1)}</TableCell>
                   <TableCell className="text-right">{fmtEur(r.revenue)}</TableCell>
+                  <TableCell className="text-right text-muted-foreground" title="Anteil ohne Rechnung, aus Tarif × Session-kWh">
+                    {r.revenueCalc > 0 ? fmtEur(r.revenueCalc) : "—"}
+                  </TableCell>
                   <TableCell className="text-right">{r.sessions > 0 ? fmtNum(r.kwh / r.sessions, 1) : "—"}</TableCell>
-                  <TableCell className="text-right" title={`Ø-Preis über ${fmtNum(r.invoicedKwh, 1)} kWh mit Rechnung`}>
-                    {r.invoicedKwh > 0 ? fmtNum(r.revenue / r.invoicedKwh, 3) : "—"}
+                  <TableCell className="text-right" title={`Ø-Preis über ${fmtNum(r.billedKwh, 1)} kWh mit Zuordnung`}>
+                    {r.billedKwh > 0 ? fmtNum(r.revenue / r.billedKwh, 3) : "—"}
                   </TableCell>
                 </TableRow>
               ))
