@@ -14,6 +14,7 @@ import { updateChargePoint } from "./backendApi";
  * bleibt aktiv und überschreibt diesen Tick bei kooperierenden Chargern.
  */
 export function startPing(ws: WebSocket, sessionId: string, chargePointId: string, chargePointPk: string) {
+  let lastDbTouch = 0;
   const t = setInterval(() => {
     if (ws.readyState !== ws.OPEN) return;
     try {
@@ -21,14 +22,17 @@ export function startPing(ws: WebSocket, sessionId: string, chargePointId: strin
     } catch (e) {
       log.warn("ping failed", { sessionId, chargePointId, error: (e as Error).message });
     }
-    // Fire-and-forget Liveness-Update. Durch das längere Ping-Intervall in der
-    // Config wird hier nicht mehr alle paar Sekunden in die Cloud geschrieben.
+    // IO-Reduktion: Liveness-Touch max. alle 60 s in die Cloud schreiben,
+    // unabhängig vom Ping-Intervall. Vorher: pro Ping ein DB-Write.
+    if (Date.now() - lastDbTouch < 60_000) return;
+    lastDbTouch = Date.now();
     updateChargePoint(chargePointPk, {
       last_ws_pong_at: new Date().toISOString(),
     }).catch((e) => log.warn("ws liveness touch failed", { chargePointId, error: (e as Error).message }));
   }, config.pingIntervalSec * 1000);
   return t;
 }
+
 
 /** Periodischer Idle-Check: Sessions ohne Frame > IDLE_TIMEOUT_SECONDS werden geschlossen. */
 export function startIdleSweeper() {

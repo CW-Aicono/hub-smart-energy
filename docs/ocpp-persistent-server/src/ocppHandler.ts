@@ -15,6 +15,9 @@ import { probeChargePointConfiguration } from "./configurationProbe";
 import { isLegacyWallbe } from "./wallboxCompat";
 
 
+/** IO-Reduktion: pro Charge-Point-PK Zeitstempel des letzten DB-Touches (ms). */
+const HEARTBEAT_TOUCH = new Map<string, number>();
+
 type OcppCall = [2, string, string, Record<string, unknown>];
 type OcppCallResult = [3, string, Record<string, unknown>];
 type OcppCallError = [4, string, string, string, Record<string, unknown>];
@@ -38,17 +41,18 @@ export async function handleCall(
   const [, messageId, action, payload] = call;
   const { chargePointId, chargePointPk, tenantId } = session;
 
-  // Zentrales "touch": Jedes eingehende OCPP-Frame (Heartbeat, MeterValues,
-  // StatusNotification, StartTransaction, …) gilt als Lebenszeichen der
-  // Wallbox. Wir aktualisieren `last_heartbeat` deshalb hier *einmal* zentral,
-  // damit das UI ("vor X Minuten") auch dann frisch bleibt, wenn die Wallbox
-  // wegen interval=86400 keine echten Heartbeat-Frames sendet, solange
-  // andere OCPP-Frames fließen. Fire-and-forget: ein fehlgeschlagener
-  // Touch darf die eigentliche Antwort an die Wallbox nicht blockieren.
-  updateChargePoint(chargePointPk, {
-    last_heartbeat: new Date().toISOString(),
-    ws_connected: true,
-  }).catch((e) => log.warn("heartbeat touch failed", { chargePointId, action, error: (e as Error).message }));
+  // IO-Reduktion: Zentrales "touch" nicht mehr bei JEDEM Frame in die DB
+  // schreiben. Pro Charge-Point maximal alle 60 s. Verhindert die massiven
+  // Update-Wellen auf `charge_points` (30k Updates auf 6 Zeilen/Tag).
+  const lastTouch = HEARTBEAT_TOUCH.get(chargePointPk) ?? 0;
+  if (Date.now() - lastTouch > 60_000) {
+    HEARTBEAT_TOUCH.set(chargePointPk, Date.now());
+    updateChargePoint(chargePointPk, {
+      last_heartbeat: new Date().toISOString(),
+      ws_connected: true,
+    }).catch((e) => log.warn("heartbeat touch failed", { chargePointId, action, error: (e as Error).message }));
+  }
+
 
   try {
     switch (action) {
