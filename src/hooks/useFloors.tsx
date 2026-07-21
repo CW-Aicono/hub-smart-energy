@@ -140,7 +140,11 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
       if (fetchError) {
         setError(fetchError.message);
       } else {
-        setFloors((data as Floor[]) || []);
+        const rows = ((data as Floor[]) || []).map((f) => ({
+          ...f,
+          floor_plan_url: withFloorPlanCacheBuster(f.floor_plan_url, f.updated_at),
+        }));
+        setFloors(rows);
       }
     } catch (err) {
       setError("Failed to fetch floors");
