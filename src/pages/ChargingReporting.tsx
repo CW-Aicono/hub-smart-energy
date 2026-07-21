@@ -652,7 +652,7 @@ const ChargingReporting = () => {
     if (id === "trend")   return "Tagesverlauf";
     if (id === "heatmap") return `Heatmap · ${METRIC_META[metric].label} pro Wochentag & Stunde`;
     if (id === "table")   return `Detailauswertung nach ${DIMENSION_LABEL[dimension]} (${grouped.length})`;
-    return WIDGET_META[id].label;
+    return WIDGET_META[id as WidgetId].label;
   };
 
   // ── DnD ────────────────────────────────────────────────────────────────────
