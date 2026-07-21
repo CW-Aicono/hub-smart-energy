@@ -73,7 +73,7 @@ export function LoxoneWsStatus({ locationIntegrationId, enabled }: LoxoneWsStatu
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
       <span className={`flex items-center gap-1 text-xs font-medium ${statusColor}`}>
         <StatusIcon className="h-3 w-3" />
-        <span>BETA · {statusLabel}</span>
+        <span>{statusLabel}</span>
       </span>
       {session && (
         <>
