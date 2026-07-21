@@ -1173,6 +1173,136 @@ const ChargingReporting = () => {
             </div>
           </SortableContext>
         </DndContext>
+
+        {/* Geplante Reports */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <CalendarClock className="h-4 w-4" /> Geplante Reports
+            </CardTitle>
+            <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                  <Plus className="h-4 w-4 mr-1" /> Neu planen
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Report planen</DialogTitle>
+                  <DialogDescription>
+                    Der Report wird mit den aktuellen Filtern (Zeitraum-Preset, Gruppierung, Metrik, Status)
+                    im gewählten Rhythmus automatisch per E-Mail versendet.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs">Name</Label>
+                    <Input value={scheduleName} onChange={(e) => setScheduleName(e.target.value)}
+                      placeholder="z. B. Monatsreport Rechnungsgruppen" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Rhythmus</Label>
+                      <Select value={scheduleFrequency} onValueChange={(v) => setScheduleFrequency(v as typeof scheduleFrequency)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">Täglich</SelectItem>
+                          <SelectItem value="weekly">Wöchentlich</SelectItem>
+                          <SelectItem value="monthly">Monatlich</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Format</Label>
+                      <Select value={scheduleFormat} onValueChange={(v) => setScheduleFormat(v as typeof scheduleFormat)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="csv">CSV</SelectItem>
+                          <SelectItem value="xlsx">XLSX</SelectItem>
+                          <SelectItem value="pdf">PDF</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Empfänger (Kommagetrennt)</Label>
+                    <Input value={scheduleRecipients} onChange={(e) => setScheduleRecipients(e.target.value)}
+                      placeholder="max@example.com, buero@example.com" />
+                  </div>
+                  <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                    Aktuelle Konfiguration: {DIMENSION_LABEL[dimension]} · {METRIC_META[metric].label} · {rangePreset}
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setScheduleDialogOpen(false)}>Abbrechen</Button>
+                  <Button onClick={createSchedule}>Anlegen</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </CardHeader>
+          <CardContent>
+            {schedulesQ.isLoading ? (
+              <div className="text-sm text-muted-foreground py-4 text-center">Lade…</div>
+            ) : (schedulesQ.data ?? []).length === 0 ? (
+              <div className="text-sm text-muted-foreground py-4 text-center">
+                Noch keine geplanten Reports. Lege einen Zeitplan an, um Berichte automatisch per E-Mail zu erhalten.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Rhythmus</TableHead>
+                    <TableHead>Format</TableHead>
+                    <TableHead>Empfänger</TableHead>
+                    <TableHead>Nächster Lauf</TableHead>
+                    <TableHead>Zuletzt</TableHead>
+                    <TableHead className="text-right">Aktionen</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(schedulesQ.data ?? []).map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-medium">
+                        {s.name}
+                        {s.last_error && (
+                          <div className="text-[10px] text-red-500 truncate max-w-[280px]" title={s.last_error}>
+                            {s.last_error}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="text-[10px]">{s.frequency}</Badge>
+                      </TableCell>
+                      <TableCell><Badge variant="outline" className="text-[10px]">{s.format}</Badge></TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {(s.recipients ?? []).slice(0, 2).join(", ")}
+                        {(s.recipients?.length ?? 0) > 2 ? ` +${(s.recipients?.length ?? 0) - 2}` : ""}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {s.next_run_at ? new Date(s.next_run_at).toLocaleString("de-DE") : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {s.last_sent_at ? new Date(s.last_sent_at).toLocaleString("de-DE") : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Switch checked={s.is_active} onCheckedChange={(v) => toggleSchedule(s.id, v)} />
+                          <Button size="sm" variant="ghost" onClick={() => sendScheduleNow(s.id)} title="Jetzt testen">
+                            <Send className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => deleteSchedule(s.id)} title="Löschen">
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   );
