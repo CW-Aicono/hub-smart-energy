@@ -6,9 +6,9 @@ import { useTenant } from "@/hooks/useTenant";
 import {
   getActiveSupportSessionId,
   getActiveSupportTenantId,
-  getOriginalSession,
   clearImpersonation,
   onImpersonationChanged,
+  endImpersonationAndReturn,
 } from "@/lib/supportView";
 import { Button } from "@/components/ui/button";
 import { HeadsetIcon, LogOut } from "lucide-react";
