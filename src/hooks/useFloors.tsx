@@ -239,7 +239,7 @@ export function useFloors(locationId: string | undefined): UseFloorsReturn {
 
     // Cache-Buster anhängen: Datei wird per upsert unter gleichem Pfad überschrieben,
     // ohne Query-Param liefert der CDN/Browser-Cache (z.B. auf Hetzner) den alten Plan.
-    const bustedUrl = publicUrl ? `${publicUrl}?v=${Date.now()}` : null;
+    const bustedUrl = withFloorPlanCacheBuster(publicUrl, Date.now());
     return { url: bustedUrl, error };
   };
 
