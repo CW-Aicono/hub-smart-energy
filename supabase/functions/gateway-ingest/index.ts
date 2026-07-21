@@ -2377,10 +2377,15 @@ Deno.serve(async (req) => {
     try {
       const clonedReq = req.clone();
       const body = await clonedReq.json();
-      if (body?.action === "getSensors") {
+      if (
+        body?.action === "getSensors" ||
+        body?.action === "getSensorsCached" ||
+        body?.action === "refreshSensors"
+      ) {
         return json({ success: true, sensors: [], push_gateway: true });
       }
     } catch { /* not JSON or no body – continue to normal routing */ }
+
 
     // Fallback: if tenant_id is present and Basic Auth is used, route to Schneider handler
     const hasTenantId = url.searchParams.has("tenant_id");
