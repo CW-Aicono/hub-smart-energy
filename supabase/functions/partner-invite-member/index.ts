@@ -43,12 +43,24 @@ serve(async (req: Request) => {
 
     if (!email.includes("@")) throw new Error("E-Mail ungültig.");
 
-    // Auth-User finden/erstellen
+    // Systemweite E-Mail-Sperre: keine Doppel-Accounts (Tenant/Partner/Super-Admin)
+    const conflict = await checkInviteConflict({
+      supabase,
+      email,
+      intent: "partner_invite",
+      partnerId: membership.partner_id,
+      callerIsSuper: false,
+    });
+    if (!conflict.ok) {
+      return new Response(
+        JSON.stringify({ success: false, error: conflict.error }),
+        { status: conflict.status ?? 409, headers: { "Content-Type": "application/json", ...corsHeaders } },
+      );
+    }
+
     let userId: string;
-    const { data: lookup } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
-    const existing = lookup?.users?.find((u) => u.email?.toLowerCase() === email);
-    if (existing) {
-      userId = existing.id;
+    if (conflict.existingUserId) {
+      userId = conflict.existingUserId;
     } else {
       const tmp = crypto.randomUUID() + "Aa1!";
       const { data: created, error: cErr } = await supabase.auth.admin.createUser({
