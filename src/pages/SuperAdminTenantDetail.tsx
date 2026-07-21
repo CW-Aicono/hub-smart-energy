@@ -1,5 +1,5 @@
 import { Navigate, useParams, useNavigate } from "react-router-dom";
-import { beginImpersonation, clearImpersonation, getActiveSupportSessionId } from "@/lib/supportView";
+import { beginImpersonation, getActiveSupportSessionId, endImpersonationAndReturn } from "@/lib/supportView";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useTenantModules, ALL_MODULES } from "@/hooks/useTenantModules";
