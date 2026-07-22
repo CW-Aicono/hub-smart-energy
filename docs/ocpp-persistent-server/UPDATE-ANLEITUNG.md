@@ -267,6 +267,81 @@ ocpp-server-live   Up 2 minutes (healthy)       8080/tcp
 > ☝ Die genauen Zeiten (z. B. `2 minutes` oder `10 days`) sind egal — wichtig ist,
 > dass bei beiden `healthy` steht.
 
+### 🆘 Falls dort „Restarting“ steht
+
+Wenn bei `ocpp-server` oder `ocpp-server-live` **Restarting** steht, bedeutet das:
+Der Server startet kurz, findet einen Fehler und beendet sich sofort wieder.
+Docker versucht ihn dann immer wieder neu zu starten.
+
+> Wichtig: Bitte jetzt nicht blind Befehle ausprobieren. Zuerst lesen wir die Fehlermeldung aus.
+
+#### Schritt 1 — Fehler vom Test-Server anzeigen
+
+```bash
+docker compose logs --tail=120 ocpp
+```
+
+#### Schritt 2 — Fehler vom Live-Server anzeigen
+
+```bash
+docker compose logs --tail=120 ocpp-live
+```
+
+Kopiere die Ausgabe an David oder in Lovable.
+Falls dort ein Schlüssel, Passwort oder `KEY=` / `SECRET=` sichtbar wäre, diese Zeile bitte vorher entfernen.
+
+#### Schritt 3 — Häufigster Fehler nach dem Realtime-Update
+
+Wenn in der Ausgabe ungefähr das steht:
+
+```text
+Missing env var SUPABASE_ANON_KEY
+```
+
+dann fehlt in der `.env`-Datei der öffentliche Cloud-Schlüssel für Realtime.
+Das ist **kein Passwort**, sondern ein öffentlicher Frontend-Schlüssel.
+
+Öffne die `.env`-Datei:
+
+```bash
+nano .env
+```
+
+Füge diese Zeile ein, falls sie fehlt:
+
+```bash
+SUPABASE_ANON_KEY=HIER_DEN_ÖFFENTLICHEN_ANON_KEY_EINFÜGEN
+```
+
+Speichern:
+1. `Strg + O` drücken
+2. `Enter` drücken
+3. `Strg + X` drücken
+
+Danach beide Server neu bauen und starten:
+
+```bash
+docker compose build --no-cache ocpp ocpp-live
+docker compose up -d ocpp ocpp-live
+docker compose ps
+```
+
+Erwartet ist danach:
+
+```text
+ocpp-server        Up ... (healthy)
+ocpp-server-live   Up ... (healthy)
+```
+
+#### Schritt 4 — Wenn weiterhin „Restarting“ steht
+
+Dann bitte **nicht weiter herumprobieren**, sondern erneut diese beiden Befehle ausführen und die Ausgabe weitergeben:
+
+```bash
+docker compose logs --tail=120 ocpp
+docker compose logs --tail=120 ocpp-live
+```
+
 ### Test B — Antwortet die Test-Umgebung?
 
 ```bash
