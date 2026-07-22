@@ -13759,6 +13759,7 @@ export type Database = {
         Args: { _partner_id: string }
         Returns: Json
       }
+      purge_meter_power_readings_retention: { Args: never; Returns: undefined }
       refresh_meter_daily_totals: {
         Args: {
           p_from: string
