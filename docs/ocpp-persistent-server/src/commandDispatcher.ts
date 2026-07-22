@@ -178,21 +178,26 @@ export function startCommandDispatcher() {
     }, 100);
   };
 
-  const channel = supabase
-    .channel("ocpp:commands")
-    .on("broadcast", { event: "new_command" }, (msg) => {
-      const cp = (msg?.payload as { cp?: string } | undefined)?.cp;
-      log.info("Realtime wakeup: new pending command", { cp });
-      wakeup();
-    })
-    .subscribe((status) => {
-      log.info("Realtime channel status", { status });
-    });
+  let channel: ReturnType<typeof supabase.channel> | null = null;
+  if (config.supabaseAnonKey) {
+    channel = supabase
+      .channel("ocpp:commands")
+      .on("broadcast", { event: "new_command" }, (msg) => {
+        const cp = (msg?.payload as { cp?: string } | undefined)?.cp;
+        log.info("Realtime wakeup: new pending command", { cp });
+        wakeup();
+      })
+      .subscribe((status) => {
+        log.info("Realtime channel status", { status });
+      });
+  } else {
+    log.warn("SUPABASE_ANON_KEY not set — Realtime-Push disabled, using polling only");
+  }
 
   return () => {
     if (pollTimer) clearInterval(pollTimer);
     if (debounceTimer) clearTimeout(debounceTimer);
-    void supabase.removeChannel(channel);
+    if (channel) void supabase.removeChannel(channel);
   };
 }
 
