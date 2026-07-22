@@ -21,6 +21,6 @@ export const supabase: SupabaseClient = createClient(
     // Node.js 20 hat im Alpine-Container kein natives WebSocket-Objekt.
     // Ohne expliziten ws-Transport wirft @supabase/realtime-js schon beim
     // createClient()-Aufruf und der OCPP-Container landet im Restart-Loop.
-    realtime: { params: { eventsPerSecond: 20 }, transport: WebSocket as unknown as WebSocket },
+    realtime: { params: { eventsPerSecond: 20 }, transport: WebSocket as any },
   },
 );
