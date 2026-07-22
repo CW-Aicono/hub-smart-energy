@@ -2,8 +2,7 @@
  * bridge-aggregator
  * =================
  * Liest unverarbeitete Roh-Samples aus `bridge_raw_samples`, aggregiert sie
- * pro Meter × 5-Min-Bucket und schreibt sie in `meter_power_readings_5min_bridge`
- * (Schatten-Tabelle parallel zum bestehenden Polling-Pfad).
+ * pro Meter × 5-Min-Bucket und schreibt sie in `meter_power_readings_5min`.
  *
  * Aufruf:
  *   - per pg_cron alle 5 Minuten (siehe Cron-Insert)
@@ -182,9 +181,9 @@ async function run(): Promise<{
   }
 
   // 4) Buckets upserten (ON CONFLICT meter_id, bucket, resolution_minutes)
-  //    Schreibt in BEIDE Tabellen:
-  //    - meter_power_readings_5min_bridge (Schatten, für Diagnose / Vergleich)
-  //    - meter_power_readings_5min        (Haupt-Tabelle, von UI/Charts gelesen)
+  //    IO-Schutz: nur noch in die Haupt-Tabelle schreiben. Der frühere parallele
+  //    Diagnose-/Schatten-Write nach `meter_power_readings_5min_bridge` hat laut
+  //    pg_stat_statements signifikante zusätzliche WAL-/IO-Last erzeugt.
   let bucketsWritten = 0;
   if (buckets.size > 0) {
     const rows = [...buckets.values()].map((b) => ({
@@ -201,14 +200,6 @@ async function run(): Promise<{
     // upsert in Chunks à 1000
     for (let i = 0; i < rows.length; i += 1000) {
       const slice = rows.slice(i, i + 1000);
-      // 4a) Schatten-Tabelle
-      const { error: errBridge } = await supabase
-        .from('meter_power_readings_5min_bridge')
-        .upsert(slice, { onConflict: 'meter_id,bucket,resolution_minutes' });
-      if (errBridge) {
-        return { raw_read: raw.length, buckets_written: bucketsWritten, samples_processed: 0, unmapped_uuids: unmapped, error: `bridge: ${errBridge.message}` };
-      }
-      // 4b) Haupt-Tabelle – damit die Daten in den bestehenden Dashboards erscheinen
       const { error: errMain } = await supabase
         .from('meter_power_readings_5min')
         .upsert(slice, { onConflict: 'meter_id,bucket,resolution_minutes' });

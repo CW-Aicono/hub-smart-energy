@@ -5,6 +5,7 @@ import { getSession, listSessions } from "./chargePointRegistry";
 import { logOcppMessage } from "./messageLog";
 import { fetchPendingCommands, updatePendingCommand } from "./backendApi";
 import { isLegacyWallbe, LEGACY_WALLBE_BLOCKED_ACTIONS } from "./wallboxCompat";
+import { supabase } from "./supabaseClient";
 
 interface PendingRow {
   id: string;
@@ -155,16 +156,49 @@ async function fetchAndDispatch() {
 }
 
 export function startCommandDispatcher() {
-  // Polling
+  // Polling (Havarie-Fallback). Realtime-Broadcast weckt uns normalerweise
+  // in <500ms; Polling greift nur, wenn die Realtime-Verbindung ausfällt.
   let pollTimer: NodeJS.Timeout | null = null;
   if (config.commandPollIntervalMs > 0) {
     pollTimer = setInterval(fetchAndDispatch, config.commandPollIntervalMs);
-    log.info("Command polling enabled", { intervalMs: config.commandPollIntervalMs });
+    log.info("Command polling enabled (fallback)", { intervalMs: config.commandPollIntervalMs });
   }
 
-  // Echtzeit ist mit der begrenzten Backend-Funktion nicht verfügbar.
-  // Polling alle 2 Sekunden reicht für Remote-Commands aus.
-  return () => { if (pollTimer) clearInterval(pollTimer); };
+  // Realtime-Push: Postgres-Trigger sendet bei neuem pending_ocpp_command
+  // einen Broadcast auf den Kanal `ocpp:commands`. Debounce 100ms falls
+  // mehrere Commands gleichzeitig eintreffen.
+  let debounceTimer: NodeJS.Timeout | null = null;
+  const wakeup = () => {
+    if (debounceTimer) return;
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      fetchAndDispatch().catch((e) =>
+        log.error("realtime-triggered dispatch failed", { error: (e as Error).message }),
+      );
+    }, 100);
+  };
+
+  let channel: ReturnType<typeof supabase.channel> | null = null;
+  if (config.supabaseAnonKey) {
+    channel = supabase
+      .channel("ocpp:commands")
+      .on("broadcast", { event: "new_command" }, (msg) => {
+        const cp = (msg?.payload as { cp?: string } | undefined)?.cp;
+        log.info("Realtime wakeup: new pending command", { cp });
+        wakeup();
+      })
+      .subscribe((status) => {
+        log.info("Realtime channel status", { status });
+      });
+  } else {
+    log.warn("SUPABASE_ANON_KEY not set — Realtime-Push disabled, using polling only");
+  }
+
+  return () => {
+    if (pollTimer) clearInterval(pollTimer);
+    if (debounceTimer) clearTimeout(debounceTimer);
+    if (channel) void supabase.removeChannel(channel);
+  };
 }
 
 /** Antwort vom Charger einem ausstehenden Command zuordnen und in DB schreiben. */

@@ -19,16 +19,15 @@ function bool(name: string, def: boolean): boolean {
 
 export const config = {
   supabaseUrl: req("SUPABASE_URL"),
-  supabaseAnonKey: req("SUPABASE_ANON_KEY"),
+  // Optional: nur für Realtime-Push (Broadcast-Kanal ocpp:commands) benötigt.
+  // Fehlt der Key, läuft der Server ausschließlich mit Polling weiter.
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
   ocppDomain: process.env.OCPP_DOMAIN ?? "",
   port: num("PORT", 8080),
   logLevel: (process.env.LOG_LEVEL ?? "info") as "debug" | "info" | "warn" | "error",
   pingIntervalSec: num("PING_INTERVAL_SECONDS", 25),
-  // 25 h: muss größer sein als unsere Heartbeat-Antwort (interval: 86400 = 24h),
-  // sonst werden OCPP-stille Wallboxen (z. B. wallbe BF-01.04.x) fälschlich
-  // alle 2 Minuten als „idle" geschlossen.
   idleTimeoutSec: num("IDLE_TIMEOUT_SECONDS", 90000),
-  commandPollIntervalMs: num("COMMAND_POLL_INTERVAL_MS", 2000),
+  commandPollIntervalMs: num("COMMAND_POLL_INTERVAL_MS", 10000),
   enableRealtime: bool("ENABLE_REALTIME", false),
   startupCheckOcppId: process.env.OCPP_STARTUP_CHECK_ID ?? "",
   ocppSubprotocol: "ocpp1.6",
