@@ -28,7 +28,10 @@ export const config = {
   // sonst werden OCPP-stille Wallboxen (z. B. wallbe BF-01.04.x) fälschlich
   // alle 2 Minuten als „idle" geschlossen.
   idleTimeoutSec: num("IDLE_TIMEOUT_SECONDS", 90000),
-  commandPollIntervalMs: num("COMMAND_POLL_INTERVAL_MS", 2000),
+  // Fallback-Polling. Realtime-Broadcast (Postgres-Trigger → realtime.send)
+  // liefert normalerweise sofortige Weckrufe; das Polling dient nur der
+  // Havarie-Absicherung bei Realtime-Ausfall.
+  commandPollIntervalMs: num("COMMAND_POLL_INTERVAL_MS", 10000),
   enableRealtime: bool("ENABLE_REALTIME", false),
   startupCheckOcppId: process.env.OCPP_STARTUP_CHECK_ID ?? "",
   ocppSubprotocol: "ocpp1.6",
