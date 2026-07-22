@@ -5,6 +5,7 @@ import { getSession, listSessions } from "./chargePointRegistry";
 import { logOcppMessage } from "./messageLog";
 import { fetchPendingCommands, updatePendingCommand } from "./backendApi";
 import { isLegacyWallbe, LEGACY_WALLBE_BLOCKED_ACTIONS } from "./wallboxCompat";
+import { supabase } from "./supabaseClient";
 
 interface PendingRow {
   id: string;
