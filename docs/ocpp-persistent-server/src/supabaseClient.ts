@@ -1,4 +1,19 @@
-// Direkter Datenbankzugriff ist in Lovable Cloud nicht möglich, weil der interne
-// Service-Schlüssel nicht angezeigt wird. Der persistente Hetzner-Server nutzt
-// stattdessen src/backendApi.ts und ruft eine begrenzte Backend-Funktion auf.
-export const supabase = null as never;
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { config } from "./config";
+
+/**
+ * Realtime-only Supabase-Client für den persistenten OCPP-Server.
+ *
+ * Datenoperationen laufen weiterhin über src/backendApi.ts (Edge Function),
+ * weil in Lovable Cloud der Service-Role-Key nicht verfügbar ist.
+ * Dieser Client wird ausschließlich für Realtime-Broadcasts genutzt
+ * (Push-Weckruf bei neuen pending_ocpp_commands).
+ */
+export const supabase: SupabaseClient = createClient(
+  config.supabaseUrl,
+  config.supabaseAnonKey,
+  {
+    auth: { persistSession: false, autoRefreshToken: false },
+    realtime: { params: { eventsPerSecond: 20 } },
+  },
+);
