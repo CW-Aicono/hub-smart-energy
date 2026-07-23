@@ -282,7 +282,9 @@ function aiconoToUnifiedRow(d: FleetDevice, tenantNameMap: Record<string, string
     sessionsLast24h: null,
     worker: null,
     lastDisconnect: null,
+    serials: [],
     device: d,
+
   };
 }
 
