@@ -3,6 +3,7 @@ import { Radio, Activity, RefreshCw, AlertCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
+import { useSystemSettingNumber } from "@/hooks/useSystemSetting";
 
 interface LoxoneWsStatusProps {
   locationIntegrationId: string;
