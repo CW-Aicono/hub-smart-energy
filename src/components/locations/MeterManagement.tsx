@@ -126,7 +126,7 @@ function DeviceTable({
   onToggleAll,
 }: {
   devices: (LoxoneSensor & { _integrationLabel: string; _integrationId: string })[];
-  type: "sensor" | "actuator";
+  type: "meter" | "sensor" | "actuator";
   meters: Meter[];
   roomNameById: Map<string, string>;
   onEditMeter: (meter: Meter) => void;
