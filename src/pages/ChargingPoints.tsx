@@ -53,6 +53,7 @@ const ChargingPoints = () => {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { chargePoints, isLoading, addChargePoint, updateChargePoint, deleteChargePoint } = useChargePoints();
+  const [mapEditMode, setMapEditMode] = useState(false);
   const { locations } = useLocations();
   const { sessions } = useChargingSessions();
   const { chargerModels, vendors: knownVendors, getModelsForVendor } = useChargerModels();
