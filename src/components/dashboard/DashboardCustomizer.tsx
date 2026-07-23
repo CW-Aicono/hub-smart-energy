@@ -187,7 +187,8 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeW
                   />
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
           {onResetLayout && (
             <Button variant="outline" size="sm" className="w-full" onClick={onResetLayout}>
