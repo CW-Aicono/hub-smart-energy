@@ -1,47 +1,59 @@
-## Status Testumgebung (verifiziert)
+## Ziel
 
-- `meter_power_readings_5min` letzte 2 h: **440 Rows, alle `source=bridge_ws**`, exakt 6 Buckets/h pro Meter → Worker-Aggregation läuft sauber.
-- `bridge_raw_samples` letzte 1 h: **898 Rows** (648 Tenant `0ce0c43a…`, 250 ohne Tenant-Zuordnung). D. h. mindestens **ein Worker schreibt noch den alten `bridge-readings`-Pfad**. Solange das der Fall ist, darf der Aggregator-Cron nicht abgeschaltet werden — sonst gehen Daten dieses Tenants verloren.
-- Aktive Crons: `bridge-aggregator-every-5min`, `cleanup-bridge-raw-samples-hourly`, `loxone-periodic-sync-15min` — alle aktiv.
+Desktop-Widgets im Dashboard nur anzeigen, wenn sie für den aktuellen Tenant / die aktuelle Liegenschaft sinnvoll sind — also nur wenn entsprechende Daten, Zähler, Verträge oder Module vorhanden sind. Aktuell werden Widgets nur nach Modul-Aktivierung und User-Sichtbarkeit gefiltert (`WIDGET_MODULE_MAP` + `visibleWidgets`), aber nicht danach, ob überhaupt Daten dahinterliegen.
 
-**Fazit:** Der neue Pfad funktioniert, aber Phase 4 kann nicht komplett zünden, bevor alle Worker (Live + Staging) auf die aggregierende Version umgestellt sind.
+## Ansatz
 
-## Phase 4 — in dieser Reihenfolge
+Zusätzlich zum bestehenden Modul-Filter in `DashboardContent.tsx` wird eine zweite Filter-Ebene eingeführt: **Datenvoraussetzungen** (Requirements). Ein Widget wird nur gerendert, wenn seine Requirement-Funktion `true` liefert. Die Prüfung passiert einmal beim Laden über einen zentralen Hook `useWidgetAvailability(selectedLocationId)`, der alle nötigen Signale bündelt (leichte COUNT-Queries, gecacht via React-Query, staleTime 5 min).
 
-### Schritt 4a: Pull-Fallback in `loxone-periodic-sync` ergänzen (jetzt, safe)
+Widgets, die die Voraussetzung nicht erfüllen, werden:
+- im normalen Dashboard **ausgeblendet**
+- im `DashboardCustomizer` weiterhin sichtbar, aber mit Badge „Keine Daten" und Hinweis, damit der User versteht, warum das Widget nicht erscheint (kein stilles Verschwinden).
 
-- In `supabase/functions/loxone-periodic-sync/index.ts`: pro Meter prüfen, ob in `meter_power_readings_5min` in den letzten `2 × poll_interval_minutes` ein Bucket mit `source='bridge_ws'` existiert.
-- Wenn nein → einen 5-Min-Bucket aus dem aktuellen HTTP-Sample schreiben mit `source='loxone_pull'` (Upsert `onConflict: meter_id,bucket,resolution_minutes`).
-- Wenn ja → wie bisher nur kWh-Zählerstände, kein Power-Row.
-- Kein Eingriff in Discovery/Fehlermanagement/Zählerstände.
-- Verifikation: Worker gezielt 15 Min stoppen → in `meter_power_readings_5min` müssen Rows mit `source='loxone_pull'` auftauchen, dann Worker wieder starten → `bridge_ws` übernimmt.
+## Widget → Anzeigebedingung
 
-### Schritt 4b: Worker-Rollout abschließen (User-Aktion Hetzner)
+| Widget | Bedingung |
+|---|---|
+| `pv_forecast` | mindestens eine PV-Anlage (`location_energy_sources` type `pv`) oder ein PV-Zähler (`meters.direction`/`role = pv`) im Scope |
+| `cost_overview` | mindestens ein Eintrag in `energy_prices` **oder** `tenant_electricity_tariffs` für den Tenant |
+| `spot_price` | dynamischer Stromtarif aktiv (`energy_prices.pricing_model = 'dynamic'` o. ä.) **oder** Modul `arbitrage_trading` aktiv **mit** mindestens einer Strategie in `arbitrage_strategies` |
+| `arbitrage_ai` | Modul `arbitrage_trading` aktiv **und** mindestens eine aktive Strategie |
+| `floor_plan` / `floor_plan_explorer` | mindestens ein Grundriss vorhanden (`floors` bzw. `locations.floor_plan_url`) |
+| `savings_share` | Modul `gain_sharing` aktiv **und** mindestens ein `tenant_savings_contracts`-Eintrag |
+| `ppa_fleet` | mindestens ein `ppa_contracts`-Eintrag |
+| `weather_normalization` | mindestens ein Wärme-/Gaszähler vorhanden |
+| `sustainability_kpis` | mindestens ein Zähler mit Energiedaten der letzten 30 Tage |
+| `integration_errors` | ungelöste Integration-Errors vorhanden |
+| `energy_gauge`, `energy_chart`, `pie_chart`, `sankey`, `forecast`, `anomaly` | mindestens ein aktiver Zähler im Scope |
+| `alerts_list` | Modul `alerts` aktiv (bereits abgedeckt) — keine zusätzliche Datenprüfung |
+| `location_map` | mindestens 2 Liegenschaften (bereits so implementiert — beibehalten) |
+| `weather` | immer sichtbar (Wetter unabhängig von Zählern) |
 
-- Alten Live-Worker `loxone-ws-worker-live` auf die neue Image-Version bringen (gleiche Prozedur wie Staging).
-- Kriterium für Schritt 4c: **24 h** lang keine neuen Rows in `bridge_raw_samples` (`SELECT count(*) FROM bridge_raw_samples WHERE received_at > now() - interval '1 hour'` = 0). Ich kann das Monitoring-Query auf Wunsch als wiederkehrenden Check einbauen.
+Wenn eine Liegenschaft ausgewählt ist, prüfen die Requirements auf Location-Ebene; ohne Auswahl auf Tenant-Ebene.
 
-### Schritt 4c: Aggregator-Cron pausieren + Raw-Samples eindampfen (nach 24 h Stille)
+## Technische Umsetzung
 
-- `SELECT cron.unschedule('bridge-aggregator-every-5min');`
-- `bridge_raw_samples` bleibt als Tabelle bestehen (leerer Puffer), Retention-Cron kümmert sich um den Rest.
-- Legacy-Handler `handleBridgeReadings` in `gateway-ingest` auf No-Op-Broadcast reduzieren (keine DB-Writes mehr), damit ältere Worker-Versionen den Delta-Guard/DB nicht mehr belasten.
+**Neue Datei:** `src/hooks/useWidgetAvailability.tsx`
+- Führt parallel leichte `select ... limit 1` / `head:true, count:'exact'` Queries aus (Zähler, PV-Sources, Grundrisse, Strategien, PPA, Tarife, Gain-Sharing-Verträge, Integration-Errors).
+- Respektiert `tenant_id` (Multi-Tenancy) und `selectedLocationId`.
+- Liefert `{ isReady: boolean, has: Record<string, boolean> }`.
 
-## Rollback pro Schritt
+**Neue Datei:** `src/lib/widgetRequirements.ts`
+- Map `widgetType → (has) => boolean` mit den Regeln aus der Tabelle oben. Zentral wartbar.
 
-- 4a: Fallback-Block auskommentieren, Deploy.
-- 4b: alten Container per Image-Tag wieder starten.
-- 4c: `cron.schedule('bridge-aggregator-every-5min', '*/5 * * * *', $$…$$)` reaktivieren, Handler-Änderung reverten.
+**Änderung:** `src/pages/DashboardContent.tsx`
+- Hook einbinden, `filteredVisibleWidgets` um Requirement-Prüfung erweitern.
+- Ladezustand: Widgets erst rendern, wenn Availability-Check abgeschlossen (verhindert Flackern).
 
-## Empfehlung
+**Änderung:** `src/components/dashboard/DashboardCustomizer.tsx`
+- Für nicht erfüllte Widgets ein dezentes Badge „Keine Daten vorhanden" + Tooltip mit Grund („PV-Anlage anlegen", „Dynamischen Tarif aktivieren" …) anzeigen.
+- Toggle bleibt bedienbar (User kann bewusst aktivieren, wird trotzdem nicht gerendert bis Voraussetzung erfüllt ist).
 
-Jetzt nur **Schritt 4a** umsetzen und deployen — das ist unabhängig vom Worker-Rollout und macht das System resilient gegen Worker-Ausfälle. **Schritt 4c** erst, wenn Hetzner-Live-Worker aktualisiert ist und `bridge_raw_samples` 24 h still ist.
+**Keine DB-Änderungen** — nur Leseabfragen auf bestehende Tabellen.
 
-Soll ich mit Schritt 4a starten?  
-  
-Antwort: Ja, starte mit Schritt 4 a. Hinweis: Hetzner-Live-Worker ist aktualisiert, das habe ich zusammen mit dem Lovable-Test-Worker gemacht.  
-  
-  
-  
-  
-  
+## Nicht im Umfang
+
+- Mobile-Dashboard-Widgets (nur Desktop wie gewünscht).
+- Custom-Widgets (`custom_*`) — bleiben unverändert sichtbar.
+- Änderungen an einzelnen Widget-Komponenten selbst.
+- Neue DB-Migrationen oder Policies.
