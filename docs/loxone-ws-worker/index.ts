@@ -659,6 +659,10 @@ async function connect(state: ConnState): Promise<void> {
           latest_value: null,
           last_pushed_value: null,
           last_pushed_at: 0,
+          bucket_start: 0,
+          bucket_sum: 0,
+          bucket_max: 0,
+          bucket_count: 0,
         });
         totalSubs++;
       }
@@ -1014,6 +1018,10 @@ async function reloadMeters(): Promise<void> {
           latest_value: null,
           last_pushed_value: null,
           last_pushed_at: 0,
+          bucket_start: 0,
+          bucket_sum: 0,
+          bucket_max: 0,
+          bucket_count: 0,
         });
       }
     }
