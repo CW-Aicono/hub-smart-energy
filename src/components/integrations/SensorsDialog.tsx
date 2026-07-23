@@ -21,10 +21,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Loader2, RefreshCw, AlertCircle, Plus, CheckCircle2,
-  Zap, Thermometer, Droplets, Wind, Gauge, Sun, BatteryCharging,
-  ToggleLeft, Activity, Lightbulb, Waves, CloudRain, Eye, Radio,
   ArrowRightLeft, Search, X,
 } from "lucide-react";
+import { getDeviceIconForSensor } from "@/lib/deviceIcons";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
