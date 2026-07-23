@@ -130,14 +130,11 @@ function WorkerRow({ w, onToggle }: { w: WorkerControl; onToggle: (next: boolean
   );
 }
 
-export default function WorkerControlsPanel() {
-  const { data, isLoading, isError, error, setEnabled } = useWorkerControls();
-
 // ---------------------------------------------------------------------------
 // Inline editor for the Loxone-WS "stale" threshold used by the tenant UI.
 // Stored in public.system_settings under key public.loxone_ws_stale_threshold_seconds.
 // ---------------------------------------------------------------------------
-function LoxoneStaleThresholdEditorImpl() {
+function LoxoneStaleThresholdEditor() {
   const KEY = "public.loxone_ws_stale_threshold_seconds";
   const { data, isLoading } = useSystemSetting(KEY);
   const setSetting = useSetSystemSetting();
@@ -153,9 +150,7 @@ function LoxoneStaleThresholdEditorImpl() {
   return (
     <div className="rounded-md border bg-muted/30 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <label className="text-xs font-medium">
-          Stale-Schwelle (Sekunden)
-        </label>
+        <label className="text-xs font-medium">Stale-Schwelle (Sekunden)</label>
         <span className="text-[10px] text-muted-foreground">
           system_settings · {KEY.replace("public.", "")}
         </span>
@@ -192,12 +187,10 @@ function LoxoneStaleThresholdEditorImpl() {
     </div>
   );
 }
-// Wrapper so it can be referenced above `WorkerControlsPanel`.
-function LoxoneStaleThresholdEditor() {
-  return <LoxoneStaleThresholdEditorImpl />;
-}
 
-  return (
+export default function WorkerControlsPanel() {
+  const { data, isLoading, isError, error, setEnabled } = useWorkerControls();
+
     <div className="space-y-6">
       <Alert>
         <AlertCircle className="h-4 w-4" />
