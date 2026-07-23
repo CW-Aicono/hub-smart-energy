@@ -1,37 +1,49 @@
 ## Ziel
-Beim Platzieren eines Ladepunktes im Bearbeiten-Dialog sollen **alle vorhandenen Ladepunkte des Tenants** in der Karte sichtbar sein. Der User wählt per Klick den zu platzierenden Ladepunkt, sein Name wird eingeblendet, und nur dieser eine ist ziehbar.
+Einheitliche Icons für Zähler/Sensoren/Aktoren in allen Listen (Dialog „Gefundene Geräte" ↔ Tabs „Zähler / Sensoren / Aktoren") und korrekte Aktualisierung, sobald der Gerätetyp im Bearbeiten-Dialog umgestellt wird.
 
-## Umfang
-- Nur Frontend/Presentation. Keine Änderungen an Datenmodell, RLS oder anderen Seiten.
-- Betroffen: `src/components/charging/SingleChargePointMap.tsx` (erweitern) und Verwendung in `src/pages/ChargePointDetail.tsx` (Bearbeiten-Dialog, Zeile ~1187).
-- Die zweite Verwendung (Read-only-Anzeige auf der Detailseite) bleibt unverändert.
+## Ist-Zustand (verifiziert)
+Zwei unabhängige Icon-Funktionen mit unterschiedlicher Logik:
+- `src/components/integrations/SensorsDialog.tsx` → lokale `getSensorIcon()` (Zap, ToggleLeft, Eye, Gauge, …) auf Basis von `unit` + `controlType`.
+- `src/components/locations/MeterManagement.tsx` → eigene Icon-Auswahl für Zähler/Sensoren/Aktoren (Gauge/Zap/Activity/ToggleLeft/Thermometer …), ebenfalls aus `unit`/`type`.
 
-## Verhalten (Bearbeiten-Dialog)
-1. Karte zeigt alle Ladepunkte des Tenants mit `latitude/longitude` als Marker.
-2. Der aktuell bearbeitete Ladepunkt ist initial **vorausgewählt** (grüner Marker, ziehbar). Sein Name wird oben mittig in der bestehenden „Marker an die exakte Position ziehen"-Kapsel angezeigt: `"<Name> – Marker an die exakte Position ziehen"`.
-3. Andere Ladepunkte werden als **neutrale, nicht ziehbare Marker** (grau/blau) mit Tooltip = Name dargestellt.
-4. Klick auf einen anderen Marker macht diesen zum aktiven, ziehbaren Marker; sein Name erscheint in der Kapsel. Der zuvor bearbeitete Ladepunkt wird wieder neutral.
-   - Wichtig: Ein Wechsel ändert nur den lokalen Auswahl-State im Karten-Widget. Die tatsächliche Persistenz von Positionsänderungen erfolgt weiterhin nur für den im Dialog geöffneten Ladepunkt über `onPositionChange` → `setCoords` → Speichern.
-   - Positionsänderungen eines anderen, per Klick ausgewählten Ladepunktes werden **nicht persistiert** (nur der Dialog-Ladepunkt wird gespeichert). Für konsistente UX wird bei Auswahl eines fremden Markers ein Hinweis angezeigt: „Nur der geöffnete Ladepunkt kann hier gespeichert werden. Öffne den anderen Ladepunkt zum Bearbeiten." — der fremde Marker bleibt dabei **nicht** ziehbar.
-   - → Damit bleibt die Logik einfach: **ziehbar ist ausschließlich der im Dialog geöffnete Ladepunkt**. Der Klick auf andere Marker dient nur der Orientierung und zeigt deren Namen an; Ziehen ist deaktiviert.
+Beide berücksichtigen den in der DB gespeicherten **effektiven Gerätetyp** (`meters.device_type` = meter/sensor/actuator) nicht bzw. nicht konsistent — deshalb bleibt nach „Zähler → Aktor"-Umstellung das alte Icon stehen (Icon wird aus `controlType`/`unit` gerechnet, nicht aus dem gespeicherten Typ).
 
-## Technische Umsetzung
+`src/lib/deviceClassification.ts` liefert bereits die Wahrheit: `getResolvedDeviceType(sensor, deviceTypeMap)`.
 
-### `SingleChargePointMap.tsx`
-- Neue optionale Prop `otherPoints?: Array<{ id: string; name: string; latitude: number; longitude: number }>`.
-- Neue optionale Prop `currentName?: string` für die Anzeige in der Kapsel.
-- Rendering:
-  - Bestehender Haupt-Marker (grün) für `latitude/longitude` bleibt (ziehbar via `alwaysEditable`/`editMode`).
-  - Zusätzliche `<Marker>` pro `otherPoints`-Eintrag mit anderem Icon (z. B. grau `#94a3b8`), `draggable={false}`, `eventHandlers={{ click: () => setSelectedOtherId(id) }}`, sowie Leaflet-`Tooltip` mit Name.
-  - Wenn ein `otherPoints`-Marker geklickt ist: Kapsel oben zeigt dessen Namen + Zusatz „(nur Anzeige – zum Bearbeiten diesen Ladepunkt öffnen)". Klick auf den grünen Haupt-Marker setzt Auswahl zurück auf den aktuell bearbeiteten (Kapsel: `currentName`).
-  - Karten-Bounds: bei Vorhandensein von `otherPoints` mit `fitBounds` initial alle Marker einpassen (nur einmal beim Mount / bei Änderung der Punkt-Liste); danach nicht mehr rezentrieren (der bestehende `Recenter` wird in diesem Modus deaktiviert, um nicht bei jedem Drag zu springen).
-- `readOnly`-Pfad bleibt unverändert.
+## Umsetzung
 
-### Datenbeschaffung in `ChargePointDetail.tsx`
-- Es existiert bereits `useChargePoints()` (siehe `src/hooks/useChargePoints.tsx`), das alle Ladepunkte des Tenants mit `latitude/longitude` liefert.
-- Im Bearbeiten-Dialog: Liste filtern auf `cp.id !== currentId && cp.latitude != null && cp.longitude != null` und als `otherPoints` an `SingleChargePointMap` übergeben. `currentName` = `form.name`.
+### 1) Neue zentrale Datei `src/lib/deviceIcons.tsx`
+Eine einzige Quelle der Wahrheit:
+```
+getDeviceIcon(input: {
+  resolvedType: "meter" | "sensor" | "actuator";
+  unit?: string | null;
+  controlType?: string | null;
+  haDomain?: string | null;   // aus entity_id abgeleitet
+  category?: string | null;
+}) : LucideIcon
+```
+Auswahllogik (in dieser Reihenfolge):
+- **actuator** → `switch/pushbutton` → `ToggleLeft`; `light` → `Lightbulb`; `cover/blind/gate` → `DoorOpen`; sonst `ToggleLeft`.
+- **meter** → Einheit `kWh/kW/W/Wh/MWh/V/A` → `Zap`; `m³/l` (Wasser) → `Droplets`; `m³` bei Gas-Kategorie → `Flame`; Wärme → `Thermometer`; Fallback `Gauge`.
+- **sensor** → Einheit `°C/K` → `Thermometer`; `%` Feuchte → `Droplets`; `lux` → `Sun`; `Pa/bar` → `Gauge`; Bewegung → `Activity`; Fallback `Eye`.
 
-## Nicht im Umfang
-- Bearbeiten fremder Ladepunkte direkt in der Karte (bewusst nicht, um Save-Semantik einfach zu halten).
-- Änderungen an der Read-only-Karte auf der Detailseite oder an `ChargePointsMap.tsx` (Übersicht).
-- Kein DB-/RLS-/Backend-Change.
+Zusätzlich Helfer `getDeviceIconFromMeter(meter)` (nutzt `device_type`, `unit`, `control_type`, `sensor_uuid`-Domain) für die MeterManagement-Tabs.
+
+### 2) `SensorsDialog.tsx` (Dialog „Gefundene Geräte")
+- Lokales `getSensorIcon` entfernen, durch `getDeviceIcon({ resolvedType: getResolvedDeviceType(sensor, deviceTypeMap), … })` ersetzen.
+- `deviceTypeMap` wird bereits im Dialog gebaut (User-Overrides + bereits verlinkte Meter) — Icon spiegelt damit sofort die aktuelle Auswahl wider.
+
+### 3) `MeterManagement.tsx` (Tabs Zähler/Sensoren/Aktoren)
+- Lokale Icon-Logik durch `getDeviceIconFromMeter(m)` ersetzen — für jeden Tab dieselbe Funktion.
+- Damit erscheint ein Eintrag, der von „Zähler" auf „Aktor" umgestellt wurde, mit korrektem Aktor-Icon im Aktoren-Tab.
+
+### 4) Reaktive Aktualisierung nach Typ-Wechsel
+- `EditMeterDialog` schreibt `device_type` bereits in `meters`. Nach `save` wird `useMeters` invalidiert → Tabs rendern neu.
+- Sicherstellen, dass der Dialog `getDeviceIcon` denselben `resolvedType` verwendet (aus lokalem Form-State live, nicht aus altem `controlType`).
+
+### 5) Weitere Fundstellen prüfen und angleichen
+- `DeviceCard` (Gateway-Kachel), `VirtualBalanceBreakdown`, ggf. Automations-Selektoren: falls sie Zähler/Sensor/Aktor-Symbole zeigen, ebenfalls `getDeviceIcon*` verwenden.
+
+## Nicht Bestandteil
+- Keine Änderung an Business-Logik, Klassifikationsregeln, Datenmodell oder Übersetzungen. Nur Icon-Vereinheitlichung.
