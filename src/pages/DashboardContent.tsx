@@ -15,6 +15,8 @@ import LazyWidget from "@/components/dashboard/LazyWidget";
 import ResizableWidget from "@/components/dashboard/ResizableWidget";
 
 import { useDashboardPrefetch } from "@/hooks/useDashboardPrefetch";
+import { useWidgetAvailability } from "@/hooks/useWidgetAvailability";
+import { isWidgetAvailable } from "@/lib/widgetRequirements";
 
 // Per-widget height constraints (px, wrapper incl. drag-handle row).
 // Prevents charts from being stretched past their natural content
