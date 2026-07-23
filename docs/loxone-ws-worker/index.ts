@@ -304,6 +304,12 @@ interface UuidEntry {
   latest_value: number | null;
   last_pushed_value: number | null;
   last_pushed_at: number; // ms epoch
+  // v1.5: Worker-seitige 5-Min-Aggregation für Power (role="pwr").
+  // Bucket-Start = Math.floor(ts / 300000) * 300000 (ms).
+  bucket_start: number;        // ms epoch, 0 = kein aktiver Bucket
+  bucket_sum: number;          // Summe aller Werte im Bucket (für avg)
+  bucket_max: number;          // Max im Bucket
+  bucket_count: number;        // Anzahl Samples im Bucket
 }
 
 interface ConnState {
@@ -488,6 +494,22 @@ async function connect(state: ConnState): Promise<void> {
           entry.latest_value = ev.value;
           state.eventsReceived++;
           state.lastEventAt = Date.now();
+          // v1.5: Bucket-Aggregation für Power. Zählerstände (kWh) werden
+          // separat behandelt und laufen nicht in meter_power_readings_5min.
+          if (entry.role === "pwr") {
+            const bucket = Math.floor(Date.now() / 300000) * 300000;
+            if (entry.bucket_start !== bucket) {
+              // Bucket-Wechsel: alten Bucket wird per periodischem Flush geliefert.
+              entry.bucket_start = bucket;
+              entry.bucket_sum = 0;
+              entry.bucket_max = 0;
+              entry.bucket_count = 0;
+            }
+            const absV = Math.abs(ev.value);
+            entry.bucket_sum += ev.value;
+            entry.bucket_count += 1;
+            if (absV > Math.abs(entry.bucket_max)) entry.bucket_max = ev.value;
+          }
         }
       }
     },
@@ -637,6 +659,10 @@ async function connect(state: ConnState): Promise<void> {
           latest_value: null,
           last_pushed_value: null,
           last_pushed_at: 0,
+          bucket_start: 0,
+          bucket_sum: 0,
+          bucket_max: 0,
+          bucket_count: 0,
         });
         totalSubs++;
       }
@@ -992,6 +1018,10 @@ async function reloadMeters(): Promise<void> {
           latest_value: null,
           last_pushed_value: null,
           last_pushed_at: 0,
+          bucket_start: 0,
+          bucket_sum: 0,
+          bucket_max: 0,
+          bucket_count: 0,
         });
       }
     }
@@ -1113,6 +1143,88 @@ async function ackPendingWrite(id: string, success: boolean, errorMessage?: stri
   await ingestPost("ack-pending-write", { id, success, error_message: errorMessage ?? null });
 }
 
+// ─── 5-Min-Bucket-Flush ──────────────────────────────────────────────────────
+// v1.5: Worker aggregiert Power-Werte lokal in 5-Minuten-Buckets. Nur beim
+// Bucket-Wechsel (oder älter als 5 Min ohne neue Samples) wird EINE Zeile
+// pro Meter an gateway-ingest?action=bridge-power-5min gesendet. Ersetzt die
+// hohe Schreiblast über bridge_raw_samples komplett.
+async function flushBuckets(): Promise<void> {
+  if (workerPaused) return;
+  const now = Date.now();
+  const currentBucket = Math.floor(now / 300000) * 300000;
+  const readyByTenant = new Map<string, Array<{
+    meter_id: string;
+    tenant_id: string;
+    energy_type: string;
+    bucket: string;
+    power_avg: number;
+    power_max: number;
+    sample_count: number;
+  }>>();
+
+  for (const state of connections.values()) {
+    if (!state.authenticated) continue;
+    // Pro Meter nur EIN Bucket-Datensatz pro Flush (verschiedene State-UUIDs
+    // desselben Meters mit role="pwr" existieren praktisch nicht, aber wir
+    // koalieren defensiv über meter_id.)
+    const perMeter = new Map<string, { sum: number; max: number; count: number; bucket: number; entry: UuidEntry }>();
+    for (const entry of state.uuidMap.values()) {
+      if (entry.role !== "pwr") continue;
+      if (entry.bucket_count === 0 || entry.bucket_start === 0) continue;
+      // Bucket noch aktiv → nicht flushen
+      if (entry.bucket_start === currentBucket) continue;
+      const key = entry.meter_id;
+      const existing = perMeter.get(key);
+      if (existing) {
+        existing.sum += entry.bucket_sum;
+        existing.count += entry.bucket_count;
+        if (Math.abs(entry.bucket_max) > Math.abs(existing.max)) existing.max = entry.bucket_max;
+      } else {
+        perMeter.set(key, {
+          sum: entry.bucket_sum,
+          max: entry.bucket_max,
+          count: entry.bucket_count,
+          bucket: entry.bucket_start,
+          entry,
+        });
+      }
+      // Bucket-Zähler zurücksetzen — wird bei nächstem Sample neu befüllt.
+      entry.bucket_start = 0;
+      entry.bucket_sum = 0;
+      entry.bucket_max = 0;
+      entry.bucket_count = 0;
+    }
+
+    for (const [meterId, agg] of perMeter.entries()) {
+      const avg = agg.count > 0 ? agg.sum / agg.count : 0;
+      const arr = readyByTenant.get(agg.entry.tenant_id) ?? [];
+      arr.push({
+        meter_id: meterId,
+        tenant_id: agg.entry.tenant_id,
+        energy_type: agg.entry.energy_type,
+        bucket: new Date(agg.bucket).toISOString(),
+        power_avg: avg,
+        power_max: agg.max,
+        sample_count: agg.count,
+      });
+      readyByTenant.set(agg.entry.tenant_id, arr);
+    }
+  }
+
+  if (readyByTenant.size === 0) return;
+  const all: any[] = [];
+  for (const rows of readyByTenant.values()) all.push(...rows);
+  try {
+    const res = await ingestPost("bridge-power-5min", {
+      worker_name: BRIDGE_WORKER_NAME,
+      rows: all,
+    });
+    log("info", `[Bucket-Flush] ${all.length} Zeilen gesendet, upserted=${res?.upserted ?? "?"}`);
+  } catch (err) {
+    log("warn", `[Bucket-Flush] fehlgeschlagen: ${describeError(err)}`);
+  }
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -1150,6 +1262,10 @@ async function main() {
   await reloadMeters();
   setInterval(reloadMeters, RELOAD_INTERVAL_MS);
   setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
+  // v1.5: 5-Min-Bucket-Flush alle 60s prüfen — sendet abgeschlossene Buckets
+  // an gateway-ingest?action=bridge-power-5min (statt bridge_raw_samples).
+  setInterval(() => { flushBuckets().catch((e) => log("error", "flushBuckets:", e)); }, 60_000);
+  log("info", "[Bucket-Flush] aktiv: prüft alle 60s auf abgeschlossene 5-Min-Buckets");
 
   // Bridge-Heartbeat: hält bridge_workers.last_heartbeat_at frisch (Phase 2)
   setInterval(() => { bridgeHeartbeat("online").catch(() => { /* siehe bridgeHeartbeat */ }); }, BRIDGE_HEARTBEAT_MS);

@@ -1542,6 +1542,92 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
   return json({ success: true, inserted: rawRows.length, broadcast: broadcastRows.length, soc_updated: socUpdated, skipped, coalesced, delta_skipped: deltaSkipped });
 }
 
+/**
+ * POST ?action=bridge-power-5min
+ * Body: {
+ *   worker_name: string,
+ *   rows: [{
+ *     meter_id: string,
+ *     tenant_id: string,
+ *     energy_type: string,
+ *     bucket: string (ISO, 5-Min-aligned),
+ *     power_avg: number,
+ *     power_max: number,
+ *     sample_count: number
+ *   }]
+ * }
+ * Direkter Upsert in meter_power_readings_5min. Ersetzt den Umweg über
+ * bridge_raw_samples + 5-Min-Aggregator-Cron für alle Meter, deren Worker
+ * v1.5+ (Bucket-Aggregation) liefern. Source = 'bridge_ws'.
+ */
+async function handleBridgePower5min(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    worker_name?: string;
+    rows?: Array<{
+      meter_id?: string;
+      tenant_id?: string;
+      energy_type?: string;
+      bucket?: string;
+      power_avg?: number;
+      power_max?: number;
+      sample_count?: number;
+    }>;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.worker_name || !Array.isArray(body.rows) || body.rows.length === 0) {
+    return json({ error: "worker_name and non-empty rows[] required" }, 400);
+  }
+
+  const supabase = getSupabase();
+  const { data: worker } = await supabase
+    .from("bridge_workers")
+    .select("id")
+    .eq("name", body.worker_name)
+    .maybeSingle();
+  if (!worker) return json({ error: "unknown worker_name" }, 404);
+
+  const upsertRows: any[] = [];
+  let skipped = 0;
+  for (const r of body.rows) {
+    if (!r.meter_id || !r.tenant_id || !r.energy_type || !r.bucket ||
+        typeof r.power_avg !== "number" || !isFinite(r.power_avg) ||
+        typeof r.power_max !== "number" || !isFinite(r.power_max) ||
+        typeof r.sample_count !== "number" || r.sample_count <= 0) {
+      skipped++;
+      continue;
+    }
+    // Bucket auf 5-Min-Grid normalisieren (Sicherheit gegen Worker-Bugs).
+    const ts = new Date(r.bucket).getTime();
+    if (!isFinite(ts)) { skipped++; continue; }
+    const alignedMs = Math.floor(ts / 300000) * 300000;
+    upsertRows.push({
+      meter_id: r.meter_id,
+      tenant_id: r.tenant_id,
+      energy_type: r.energy_type,
+      bucket: new Date(alignedMs).toISOString(),
+      power_avg: r.power_avg,
+      power_max: r.power_max,
+      sample_count: r.sample_count,
+      resolution_minutes: 5,
+      source: "bridge_ws",
+    });
+  }
+
+  if (upsertRows.length === 0) {
+    return json({ success: true, upserted: 0, skipped });
+  }
+
+  const { error } = await supabase
+    .from("meter_power_readings_5min")
+    .upsert(upsertRows, { onConflict: "meter_id,bucket,resolution_minutes" });
+  if (error) return json({ success: false, error: error.message }, 500);
+
+  return json({ success: true, upserted: upsertRows.length, skipped });
+
 /* ── Loxone Remote-Connect WebSocket Feldtest ───────────────────────────────── */
 
 
@@ -2456,6 +2542,7 @@ Deno.serve(async (req) => {
     if (action === "bridge-heartbeat") return handleBridgeHeartbeat(req);
     if (action === "bridge-log-event") return handleBridgeLogEvent(req);
     if (action === "bridge-readings") return handleBridgeReadings(req);
+    if (action === "bridge-power-5min") return handleBridgePower5min(req);
     if (action === "gateway-backup") return handleGatewayBackup(req);
     if (action === "gateway-command") return handleGatewayCommand(req);
     if (action === "push-execution-logs") return handlePushExecutionLogs(req);
