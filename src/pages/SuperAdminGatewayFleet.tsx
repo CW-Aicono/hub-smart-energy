@@ -679,7 +679,7 @@ const SuperAdminGatewayFleet = () => {
                 <div className="relative ml-2">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Suchen (Tenant, Liegenschaft, Typ, Worker)…"
+                    placeholder="Suchen (Tenant, Liegenschaft, Typ, Worker, Seriennummer)…"
                     value={fleetSearch}
                     onChange={(e) => setFleetSearch(e.target.value)}
                     className="pl-8 h-9 w-72"
