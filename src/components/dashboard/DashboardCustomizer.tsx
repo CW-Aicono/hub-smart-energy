@@ -5,10 +5,13 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Settings2, GripVertical, RotateCcw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Settings2, GripVertical, RotateCcw, AlertCircle } from "lucide-react";
 import { DashboardWidget, WidgetSize } from "@/hooks/useDashboardWidgets";
 import { useTranslation } from "@/hooks/useTranslation";
 import { cn } from "@/lib/utils";
+import { widgetUnavailableReason } from "@/lib/widgetRequirements";
+import type { WidgetAvailabilitySignals } from "@/lib/widgetRequirements";
 
 interface DashboardCustomizerProps {
   widgets: DashboardWidget[];
@@ -17,6 +20,7 @@ interface DashboardCustomizerProps {
   onResizeWidget: (widgetType: string, size: WidgetSize) => void;
   onResetLayout?: () => void;
   customWidgetNames?: Record<string, string>;
+  availabilitySignals?: WidgetAvailabilitySignals | null;
 }
 
 const WIDGET_LABEL_KEYS: Record<string, string> = {
