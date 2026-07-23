@@ -72,29 +72,8 @@ function isSensorOnly(sensor: LoxoneSensor): boolean {
   return !isMeterDevice(sensor) && !isActuator(sensor);
 }
 
-function getSensorIcon(type: string) {
-  const cls = "h-4 w-4";
-  switch (type) {
-    case "temperature": return <Thermometer className={cls} />;
-    case "switch":
-    case "digital":
-    case "button": return <ToggleLeft className={cls} />;
-    case "light": return <Lightbulb className={cls} />;
-    case "blind": return <DoorOpen className={cls} />;
-    case "power": return <Gauge className={cls} />;
-    case "motion": return <Activity className={cls} />;
-    default: return <Server className={cls} />;
-  }
-}
 
-function getUnitIcon(unit: string) {
-  const cls = "h-4 w-4";
-  const u = (unit || "").toLowerCase();
-  if (u === "°c" || u === "°f" || u === "k") return <Thermometer className={cls} />;
-  if (u === "kwh" || u === "kw" || u === "w" || u === "wh") return <Zap className={cls} />;
-  if (u === "v" || u === "a") return <Activity className={cls} />;
-  return <Gauge className={cls} />;
-}
+
 
 type DeviceSortKey = "type" | "name" | "room" | "assignedRoom" | "gateway" | "controlType" | "value" | "status";
 
