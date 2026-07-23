@@ -54,6 +54,8 @@ interface ChargePointsMapProps {
   showLocateButton?: boolean;
   showEditPositionButton?: boolean;
   externalUserPos?: [number, number] | null;
+  editMode?: boolean;
+  onEditModeChange?: (v: boolean) => void;
 }
 
 const statusVariantMap: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
