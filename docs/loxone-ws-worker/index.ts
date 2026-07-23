@@ -304,6 +304,12 @@ interface UuidEntry {
   latest_value: number | null;
   last_pushed_value: number | null;
   last_pushed_at: number; // ms epoch
+  // v1.5: Worker-seitige 5-Min-Aggregation für Power (role="pwr").
+  // Bucket-Start = Math.floor(ts / 300000) * 300000 (ms).
+  bucket_start: number;        // ms epoch, 0 = kein aktiver Bucket
+  bucket_sum: number;          // Summe aller Werte im Bucket (für avg)
+  bucket_max: number;          // Max im Bucket
+  bucket_count: number;        // Anzahl Samples im Bucket
 }
 
 interface ConnState {
