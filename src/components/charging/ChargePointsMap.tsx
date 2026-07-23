@@ -300,18 +300,13 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
         </div>
       )}
 
-      {/* Place-charge-points button (top-right, labelled) */}
-      {showEditPositionButton && (
+      {/* Place-charge-points button (top-right, labelled) — only when uncontrolled */}
+      {showEditPositionButton && editModeProp === undefined && (
         <div className="absolute top-3 right-3 z-[1000]">
           <Button
             size="sm"
-            variant={editMode ? "default" : "secondary"}
-            className={cn(
-              "shadow-lg backdrop-blur-sm border rounded-full gap-2",
-              editMode
-                ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "bg-background/95"
-            )}
+            variant="default"
+            className="shadow-lg rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
             onClick={() => setEditMode((v) => !v)}
           >
             {editMode ? (
