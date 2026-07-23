@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode, Settings, Shield, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Globe, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode, Settings, Shield, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Globe, ArrowUp, ArrowDown, ArrowUpDown, Move, Check } from "lucide-react";
 import PublicStatusLinkDialog from "@/components/charging/PublicStatusLinkDialog";
 import { toast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -53,6 +53,7 @@ const ChargingPoints = () => {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const { chargePoints, isLoading, addChargePoint, updateChargePoint, deleteChargePoint } = useChargePoints();
+  const [mapEditMode, setMapEditMode] = useState(false);
   const { locations } = useLocations();
   const { sessions } = useChargingSessions();
   const { chargerModels, vendors: knownVendors, getModelsForVendor } = useChargerModels();
@@ -756,8 +757,28 @@ const ChargingPoints = () => {
 
           {/* Map */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
               <CardTitle>{t("charging.chargePointLocations" as any)}</CardTitle>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={() => setMapEditMode((v) => !v)}
+                >
+                  {mapEditMode ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      Fertig
+                    </>
+                  ) : (
+                    <>
+                      <Move className="h-4 w-4" />
+                      Ladepunkte platzieren
+                    </>
+                  )}
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               <Suspense fallback={<div className="h-[400px] rounded-lg border bg-muted/50 flex items-center justify-center"><div className="animate-pulse text-muted-foreground">{t("charging.mapLoading" as any)}</div></div>}>
@@ -765,6 +786,8 @@ const ChargingPoints = () => {
                   chargePoints={effectiveFilteredChargePoints}
                   onChargePointClick={(cp) => navigate(demoPath(`/charging/points/${cp.id}`))}
                   showEditPositionButton={isAdmin}
+                  editMode={mapEditMode}
+                  onEditModeChange={setMapEditMode}
                   onPositionChange={isAdmin ? (cpId, lat, lng) => {
                     updateChargePoint.mutate({ id: cpId, latitude: lat, longitude: lng });
                   } : undefined}

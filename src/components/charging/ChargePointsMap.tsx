@@ -54,6 +54,8 @@ interface ChargePointsMapProps {
   showLocateButton?: boolean;
   showEditPositionButton?: boolean;
   externalUserPos?: [number, number] | null;
+  editMode?: boolean;
+  onEditModeChange?: (v: boolean) => void;
 }
 
 const statusVariantMap: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -133,12 +135,18 @@ function BoundsTracker({ points, onVisiblePointsChange }: { points: ChargePointF
   return null;
 }
 
-export default function ChargePointsMap({ chargePoints, onChargePointClick, onVisiblePointsChange, onPositionChange, className, showLocateButton = false, showEditPositionButton = false, externalUserPos }: ChargePointsMapProps) {
+export default function ChargePointsMap({ chargePoints, onChargePointClick, onVisiblePointsChange, onPositionChange, className, showLocateButton = false, showEditPositionButton = false, externalUserPos, editMode: editModeProp, onEditModeChange }: ChargePointsMapProps) {
   const { t } = useTranslation();
   const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   const [userPos, setUserPos] = useState<[number, number] | null>(externalUserPos || null);
   const [locating, setLocating] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [editModeInternal, setEditModeInternal] = useState(false);
+  const editMode = editModeProp ?? editModeInternal;
+  const setEditMode = (updater: boolean | ((v: boolean) => boolean)) => {
+    const next = typeof updater === "function" ? (updater as (v: boolean) => boolean)(editMode) : updater;
+    if (onEditModeChange) onEditModeChange(next);
+    else setEditModeInternal(next);
+  };
 
   // Sync external user position
   useEffect(() => {
@@ -292,18 +300,13 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
         </div>
       )}
 
-      {/* Place-charge-points button (top-right, labelled) */}
-      {showEditPositionButton && (
+      {/* Place-charge-points button (top-right, labelled) — only when uncontrolled */}
+      {showEditPositionButton && editModeProp === undefined && (
         <div className="absolute top-3 right-3 z-[1000]">
           <Button
             size="sm"
-            variant={editMode ? "default" : "secondary"}
-            className={cn(
-              "shadow-lg backdrop-blur-sm border rounded-full gap-2",
-              editMode
-                ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "bg-background/95"
-            )}
+            variant="default"
+            className="shadow-lg rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
             onClick={() => setEditMode((v) => !v)}
           >
             {editMode ? (
