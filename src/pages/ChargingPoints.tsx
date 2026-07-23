@@ -764,10 +764,10 @@ const ChargingPoints = () => {
                 <LazyChargePointsMap
                   chargePoints={effectiveFilteredChargePoints}
                   onChargePointClick={(cp) => navigate(demoPath(`/charging/points/${cp.id}`))}
-                  showEditPositionButton={true}
-                  onPositionChange={(cpId, lat, lng) => {
+                  showEditPositionButton={isAdmin}
+                  onPositionChange={isAdmin ? (cpId, lat, lng) => {
                     updateChargePoint.mutate({ id: cpId, latitude: lat, longitude: lng });
-                  }}
+                  } : undefined}
                 />
               </Suspense>
             </CardContent>

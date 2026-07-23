@@ -37,6 +37,7 @@ import { filterAssignedGatewayDevices } from "@/lib/gatewayDeviceFiltering";
 import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
 import { LocationChargingInfrastructure } from "./LocationChargingInfrastructure";
 import { confirmDialog } from "@/components/ui/confirm-dialog";
+import { getDeviceIconForSensor, getDeviceIconForMeter } from "@/lib/deviceIcons";
 
 interface MeterManagementProps {
   locationId: string;
@@ -71,29 +72,8 @@ function isSensorOnly(sensor: LoxoneSensor): boolean {
   return !isMeterDevice(sensor) && !isActuator(sensor);
 }
 
-function getSensorIcon(type: string) {
-  const cls = "h-4 w-4";
-  switch (type) {
-    case "temperature": return <Thermometer className={cls} />;
-    case "switch":
-    case "digital":
-    case "button": return <ToggleLeft className={cls} />;
-    case "light": return <Lightbulb className={cls} />;
-    case "blind": return <DoorOpen className={cls} />;
-    case "power": return <Gauge className={cls} />;
-    case "motion": return <Activity className={cls} />;
-    default: return <Server className={cls} />;
-  }
-}
 
-function getUnitIcon(unit: string) {
-  const cls = "h-4 w-4";
-  const u = (unit || "").toLowerCase();
-  if (u === "°c" || u === "°f" || u === "k") return <Thermometer className={cls} />;
-  if (u === "kwh" || u === "kw" || u === "w" || u === "wh") return <Zap className={cls} />;
-  if (u === "v" || u === "a") return <Activity className={cls} />;
-  return <Gauge className={cls} />;
-}
+
 
 type DeviceSortKey = "type" | "name" | "room" | "assignedRoom" | "gateway" | "controlType" | "value" | "status";
 
@@ -126,7 +106,7 @@ function DeviceTable({
   onToggleAll,
 }: {
   devices: (LoxoneSensor & { _integrationLabel: string; _integrationId: string })[];
-  type: "sensor" | "actuator";
+  type: "meter" | "sensor" | "actuator";
   meters: Meter[];
   roomNameById: Map<string, string>;
   onEditMeter: (meter: Meter) => void;
@@ -268,7 +248,12 @@ function DeviceTable({
               )}
               <TableCell>
                 <div className="p-1.5 rounded bg-muted w-fit">
-                  {d.unit ? getUnitIcon(d.unit) : getSensorIcon(d.type)}
+                  {(() => {
+                    const linked = sensorUuidToMeter.get(d.id);
+                    const dbType = ((linked as any)?.device_type as "meter" | "sensor" | "actuator" | undefined) || type;
+                    const Icon = getDeviceIconForSensor(d, dbType);
+                    return <Icon className="h-4 w-4" />;
+                  })()}
                 </div>
               </TableCell>
 
@@ -860,7 +845,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                   <DeviceTable
                     roomNameById={roomNameById}
                     devices={list}
-                    type="sensor"
+                    type="meter"
                     meters={meters}
                     onEditMeter={(m) => setEditingMeter(m)}
                     onCreateAndEdit={(d) => handleCreateAndEdit(d, "meter")}

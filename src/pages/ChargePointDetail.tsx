@@ -1188,6 +1188,15 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                             latitude={coords.lat}
                             longitude={coords.lng}
                             alwaysEditable
+                            currentName={form.name}
+                            otherPoints={chargePoints
+                              .filter((c) => c.id !== id && c.latitude != null && c.longitude != null)
+                              .map((c) => ({
+                                id: c.id,
+                                name: c.name,
+                                latitude: c.latitude as number,
+                                longitude: c.longitude as number,
+                              }))}
                             onPositionChange={(lat, lng) => setCoords({ lat, lng })}
                           />
                           <p className="text-xs text-muted-foreground mt-1">
