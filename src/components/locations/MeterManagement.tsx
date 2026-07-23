@@ -866,7 +866,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                   <DeviceTable
                     roomNameById={roomNameById}
                     devices={list}
-                    type="sensor"
+                    type="meter"
                     meters={meters}
                     onEditMeter={(m) => setEditingMeter(m)}
                     onCreateAndEdit={(d) => handleCreateAndEdit(d, "meter")}
