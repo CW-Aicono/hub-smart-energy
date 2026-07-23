@@ -1,7 +1,7 @@
 import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
-import { Icon } from "leaflet";
+import { MapContainer, TileLayer, Marker, Tooltip, useMap } from "react-leaflet";
+import { Icon, LatLngBounds } from "leaflet";
 import type { Marker as LeafletMarker } from "leaflet";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { LocateFixed, Loader2, Move, Check, MapPin } from "lucide-react";
 import { toast } from "sonner";
 
 const PRIMARY = "#22c55e";
+const OTHER = "#94a3b8";
 
 function createIcon(color: string) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 41" width="25" height="41">
@@ -39,6 +40,25 @@ function Recenter({ pos }: { pos: [number, number] }) {
   return null;
 }
 
+function FitBoundsOnce({ points }: { points: Array<[number, number]> }) {
+  const map = useMap();
+  const didFit = useRef(false);
+  useEffect(() => {
+    if (didFit.current || points.length < 2) return;
+    const bounds = new LatLngBounds(points);
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 });
+    didFit.current = true;
+  }, [map, points]);
+  return null;
+}
+
+export interface OtherChargePoint {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+}
+
 interface SingleChargePointMapProps {
   latitude: number | null;
   longitude: number | null;
@@ -48,6 +68,10 @@ interface SingleChargePointMapProps {
   alwaysEditable?: boolean;
   /** When true, marker is locked: no drag, no edit/locate buttons, no hint banner. */
   readOnly?: boolean;
+  /** Other charge points to display for orientation (non-draggable). */
+  otherPoints?: OtherChargePoint[];
+  /** Name of the current charge point (shown in the top hint capsule). */
+  currentName?: string;
   className?: string;
 }
 
@@ -63,6 +87,8 @@ export default function SingleChargePointMap({
   onPositionChange,
   alwaysEditable = false,
   readOnly = false,
+  otherPoints,
+  currentName,
   className,
 }: SingleChargePointMapProps) {
 
@@ -71,6 +97,7 @@ export default function SingleChargePointMap({
     ("ontouchstart" in window || navigator.maxTouchPoints > 0);
   const [editMode, setEditMode] = useState(alwaysEditable);
   const [locating, setLocating] = useState(false);
+  const [selectedOtherId, setSelectedOtherId] = useState<string | null>(null);
   const markerRef = useRef<LeafletMarker | null>(null);
 
   useEffect(() => {
@@ -81,6 +108,19 @@ export default function SingleChargePointMap({
     if (latitude == null || longitude == null) return null;
     return [latitude, longitude];
   }, [latitude, longitude]);
+
+  const hasOthers = !readOnly && (otherPoints?.length ?? 0) > 0;
+  const boundsPoints = useMemo<Array<[number, number]>>(() => {
+    if (!center) return [];
+    const pts: Array<[number, number]> = [center];
+    otherPoints?.forEach((p) => pts.push([p.latitude, p.longitude]));
+    return pts;
+  }, [center, otherPoints]);
+
+  const selectedOther = useMemo(
+    () => otherPoints?.find((p) => p.id === selectedOtherId) ?? null,
+    [otherPoints, selectedOtherId],
+  );
 
   if (!center) {
     return (
@@ -143,7 +183,29 @@ export default function SingleChargePointMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapInvalidator />
-        <Recenter pos={center} />
+        {hasOthers ? (
+          <FitBoundsOnce points={boundsPoints} />
+        ) : (
+          <Recenter pos={center} />
+        )}
+
+        {hasOthers &&
+          otherPoints!.map((p) => (
+            <Marker
+              key={p.id}
+              position={[p.latitude, p.longitude]}
+              icon={createIcon(OTHER)}
+              draggable={false}
+              eventHandlers={{
+                click: () => setSelectedOtherId(p.id),
+              }}
+            >
+              <Tooltip direction="top" offset={[0, -30]} opacity={0.95}>
+                {p.name}
+              </Tooltip>
+            </Marker>
+          ))}
+
         <Marker
           ref={(ref) => {
             markerRef.current = ref;
@@ -155,6 +217,7 @@ export default function SingleChargePointMap({
             readOnly
               ? {}
               : {
+                  click: () => setSelectedOtherId(null),
                   dragend: (e) => {
                     const m = e.target as LeafletMarker;
                     const pos = m.getLatLng();
@@ -163,13 +226,27 @@ export default function SingleChargePointMap({
                   },
                 }
           }
-        />
+        >
+          {currentName && (
+            <Tooltip direction="top" offset={[0, -30]} opacity={0.95}>
+              {currentName}
+            </Tooltip>
+          )}
+        </Marker>
       </MapContainer>
 
       {!readOnly && editMode && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-primary text-primary-foreground px-4 py-2 rounded-full shadow-lg text-sm font-medium flex items-center gap-2">
-          <Move className="h-4 w-4" />
-          Marker an die exakte Position ziehen
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-primary text-primary-foreground px-4 py-2 rounded-full shadow-lg text-sm font-medium flex items-center gap-2 max-w-[90%]">
+          <Move className="h-4 w-4 shrink-0" />
+          {selectedOther ? (
+            <span className="truncate">
+              {selectedOther.name} – nur Anzeige (zum Bearbeiten diesen Ladepunkt öffnen)
+            </span>
+          ) : (
+            <span className="truncate">
+              {currentName ? `${currentName} – ` : ""}Marker an die exakte Position ziehen
+            </span>
+          )}
         </div>
       )}
 
@@ -217,4 +294,3 @@ export default function SingleChargePointMap({
     </div>
   );
 }
-
