@@ -268,7 +268,12 @@ function DeviceTable({
               )}
               <TableCell>
                 <div className="p-1.5 rounded bg-muted w-fit">
-                  {d.unit ? getUnitIcon(d.unit) : getSensorIcon(d.type)}
+                  {(() => {
+                    const linked = sensorUuidToMeter.get(d.id);
+                    const dbType = ((linked as any)?.device_type as "meter" | "sensor" | "actuator" | undefined) || type;
+                    const Icon = getDeviceIconForSensor(d, dbType);
+                    return <Icon className="h-4 w-4" />;
+                  })()}
                 </div>
               </TableCell>
 
