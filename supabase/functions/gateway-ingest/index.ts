@@ -32,6 +32,10 @@ const json = (body: unknown, status = 200) =>
 const LOXONE_WS_IO_EMERGENCY_PAUSE = false;
 const LOXONE_WS_IO_PAUSED_ACTIONS = new Set<string>([]);
 
+// Modul-globaler LRU-Cache pro warmer Function-Instanz. Key: `${serial}|${uuid}`.
+// Wird für den Delta-Guard in handleBridgeReadings verwendet.
+const bridgeRawLastCache = new Map<string, { value: number; atMs: number }>();
+
 async function handleLoxoneWsEmergencyPause(req: Request, action: string | null): Promise<Response> {
   const _auth = await validateApiKey(req);
   if (isAuthError(_auth)) return _auth;
