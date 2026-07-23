@@ -161,14 +161,33 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
     ? await supabase.from("tenants").select("id, name").in("id", tenantIds)
     : { data: [] as any[] };
 
+  // Miniserver-Seriennummern pro (tenant_id, location_id) auflösen
+  const { data: links } = tenantIds.length && locationIds.length
+    ? await supabase
+        .from("bridge_miniserver_links")
+        .select("tenant_id, location_id, miniserver_serial")
+        .in("tenant_id", tenantIds)
+        .in("location_id", locationIds)
+    : { data: [] as any[] };
+  const serialsByKey = new Map<string, string[]>();
+  (links ?? []).forEach((l: any) => {
+    if (!l.tenant_id || !l.location_id || !l.miniserver_serial) return;
+    const k = `${l.tenant_id}:${l.location_id}`;
+    const arr = serialsByKey.get(k) ?? [];
+    if (!arr.includes(l.miniserver_serial)) arr.push(l.miniserver_serial);
+    serialsByKey.set(k, arr);
+  });
+
   const locById = new Map((locations ?? []).map((l: any) => [l.id, l]));
   const tenantById = new Map((tenants ?? []).map((t: any) => [t.id, t]));
-  const infoMap = new Map<string, { tenant: string; location: string }>();
+  const infoMap = new Map<string, { tenant: string; location: string; serials: string[] }>();
   (integrations ?? []).forEach((it: any) => {
-    const loc = locById.get(it.location_id);
-    const tenant = loc ? tenantById.get(loc.tenant_id) : null;
-    infoMap.set(it.id, { tenant: tenant?.name ?? "—", location: loc?.name ?? "—" });
+    const loc: any = locById.get(it.location_id);
+    const tenant: any = loc ? tenantById.get(loc.tenant_id) : null;
+    const serials = loc && tenant ? (serialsByKey.get(`${tenant.id}:${loc.id}`) ?? []) : [];
+    infoMap.set(it.id, { tenant: tenant?.name ?? "—", location: loc?.name ?? "—", serials });
   });
+
 
   const now = Date.now();
   const windowStart = now - LOOKBACK_MS;
