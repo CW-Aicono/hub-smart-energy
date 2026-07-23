@@ -100,6 +100,7 @@ function WorkerRow({ w, onToggle }: { w: WorkerControl; onToggle: (next: boolean
             className="mt-1"
           />
         </div>
+        {w.worker_key === "loxone_ws_worker" && <LoxoneStaleThresholdEditor />}
       </CardContent>
 
       <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
