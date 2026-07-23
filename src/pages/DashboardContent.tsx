@@ -192,6 +192,7 @@ const DashboardContent = () => {
                 onToggleVisibility={toggleWidgetVisibility}
                 onReorder={reorderWidgets}
                 onResizeWidget={updateWidgetSize}
+                availabilitySignals={availabilitySignals}
                 customWidgetNames={Object.fromEntries(
                   customWidgetDefs.map((d) => [`custom_${d.id}`, d.name])
                 )}
