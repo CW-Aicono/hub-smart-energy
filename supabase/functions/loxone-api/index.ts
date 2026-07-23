@@ -1716,7 +1716,14 @@ serve(async (req) => {
                     energy_type: meter.energy_type,
                     recorded_at: now.toISOString(),
                   });
+                  fallbackCandidates.push({
+                    meter_id: meter.id,
+                    tenant_id: meter.tenant_id,
+                    energy_type: meter.energy_type,
+                    power_value: powerVal,
+                  });
                 }
+
               }
             }
           }
