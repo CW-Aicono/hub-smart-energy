@@ -1627,6 +1627,7 @@ async function handleBridgePower5min(req: Request): Promise<Response> {
   if (error) return json({ success: false, error: error.message }, 500);
 
   return json({ success: true, upserted: upsertRows.length, skipped });
+}
 
 /* ── Loxone Remote-Connect WebSocket Feldtest ───────────────────────────────── */
 
