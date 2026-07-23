@@ -757,8 +757,28 @@ const ChargingPoints = () => {
 
           {/* Map */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
               <CardTitle>{t("charging.chargePointLocations" as any)}</CardTitle>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={() => setMapEditMode((v) => !v)}
+                >
+                  {mapEditMode ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      Fertig
+                    </>
+                  ) : (
+                    <>
+                      <Move className="h-4 w-4" />
+                      Ladepunkte platzieren
+                    </>
+                  )}
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               <Suspense fallback={<div className="h-[400px] rounded-lg border bg-muted/50 flex items-center justify-center"><div className="animate-pulse text-muted-foreground">{t("charging.mapLoading" as any)}</div></div>}>
@@ -766,6 +786,8 @@ const ChargingPoints = () => {
                   chargePoints={effectiveFilteredChargePoints}
                   onChargePointClick={(cp) => navigate(demoPath(`/charging/points/${cp.id}`))}
                   showEditPositionButton={isAdmin}
+                  editMode={mapEditMode}
+                  onEditModeChange={setMapEditMode}
                   onPositionChange={isAdmin ? (cpId, lat, lng) => {
                     updateChargePoint.mutate({ id: cpId, latitude: lat, longitude: lng });
                   } : undefined}
