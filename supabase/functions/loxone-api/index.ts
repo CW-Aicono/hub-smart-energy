@@ -1456,6 +1456,18 @@ serve(async (req) => {
             recorded_at: string;
           }> = [];
 
+          // Fallback für meter_power_readings_5min: wird nur beschrieben,
+          // wenn der Loxone-WS-Worker seit >2 Poll-Intervallen keinen
+          // bridge_ws-Bucket geliefert hat. So bleibt der Chart gefüllt,
+          // wenn der Worker offline ist. Siehe Phase 4a im Plan.
+          const fallbackCandidates: Array<{
+            meter_id: string;
+            tenant_id: string;
+            energy_type: string;
+            power_value: number;
+          }> = [];
+
+
           // Kumulative Zählerstands-Snapshots (für intervall-unabhängige Ist-Berechnung)
           const cumulativeInserts: Array<{
             tenant_id: string;
