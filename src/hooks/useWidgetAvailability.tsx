@@ -19,11 +19,41 @@ export function useWidgetAvailability(selectedLocationId: string | null) {
     queryKey: ["widget-availability", tenantId, selectedLocationId],
     enabled: !!tenantId,
     staleTime: 5 * 60 * 1000,
-    queryFn: async (): Promise<Omit<WidgetAvailabilitySignals, "arbitrageModuleEnabled" | "gainSharingModuleEnabled">> => {
-      const locFilter = <T extends { eq: (col: string, val: string) => T }>(q: T) =>
-        selectedLocationId ? q.eq("location_id", selectedLocationId) : q;
-
+    queryFn: async (): Promise<
+      Omit<WidgetAvailabilitySignals, "arbitrageModuleEnabled" | "gainSharingModuleEnabled">
+    > => {
+      const loc = selectedLocationId;
       const head = { count: "exact" as const, head: true };
+
+      // Build queries; conditionally apply location filter after typing narrows.
+      const metersQ = supabase.from("meters").select("id", head).eq("tenant_id", tenantId!);
+      const pvSourceQ = supabase
+        .from("location_energy_sources")
+        .select("id", head)
+        .eq("tenant_id", tenantId!)
+        .eq("energy_type", "pv");
+      const pvMeterQ = supabase
+        .from("meters")
+        .select("id", head)
+        .eq("tenant_id", tenantId!)
+        .eq("energy_type", "pv");
+      const gasHeatMeterQ = supabase
+        .from("meters")
+        .select("id", head)
+        .eq("tenant_id", tenantId!)
+        .in("energy_type", ["gas", "heat", "heating"]);
+      const floorsQ = supabase.from("floors").select("id", head).not("floor_plan_url", "is", null);
+      const energyPricesQ = supabase.from("energy_prices").select("id", head).eq("tenant_id", tenantId!);
+      const dynamicPriceQ = supabase
+        .from("energy_prices")
+        .select("id", head)
+        .eq("tenant_id", tenantId!)
+        .eq("is_dynamic", true);
+      const integrationErrQ = supabase
+        .from("integration_errors")
+        .select("id", head)
+        .eq("tenant_id", tenantId!)
+        .is("resolved_at", null);
 
       const [
         metersRes,
@@ -40,20 +70,18 @@ export function useWidgetAvailability(selectedLocationId: string | null) {
         integrationErrRes,
         locationCountRes,
       ] = await Promise.all([
-        locFilter(supabase.from("meters").select("id", head).eq("tenant_id", tenantId!)),
-        locFilter(supabase.from("location_energy_sources").select("id", head).eq("tenant_id", tenantId!).eq("energy_type", "pv")),
-        locFilter(supabase.from("meters").select("id", head).eq("tenant_id", tenantId!).eq("energy_type", "pv")),
-        locFilter(supabase.from("meters").select("id", head).eq("tenant_id", tenantId!).in("energy_type", ["gas", "heat", "heating"])),
-        selectedLocationId
-          ? supabase.from("floors").select("id", head).eq("location_id", selectedLocationId).not("floor_plan_url", "is", null)
-          : supabase.from("floors").select("id", head).not("floor_plan_url", "is", null),
-        locFilter(supabase.from("energy_prices").select("id", head).eq("tenant_id", tenantId!)),
+        loc ? metersQ.eq("location_id", loc) : metersQ,
+        loc ? pvSourceQ.eq("location_id", loc) : pvSourceQ,
+        loc ? pvMeterQ.eq("location_id", loc) : pvMeterQ,
+        loc ? gasHeatMeterQ.eq("location_id", loc) : gasHeatMeterQ,
+        loc ? floorsQ.eq("location_id", loc) : floorsQ,
+        loc ? energyPricesQ.eq("location_id", loc) : energyPricesQ,
         supabase.from("tenant_electricity_tariffs").select("id", head).eq("tenant_id", tenantId!),
-        locFilter(supabase.from("energy_prices").select("id", head).eq("tenant_id", tenantId!).eq("is_dynamic", true)),
+        loc ? dynamicPriceQ.eq("location_id", loc) : dynamicPriceQ,
         supabase.from("arbitrage_strategies").select("id", head).eq("tenant_id", tenantId!).eq("is_active", true),
         supabase.from("ppa_contracts").select("id", head).eq("tenant_id", tenantId!),
         supabase.from("tenant_savings_contracts").select("id", head).eq("tenant_id", tenantId!),
-        locFilter(supabase.from("integration_errors").select("id", head).eq("tenant_id", tenantId!).is("resolved_at", null)),
+        loc ? integrationErrQ.eq("location_id", loc) : integrationErrQ,
         supabase.from("locations").select("id", head).eq("tenant_id", tenantId!),
       ]);
 
