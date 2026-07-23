@@ -45,17 +45,14 @@ function svc(): SupabaseClient {
 const VALID_CHANNELS = new Set(["stable", "beta", "dev"]);
 
 async function resolveSuperAdmin(token: string) {
-  const sb = createClient(SUPABASE_URL, ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false },
-  });
-  const { data } = await sb.auth.getUser();
-  if (!data?.user) return null;
-  const { data: row } = await svc()
+  const admin = svc();
+  const { data: userRes, error: userErr } = await admin.auth.getUser(token);
+  if (userErr || !userRes?.user) return null;
+  const { data: row } = await admin
     .from("user_roles").select("role")
-    .eq("user_id", data.user.id).eq("role", "super_admin").maybeSingle();
+    .eq("user_id", userRes.user.id).eq("role", "super_admin").maybeSingle();
   if (!row) return null;
-  return data.user.id;
+  return userRes.user.id;
 }
 
 async function enqueueUpdateCommand(jobId: string, deviceId: string, tenantId: string | null, imageRef: string, version: string) {
