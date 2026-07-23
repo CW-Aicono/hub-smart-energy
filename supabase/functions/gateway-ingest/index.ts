@@ -1350,6 +1350,13 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
   const socRows: Array<{ tenant_id: string; uuid: string; value: number; at: string }> = [];
   const socReadingRows: Array<{ storage_id: string; tenant_id: string; sensor_uuid: string; soc_pct: number; recorded_at: string; source: string }> = [];
   let skipped = 0;
+  let coalesced = 0;
+  let deltaSkipped = 0;
+
+  // Phase A: Batch-Coalescing — mehrere Readings desselben Sensors innerhalb
+  // eines Requests werden auf den letzten Wert reduziert (Broadcast trotzdem
+  // für alle Events, damit die Live-UI keine Zwischenwerte verliert).
+  const lastByUuid = new Map<string, { value: number; at: string; role: Role; miniserver_serial: string }>();
   for (const r of body.readings) {
     if (!r.miniserver_serial || !r.sensor_uuid || typeof r.value !== "number" || !isFinite(r.value)) {
       skipped++;
@@ -1361,20 +1368,50 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     const at = r.recorded_at ?? new Date().toISOString();
     broadcastRows.push({ tenant_id: link?.tenant_id ?? null, uuid, value: r.value, at, role });
     if (role === "pwr") {
-      rawRows.push({
-        worker_id: worker.id,
-        link_id: link?.id ?? null,
-        tenant_id: link?.tenant_id ?? null,
-        miniserver_serial: r.miniserver_serial,
-        uuid,
-        value: r.value,
-        received_at: at,
-      });
+      const key = `${r.miniserver_serial}|${uuid}`;
+      if (lastByUuid.has(key)) coalesced++;
+      lastByUuid.set(key, { value: r.value, at, role, miniserver_serial: r.miniserver_serial });
     } else if (role === "soc") {
       if (link?.tenant_id && r.value >= 0 && r.value <= 100) {
         socRows.push({ tenant_id: link.tenant_id, uuid, value: r.value, at });
       }
     }
+  }
+
+  // Phase B: In-Memory Delta-Guard pro warmer Function-Instanz. Skippt Inserts,
+  // wenn |Δ| < 5 W (abs) UND < 1% (rel) UND letzter Insert < 60s her.
+  // Cold-Start setzt den Cache zurück → nach Boot wird jeder Sensor 1x geschrieben.
+  const now = Date.now();
+  for (const [key, s] of lastByUuid.entries()) {
+    const link = linkCache.get(s.miniserver_serial);
+    const prev = bridgeRawLastCache.get(key);
+    const atMs = new Date(s.at).getTime();
+    if (prev) {
+      const dv = Math.abs(s.value - prev.value);
+      const rel = prev.value !== 0 ? dv / Math.abs(prev.value) : Infinity;
+      const ageMs = atMs - prev.atMs;
+      if (dv < 5 && rel < 0.01 && ageMs < 60_000) {
+        deltaSkipped++;
+        continue;
+      }
+    }
+    const uuid = key.split("|")[1];
+    rawRows.push({
+      worker_id: worker.id,
+      link_id: link?.id ?? null,
+      tenant_id: link?.tenant_id ?? null,
+      miniserver_serial: s.miniserver_serial,
+      uuid,
+      value: s.value,
+      received_at: s.at,
+    });
+    bridgeRawLastCache.set(key, { value: s.value, atMs });
+  }
+  // LRU-Grenze verhindert Speicherleck bei sehr vielen Sensoren.
+  if (bridgeRawLastCache.size > 5000) {
+    const excess = bridgeRawLastCache.size - 5000;
+    let i = 0;
+    for (const k of bridgeRawLastCache.keys()) { if (i++ >= excess) break; bridgeRawLastCache.delete(k); }
   }
 
   // Power-Werte in bridge_raw_samples persistieren (für 5-Min-Aggregator).
