@@ -164,6 +164,17 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
     return m;
   }, [meters]);
 
+  // sensor_uuid -> device_type override from DB (authoritative when set)
+  const dbDeviceTypeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    meters.forEach((m) => {
+      if (m.sensor_uuid && (m as any).device_type) {
+        map.set(m.sensor_uuid, (m as any).device_type);
+      }
+    });
+    return map;
+  }, [meters]);
+
   // Sensor is "here" when both location_id and location_integration_id match current context
   const isAssignedHere = (meter: Meter): boolean => {
     return (
