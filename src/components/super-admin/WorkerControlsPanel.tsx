@@ -2,10 +2,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, PauseCircle, PlayCircle, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { AlertCircle, PauseCircle, PlayCircle, Loader2, Save } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useWorkerControls, WorkerControl } from "@/hooks/useWorkerControls";
+import { useSystemSetting, useSetSystemSetting } from "@/hooks/useSystemSetting";
 import {
   AlertDialog,
   AlertDialogAction,
