@@ -62,13 +62,17 @@ const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
 const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
 // Phase 6: Heartbeat-Intervall von 30s auf 5min erhöht (IO-Optimierung)
 const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "300000", 10);
-// IO-Notbremse v1.3 (18.07.2026): Session-Heartbeat nur noch alle 5 Minuten.
-// Die Miniserver-WebSocket-Verbindung bleibt trotzdem dauerhaft offen; hier geht
-// es nur um die Anzeige/Statistik in der Cloud. Senkt DB-Schreiblast massiv.
+// v1.7 (23.07.2026): Session-Heartbeat wieder alle 60 s (statt 5 min).
+// Der 5-Minuten-Wert der IO-Notbremse v1.3 führte in der UI zu "stale"-Anzeigen,
+// obwohl die Verbindung stabil war. Der Heartbeat ist ein günstiges UPDATE mit
+// fillfactor=80/HOT-Update — die zusätzliche Last ist vernachlässigbar. Er läuft
+// in einem eigenen setInterval unabhängig vom Bucket-Flush, damit updated_at
+// garantiert alle 60 s frisch bleibt.
 const SESSION_HEARTBEAT_MS = Math.max(
-  300000,
-  parseInt(process.env.SESSION_HEARTBEAT_MS || "300000", 10),
+  30_000,
+  parseInt(process.env.SESSION_HEARTBEAT_MS || "60000", 10),
 );
+
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
 const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.5-auth-status";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
