@@ -21,10 +21,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Loader2, RefreshCw, AlertCircle, Plus, CheckCircle2,
-  Zap, Thermometer, Droplets, Wind, Gauge, Sun, BatteryCharging,
-  ToggleLeft, Activity, Lightbulb, Waves, CloudRain, Eye, Radio,
   ArrowRightLeft, Search, X,
 } from "lucide-react";
+import { getDeviceIconForSensor } from "@/lib/deviceIcons";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -65,36 +64,7 @@ interface SensorsDialogProps {
 }
 
 
-function getSensorIcon(sensor: Sensor) {
-  const cls = "h-4 w-4";
-  const unit = (sensor.unit || "").toLowerCase();
-  const ct = (sensor.controlType || "").toLowerCase();
-  const name = (sensor.name || "").toLowerCase();
 
-  // Unit-based matching first
-  if (unit === "°c" || unit === "°f" || unit === "k") return <Thermometer className={cls} />;
-  if (unit === "%" && (name.includes("feuchte") || name.includes("humid"))) return <Droplets className={cls} />;
-  if (unit === "l" || unit === "m³" || unit === "l/h" || unit === "m³/h") return <Droplets className={cls} />;
-  if (unit === "lux" || unit === "lx") return <Sun className={cls} />;
-  if (unit === "m/s" || unit === "km/h") return <Wind className={cls} />;
-  if (unit === "mm" && name.includes("regen")) return <CloudRain className={cls} />;
-  if (unit === "kwh" || unit === "kw" || unit === "w" || unit === "wh" || unit === "mwh") return <Zap className={cls} />;
-  if (unit === "v" || unit === "a" || unit === "va" || unit === "var") return <Activity className={cls} />;
-  if (unit === "hz") return <Waves className={cls} />;
-  if (unit === "ppm" || unit === "µg/m³" || unit === "ppb") return <Wind className={cls} />;
-  if (unit === "bar" || unit === "pa" || unit === "hpa" || unit === "mbar") return <Gauge className={cls} />;
-
-  // ControlType-based matching
-  if (ct.includes("switch") || ct.includes("pushbutton") || ct === "timedswitch") return <ToggleLeft className={cls} />;
-  if (ct.includes("light") || ct.includes("dimmer")) return <Lightbulb className={cls} />;
-  if (ct.includes("meter") || ct === "efm" || ct === "energymanager2" || ct === "fronius") return <Zap className={cls} />;
-  if (ct.includes("temperature") || ct.includes("iroom")) return <Thermometer className={cls} />;
-  if (ct.includes("battery") || name.includes("batterie") || name.includes("speicher")) return <BatteryCharging className={cls} />;
-  if (ct === "gateway" || ct === "access_point") return <Radio className={cls} />;
-  if (ct.includes("sensor") || ct.includes("analog")) return <Eye className={cls} />;
-
-  return <Gauge className={cls} />;
-}
 
 const getStatusBadge = (status: Sensor["status"]) => {
   switch (status) {
@@ -192,6 +162,17 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
       }
     });
     return m;
+  }, [meters]);
+
+  // sensor_uuid -> device_type override from DB (authoritative when set)
+  const dbDeviceTypeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    meters.forEach((m) => {
+      if (m.sensor_uuid && (m as any).device_type) {
+        map.set(m.sensor_uuid, (m as any).device_type);
+      }
+    });
+    return map;
   }, [meters]);
 
   // Sensor is "here" when both location_id and location_integration_id match current context
@@ -435,7 +416,11 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                         </TableCell>
                         <TableCell>
                           <div className="p-1.5 rounded bg-muted w-fit" title={sensor.controlType || sensor.unit}>
-                            {getSensorIcon(sensor)}
+                            {(() => {
+                              const resolved = getResolvedDeviceType(sensor as any, dbDeviceTypeMap);
+                              const Icon = getDeviceIconForSensor(sensor as any, resolved);
+                              return <Icon className="h-4 w-4" />;
+                            })()}
                           </div>
                         </TableCell>
                         <TableCell className="font-medium">
