@@ -1261,11 +1261,13 @@ async function main() {
 
   await reloadMeters();
   setInterval(reloadMeters, RELOAD_INTERVAL_MS);
-  setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
-  // v1.5: 5-Min-Bucket-Flush alle 60s prüfen — sendet abgeschlossene Buckets
-  // an gateway-ingest?action=bridge-power-5min (statt bridge_raw_samples).
+  // v1.6: Legacy-Rohdaten-Flush (bridge-readings → bridge_raw_samples) deaktiviert.
+  // Es werden ausschließlich noch aggregierte 5-Minuten-Buckets an
+  // gateway-ingest?action=bridge-power-5min gesendet. Live-Werte laufen weiterhin
+  // via Realtime-Broadcast, ohne die Cloud-DB zu beschreiben.
+  // setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
   setInterval(() => { flushBuckets().catch((e) => log("error", "flushBuckets:", e)); }, 60_000);
-  log("info", "[Bucket-Flush] aktiv: prüft alle 60s auf abgeschlossene 5-Min-Buckets");
+  log("info", "[Bucket-Flush] aktiv: prüft alle 60s auf abgeschlossene 5-Min-Buckets (Legacy bridge-readings deaktiviert)");
 
   // Bridge-Heartbeat: hält bridge_workers.last_heartbeat_at frisch (Phase 2)
   setInterval(() => { bridgeHeartbeat("online").catch(() => { /* siehe bridgeHeartbeat */ }); }, BRIDGE_HEARTBEAT_MS);
