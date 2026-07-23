@@ -191,7 +191,9 @@ function LoxoneStaleThresholdEditor() {
 export default function WorkerControlsPanel() {
   const { data, isLoading, isError, error, setEnabled } = useWorkerControls();
 
+  return (
     <div className="space-y-6">
+
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>Wichtig zur IO-Messung</AlertTitle>
