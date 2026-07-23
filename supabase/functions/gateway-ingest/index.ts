@@ -27,19 +27,10 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-// IO-Notbremse (23.07.2026): Der Loxone-WS-Bridge-Pfad erzeugt aktuell die
-// dominante Schreiblast (bridge_raw_samples / meter_power_readings). Solange
-// diese Konstante aktiv ist, werden betroffene Worker-POSTs nach Authentifizierung
-// ohne Datenbankzugriff akzeptiert. Reversibel durch Entfernen/false setzen.
-const LOXONE_WS_IO_EMERGENCY_PAUSE = true;
-const LOXONE_WS_IO_PAUSED_ACTIONS = new Set([
-  "ws-session-start",
-  "ws-session-end",
-  "ws-session-heartbeat",
-  "bridge-heartbeat",
-  "bridge-log-event",
-  "bridge-readings",
-]);
+// IO-Notbremse deaktiviert (24.07.2026): Ersetzt durch Delta-Guard +
+// Batch-Coalescing direkt in handleBridgeReadings (siehe unten).
+const LOXONE_WS_IO_EMERGENCY_PAUSE = false;
+const LOXONE_WS_IO_PAUSED_ACTIONS = new Set<string>([]);
 
 async function handleLoxoneWsEmergencyPause(req: Request, action: string | null): Promise<Response> {
   const _auth = await validateApiKey(req);
