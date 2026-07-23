@@ -27,6 +27,29 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+// IO-Notbremse deaktiviert (24.07.2026): Ersetzt durch Delta-Guard +
+// Batch-Coalescing direkt in handleBridgeReadings (siehe unten).
+const LOXONE_WS_IO_EMERGENCY_PAUSE = false;
+const LOXONE_WS_IO_PAUSED_ACTIONS = new Set<string>([]);
+
+// Modul-globaler LRU-Cache pro warmer Function-Instanz. Key: `${serial}|${uuid}`.
+// Wird für den Delta-Guard in handleBridgeReadings verwendet.
+const bridgeRawLastCache = new Map<string, { value: number; atMs: number }>();
+
+async function handleLoxoneWsEmergencyPause(req: Request, action: string | null): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  return json({
+    success: true,
+    paused: true,
+    action,
+    inserted: 0,
+    accepted: 0,
+    reason: "loxone_ws_io_emergency_pause",
+  }, 202);
+}
+
 /* ── Auth helper ─────────────────────────────────────────────────────────────── */
 
 /**
@@ -1331,6 +1354,13 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
   const socRows: Array<{ tenant_id: string; uuid: string; value: number; at: string }> = [];
   const socReadingRows: Array<{ storage_id: string; tenant_id: string; sensor_uuid: string; soc_pct: number; recorded_at: string; source: string }> = [];
   let skipped = 0;
+  let coalesced = 0;
+  let deltaSkipped = 0;
+
+  // Phase A: Batch-Coalescing — mehrere Readings desselben Sensors innerhalb
+  // eines Requests werden auf den letzten Wert reduziert (Broadcast trotzdem
+  // für alle Events, damit die Live-UI keine Zwischenwerte verliert).
+  const lastByUuid = new Map<string, { value: number; at: string; role: Role; miniserver_serial: string }>();
   for (const r of body.readings) {
     if (!r.miniserver_serial || !r.sensor_uuid || typeof r.value !== "number" || !isFinite(r.value)) {
       skipped++;
@@ -1342,20 +1372,50 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     const at = r.recorded_at ?? new Date().toISOString();
     broadcastRows.push({ tenant_id: link?.tenant_id ?? null, uuid, value: r.value, at, role });
     if (role === "pwr") {
-      rawRows.push({
-        worker_id: worker.id,
-        link_id: link?.id ?? null,
-        tenant_id: link?.tenant_id ?? null,
-        miniserver_serial: r.miniserver_serial,
-        uuid,
-        value: r.value,
-        received_at: at,
-      });
+      const key = `${r.miniserver_serial}|${uuid}`;
+      if (lastByUuid.has(key)) coalesced++;
+      lastByUuid.set(key, { value: r.value, at, role, miniserver_serial: r.miniserver_serial });
     } else if (role === "soc") {
       if (link?.tenant_id && r.value >= 0 && r.value <= 100) {
         socRows.push({ tenant_id: link.tenant_id, uuid, value: r.value, at });
       }
     }
+  }
+
+  // Phase B: In-Memory Delta-Guard pro warmer Function-Instanz. Skippt Inserts,
+  // wenn |Δ| < 5 W (abs) UND < 1% (rel) UND letzter Insert < 60s her.
+  // Cold-Start setzt den Cache zurück → nach Boot wird jeder Sensor 1x geschrieben.
+  const now = Date.now();
+  for (const [key, s] of lastByUuid.entries()) {
+    const link = linkCache.get(s.miniserver_serial);
+    const prev = bridgeRawLastCache.get(key);
+    const atMs = new Date(s.at).getTime();
+    if (prev) {
+      const dv = Math.abs(s.value - prev.value);
+      const rel = prev.value !== 0 ? dv / Math.abs(prev.value) : Infinity;
+      const ageMs = atMs - prev.atMs;
+      if (dv < 5 && rel < 0.01 && ageMs < 60_000) {
+        deltaSkipped++;
+        continue;
+      }
+    }
+    const uuid = key.split("|")[1];
+    rawRows.push({
+      worker_id: worker.id,
+      link_id: link?.id ?? null,
+      tenant_id: link?.tenant_id ?? null,
+      miniserver_serial: s.miniserver_serial,
+      uuid,
+      value: s.value,
+      received_at: s.at,
+    });
+    bridgeRawLastCache.set(key, { value: s.value, atMs });
+  }
+  // LRU-Grenze verhindert Speicherleck bei sehr vielen Sensoren.
+  if (bridgeRawLastCache.size > 5000) {
+    const excess = bridgeRawLastCache.size - 5000;
+    let i = 0;
+    for (const k of bridgeRawLastCache.keys()) { if (i++ >= excess) break; bridgeRawLastCache.delete(k); }
   }
 
   // Power-Werte in bridge_raw_samples persistieren (für 5-Min-Aggregator).
@@ -1479,8 +1539,94 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     console.error("[bridge-readings] broadcast prep error:", (e as Error).message);
   }
 
-  return json({ success: true, inserted: rawRows.length, broadcast: broadcastRows.length, soc_updated: socUpdated, skipped });
+  return json({ success: true, inserted: rawRows.length, broadcast: broadcastRows.length, soc_updated: socUpdated, skipped, coalesced, delta_skipped: deltaSkipped });
 }
+
+/**
+ * POST ?action=bridge-power-5min
+ * Body: {
+ *   worker_name: string,
+ *   rows: [{
+ *     meter_id: string,
+ *     tenant_id: string,
+ *     energy_type: string,
+ *     bucket: string (ISO, 5-Min-aligned),
+ *     power_avg: number,
+ *     power_max: number,
+ *     sample_count: number
+ *   }]
+ * }
+ * Direkter Upsert in meter_power_readings_5min. Ersetzt den Umweg über
+ * bridge_raw_samples + 5-Min-Aggregator-Cron für alle Meter, deren Worker
+ * v1.5+ (Bucket-Aggregation) liefern. Source = 'bridge_ws'.
+ */
+async function handleBridgePower5min(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    worker_name?: string;
+    rows?: Array<{
+      meter_id?: string;
+      tenant_id?: string;
+      energy_type?: string;
+      bucket?: string;
+      power_avg?: number;
+      power_max?: number;
+      sample_count?: number;
+    }>;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.worker_name || !Array.isArray(body.rows) || body.rows.length === 0) {
+    return json({ error: "worker_name and non-empty rows[] required" }, 400);
+  }
+
+  const supabase = getSupabase();
+  const { data: worker } = await supabase
+    .from("bridge_workers")
+    .select("id")
+    .eq("name", body.worker_name)
+    .maybeSingle();
+  if (!worker) return json({ error: "unknown worker_name" }, 404);
+
+  const upsertRows: any[] = [];
+  let skipped = 0;
+  for (const r of body.rows) {
+    if (!r.meter_id || !r.tenant_id || !r.energy_type || !r.bucket ||
+        typeof r.power_avg !== "number" || !isFinite(r.power_avg) ||
+        typeof r.power_max !== "number" || !isFinite(r.power_max) ||
+        typeof r.sample_count !== "number" || r.sample_count <= 0) {
+      skipped++;
+      continue;
+    }
+    // Bucket auf 5-Min-Grid normalisieren (Sicherheit gegen Worker-Bugs).
+    const ts = new Date(r.bucket).getTime();
+    if (!isFinite(ts)) { skipped++; continue; }
+    const alignedMs = Math.floor(ts / 300000) * 300000;
+    upsertRows.push({
+      meter_id: r.meter_id,
+      tenant_id: r.tenant_id,
+      energy_type: r.energy_type,
+      bucket: new Date(alignedMs).toISOString(),
+      power_avg: r.power_avg,
+      power_max: r.power_max,
+      sample_count: r.sample_count,
+      resolution_minutes: 5,
+      source: "bridge_ws",
+    });
+  }
+
+  if (upsertRows.length === 0) {
+    return json({ success: true, upserted: 0, skipped });
+  }
+
+  const { error } = await supabase
+    .from("meter_power_readings_5min")
+    .upsert(upsertRows, { onConflict: "meter_id,bucket,resolution_minutes" });
+  if (error) return json({ success: false, error: error.message }, 500);
+
+  return json({ success: true, upserted: upsertRows.length, skipped });
 
 /* ── Loxone Remote-Connect WebSocket Feldtest ───────────────────────────────── */
 
@@ -2379,6 +2525,10 @@ Deno.serve(async (req) => {
 
   // POST routes
   if (req.method === "POST") {
+    if (LOXONE_WS_IO_EMERGENCY_PAUSE && LOXONE_WS_IO_PAUSED_ACTIONS.has(action ?? "")) {
+      return handleLoxoneWsEmergencyPause(req, action);
+    }
+
     if (action === "ws-session-start") return handleWsSessionStart(req);
     if (action === "ws-session-end") return handleWsSessionEnd(req);
     if (action === "ws-session-heartbeat") return handleWsSessionHeartbeat(req);
@@ -2392,6 +2542,7 @@ Deno.serve(async (req) => {
     if (action === "bridge-heartbeat") return handleBridgeHeartbeat(req);
     if (action === "bridge-log-event") return handleBridgeLogEvent(req);
     if (action === "bridge-readings") return handleBridgeReadings(req);
+    if (action === "bridge-power-5min") return handleBridgePower5min(req);
     if (action === "gateway-backup") return handleGatewayBackup(req);
     if (action === "gateway-command") return handleGatewayCommand(req);
     if (action === "push-execution-logs") return handlePushExecutionLogs(req);
