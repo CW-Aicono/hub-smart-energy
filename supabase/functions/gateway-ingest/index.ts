@@ -27,6 +27,34 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+// IO-Notbremse (23.07.2026): Der Loxone-WS-Bridge-Pfad erzeugt aktuell die
+// dominante Schreiblast (bridge_raw_samples / meter_power_readings). Solange
+// diese Konstante aktiv ist, werden betroffene Worker-POSTs nach Authentifizierung
+// ohne Datenbankzugriff akzeptiert. Reversibel durch Entfernen/false setzen.
+const LOXONE_WS_IO_EMERGENCY_PAUSE = true;
+const LOXONE_WS_IO_PAUSED_ACTIONS = new Set([
+  "ws-session-start",
+  "ws-session-end",
+  "ws-session-heartbeat",
+  "bridge-heartbeat",
+  "bridge-log-event",
+  "bridge-readings",
+]);
+
+async function handleLoxoneWsEmergencyPause(req: Request, action: string | null): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  return json({
+    success: true,
+    paused: true,
+    action,
+    inserted: 0,
+    accepted: 0,
+    reason: "loxone_ws_io_emergency_pause",
+  }, 202);
+}
+
 /* ── Auth helper ─────────────────────────────────────────────────────────────── */
 
 /**
@@ -2379,6 +2407,10 @@ Deno.serve(async (req) => {
 
   // POST routes
   if (req.method === "POST") {
+    if (LOXONE_WS_IO_EMERGENCY_PAUSE && LOXONE_WS_IO_PAUSED_ACTIONS.has(action ?? "")) {
+      return handleLoxoneWsEmergencyPause(req, action);
+    }
+
     if (action === "ws-session-start") return handleWsSessionStart(req);
     if (action === "ws-session-end") return handleWsSessionEnd(req);
     if (action === "ws-session-heartbeat") return handleWsSessionHeartbeat(req);
