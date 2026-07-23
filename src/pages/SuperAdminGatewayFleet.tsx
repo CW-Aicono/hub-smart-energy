@@ -828,7 +828,14 @@ const SuperAdminGatewayFleet = () => {
                                 <TableCell colSpan={12} className="py-4">
                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
                                     <div><div className="text-muted-foreground">Gateway-Typ</div><div className="font-medium">Loxone Miniserver</div></div>
+                                    <div>
+                                      <div className="text-muted-foreground">Seriennummer(n)</div>
+                                      <div className="font-mono break-all">
+                                        {lx.serials.length > 0 ? lx.serials.join(", ") : "— (nicht verknüpft)"}
+                                      </div>
+                                    </div>
                                     <div><div className="text-muted-foreground">Worker</div><div className="font-mono">{lx ? (r.worker ?? "—") : "—"}</div></div>
+
                                     <div><div className="text-muted-foreground">Sitzungs-Start</div><div className="font-mono">{new Date(lx.startedAt).toLocaleString("de-DE")}</div></div>
                                     <div><div className="text-muted-foreground">Letztes Update</div><div className="font-mono">{new Date(lx.updatedAt).toLocaleString("de-DE")}</div></div>
                                     <div><div className="text-muted-foreground">Events (Sitzung)</div><div className="font-medium">{(lx.eventsReceived ?? 0).toLocaleString("de-DE")}</div></div>
