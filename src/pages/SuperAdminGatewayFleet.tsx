@@ -98,6 +98,7 @@ interface LoxoneDetails {
   eventsReceived: number | null;
   reconnectCount: number | null;
   disconnectReason: string | null;
+  serials: string[];
 }
 
 interface UnifiedRow {
@@ -116,9 +117,11 @@ interface UnifiedRow {
   sessionsLast24h: number | null;
   worker: string | null;
   lastDisconnect: string | null;
+  serials: string[];
   device?: FleetDevice;
   loxone?: LoxoneDetails;
 }
+
 
 const LOOKBACK_MS = 24 * 60 * 60 * 1000;
 // Loxone worker heartbeat = 5 min; threshold 6 min so display stays green between beats.
