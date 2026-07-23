@@ -1,61 +1,101 @@
-## Ausgangslage (gemessen, nicht vermutet)
-
-- Loxone-WS-Worker liefert wieder normal: 338 Rohsamples / 15 min für Tenant `0ce0c43a`.
-- `gateway-ingest` schreibt aber nur noch **42 Zeilen / 15 min** in `meter_power_readings` für diesen Tenant. Über alle Meter verteilt ergibt das ~3 Datenpunkte pro Meter pro Stunde.
-- Widgets (EnergyFlowMonitor, PieChart, Verbrauchsübersicht) lesen kurze Zeitfenster aus `meter_power_readings` und finden daher nichts.
-- Ursache: der von mir zuletzt eingebaute In-Memory Delta-Guard (`|Δ| ≥ 5 W` und `≥ 1 %`, sonst alle 60 s) ist für langsam/klein driftende Loxone-Signale zu grob.
-- Der WS-Worker selbst, der Aggregator und der Realtime-Broadcast funktionieren.
 
 ## Ziel
 
-Widgets wieder mit Werten füllen, **ohne** Datenpfad umzubauen und **ohne** die IO-Krise wieder auszulösen.
+Loxone-Datenpfad so umbauen, dass die Datenbank drastisch entlastet wird, ohne Live-Widgets, Automationen oder historische Charts zu brechen. Zusätzlich das (bereits aktive) Abfrage-Intervall im UI auf 5–60 Minuten begrenzen.
 
-## Plan – 3 kleine, umkehrbare Schritte
+## Endarchitektur (Zielbild)
 
-### Schritt 1 – Delta-Guard entschärfen (Haupt-Fix)
+```text
+Loxone Miniserver
+        │  WebSocket (sekündlich)
+        ▼
+loxone-ws-worker  ────►  Realtime-Broadcast  ────► UI Live-Kacheln, DLM/Automation-Cache
+        │                (loxone-live-{tenant})
+        │
+        │  1× pro 5-Min-Bucket
+        │  (avg / max / count, worker-lokal aggregiert)
+        ▼
+gateway-ingest  ────►  meter_power_readings_5min   ────► Charts, Historie, Reports
+                       (kein bridge_raw_samples mehr,
+                        kein zweiter Schreibpfad,
+                        kein Cloud-Aggregator-Cron)
 
-In `supabase/functions/gateway-ingest/index.ts`:
+loxone-periodic-sync (HTTP-Pull, 5–60 Min, default 15 Min)
+        │
+        └──►  meter_period_totals / _cumulative_readings  (driftfreie kWh-Zählerstände)
+        └──►  Fallback-Ingest in meter_power_readings_5min,
+              wenn für einen Meter seit >2 Bucket-Intervallen
+              kein WS-Wert eingegangen ist
+```
 
-- Schwelle von `|Δ| ≥ 5 W` auf **`|Δ| ≥ 1 W`** senken.
-- Prozent-Bedingung entfernen (`≥ 1 %` fällt weg).
-- Max-Intervall von 60 s auf **15 s** senken – d. h. spätestens alle 15 s wird pro Meter ein Stützpunkt geschrieben, auch wenn der Wert konstant ist.
-- Coalescing pro Request-Batch **bleibt** (das war IO-effektiv und schadet nicht).
+## Warum das die richtige Balance ist
 
-Erwartung: Widgets bekommen wieder ~4 Punkte/min pro Meter, IO-Last steigt gegenüber jetzt, bleibt aber deutlich unter dem Vor-Krisen-Niveau (weil Coalescing + 1 W-Schwelle Mikrorauschen weiter filtern).
+- **Live bleibt live**: Broadcast fließt weiter pro Event, EnergyFlowMonitor / LiveValues / DLM-Realtime sehen Sekundenwerte.
+- **Historie bleibt dicht**: Charts lesen `meter_power_readings_5min` – wird alle 5 Min garantiert befüllt, entweder vom Worker (WS gesund) oder vom Pull-Fallback.
+- **IO-Last minimiert**: Pro Zähler max. 12 Inserts/Stunde in `meter_power_readings_5min` statt hunderten Rohwerten in `bridge_raw_samples`. Zweiter Schreibpfad (`meter_power_readings`) und der Cloud-`bridge-aggregator` entfallen für Loxone.
+- **kWh driftfrei**: HTTP-Pull bleibt für kumulierte Zählerstände zuständig – wie heute.
 
-### Schritt 2 – NULL-Tenant-Samples nicht liegen lassen
+## Umbau in vier Phasen (jede einzeln deploybar & rückrollbar)
 
-144 unverarbeitete Rohsamples, davon 170 in den letzten 15 min mit `tenant_id = NULL`.
+### Phase 1 – UI-Mindestintervall auf 5 Minuten (isoliert, sofort)
 
-- Prüfen, welcher Codepfad in `gateway-ingest` `tenant_id` nicht setzt (vermutlich Fallback-Pfad ohne Auth-Kontext).
-- Falls harmlos: NULL-Samples im Aggregator als „unmapped" akzeptiert markieren, damit sie nicht liegen bleiben und den Rückstand aufbauen.
-- Keine Umverdrahtung, nur `processed_at` auch für unmappable NULL-Rows setzen.
+- `src/components/integrations/EditIntegrationDialog.tsx`:
+  - Grenzen `1` → `5` in Reset-Logik (Zeile 74) und Clamp (Zeile 89).
+  - Input-Feld `min={5}`, Hilfetext auf „Erlaubt: 5–60 Minuten. Empfehlung: 15 Minuten." anpassen.
+- `supabase/functions/loxone-periodic-sync/index.ts` (Zeile 108ff): Untergrenze in `rawInterval`-Validierung ebenfalls auf 5 heben, damit alte Werte < 5 in der DB serverseitig zu 5 hochgezogen werden.
+- Keine Migration nötig; bestehende Werte < 5 werden beim ersten Speichern bzw. beim Sync-Aufruf normalisiert.
 
-### Schritt 3 – Beobachten, dann entscheiden
+Bestätigt aus Recherche: `poll_interval_minutes` wird in `loxone-periodic-sync/index.ts:108` tatsächlich verwendet, die Einstellung ist **nicht fake**.
 
-Nach 15 min Betrieb mit den neuen Schwellen:
+### Phase 2 – Worker-seitige 5-Min-Aggregation im `loxone-ws-worker`
 
-- `meter_power_readings`-Rate pro Tenant erneut messen (Ziel: ≥ 5× aktuelle Rate für Tenant `0ce0c43a`).
-- IO-Budget in Advanced Settings prüfen.
-- Widgets im Dashboard visuell prüfen.
+- Neuer In-Memory-Puffer pro Sensor: rollierendes Fenster auf 5-Min-Bucket (`Math.floor(ts / 300000) * 300000`), sammelt `sum`, `count`, `max`, `min`, `last`.
+- Bei Bucket-Wechsel: flush an `gateway-ingest` mit neuem Action `bridge-power-5min`, Payload `{ meter_id?/sensor_uuid, bucket_start, avg_kw, max_kw, count }`.
+- Broadcast (`loxone-live-{tenantId}`) bleibt unverändert pro Event – Live-UI und Automationen sind entkoppelt.
+- `bridge-readings`-Action bleibt vorerst bestehen (Kompatibilität), wird aber im Worker nicht mehr aufgerufen. Nach Feldtest entfernen.
+- Cold-Start-Verhalten: unvollständiger erster Bucket wird nach Flush verworfen (kein halber Punkt in der DB).
 
-**Wenn IO stabil bleibt** → fertig, keine weiteren Änderungen.
-**Wenn IO wieder steigt** → Schwellen wieder etwas anziehen (z. B. 2 W / 20 s) oder gezielt einzelne Rausch-Sensoren identifizieren.
+### Phase 3 – `gateway-ingest` neuer Handler `bridge-power-5min`
 
-## Was ich ausdrücklich NICHT tue
+- Upsert direkt in `meter_power_readings_5min` (`onConflict: meter_id,bucket,resolution_minutes`, `source: 'bridge_ws'`).
+- Kein Insert in `bridge_raw_samples`, kein Insert in `meter_power_readings`.
+- Delta-Guard und Batch-Coalescing entfallen an dieser Stelle (nicht mehr nötig – nur 12 Rows/h/Meter).
+- Legacy-Handler `handleBridgeReadings` bleibt als No-Op-Broadcast (Fallback für alte Worker-Versionen), aber ohne DB-Writes.
+- `bridge-aggregator`-Cron wird pausiert (kein Rollback-Risiko, nur ein `cron.unschedule`).
 
-- Keine neuen Hooks, kein `useEnergyData`-Umbau, kein Client-Fallback auf `bridge_raw_samples`.
-- Kein Umbiegen der Widgets auf andere Tabellen.
-- Keine SQL-Migration, keine Trigger-Änderung.
-- Keine Änderung am WS-Worker, am Aggregator oder am Broadcast-Kanal.
-- Kein Backend-Restart.
+### Phase 4 – Pull-Fallback in `loxone-periodic-sync`
+
+- Neue Logik: pro Meter prüfen, ob in `meter_power_readings_5min` in den letzten `2 × poll_interval_minutes` ein Bucket mit `source='bridge_ws'` existiert.
+- Wenn nein → einen synthetischen 5-Min-Bucket aus dem aktuellen HTTP-Sample schreiben (`source: 'loxone_pull'`), damit Charts nicht flatlinen, wenn der WS-Worker offline ist.
+- Wenn ja → wie bisher nur kWh-Zählerstände schreiben, keine Power-Rows.
+- Retention & Bereinigung unverändert.
+
+## Was ich NICHT anfasse
+
+- `useEnergyData`, `EnergyFlowMonitor`, `LiveValues`, `DynamicDlmCard`, `_shared/meterPower.ts` – lesen weiterhin ihre gewohnten Quellen (`meter_power_readings_5min` bzw. Broadcast). Kein Widget-Refactor.
+- OCPP-Pfad, Shelly, Fronius, Peak-Shaving, DLM – bleiben unverändert.
+- RLS-Policies, Grants, Storage.
+
+## Rollout-Reihenfolge & Verifikation
+
+1. **Phase 1** deployen (UI + Sync-Untergrenze). Verifikation: Feld akzeptiert nur 5–60, `loxone-periodic-sync` läuft weiter durch.
+2. **Phase 3** (Handler) vor Phase 2 deployen – erst Backend bereit, dann Worker umstellen. Verifikation: `bridge-power-5min` per curl testbar, schreibt Row.
+3. **Phase 2** Worker-Update (`docs/loxone-ws-worker` + Update-Anleitung, Rollout auf Hetzner-Live-Worker). Verifikation nach 15 Min: neue Rows in `meter_power_readings_5min` mit `source='bridge_ws'`, `bridge_raw_samples` wächst nicht mehr.
+4. **Phase 4** Fallback aktivieren + Aggregator-Cron pausieren. Verifikation: WS-Worker gezielt für 15 Min stoppen → Pull-Fallback erzeugt Buckets, Charts bleiben gefüllt.
+5. Nach 48 h stabilem Lauf: `bridge_raw_samples`-Tabelle auf 1 h Ringbuffer eindampfen (separater Cleanup-Schritt, außerhalb dieses Plans).
 
 ## Rollback
 
-Ein einziger File-Edit in `gateway-ingest/index.ts`. Rückrollen = Werte zurücksetzen auf 5 W / 60 s.
+- Phase 1: einzelner File-Edit rückrollbar.
+- Phase 3: Handler entfernen, alte `bridge-readings`-Logik wieder aktivieren.
+- Phase 2: alten Worker-Container neu starten (Image-Tag bleibt erhalten).
+- Phase 4: Fallback-Block auskommentieren, Aggregator-Cron reaktivieren.
 
-## Technische Details
+## Betroffene Dateien (Kurzliste)
 
-**Betroffene Datei:** `supabase/functions/gateway-ingest/index.ts` – nur die Delta-Guard-Konstanten und die `if`-Bedingung, die entscheidet, ob ein Reading in `meter_power_readings` bzw. `bridge_raw_samples` geschrieben wird.
-
-**Nicht angefasst:** `bridge-aggregator`, `useEnergyData`, `useRealtimePower`, `useGatewayLivePower`, EnergyFlowMonitor, PieChartWidget, alle SQL-Objekte.
+- `src/components/integrations/EditIntegrationDialog.tsx`
+- `supabase/functions/loxone-periodic-sync/index.ts`
+- `supabase/functions/gateway-ingest/index.ts` (neuer Handler + Broadcast-Only-Pfad)
+- `docs/loxone-ws-worker/index.ts` (Bucket-Aggregation)
+- `docs/loxone-ws-worker/UPDATE-ANLEITUNG.md` (neue Version)
+- SQL-Migration: `cron.unschedule('bridge-aggregator-*')` (Phase 4)
