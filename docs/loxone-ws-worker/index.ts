@@ -800,6 +800,10 @@ async function keepaliveTick(): Promise<void> {
 // bestehenden Polling-Pfad, der unberührt weiterläuft.
 
 async function flush(): Promise<void> {
+  // v1.6: Legacy-Pfad hart deaktiviert – Rohdaten dürfen NICHT mehr in
+  // bridge_raw_samples geschrieben werden. Aggregation läuft ausschließlich
+  // über flushBuckets() → bridge-power-5min.
+  return;
   if (workerPaused) return;
   const readings: any[] = [];
   const nowMs = Date.now();
