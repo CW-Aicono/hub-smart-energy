@@ -1456,6 +1456,18 @@ serve(async (req) => {
             recorded_at: string;
           }> = [];
 
+          // Fallback für meter_power_readings_5min: wird nur beschrieben,
+          // wenn der Loxone-WS-Worker seit >2 Poll-Intervallen keinen
+          // bridge_ws-Bucket geliefert hat. So bleibt der Chart gefüllt,
+          // wenn der Worker offline ist. Siehe Phase 4a im Plan.
+          const fallbackCandidates: Array<{
+            meter_id: string;
+            tenant_id: string;
+            energy_type: string;
+            power_value: number;
+          }> = [];
+
+
           // Kumulative Zählerstands-Snapshots (für intervall-unabhängige Ist-Berechnung)
           const cumulativeInserts: Array<{
             tenant_id: string;
@@ -1704,7 +1716,14 @@ serve(async (req) => {
                     energy_type: meter.energy_type,
                     recorded_at: now.toISOString(),
                   });
+                  fallbackCandidates.push({
+                    meter_id: meter.id,
+                    tenant_id: meter.tenant_id,
+                    energy_type: meter.energy_type,
+                    power_value: powerVal,
+                  });
                 }
+
               }
             }
           }
@@ -1789,6 +1808,68 @@ serve(async (req) => {
               }
             }
           }
+
+          // ── Phase 4a: Pull-Fallback in meter_power_readings_5min ──
+          // Wenn der WS-Worker seit > 2 × poll_interval_minutes keinen bridge_ws-
+          // Bucket geschrieben hat (oder noch nie), erzeugt der HTTP-Poll einen
+          // synthetischen 5-Min-Bucket aus dem aktuellen Sample. Sobald der WS-
+          // Worker wieder aggregiert, überschreibt dessen Upsert diesen Bucket
+          // (identisches onConflict-Ziel), source wechselt zurück auf bridge_ws.
+          if (fallbackCandidates.length > 0) {
+            try {
+              const rawInterval = Number((config as any).poll_interval_minutes);
+              const pollMin = Number.isFinite(rawInterval) && rawInterval >= 5 && rawInterval <= 60
+                ? Math.floor(rawInterval)
+                : 15;
+              const freshCutoffMs = Date.now() - 2 * pollMin * 60_000;
+              const freshCutoffIso = new Date(freshCutoffMs).toISOString();
+
+              const meterIdsFb = fallbackCandidates.map((c) => c.meter_id);
+              const { data: freshRows } = await supabase
+                .from("meter_power_readings_5min")
+                .select("meter_id")
+                .in("meter_id", meterIdsFb)
+                .eq("source", "bridge_ws")
+                .gte("bucket", freshCutoffIso);
+
+              const freshSet = new Set<string>((freshRows ?? []).map((r: any) => r.meter_id));
+              const stale = fallbackCandidates.filter((c) => !freshSet.has(c.meter_id));
+
+              if (stale.length > 0) {
+                // 5-Min-Bucket-Start (UTC) für den aktuellen Zeitpunkt
+                const bucketDate = new Date(now);
+                bucketDate.setUTCSeconds(0, 0);
+                bucketDate.setUTCMinutes(Math.floor(bucketDate.getUTCMinutes() / 5) * 5);
+                const bucketIso = bucketDate.toISOString();
+
+                const rows = stale.map((c) => ({
+                  meter_id: c.meter_id,
+                  tenant_id: c.tenant_id,
+                  energy_type: c.energy_type,
+                  bucket: bucketIso,
+                  power_avg: c.power_value,
+                  power_max: c.power_value,
+                  sample_count: 1,
+                  resolution_minutes: 5,
+                  source: "loxone_pull",
+                }));
+
+                const { error: fbErr } = await supabase
+                  .from("meter_power_readings_5min")
+                  .upsert(rows, { onConflict: "meter_id,bucket,resolution_minutes" });
+
+                if (fbErr) {
+                  console.error(`[loxone-api] Pull-Fallback upsert failed: ${fbErr.message}`);
+                } else {
+                  console.log(`[loxone-api] Pull-Fallback: wrote ${rows.length} loxone_pull buckets (WS worker stale > ${2 * pollMin}min)`);
+                }
+              }
+            } catch (fbEx) {
+              console.warn("[loxone-api] Pull-Fallback exception:", (fbEx as Error).message);
+            }
+          }
+
+
 
           // Bulk-Insert der Zählerstands-Snapshots (Konflikt = bereits vorhandener Zeitpunkt → ignorieren)
           if (cumulativeInserts.length > 0) {
