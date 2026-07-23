@@ -2542,6 +2542,7 @@ Deno.serve(async (req) => {
     if (action === "bridge-heartbeat") return handleBridgeHeartbeat(req);
     if (action === "bridge-log-event") return handleBridgeLogEvent(req);
     if (action === "bridge-readings") return handleBridgeReadings(req);
+    if (action === "bridge-power-5min") return handleBridgePower5min(req);
     if (action === "gateway-backup") return handleGatewayBackup(req);
     if (action === "gateway-command") return handleGatewayCommand(req);
     if (action === "push-execution-logs") return handlePushExecutionLogs(req);
