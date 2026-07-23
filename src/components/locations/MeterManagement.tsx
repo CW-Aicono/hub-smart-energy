@@ -37,6 +37,7 @@ import { filterAssignedGatewayDevices } from "@/lib/gatewayDeviceFiltering";
 import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
 import { LocationChargingInfrastructure } from "./LocationChargingInfrastructure";
 import { confirmDialog } from "@/components/ui/confirm-dialog";
+import { getDeviceIconForSensor, getDeviceIconForMeter } from "@/lib/deviceIcons";
 
 interface MeterManagementProps {
   locationId: string;
