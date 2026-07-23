@@ -124,7 +124,10 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeW
             </p>
           </div>
           <div className="space-y-2">
-            {sortedWidgets.map((widget) => (
+            {sortedWidgets.map((widget) => {
+              const isCustom = widget.widget_type.startsWith("custom_");
+              const reasonKey = isCustom ? null : widgetUnavailableReason(widget.widget_type, availabilitySignals);
+              return (
               <div
                 key={widget.widget_type}
                 draggable
@@ -143,10 +146,23 @@ const DashboardCustomizer = ({ widgets, onToggleVisibility, onReorder, onResizeW
                   <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                   <Label
                     htmlFor={widget.widget_type}
-                    className="text-sm cursor-grab truncate"
+                    className={cn("text-sm cursor-grab truncate", reasonKey && "text-muted-foreground")}
                   >
                     {customWidgetNames[widget.widget_type] || t((WIDGET_LABEL_KEYS[widget.widget_type] || widget.widget_type) as any)}
                   </Label>
+                  {reasonKey && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant="outline" className="gap-1 flex-shrink-0 text-[10px] px-1.5 py-0 h-5">
+                          <AlertCircle className="h-3 w-3" />
+                          {t("widgetReq.noData" as any)}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        {t(reasonKey as any)}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <Select
