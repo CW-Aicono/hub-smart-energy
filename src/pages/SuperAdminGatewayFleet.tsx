@@ -482,10 +482,12 @@ const SuperAdminGatewayFleet = () => {
           (r.locationName ?? "").toLowerCase().includes(q) ||
           (r.type ?? "").toLowerCase().includes(q) ||
           (r.statusLabel ?? r.status ?? "").toLowerCase().includes(q) ||
-          (r.worker ?? "").toLowerCase().includes(q)
+          (r.worker ?? "").toLowerCase().includes(q) ||
+          (r.serials ?? []).some((s) => s.toLowerCase().includes(q))
         );
       })
     : filteredRowsPre;
+
   const { sorted: filteredRows, sort: fleetSort, toggle: toggleFleetSort } = useSortableData<any, "tenant" | "location" | "type" | "status" | "connected" | "heartbeat" | "events" | "reconnects" | "uptime" | "sessions" | "worker">(
     filteredRowsSearched,
     (r, k) => {
