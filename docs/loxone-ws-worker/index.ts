@@ -494,6 +494,22 @@ async function connect(state: ConnState): Promise<void> {
           entry.latest_value = ev.value;
           state.eventsReceived++;
           state.lastEventAt = Date.now();
+          // v1.5: Bucket-Aggregation für Power. Zählerstände (kWh) werden
+          // separat behandelt und laufen nicht in meter_power_readings_5min.
+          if (entry.role === "pwr") {
+            const bucket = Math.floor(Date.now() / 300000) * 300000;
+            if (entry.bucket_start !== bucket) {
+              // Bucket-Wechsel: alten Bucket wird per periodischem Flush geliefert.
+              entry.bucket_start = bucket;
+              entry.bucket_sum = 0;
+              entry.bucket_max = 0;
+              entry.bucket_count = 0;
+            }
+            const absV = Math.abs(ev.value);
+            entry.bucket_sum += ev.value;
+            entry.bucket_count += 1;
+            if (absV > Math.abs(entry.bucket_max)) entry.bucket_max = ev.value;
+          }
         }
       }
     },
