@@ -292,17 +292,17 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
         </div>
       )}
 
-      {/* Map control buttons */}
-      <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
-        {showEditPositionButton && (
+      {/* Place-charge-points button (top-right, labelled) */}
+      {showEditPositionButton && (
+        <div className="absolute top-3 right-3 z-[1000]">
           <Button
-            size={editMode ? "default" : "icon"}
+            size="sm"
             variant={editMode ? "default" : "secondary"}
             className={cn(
-              "shadow-lg backdrop-blur-sm border",
+              "shadow-lg backdrop-blur-sm border rounded-full gap-2",
               editMode
-                ? "rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-                : "h-10 w-10 rounded-full bg-background/95"
+                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                : "bg-background/95"
             )}
             onClick={() => setEditMode((v) => !v)}
           >
@@ -312,10 +312,17 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
                 Fertig
               </>
             ) : (
-              <Move className="h-5 w-5" />
+              <>
+                <Move className="h-4 w-4" />
+                Ladepunkte platzieren
+              </>
             )}
           </Button>
-        )}
+        </div>
+      )}
+
+      {/* Map control buttons */}
+      <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
         {showLocateButton && (
           <Button
             size="icon"
