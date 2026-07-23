@@ -135,12 +135,18 @@ function BoundsTracker({ points, onVisiblePointsChange }: { points: ChargePointF
   return null;
 }
 
-export default function ChargePointsMap({ chargePoints, onChargePointClick, onVisiblePointsChange, onPositionChange, className, showLocateButton = false, showEditPositionButton = false, externalUserPos }: ChargePointsMapProps) {
+export default function ChargePointsMap({ chargePoints, onChargePointClick, onVisiblePointsChange, onPositionChange, className, showLocateButton = false, showEditPositionButton = false, externalUserPos, editMode: editModeProp, onEditModeChange }: ChargePointsMapProps) {
   const { t } = useTranslation();
   const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   const [userPos, setUserPos] = useState<[number, number] | null>(externalUserPos || null);
   const [locating, setLocating] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [editModeInternal, setEditModeInternal] = useState(false);
+  const editMode = editModeProp ?? editModeInternal;
+  const setEditMode = (updater: boolean | ((v: boolean) => boolean)) => {
+    const next = typeof updater === "function" ? (updater as (v: boolean) => boolean)(editMode) : updater;
+    if (onEditModeChange) onEditModeChange(next);
+    else setEditModeInternal(next);
+  };
 
   // Sync external user position
   useEffect(() => {
