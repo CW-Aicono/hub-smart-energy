@@ -1,132 +1,61 @@
-## Kurzfazit aus der aktuellen Prüfung
+## Ausgangslage (gemessen, nicht vermutet)
 
-Ich verstehe den Frust. Die aktuelle 96%-Warnung ist ernst, und ich werde hier nicht behaupten, dass das Problem gelöst ist.
-
-Was ich gerade belastbar prüfen konnte:
-
-- Die Backend-Instanz antwortet grundsätzlich, aber **Health- und Diagnose-Abfragen laufen bereits in Timeouts**. Das ist selbst ein starkes Signal für echte Backend-/Datenbanklast.
-- Die langsamsten Statements zeigen sehr klar die aktuelle Hauptlast:
-  - `meter_power_readings`: ca. **29.358 Insert-Batches**, zusammen ca. **741 Sekunden DB-Zeit**
-  - `bridge_raw_samples`: ca. **7.409 Insert-Batches**, zusammen ca. **437 Sekunden DB-Zeit**
-  - `meter_power_readings_5min`: ca. **1.482 Upsert-Batches**, zusammen ca. **403 Sekunden DB-Zeit**
-- Read-only Detailabfragen auf die letzten 8 Stunden sind wegen Timeouts fehlgeschlagen. Das spricht dagegen, jetzt noch mehr breit über die Tabellen zu scannen.
-
-Damit ist die wahrscheinlichste echte Ursache nicht „ein langsames Dashboard“, sondern **anhaltende Schreiblast durch Gateway-/Bridge-/Messdaten-Ingestion plus 5-Minuten-Aggregation**.
+- Loxone-WS-Worker liefert wieder normal: 338 Rohsamples / 15 min für Tenant `0ce0c43a`.
+- `gateway-ingest` schreibt aber nur noch **42 Zeilen / 15 min** in `meter_power_readings` für diesen Tenant. Über alle Meter verteilt ergibt das ~3 Datenpunkte pro Meter pro Stunde.
+- Widgets (EnergyFlowMonitor, PieChart, Verbrauchsübersicht) lesen kurze Zeitfenster aus `meter_power_readings` und finden daher nichts.
+- Ursache: der von mir zuletzt eingebaute In-Memory Delta-Guard (`|Δ| ≥ 5 W` und `≥ 1 %`, sonst alle 60 s) ist für langsam/klein driftende Loxone-Signale zu grob.
+- Der WS-Worker selbst, der Aggregator und der Realtime-Broadcast funktionieren.
 
 ## Ziel
 
-Nicht weiter Tage verbrennen, sondern in einem kontrollierten Notfall-Schritt:
+Widgets wieder mit Werten füllen, **ohne** Datenpfad umzubauen und **ohne** die IO-Krise wieder auszulösen.
 
-1. IO sofort stabilisieren.
-2. Die genaue Quelle der Schreibflut isolieren.
-3. Nur danach gezielt optimieren.
-4. Keine kosmetischen UI-Änderungen und keine weiteren Vermutungen.
+## Plan – 3 kleine, umkehrbare Schritte
 
-## Plan
+### Schritt 1 – Delta-Guard entschärfen (Haupt-Fix)
 
-### 1. Sofortiger Diagnose-Snapshot ohne Vollscans
+In `supabase/functions/gateway-ingest/index.ts`:
 
-Statt große Zeitreihen-Queries zu fahren, nur kompakte Systemstatistiken abfragen:
+- Schwelle von `|Δ| ≥ 5 W` auf **`|Δ| ≥ 1 W`** senken.
+- Prozent-Bedingung entfernen (`≥ 1 %` fällt weg).
+- Max-Intervall von 60 s auf **15 s** senken – d. h. spätestens alle 15 s wird pro Meter ein Stützpunkt geschrieben, auch wenn der Wert konstant ist.
+- Coalescing pro Request-Batch **bleibt** (das war IO-effektiv und schadet nicht).
 
-- Schreib-/Update-Zähler pro Tabelle aus `pg_stat_user_tables`
-- Index-/Tabellengrößen der High-Write-Tabellen
-- Dead tuples / Autovacuum-Lage
-- Top Statements aus `pg_stat_statements`, eingeschränkt auf Inserts/Upserts
-- Prüfung, ob die bereits eingeführten Trigger/Retention-Funktionen wirklich vorhanden und aktiv sind
+Erwartung: Widgets bekommen wieder ~4 Punkte/min pro Meter, IO-Last steigt gegenüber jetzt, bleibt aber deutlich unter dem Vor-Krisen-Niveau (weil Coalescing + 1 W-Schwelle Mikrorauschen weiter filtern).
 
-Wichtig: Keine `count(*)` über große Messwerttabellen, keine breiten 8h-Scans.
+### Schritt 2 – NULL-Tenant-Samples nicht liegen lassen
 
-### 2. Gateway-/Bridge-Quelle identifizieren
+144 unverarbeitete Rohsamples, davon 170 in den letzten 15 min mit `tenant_id = NULL`.
 
-Die drei Hauptkandidaten werden getrennt untersucht:
+- Prüfen, welcher Codepfad in `gateway-ingest` `tenant_id` nicht setzt (vermutlich Fallback-Pfad ohne Auth-Kontext).
+- Falls harmlos: NULL-Samples im Aggregator als „unmapped" akzeptiert markieren, damit sie nicht liegen bleiben und den Rückstand aufbauen.
+- Keine Umverdrahtung, nur `processed_at` auch für unmappable NULL-Rows setzen.
 
-- `meter_power_readings`
-- `bridge_raw_samples`
-- `meter_power_readings_5min`
+### Schritt 3 – Beobachten, dann entscheiden
 
-Dafür werden nur indexfreundliche, begrenzte Queries verwendet, z. B. Top-Quellen nach:
+Nach 15 min Betrieb mit den neuen Schwellen:
 
-- `tenant_id`
-- `worker_id`
-- `miniserver_serial`
-- `meter_id`
-- `uuid`
-- jüngste Schreibzeit
+- `meter_power_readings`-Rate pro Tenant erneut messen (Ziel: ≥ 5× aktuelle Rate für Tenant `0ce0c43a`).
+- IO-Budget in Advanced Settings prüfen.
+- Widgets im Dashboard visuell prüfen.
 
-Ziel: Herausfinden, ob ein einzelner Worker/Miniserver/Gateway ungewöhnlich viele Daten schreibt oder ob die Last breit über alle Quellen verteilt ist.
+**Wenn IO stabil bleibt** → fertig, keine weiteren Änderungen.
+**Wenn IO wieder steigt** → Schwellen wieder etwas anziehen (z. B. 2 W / 20 s) oder gezielt einzelne Rausch-Sensoren identifizieren.
 
-### 3. Notfall-Drosselung statt weiterer Daueroptimierung
+## Was ich ausdrücklich NICHT tue
 
-Wenn ein einzelner Worker oder eine einzelne Quelle dominiert, wird nicht pauschal die Instanz vergrößert, sondern gezielt gedrosselt:
+- Keine neuen Hooks, kein `useEnergyData`-Umbau, kein Client-Fallback auf `bridge_raw_samples`.
+- Kein Umbiegen der Widgets auf andere Tabellen.
+- Keine SQL-Migration, keine Trigger-Änderung.
+- Keine Änderung am WS-Worker, am Aggregator oder am Broadcast-Kanal.
+- Kein Backend-Restart.
 
-- Rohdaten-Insert in `bridge_raw_samples` optional temporär deaktivieren oder stark ausdünnen
-- `meter_power_readings` nur noch schreiben, wenn sich Wert oder Zeitfenster relevant verändert haben
-- 5-Minuten-Upserts nur noch bei echtem Delta durchführen
-- Falls nötig: problematische Quelle temporär quarantänen, statt das ganze System zu belasten
+## Rollback
 
-Das ist als Notfallmaßnahme gedacht, damit die IO-Anzeige wieder Luft bekommt.
+Ein einziger File-Edit in `gateway-ingest/index.ts`. Rückrollen = Werte zurücksetzen auf 5 W / 60 s.
 
-### 4. Ingestion-Code prüfen
+## Technische Details
 
-Anschließend wird der Codepfad geprüft, der diese Inserts erzeugt:
+**Betroffene Datei:** `supabase/functions/gateway-ingest/index.ts` – nur die Delta-Guard-Konstanten und die `if`-Bedingung, die entscheidet, ob ein Reading in `meter_power_readings` bzw. `bridge_raw_samples` geschrieben wird.
 
-- `gateway-ingest`
-- Loxone/ws-worker Pfad
-- Bridge-/Raw-Sample-Schreiber
-- Aggregation nach `meter_power_readings_5min`
-
-Dabei wird geprüft:
-
-- Werden identische Werte unnötig erneut geschrieben?
-- Wird pro Sensor zu häufig geschrieben?
-- Werden Rohdaten gespeichert, obwohl sie für den Produktbetrieb nicht nötig sind?
-- Wird `upsert` genutzt, obwohl ein Delta-Guard sinnvoller wäre?
-- Gibt es doppelte Pfade, z. B. Websocket-Worker plus Periodic Sync?
-
-### 5. Konkrete dauerhafte Änderung
-
-Abhängig vom Befund wird genau eine der folgenden dauerhaften Lösungen umgesetzt:
-
-**Variante A: Einzelne Quelle ist Verursacher**
-- Source-spezifisches Rate-Limit/Quarantäne
-- Logging der betroffenen Quelle
-- keine globale Einschränkung für alle Kunden
-
-**Variante B: Rohdaten-Tabelle ist Haupttreiber**
-- `bridge_raw_samples` nur noch kurzlebig oder optional speichern
-- Default: Rohdaten nicht dauerhaft persistieren, nur aggregierte/zugeordnete Werte
-- Retention weiter reduzieren oder ingestion-seitig sampling einführen
-
-**Variante C: Aggregation/Upsert ist Haupttreiber**
-- Upsert-Delta-Guard verschärfen
-- 5-Minuten-Aggregation entkoppeln oder seltener schreiben
-- Aggregationsjob nur auf neue/geänderte Buckets laufen lassen
-
-**Variante D: Doppelte Ingestion-Pfade**
-- Periodic Sync und Websocket-Worker sauber entkoppeln
-- Periodic Sync nur noch Discovery/Health/Drift-Korrektur, nicht dauerhafte Live-Datenflut
-
-### 6. Erfolgskontrolle
-
-Nach Umsetzung wird nicht nur „fertig“ gemeldet, sondern geprüft:
-
-- Top-Schreibqueries erneut vergleichen
-- Tabellenstatistik erneut vergleichen
-- Backend-Health erneut abrufen
-- IO-Indikator später erneut bewerten, mit Hinweis, dass die Lovable-Anzeige verzögert sein kann
-
-## Was ich nicht tun werde
-
-- Nicht erneut blind Indizes hinzufügen oder entfernen.
-- Nicht zuerst ein größeres Cloud-Upgrade empfehlen.
-- Nicht behaupten, die Ursache sei gefunden, bevor eine Quelle eindeutig belegt ist.
-- Keine breiten `count(*)`-Analysen über große Messwerttabellen, solange die DB unter Last steht.
-
-## Erwartetes Ergebnis
-
-Am Ende soll klar benannt sein:
-
-- welche Tabelle die IO treibt,
-- welcher Worker/Gateway/Meter/Job dahinter steckt,
-- welche konkrete Änderung die Schreiblast reduziert,
-- und ob zusätzlich Infrastrukturmaßnahmen nötig sind oder nicht.
+**Nicht angefasst:** `bridge-aggregator`, `useEnergyData`, `useRealtimePower`, `useGatewayLivePower`, EnergyFlowMonitor, PieChartWidget, alle SQL-Objekte.
