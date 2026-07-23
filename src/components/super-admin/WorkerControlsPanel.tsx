@@ -2,10 +2,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, PauseCircle, PlayCircle, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { AlertCircle, PauseCircle, PlayCircle, Loader2, Save } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useWorkerControls, WorkerControl } from "@/hooks/useWorkerControls";
+import { useSystemSetting, useSetSystemSetting } from "@/hooks/useSystemSetting";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -97,6 +100,7 @@ function WorkerRow({ w, onToggle }: { w: WorkerControl; onToggle: (next: boolean
             className="mt-1"
           />
         </div>
+        {w.worker_key === "loxone_ws_worker" && <LoxoneStaleThresholdEditor />}
       </CardContent>
 
       <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -126,11 +130,70 @@ function WorkerRow({ w, onToggle }: { w: WorkerControl; onToggle: (next: boolean
   );
 }
 
+// ---------------------------------------------------------------------------
+// Inline editor for the Loxone-WS "stale" threshold used by the tenant UI.
+// Stored in public.system_settings under key public.loxone_ws_stale_threshold_seconds.
+// ---------------------------------------------------------------------------
+function LoxoneStaleThresholdEditor() {
+  const KEY = "public.loxone_ws_stale_threshold_seconds";
+  const { data, isLoading } = useSystemSetting(KEY);
+  const setSetting = useSetSystemSetting();
+  const [value, setValue] = useState<string>("");
+
+  useEffect(() => {
+    if (data != null) setValue(data);
+  }, [data]);
+
+  const numeric = Number(value);
+  const invalid = !Number.isFinite(numeric) || numeric < 30 || numeric > 3600;
+
+  return (
+    <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-xs font-medium">Stale-Schwelle (Sekunden)</label>
+        <span className="text-[10px] text-muted-foreground">
+          system_settings · {KEY.replace("public.", "")}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Input
+          type="number"
+          min={30}
+          max={3600}
+          step={10}
+          value={value}
+          disabled={isLoading}
+          onChange={(e) => setValue(e.target.value)}
+          className="h-8 w-28"
+        />
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={invalid || setSetting.isPending || value === (data ?? "")}
+          onClick={() => setSetting.mutate({ key: KEY, value: String(numeric) })}
+        >
+          {setSetting.isPending ? (
+            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+          ) : (
+            <Save className="w-3 h-3 mr-1" />
+          )}
+          Speichern
+        </Button>
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-relaxed">
+        Ab dieser Zeit ohne Session-Heartbeat markiert das Standort-UI die Loxone-WebSocket-Verbindung
+        als "stale" (gelb). Der Worker sendet den Heartbeat alle 60 s — 120–240 s sind sinnvoll.
+      </p>
+    </div>
+  );
+}
+
 export default function WorkerControlsPanel() {
   const { data, isLoading, isError, error, setEnabled } = useWorkerControls();
 
   return (
     <div className="space-y-6">
+
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>Wichtig zur IO-Messung</AlertTitle>

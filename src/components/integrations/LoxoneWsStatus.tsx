@@ -3,6 +3,7 @@ import { Radio, Activity, RefreshCw, AlertCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
+import { useSystemSettingNumber } from "@/hooks/useSystemSetting";
 
 interface LoxoneWsStatusProps {
   locationIntegrationId: string;
@@ -41,9 +42,17 @@ export function LoxoneWsStatus({ locationIntegrationId, enabled }: LoxoneWsStatu
 
   if (!enabled) return null;
 
+  // Stale-Schwelle (Sekunden) ist im Super-Admin konfigurierbar
+  // (system_settings.public.loxone_ws_stale_threshold_seconds). Fallback 180 s.
+  const staleThresholdSec = useSystemSettingNumber(
+    "public.loxone_ws_stale_threshold_seconds",
+    180,
+  );
+  const staleThresholdMs = Math.max(30, staleThresholdSec) * 1000;
+
   // Status-Logik:
-  // - Aktiv = ended_at IS NULL UND updated_at < 120s alt (Worker-Heartbeat alle 60s + Puffer)
-  // - Stale = ended_at IS NULL aber kein Heartbeat seit >120s
+  // - Aktiv = ended_at IS NULL UND updated_at innerhalb der Schwelle
+  // - Stale = ended_at IS NULL aber kein Heartbeat seit > Schwelle
   // - Getrennt = ended_at IS NOT NULL
   let statusColor = "text-muted-foreground";
   let statusLabel = "Keine WS-Verbindung";
@@ -51,7 +60,7 @@ export function LoxoneWsStatus({ locationIntegrationId, enabled }: LoxoneWsStatu
 
   if (session) {
     const updatedMs = Date.now() - new Date(session.updated_at).getTime();
-    if (!session.ended_at && updatedMs < 120_000) {
+    if (!session.ended_at && updatedMs < staleThresholdMs) {
       statusColor = "text-green-600 dark:text-green-400";
       statusLabel = "WebSocket aktiv";
       StatusIcon = Radio;
