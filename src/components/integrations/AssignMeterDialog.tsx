@@ -56,7 +56,18 @@ export function AssignMeterDialog({
   const T = (key: string) => t(key as any);
   const { addMeter } = useMeters();
 
-  const [energyType, setEnergyType] = useState("strom");
+  const inferEnergyType = (u: string, name: string): string => {
+    const unit = (u || "").trim();
+    const n = (name || "").toLowerCase();
+    if (["m³", "m³/h", "l", "l/min"].includes(unit) || /wasser|water/.test(n)) return "wasser";
+    if (/gas/.test(n)) return "gas";
+    if (/wärme|waerme|heat/.test(n)) return "waerme";
+    return "strom";
+  };
+  const firstSensor = sensorList[0];
+  const [energyType, setEnergyType] = useState(() =>
+    firstSensor ? inferEnergyType(firstSensor.unit, firstSensor.name) : "strom",
+  );
   const [saving, setSaving] = useState(false);
 
   const uniformDeviceType: "meter" | "sensor" | "actuator" | null = (() => {
