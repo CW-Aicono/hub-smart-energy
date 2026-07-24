@@ -1,48 +1,32 @@
-## Problem
 
-Die Anwendung (`LoxoneWsStatus.tsx`) verwendet für den Stale-Status einen Fallback von **180 Sekunden (3 Minuten)**. Der `loxone-ws-worker` sendet aber laut Dockerfile und Live-Env `BRIDGE_HEARTBEAT_MS=300000` (= **5 Minuten**). Dadurch wird eine funktionierende Verbindung fälschlicherweise als „stale“ angezeigt.
+# Akute Auth-Blockade beheben — Restart + Neubewertung
 
-## Ziel
+## Ausgangslage (verifiziert aus Auth-Logs)
 
-Heartbeat-Erkennung in UI und Worker konsistent auf einen sicheren Wert ausrichten, sodass „stale“ erst nach einem echten Ausfall gemeldet wird.
+Der Auth-Dienst kann Postgres nicht mehr erreichen:
 
-## Vorgeschlagene Änderungen
+```
+500: error finding refresh token: failed to connect to
+  host=localhost user=supabase_auth_admin database=postgres
+  dial error (timeout: dial tcp [::1]:5432: i/o timeout)
+```
 
-### Option A (empfohlen): Worker häufiger heartbeaten lassen
+Zusätzlich antwortet der interne Metrics-Endpoint (`db_health`) nicht. Das ist ein Connection-/Sättigungsproblem auf Infrastruktur-Ebene — nicht durch einen Index sofort lösbar.
 
-1. `**docs/loxone-ws-worker/index.ts**`
-  - `BRIDGE_HEARTBEAT_MS` auf **60.000 ms** (= 1 Minute) setzen.
-  - Sicherstellen, dass der Heartbeat wirklich im konfigurierten Intervall gesendet wird (nicht nur alle 5 Min mit Reload).
-2. `**docs/loxone-ws-worker/Dockerfile**`
-  - `ENV BRIDGE_HEARTBEAT_MS=60000` setzen.
-3. **Live-Container**
-  - Env `BRIDGE_HEARTBEAT_MS=60000` in `docker-compose.yml`/Systemd-Unit übernehmen und Worker neu starten.
-4. **UI-Default**
-  - In `LoxoneWsStatus.tsx` den Fallback `180` auf **120 Sekunden** senken, damit ein Ausfall schneller erkannt wird, ohne falsch-positive.
+## Schritte
 
-### Option B: UI-Threshold an 5-Min-Worker anpassen (kein Worker-Deploy nötig)
+1. **Backend neu starten** (`supabase--restart`) — räumt hängende Backends, Locks und den Connection-Pool ab. Kurzer Ausfall (~30–60 s) erwartet.
+2. **Status verifizieren** (`supabase--cloud_status`) bis `ACTIVE_HEALTHY`, dann Test-Login.
+3. **Neu messen**:
+   - `supabase--db_health` — Connections, WAL, Deadlocks.
+   - `supabase--slow_queries` — sind es wieder `meter_cumulative_readings` + `integration_errors`?
+4. **Wenn die Slow-Query-Liste bestätigt ist**, per Migration nachziehen (Grundlast senken, künftige Blockade unwahrscheinlicher):
+   - Index auf `meter_cumulative_readings (meter_id, reading_at DESC)`
+   - Partial-Index auf `integration_errors (tenant_id) WHERE resolved_at IS NULL`
+   - Anschließend `EXPLAIN (ANALYZE, BUFFERS)` zur Verifikation.
+5. **Kurzer Health-Report** an dich: was war Ursache des Ausfalls, was war reine Grundlast.
 
-1. `**src/components/integrations/LoxoneWsStatus.tsx**`
-  - Fallback `180` auf **360 Sekunden** (6 Minuten) erhöhen.
-2. **Super-Admin-Einstellung**
-  - Im `WorkerControlsPanel.tsx` (falls vorhanden) Hinweis ergänzen, dass `loxone_ws_stale_threshold_seconds` mindestens so groß sein muss wie `BRIDGE_HEARTBEAT_MS`.
+## Wichtig / Erwartungsmanagement
 
-## Empfehlung
-
-**Option A**, weil:
-
-- Ein Heartbeat alle 5 Minuten zu grob ist, um Stale-Zustände schnell zu erkennen.
-- Die vorherige Änderung (v1.7) bereits auf 60s Heartbeat abzielte, aber das Dockerfile/Env wurde offenbar nicht mitgezogen.
-- `RELOAD_INTERVAL_MS` kann weiterhin 300.000 ms bleiben (Struktur-Neuladung ist unabhängig).
-
-## Abgrenzung
-
-- Keine Änderung an der WebSocket-Datenübertragung selbst.
-- Keine Änderung an der `RELOAD_INTERVAL_MS` (5 Min Struktur-Reload bleibt).
-- Keine neuen Datenbanktabellen.
-
-## Akzeptanzkriterien
-
-- `LoxoneWsStatus.tsx` zeigt eine Verbindung nicht mehr als „stale“ an, solange der Worker regelmäßig heartbeated.
-- Worker-Heartbeat-Intervall ist in Code (Dockerfile) und Live-Env identisch dokumentiert.
-- Nach Deploy: Logs zeigen Heartbeat alle 60 Sekunden, keine 5-Min-Lücken mehr.
+- Der Restart löst die *akute* Blockade, nicht die *Grundlast*. Schritt 4 ist die eigentliche Nachhaltigkeitsmaßnahme.
+- Sollte nach dem Restart die Sättigung sofort wiederkommen, ist die Ursache eher ein Traffic-Peak (Worker/Ingest) — dann sehen wir das in `slow_queries` / `db_health` und passen den nächsten Schritt entsprechend an (z. B. Ingest-Throttling), statt blind Indizes zu bauen.
