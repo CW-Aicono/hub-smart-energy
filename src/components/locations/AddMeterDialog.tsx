@@ -80,7 +80,10 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     else setUnit("kWh");
   }, [energyType]);
 
-  const unitOptions = energyType === "gas" ? ["m³", "kWh"] : null;
+  const unitOptions =
+    energyType === "gas" ? ["m³", "m³/h", "kWh"] :
+    energyType === "wasser" ? ["m³", "m³/h"] :
+    null;
 
   const enabledIntegrations = locationIntegrations.filter((li) => li.is_enabled);
 

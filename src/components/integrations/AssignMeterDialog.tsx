@@ -56,7 +56,18 @@ export function AssignMeterDialog({
   const T = (key: string) => t(key as any);
   const { addMeter } = useMeters();
 
-  const [energyType, setEnergyType] = useState("strom");
+  const inferEnergyType = (u: string, name: string): string => {
+    const unit = (u || "").trim();
+    const n = (name || "").toLowerCase();
+    if (["m³", "m³/h", "l", "l/min"].includes(unit) || /wasser|water/.test(n)) return "wasser";
+    if (/gas/.test(n)) return "gas";
+    if (/wärme|waerme|heat/.test(n)) return "waerme";
+    return "strom";
+  };
+  const firstSensor = sensorList[0];
+  const [energyType, setEnergyType] = useState(() =>
+    firstSensor ? inferEnergyType(firstSensor.unit, firstSensor.name) : "strom",
+  );
   const [saving, setSaving] = useState(false);
 
   const uniformDeviceType: "meter" | "sensor" | "actuator" | null = (() => {
@@ -75,16 +86,28 @@ export function AssignMeterDialog({
     try {
       for (const s of sensorList) {
         const dt: "meter" | "sensor" | "actuator" = s.deviceType ?? "sensor";
+        const rawUnit = (s.unit || "").trim();
+        // Meter.unit stores the totalizer/cumulative unit. Map rate units to their totalizer counterpart.
+        const totalizerUnit =
+          rawUnit === "m³/h" ? "m³" :
+          rawUnit === "l/min" ? "l" :
+          rawUnit === "kW" ? "kWh" :
+          rawUnit === "W" ? "Wh" :
+          rawUnit;
+        const meterUnit = dt === "meter"
+          ? (totalizerUnit || (energyType === "wasser" || energyType === "gas" ? "m³" : "kWh"))
+          : (rawUnit || "");
         await addMeter({
           name: s.name.trim(),
           location_id: currentLocationId,
           energy_type: energyType,
-          unit: s.unit || (dt === "meter" ? "kWh" : ""),
+          unit: meterUnit,
           capture_type: "automatic",
           device_type: dt,
           location_integration_id: locationIntegrationId,
           sensor_uuid: s.id,
-        });
+          ...(dt === "meter" && rawUnit ? { source_unit_power: rawUnit, source_unit_energy: totalizerUnit } : {}),
+        } as any);
       }
 
       const count = sensorList.length;

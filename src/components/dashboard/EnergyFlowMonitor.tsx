@@ -1361,11 +1361,17 @@ export function MeterDetailDialog({
   // Derive display units from the meter's configured unit so non-electric
   // media (water m³, gas m³, …) are not shown as kW/kWh.
   const meterUnitRaw = (nodeMeter?.unit ?? "").toString().trim();
+  const meterEnergyType = (nodeMeter?.energy_type ?? "").toString().trim();
   const { rateUnit, energyUnit } = (() => {
     const u = meterUnitRaw;
-    if (!u || /wh$/i.test(u)) return { rateUnit: "kW", energyUnit: "kWh" };
-    if (u === "m³" || u === "m3") return { rateUnit: "m³/h", energyUnit: "m³" };
-    if (u.toLowerCase() === "l" || u.toLowerCase() === "liter") return { rateUnit: "L/h", energyUnit: "L" };
+    if (u === "m³" || u === "m3" || u === "m³/h") return { rateUnit: "m³/h", energyUnit: "m³" };
+    if (u.toLowerCase() === "l" || u.toLowerCase() === "liter" || u === "l/min") return { rateUnit: "l/h", energyUnit: "l" };
+    if (!u || /wh$/i.test(u)) {
+      // Fallback when unit is missing/generic: use energy_type to avoid kW on water/gas meters.
+      if (meterEnergyType === "wasser") return { rateUnit: "m³/h", energyUnit: "m³" };
+      if (meterEnergyType === "gas") return { rateUnit: "m³/h", energyUnit: "m³" };
+      return { rateUnit: "kW", energyUnit: "kWh" };
+    }
     return { rateUnit: `${u}/h`, energyUnit: u };
   })();
 

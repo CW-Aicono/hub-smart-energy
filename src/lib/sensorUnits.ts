@@ -17,7 +17,6 @@ export const SOURCE_UNIT_GROUPS: SourceUnitGroup[] = [
     options: [
       { value: "kW", label: "kW / kWh" },
       { value: "W", label: "W / Wh" },
-      { value: "m³", label: "m³" },
     ],
   },
   {
@@ -55,10 +54,12 @@ export const SOURCE_UNIT_GROUPS: SourceUnitGroup[] = [
     ],
   },
   {
-    label: "Durchfluss",
+    label: "Durchfluss / Volumen",
     options: [
+      { value: "m³/h", label: "m³/h (Durchfluss)" },
+      { value: "m³", label: "m³ (Volumen / Zählerstand)" },
       { value: "l/min", label: "l/min (Liter pro Minute)" },
-      { value: "m³/h", label: "m³/h (Kubikmeter pro Stunde)" },
+      { value: "l", label: "l (Liter)" },
     ],
   },
   {
@@ -73,7 +74,8 @@ export const SOURCE_UNIT_GROUPS: SourceUnitGroup[] = [
 
 // Derive the energy-unit counterpart for power-style source units used by automatic meters.
 export function deriveEnergyUnit(sourceUnit: string): string {
-  if (sourceUnit === "m³") return "m³";
+  if (sourceUnit === "m³" || sourceUnit === "m³/h") return "m³";
+  if (sourceUnit === "l" || sourceUnit === "l/min") return "l";
   if (sourceUnit === "kW") return "kWh";
   if (sourceUnit === "W") return "Wh";
   // For non-energy sensor units (°C, %, hPa, ...) the cumulative/energy counterpart equals the source unit.
