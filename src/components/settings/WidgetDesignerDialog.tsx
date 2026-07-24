@@ -43,7 +43,7 @@ const AGGREGATIONS: { value: AggregationType; label: string }[] = [
   { value: "min", label: "Minimum" },
 ];
 
-const UNITS = ["kWh", "kW", "€", "m³", "MWh", "W", "%"];
+const UNITS = WIDGET_UNIT_OPTIONS;
 
 const PRESET_COLORS = [
   "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
