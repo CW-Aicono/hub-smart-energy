@@ -55,10 +55,12 @@ export const SOURCE_UNIT_GROUPS: SourceUnitGroup[] = [
     ],
   },
   {
-    label: "Durchfluss",
+    label: "Durchfluss / Volumen",
     options: [
+      { value: "m³/h", label: "m³/h (Durchfluss)" },
+      { value: "m³", label: "m³ (Volumen / Zählerstand)" },
       { value: "l/min", label: "l/min (Liter pro Minute)" },
-      { value: "m³/h", label: "m³/h (Kubikmeter pro Stunde)" },
+      { value: "l", label: "l (Liter)" },
     ],
   },
   {
