@@ -443,12 +443,23 @@ export function SensorsDialog({ locationIntegration, open, onOpenChange, locatio
                           )}
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          <div>{sensor.value} {sensor.unit}</div>
-                          {sensor.secondaryValue && (
-                            <div className="text-muted-foreground">
-                              {sensor.secondaryValue} {sensor.secondaryUnit}
-                            </div>
-                          )}
+                          {(() => {
+                            // Heuristic: Wasser-/Gaszähler melden bei Loxone oft eine
+                            // hartkodierte kW/kWh-Einheit, obwohl es sich um m³/h bzw. m³ handelt.
+                            const isFlow = /wasser|water|gas/i.test(sensor.name || "");
+                            const primaryUnit = isFlow && (sensor.unit === "kW" || !sensor.unit) ? "m³/h" : sensor.unit;
+                            const secondaryUnit = isFlow && (sensor.secondaryUnit === "kWh" || !sensor.secondaryUnit) ? "m³" : sensor.secondaryUnit;
+                            return (
+                              <>
+                                <div>{sensor.value} {primaryUnit}</div>
+                                {sensor.secondaryValue && (
+                                  <div className="text-muted-foreground">
+                                    {sensor.secondaryValue} {secondaryUnit}
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           {getStatusBadge(sensor.status)}

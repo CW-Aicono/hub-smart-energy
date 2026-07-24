@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useLocations } from "@/hooks/useLocations";
 import { useMeters } from "@/hooks/useMeters";
 import { useTranslation } from "@/hooks/useTranslation";
+import { powerUnitForMeter } from "@/lib/meterUnits";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -804,15 +805,18 @@ const LiveValues = () => {
                               ) : (
                                 <>
                               {(() => {
-                                    if (source === "live" && sensorUnit) {
+                                    // For flow-type meters (water/gas) the configured meter unit is authoritative.
+                                    const isFlow = meter.energy_type === "wasser" || meter.energy_type === "gas";
+                                    const meterPowerUnit = powerUnitForMeter(meter as any);
+                                    if (source === "live" && sensorUnit && !isFlow) {
                                       return `${value.toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${sensorUnit}`;
                                     }
                                     if (source === "live") {
-                                      const srcPower = (meter as any).source_unit_power || "kW";
+                                      const srcPower = (meter as any).source_unit_power || meterPowerUnit;
                                       if (srcPower === "W") {
                                         return `${(value / 1000).toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kW`;
                                       }
-                                      return `${value.toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kW`;
+                                      return `${value.toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${srcPower}`;
                                     }
                                     return `${value.toLocaleString(dateLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${meter.unit}`;
                                   })()}
