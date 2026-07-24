@@ -262,7 +262,7 @@ const EnergyData = () => {
             Datum: datePart,
             Zeit: timePart,
             Wert: r.power_avg,
-            Einheit: "kW",
+            Einheit: powerUnitForMeter(m),
           };
         });
         blocks.push({ name: "Leistung 5min", rows: out });
