@@ -1397,7 +1397,9 @@ serve(async (req) => {
 
         if (stateData?.secondaryValue !== null && stateData?.secondaryValue !== undefined) {
           secondaryStateName = stateData.secondaryStateName || "";
-          secondaryUnit = stateData.secondaryUnit || (mappingEntry?.secondaryUnit || "");
+          // Prefer totalizer unit derived from primary rate unit (e.g. m³/h → m³).
+          const _inferredSecondary = totalizerUnitFor(unit);
+          secondaryUnit = stateData.secondaryUnit || _inferredSecondary || (mappingEntry?.secondaryUnit || "");
           const rawSecondary = stateData.secondaryValue;
           if (typeof rawSecondary === "number") {
             secondaryValue = rawSecondary.toLocaleString("de-DE", { maximumFractionDigits: secondaryUnit === "kWh" ? 0 : 2 });
