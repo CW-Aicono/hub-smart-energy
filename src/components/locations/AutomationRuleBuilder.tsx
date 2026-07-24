@@ -876,6 +876,75 @@ export function AutomationRuleBuilder({
     }
   }, [templateRequiresCloud, executionMode]);
 
+  // Auto-Bereinigung: Wenn Ausführungsort auf lokal/hybrid wechselt,
+  // aus Bedingungen und Aktionen alle Geräte entfernen, die auf
+  // cloud-only Integrationen (z. B. Shelly Cloud) verweisen.
+  const isRefIncompatible = (integrationType: string | undefined) =>
+    executionMode !== "cloud" && isCloudOnlyIntegration(integrationType);
+
+  useEffect(() => {
+    if (executionMode === "cloud") return;
+    // Build id -> integrationType lookup from both flat sensors and MLA gateway options.
+    const typeById = new Map<string, string | undefined>();
+    for (const s of sensors) if (s._integrationType) typeById.set(s.id, s._integrationType);
+    if (gatewayOptions) {
+      for (const gw of gatewayOptions) {
+        for (const s of gw.sensors) typeById.set(s.id, gw.integrationType);
+      }
+    }
+    const cloudOnlyGwIds = new Set(
+      (gatewayOptions ?? []).filter((gw) => isCloudOnlyIntegration(gw.integrationType)).map((gw) => gw.id),
+    );
+
+    let condChanged = false;
+    const nextConditions = conditions.map((c) => {
+      const cloned = { ...c };
+      let touched = false;
+      if (cloned.sensor_uuid && isRefIncompatible(typeById.get(cloned.sensor_uuid))) {
+        cloned.sensor_uuid = ""; cloned.sensor_name = ""; cloned.unit = ""; touched = true;
+      }
+      if (cloned.actuator_uuid && isRefIncompatible(typeById.get(cloned.actuator_uuid))) {
+        cloned.actuator_uuid = ""; cloned.actuator_name = ""; touched = true;
+      }
+      if (cloned.gateway_id && cloudOnlyGwIds.has(cloned.gateway_id)) {
+        cloned.gateway_id = ""; cloned.sensor_uuid = ""; cloned.sensor_name = "";
+        cloned.actuator_uuid = ""; cloned.actuator_name = ""; touched = true;
+      }
+      if (touched) condChanged = true;
+      return cloned;
+    });
+    if (condChanged) setConditions(nextConditions);
+
+    let actChanged = false;
+    const nextActions = actions.map((a) => {
+      const cloned = { ...a };
+      let touched = false;
+      if (cloned.actuator_uuid && isRefIncompatible(typeById.get(cloned.actuator_uuid))) {
+        cloned.actuator_uuid = ""; cloned.actuator_name = ""; cloned.control_type = ""; touched = true;
+      }
+      if (cloned.gateway_id && cloudOnlyGwIds.has(cloned.gateway_id)) {
+        cloned.gateway_id = ""; cloned.actuator_uuid = ""; cloned.actuator_name = ""; cloned.control_type = ""; touched = true;
+      }
+      if (touched) actChanged = true;
+      return cloned;
+    });
+    if (actChanged) setActions(nextActions);
+
+    if (condChanged || actChanged) {
+      toast.warning("Cloud-Geräte sind bei lokaler/hybrider Ausführung nicht verfügbar und wurden entfernt.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [executionMode]);
+
+  // Hinweis-Text: gibt es überhaupt cloud-only Geräte, die aktuell unterdrückt werden?
+  const hasHiddenCloudDevices = useMemo(() => {
+    if (executionMode === "cloud") return false;
+    if (gatewayOptions) return gatewayOptions.some((gw) => isCloudOnlyIntegration(gw.integrationType));
+    return sensors.some((s) => isCloudOnlyIntegration(s._integrationType));
+  }, [executionMode, gatewayOptions, sensors]);
+
+
+
 
   const handleSave = async () => {
     if (!name.trim()) { toast.error("Name ist erforderlich"); return; }
