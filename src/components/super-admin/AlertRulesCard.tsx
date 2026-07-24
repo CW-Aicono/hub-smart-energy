@@ -8,12 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Bell, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Bell, Plus, Trash2, AlertTriangle, Pencil } from "lucide-react";
 import {
   useMonitoringAlertRules, type AlertRule, type AlertRuleInput,
 } from "@/hooks/useMonitoringAlertRules";
@@ -52,18 +52,52 @@ function evaluateRule(rule: AlertRule, value: number): boolean {
 
 const fmt = (n: number) => n.toLocaleString("de-DE", { maximumFractionDigits: 2 });
 
+const emptyForm: AlertRuleInput = {
+  metric_category: KNOWN_METRICS[0].category,
+  metric_name: KNOWN_METRICS[0].name,
+  comparator: ">",
+  threshold: 0,
+  severity: "warning",
+  enabled: true,
+  notify_email: "",
+};
+
 export default function AlertRulesCard({ getLatest }: Props) {
   const { data: rules = [], isLoading, create, update, remove } = useMonitoringAlertRules();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<AlertRuleInput>({
-    metric_category: KNOWN_METRICS[0].category,
-    metric_name: KNOWN_METRICS[0].name,
-    comparator: ">",
-    threshold: 0,
-    severity: "warning",
-    enabled: true,
-    notify_email: "",
-  });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<AlertRuleInput>(emptyForm);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setOpen(true);
+  };
+
+  const openEdit = (r: AlertRule) => {
+    setEditingId(r.id);
+    setForm({
+      metric_category: r.metric_category,
+      metric_name: r.metric_name,
+      comparator: r.comparator,
+      threshold: r.threshold,
+      severity: r.severity,
+      enabled: r.enabled,
+      notify_email: r.notify_email,
+    });
+    setOpen(true);
+  };
+
+  const submit = () => {
+    if (editingId) {
+      update.mutate(
+        { id: editingId, patch: form },
+        { onSuccess: () => setOpen(false) },
+      );
+    } else {
+      create.mutate(form, { onSuccess: () => setOpen(false) });
+    }
+  };
 
   const violations = useMemo(() => {
     return rules
@@ -87,15 +121,13 @@ export default function AlertRulesCard({ getLatest }: Props) {
             </Badge>
           )}
         </CardTitle>
+        <Button size="sm" variant="outline" onClick={openCreate}>
+          <Plus className="h-4 w-4 mr-1" /> Regel
+        </Button>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" variant="outline">
-              <Plus className="h-4 w-4 mr-1" /> Regel
-            </Button>
-          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Alert-Regel anlegen</DialogTitle>
+              <DialogTitle>{editingId ? "Alert-Regel bearbeiten" : "Alert-Regel anlegen"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               <div className="space-y-1.5">
@@ -156,6 +188,16 @@ export default function AlertRulesCard({ getLatest }: Props) {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div>
+                  <Label className="text-sm">Aktiv</Label>
+                  <p className="text-xs text-muted-foreground">Regel wird bei Prüfung ausgewertet.</p>
+                </div>
+                <Switch
+                  checked={form.enabled}
+                  onCheckedChange={(checked) => setForm((f) => ({ ...f, enabled: checked }))}
+                />
+              </div>
               <div className="space-y-1.5">
                 <Label>Benachrichtigungs-E-Mail (optional)</Label>
                 <Input
@@ -168,13 +210,8 @@ export default function AlertRulesCard({ getLatest }: Props) {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>Abbrechen</Button>
-              <Button
-                onClick={() => {
-                  create.mutate(form, { onSuccess: () => setOpen(false) });
-                }}
-                disabled={create.isPending}
-              >
-                Anlegen
+              <Button onClick={submit} disabled={create.isPending || update.isPending}>
+                {editingId ? "Speichern" : "Anlegen"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -227,14 +264,25 @@ export default function AlertRulesCard({ getLatest }: Props) {
                       </td>
                       <td className="py-2 pr-2 text-xs text-muted-foreground">{r.notify_email ?? "–"}</td>
                       <td className="py-2 pr-2 text-right">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => remove.mutate(r.id)}
-                          disabled={remove.isPending}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => openEdit(r)}
+                            aria-label="Regel bearbeiten"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => remove.mutate(r.id)}
+                            disabled={remove.isPending}
+                            aria-label="Regel löschen"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
