@@ -20,6 +20,7 @@ import { downloadCSV, downloadPDF, downloadCsvZip, downloadXlsxMulti } from "@/l
 import { toast } from "sonner";
 import ReportSchedulesList from "@/components/energy-data/ReportSchedulesList";
 import { supabase } from "@/integrations/supabase/client";
+import { powerUnitForMeter, energyUnitForMeter } from "@/lib/meterUnits";
 
 const DataImportDialog = lazy(() => import("@/components/energy-data/DataImportDialog"));
 const InvoicesList = lazy(() => import("@/components/energy-data/InvoicesList"));
