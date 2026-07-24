@@ -38,6 +38,8 @@ import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
 import { LocationChargingInfrastructure } from "./LocationChargingInfrastructure";
 import { confirmDialog } from "@/components/ui/confirm-dialog";
 import { getDeviceIconForSensor, getDeviceIconForMeter } from "@/lib/deviceIcons";
+import { energyUnitForMeter } from "@/lib/meterUnits";
+import { useLatestMeterValues } from "@/hooks/useLatestMeterValues";
 
 interface MeterManagementProps {
   locationId: string;
