@@ -261,6 +261,7 @@ function ConditionCard({
   onRemove,
   gatewayOptions,
   deviceTypeMap,
+  executionMode,
 }: {
   condition: AutomationCondition;
   sensors: LoxoneSensor[];
@@ -268,19 +269,32 @@ function ConditionCard({
   onRemove: () => void;
   gatewayOptions?: GatewayOption[];
   deviceTypeMap?: Map<string, string>;
+  executionMode: AutomationExecutionMode;
 }) {
   const condType = CONDITION_TYPES.find((t) => t.value === condition.type);
   const CondIcon = condType?.icon || Zap;
 
-  const isMLA = !!gatewayOptions && gatewayOptions.length > 0;
+  // Filter gateway options for local/hybrid modes: cloud-only integrations are forbidden.
+  const allowedGatewayOptions = useMemo(() => {
+    if (!gatewayOptions) return undefined;
+    if (executionMode === "cloud") return gatewayOptions;
+    return gatewayOptions.filter((gw) => !isCloudOnlyIntegration(gw.integrationType));
+  }, [gatewayOptions, executionMode]);
+
+  const isMLA = !!allowedGatewayOptions && allowedGatewayOptions.length > 0;
 
   // In MLA mode, filter sensors by selected gateway
   // All devices for this gateway (unfiltered, used by status condition for actuator selection)
   const effectiveSensors = useMemo(() => {
-    if (!isMLA || !condition.gateway_id) return isMLA ? [] : sensors;
-    const gw = gatewayOptions!.find((g) => g.id === condition.gateway_id);
-    return gw?.sensors || [];
-  }, [isMLA, condition.gateway_id, gatewayOptions, sensors]);
+    if (isMLA) {
+      if (!condition.gateway_id) return [];
+      const gw = allowedGatewayOptions!.find((g) => g.id === condition.gateway_id);
+      return gw?.sensors || [];
+    }
+    // Non-MLA: filter merged sensor list by execution mode (drop cloud-only devices in local/hybrid).
+    if (executionMode === "cloud") return sensors;
+    return sensors.filter((s) => isDeviceAllowedForExecutionMode(s._integrationType, executionMode));
+  }, [isMLA, condition.gateway_id, allowedGatewayOptions, sensors, executionMode]);
 
   // Only sensors & meters for sensor_value condition dropdowns (use deviceTypeMap if available)
   const sensorOnlyDevices = useMemo(() => {
