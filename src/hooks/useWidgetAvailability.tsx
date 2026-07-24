@@ -49,11 +49,6 @@ export function useWidgetAvailability(selectedLocationId: string | null) {
         .select("id", head)
         .eq("tenant_id", tenantId!)
         .eq("is_dynamic", true);
-      const integrationErrQ = supabase
-        .from("integration_errors")
-        .select("id", head)
-        .eq("tenant_id", tenantId!)
-        .is("resolved_at", null);
 
       const [
         metersRes,
@@ -67,7 +62,7 @@ export function useWidgetAvailability(selectedLocationId: string | null) {
         arbitrageStratRes,
         ppaRes,
         savingsRes,
-        integrationErrRes,
+        
         locationCountRes,
       ] = await Promise.all([
         loc ? metersQ.eq("location_id", loc) : metersQ,
@@ -81,7 +76,7 @@ export function useWidgetAvailability(selectedLocationId: string | null) {
         supabase.from("arbitrage_strategies").select("id", head).eq("tenant_id", tenantId!).eq("is_active", true),
         supabase.from("ppa_contracts").select("id", head).eq("tenant_id", tenantId!),
         supabase.from("tenant_savings_contracts").select("id", head).eq("tenant_id", tenantId!),
-        loc ? integrationErrQ.eq("location_id", loc) : integrationErrQ,
+        
         supabase.from("locations").select("id", head).eq("tenant_id", tenantId!),
       ]);
 
@@ -95,7 +90,7 @@ export function useWidgetAvailability(selectedLocationId: string | null) {
         hasArbitrageStrategy: has(arbitrageStratRes.count),
         hasPpaContract: has(ppaRes.count),
         hasSavingsContract: has(savingsRes.count),
-        hasIntegrationError: has(integrationErrRes.count),
+        
         hasMultipleLocations: (locationCountRes.count ?? 0) >= 2,
       };
     },
