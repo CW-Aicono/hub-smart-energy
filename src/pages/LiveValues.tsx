@@ -887,7 +887,7 @@ const LiveValues = () => {
                             )}
                           </div>
                         )}
-                        {(source === "live" || source === "virtual") && meterReading != null && (
+                        {!isStateSensor && (source === "live" || source === "virtual") && meterReading != null && (
                           <div className="text-sm text-muted-foreground">
                             <span className="font-medium">
                               {meter.energy_type === "wasser" || meter.energy_type === "gas"
