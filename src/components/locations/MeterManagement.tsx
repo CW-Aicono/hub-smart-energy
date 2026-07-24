@@ -798,6 +798,10 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <TableHeader>
                   <TableRow>
                      {isAdmin && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                     {isAdmin && (
                        <TableHead className="w-8">
                          <Checkbox
                            checked={displayedMeters.length > 0 && displayedMeters.every((m) => selectedMeterIds.has(m.id))}
@@ -809,16 +813,35 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                          />
                        </TableHead>
                      )}
-                     <TableHead>{t("common.name" as any)}</TableHead>
-                     <TableHead>{t("mm.meterNumber" as any)}</TableHead>
-                     <TableHead>{t("mm.captureType" as any)}</TableHead>
-                     <TableHead>{t("mm.energyType" as any)}</TableHead>
-                     <TableHead>{t("mm.unit" as any)}</TableHead>
+                     <TableHead className="w-[40px]">Typ</TableHead>
+                     <TableHead>
+                       <SortableHeadUI label={t("common.name" as any)} sortKey="name" sort={{ key: mmSortKey, direction: mmSortDir }} onToggle={toggleMmSort} />
+                     </TableHead>
+                     <TableHead>
+                       <SortableHeadUI label="Raum" sortKey="room" sort={{ key: mmSortKey, direction: mmSortDir }} onToggle={toggleMmSort} />
+                     </TableHead>
+                     <TableHead>
+                       <SortableHeadUI label={t("mm.energyType" as any)} sortKey="energy" sort={{ key: mmSortKey, direction: mmSortDir }} onToggle={toggleMmSort} />
+                     </TableHead>
+                     <TableHead>
+                       <SortableHeadUI label={t("mm.captureType" as any)} sortKey="capture" sort={{ key: mmSortKey, direction: mmSortDir }} onToggle={toggleMmSort} />
+                     </TableHead>
+                     <TableHead className="text-right">
+                       <SortableHeadUI label="Wert" sortKey="value" sort={{ key: mmSortKey, direction: mmSortDir }} onToggle={toggleMmSort} align="right" />
+                     </TableHead>
                      {isAdmin && <TableHead className="w-32" />}
                    </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {displayedMeters.map((m) => (
+                  {sortedDisplayedMeters.map((m) => {
+                    const Icon = getDeviceIconForMeter(m);
+                    const room = m.room_id ? roomNameById.get(m.room_id) : null;
+                    const latest = latestMeterValues.get(m.id);
+                    const unit = energyUnitForMeter(m);
+                    const valueText = latest?.value != null
+                      ? `${latest.value.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${unit}`
+                      : "—";
+                    return (
                     <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
                        {isAdmin && (
                          <TableCell className="w-8">
@@ -837,6 +860,11 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                          </TableCell>
                        )}
                        <TableCell>
+                         <div className="p-1.5 rounded bg-muted w-fit">
+                           <Icon className="h-4 w-4" />
+                         </div>
+                       </TableCell>
+                       <TableCell>
                          <button
                            className="font-medium text-left hover:underline text-primary cursor-pointer"
                            onClick={() => setEditingMeter(m)}
@@ -844,16 +872,16 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                            {m.name}
                          </button>
                        </TableCell>
-                      <TableCell>{m.meter_number || "–"}</TableCell>
+                       <TableCell className="text-muted-foreground">{room || "–"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={ENERGY_BADGE_CLASSES[m.energy_type] || ""}>{ENERGY_TYPE_LABELS[m.energy_type] || m.energy_type}</Badge>
+                      </TableCell>
                       <TableCell>
                         <Badge variant={m.capture_type === "automatic" ? "default" : m.capture_type === "virtual" ? "outline" : "secondary"}>
                           {m.capture_type === "automatic" ? t("mm.captureAutomatic" as any) : m.capture_type === "virtual" ? t("mm.captureVirtual" as any) : t("mm.captureManual" as any)}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={ENERGY_BADGE_CLASSES[m.energy_type] || ""}>{ENERGY_TYPE_LABELS[m.energy_type] || m.energy_type}</Badge>
-                      </TableCell>
-                      <TableCell>{m.unit}</TableCell>
+                      <TableCell className="text-right font-mono text-sm">{valueText}</TableCell>
                       {isAdmin && (
                         <TableCell className="flex gap-1">
                           {!m.is_archived && (
@@ -878,7 +906,8 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                         </TableCell>
                       )}
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
               </>
