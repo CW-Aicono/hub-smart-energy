@@ -16,6 +16,7 @@ import ResizableWidget from "@/components/dashboard/ResizableWidget";
 
 import { useDashboardPrefetch } from "@/hooks/useDashboardPrefetch";
 import { useWidgetAvailability } from "@/hooks/useWidgetAvailability";
+import { useTenant } from "@/hooks/useTenant";
 import { isWidgetAvailable } from "@/lib/widgetRequirements";
 
 // Per-widget height constraints (px, wrapper incl. drag-handle row).
