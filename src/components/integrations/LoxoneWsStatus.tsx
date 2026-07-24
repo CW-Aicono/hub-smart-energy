@@ -43,10 +43,10 @@ export function LoxoneWsStatus({ locationIntegrationId, enabled }: LoxoneWsStatu
   if (!enabled) return null;
 
   // Stale-Schwelle (Sekunden) ist im Super-Admin konfigurierbar
-  // (system_settings.public.loxone_ws_stale_threshold_seconds). Fallback 180 s.
+  // (system_settings.public.loxone_ws_stale_threshold_seconds). Fallback 120 s.
   const staleThresholdSec = useSystemSettingNumber(
     "public.loxone_ws_stale_threshold_seconds",
-    180,
+    120,
   );
   const staleThresholdMs = Math.max(30, staleThresholdSec) * 1000;
 

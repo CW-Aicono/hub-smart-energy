@@ -31,7 +31,7 @@
  *   LOG_LEVEL           "debug" | "info" | "warn" | "error" (Standard: "info")
  *   WORKER_HOST         Freier Text, taucht im Session-Log auf (Standard: hostname)
  *   BRIDGE_WORKER_NAME  Name in Tabelle bridge_workers (Standard: hetzner-bridge-test)
- *   BRIDGE_HEARTBEAT_MS Heartbeat-Intervall in ms (Standard: 30000)
+ *   BRIDGE_HEARTBEAT_MS Heartbeat-Intervall in ms (Standard: 60000)
  *   HEALTH_PORT         HTTP-Port für /healthz und /state (Standard: 8080, 0 = aus)
  *   WORKER_VERSION      Versions-String, taucht in bridge_workers.version auf
  *   WATCHDOG_STALE_MS   (Phase 3) Forcierter Reconnect, wenn so lange kein Event
@@ -60,14 +60,13 @@ const RELOAD_INTERVAL_MS = parseInt(process.env.RELOAD_INTERVAL_MS || "300000", 
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
 const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
 const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
-// Phase 6: Heartbeat-Intervall von 30s auf 5min erhöht (IO-Optimierung)
-const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "300000", 10);
-// v1.7 (23.07.2026): Session-Heartbeat wieder alle 60 s (statt 5 min).
-// Der 5-Minuten-Wert der IO-Notbremse v1.3 führte in der UI zu "stale"-Anzeigen,
+// v1.7/v1.9 (23.07.2026): Bridge-Heartbeat wieder alle 60 s (statt 5 min).
+// Der 5-Minuten-Wert der IO-Notbremse führte in der UI zu "stale"-Anzeigen,
 // obwohl die Verbindung stabil war. Der Heartbeat ist ein günstiges UPDATE mit
-// fillfactor=80/HOT-Update — die zusätzliche Last ist vernachlässigbar. Er läuft
-// in einem eigenen setInterval unabhängig vom Bucket-Flush, damit updated_at
-// garantiert alle 60 s frisch bleibt.
+// fillfactor=80/HOT-Update — die zusätzliche Last ist vernachlässigbar.
+const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "60000", 10);
+// Session-Heartbeat alle 60 s: hält die aktive Session "live" und liefert
+// gleichzeitig den updated_at-Puls für LoxoneWsStatus.
 const SESSION_HEARTBEAT_MS = Math.max(
   30_000,
   parseInt(process.env.SESSION_HEARTBEAT_MS || "60000", 10),
