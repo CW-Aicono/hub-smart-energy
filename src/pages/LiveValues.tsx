@@ -857,7 +857,7 @@ const LiveValues = () => {
                             ≈ {formatGasDual(value, (meter as any).gas_type, (meter as any).brennwert, (meter as any).zustandszahl).kwhStr}
                           </div>
                         )}
-                        {totalDay != null && totalDay !== undefined && (
+                        {!isStateSensor && totalDay != null && totalDay !== undefined && (
                           <div className="text-sm text-muted-foreground font-medium">
                             {meter.energy_type === "gas" ? (
                               <>
