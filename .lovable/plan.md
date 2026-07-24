@@ -1,32 +1,40 @@
+# Performance-Fix: Partial-Index auf `integration_errors`
 
-# Akute Auth-Blockade beheben — Restart + Neubewertung
+## Ausgangslage
 
-## Ausgangslage (verifiziert aus Auth-Logs)
+Im Performance-Check zeigt sich:
 
-Der Auth-Dienst kann Postgres nicht mehr erreichen:
+- `integration_errors` Abfrage (Filter: `tenant_id` + `resolved_at IS NULL`) läuft im Mittel **~3,4 s**, Spitzen bis 6 s.
+- Tabelle ist klein (19 MB Daten, 7 MB Indizes).
+- Die langsame Abfrage wird vom Dashboard-Widget (`IntegrationErrorsWidget`), vom Task-System und von Edge Functions regelmäßig ausgeführt.
 
-```
-500: error finding refresh token: failed to connect to
-  host=localhost user=supabase_auth_admin database=postgres
-  dial error (timeout: dial tcp [::1]:5432: i/o timeout)
-```
+## Ziel
 
-Zusätzlich antwortet der interne Metrics-Endpoint (`db_health`) nicht. Das ist ein Connection-/Sättigungsproblem auf Infrastruktur-Ebene — nicht durch einen Index sofort lösbar.
+Einen gezielten Partial-Index anlegen, der nur offene Fehler indexiert und die Abfrage auf wenige Millisekunden beschleunigt.
 
-## Schritte
+## Umsetzung
 
-1. **Backend neu starten** (`supabase--restart`) — räumt hängende Backends, Locks und den Connection-Pool ab. Kurzer Ausfall (~30–60 s) erwartet.
-2. **Status verifizieren** (`supabase--cloud_status`) bis `ACTIVE_HEALTHY`, dann Test-Login.
-3. **Neu messen**:
-   - `supabase--db_health` — Connections, WAL, Deadlocks.
-   - `supabase--slow_queries` — sind es wieder `meter_cumulative_readings` + `integration_errors`?
-4. **Wenn die Slow-Query-Liste bestätigt ist**, per Migration nachziehen (Grundlast senken, künftige Blockade unwahrscheinlicher):
-   - Index auf `meter_cumulative_readings (meter_id, reading_at DESC)`
-   - Partial-Index auf `integration_errors (tenant_id) WHERE resolved_at IS NULL`
-   - Anschließend `EXPLAIN (ANALYZE, BUFFERS)` zur Verifikation.
-5. **Kurzer Health-Report** an dich: was war Ursache des Ausfalls, was war reine Grundlast.
+1. **Migration anlegen**
+   - Partial-Index auf `integration_errors (tenant_id)`
+   - Bedingung: `WHERE resolved_at IS NULL`
+   - Name: `idx_integration_errors_unresolved_tenant`
 
-## Wichtig / Erwartungsmanagement
+2. **Verifikation**
+   - `EXPLAIN (ANALYZE, BUFFERS)` auf die typische Abfrage ausführen.
+   - Sicherstellen, dass der Index verwendet wird.
 
-- Der Restart löst die *akute* Blockade, nicht die *Grundlast*. Schritt 4 ist die eigentliche Nachhaltigkeitsmaßnahme.
-- Sollte nach dem Restart die Sättigung sofort wiederkommen, ist die Ursache eher ein Traffic-Peak (Worker/Ingest) — dann sehen wir das in `slow_queries` / `db_health` und passen den nächsten Schritt entsprechend an (z. B. Ingest-Throttling), statt blind Indizes zu bauen.
+3. **Monitoring**
+   - Nach ~30–60 Minuten `slow_queries` erneut prüfen.
+   - Sollte `integration_errors` nicht mehr in den Top-Slow-Queries auftauchen.
+
+## Nicht im Scope
+
+- Keine weiteren Indizes oder Schema-Änderungen.
+- Keine Logik-Änderung an Widgets oder Edge Functions.
+- Kein Backend-Restart (nicht nötig).
+
+## Erwartetes Ergebnis
+
+- Die Abfrage für offene Integrationsfehler sinkt von mehreren Sekunden auf < 50 ms.
+- Das Dashboard-Widget und das Task-System reagieren spürbar schneller.
+- Kein nennenswerter zusätzlicher Schreib-Overhead, da der Index nur offene Zeilen umfasst.
