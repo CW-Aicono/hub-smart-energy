@@ -749,14 +749,18 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                       variant="outline"
                       onClick={() => {
                         const rows = displayedMeters.filter((m) => selectedMeterIds.has(m.id));
-                        const header = ["Name", "Zählernummer", "Erfassung", "Energieart", "Einheit"];
+                        const header = ["Name", "Raum", "Energieart", "Erfassung", "Wert", "Einheit"];
                         const csv = [header.join(";")]
                           .concat(
-                            rows.map((r) =>
-                              [r.name, r.meter_number ?? "", r.capture_type ?? "", r.energy_type ?? "", r.unit ?? ""]
+                            rows.map((r) => {
+                              const room = r.room_id ? roomNameById.get(r.room_id) || "" : "";
+                              const unit = energyUnitForMeter(r);
+                              const v = latestMeterValues.get(r.id)?.value;
+                              const val = v != null ? v.toLocaleString("de-DE", { maximumFractionDigits: 2 }) : "";
+                              return [r.name, room, r.energy_type ?? "", r.capture_type ?? "", val, unit]
                                 .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-                                .join(";"),
-                            ),
+                                .join(";");
+                            }),
                           )
                           .join("\n");
                         const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
