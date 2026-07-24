@@ -74,7 +74,8 @@ export const SOURCE_UNIT_GROUPS: SourceUnitGroup[] = [
 
 // Derive the energy-unit counterpart for power-style source units used by automatic meters.
 export function deriveEnergyUnit(sourceUnit: string): string {
-  if (sourceUnit === "m³") return "m³";
+  if (sourceUnit === "m³" || sourceUnit === "m³/h") return "m³";
+  if (sourceUnit === "l" || sourceUnit === "l/min") return "l";
   if (sourceUnit === "kW") return "kWh";
   if (sourceUnit === "W") return "Wh";
   // For non-energy sensor units (°C, %, hPa, ...) the cumulative/energy counterpart equals the source unit.
