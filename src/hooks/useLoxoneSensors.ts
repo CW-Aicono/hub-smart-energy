@@ -66,6 +66,10 @@ export interface GatewaySensor {
   totalWeek: number | null;
   totalMonth: number | null;
   totalYear: number | null;
+  /** Optional: integration type of the gateway that provides this device
+   *  (e.g. "loxone_miniserver", "shelly_cloud"). Populated by consumers
+   *  that aggregate multi-gateway lists (LocationAutomation, Automation). */
+  _integrationType?: string;
 }
 
 // Re-export as LoxoneSensor for backwards-compat
