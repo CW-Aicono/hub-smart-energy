@@ -12732,6 +12732,7 @@ export type Database = {
           sepa_iban: string | null
           sepa_mandate_date: string | null
           sepa_mandate_ref: string | null
+          show_empty_widgets: boolean
           show_manual_meters: boolean
           slug: string
           status: string
@@ -12777,6 +12778,7 @@ export type Database = {
           sepa_iban?: string | null
           sepa_mandate_date?: string | null
           sepa_mandate_ref?: string | null
+          show_empty_widgets?: boolean
           show_manual_meters?: boolean
           slug: string
           status?: string
@@ -12822,6 +12824,7 @@ export type Database = {
           sepa_iban?: string | null
           sepa_mandate_date?: string | null
           sepa_mandate_ref?: string | null
+          show_empty_widgets?: boolean
           show_manual_meters?: boolean
           slug?: string
           status?: string

@@ -7,6 +7,7 @@ import { BrandingSettings } from "@/components/settings/BrandingSettings";
 import { WeekStartSetting } from "@/components/settings/WeekStartSetting";
 import { AutoLogoutSetting } from "@/components/settings/AutoLogoutSetting";
 import { ManualMetersSetting } from "@/components/settings/ManualMetersSetting";
+import { EmptyWidgetsSetting } from "@/components/settings/EmptyWidgetsSetting";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Palette } from "lucide-react";
 
@@ -48,6 +49,7 @@ const Branding = () => {
           <WeekStartSetting />
           <AutoLogoutSetting />
           <ManualMetersSetting />
+          <EmptyWidgetsSetting />
           <BrandingSettings />
         </div>
       </main>
