@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WidgetPreview } from "./WidgetPreview";
 import { EnergyFlowDesigner } from "./EnergyFlowDesigner";
 import { BarChart3, LineChart, Gauge, Activity, Table2, Plus, X, GitBranch, Search } from "lucide-react";
+import { WIDGET_UNIT_OPTIONS, suggestWidgetUnit } from "@/lib/meterUnits";
 
 const CHART_TYPES: { value: ChartType; label: string; icon: React.ReactNode }[] = [
   { value: "line", label: "Liniendiagramm", icon: <LineChart className="h-5 w-5" /> },
