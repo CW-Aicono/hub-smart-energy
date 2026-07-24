@@ -1836,7 +1836,7 @@ export function MeterDetailDialog({
                           {kw != null && (
                             <div className="flex items-center gap-2">
                               <span className="inline-block h-2 w-2 rounded-sm" style={{ background: node.color }} />
-                              <span>Leistung: <span className="font-medium tabular-nums">{fmtDeNum(Number(kw))} kW</span></span>
+                              <span>Leistung: <span className="font-medium tabular-nums">{fmtDeNum(Number(kw))} {rateUnit}</span></span>
                             </div>
                           )}
                           {soc != null && (
