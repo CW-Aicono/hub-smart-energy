@@ -741,6 +741,13 @@ const LiveValues = () => {
                 const location = locations.find((l) => l.id === meter.location_id);
                 const isFlowType = meter.energy_type === "wasser" || meter.energy_type === "gas";
                 const soc = socByMeterId.get(meter.id);
+                // Non-Energie-Sensoren (Zustand, Zähler, Zeit, Temperatur …) sollen
+                // keine kWh-Summen anzeigen und "bool" wird als An/Aus dargestellt.
+                const displayUnit = ((meter as any).source_unit_power || meter.unit || "").toString();
+                const ENERGY_UNITS = new Set(["kW", "kWh", "W", "Wh", "MW", "MWh"]);
+                const isBoolUnit = displayUnit === "bool";
+                const isEnergyUnit = ENERGY_UNITS.has(displayUnit);
+                const isStateSensor = !isFlowType && !isEnergyUnit;
 
                 const openDetail = () => {
                   const role: EnergyFlowNodeRole = soc ? "battery" : "consumer";
