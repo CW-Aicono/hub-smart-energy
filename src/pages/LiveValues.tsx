@@ -741,6 +741,13 @@ const LiveValues = () => {
                 const location = locations.find((l) => l.id === meter.location_id);
                 const isFlowType = meter.energy_type === "wasser" || meter.energy_type === "gas";
                 const soc = socByMeterId.get(meter.id);
+                // Non-Energie-Sensoren (Zustand, Zähler, Zeit, Temperatur …) sollen
+                // keine kWh-Summen anzeigen und "bool" wird als An/Aus dargestellt.
+                const displayUnit = ((meter as any).source_unit_power || meter.unit || "").toString();
+                const ENERGY_UNITS = new Set(["kW", "kWh", "W", "Wh", "MW", "MWh"]);
+                const isBoolUnit = displayUnit === "bool";
+                const isEnergyUnit = ENERGY_UNITS.has(displayUnit);
+                const isStateSensor = !isFlowType && !isEnergyUnit;
 
                 const openDetail = () => {
                   const role: EnergyFlowNodeRole = soc ? "battery" : "consumer";
@@ -802,6 +809,13 @@ const LiveValues = () => {
                                     <span className="text-sm font-normal text-muted-foreground ml-1">{t("liveValues.flow" as any)}</span>
                                   )}
                                 </>
+                              ) : isBoolUnit ? (
+                                <>{value >= 0.5 ? "An" : "Aus"}</>
+                              ) : isStateSensor ? (
+                                <>
+                                  {value.toLocaleString(dateLocale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                  {displayUnit && <span className="ml-1">{displayUnit}</span>}
+                                </>
                               ) : (
                                 <>
                               {(() => {
@@ -843,7 +857,7 @@ const LiveValues = () => {
                             ≈ {formatGasDual(value, (meter as any).gas_type, (meter as any).brennwert, (meter as any).zustandszahl).kwhStr}
                           </div>
                         )}
-                        {totalDay != null && totalDay !== undefined && (
+                        {!isStateSensor && totalDay != null && totalDay !== undefined && (
                           <div className="text-sm text-muted-foreground font-medium">
                             {meter.energy_type === "gas" ? (
                               <>
@@ -873,7 +887,7 @@ const LiveValues = () => {
                             )}
                           </div>
                         )}
-                        {(source === "live" || source === "virtual") && meterReading != null && (
+                        {!isStateSensor && (source === "live" || source === "virtual") && meterReading != null && (
                           <div className="text-sm text-muted-foreground">
                             <span className="font-medium">
                               {meter.energy_type === "wasser" || meter.energy_type === "gas"
@@ -885,7 +899,7 @@ const LiveValues = () => {
                             <span className="ml-1 font-normal">{t("liveValues.meterReading" as any)}</span>
                           </div>
                         )}
-                        {(source === "live" || source === "virtual") && (totalMonth != null || totalYear != null) && (
+                        {!isStateSensor && (source === "live" || source === "virtual") && (totalMonth != null || totalYear != null) && (
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                             {totalMonth != null && (
                               <span>{t("liveValues.month" as any)}: {meter.energy_type === "wasser" || meter.energy_type === "gas"

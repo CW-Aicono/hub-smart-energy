@@ -63,11 +63,20 @@ export const SOURCE_UNIT_GROUPS: SourceUnitGroup[] = [
     ],
   },
   {
+    label: "Zeit",
+    options: [
+      { value: "ms", label: "ms (Millisekunden)" },
+      { value: "sek", label: "sek (Sekunden)" },
+      { value: "min", label: "min (Minuten)" },
+      { value: "std", label: "std (Stunden)" },
+    ],
+  },
+  {
     label: "Zähler / Sonstiges",
     options: [
       { value: "Impulse", label: "Impulse" },
       { value: "Anzahl", label: "Anzahl" },
-      { value: "bool", label: "An/Aus (bool)" },
+      { value: "bool", label: "An/Aus" },
     ],
   },
 ];
