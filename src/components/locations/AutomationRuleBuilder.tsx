@@ -42,6 +42,7 @@ import {
 import { LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
 import { isCloudRequiredTemplate } from "@/lib/loxone/snippetsCatalog";
+import { isCloudOnlyIntegration, isDeviceAllowedForExecutionMode } from "@/lib/gatewayExecution";
 import { toast } from "sonner";
 
 // ── Types ──
