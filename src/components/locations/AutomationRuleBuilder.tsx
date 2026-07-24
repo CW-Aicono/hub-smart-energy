@@ -1250,6 +1250,7 @@ export function AutomationRuleBuilder({
                     onRemove={() => removeCondition(cond.id)}
                     gatewayOptions={gatewayOptions}
                     deviceTypeMap={deviceTypeMap}
+                    executionMode={executionMode}
                   />
                 </div>
               ))}
