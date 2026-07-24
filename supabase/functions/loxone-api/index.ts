@@ -1368,6 +1368,16 @@ serve(async (req) => {
           unit = detected.unit;
         }
 
+        // Override the (possibly hardcoded) unit with the real unit from the Loxone
+        // control's format string when available (e.g. water meter → "m³/h" instead of "kW").
+        const _details = (control as any).details;
+        const _formatUnit = _details && typeof _details === "object"
+          ? extractUnitFromFormat(_details.format ?? _details.formatValue)
+          : null;
+        if (_formatUnit) {
+          unit = _formatUnit;
+        }
+
         // Get the fetched value(s)
         const stateData = stateResults[uuid];
         let value = "-";
