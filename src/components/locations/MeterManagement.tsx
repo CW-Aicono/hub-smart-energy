@@ -278,7 +278,19 @@ function DeviceTable({
               </TableCell>
               <TableCell className="text-muted-foreground text-xs">{d.controlType}</TableCell>
               <TableCell className="text-right font-mono text-sm">
-                {d.value}{d.unit ? ` ${d.unit}` : ""}
+                {(() => {
+                  // Prefer the configured meter unit (e.g. m³/h for water) over the raw
+                  // sensor unit label reported by the gateway (which can be a wrong "kW").
+                  let unit = d.unit || "";
+                  if (linkedMeter) {
+                    const flow = linkedMeter.energy_type === "wasser" || linkedMeter.energy_type === "gas";
+                    const configured = (linkedMeter as any).source_unit_power || linkedMeter.unit;
+                    if (flow || (configured && configured !== unit)) {
+                      unit = configured || unit;
+                    }
+                  }
+                  return `${d.value}${unit ? ` ${unit}` : ""}`;
+                })()}
               </TableCell>
               <TableCell>
                 <Badge variant={d.status === "online" ? "default" : "secondary"} className="text-[10px]">
