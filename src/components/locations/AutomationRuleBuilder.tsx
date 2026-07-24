@@ -326,7 +326,7 @@ function ConditionCard({
             {/* MLA: Gateway selector first */}
             {isMLA && (
               <GatewaySelector
-                gatewayOptions={gatewayOptions!}
+                gatewayOptions={allowedGatewayOptions!}
                 selectedGatewayId={condition.gateway_id}
                 onSelect={handleGatewayChange}
               />
@@ -496,7 +496,7 @@ function ConditionCard({
             {/* MLA: Gateway selector first */}
             {isMLA && (
               <GatewaySelector
-                gatewayOptions={gatewayOptions!}
+                gatewayOptions={allowedGatewayOptions!}
                 selectedGatewayId={condition.gateway_id}
                 onSelect={handleGatewayChange}
               />
@@ -644,7 +644,7 @@ function ActionCard({
         {/* MLA: Gateway selector first */}
         {isMLA && (
           <GatewaySelector
-            gatewayOptions={gatewayOptions!}
+            gatewayOptions={allowedGatewayOptions!}
             selectedGatewayId={action.gateway_id}
             onSelect={handleGatewayChange}
           />
