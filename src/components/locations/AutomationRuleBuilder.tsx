@@ -591,6 +591,7 @@ function ActionCard({
   onRemove,
   gatewayOptions,
   deviceTypeMap,
+  executionMode,
 }: {
   action: AutomationAction;
   sensors: LoxoneSensor[];
@@ -598,15 +599,26 @@ function ActionCard({
   onRemove: () => void;
   gatewayOptions?: GatewayOption[];
   deviceTypeMap?: Map<string, string>;
+  executionMode: AutomationExecutionMode;
 }) {
-  const isMLA = !!gatewayOptions && gatewayOptions.length > 0;
+  const allowedGatewayOptions = useMemo(() => {
+    if (!gatewayOptions) return undefined;
+    if (executionMode === "cloud") return gatewayOptions;
+    return gatewayOptions.filter((gw) => !isCloudOnlyIntegration(gw.integrationType));
+  }, [gatewayOptions, executionMode]);
+
+  const isMLA = !!allowedGatewayOptions && allowedGatewayOptions.length > 0;
 
   // In MLA mode, filter actuators by selected gateway
   const effectiveSensors = useMemo(() => {
-    if (!isMLA || !action.gateway_id) return isMLA ? [] : sensors;
-    const gw = gatewayOptions!.find((g) => g.id === action.gateway_id);
-    return gw?.sensors || [];
-  }, [isMLA, action.gateway_id, gatewayOptions, sensors]);
+    if (isMLA) {
+      if (!action.gateway_id) return [];
+      const gw = allowedGatewayOptions!.find((g) => g.id === action.gateway_id);
+      return gw?.sensors || [];
+    }
+    if (executionMode === "cloud") return sensors;
+    return sensors.filter((s) => isDeviceAllowedForExecutionMode(s._integrationType, executionMode));
+  }, [isMLA, action.gateway_id, allowedGatewayOptions, sensors, executionMode]);
 
   const actuators = useMemo(() => {
     const list = effectiveSensors.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
