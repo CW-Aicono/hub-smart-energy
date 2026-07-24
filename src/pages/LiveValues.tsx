@@ -338,11 +338,7 @@ const LiveValues = () => {
         .in("meter_id", meterIds)
         .in("period_type", ["day", "month", "year"])
         .in("period_start", [today, firstOfMonth, firstOfYear]),
-      supabase
-        .from("meter_cumulative_readings")
-        .select("meter_id, kwh_total, reading_at")
-        .in("meter_id", meterIds)
-        .order("reading_at", { ascending: false }),
+      supabase.rpc("latest_meter_cumulative" as any, { _meter_ids: meterIds }),
     ]);
 
 
