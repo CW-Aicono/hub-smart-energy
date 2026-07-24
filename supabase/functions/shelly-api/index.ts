@@ -77,6 +77,47 @@ function extractNameFromStatus(deviceStatus: any): string | null {
   return null;
 }
 
+async function writeSensorSnapshot(
+  supabase: any,
+  locationIntegrationId: string,
+  sensors: any[],
+  tenantId: string | null,
+  locationId: string | null,
+) {
+  try {
+    const row: Record<string, unknown> = {
+      location_integration_id: locationIntegrationId,
+      sensors,
+      system_messages: [],
+      status: "fresh",
+      error_message: null,
+      fetched_at: new Date().toISOString(),
+      source: "shelly-api",
+    };
+    if (tenantId) row.tenant_id = tenantId;
+    if (locationId) row.location_id = locationId;
+    const { error } = await supabase
+      .from("gateway_sensor_snapshots")
+      .upsert(row, { onConflict: "location_integration_id" });
+    if (error) console.warn("[shelly snapshot] upsert failed:", error.message);
+  } catch (err) {
+    console.warn("[shelly snapshot] write error:", err);
+  }
+}
+
+async function readSensorSnapshot(supabase: any, locationIntegrationId: string) {
+  const { data, error } = await supabase
+    .from("gateway_sensor_snapshots")
+    .select("sensors, system_messages, status, fetched_at, error_message")
+    .eq("location_integration_id", locationIntegrationId)
+    .maybeSingle();
+  if (error) {
+    console.warn("[shelly snapshot] read failed:", error.message);
+    return null;
+  }
+  return data;
+}
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
