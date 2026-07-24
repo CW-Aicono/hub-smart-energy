@@ -1694,19 +1694,19 @@ export function MeterDetailDialog({
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Ø Leistung</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.avg)} kW` : "–"}
+              {stats ? `${fmtDeNum(stats.avg)} ${rateUnit}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Max</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.max)} kW` : "–"}
+              {stats ? `${fmtDeNum(stats.max)} ${rateUnit}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Min</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.min)} kW` : "–"}
+              {stats ? `${fmtDeNum(stats.min)} ${rateUnit}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
@@ -1715,11 +1715,12 @@ export function MeterDetailDialog({
             </div>
             <div className="text-base font-semibold tabular-nums">
               {stats?.bidirectional
-                ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} kWh`
-                : `${fmtDeNum(totalImport - totalExport)} kWh`}
+                ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
+                : `${fmtDeNum(totalImport - totalExport)} ${energyUnit}`}
             </div>
           </div>
         </div>
+
 
         {isHouse && (
           <HouseSelfSufficiencyPanel
