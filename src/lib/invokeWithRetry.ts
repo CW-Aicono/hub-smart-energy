@@ -41,13 +41,32 @@ async function getErrorSignal(res: { data: any; error: any }): Promise<string> {
     .join(" ");
 }
 
-async function invokeFunction(fnName: string, options: { body?: any; headers?: Record<string, string> }) {
-  const session = (await supabase.auth.getSession()).data.session;
+async function getAccessToken(forceRefresh = false): Promise<string | null> {
+  if (forceRefresh) {
+    const { data } = await supabase.auth.refreshSession();
+    if (data.session?.access_token) return data.session.access_token;
+  }
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+async function invokeFunction(
+  fnName: string,
+  options: { body?: any; headers?: Record<string, string> },
+  forceRefresh = false,
+) {
+  const token = await getAccessToken(forceRefresh);
+  if (!token) {
+    return {
+      data: null,
+      error: { message: "Not authenticated", status: 401, noSession: true },
+    };
+  }
   const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fnName}`, {
     method: "POST",
     headers: {
       apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
-      Authorization: `Bearer ${session?.access_token ?? ""}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
       ...(options.headers ?? {}),
     },
