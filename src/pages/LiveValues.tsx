@@ -899,7 +899,7 @@ const LiveValues = () => {
                             <span className="ml-1 font-normal">{t("liveValues.meterReading" as any)}</span>
                           </div>
                         )}
-                        {(source === "live" || source === "virtual") && (totalMonth != null || totalYear != null) && (
+                        {!isStateSensor && (source === "live" || source === "virtual") && (totalMonth != null || totalYear != null) && (
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                             {totalMonth != null && (
                               <span>{t("liveValues.month" as any)}: {meter.energy_type === "wasser" || meter.energy_type === "gas"
