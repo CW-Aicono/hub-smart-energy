@@ -797,7 +797,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                     const hidden = hiddenKeys.has(key);
                     const displayName = T(`energy.${key}`);
                     return (
-                      <Line key={key} type="monotone" dataKey={key} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={false} legendType="line" />
+                      <Line key={key} type="monotone" dataKey={key} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={key === "wasser" || key === "gas"} legendType="line" />
                     );
                   })}
                 </LineChart>
