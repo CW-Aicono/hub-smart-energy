@@ -635,6 +635,21 @@ async function connect(state: ConnState): Promise<void> {
     let blocksMapped = 0;
     let blocksFallback = 0;
     let totalSubs = 0;
+    const controlsMap: Record<string, any> = (loxApp3?.controls && typeof loxApp3.controls === "object")
+      ? loxApp3.controls
+      : {};
+    const controlsByLowerKey = new Map<string, any>();
+    for (const [k, v] of Object.entries(controlsMap)) controlsByLowerKey.set(k.toLowerCase(), v);
+    const findControl = (uuid: string): any | undefined => {
+      const lower = uuid.toLowerCase();
+      const direct = controlsByLowerKey.get(lower);
+      if (direct) return direct;
+      for (const ctrl of controlsByLowerKey.values()) {
+        const ua = (ctrl?.uuidAction as string | undefined)?.toLowerCase();
+        if (ua === lower) return ctrl;
+      }
+      return undefined;
+    };
     for (const [blockUuid, baseEntry] of blockEntries) {
       const ctrl = findControl(blockUuid);
       const states = ctrl?.states as Record<string, string> | undefined;
