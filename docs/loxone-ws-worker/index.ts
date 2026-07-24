@@ -632,7 +632,6 @@ async function connect(state: ConnState): Promise<void> {
       const t = (et ?? "").toLowerCase();
       return t === "wasser" || t === "gas" || t === "water";
     }
-    let blocksMapped = 0;
     let blocksFallback = 0;
     let totalSubs = 0;
     for (const [blockUuid, baseEntry] of blockEntries) {
