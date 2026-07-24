@@ -537,7 +537,14 @@ const LiveValues = () => {
           if ((m as any).room_id !== locationScope.roomId) return false;
         }
         if (selectedEnergyType !== "all" && m.energy_type !== selectedEnergyType) return false;
-        if (selectedCaptureType !== "all" && m.capture_type !== selectedCaptureType) return false;
+        if (selectedCaptureType !== "all") {
+          if (selectedCaptureType === "sensor" || selectedCaptureType === "actuator") {
+            if (((m as any).device_type ?? "meter") !== selectedCaptureType) return false;
+          } else {
+            if (((m as any).device_type ?? "meter") !== "meter") return false;
+            if (m.capture_type !== selectedCaptureType) return false;
+          }
+        }
         if (searchQuery) {
           const q = searchQuery.toLowerCase();
           const loc = locations.find((l) => l.id === m.location_id);
