@@ -27,21 +27,23 @@ export function useWidgetAvailability(selectedLocationId: string | null) {
 
       // Build queries; conditionally apply location filter after typing narrows.
       const metersQ = supabase.from("meters").select("id", head).eq("tenant_id", tenantId!);
+      // Historically 'pv' was proposed, but the schema uses 'solar' for PV
+      // sources (location_energy_sources) and meters. Accept both defensively.
       const pvSourceQ = supabase
         .from("location_energy_sources")
         .select("id", head)
         .eq("tenant_id", tenantId!)
-        .eq("energy_type", "pv");
+        .in("energy_type", ["pv", "solar"]);
       const pvMeterQ = supabase
         .from("meters")
         .select("id", head)
         .eq("tenant_id", tenantId!)
-        .eq("energy_type", "pv");
+        .in("energy_type", ["pv", "solar"]);
       const gasHeatMeterQ = supabase
         .from("meters")
         .select("id", head)
         .eq("tenant_id", tenantId!)
-        .in("energy_type", ["gas", "heat", "heating"]);
+        .in("energy_type", ["gas", "heat", "heating", "waerme", "oel"]);
       const floorsQ = supabase.from("floors").select("id", head).not("floor_plan_url", "is", null);
       const energyPricesQ = supabase.from("energy_prices").select("id", head).eq("tenant_id", tenantId!);
       const dynamicPriceQ = supabase
