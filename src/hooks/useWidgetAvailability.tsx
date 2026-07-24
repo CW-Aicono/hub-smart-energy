@@ -94,6 +94,7 @@ export function useWidgetAvailability(selectedLocationId: string | null) {
         hasSavingsContract: has(savingsRes.count),
         
         hasMultipleLocations: (locationCountRes.count ?? 0) >= 2,
+        hasAnyLocation: (locationCountRes.count ?? 0) >= 1,
       };
     },
   });
