@@ -718,6 +718,8 @@ const LiveValues = () => {
                 <SelectItem value="automatic">{t("common.automatic" as any)}</SelectItem>
                 <SelectItem value="manual">{t("common.manual" as any)}</SelectItem>
                 <SelectItem value="virtual">{t("common.virtual" as any)}</SelectItem>
+                <SelectItem value="sensor">Sensoren</SelectItem>
+                <SelectItem value="actuator">Aktoren</SelectItem>
               </SelectContent>
             </Select>
           </div>
