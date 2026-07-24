@@ -1,59 +1,39 @@
-## Ziel
+## Ursache (verifiziert)
 
-Desktop-Widgets im Dashboard nur anzeigen, wenn sie für den aktuellen Tenant / die aktuelle Liegenschaft sinnvoll sind — also nur wenn entsprechende Daten, Zähler, Verträge oder Module vorhanden sind. Aktuell werden Widgets nur nach Modul-Aktivierung und User-Sichtbarkeit gefiltert (`WIDGET_MODULE_MAP` + `visibleWidgets`), aber nicht danach, ob überhaupt Daten dahinterliegen.
+Beide Widgets lesen dieselben 5-Min-Aggregate (`get_power_readings_5min` bzw. `meter_power_readings_5min`). Der Unterschied liegt allein in der Interpolation:
 
-## Ansatz
+- **`EnergyChart.tsx` („Energieverbrauch (kW)")** — Zeilen 386–440: baut ein festes 288-Slot-Raster (5 min) und **forward-fillt** jeden leeren Slot mit dem letzten realen Wert (bis zu 36 Slots / 3 h). Bei 15-Min-Poll liegen zwischen zwei echten Messungen zwei Kopien → klassische **Rechteck-/Plateau-Optik**.
+- **`CustomWidget.tsx` („Wasser und Gas · m³/h")** — Zeilen 268–283: leere Slots bleiben `null`, gerendert mit `type="monotone"` und `connectNulls={true}` → Recharts zieht eine glatte Spline zwischen echten Punkten.
 
-Zusätzlich zum bestehenden Modul-Filter in `DashboardContent.tsx` wird eine zweite Filter-Ebene eingeführt: **Datenvoraussetzungen** (Requirements). Ein Widget wird nur gerendert, wenn seine Requirement-Funktion `true` liefert. Die Prüfung passiert einmal beim Laden über einen zentralen Hook `useWidgetAvailability(selectedLocationId)`, der alle nötigen Signale bündelt (leichte COUNT-Queries, gecacht via React-Query, staleTime 5 min).
+Zusätzlich rendert `EnergyChart` mit `connectNulls={false}`, was das Bild bei ausgefallenen Reihen zusätzlich abhackt.
 
-Widgets, die die Voraussetzung nicht erfüllen, werden:
-- im normalen Dashboard **ausgeblendet**
-- im `DashboardCustomizer` weiterhin sichtbar, aber mit Badge „Keine Daten" und Hinweis, damit der User versteht, warum das Widget nicht erscheint (kein stilles Verschwinden).
+Kein Daten- oder Einheiten-Problem — reine Render-Logik. Ein 5-Min-Poll würde die Optik ebenfalls glätten, aber ~3× mehr IO erzeugen — daher lösen wir es im Code.
 
-## Widget → Anzeigebedingung
+## Umsetzung — Option A (energieartabhängige Interpolation)
 
-| Widget | Bedingung |
-|---|---|
-| `pv_forecast` | mindestens eine PV-Anlage (`location_energy_sources` type `pv`) oder ein PV-Zähler (`meters.direction`/`role = pv`) im Scope |
-| `cost_overview` | mindestens ein Eintrag in `energy_prices` **oder** `tenant_electricity_tariffs` für den Tenant |
-| `spot_price` | dynamischer Stromtarif aktiv (`energy_prices.pricing_model = 'dynamic'` o. ä.) **oder** Modul `arbitrage_trading` aktiv **mit** mindestens einer Strategie in `arbitrage_strategies` |
-| `arbitrage_ai` | Modul `arbitrage_trading` aktiv **und** mindestens eine aktive Strategie |
-| `floor_plan` / `floor_plan_explorer` | mindestens ein Grundriss vorhanden (`floors` bzw. `locations.floor_plan_url`) |
-| `savings_share` | Modul `gain_sharing` aktiv **und** mindestens ein `tenant_savings_contracts`-Eintrag |
-| `ppa_fleet` | mindestens ein `ppa_contracts`-Eintrag |
-| `weather_normalization` | mindestens ein Wärme-/Gaszähler vorhanden |
-| `sustainability_kpis` | mindestens ein Zähler mit Energiedaten der letzten 30 Tage |
-| `integration_errors` | ungelöste Integration-Errors vorhanden |
-| `energy_gauge`, `energy_chart`, `pie_chart`, `sankey`, `forecast`, `anomaly` | mindestens ein aktiver Zähler im Scope |
-| `alerts_list` | Modul `alerts` aktiv (bereits abgedeckt) — keine zusätzliche Datenprüfung |
-| `location_map` | mindestens 2 Liegenschaften (bereits so implementiert — beibehalten) |
-| `weather` | immer sichtbar (Wetter unabhängig von Zählern) |
+Nur `src/components/dashboard/EnergyChart.tsx` wird angefasst. Kein DB-, Worker- oder RPC-Eingriff.
 
-Wenn eine Liegenschaft ausgewählt ist, prüfen die Requirements auf Location-Ebene; ohne Auswahl auf Tenant-Ebene.
+### Änderung 1 — Forward-Fill überspringen für Wasser/Gas
+In der per-Meter-Forward-Fill-Schleife ab Zeile ~430:
+- Vor dem Forward-Fill die `energy_type` des Meters prüfen.
+- Für `wasser` und `gas`: kein Fill — Slots bleiben `null`, echte Messpunkte bleiben erhalten.
+- Für `strom` und `waerme`: Verhalten unverändert (Forward-Fill mit Poll-Intervall + Toleranz), damit die stabile Summenlinie bei 15-Min-Pollern bleibt.
 
-## Technische Umsetzung
+### Änderung 2 — `connectNulls` energieartabhängig setzen
+Line-Rendering Zeile 789:
+- `connectNulls={key === "wasser" || key === "gas"}` statt fix `false`.
+- Damit zeichnet Recharts für Wasser/Gas eine durchgehende Monotone-Spline zwischen den echten Punkten (wie im Custom-Widget); Strom/Wärme behalten das bisherige Verhalten (echte Ausfälle sichtbar als Lücke).
 
-**Neue Datei:** `src/hooks/useWidgetAvailability.tsx`
-- Führt parallel leichte `select ... limit 1` / `head:true, count:'exact'` Queries aus (Zähler, PV-Sources, Grundrisse, Strategien, PPA, Tarife, Gain-Sharing-Verträge, Integration-Errors).
-- Respektiert `tenant_id` (Multi-Tenancy) und `selectedLocationId`.
-- Liefert `{ isReady: boolean, has: Record<string, boolean> }`.
+### Änderung 3 — Gap-Overlay für Wasser/Gas deaktivieren
+Das gepunktete „Gap"-Overlay (Zeilen ~795 ff.) ist für Strom gedacht, um echte Datenausfälle sichtbar zu machen. Für Wasser/Gas wird es überflüssig, weil die Slots leer bleiben und die Spline die Lücke bereits visuell schließt — für diese Keys nicht mehr rendern, damit keine doppelten oder verwirrenden Linien erscheinen.
 
-**Neue Datei:** `src/lib/widgetRequirements.ts`
-- Map `widgetType → (has) => boolean` mit den Regeln aus der Tabelle oben. Zentral wartbar.
+## Verifikation
 
-**Änderung:** `src/pages/DashboardContent.tsx`
-- Hook einbinden, `filteredVisibleWidgets` um Requirement-Prüfung erweitern.
-- Ladezustand: Widgets erst rendern, wenn Availability-Check abgeschlossen (verhindert Flackern).
+- Frontend-Vergleich: Im Dashboard „Energieverbrauch"-Widget Gas bzw. Wasser aktivieren und mit dem Custom-Widget „Wasser und Gas · m³/h" nebeneinander vergleichen → Kurvenverlauf muss deckungsgleich sein (bis auf Skalierungsunterschied der Y-Achse).
+- Strom-Ansicht (Standardfall) darf sich **nicht** verändern — visuelle Regression prüfen: gleiche Treppen-/Halte-Optik wie zuvor bei 15-Min-Poll-Zählern.
+- Keine DB-, Edge-Function- oder Worker-Änderung. Kein IO-Impact.
 
-**Änderung:** `src/components/dashboard/DashboardCustomizer.tsx`
-- Für nicht erfüllte Widgets ein dezentes Badge „Keine Daten vorhanden" + Tooltip mit Grund („PV-Anlage anlegen", „Dynamischen Tarif aktivieren" …) anzeigen.
-- Toggle bleibt bedienbar (User kann bewusst aktivieren, wird trotzdem nicht gerendert bis Voraussetzung erfüllt ist).
+## Nicht-Ziele
 
-**Keine DB-Änderungen** — nur Leseabfragen auf bestehende Tabellen.
-
-## Nicht im Umfang
-
-- Mobile-Dashboard-Widgets (nur Desktop wie gewünscht).
-- Custom-Widgets (`custom_*`) — bleiben unverändert sichtbar.
-- Änderungen an einzelnen Widget-Komponenten selbst.
-- Neue DB-Migrationen oder Policies.
+- Poll-Intervall bleibt bei 15 min (Empfehlung im UI unverändert).
+- Datenkorrektur der bereits als „pwr" falsch klassifizierten Wasser-Readings ist ein separates Thema (siehe frühere Worker-v1.8-Diskussion) und wird hier **nicht** angefasst.
