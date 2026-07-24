@@ -1325,6 +1325,7 @@ export function AutomationRuleBuilder({
                   onRemove={() => removeAction(action.id)}
                   gatewayOptions={gatewayOptions}
                   deviceTypeMap={deviceTypeMap}
+                  executionMode={executionMode}
                 />
               ))}
 
