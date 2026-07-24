@@ -442,6 +442,17 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const TOLERANCE_SLOTS = 1; // = 5 Min Toleranz
       const filledFlag: Record<string, boolean[]> = {}; // per meter: was this slot real (false) or forward-filled-but-treated-as-gap (true)?
       for (const [mid, s] of Object.entries(meterSeries)) {
+        // Für Wasser/Gas KEIN Forward-Fill: kumulative bzw. m³/h-Zähler liefern
+        // typischerweise nur alle 10–15 min echte Werte. Ein Step-Fill würde die
+        // klassische Rechteck-/Plateau-Optik erzeugen. Stattdessen lassen wir
+        // leere Slots null und zeichnen unten via connectNulls=true eine glatte
+        // Monotone-Spline zwischen den echten Punkten (analog zum Custom-Widget
+        // „Wasser und Gas · m³/h").
+        if (s.et === "wasser" || s.et === "gas") {
+          filledFlag[mid] = Array.from({ length: 288 }, () => false);
+          continue;
+        }
+
         // Geschätzten Poll-Abstand bestimmen: Median der Slot-Abstände zwischen
         // aufeinanderfolgenden echten Messungen. Fallback: 1 Slot (5 Min).
         const realIdx: number[] = [];
@@ -786,7 +797,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                     const hidden = hiddenKeys.has(key);
                     const displayName = T(`energy.${key}`);
                     return (
-                      <Line key={key} type="monotone" dataKey={key} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={false} legendType="line" />
+                      <Line key={key} type="monotone" dataKey={key} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={key === "wasser" || key === "gas"} legendType="line" />
                     );
                   })}
                 </LineChart>
