@@ -3807,6 +3807,21 @@ export const translations = {
   "widget.integrationErrors": { de: "Integrations-Fehlermeldungen", en: "Integration Errors", es: "Errores de integración", nl: "Integratiefouten" },
   "widget.savingsShare": { de: "Gain-Sharing KPIs", en: "Gain-Sharing KPIs", es: "KPIs de Gain-Sharing", nl: "Gain-Sharing KPI's" },
 
+  // Widget requirement / availability messages
+  "widgetReq.noData": { de: "Keine Daten", en: "No data", es: "Sin datos", nl: "Geen data" },
+  "widgetReq.meterNeeded": { de: "Kein Zähler angelegt. Widget erscheint, sobald mindestens ein Zähler vorhanden ist.", en: "No meter configured. Widget appears once at least one meter exists.", es: "Sin contador configurado. El widget aparece cuando exista al menos uno.", nl: "Geen meter ingesteld. Widget verschijnt zodra er minstens één meter is." },
+  "widgetReq.pvSourceNeeded": { de: "Keine PV-Anlage oder PV-Zähler hinterlegt.", en: "No PV system or PV meter configured.", es: "Sin sistema FV o contador FV configurado.", nl: "Geen PV-installatie of PV-meter ingesteld." },
+  "widgetReq.costTariffNeeded": { de: "Keine Strompreise oder Tarife hinterlegt.", en: "No electricity prices or tariffs configured.", es: "Sin precios ni tarifas configurados.", nl: "Geen prijzen of tarieven ingesteld." },
+  "widgetReq.dynamicOrArbitrageNeeded": { de: "Nur bei dynamischem Stromtarif oder aktivem Arbitragehandel sichtbar.", en: "Only visible with a dynamic tariff or active arbitrage trading.", es: "Visible solo con tarifa dinámica o trading de arbitraje activo.", nl: "Alleen zichtbaar bij dynamisch tarief of actieve arbitragehandel." },
+  "widgetReq.arbitrageStrategyNeeded": { de: "Arbitragehandel-Modul aktivieren und Strategie anlegen.", en: "Enable the arbitrage module and add a strategy.", es: "Activa el módulo de arbitraje y añade una estrategia.", nl: "Activeer de arbitragemodule en voeg een strategie toe." },
+  "widgetReq.floorPlanNeeded": { de: "Kein Grundriss hinterlegt.", en: "No floor plan configured.", es: "Sin plano configurado.", nl: "Geen plattegrond ingesteld." },
+  "widgetReq.savingsContractNeeded": { de: "Gain-Sharing-Modul aktivieren und Vertrag anlegen.", en: "Enable the Gain-Sharing module and add a contract.", es: "Activa el módulo Gain-Sharing y añade un contrato.", nl: "Activeer de Gain-Sharing-module en voeg een contract toe." },
+  "widgetReq.ppaContractNeeded": { de: "Kein PPA-Vertrag vorhanden.", en: "No PPA contract available.", es: "Sin contrato PPA disponible.", nl: "Geen PPA-contract beschikbaar." },
+  "widgetReq.gasOrHeatMeterNeeded": { de: "Kein Gas- oder Wärmezähler vorhanden.", en: "No gas or heat meter available.", es: "Sin contador de gas o calor.", nl: "Geen gas- of warmtemeter aanwezig." },
+  "widgetReq.noIntegrationErrors": { de: "Aktuell keine offenen Integrationsfehler.", en: "No open integration errors.", es: "Sin errores de integración abiertos.", nl: "Geen openstaande integratiefouten." },
+  "widgetReq.multipleLocationsNeeded": { de: "Nur bei mehreren Liegenschaften sichtbar.", en: "Only visible with multiple locations.", es: "Visible solo con varias ubicaciones.", nl: "Alleen zichtbaar bij meerdere locaties." },
+
+
   // Widget size labels
   "widget.sizeFull": { de: "Volle Breite", en: "Full Width", es: "Ancho completo", nl: "Volledige breedte" },
   "widget.sizeTwoThirds": { de: "2/3 Breite", en: "2/3 Width", es: "2/3 del ancho", nl: "2/3 breedte" },

@@ -62,13 +62,17 @@ const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
 const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
 // Phase 6: Heartbeat-Intervall von 30s auf 5min erhöht (IO-Optimierung)
 const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "300000", 10);
-// IO-Notbremse v1.3 (18.07.2026): Session-Heartbeat nur noch alle 5 Minuten.
-// Die Miniserver-WebSocket-Verbindung bleibt trotzdem dauerhaft offen; hier geht
-// es nur um die Anzeige/Statistik in der Cloud. Senkt DB-Schreiblast massiv.
+// v1.7 (23.07.2026): Session-Heartbeat wieder alle 60 s (statt 5 min).
+// Der 5-Minuten-Wert der IO-Notbremse v1.3 führte in der UI zu "stale"-Anzeigen,
+// obwohl die Verbindung stabil war. Der Heartbeat ist ein günstiges UPDATE mit
+// fillfactor=80/HOT-Update — die zusätzliche Last ist vernachlässigbar. Er läuft
+// in einem eigenen setInterval unabhängig vom Bucket-Flush, damit updated_at
+// garantiert alle 60 s frisch bleibt.
 const SESSION_HEARTBEAT_MS = Math.max(
-  300000,
-  parseInt(process.env.SESSION_HEARTBEAT_MS || "300000", 10),
+  30_000,
+  parseInt(process.env.SESSION_HEARTBEAT_MS || "60000", 10),
 );
+
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
 const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.5-auth-status";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
@@ -598,6 +602,11 @@ async function connect(state: ConnState): Promise<void> {
     const blockEntries = Array.from(state.uuidMap.entries());
     state.uuidMap.clear();
 
+    // v1.9: Split pwr in „strong" (eindeutige Momentanleistungs-States) und
+    // „ambiguous" (Actual/Value/P — bei Wasser-/Gaszähler oft der kumulative
+    // Zählerstand). Für Medien ohne echte Leistung akzeptieren wir nur strong-pwr.
+    const PWR_STRONG_RX = /^(pwr|power|currentpower|actualpower|cp|chargingpower|currentchargingpower)$/i;
+    const PWR_AMBIGUOUS_RX = /^(actual|value|p)$/i;
     const ROLE_PATTERNS: Array<{ role: StateRole; rx: RegExp }> = [
       // Reihenfolge wichtig: spezifischere Patterns zuerst
       { role: "today", rx: /^(energytoday|today|daily|day|tagesverbrauch|cd)$/i },
@@ -605,42 +614,82 @@ async function connect(state: ConnState): Promise<void> {
       { role: "year",  rx: /^(energyyear|year|yearly|jahresverbrauch|cy)$/i },
       { role: "total", rx: /^(energytotal|total|totalenergy|zaehlerstand|meter|mr)$/i },
       { role: "soc",   rx: /^(slvl|soc|stateofcharge|state_of_charge|storagelevel|storage_level|ladezustand|speicherstand)$/i },
-      // pwr: klassische Meter (pwr/power/...) + Wallbox „Cp" (Current charging power)
-      { role: "pwr",   rx: /^(pwr|power|currentpower|actual|actualpower|value|p|cp|chargingpower|currentchargingpower)$/i },
     ];
-    function classifyState(key: string): StateRole | null {
+    function classifyState(key: string): StateRole | "pwr_ambiguous" | null {
       for (const { role, rx } of ROLE_PATTERNS) if (rx.test(key)) return role;
+      if (PWR_STRONG_RX.test(key)) return "pwr";
+      if (PWR_AMBIGUOUS_RX.test(key)) return "pwr_ambiguous";
       return null;
     }
 
-    function findControl(blockUuid: string): any | null {
-      if (!loxApp3?.controls) return null;
-      // Loxone-Schlüssel sind case-sensitive UUIDs; DB-UUIDs sind lowercase.
-      for (const [k, v] of Object.entries(loxApp3.controls as Record<string, any>)) {
-        if (k.toLowerCase() === blockUuid) return v;
-      }
-      return null;
+    /**
+     * Zählertypen, deren Loxone-Block **keinen** echten Momentanleistungs-State
+     * bereitstellen muss (Impulszähler o. ä.). Für diese Typen dürfen wir
+     * mehrdeutige Keys (Actual/Value/P) NICHT als Leistung interpretieren —
+     * sonst landet der kumulative Zählerstand als „pwr" in der DB (Spikes).
+     */
+    function isFlowLikeType(et: string | undefined | null): boolean {
+      const t = (et ?? "").toLowerCase();
+      return t === "wasser" || t === "gas" || t === "water";
     }
-
     let blocksMapped = 0;
     let blocksFallback = 0;
     let totalSubs = 0;
+    const controlsMap: Record<string, any> = (loxApp3?.controls && typeof loxApp3.controls === "object")
+      ? loxApp3.controls
+      : {};
+    const controlsByLowerKey = new Map<string, any>();
+    for (const [k, v] of Object.entries(controlsMap)) controlsByLowerKey.set(k.toLowerCase(), v);
+    const findControl = (uuid: string): any | undefined => {
+      const lower = uuid.toLowerCase();
+      const direct = controlsByLowerKey.get(lower);
+      if (direct) return direct;
+      for (const ctrl of controlsByLowerKey.values()) {
+        const ua = (ctrl?.uuidAction as string | undefined)?.toLowerCase();
+        if (ua === lower) return ctrl;
+      }
+      return undefined;
+    };
     for (const [blockUuid, baseEntry] of blockEntries) {
       const ctrl = findControl(blockUuid);
       const states = ctrl?.states as Record<string, string> | undefined;
       const stateEntries: Array<{ stateUuid: string; role: StateRole; key: string }> = [];
+      let ambiguousPwr: { stateUuid: string; key: string } | null = null;
+      let hasStrongPwr = false;
 
       if (states && typeof states === "object") {
         for (const [k, v] of Object.entries(states)) {
           if (typeof v !== "string") continue;
-          const role = classifyState(k);
-          if (!role) continue;
-          stateEntries.push({ stateUuid: v.toLowerCase(), role, key: k });
+          const cls = classifyState(k);
+          if (!cls) continue;
+          if (cls === "pwr_ambiguous") {
+            if (!ambiguousPwr) ambiguousPwr = { stateUuid: v.toLowerCase(), key: k };
+            continue;
+          }
+          if (cls === "pwr") hasStrongPwr = true;
+          stateEntries.push({ stateUuid: v.toLowerCase(), role: cls, key: k });
         }
       }
 
+      // Ambiguous-pwr NUR akzeptieren, wenn:
+      //  – kein strong-pwr vorhanden, UND
+      //  – der Meter kein reines Fluss-/Impuls-Medium (Wasser/Gas) ist.
+      // Für Wasser/Gas ohne echten Pwr-State → Block läuft als Total-only.
+      const flowLike = isFlowLikeType(baseEntry.energy_type);
+      if (!hasStrongPwr && ambiguousPwr && !flowLike) {
+        stateEntries.push({ stateUuid: ambiguousPwr.stateUuid, role: "pwr", key: ambiguousPwr.key });
+      } else if (!hasStrongPwr && ambiguousPwr && flowLike) {
+        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): ambiguous pwr-key "${ambiguousPwr.key}" ignoriert (kein echter Momentanwert für ${baseEntry.energy_type})`);
+      }
+
       if (stateEntries.length === 0) {
-        // Fallback: Block-UUID direkt als pwr behandeln (alte Logik)
+        if (flowLike) {
+          // v1.9: Fallback deaktiviert für Wasser/Gas — sonst würde der kumulative
+          // Zählerstand als Momentanleistung interpretiert (660-kW-Spikes im Chart).
+          log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): kein verwertbarer State — Block wird ignoriert (Fallback deaktiviert für Fluss-Medien)`);
+          continue;
+        }
+        // Fallback: Block-UUID direkt als pwr behandeln (alte Logik) — nur für Strom/Wärme.
         state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: "pwr" });
         blocksFallback++;
         totalSubs++;
@@ -667,7 +716,7 @@ async function connect(state: ConnState): Promise<void> {
         totalSubs++;
       }
       blocksMapped++;
-      log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} → ${[...seenRoles].join(",")} (type=${ctrl?.type ?? "?"})`);
+      log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} → ${[...seenRoles].join(",")} (type=${ctrl?.type ?? "?"}, energy_type=${baseEntry.energy_type})`);
     }
 
     log("info", `[WS] ${state.serialNumber} LoxAPP3-Mapping: blocks=${blockEntries.length}, mapped=${blocksMapped}, fallback=${blocksFallback}, totalStateUuids=${totalSubs}`);
@@ -800,6 +849,10 @@ async function keepaliveTick(): Promise<void> {
 // bestehenden Polling-Pfad, der unberührt weiterläuft.
 
 async function flush(): Promise<void> {
+  // v1.6: Legacy-Pfad hart deaktiviert – Rohdaten dürfen NICHT mehr in
+  // bridge_raw_samples geschrieben werden. Aggregation läuft ausschließlich
+  // über flushBuckets() → bridge-power-5min.
+  return;
   if (workerPaused) return;
   const readings: any[] = [];
   const nowMs = Date.now();
@@ -1261,11 +1314,13 @@ async function main() {
 
   await reloadMeters();
   setInterval(reloadMeters, RELOAD_INTERVAL_MS);
-  setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
-  // v1.5: 5-Min-Bucket-Flush alle 60s prüfen — sendet abgeschlossene Buckets
-  // an gateway-ingest?action=bridge-power-5min (statt bridge_raw_samples).
+  // v1.6: Legacy-Rohdaten-Flush (bridge-readings → bridge_raw_samples) deaktiviert.
+  // Es werden ausschließlich noch aggregierte 5-Minuten-Buckets an
+  // gateway-ingest?action=bridge-power-5min gesendet. Live-Werte laufen weiterhin
+  // via Realtime-Broadcast, ohne die Cloud-DB zu beschreiben.
+  // setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
   setInterval(() => { flushBuckets().catch((e) => log("error", "flushBuckets:", e)); }, 60_000);
-  log("info", "[Bucket-Flush] aktiv: prüft alle 60s auf abgeschlossene 5-Min-Buckets");
+  log("info", "[Bucket-Flush] aktiv: prüft alle 60s auf abgeschlossene 5-Min-Buckets (Legacy bridge-readings deaktiviert)");
 
   // Bridge-Heartbeat: hält bridge_workers.last_heartbeat_at frisch (Phase 2)
   setInterval(() => { bridgeHeartbeat("online").catch(() => { /* siehe bridgeHeartbeat */ }); }, BRIDGE_HEARTBEAT_MS);

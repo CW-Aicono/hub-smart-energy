@@ -15,6 +15,8 @@ import LazyWidget from "@/components/dashboard/LazyWidget";
 import ResizableWidget from "@/components/dashboard/ResizableWidget";
 
 import { useDashboardPrefetch } from "@/hooks/useDashboardPrefetch";
+import { useWidgetAvailability } from "@/hooks/useWidgetAvailability";
+import { isWidgetAvailable } from "@/lib/widgetRequirements";
 
 // Per-widget height constraints (px, wrapper incl. drag-handle row).
 // Prevents charts from being stretched past their natural content
@@ -145,13 +147,17 @@ const DashboardContent = () => {
   const { lastUpdate } = useDashboardPrefetch(selectedLocationId);
   const dateLocale = language === "de" ? "de-DE" : language === "nl" ? "nl-NL" : language === "es" ? "es-ES" : "en-US";
 
+  const { signals: availabilitySignals } = useWidgetAvailability(selectedLocationId);
+
   const filteredVisibleWidgets = useMemo(() => {
     return visibleWidgets.filter((w) => {
       const moduleCode = WIDGET_MODULE_MAP[w.widget_type];
-      if (!moduleCode) return true;
-      return isModuleEnabled(moduleCode);
+      if (moduleCode && !isModuleEnabled(moduleCode)) return false;
+      // Custom widgets bypass the data-requirement filter.
+      if (w.widget_type.startsWith("custom_")) return true;
+      return isWidgetAvailable(w.widget_type, availabilitySignals);
     });
-  }, [visibleWidgets, isModuleEnabled]);
+  }, [visibleWidgets, isModuleEnabled, availabilitySignals]);
 
   if (widgetsLoading) {
     return (
@@ -186,6 +192,7 @@ const DashboardContent = () => {
                 onToggleVisibility={toggleWidgetVisibility}
                 onReorder={reorderWidgets}
                 onResizeWidget={updateWidgetSize}
+                availabilitySignals={availabilitySignals}
                 customWidgetNames={Object.fromEntries(
                   customWidgetDefs.map((d) => [`custom_${d.id}`, d.name])
                 )}

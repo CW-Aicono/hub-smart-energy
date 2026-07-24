@@ -98,6 +98,7 @@ interface LoxoneDetails {
   eventsReceived: number | null;
   reconnectCount: number | null;
   disconnectReason: string | null;
+  serials: string[];
 }
 
 interface UnifiedRow {
@@ -116,9 +117,11 @@ interface UnifiedRow {
   sessionsLast24h: number | null;
   worker: string | null;
   lastDisconnect: string | null;
+  serials: string[];
   device?: FleetDevice;
   loxone?: LoxoneDetails;
 }
+
 
 const LOOKBACK_MS = 24 * 60 * 60 * 1000;
 // Loxone worker heartbeat = 5 min; threshold 6 min so display stays green between beats.
@@ -158,14 +161,33 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
     ? await supabase.from("tenants").select("id, name").in("id", tenantIds)
     : { data: [] as any[] };
 
+  // Miniserver-Seriennummern pro (tenant_id, location_id) auflösen
+  const { data: links } = tenantIds.length && locationIds.length
+    ? await supabase
+        .from("bridge_miniserver_links")
+        .select("tenant_id, location_id, miniserver_serial")
+        .in("tenant_id", tenantIds)
+        .in("location_id", locationIds)
+    : { data: [] as any[] };
+  const serialsByKey = new Map<string, string[]>();
+  (links ?? []).forEach((l: any) => {
+    if (!l.tenant_id || !l.location_id || !l.miniserver_serial) return;
+    const k = `${l.tenant_id}:${l.location_id}`;
+    const arr = serialsByKey.get(k) ?? [];
+    if (!arr.includes(l.miniserver_serial)) arr.push(l.miniserver_serial);
+    serialsByKey.set(k, arr);
+  });
+
   const locById = new Map((locations ?? []).map((l: any) => [l.id, l]));
   const tenantById = new Map((tenants ?? []).map((t: any) => [t.id, t]));
-  const infoMap = new Map<string, { tenant: string; location: string }>();
+  const infoMap = new Map<string, { tenant: string; location: string; serials: string[] }>();
   (integrations ?? []).forEach((it: any) => {
-    const loc = locById.get(it.location_id);
-    const tenant = loc ? tenantById.get(loc.tenant_id) : null;
-    infoMap.set(it.id, { tenant: tenant?.name ?? "—", location: loc?.name ?? "—" });
+    const loc: any = locById.get(it.location_id);
+    const tenant: any = loc ? tenantById.get(loc.tenant_id) : null;
+    const serials = loc && tenant ? (serialsByKey.get(`${tenant.id}:${loc.id}`) ?? []) : [];
+    infoMap.set(it.id, { tenant: tenant?.name ?? "—", location: loc?.name ?? "—", serials });
   });
+
 
   const now = Date.now();
   const windowStart = now - LOOKBACK_MS;
@@ -214,6 +236,7 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
       sessionsLast24h,
       worker: current?.worker_host ?? null,
       lastDisconnect: current?.disconnect_reason ?? (current && !current.ended_at ? null : "unbekannt"),
+      serials: info?.serials ?? [],
       loxone: current ? {
         integrationId: intId,
         sessionId: current.id,
@@ -223,8 +246,10 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
         eventsReceived: current.events_received,
         reconnectCount: current.reconnect_count,
         disconnectReason: current.disconnect_reason,
+        serials: info?.serials ?? [],
       } : undefined,
     });
+
   }
   return result;
 }
@@ -257,7 +282,9 @@ function aiconoToUnifiedRow(d: FleetDevice, tenantNameMap: Record<string, string
     sessionsLast24h: null,
     worker: null,
     lastDisconnect: null,
+    serials: [],
     device: d,
+
   };
 }
 
@@ -455,10 +482,12 @@ const SuperAdminGatewayFleet = () => {
           (r.locationName ?? "").toLowerCase().includes(q) ||
           (r.type ?? "").toLowerCase().includes(q) ||
           (r.statusLabel ?? r.status ?? "").toLowerCase().includes(q) ||
-          (r.worker ?? "").toLowerCase().includes(q)
+          (r.worker ?? "").toLowerCase().includes(q) ||
+          (r.serials ?? []).some((s) => s.toLowerCase().includes(q))
         );
       })
     : filteredRowsPre;
+
   const { sorted: filteredRows, sort: fleetSort, toggle: toggleFleetSort } = useSortableData<any, "tenant" | "location" | "type" | "status" | "connected" | "heartbeat" | "events" | "reconnects" | "uptime" | "sessions" | "worker">(
     filteredRowsSearched,
     (r, k) => {
@@ -650,7 +679,7 @@ const SuperAdminGatewayFleet = () => {
                 <div className="relative ml-2">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Suchen (Tenant, Liegenschaft, Typ, Worker)…"
+                    placeholder="Suchen (Tenant, Liegenschaft, Typ, Worker, Seriennummer)…"
                     value={fleetSearch}
                     onChange={(e) => setFleetSearch(e.target.value)}
                     className="pl-8 h-9 w-72"
@@ -799,7 +828,14 @@ const SuperAdminGatewayFleet = () => {
                                 <TableCell colSpan={12} className="py-4">
                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
                                     <div><div className="text-muted-foreground">Gateway-Typ</div><div className="font-medium">Loxone Miniserver</div></div>
+                                    <div>
+                                      <div className="text-muted-foreground">Seriennummer(n)</div>
+                                      <div className="font-mono break-all">
+                                        {lx.serials.length > 0 ? lx.serials.join(", ") : "— (nicht verknüpft)"}
+                                      </div>
+                                    </div>
                                     <div><div className="text-muted-foreground">Worker</div><div className="font-mono">{lx ? (r.worker ?? "—") : "—"}</div></div>
+
                                     <div><div className="text-muted-foreground">Sitzungs-Start</div><div className="font-mono">{new Date(lx.startedAt).toLocaleString("de-DE")}</div></div>
                                     <div><div className="text-muted-foreground">Letztes Update</div><div className="font-mono">{new Date(lx.updatedAt).toLocaleString("de-DE")}</div></div>
                                     <div><div className="text-muted-foreground">Events (Sitzung)</div><div className="font-medium">{(lx.eventsReceived ?? 0).toLocaleString("de-DE")}</div></div>

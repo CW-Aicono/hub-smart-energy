@@ -85,9 +85,10 @@ export function ManualSectionImages({ templateKey, section, label }: Props) {
 
   const updateImage = async (id: string, patch: Partial<ManualImage>) => {
     setImages((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    const { signed_url: _ignored, ...dbPatch } = patch as Partial<ManualImage> & { signed_url?: string };
     const { error } = await supabase
       .from("loxone_snippet_manual_images")
-      .update(patch)
+      .update(dbPatch)
       .eq("id", id);
     if (error) toast({ title: "Fehler", description: error.message, variant: "destructive" });
   };

@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WidgetPreview } from "./WidgetPreview";
 import { EnergyFlowDesigner } from "./EnergyFlowDesigner";
 import { BarChart3, LineChart, Gauge, Activity, Table2, Plus, X, GitBranch, Search } from "lucide-react";
+import { WIDGET_UNIT_OPTIONS, suggestWidgetUnit } from "@/lib/meterUnits";
 
 const CHART_TYPES: { value: ChartType; label: string; icon: React.ReactNode }[] = [
   { value: "line", label: "Liniendiagramm", icon: <LineChart className="h-5 w-5" /> },
@@ -42,7 +43,7 @@ const AGGREGATIONS: { value: AggregationType; label: string }[] = [
   { value: "min", label: "Minimum" },
 ];
 
-const UNITS = ["kWh", "kW", "€", "m³", "MWh", "W", "%"];
+const UNITS = WIDGET_UNIT_OPTIONS;
 
 const PRESET_COLORS = [
   "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
@@ -160,7 +161,17 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
       const ids = prev.meter_ids.includes(meterId)
         ? prev.meter_ids.filter((id) => id !== meterId)
         : [...prev.meter_ids, meterId];
-      return { ...prev, meter_ids: ids };
+      // Automatisch passende Einheit vorschlagen, solange der Nutzer noch
+      // die Default-Einheit (kWh) verwendet – so bekommen Wasser-/Gaszähler
+      // gleich m³ statt kWh vorbelegt.
+      const selectedMeters = ids
+        .map((id) => (meters || []).find((m) => m.id === id))
+        .filter(Boolean) as { unit?: string | null; energy_type?: string | null }[];
+      const shouldAutoUnit = !prev.unit || prev.unit === "kWh";
+      const nextUnit = shouldAutoUnit && selectedMeters.length > 0
+        ? suggestWidgetUnit(selectedMeters)
+        : prev.unit;
+      return { ...prev, meter_ids: ids, unit: nextUnit };
     });
   };
 

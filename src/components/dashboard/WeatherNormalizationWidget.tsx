@@ -357,11 +357,17 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
                         if (payload?.[0]?.payload?.fullMonthLabel) return payload[0].payload.fullMonthLabel;
                         return label;
                       }}
-                      formatter={(value: number, name: string) => [
-                        value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + yAxisUnit,
-                        name === "actualScaled" ? T("wn.actual") : T("wn.normalized"),
-                      ]}
+                      formatter={(_value: number, name: string, item: any) => {
+                        const raw = name === "actualScaled"
+                          ? item?.payload?.actualConsumption ?? 0
+                          : item?.payload?.normalizedConsumption ?? 0;
+                        return [
+                          formatEnergy(raw),
+                          name === "actualScaled" ? T("wn.actual") : T("wn.normalized"),
+                        ];
+                      }}
                     />
+
                     <Legend formatter={(v) => (v === "actualScaled" ? T("wn.actual") : T("wn.normalized"))} />
                     <Bar dataKey="actualScaled" fill="hsl(var(--chart-1))" radius={[2, 2, 0, 0]} />
                     <Bar dataKey="normalizedScaled" fill="hsl(var(--chart-3))" radius={[2, 2, 0, 0]} />

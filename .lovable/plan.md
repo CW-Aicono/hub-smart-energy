@@ -1,47 +1,74 @@
-## Status Testumgebung (verifiziert)
+# Warum Wasser spikt, Gas aber nicht
 
-- `meter_power_readings_5min` letzte 2 h: **440 Rows, alle `source=bridge_ws**`, exakt 6 Buckets/h pro Meter → Worker-Aggregation läuft sauber.
-- `bridge_raw_samples` letzte 1 h: **898 Rows** (648 Tenant `0ce0c43a…`, 250 ohne Tenant-Zuordnung). D. h. mindestens **ein Worker schreibt noch den alten `bridge-readings`-Pfad**. Solange das der Fall ist, darf der Aggregator-Cron nicht abgeschaltet werden — sonst gehen Daten dieses Tenants verloren.
-- Aktive Crons: `bridge-aggregator-every-5min`, `cleanup-bridge-raw-samples-hourly`, `loxone-periodic-sync-15min` — alle aktiv.
+## Kurzantwort (bestätigt durch Codeprüfung + DB-Check)
 
-**Fazit:** Der neue Pfad funktioniert, aber Phase 4 kann nicht komplett zünden, bevor alle Worker (Live + Staging) auf die aggregierende Version umgestellt sind.
+Die Hardware ist gleich (Shelly-Pulse → Miniserver), aber in Loxone sind Gas und Wasser **unterschiedlich modelliert** — und der `loxone-ws-worker` klassifiziert die States dieser beiden Block-Typen unterschiedlich.
 
-## Phase 4 — in dieser Reihenfolge
+### Was der Worker macht (`docs/loxone-ws-worker/index.ts`, Zeile ~598–655)
 
-### Schritt 4a: Pull-Fallback in `loxone-periodic-sync` ergänzen (jetzt, safe)
+Für jeden Meter-Block liest er aus `LoxAPP3.json` alle `states` und mappt sie über Regex auf Rollen:
 
-- In `supabase/functions/loxone-periodic-sync/index.ts`: pro Meter prüfen, ob in `meter_power_readings_5min` in den letzten `2 × poll_interval_minutes` ein Bucket mit `source='bridge_ws'` existiert.
-- Wenn nein → einen 5-Min-Bucket aus dem aktuellen HTTP-Sample schreiben mit `source='loxone_pull'` (Upsert `onConflict: meter_id,bucket,resolution_minutes`).
-- Wenn ja → wie bisher nur kWh-Zählerstände, kein Power-Row.
-- Kein Eingriff in Discovery/Fehlermanagement/Zählerstände.
-- Verifikation: Worker gezielt 15 Min stoppen → in `meter_power_readings_5min` müssen Rows mit `source='loxone_pull'` auftauchen, dann Worker wieder starten → `bridge_ws` übernimmt.
+```text
+today  → EnergyToday / Today / Daily / Tagesverbrauch / Cd
+month  → EnergyMonth / …
+year   → EnergyYear / …
+total  → EnergyTotal / Total / TotalEnergy / Zaehlerstand / Meter / Mr
+pwr    → Pwr / Power / CurrentPower / Actual / ActualPower / Value / P / Cp / …
+```
 
-### Schritt 4b: Worker-Rollout abschließen (User-Aktion Hetzner)
+Nur Einträge mit `role="pwr"` landen später als Momentanleistung in `meter_power_readings(_5min)` (Zeile 503). Alle anderen Rollen werden getrennt als Energiestände geschrieben.
 
-- Alten Live-Worker `loxone-ws-worker-live` auf die neue Image-Version bringen (gleiche Prozedur wie Staging).
-- Kriterium für Schritt 4c: **24 h** lang keine neuen Rows in `bridge_raw_samples` (`SELECT count(*) FROM bridge_raw_samples WHERE received_at > now() - interval '1 hour'` = 0). Ich kann das Monitoring-Query auf Wunsch als wiederkehrenden Check einbauen.
+### Der entscheidende Unterschied Gas ↔ Wasser
 
-### Schritt 4c: Aggregator-Cron pausieren + Raw-Samples eindampfen (nach 24 h Stille)
+- **Gaszähler** in Loxone ist typischerweise als *Energie-Meter* mit **kWh-Bewertung pro Impuls** angelegt (`source_unit_power = "kW"` in der DB bestätigt das für alle 5 Gaszähler dieses Tenants). Der Loxone-Block liefert dadurch einen echten `Pwr`-State (aktuelle Leistung in kW) **und** einen `Total`-State — der Worker mappt sauber `Pwr → pwr` und `Total → total`. Die pwr-Werte sind kleine, sinnvolle Zahlen.
 
-- `SELECT cron.unschedule('bridge-aggregator-every-5min');`
-- `bridge_raw_samples` bleibt als Tabelle bestehen (leerer Puffer), Retention-Cron kümmert sich um den Rest.
-- Legacy-Handler `handleBridgeReadings` in `gateway-ingest` auf No-Op-Broadcast reduzieren (keine DB-Writes mehr), damit ältere Worker-Versionen den Delta-Guard/DB nicht mehr belasten.
+- **Wasserzähler „Hausanschluss"** hat in der DB `source_unit_power = "m³"` (nicht "kW") — d. h. der Loxone-Meter-Block ist als reiner **Impuls-/Zählerstands-Block ohne echten Momentanwert** konfiguriert. Er exponiert entweder gar keinen `Pwr`, oder er exponiert einen State namens `Actual`/`Value`, der aber tatsächlich den kumulativen Zählerstand (m³) enthält.
+  Die aktuelle Regex für `pwr` schluckt `Actual` und `Value` — dadurch wird der **Zählerstand als Leistung** interpretiert und geschrieben → 660 kW/m³ Spikes.
 
-## Rollback pro Schritt
+- Der zweite Wasserzähler „Wasserimpuls_01" (source_unit_power `kW`, aktuell konstant 0) zeigt, dass es auch Wasser-Blöcke mit echtem Pwr gibt — nur der Hausanschluss-Block ist unglücklich modelliert.
 
-- 4a: Fallback-Block auskommentieren, Deploy.
-- 4b: alten Container per Image-Tag wieder starten.
-- 4c: `cron.schedule('bridge-aggregator-every-5min', '*/5 * * * *', $$…$$)` reaktivieren, Handler-Änderung reverten.
+Gas erwischt es nicht, weil dort ein echtes `Pwr` existiert und die Regex-Reihenfolge irrelevant wird — beim Wasser-Hausanschluss ist `Actual`/`Value` die einzige Quelle, die als „pwr" durchgeht.
 
-## Empfehlung
+### Warum das im DB-Check gerade unsichtbar ist
 
-Jetzt nur **Schritt 4a** umsetzen und deployen — das ist unabhängig vom Worker-Rollout und macht das System resilient gegen Worker-Ausfälle. **Schritt 4c** erst, wenn Hetzner-Live-Worker aktualisiert ist und `bridge_raw_samples` 24 h still ist.
+Die letzten 24 h in `meter_power_readings` sind aktuell sauber (max 0,95 für Wasser Hausanschluss). Das passt: die Spikes traten **während der WS-Bridge-Phase** auf und wurden durch das vorherige Cleanup + den Notfall-Pause-Guard entfernt. Sobald die WS-Bridge wieder pusht (v1.6/1.7), kommen sie ohne den unten geplanten Fix zurück.
 
-Soll ich mit Schritt 4a starten?  
-  
-Antwort: Ja, starte mit Schritt 4 a. Hinweis: Hetzner-Live-Worker ist aktualisiert, das habe ich zusammen mit dem Lovable-Test-Worker gemacht.  
-  
-  
-  
-  
-  
+---
+
+## Plan zur endgültigen Behebung
+
+### 1. Worker-Klassifizierung härten (`docs/loxone-ws-worker/index.ts`)
+
+- `pwr`-Regex **entschärfen**: `Actual` und `Value` **nicht** mehr als pwr akzeptieren, wenn parallel im selben Block ein `Total`/`Meter`/`Zaehlerstand`-State existiert und **kein** eindeutiger `Pwr`/`Power`/`CurrentPower`-State vorhanden ist.
+- Neue Regel: wenn ein Block **nur** ambivalente Keys (`Actual`, `Value`, `P`) und **einen** Total-State hat, wird der Block als *Total-only* geführt (kein pwr-Sub). Der Worker berechnet dann optional selbst den Durchfluss aus Δ(Total)/Δt für die 5-Min-Aggregation (positiv, keine Spikes durch kumulativen Zählerstand als Momentanwert).
+- Fallback-Zweig (Zeile 649) analog absichern: wenn nur die Block-UUID selbst als „pwr" verwendet wird, aber der Meter-Typ `wasser`/`gas` ist und `source_unit_power` nicht `kW`/`W` ist → nicht als pwr subscriben.
+
+### 2. Ingest-Guard als zweite Verteidigungslinie (`supabase/functions/gateway-ingest/index.ts`)
+
+- In `handleBridgePower5min` (und im Direkt-Reading-Handler) für Meter mit `energy_type in ('wasser','gas')` und `source_unit_power ∈ (null,'m³','L')`: Werte, deren Betrag den vom Typ plausiblen Maximaldurchfluss (Wasser 2 m³/h, Gas 20 kW) **um Faktor > 10** übersteigt, verwerfen und einmalig als `integration_error` melden.
+- So bleibt ein falsch modellierter Loxone-Block auch bei künftigen Kunden ohne Spikes im Chart.
+
+### 3. Bestandsdaten prüfen (kein Cleanup nötig, wenn schon leer)
+
+- Ein Query auf `meter_power_readings_5min` der letzten 30 Tage für die betroffenen Wasser-Meter (Wert > 50 kW/m³) — falls Reste vorhanden, punktuell löschen. Aktueller Check der letzten 24 h in `meter_power_readings` ist sauber.
+
+### 4. UI/Zählerkonfiguration transparent machen (klein)
+
+- In der Zähler-Detailansicht warnen, wenn `energy_type = wasser|gas` UND `source_unit_power` nicht auf ein Fluss-/Leistungs-Feld deutet — als Hinweis, dass der Loxone-Block einen Pwr-State bereitstellen sollte.
+
+### 5. Kein Änderungsbedarf an EnergyChart / CustomWidget
+
+Die kürzlich umgestellte Interpolation bleibt korrekt; sie war nie die Ursache der 660-kW-Spitzen.
+
+## Technische Details (Referenzen)
+
+- Klassifizierung: `docs/loxone-ws-worker/index.ts` Zeilen ~598–655
+- Nur pwr wird als Momentanleistung geschrieben: Zeile 503
+- Fallback (Block-UUID als pwr): Zeile 649
+- DB-Belege für unterschiedliche `source_unit_power` je Meter im `meters`-Table (Wasser Hausanschluss = `m³`, alle Gas-Meter = `kW`).
+
+## Reihenfolge / Aufwand
+
+1. Ingest-Guard (klein, sofort wirksam, ~30 min)
+2. Worker v1.9 (Klassifizierung + Total-only-Modus, ~1–2 h, Rollout auf Bridge-VM)
+3. UI-Hinweis (klein, ~20 min)

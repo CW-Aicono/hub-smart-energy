@@ -77,14 +77,18 @@ function getPeriodLabel(period: ChartPeriod, ref: Date, locale: Locale, cwPrefix
 function getUnitForPeriod(period: ChartPeriod, energyType: string): string {
   if (period === "day") {
     if (energyType === "wasser") return "Liter";
+    if (energyType === "gas") return "m³/h";
     return "kW";
   }
-  if (energyType === "wasser") return "m³";
+  if (energyType === "wasser" || energyType === "gas") return "m³";
   return "kWh";
 }
 
-function getChartUnitLabel(period: ChartPeriod): string {
-  return period === "day" ? "kW" : "kWh";
+function getChartUnitLabel(period: ChartPeriod, visibleTypes: readonly string[] = []): string {
+  const units = Array.from(new Set(visibleTypes.map((t) => getUnitForPeriod(period, t))));
+  if (units.length === 0) return period === "day" ? "kW" : "kWh";
+  if (units.length === 1) return units[0];
+  return units.join(" / ");
 }
 
 interface EnergyChartProps {
@@ -438,6 +442,35 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const TOLERANCE_SLOTS = 1; // = 5 Min Toleranz
       const filledFlag: Record<string, boolean[]> = {}; // per meter: was this slot real (false) or forward-filled-but-treated-as-gap (true)?
       for (const [mid, s] of Object.entries(meterSeries)) {
+        // Für Wasser/Gas KEIN Step-Forward-Fill (würde Rechteck-/Plateau-Optik
+        // erzeugen). Stattdessen linear zwischen zwei echten Messpunkten
+        // interpolieren — visuell identisch zur Monotone-Spline im Custom-Widget,
+        // aber jeder Slot trägt einen konkreten Wert, damit der Chart-Tooltip
+        // beim Hover an *jeder* Position einen Wert zeigt (nicht nur an den
+        // Original-Messpunkten). Alle interpolierten Slots werden als Gap
+        // geflaggt, sodass sie nicht als "echt" gezählt werden.
+        if (s.et === "wasser" || s.et === "gas") {
+          const flags = Array.from({ length: 288 }, () => false);
+          const realIdxWG: number[] = [];
+          for (let i = 0; i < 288; i++) if (s.values[i] != null) realIdxWG.push(i);
+          if (realIdxWG.length >= 2) {
+            for (let k = 0; k < realIdxWG.length - 1; k++) {
+              const a = realIdxWG[k];
+              const b = realIdxWG[k + 1];
+              const va = s.values[a] as number;
+              const vb = s.values[b] as number;
+              const span = b - a;
+              if (span <= 1) continue;
+              for (let i = a + 1; i < b; i++) {
+                s.values[i] = va + ((vb - va) * (i - a)) / span;
+                flags[i] = true;
+              }
+            }
+          }
+          filledFlag[mid] = flags;
+          continue;
+        }
+
         // Geschätzten Poll-Abstand bestimmen: Median der Slot-Abstände zwischen
         // aufeinanderfolgenden echten Messungen. Fallback: 1 Slot (5 Min).
         const realIdx: number[] = [];
@@ -690,10 +723,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
   if (loading || powerLoading || dailyTotalsLoading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
 
-  const unitLabel = getChartUnitLabel(period);
+  const visibleKeys = ENERGY_KEYS.filter((k) => !hiddenKeys.has(k));
+  const unitLabel = getChartUnitLabel(period, visibleKeys.filter((k) => allowedTypes.has(k)));
   const isLineChart = period === "day";
 
-  const visibleKeys = ENERGY_KEYS.filter((k) => !hiddenKeys.has(k));
 
   const handleLegendClick = (e: any) => {
     // dataKey can be "strom", "real_strom", "__gap_strom" — normalise to base key
@@ -782,7 +815,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                     const hidden = hiddenKeys.has(key);
                     const displayName = T(`energy.${key}`);
                     return (
-                      <Line key={key} type="monotone" dataKey={key} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={false} legendType="line" />
+                      <Line key={key} type="monotone" dataKey={key} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={key === "wasser" || key === "gas"} legendType="line" />
                     );
                   })}
                 </LineChart>
