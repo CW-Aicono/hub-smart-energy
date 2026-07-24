@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useLocations } from "@/hooks/useLocations";
 import { useMeters } from "@/hooks/useMeters";
 import { useTranslation } from "@/hooks/useTranslation";
+import { powerUnitForMeter } from "@/lib/meterUnits";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
