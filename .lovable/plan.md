@@ -1,37 +1,52 @@
 ## Ziel
-Die obere Tabelle in `MeterManagement.tsx` (manuelle & virtuelle Zähler) erhält dasselbe visuelle Format wie die untere „Vom Gateway gelieferte Zähler-Geräte"-Tabelle (`DeviceTable`) — inkl. Typ-Icon, sortierbaren Spalten, Wert-Spalte und farbigen Status-Badges.
 
-## Neues Spalten-Layout (obere Tabelle)
+Im Automation-Editor werden Sensor- und Aktor-Dropdowns strikt an den gewählten **Ausführungsort** gekoppelt. Sobald *nicht* „Cloud" gewählt ist (also „Loxone lokal" oder „Hybrid"), dürfen ausschließlich Geräte angeboten werden, die auch lokal ansprechbar sind. Cloud-API-Geräte (Shelly Cloud, Tuya, ABB, Siemens Building X, Homematic IP, Omada, Schneider Cloud, …) werden dann ausgeblendet.
 
-```text
-[☐] [Typ-Icon] [Name ↕] [Raum ↕] [Energieart ↕] [Erfassung ↕] [Wert ↕] [Aktionen]
-```
+## Warum
 
-Änderungen ggü. jetzt:
-- **Neu**: führende Typ-Icon-Spalte (grauer Badge mit Icon aus `getDeviceIconForMeter` je nach `energy_type` / `device_type`) — identisch zur Gateway-Tabelle.
-- **Neu**: Spalte „Raum" (aus `roomNameById[m.room_id]`, „–" wenn leer) — passt zu „Zugeordneter Raum" in der unteren Tabelle.
-- **Entfernt**: Spalte „Zählernummer".
-- **Ersetzt**: Spalte „Einheit" → Spalte „Wert" (rechtsbündig, `font-mono`, Format `123,45 kWh` / `0,03 m³/h` etc. via `energyUnitForMeter` aus `src/lib/meterUnits.ts`).
-- **Umgezogen**: Spalte „Erfassung" nutzt jetzt das Status-Badge-Styling der Gateway-Tabelle (gleiche Badge-Varianten wie bisher: `default` = automatic, `outline` = virtual, `secondary` = manual — bleibt inhaltlich gleich, nur Position analog „Status").
-- Sortierbare Header via `SortableHeadUI` (wie in `DeviceTable`) für Name, Raum, Energieart, Erfassung, Wert.
-- Aktions-Spalte (Bearbeiten/Archivieren/Löschen) und Bulk-Auswahl-Checkbox bleiben unverändert.
+„Loxone lokal" bedeutet: die Regel läuft ausschließlich auf dem Miniserver. Ein Cloud-Aktor kann von dort nicht angesteuert werden – die Kombination widerspricht sich. „Hybrid" fällt bei Cloud-Ausfall auf lokale Ausführung zurück; auch dort sind Cloud-Geräte nicht sinnvoll.
 
-## Datenherkunft „Wert"
+## Klassifizierung der Integrationen
 
-Pro Zeile wird der letzte Zählerstand + konfigurierte Einheit angezeigt:
+Neuer zentraler Helper `src/lib/gatewayExecution.ts`:
 
-- **Manuelle Zähler** (`capture_type = "manual"`): letzter Eintrag aus `meter_readings` (bereits im Projekt via ähnlicher Logik in `LiveValues.tsx` genutzt) — ein einmaliger Fetch nach `meter_id` in der aktuellen Location, gruppiert per `Map<meterId, {value, date}>`.
-- **Virtuelle Zähler** (`capture_type = "virtual"`): letzter Wert aus `meter_cumulative_readings` (dieselbe Quelle, die auch das Dashboard-Widget nutzt), pro `meter_id` neuester Eintrag.
-- Einheit: `energyUnitForMeter(meter)` (respektiert `unit`, fällt auf `m³` bei Wasser/Gas zurück).
-- Anzeige: `"—"` wenn kein Wert vorhanden; sonst `value.toLocaleString("de-DE", { maximumFractionDigits: 2 }) + " " + unit`.
+- `LOCAL_CAPABLE_TYPES = ["loxone_miniserver", "aicono_gateway", "schneider_panel_server", "siemens_iot2050", "sentron_powercenter_3000", "mqtt_generic", "shelly_mqtt", "smart_meter_imsys"]`
+- `CLOUD_ONLY_TYPES = ["shelly_cloud", "tuya_cloud", "abb_free_at_home", "siemens_building_x", "homematic_ip", "omada_cloud", "schneider_cloud"]`
+- `isCloudOnlyIntegration(type)` / `isLocalCapableIntegration(type)`
 
-Fetch als kleiner neuer Hook `useLatestMeterValues(locationId, meters)` in `src/hooks/` (lokal für diese Komponente), invalidiert bei Meter-Änderungen. Kein Realtime nötig — refetch beim Fokus reicht (analog anderen Tabellen).
+Für „Loxone lokal"-Templates gilt zusätzlich: nur `loxone_miniserver`-Geräte des jeweils gewählten Miniservers sind zulässig (Templates laufen im Miniserver-Programm).
 
-## Betroffene Dateien
-- `src/components/locations/MeterManagement.tsx` — Tabellen-Rewrite (Zeilen ~757–843) inkl. neuer Sort-States (analog `DeviceTable`) und Icon-Renderer. CSV-Export-Header (Zeile 716) auf neue Spalten anpassen (`Name;Raum;Energieart;Erfassung;Wert;Einheit`).
-- `src/hooks/useLatestMeterValues.ts` — **neu**, kleiner Query-Hook für die zwei Quellen oben.
+## Änderungen
 
-## Nicht im Scope
-- Keine Änderungen an der unteren Gateway-Tabelle.
-- Keine Änderungen an den Sensor-/Aktor-Tabs (nur der Zähler-Tab-Bereich für manuell/virtuell).
-- Keine Backend-/Migrations-Änderungen.
+### 1. `src/lib/gatewayExecution.ts` (neu)
+Klassifizierungs-Helper wie oben.
+
+### 2. `src/components/locations/AutomationRuleBuilder.tsx`
+- `GatewayOption` um `integrationType: string` erweitern.
+- Neue Prop `integrationType?: string` für den Single-Gateway-Modus (Nicht-MLA).
+- In `ConditionEditor` und `ActionEditor`:
+  - Wenn `executionMode !== "cloud"`:
+    - **MLA**: `gatewayOptions` beim Rendern des Gateway-Dropdowns filtern (`isLocalCapableIntegration`), und bei „Loxone lokal" mit gewähltem Template weiter auf `loxone_miniserver` reduzieren.
+    - **Single-Gateway**: Wenn die Integration cloud-only ist, Sensor-/Aktor-Auswahl deaktivieren und einen Hinweis anzeigen: „Diese Integration ist nur mit Ausführungsort ‚Cloud' verfügbar."
+  - Bereits gewählte `sensor_uuid`/`actuator_uuid`, die durch den Wechsel nicht mehr zulässig sind, werden geleert und rot markiert („Gerät nicht mit gewähltem Ausführungsort kompatibel").
+- `executionMode`-Änderung: `useEffect` bereinigt betroffene Conditions/Actions (Reset auf leere Auswahl statt stillem Fortbestand).
+- Speichern-Button wird deaktiviert, solange inkompatible Referenzen existieren.
+
+### 3. `src/components/locations/LocationAutomation.tsx`
+- `integrationType` des lokalen Gateways an `AutomationRuleBuilder` durchreichen.
+- MLA-Modus: `gatewayOptions` um `integrationType` (aus `gatewayIntegrations[i].integration?.type`) anreichern.
+
+### 4. i18n / Texte
+Neue Strings in `src/i18n/de.ts` (+ EN/ES/NL Aliasse):
+- `automation.cloudOnlyDeviceHidden`: „Cloud-Geräte sind bei lokaler Ausführung nicht verfügbar."
+- `automation.incompatibleSelection`: „Diese Auswahl passt nicht zum Ausführungsort und wurde entfernt."
+
+### 5. Tests
+- Unit-Test `AutomationRuleBuilder.test.tsx`: Wechsel des Ausführungsorts entfernt Shelly-Cloud-Aktor aus dem Dropdown und aus einer bereits bestehenden Aktion.
+- Snapshot der Gateway-Filterlogik in `gatewayExecution.test.ts`.
+
+## Was nicht geändert wird
+
+- Bestehende Automations in der DB bleiben unverändert. Beim Öffnen im Editor werden sie normal geladen; erst beim Wechsel des Ausführungsorts durch den User wird bereinigt.
+- Cloud-Ausführung („Cloud" gewählt) verhält sich exakt wie heute – alle Integrationen bleiben verfügbar.
+- Keine Änderungen an Edge Functions oder DB-Schema.
