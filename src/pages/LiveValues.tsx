@@ -932,6 +932,7 @@ const LiveValues = () => {
         <MeterDetailDialog
           node={detailNode}
           socPct={socByMeterId.get(detailNode.meter_id)?.pct ?? null}
+          metersById={Object.fromEntries((meters ?? []).map((m: any) => [m.id, m]))}
           onClose={() => setDetailNode(null)}
         />
       )}
