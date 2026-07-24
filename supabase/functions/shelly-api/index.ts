@@ -370,6 +370,13 @@ serve(async (req) => {
 
       sensors.sort((a, b) => a.name.localeCompare(b.name));
       await updateSyncStatus(supabase, locationIntegrationId, "success");
+      await writeSensorSnapshot(
+        supabase,
+        locationIntegrationId,
+        sensors,
+        (li as any).location?.tenant_id ?? null,
+        (li as any).location_id ?? null,
+      );
       return new Response(JSON.stringify({ success: true, sensors }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
