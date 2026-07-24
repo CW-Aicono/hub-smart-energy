@@ -798,10 +798,6 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <TableHeader>
                   <TableRow>
                      {isAdmin && (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                     {isAdmin && (
                        <TableHead className="w-8">
                          <Checkbox
                            checked={displayedMeters.length > 0 && displayedMeters.every((m) => selectedMeterIds.has(m.id))}
