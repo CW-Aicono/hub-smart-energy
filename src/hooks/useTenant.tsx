@@ -231,6 +231,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           report_settings: (data.report_settings as unknown as TenantReportSettings) || { footer_text: "", show_logo: true },
           week_start_day: (data.week_start_day as 0 | 1 | 2 | 3 | 4 | 5 | 6) ?? 1,
           show_manual_meters: data.show_manual_meters ?? false,
+          show_empty_widgets: (data as any).show_empty_widgets ?? false,
           auto_logout_enabled: (data as any).auto_logout_enabled ?? true,
           auto_logout_minutes: (((data as any).auto_logout_minutes ?? 30) as 10 | 20 | 30 | 60 | 120),
           logo_url: resolvedLogoUrl,
