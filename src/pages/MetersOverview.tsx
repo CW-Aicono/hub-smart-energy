@@ -111,6 +111,8 @@ const MetersOverview = () => {
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const locationFiltered = meters.filter((m) => {
+    const dt = (m as any).device_type;
+    if (dt && dt !== "meter") return false;
     if (selectedLocationId !== "all" && m.location_id !== selectedLocationId) return false;
     if (selectedEnergyType !== "all" && m.energy_type !== selectedEnergyType) return false;
     if (selectedCaptureType !== "all" && m.capture_type !== selectedCaptureType) return false;
