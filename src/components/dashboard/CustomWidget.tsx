@@ -65,14 +65,13 @@ function getDayBucketLabel(date: Date): string {
   return formatTimeLabel(date.getHours(), roundedMinutes);
 }
 
+import { powerUnitForMeter, energyUnitForMeter, type MeterLike } from "@/lib/meterUnits";
+
 function normalizePowerUnit(unit?: string | null, energyType?: string | null, fallback?: string | null): string {
-  if (unit === "Wh") return "W";
-  if (unit === "kWh") return "kW";
-  if (unit === "m³") return "m³/h";
-  if (unit) return unit;
-  if (energyType === "gas" || energyType === "wasser") return "m³/h";
-  if (fallback === "kWh") return "kW";
-  return fallback || "kW";
+  return powerUnitForMeter(
+    { unit: unit ?? undefined, energy_type: energyType ?? undefined },
+    fallback ?? "kW",
+  );
 }
 
 /** Compute date range from the dashboard time period and offset */
