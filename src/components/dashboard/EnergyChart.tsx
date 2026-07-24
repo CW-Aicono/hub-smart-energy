@@ -442,14 +442,32 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const TOLERANCE_SLOTS = 1; // = 5 Min Toleranz
       const filledFlag: Record<string, boolean[]> = {}; // per meter: was this slot real (false) or forward-filled-but-treated-as-gap (true)?
       for (const [mid, s] of Object.entries(meterSeries)) {
-        // Für Wasser/Gas KEIN Forward-Fill: kumulative bzw. m³/h-Zähler liefern
-        // typischerweise nur alle 10–15 min echte Werte. Ein Step-Fill würde die
-        // klassische Rechteck-/Plateau-Optik erzeugen. Stattdessen lassen wir
-        // leere Slots null und zeichnen unten via connectNulls=true eine glatte
-        // Monotone-Spline zwischen den echten Punkten (analog zum Custom-Widget
-        // „Wasser und Gas · m³/h").
+        // Für Wasser/Gas KEIN Step-Forward-Fill (würde Rechteck-/Plateau-Optik
+        // erzeugen). Stattdessen linear zwischen zwei echten Messpunkten
+        // interpolieren — visuell identisch zur Monotone-Spline im Custom-Widget,
+        // aber jeder Slot trägt einen konkreten Wert, damit der Chart-Tooltip
+        // beim Hover an *jeder* Position einen Wert zeigt (nicht nur an den
+        // Original-Messpunkten). Alle interpolierten Slots werden als Gap
+        // geflaggt, sodass sie nicht als "echt" gezählt werden.
         if (s.et === "wasser" || s.et === "gas") {
-          filledFlag[mid] = Array.from({ length: 288 }, () => false);
+          const flags = Array.from({ length: 288 }, () => false);
+          const realIdxWG: number[] = [];
+          for (let i = 0; i < 288; i++) if (s.values[i] != null) realIdxWG.push(i);
+          if (realIdxWG.length >= 2) {
+            for (let k = 0; k < realIdxWG.length - 1; k++) {
+              const a = realIdxWG[k];
+              const b = realIdxWG[k + 1];
+              const va = s.values[a] as number;
+              const vb = s.values[b] as number;
+              const span = b - a;
+              if (span <= 1) continue;
+              for (let i = a + 1; i < b; i++) {
+                s.values[i] = va + ((vb - va) * (i - a)) / span;
+                flags[i] = true;
+              }
+            }
+          }
+          filledFlag[mid] = flags;
           continue;
         }
 
