@@ -77,14 +77,18 @@ function getPeriodLabel(period: ChartPeriod, ref: Date, locale: Locale, cwPrefix
 function getUnitForPeriod(period: ChartPeriod, energyType: string): string {
   if (period === "day") {
     if (energyType === "wasser") return "Liter";
+    if (energyType === "gas") return "m³/h";
     return "kW";
   }
-  if (energyType === "wasser") return "m³";
+  if (energyType === "wasser" || energyType === "gas") return "m³";
   return "kWh";
 }
 
-function getChartUnitLabel(period: ChartPeriod): string {
-  return period === "day" ? "kW" : "kWh";
+function getChartUnitLabel(period: ChartPeriod, visibleTypes: readonly string[] = []): string {
+  const units = Array.from(new Set(visibleTypes.map((t) => getUnitForPeriod(period, t))));
+  if (units.length === 0) return period === "day" ? "kW" : "kWh";
+  if (units.length === 1) return units[0];
+  return units.join(" / ");
 }
 
 interface EnergyChartProps {
@@ -690,10 +694,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
   if (loading || powerLoading || dailyTotalsLoading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
 
-  const unitLabel = getChartUnitLabel(period);
+  const visibleKeys = ENERGY_KEYS.filter((k) => !hiddenKeys.has(k));
+  const unitLabel = getChartUnitLabel(period, visibleKeys.filter((k) => allowedTypes.has(k)));
   const isLineChart = period === "day";
 
-  const visibleKeys = ENERGY_KEYS.filter((k) => !hiddenKeys.has(k));
 
   const handleLegendClick = (e: any) => {
     // dataKey can be "strom", "real_strom", "__gap_strom" — normalise to base key
