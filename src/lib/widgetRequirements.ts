@@ -63,8 +63,8 @@ export const WIDGET_REQUIREMENTS: Record<string, WidgetRequirement> = {
     reasonKey: "widgetReq.gasOrHeatMeterNeeded",
   },
   location_map: {
-    check: (s) => s.hasMultipleLocations,
-    reasonKey: "widgetReq.multipleLocationsNeeded",
+    check: (s) => s.hasAnyLocation,
+    reasonKey: "widgetReq.locationNeeded",
   },
   sustainability_kpis: {
     check: (s) => s.hasMeter,
