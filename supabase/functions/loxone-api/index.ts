@@ -59,6 +59,30 @@ const CONTROL_TYPE_MAPPINGS: Record<string, StateMapping> = {
   TextState:      { primaryState: "textAndIcon", primaryUnit: "", sensorType: "text" },
 };
 
+// Extract a physical unit from a Loxone format string like "%.3f m³/h", "%.1f°C", "%.0f kWh".
+function extractUnitFromFormat(fmt: unknown): string | null {
+  if (typeof fmt !== "string" || !fmt) return null;
+  // Take everything after the last format specifier (%…f, %…d, %…g, %s)
+  const m = fmt.match(/%[^a-zA-Z]*[a-zA-Z]\s*(.+)$/);
+  const tail = (m ? m[1] : fmt).trim();
+  if (!tail) return null;
+  // Common units, order matters (longest first)
+  const known = ["m³/h", "kWh", "Wh", "kW", "kVA", "kvar", "m³", "l/min", "l/h", "°C", "°F", "hPa", "bar", "Pa", "ppm", "lx", "V", "A", "%", "W", "l", "K"];
+  for (const u of known) {
+    if (tail === u || tail.endsWith(u)) return u;
+  }
+  return null;
+}
+
+// Given a rate unit, return the counterpart totalizer unit (or null if unknown).
+function totalizerUnitFor(rateUnit: string): string | null {
+  if (rateUnit === "m³/h") return "m³";
+  if (rateUnit === "l/min" || rateUnit === "l/h") return "l";
+  if (rateUnit === "kW") return "kWh";
+  if (rateUnit === "W") return "Wh";
+  return null;
+}
+
 // Mapping from Loxone /all output names to our internal state names
 const LOXONE_OUTPUT_TO_STATE: Record<string, string> = {
   "Pf": "actual",       // Power (Leistung)
@@ -1344,6 +1368,16 @@ serve(async (req) => {
           unit = detected.unit;
         }
 
+        // Override the (possibly hardcoded) unit with the real unit from the Loxone
+        // control's format string when available (e.g. water meter → "m³/h" instead of "kW").
+        const _details = (control as any).details;
+        const _formatUnit = _details && typeof _details === "object"
+          ? extractUnitFromFormat(_details.format ?? _details.formatValue)
+          : null;
+        if (_formatUnit) {
+          unit = _formatUnit;
+        }
+
         // Get the fetched value(s)
         const stateData = stateResults[uuid];
         let value = "-";
@@ -1363,7 +1397,9 @@ serve(async (req) => {
 
         if (stateData?.secondaryValue !== null && stateData?.secondaryValue !== undefined) {
           secondaryStateName = stateData.secondaryStateName || "";
-          secondaryUnit = stateData.secondaryUnit || (mappingEntry?.secondaryUnit || "");
+          // Prefer totalizer unit derived from primary rate unit (e.g. m³/h → m³).
+          const _inferredSecondary = totalizerUnitFor(unit);
+          secondaryUnit = stateData.secondaryUnit || _inferredSecondary || (mappingEntry?.secondaryUnit || "");
           const rawSecondary = stateData.secondaryValue;
           if (typeof rawSecondary === "number") {
             secondaryValue = rawSecondary.toLocaleString("de-DE", { maximumFractionDigits: secondaryUnit === "kWh" ? 0 : 2 });
