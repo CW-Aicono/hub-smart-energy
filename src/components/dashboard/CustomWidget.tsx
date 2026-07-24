@@ -272,7 +272,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
           valuesByBucket[label][row.meter_id].push(row.value);
         }
 
-        return timeline.map((label) => {
+        const rows = timeline.map((label) => {
           const entry: Record<string, string | number | null> = { name: label };
           for (const meterId of config.meter_ids) {
             const bucketValues = valuesByBucket[label][meterId];
@@ -282,6 +282,30 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
           }
           return entry;
         });
+
+        // Linear zwischen echten Messpunkten interpolieren, damit der Tooltip
+        // an jeder Hover-Position (auch zwischen zwei 15-Min-Polls) einen Wert
+        // zeigt. Visuell identisch zur bisherigen Monotone-Spline mit
+        // connectNulls, aber jeder Slot trägt jetzt einen konkreten Wert.
+        for (const meterId of config.meter_ids) {
+          const realIdx: number[] = [];
+          for (let i = 0; i < rows.length; i++) {
+            if (rows[i][meterId] != null) realIdx.push(i);
+          }
+          for (let k = 0; k < realIdx.length - 1; k++) {
+            const a = realIdx[k];
+            const b = realIdx[k + 1];
+            const va = rows[a][meterId] as number;
+            const vb = rows[b][meterId] as number;
+            const span = b - a;
+            if (span <= 1) continue;
+            for (let i = a + 1; i < b; i++) {
+              rows[i][meterId] = va + ((vb - va) * (i - a)) / span;
+            }
+          }
+        }
+
+        return rows;
       }
 
       // Non-day periods: use the server-side fallback RPC, which prefers archived
