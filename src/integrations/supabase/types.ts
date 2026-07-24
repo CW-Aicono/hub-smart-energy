@@ -13724,6 +13724,14 @@ export type Database = {
         Args: { _tenant_id: string; _user_id: string }
         Returns: boolean
       }
+      latest_meter_cumulative: {
+        Args: { _meter_ids: string[] }
+        Returns: {
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+        }[]
+      }
       next_charging_invoice_number: {
         Args: { p_tenant_id: string; p_year: number }
         Returns: string
