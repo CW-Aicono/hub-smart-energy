@@ -117,6 +117,9 @@ export interface GatewayOption {
   locationName: string;    // location name
   sensors: LoxoneSensor[]; // sensors for this specific gateway
   isOnline: boolean;
+  /** Integration type (e.g. "loxone_miniserver", "shelly_cloud") – used
+   *  to hide cloud-only gateways when execution_mode != "cloud". */
+  integrationType?: string;
 }
 
 /** MLA-Modus: Auswählbare Ziel-Standorte für eine Cross-Location-Automation */
