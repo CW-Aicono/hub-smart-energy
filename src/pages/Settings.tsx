@@ -9,6 +9,7 @@ import { BrandingSettings } from "@/components/settings/BrandingSettings";
 import { BackupSettings } from "@/components/settings/BackupSettings";
 import { WeekStartSetting } from "@/components/settings/WeekStartSetting";
 import { ManualMetersSetting } from "@/components/settings/ManualMetersSetting";
+import { EmptyWidgetsSetting } from "@/components/settings/EmptyWidgetsSetting";
 import { AutoLogoutSetting } from "@/components/settings/AutoLogoutSetting";
 import { TenantInfoSettings } from "@/components/settings/TenantInfoSettings";
 import { WidgetDesigner } from "@/components/settings/WidgetDesigner";
@@ -84,6 +85,7 @@ const Settings = () => {
               <WeekStartSetting />
               <AutoLogoutSetting />
               <ManualMetersSetting />
+              <EmptyWidgetsSetting />
               <BrandingSettings />
             </TabsContent>
             <TabsContent value="backup">
