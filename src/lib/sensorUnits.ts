@@ -17,7 +17,6 @@ export const SOURCE_UNIT_GROUPS: SourceUnitGroup[] = [
     options: [
       { value: "kW", label: "kW / kWh" },
       { value: "W", label: "W / Wh" },
-      { value: "m³", label: "m³" },
     ],
   },
   {
