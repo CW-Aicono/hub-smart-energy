@@ -161,7 +161,17 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
       const ids = prev.meter_ids.includes(meterId)
         ? prev.meter_ids.filter((id) => id !== meterId)
         : [...prev.meter_ids, meterId];
-      return { ...prev, meter_ids: ids };
+      // Automatisch passende Einheit vorschlagen, solange der Nutzer noch
+      // die Default-Einheit (kWh) verwendet – so bekommen Wasser-/Gaszähler
+      // gleich m³ statt kWh vorbelegt.
+      const selectedMeters = ids
+        .map((id) => (meters || []).find((m) => m.id === id))
+        .filter(Boolean) as { unit?: string | null; energy_type?: string | null }[];
+      const shouldAutoUnit = !prev.unit || prev.unit === "kWh";
+      const nextUnit = shouldAutoUnit && selectedMeters.length > 0
+        ? suggestWidgetUnit(selectedMeters)
+        : prev.unit;
+      return { ...prev, meter_ids: ids, unit: nextUnit };
     });
   };
 
