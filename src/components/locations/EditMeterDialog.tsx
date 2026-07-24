@@ -202,9 +202,13 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     // Only auto-set if user actively changed the energy type (not on initial render)
     if (energyType === initialEnergyTypeRef.current) return;
     initialEnergyTypeRef.current = energyType;
-    if (energyType === "gas") setUnit("m³");
-    else if (energyType === "wasser") setUnit("m³");
-    else setUnit("kWh");
+    if (energyType === "gas") {
+      if (!["m³", "m³/h", "kWh"].includes(unit)) setUnit("m³");
+    } else if (energyType === "wasser") {
+      if (!["m³", "m³/h"].includes(unit)) setUnit("m³");
+    } else {
+      setUnit("kWh");
+    }
   }, [energyType]);
 
   // Fetch floors for the location
