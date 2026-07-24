@@ -694,10 +694,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
   if (loading || powerLoading || dailyTotalsLoading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
 
-  const unitLabel = getChartUnitLabel(period);
+  const visibleKeys = ENERGY_KEYS.filter((k) => !hiddenKeys.has(k));
+  const unitLabel = getChartUnitLabel(period, visibleKeys.filter((k) => allowedTypes.has(k)));
   const isLineChart = period === "day";
 
-  const visibleKeys = ENERGY_KEYS.filter((k) => !hiddenKeys.has(k));
 
   const handleLegendClick = (e: any) => {
     // dataKey can be "strom", "real_strom", "__gap_strom" — normalise to base key
