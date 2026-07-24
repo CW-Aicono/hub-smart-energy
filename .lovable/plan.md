@@ -1,50 +1,37 @@
 ## Ziel
+Die obere Tabelle in `MeterManagement.tsx` (manuelle & virtuelle Zähler) erhält dasselbe visuelle Format wie die untere „Vom Gateway gelieferte Zähler-Geräte"-Tabelle (`DeviceTable`) — inkl. Typ-Icon, sortierbaren Spalten, Wert-Spalte und farbigen Status-Badges.
 
-Wasser-/Gaszähler sollen konsistent mit ihrer echten Einheit (m³ bzw. m³/h) statt kW/kWh angezeigt werden. Die Einheit aus dem Loxone-Miniserver soll als Default übernommen, in den Geräteeinstellungen aber überschreibbar sein — und die dort gesetzte Einheit ist überall die alleinige Anzeigequelle.
+## Neues Spalten-Layout (obere Tabelle)
 
-## Was aktuell nicht passt (verifiziert)
+```text
+[☐] [Typ-Icon] [Name ↕] [Raum ↕] [Energieart ↕] [Erfassung ↕] [Wert ↕] [Aktionen]
+```
 
-- **Loxone-Import** (`supabase/functions/loxone-api/index.ts`, Zeilen 50–60): `CONTROL_TYPE_MAPPINGS.Meter` liefert hart `primaryUnit: "kW"` / `secondaryUnit: "kWh"`. Der tatsächliche Formatstring der Loxone-Ausgänge (`Pf` = `m³/h`, `Mr` = `m³`) wird ignoriert → Wasserzähler bekommen bei der Discovery `unit: "kW"` mitgegeben.
-- **AssignMeterDialog** (Zeile 82): übernimmt `s.unit` — bekommt also fälschlich "kW" statt "m³".
-- **EditMeterDialog** (`src/components/locations/EditMeterDialog.tsx`, Zeilen 199–207, 603–615): Bei Energieart „Wasser" wird `unit` fest auf `"m³"` gesetzt und über ein Freitext-`Input` angezeigt — keine Auswahl m³ / m³/h.
-- **SOURCE_UNIT_GROUPS** (`src/lib/sensorUnits.ts`): „Durchfluss"-Gruppe bietet `m³/h`, aber die Gruppe „Energie / Leistung" enthält nur `m³` (ohne `m³/h`). Für einen Wasserzähler ist die Gateway-Rate `m³/h` — nicht offensichtlich auffindbar.
-- **MeterDetailDialog** (`EnergyFlowMonitor.tsx`, Zeilen 1361–1370) leitet zwar `rateUnit`/`energyUnit` aus `meter.unit` ab (m³ → m³/h) — funktioniert also, sobald `meter.unit` korrekt gesetzt ist. Das erklärt die kW-Anzeige im Screenshot: der Zähler wurde mit `unit="kW"` importiert.
+Änderungen ggü. jetzt:
+- **Neu**: führende Typ-Icon-Spalte (grauer Badge mit Icon aus `getDeviceIconForMeter` je nach `energy_type` / `device_type`) — identisch zur Gateway-Tabelle.
+- **Neu**: Spalte „Raum" (aus `roomNameById[m.room_id]`, „–" wenn leer) — passt zu „Zugeordneter Raum" in der unteren Tabelle.
+- **Entfernt**: Spalte „Zählernummer".
+- **Ersetzt**: Spalte „Einheit" → Spalte „Wert" (rechtsbündig, `font-mono`, Format `123,45 kWh` / `0,03 m³/h` etc. via `energyUnitForMeter` aus `src/lib/meterUnits.ts`).
+- **Umgezogen**: Spalte „Erfassung" nutzt jetzt das Status-Badge-Styling der Gateway-Tabelle (gleiche Badge-Varianten wie bisher: `default` = automatic, `outline` = virtual, `secondary` = manual — bleibt inhaltlich gleich, nur Position analog „Status").
+- Sortierbare Header via `SortableHeadUI` (wie in `DeviceTable`) für Name, Raum, Energieart, Erfassung, Wert.
+- Aktions-Spalte (Bearbeiten/Archivieren/Löschen) und Bulk-Auswahl-Checkbox bleiben unverändert.
 
-## Umsetzung
+## Datenherkunft „Wert"
 
-### 1. Loxone-Discovery: echte Einheit übernehmen
-`supabase/functions/loxone-api/index.ts`
-- Beim Auslesen der Controls die Formatstrings der zugehörigen Ausgänge (`Pf` für Leistung/Rate, `Mr` für Totalzähler) auslesen. Das Loxone-`/data/LoxAPP3.json` liefert pro Control ein `details.format` oder pro State ein `format` wie `"%.3f m³/h"` bzw. `"%.3f m³"`.
-- Hilfsfunktion `extractUnitFromFormat(fmt: string): string | null` → Regex nach dem Trailer nach `%…f` extrahieren (`m³/h`, `m³`, `kW`, `kWh`, `°C`, `%`, `l/min`, …).
-- Wenn `Pf`-Format eine Nicht-`kW`-Einheit liefert (z. B. `m³/h`, `l/min`), diese in `unit` (primary) statt hartkodiertem `kW` zurückgeben; analog `secondaryUnit` aus `Mr`.
-- Fallback bleibt das bestehende `CONTROL_TYPE_MAPPINGS`.
+Pro Zeile wird der letzte Zählerstand + konfigurierte Einheit angezeigt:
 
-### 2. Zuordnung: passende Energieart automatisch setzen
-`src/components/integrations/AssignMeterDialog.tsx`
-- Wenn `s.unit` auf `m³` / `m³/h` / `l` / `l/min` endet → Default `energyType = "wasser"` (bzw. bei explizit gasähnlichem Namen `gas`), sonst wie bisher „strom".
-- `unit` bleibt der übernommene Wert; für Rate-Einheiten (`m³/h`, `l/min`) wird zusätzlich der Totalzähler-Wert (`m³`, `l`) über `deriveEnergyUnit` als `unit` gespeichert, damit die zentrale Anzeige-Logik greift.
+- **Manuelle Zähler** (`capture_type = "manual"`): letzter Eintrag aus `meter_readings` (bereits im Projekt via ähnlicher Logik in `LiveValues.tsx` genutzt) — ein einmaliger Fetch nach `meter_id` in der aktuellen Location, gruppiert per `Map<meterId, {value, date}>`.
+- **Virtuelle Zähler** (`capture_type = "virtual"`): letzter Wert aus `meter_cumulative_readings` (dieselbe Quelle, die auch das Dashboard-Widget nutzt), pro `meter_id` neuester Eintrag.
+- Einheit: `energyUnitForMeter(meter)` (respektiert `unit`, fällt auf `m³` bei Wasser/Gas zurück).
+- Anzeige: `"—"` wenn kein Wert vorhanden; sonst `value.toLocaleString("de-DE", { maximumFractionDigits: 2 }) + " " + unit`.
 
-### 3. Einheiten-Dropdown im Gerätedialog erweitern
-`src/components/locations/EditMeterDialog.tsx` und `AddMeterDialog.tsx`
-- Für Energieart **Wasser** und **Gas** ein `<Select>` mit den Optionen `m³` und `m³/h` anzeigen (statt Freitext bei Wasser bzw. m³/kWh bei Gas).
-  - Wasser: Optionen `m³`, `m³/h`. Default `m³`.
-  - Gas: Optionen `m³`, `m³/h`, `kWh`. Default `m³`.
-- Auto-Set-Effekt (Zeilen 199–207) anpassen: bei Wechsel auf „wasser" nur setzen, wenn aktueller Wert nicht bereits eine gültige Wasser-Einheit ist (User-Override respektieren).
+Fetch als kleiner neuer Hook `useLatestMeterValues(locationId, meters)` in `src/hooks/` (lokal für diese Komponente), invalidiert bei Meter-Änderungen. Kein Realtime nötig — refetch beim Fokus reicht (analog anderen Tabellen).
 
-### 4. `SOURCE_UNIT_GROUPS` bereinigen
-`src/lib/sensorUnits.ts`
-- In der Gruppe „Durchfluss" die vorhandene Option `m³/h` behalten und zusätzlich `m³` (Totalzähler) ergänzen, damit Loxone-Impulszähler-Ausgänge auf beide Varianten sauber gemappt werden können.
-- `deriveEnergyUnit`: `m³/h` → `m³`, `l/min` → `l` ergänzen.
+## Betroffene Dateien
+- `src/components/locations/MeterManagement.tsx` — Tabellen-Rewrite (Zeilen ~757–843) inkl. neuer Sort-States (analog `DeviceTable`) und Icon-Renderer. CSV-Export-Header (Zeile 716) auf neue Spalten anpassen (`Name;Raum;Energieart;Erfassung;Wert;Einheit`).
+- `src/hooks/useLatestMeterValues.ts` — **neu**, kleiner Query-Hook für die zwei Quellen oben.
 
-### 5. Bestandsdaten korrigieren (einmalige Migration)
-Nur wenn `energy_type IN ('wasser','gas')` **und** `unit = 'kWh'`: `unit` auf `m³` setzen, `source_unit_power` auf `m³/h` (falls leer). Damit erscheinen bereits importierte Zähler wie der „Wasserzähler Hausanschluss" sofort korrekt (`MeterDetailDialog` leitet dann automatisch `m³/h`/`m³` ab).
-
-## Wirkungsnachweis nach dem Bau
-- Neu-Discovery eines Loxone-Wasserzählers → Assign-Dialog schlägt Energieart „Wasser" + Einheit `m³` vor.
-- Editieren: Dropdown „Einheit" zeigt `m³` / `m³/h`, Standard `m³`.
-- Detail-Dialog & Widget-Kachel des Wasserzählers zeigen Ø/Max/Min in `m³/h`, Energie/Zählerstand in `m³`, Y-Achse `Leistung (m³/h)`.
-- Bestandszähler nach Migration ebenfalls in `m³` / `m³/h`.
-
-## Nicht enthalten
-- Umrechnung m³ ↔ kWh für Wasser (technisch nicht sinnvoll). Für Gas bleibt die vorhandene Brennwert-Logik unverändert.
-- Änderungen am Widget-Designer über `WIDGET_UNIT_OPTIONS` hinaus.
+## Nicht im Scope
+- Keine Änderungen an der unteren Gateway-Tabelle.
+- Keine Änderungen an den Sensor-/Aktor-Tabs (nur der Zähler-Tab-Bereich für manuell/virtuell).
+- Keine Backend-/Migrations-Änderungen.
