@@ -809,6 +809,13 @@ const LiveValues = () => {
                                     <span className="text-sm font-normal text-muted-foreground ml-1">{t("liveValues.flow" as any)}</span>
                                   )}
                                 </>
+                              ) : isBoolUnit ? (
+                                <>{value >= 0.5 ? "An" : "Aus"}</>
+                              ) : isStateSensor ? (
+                                <>
+                                  {value.toLocaleString(dateLocale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                  {displayUnit && <span className="ml-1">{displayUnit}</span>}
+                                </>
                               ) : (
                                 <>
                               {(() => {
