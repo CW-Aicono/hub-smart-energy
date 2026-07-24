@@ -41,13 +41,32 @@ async function getErrorSignal(res: { data: any; error: any }): Promise<string> {
     .join(" ");
 }
 
-async function invokeFunction(fnName: string, options: { body?: any; headers?: Record<string, string> }) {
-  const session = (await supabase.auth.getSession()).data.session;
+async function getAccessToken(forceRefresh = false): Promise<string | null> {
+  if (forceRefresh) {
+    const { data } = await supabase.auth.refreshSession();
+    if (data.session?.access_token) return data.session.access_token;
+  }
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+async function invokeFunction(
+  fnName: string,
+  options: { body?: any; headers?: Record<string, string> },
+  forceRefresh = false,
+) {
+  const token = await getAccessToken(forceRefresh);
+  if (!token) {
+    return {
+      data: null,
+      error: { message: "Not authenticated", status: 401, noSession: true },
+    };
+  }
   const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fnName}`, {
     method: "POST",
     headers: {
       apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
-      Authorization: `Bearer ${session?.access_token ?? ""}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
       ...(options.headers ?? {}),
     },
@@ -91,6 +110,7 @@ export async function invokeWithRetry<T = any>(
 
   const request = (async () => {
     let lastResult: { data: any; error: any } = { data: null, error: null };
+    let refreshedForAuth = false;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       let res: { data: any; error: any };
       try {
@@ -102,7 +122,19 @@ export async function invokeWithRetry<T = any>(
       lastResult = res as any;
       const msg = await getErrorSignal(res as any);
       const isTransient = TRANSIENT_EDGE_ERROR.test(msg);
+      const is401 = res.error?.status === 401 && !res.error?.noSession;
       if (!res.error && (res.data as any)?.success !== false) return res as any;
+      if (is401 && !refreshedForAuth) {
+        refreshedForAuth = true;
+        try {
+          res = await invokeFunction(normalized.fnName, normalized.options, true);
+          lastResult = res as any;
+          if (!res.error && (res.data as any)?.success !== false) return res as any;
+        } catch (error) {
+          lastResult = { data: null, error };
+        }
+        continue;
+      }
       if (!isTransient) return res as any;
       if (attempt === maxAttempts - 1) return res as any;
       await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));

@@ -13,7 +13,7 @@ export interface WidgetAvailabilitySignals {
   hasArbitrageStrategy: boolean;
   hasPpaContract: boolean;
   hasSavingsContract: boolean;
-  hasIntegrationError: boolean;
+  
   hasMultipleLocations: boolean;
   arbitrageModuleEnabled: boolean;
   gainSharingModuleEnabled: boolean;
@@ -61,10 +61,6 @@ export const WIDGET_REQUIREMENTS: Record<string, WidgetRequirement> = {
   weather_normalization: {
     check: (s) => s.hasGasOrHeatMeter,
     reasonKey: "widgetReq.gasOrHeatMeterNeeded",
-  },
-  integration_errors: {
-    check: (s) => s.hasIntegrationError,
-    reasonKey: "widgetReq.noIntegrationErrors",
   },
   location_map: {
     check: (s) => s.hasMultipleLocations,
