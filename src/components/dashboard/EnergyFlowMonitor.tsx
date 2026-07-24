@@ -1358,6 +1358,18 @@ export function MeterDetailDialog({
   const nodeGatewayDeviceId = nodeMeter?.gateway_device_id ?? null;
   const nodeLocationId = nodeMeter?.location_id ?? null;
 
+  // Derive display units from the meter's configured unit so non-electric
+  // media (water m³, gas m³, …) are not shown as kW/kWh.
+  const meterUnitRaw = (nodeMeter?.unit ?? "").toString().trim();
+  const { rateUnit, energyUnit } = (() => {
+    const u = meterUnitRaw;
+    if (!u || /wh$/i.test(u)) return { rateUnit: "kW", energyUnit: "kWh" };
+    if (u === "m³" || u === "m3") return { rateUnit: "m³/h", energyUnit: "m³" };
+    if (u.toLowerCase() === "l" || u.toLowerCase() === "liter") return { rateUnit: "L/h", energyUnit: "L" };
+    return { rateUnit: `${u}/h`, energyUnit: u };
+  })();
+
+
 
   const { data: storageInfo, isLoading: isStorageLoading } = useQuery({
     queryKey: ["meter-detail-storage-info", node.meter_id, nodeGatewayDeviceId, nodeLocationId, socPct],
@@ -1682,19 +1694,19 @@ export function MeterDetailDialog({
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Ø Leistung</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.avg)} kW` : "–"}
+              {stats ? `${fmtDeNum(stats.avg)} ${rateUnit}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Max</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.max)} kW` : "–"}
+              {stats ? `${fmtDeNum(stats.max)} ${rateUnit}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Min</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.min)} kW` : "–"}
+              {stats ? `${fmtDeNum(stats.min)} ${rateUnit}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
@@ -1703,11 +1715,12 @@ export function MeterDetailDialog({
             </div>
             <div className="text-base font-semibold tabular-nums">
               {stats?.bidirectional
-                ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} kWh`
-                : `${fmtDeNum(totalImport - totalExport)} kWh`}
+                ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
+                : `${fmtDeNum(totalImport - totalExport)} ${energyUnit}`}
             </div>
           </div>
         </div>
+
 
         {isHouse && (
           <HouseSelfSufficiencyPanel
@@ -1770,7 +1783,7 @@ export function MeterDetailDialog({
                     tickFormatter={(v) => v.toLocaleString("de-DE")}
                     width={70}
                   >
-                    <AxisLabel value="Leistung (kW)" angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
+                    <AxisLabel value={`Leistung (${rateUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
                   {showSocAxis && (
                     <YAxis
@@ -1823,7 +1836,7 @@ export function MeterDetailDialog({
                           {kw != null && (
                             <div className="flex items-center gap-2">
                               <span className="inline-block h-2 w-2 rounded-sm" style={{ background: node.color }} />
-                              <span>Leistung: <span className="font-medium tabular-nums">{fmtDeNum(Number(kw))} kW</span></span>
+                              <span>Leistung: <span className="font-medium tabular-nums">{fmtDeNum(Number(kw))} {rateUnit}</span></span>
                             </div>
                           )}
                           {soc != null && (
@@ -1840,7 +1853,7 @@ export function MeterDetailDialog({
                     <Legend
                       verticalAlign="top"
                       wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
-                      formatter={(v) => (v === "soc" ? "Ladezustand (SOC %)" : "Leistung (kW)")}
+                      formatter={(v) => (v === "soc" ? "Ladezustand (SOC %)" : `Leistung (${rateUnit})`)}
                     />
                   )}
                   <Area
@@ -1911,17 +1924,18 @@ export function MeterDetailDialog({
                     ]}
                     width={70}
                   >
-                    <AxisLabel value="Energie (kWh)" angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
+                    <AxisLabel value={`Energie (${energyUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
                   {stats?.bidirectional && <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />}
                   <RTooltip
                     contentStyle={{ fontSize: 11 }}
                     labelFormatter={(v) => new Date(v as number).toLocaleString("de-DE")}
                     formatter={(v: any, name: string) => [
-                      `${fmtDeNum(Math.abs(Number(v)))} kWh`,
+                      `${fmtDeNum(Math.abs(Number(v)))} ${energyUnit}`,
                       name === "import" ? "Bezug" : "Einspeisung",
                     ]}
                   />
+
                   <Legend
                     verticalAlign="top"
                     wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
