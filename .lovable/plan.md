@@ -1,50 +1,52 @@
 ## Ziel
 
-Wasser-/Gaszähler sollen konsistent mit ihrer echten Einheit (m³ bzw. m³/h) statt kW/kWh angezeigt werden. Die Einheit aus dem Loxone-Miniserver soll als Default übernommen, in den Geräteeinstellungen aber überschreibbar sein — und die dort gesetzte Einheit ist überall die alleinige Anzeigequelle.
+Im Automation-Editor werden Sensor- und Aktor-Dropdowns strikt an den gewählten **Ausführungsort** gekoppelt. Sobald *nicht* „Cloud" gewählt ist (also „Loxone lokal" oder „Hybrid"), dürfen ausschließlich Geräte angeboten werden, die auch lokal ansprechbar sind. Cloud-API-Geräte (Shelly Cloud, Tuya, ABB, Siemens Building X, Homematic IP, Omada, Schneider Cloud, …) werden dann ausgeblendet.
 
-## Was aktuell nicht passt (verifiziert)
+## Warum
 
-- **Loxone-Import** (`supabase/functions/loxone-api/index.ts`, Zeilen 50–60): `CONTROL_TYPE_MAPPINGS.Meter` liefert hart `primaryUnit: "kW"` / `secondaryUnit: "kWh"`. Der tatsächliche Formatstring der Loxone-Ausgänge (`Pf` = `m³/h`, `Mr` = `m³`) wird ignoriert → Wasserzähler bekommen bei der Discovery `unit: "kW"` mitgegeben.
-- **AssignMeterDialog** (Zeile 82): übernimmt `s.unit` — bekommt also fälschlich "kW" statt "m³".
-- **EditMeterDialog** (`src/components/locations/EditMeterDialog.tsx`, Zeilen 199–207, 603–615): Bei Energieart „Wasser" wird `unit` fest auf `"m³"` gesetzt und über ein Freitext-`Input` angezeigt — keine Auswahl m³ / m³/h.
-- **SOURCE_UNIT_GROUPS** (`src/lib/sensorUnits.ts`): „Durchfluss"-Gruppe bietet `m³/h`, aber die Gruppe „Energie / Leistung" enthält nur `m³` (ohne `m³/h`). Für einen Wasserzähler ist die Gateway-Rate `m³/h` — nicht offensichtlich auffindbar.
-- **MeterDetailDialog** (`EnergyFlowMonitor.tsx`, Zeilen 1361–1370) leitet zwar `rateUnit`/`energyUnit` aus `meter.unit` ab (m³ → m³/h) — funktioniert also, sobald `meter.unit` korrekt gesetzt ist. Das erklärt die kW-Anzeige im Screenshot: der Zähler wurde mit `unit="kW"` importiert.
+„Loxone lokal" bedeutet: die Regel läuft ausschließlich auf dem Miniserver. Ein Cloud-Aktor kann von dort nicht angesteuert werden – die Kombination widerspricht sich. „Hybrid" fällt bei Cloud-Ausfall auf lokale Ausführung zurück; auch dort sind Cloud-Geräte nicht sinnvoll.
 
-## Umsetzung
+## Klassifizierung der Integrationen
 
-### 1. Loxone-Discovery: echte Einheit übernehmen
-`supabase/functions/loxone-api/index.ts`
-- Beim Auslesen der Controls die Formatstrings der zugehörigen Ausgänge (`Pf` für Leistung/Rate, `Mr` für Totalzähler) auslesen. Das Loxone-`/data/LoxAPP3.json` liefert pro Control ein `details.format` oder pro State ein `format` wie `"%.3f m³/h"` bzw. `"%.3f m³"`.
-- Hilfsfunktion `extractUnitFromFormat(fmt: string): string | null` → Regex nach dem Trailer nach `%…f` extrahieren (`m³/h`, `m³`, `kW`, `kWh`, `°C`, `%`, `l/min`, …).
-- Wenn `Pf`-Format eine Nicht-`kW`-Einheit liefert (z. B. `m³/h`, `l/min`), diese in `unit` (primary) statt hartkodiertem `kW` zurückgeben; analog `secondaryUnit` aus `Mr`.
-- Fallback bleibt das bestehende `CONTROL_TYPE_MAPPINGS`.
+Neuer zentraler Helper `src/lib/gatewayExecution.ts`:
 
-### 2. Zuordnung: passende Energieart automatisch setzen
-`src/components/integrations/AssignMeterDialog.tsx`
-- Wenn `s.unit` auf `m³` / `m³/h` / `l` / `l/min` endet → Default `energyType = "wasser"` (bzw. bei explizit gasähnlichem Namen `gas`), sonst wie bisher „strom".
-- `unit` bleibt der übernommene Wert; für Rate-Einheiten (`m³/h`, `l/min`) wird zusätzlich der Totalzähler-Wert (`m³`, `l`) über `deriveEnergyUnit` als `unit` gespeichert, damit die zentrale Anzeige-Logik greift.
+- `LOCAL_CAPABLE_TYPES = ["loxone_miniserver", "aicono_gateway", "schneider_panel_server", "siemens_iot2050", "sentron_powercenter_3000", "mqtt_generic", "shelly_mqtt", "smart_meter_imsys"]`
+- `CLOUD_ONLY_TYPES = ["shelly_cloud", "tuya_cloud", "abb_free_at_home", "siemens_building_x", "homematic_ip", "omada_cloud", "schneider_cloud"]`
+- `isCloudOnlyIntegration(type)` / `isLocalCapableIntegration(type)`
 
-### 3. Einheiten-Dropdown im Gerätedialog erweitern
-`src/components/locations/EditMeterDialog.tsx` und `AddMeterDialog.tsx`
-- Für Energieart **Wasser** und **Gas** ein `<Select>` mit den Optionen `m³` und `m³/h` anzeigen (statt Freitext bei Wasser bzw. m³/kWh bei Gas).
-  - Wasser: Optionen `m³`, `m³/h`. Default `m³`.
-  - Gas: Optionen `m³`, `m³/h`, `kWh`. Default `m³`.
-- Auto-Set-Effekt (Zeilen 199–207) anpassen: bei Wechsel auf „wasser" nur setzen, wenn aktueller Wert nicht bereits eine gültige Wasser-Einheit ist (User-Override respektieren).
+Für „Loxone lokal"-Templates gilt zusätzlich: nur `loxone_miniserver`-Geräte des jeweils gewählten Miniservers sind zulässig (Templates laufen im Miniserver-Programm).
 
-### 4. `SOURCE_UNIT_GROUPS` bereinigen
-`src/lib/sensorUnits.ts`
-- In der Gruppe „Durchfluss" die vorhandene Option `m³/h` behalten und zusätzlich `m³` (Totalzähler) ergänzen, damit Loxone-Impulszähler-Ausgänge auf beide Varianten sauber gemappt werden können.
-- `deriveEnergyUnit`: `m³/h` → `m³`, `l/min` → `l` ergänzen.
+## Änderungen
 
-### 5. Bestandsdaten korrigieren (einmalige Migration)
-Nur wenn `energy_type IN ('wasser','gas')` **und** `unit = 'kWh'`: `unit` auf `m³` setzen, `source_unit_power` auf `m³/h` (falls leer). Damit erscheinen bereits importierte Zähler wie der „Wasserzähler Hausanschluss" sofort korrekt (`MeterDetailDialog` leitet dann automatisch `m³/h`/`m³` ab).
+### 1. `src/lib/gatewayExecution.ts` (neu)
+Klassifizierungs-Helper wie oben.
 
-## Wirkungsnachweis nach dem Bau
-- Neu-Discovery eines Loxone-Wasserzählers → Assign-Dialog schlägt Energieart „Wasser" + Einheit `m³` vor.
-- Editieren: Dropdown „Einheit" zeigt `m³` / `m³/h`, Standard `m³`.
-- Detail-Dialog & Widget-Kachel des Wasserzählers zeigen Ø/Max/Min in `m³/h`, Energie/Zählerstand in `m³`, Y-Achse `Leistung (m³/h)`.
-- Bestandszähler nach Migration ebenfalls in `m³` / `m³/h`.
+### 2. `src/components/locations/AutomationRuleBuilder.tsx`
+- `GatewayOption` um `integrationType: string` erweitern.
+- Neue Prop `integrationType?: string` für den Single-Gateway-Modus (Nicht-MLA).
+- In `ConditionEditor` und `ActionEditor`:
+  - Wenn `executionMode !== "cloud"`:
+    - **MLA**: `gatewayOptions` beim Rendern des Gateway-Dropdowns filtern (`isLocalCapableIntegration`), und bei „Loxone lokal" mit gewähltem Template weiter auf `loxone_miniserver` reduzieren.
+    - **Single-Gateway**: Wenn die Integration cloud-only ist, Sensor-/Aktor-Auswahl deaktivieren und einen Hinweis anzeigen: „Diese Integration ist nur mit Ausführungsort ‚Cloud' verfügbar."
+  - Bereits gewählte `sensor_uuid`/`actuator_uuid`, die durch den Wechsel nicht mehr zulässig sind, werden geleert und rot markiert („Gerät nicht mit gewähltem Ausführungsort kompatibel").
+- `executionMode`-Änderung: `useEffect` bereinigt betroffene Conditions/Actions (Reset auf leere Auswahl statt stillem Fortbestand).
+- Speichern-Button wird deaktiviert, solange inkompatible Referenzen existieren.
 
-## Nicht enthalten
-- Umrechnung m³ ↔ kWh für Wasser (technisch nicht sinnvoll). Für Gas bleibt die vorhandene Brennwert-Logik unverändert.
-- Änderungen am Widget-Designer über `WIDGET_UNIT_OPTIONS` hinaus.
+### 3. `src/components/locations/LocationAutomation.tsx`
+- `integrationType` des lokalen Gateways an `AutomationRuleBuilder` durchreichen.
+- MLA-Modus: `gatewayOptions` um `integrationType` (aus `gatewayIntegrations[i].integration?.type`) anreichern.
+
+### 4. i18n / Texte
+Neue Strings in `src/i18n/de.ts` (+ EN/ES/NL Aliasse):
+- `automation.cloudOnlyDeviceHidden`: „Cloud-Geräte sind bei lokaler Ausführung nicht verfügbar."
+- `automation.incompatibleSelection`: „Diese Auswahl passt nicht zum Ausführungsort und wurde entfernt."
+
+### 5. Tests
+- Unit-Test `AutomationRuleBuilder.test.tsx`: Wechsel des Ausführungsorts entfernt Shelly-Cloud-Aktor aus dem Dropdown und aus einer bereits bestehenden Aktion.
+- Snapshot der Gateway-Filterlogik in `gatewayExecution.test.ts`.
+
+## Was nicht geändert wird
+
+- Bestehende Automations in der DB bleiben unverändert. Beim Öffnen im Editor werden sie normal geladen; erst beim Wechsel des Ausführungsorts durch den User wird bereinigt.
+- Cloud-Ausführung („Cloud" gewählt) verhält sich exakt wie heute – alle Integrationen bleiben verfügbar.
+- Keine Änderungen an Edge Functions oder DB-Schema.

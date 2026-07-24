@@ -283,6 +283,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     const result: (LoxoneSensor & { _integrationId: string; _integrationLabel: string })[] = [];
     sensorQueries.forEach((q, idx) => {
       const intId = integrationIds[idx];
+      const intType = integrationTypes[idx];
       const label = integrationLabelMap[intId] || "Unknown";
       (q.data || []).forEach((s) => {
         result.push({
@@ -290,11 +291,12 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
           name: sensorNameMap[s.id] || s.name,
           _integrationId: intId,
           _integrationLabel: label,
+          _integrationType: intType,
         });
       });
     });
     return result;
-  }, [sensorQueries, integrationIds, integrationLabelMap, sensorNameMap]);
+  }, [sensorQueries, integrationIds, integrationTypes, integrationLabelMap, sensorNameMap]);
 
   const hasAnyIntegration = gatewayIntegrations.length > 0;
   // For backward compat: pick the first gateway integration as default for new automations

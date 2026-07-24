@@ -42,6 +42,7 @@ import {
 import { LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
 import { isCloudRequiredTemplate } from "@/lib/loxone/snippetsCatalog";
+import { isCloudOnlyIntegration, isDeviceAllowedForExecutionMode } from "@/lib/gatewayExecution";
 import { toast } from "sonner";
 
 // ── Types ──
@@ -116,6 +117,9 @@ export interface GatewayOption {
   locationName: string;    // location name
   sensors: LoxoneSensor[]; // sensors for this specific gateway
   isOnline: boolean;
+  /** Integration type (e.g. "loxone_miniserver", "shelly_cloud") – used
+   *  to hide cloud-only gateways when execution_mode != "cloud". */
+  integrationType?: string;
 }
 
 /** MLA-Modus: Auswählbare Ziel-Standorte für eine Cross-Location-Automation */
@@ -257,6 +261,7 @@ function ConditionCard({
   onRemove,
   gatewayOptions,
   deviceTypeMap,
+  executionMode,
 }: {
   condition: AutomationCondition;
   sensors: LoxoneSensor[];
@@ -264,19 +269,32 @@ function ConditionCard({
   onRemove: () => void;
   gatewayOptions?: GatewayOption[];
   deviceTypeMap?: Map<string, string>;
+  executionMode: AutomationExecutionMode;
 }) {
   const condType = CONDITION_TYPES.find((t) => t.value === condition.type);
   const CondIcon = condType?.icon || Zap;
 
-  const isMLA = !!gatewayOptions && gatewayOptions.length > 0;
+  // Filter gateway options for local/hybrid modes: cloud-only integrations are forbidden.
+  const allowedGatewayOptions = useMemo(() => {
+    if (!gatewayOptions) return undefined;
+    if (executionMode === "cloud") return gatewayOptions;
+    return gatewayOptions.filter((gw) => !isCloudOnlyIntegration(gw.integrationType));
+  }, [gatewayOptions, executionMode]);
+
+  const isMLA = !!allowedGatewayOptions && allowedGatewayOptions.length > 0;
 
   // In MLA mode, filter sensors by selected gateway
   // All devices for this gateway (unfiltered, used by status condition for actuator selection)
   const effectiveSensors = useMemo(() => {
-    if (!isMLA || !condition.gateway_id) return isMLA ? [] : sensors;
-    const gw = gatewayOptions!.find((g) => g.id === condition.gateway_id);
-    return gw?.sensors || [];
-  }, [isMLA, condition.gateway_id, gatewayOptions, sensors]);
+    if (isMLA) {
+      if (!condition.gateway_id) return [];
+      const gw = allowedGatewayOptions!.find((g) => g.id === condition.gateway_id);
+      return gw?.sensors || [];
+    }
+    // Non-MLA: filter merged sensor list by execution mode (drop cloud-only devices in local/hybrid).
+    if (executionMode === "cloud") return sensors;
+    return sensors.filter((s) => isDeviceAllowedForExecutionMode(s._integrationType, executionMode));
+  }, [isMLA, condition.gateway_id, allowedGatewayOptions, sensors, executionMode]);
 
   // Only sensors & meters for sensor_value condition dropdowns (use deviceTypeMap if available)
   const sensorOnlyDevices = useMemo(() => {
@@ -308,7 +326,7 @@ function ConditionCard({
             {/* MLA: Gateway selector first */}
             {isMLA && (
               <GatewaySelector
-                gatewayOptions={gatewayOptions!}
+                gatewayOptions={allowedGatewayOptions!}
                 selectedGatewayId={condition.gateway_id}
                 onSelect={handleGatewayChange}
               />
@@ -478,7 +496,7 @@ function ConditionCard({
             {/* MLA: Gateway selector first */}
             {isMLA && (
               <GatewaySelector
-                gatewayOptions={gatewayOptions!}
+                gatewayOptions={allowedGatewayOptions!}
                 selectedGatewayId={condition.gateway_id}
                 onSelect={handleGatewayChange}
               />
@@ -573,6 +591,7 @@ function ActionCard({
   onRemove,
   gatewayOptions,
   deviceTypeMap,
+  executionMode,
 }: {
   action: AutomationAction;
   sensors: LoxoneSensor[];
@@ -580,15 +599,26 @@ function ActionCard({
   onRemove: () => void;
   gatewayOptions?: GatewayOption[];
   deviceTypeMap?: Map<string, string>;
+  executionMode: AutomationExecutionMode;
 }) {
-  const isMLA = !!gatewayOptions && gatewayOptions.length > 0;
+  const allowedGatewayOptions = useMemo(() => {
+    if (!gatewayOptions) return undefined;
+    if (executionMode === "cloud") return gatewayOptions;
+    return gatewayOptions.filter((gw) => !isCloudOnlyIntegration(gw.integrationType));
+  }, [gatewayOptions, executionMode]);
+
+  const isMLA = !!allowedGatewayOptions && allowedGatewayOptions.length > 0;
 
   // In MLA mode, filter actuators by selected gateway
   const effectiveSensors = useMemo(() => {
-    if (!isMLA || !action.gateway_id) return isMLA ? [] : sensors;
-    const gw = gatewayOptions!.find((g) => g.id === action.gateway_id);
-    return gw?.sensors || [];
-  }, [isMLA, action.gateway_id, gatewayOptions, sensors]);
+    if (isMLA) {
+      if (!action.gateway_id) return [];
+      const gw = allowedGatewayOptions!.find((g) => g.id === action.gateway_id);
+      return gw?.sensors || [];
+    }
+    if (executionMode === "cloud") return sensors;
+    return sensors.filter((s) => isDeviceAllowedForExecutionMode(s._integrationType, executionMode));
+  }, [isMLA, action.gateway_id, allowedGatewayOptions, sensors, executionMode]);
 
   const actuators = useMemo(() => {
     const list = effectiveSensors.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
@@ -626,7 +656,7 @@ function ActionCard({
         {/* MLA: Gateway selector first */}
         {isMLA && (
           <GatewaySelector
-            gatewayOptions={gatewayOptions!}
+            gatewayOptions={allowedGatewayOptions!}
             selectedGatewayId={action.gateway_id}
             onSelect={handleGatewayChange}
           />
@@ -845,6 +875,75 @@ export function AutomationRuleBuilder({
       setExecutionMode("hybrid");
     }
   }, [templateRequiresCloud, executionMode]);
+
+  // Auto-Bereinigung: Wenn Ausführungsort auf lokal/hybrid wechselt,
+  // aus Bedingungen und Aktionen alle Geräte entfernen, die auf
+  // cloud-only Integrationen (z. B. Shelly Cloud) verweisen.
+  const isRefIncompatible = (integrationType: string | undefined) =>
+    executionMode !== "cloud" && isCloudOnlyIntegration(integrationType);
+
+  useEffect(() => {
+    if (executionMode === "cloud") return;
+    // Build id -> integrationType lookup from both flat sensors and MLA gateway options.
+    const typeById = new Map<string, string | undefined>();
+    for (const s of sensors) if (s._integrationType) typeById.set(s.id, s._integrationType);
+    if (gatewayOptions) {
+      for (const gw of gatewayOptions) {
+        for (const s of gw.sensors) typeById.set(s.id, gw.integrationType);
+      }
+    }
+    const cloudOnlyGwIds = new Set(
+      (gatewayOptions ?? []).filter((gw) => isCloudOnlyIntegration(gw.integrationType)).map((gw) => gw.id),
+    );
+
+    let condChanged = false;
+    const nextConditions = conditions.map((c) => {
+      const cloned = { ...c };
+      let touched = false;
+      if (cloned.sensor_uuid && isRefIncompatible(typeById.get(cloned.sensor_uuid))) {
+        cloned.sensor_uuid = ""; cloned.sensor_name = ""; cloned.unit = ""; touched = true;
+      }
+      if (cloned.actuator_uuid && isRefIncompatible(typeById.get(cloned.actuator_uuid))) {
+        cloned.actuator_uuid = ""; cloned.actuator_name = ""; touched = true;
+      }
+      if (cloned.gateway_id && cloudOnlyGwIds.has(cloned.gateway_id)) {
+        cloned.gateway_id = ""; cloned.sensor_uuid = ""; cloned.sensor_name = "";
+        cloned.actuator_uuid = ""; cloned.actuator_name = ""; touched = true;
+      }
+      if (touched) condChanged = true;
+      return cloned;
+    });
+    if (condChanged) setConditions(nextConditions);
+
+    let actChanged = false;
+    const nextActions = actions.map((a) => {
+      const cloned = { ...a };
+      let touched = false;
+      if (cloned.actuator_uuid && isRefIncompatible(typeById.get(cloned.actuator_uuid))) {
+        cloned.actuator_uuid = ""; cloned.actuator_name = ""; cloned.control_type = ""; touched = true;
+      }
+      if (cloned.gateway_id && cloudOnlyGwIds.has(cloned.gateway_id)) {
+        cloned.gateway_id = ""; cloned.actuator_uuid = ""; cloned.actuator_name = ""; cloned.control_type = ""; touched = true;
+      }
+      if (touched) actChanged = true;
+      return cloned;
+    });
+    if (actChanged) setActions(nextActions);
+
+    if (condChanged || actChanged) {
+      toast.warning("Cloud-Geräte sind bei lokaler/hybrider Ausführung nicht verfügbar und wurden entfernt.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [executionMode]);
+
+  // Hinweis-Text: gibt es überhaupt cloud-only Geräte, die aktuell unterdrückt werden?
+  const hasHiddenCloudDevices = useMemo(() => {
+    if (executionMode === "cloud") return false;
+    if (gatewayOptions) return gatewayOptions.some((gw) => isCloudOnlyIntegration(gw.integrationType));
+    return sensors.some((s) => isCloudOnlyIntegration(s._integrationType));
+  }, [executionMode, gatewayOptions, sensors]);
+
+
 
 
   const handleSave = async () => {
@@ -1220,6 +1319,7 @@ export function AutomationRuleBuilder({
                     onRemove={() => removeCondition(cond.id)}
                     gatewayOptions={gatewayOptions}
                     deviceTypeMap={deviceTypeMap}
+                    executionMode={executionMode}
                   />
                 </div>
               ))}
@@ -1294,6 +1394,7 @@ export function AutomationRuleBuilder({
                   onRemove={() => removeAction(action.id)}
                   gatewayOptions={gatewayOptions}
                   deviceTypeMap={deviceTypeMap}
+                  executionMode={executionMode}
                 />
               ))}
 

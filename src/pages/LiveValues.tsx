@@ -338,11 +338,7 @@ const LiveValues = () => {
         .in("meter_id", meterIds)
         .in("period_type", ["day", "month", "year"])
         .in("period_start", [today, firstOfMonth, firstOfYear]),
-      supabase
-        .from("meter_cumulative_readings")
-        .select("meter_id, kwh_total, reading_at")
-        .in("meter_id", meterIds)
-        .order("reading_at", { ascending: false }),
+      supabase.rpc("latest_meter_cumulative" as any, { _meter_ids: meterIds }),
     ]);
 
 
@@ -541,7 +537,14 @@ const LiveValues = () => {
           if ((m as any).room_id !== locationScope.roomId) return false;
         }
         if (selectedEnergyType !== "all" && m.energy_type !== selectedEnergyType) return false;
-        if (selectedCaptureType !== "all" && m.capture_type !== selectedCaptureType) return false;
+        if (selectedCaptureType !== "all") {
+          if (selectedCaptureType === "sensor" || selectedCaptureType === "actuator") {
+            if (((m as any).device_type ?? "meter") !== selectedCaptureType) return false;
+          } else {
+            if (((m as any).device_type ?? "meter") !== "meter") return false;
+            if (m.capture_type !== selectedCaptureType) return false;
+          }
+        }
         if (searchQuery) {
           const q = searchQuery.toLowerCase();
           const loc = locations.find((l) => l.id === m.location_id);
@@ -715,6 +718,8 @@ const LiveValues = () => {
                 <SelectItem value="automatic">{t("common.automatic" as any)}</SelectItem>
                 <SelectItem value="manual">{t("common.manual" as any)}</SelectItem>
                 <SelectItem value="virtual">{t("common.virtual" as any)}</SelectItem>
+                <SelectItem value="sensor">Sensoren</SelectItem>
+                <SelectItem value="actuator">Aktoren</SelectItem>
               </SelectContent>
             </Select>
           </div>
