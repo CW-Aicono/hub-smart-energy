@@ -222,7 +222,7 @@ const EnergyData = () => {
             Energieart: labelEnergy(r.energy_type || m?.energy_type || ""),
             Datum: r.period_start,
             Wert: r.total_value,
-            Einheit: m?.unit || "kWh",
+            Einheit: energyUnitForMeter(m, r.energy_type === "wasser" || r.energy_type === "gas" ? "m³" : "kWh"),
             Quellsystem: r.source || "",
           };
           (r.period_type === "month" ? monthRows : dayRows).push(out);
