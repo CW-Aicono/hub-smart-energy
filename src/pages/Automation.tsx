@@ -139,8 +139,9 @@ const Automation = () => {
       id: gw.locationIntegrationId,
       name: gw.name,
       locationName: gw.locationName,
-      sensors: sensorQueries[idx]?.data || [],
+      sensors: (sensorQueries[idx]?.data || []).map((s) => ({ ...s, _integrationType: gw.type })),
       isOnline: gw.isOnline,
+      integrationType: gw.type,
     }));
   }, [gateways, sensorQueries]);
 
