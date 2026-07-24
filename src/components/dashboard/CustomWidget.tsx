@@ -65,14 +65,13 @@ function getDayBucketLabel(date: Date): string {
   return formatTimeLabel(date.getHours(), roundedMinutes);
 }
 
+import { powerUnitForMeter, energyUnitForMeter, type MeterLike } from "@/lib/meterUnits";
+
 function normalizePowerUnit(unit?: string | null, energyType?: string | null, fallback?: string | null): string {
-  if (unit === "Wh") return "W";
-  if (unit === "kWh") return "kW";
-  if (unit === "m³") return "m³/h";
-  if (unit) return unit;
-  if (energyType === "gas" || energyType === "wasser") return "m³/h";
-  if (fallback === "kWh") return "kW";
-  return fallback || "kW";
+  return powerUnitForMeter(
+    { unit: unit ?? undefined, energy_type: energyType ?? undefined },
+    fallback ?? "kW",
+  );
 }
 
 /** Compute date range from the dashboard time period and offset */
@@ -196,16 +195,13 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
   });
 
   const displayUnit = useMemo(() => {
-    if (selectedPeriod !== "day") return config.unit;
     const primaryMeter = config.meter_ids.map((meterId) => meterDetails[meterId]).find(Boolean) as
-      | { unit?: string | null; source_unit_power?: string | null; energy_type?: string | null }
+      | MeterLike
       | undefined;
-
-    return normalizePowerUnit(
-      primaryMeter?.source_unit_power ?? primaryMeter?.unit,
-      primaryMeter?.energy_type,
-      config.unit,
-    );
+    if (!primaryMeter) return config.unit;
+    return selectedPeriod === "day"
+      ? powerUnitForMeter(primaryMeter, config.unit)
+      : energyUnitForMeter(primaryMeter, config.unit);
   }, [config.meter_ids, config.unit, meterDetails, selectedPeriod]);
 
   // Fetch data: 5-min readings for "day", daily totals otherwise

@@ -20,6 +20,7 @@ import { downloadCSV, downloadPDF, downloadCsvZip, downloadXlsxMulti } from "@/l
 import { toast } from "sonner";
 import ReportSchedulesList from "@/components/energy-data/ReportSchedulesList";
 import { supabase } from "@/integrations/supabase/client";
+import { powerUnitForMeter, energyUnitForMeter } from "@/lib/meterUnits";
 
 const DataImportDialog = lazy(() => import("@/components/energy-data/DataImportDialog"));
 const InvoicesList = lazy(() => import("@/components/energy-data/InvoicesList"));
@@ -183,7 +184,7 @@ const EnergyData = () => {
             Energieart: labelEnergy(m?.energy_type || ""),
             Datum: r.reading_date,
             Wert: r.value,
-            Einheit: m?.unit || "kWh",
+            Einheit: energyUnitForMeter(m),
             Erfassung: r.capture_method === "manual" ? "Manual" : r.capture_method === "ai" ? "AI-OCR" : r.capture_method,
           };
         });
@@ -221,7 +222,7 @@ const EnergyData = () => {
             Energieart: labelEnergy(r.energy_type || m?.energy_type || ""),
             Datum: r.period_start,
             Wert: r.total_value,
-            Einheit: m?.unit || "kWh",
+            Einheit: energyUnitForMeter(m, r.energy_type === "wasser" || r.energy_type === "gas" ? "m³" : "kWh"),
             Quellsystem: r.source || "",
           };
           (r.period_type === "month" ? monthRows : dayRows).push(out);
@@ -261,7 +262,7 @@ const EnergyData = () => {
             Datum: datePart,
             Zeit: timePart,
             Wert: r.power_avg,
-            Einheit: "kW",
+            Einheit: powerUnitForMeter(m),
           };
         });
         blocks.push({ name: "Leistung 5min", rows: out });
