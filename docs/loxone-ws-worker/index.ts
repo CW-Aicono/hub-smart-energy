@@ -602,6 +602,11 @@ async function connect(state: ConnState): Promise<void> {
     const blockEntries = Array.from(state.uuidMap.entries());
     state.uuidMap.clear();
 
+    // v1.9: Split pwr in „strong" (eindeutige Momentanleistungs-States) und
+    // „ambiguous" (Actual/Value/P — bei Wasser-/Gaszähler oft der kumulative
+    // Zählerstand). Für Medien ohne echte Leistung akzeptieren wir nur strong-pwr.
+    const PWR_STRONG_RX = /^(pwr|power|currentpower|actualpower|cp|chargingpower|currentchargingpower)$/i;
+    const PWR_AMBIGUOUS_RX = /^(actual|value|p)$/i;
     const ROLE_PATTERNS: Array<{ role: StateRole; rx: RegExp }> = [
       // Reihenfolge wichtig: spezifischere Patterns zuerst
       { role: "today", rx: /^(energytoday|today|daily|day|tagesverbrauch|cd)$/i },
@@ -609,23 +614,24 @@ async function connect(state: ConnState): Promise<void> {
       { role: "year",  rx: /^(energyyear|year|yearly|jahresverbrauch|cy)$/i },
       { role: "total", rx: /^(energytotal|total|totalenergy|zaehlerstand|meter|mr)$/i },
       { role: "soc",   rx: /^(slvl|soc|stateofcharge|state_of_charge|storagelevel|storage_level|ladezustand|speicherstand)$/i },
-      // pwr: klassische Meter (pwr/power/...) + Wallbox „Cp" (Current charging power)
-      { role: "pwr",   rx: /^(pwr|power|currentpower|actual|actualpower|value|p|cp|chargingpower|currentchargingpower)$/i },
     ];
-    function classifyState(key: string): StateRole | null {
+    function classifyState(key: string): StateRole | "pwr_ambiguous" | null {
       for (const { role, rx } of ROLE_PATTERNS) if (rx.test(key)) return role;
+      if (PWR_STRONG_RX.test(key)) return "pwr";
+      if (PWR_AMBIGUOUS_RX.test(key)) return "pwr_ambiguous";
       return null;
     }
 
-    function findControl(blockUuid: string): any | null {
-      if (!loxApp3?.controls) return null;
-      // Loxone-Schlüssel sind case-sensitive UUIDs; DB-UUIDs sind lowercase.
-      for (const [k, v] of Object.entries(loxApp3.controls as Record<string, any>)) {
-        if (k.toLowerCase() === blockUuid) return v;
-      }
-      return null;
+    /**
+     * Zählertypen, deren Loxone-Block **keinen** echten Momentanleistungs-State
+     * bereitstellen muss (Impulszähler o. ä.). Für diese Typen dürfen wir
+     * mehrdeutige Keys (Actual/Value/P) NICHT als Leistung interpretieren —
+     * sonst landet der kumulative Zählerstand als „pwr" in der DB (Spikes).
+     */
+    function isFlowLikeType(et: string | undefined | null): boolean {
+      const t = (et ?? "").toLowerCase();
+      return t === "wasser" || t === "gas" || t === "water";
     }
-
     let blocksMapped = 0;
     let blocksFallback = 0;
     let totalSubs = 0;
@@ -633,18 +639,42 @@ async function connect(state: ConnState): Promise<void> {
       const ctrl = findControl(blockUuid);
       const states = ctrl?.states as Record<string, string> | undefined;
       const stateEntries: Array<{ stateUuid: string; role: StateRole; key: string }> = [];
+      let ambiguousPwr: { stateUuid: string; key: string } | null = null;
+      let hasStrongPwr = false;
 
       if (states && typeof states === "object") {
         for (const [k, v] of Object.entries(states)) {
           if (typeof v !== "string") continue;
-          const role = classifyState(k);
-          if (!role) continue;
-          stateEntries.push({ stateUuid: v.toLowerCase(), role, key: k });
+          const cls = classifyState(k);
+          if (!cls) continue;
+          if (cls === "pwr_ambiguous") {
+            if (!ambiguousPwr) ambiguousPwr = { stateUuid: v.toLowerCase(), key: k };
+            continue;
+          }
+          if (cls === "pwr") hasStrongPwr = true;
+          stateEntries.push({ stateUuid: v.toLowerCase(), role: cls, key: k });
         }
       }
 
+      // Ambiguous-pwr NUR akzeptieren, wenn:
+      //  – kein strong-pwr vorhanden, UND
+      //  – der Meter kein reines Fluss-/Impuls-Medium (Wasser/Gas) ist.
+      // Für Wasser/Gas ohne echten Pwr-State → Block läuft als Total-only.
+      const flowLike = isFlowLikeType(baseEntry.energy_type);
+      if (!hasStrongPwr && ambiguousPwr && !flowLike) {
+        stateEntries.push({ stateUuid: ambiguousPwr.stateUuid, role: "pwr", key: ambiguousPwr.key });
+      } else if (!hasStrongPwr && ambiguousPwr && flowLike) {
+        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): ambiguous pwr-key "${ambiguousPwr.key}" ignoriert (kein echter Momentanwert für ${baseEntry.energy_type})`);
+      }
+
       if (stateEntries.length === 0) {
-        // Fallback: Block-UUID direkt als pwr behandeln (alte Logik)
+        if (flowLike) {
+          // v1.9: Fallback deaktiviert für Wasser/Gas — sonst würde der kumulative
+          // Zählerstand als Momentanleistung interpretiert (660-kW-Spikes im Chart).
+          log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): kein verwertbarer State — Block wird ignoriert (Fallback deaktiviert für Fluss-Medien)`);
+          continue;
+        }
+        // Fallback: Block-UUID direkt als pwr behandeln (alte Logik) — nur für Strom/Wärme.
         state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: "pwr" });
         blocksFallback++;
         totalSubs++;
@@ -671,7 +701,7 @@ async function connect(state: ConnState): Promise<void> {
         totalSubs++;
       }
       blocksMapped++;
-      log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} → ${[...seenRoles].join(",")} (type=${ctrl?.type ?? "?"})`);
+      log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} → ${[...seenRoles].join(",")} (type=${ctrl?.type ?? "?"}, energy_type=${baseEntry.energy_type})`);
     }
 
     log("info", `[WS] ${state.serialNumber} LoxAPP3-Mapping: blocks=${blockEntries.length}, mapped=${blocksMapped}, fallback=${blocksFallback}, totalStateUuids=${totalSubs}`);
