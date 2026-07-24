@@ -186,7 +186,7 @@ ENV LOG_LEVEL=info
 ENV FLUSH_INTERVAL_MS=1000
 ENV RELOAD_INTERVAL_MS=300000
 ENV BRIDGE_WORKER_NAME=hetzner-bridge-test
-ENV BRIDGE_HEARTBEAT_MS=300000
+ENV BRIDGE_HEARTBEAT_MS=60000
 ENV HEALTH_PORT=8080
 
 EXPOSE 8080
@@ -236,7 +236,7 @@ cat << 'EOF' > index.ts
  *   LOG_LEVEL           "debug" | "info" | "warn" | "error" (Standard: "info")
  *   WORKER_HOST         Freier Text, taucht im Session-Log auf (Standard: hostname)
  *   BRIDGE_WORKER_NAME  Name in Tabelle bridge_workers (Standard: hetzner-bridge-test)
- *   BRIDGE_HEARTBEAT_MS Heartbeat-Intervall in ms (Standard: 30000)
+ *   BRIDGE_HEARTBEAT_MS Heartbeat-Intervall in ms (Standard: 60000)
  *   HEALTH_PORT         HTTP-Port für /healthz und /state (Standard: 8080, 0 = aus)
  *   WORKER_VERSION      Versions-String, taucht in bridge_workers.version auf
  */
@@ -253,7 +253,7 @@ const RELOAD_INTERVAL_MS = parseInt(process.env.RELOAD_INTERVAL_MS || "300000", 
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
 const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
 const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
-const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "30000", 10);
+const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "60000", 10);
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
 const WORKER_VERSION = process.env.WORKER_VERSION || "phase2-skeleton";
 
