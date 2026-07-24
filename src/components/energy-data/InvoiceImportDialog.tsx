@@ -442,8 +442,13 @@ export default function InvoiceImportDialog({ open, onOpenChange, correctionOfId
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="kWh">kWh</SelectItem>
+                    <SelectItem value="MWh">MWh</SelectItem>
                     <SelectItem value="m³">m³</SelectItem>
+                    <SelectItem value="L">L</SelectItem>
+                    <SelectItem value="kg">kg</SelectItem>
+                    <SelectItem value="t">t</SelectItem>
                   </SelectContent>
+
                 </Select>
               </div>
               <div>
