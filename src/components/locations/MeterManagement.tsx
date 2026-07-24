@@ -509,6 +509,40 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const displayedSensors = showArchived ? archivedSensorsByType : sensorTypeMeters;
   const displayedActuators = showArchived ? archivedActuatorsByType : actuatorTypeMeters;
 
+  const { values: latestMeterValues } = useLatestMeterValues(displayedMeters);
+
+  type MMSortKey = "name" | "room" | "energy" | "capture" | "value";
+  const [mmSortKey, setMmSortKey] = useState<MMSortKey | null>(null);
+  const [mmSortDir, setMmSortDir] = useState<"asc" | "desc">("asc");
+  const toggleMmSort = (k: MMSortKey) => {
+    if (mmSortKey === k) setMmSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setMmSortKey(k); setMmSortDir("asc"); }
+  };
+  const sortedDisplayedMeters = useMemo(() => {
+    if (!mmSortKey) return displayedMeters;
+    const dir = mmSortDir === "asc" ? 1 : -1;
+    const arr = [...displayedMeters];
+    arr.sort((a, b) => {
+      let av: any; let bv: any;
+      switch (mmSortKey) {
+        case "name": av = a.name; bv = b.name; break;
+        case "room": av = a.room_id ? roomNameById.get(a.room_id) || "" : ""; bv = b.room_id ? roomNameById.get(b.room_id) || "" : ""; break;
+        case "energy": av = ENERGY_TYPE_LABELS[a.energy_type] || a.energy_type; bv = ENERGY_TYPE_LABELS[b.energy_type] || b.energy_type; break;
+        case "capture": av = a.capture_type || ""; bv = b.capture_type || ""; break;
+        case "value": {
+          const an = latestMeterValues.get(a.id)?.value ?? null;
+          const bn = latestMeterValues.get(b.id)?.value ?? null;
+          if (an != null && bn != null) return (an - bn) * dir;
+          if (an != null) return -1 * dir;
+          if (bn != null) return 1 * dir;
+          return 0;
+        }
+      }
+      return String(av ?? "").localeCompare(String(bv ?? ""), "de", { sensitivity: "base", numeric: true }) * dir;
+    });
+    return arr;
+  }, [displayedMeters, mmSortKey, mmSortDir, latestMeterValues]);
+
   const confirmDelete = async (m: Meter) => {
     const ok = await confirmDialog({
       title: "Zähler endgültig löschen?",
