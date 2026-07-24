@@ -1358,6 +1358,18 @@ export function MeterDetailDialog({
   const nodeGatewayDeviceId = nodeMeter?.gateway_device_id ?? null;
   const nodeLocationId = nodeMeter?.location_id ?? null;
 
+  // Derive display units from the meter's configured unit so non-electric
+  // media (water m³, gas m³, …) are not shown as kW/kWh.
+  const meterUnitRaw = (nodeMeter?.unit ?? "").toString().trim();
+  const { rateUnit, energyUnit } = (() => {
+    const u = meterUnitRaw;
+    if (!u || /wh$/i.test(u)) return { rateUnit: "kW", energyUnit: "kWh" };
+    if (u === "m³" || u === "m3") return { rateUnit: "m³/h", energyUnit: "m³" };
+    if (u.toLowerCase() === "l" || u.toLowerCase() === "liter") return { rateUnit: "L/h", energyUnit: "L" };
+    return { rateUnit: `${u}/h`, energyUnit: u };
+  })();
+
+
 
   const { data: storageInfo, isLoading: isStorageLoading } = useQuery({
     queryKey: ["meter-detail-storage-info", node.meter_id, nodeGatewayDeviceId, nodeLocationId, socPct],
