@@ -59,6 +59,30 @@ const CONTROL_TYPE_MAPPINGS: Record<string, StateMapping> = {
   TextState:      { primaryState: "textAndIcon", primaryUnit: "", sensorType: "text" },
 };
 
+// Extract a physical unit from a Loxone format string like "%.3f m³/h", "%.1f°C", "%.0f kWh".
+function extractUnitFromFormat(fmt: unknown): string | null {
+  if (typeof fmt !== "string" || !fmt) return null;
+  // Take everything after the last format specifier (%…f, %…d, %…g, %s)
+  const m = fmt.match(/%[^a-zA-Z]*[a-zA-Z]\s*(.+)$/);
+  const tail = (m ? m[1] : fmt).trim();
+  if (!tail) return null;
+  // Common units, order matters (longest first)
+  const known = ["m³/h", "kWh", "Wh", "kW", "kVA", "kvar", "m³", "l/min", "l/h", "°C", "°F", "hPa", "bar", "Pa", "ppm", "lx", "V", "A", "%", "W", "l", "K"];
+  for (const u of known) {
+    if (tail === u || tail.endsWith(u)) return u;
+  }
+  return null;
+}
+
+// Given a rate unit, return the counterpart totalizer unit (or null if unknown).
+function totalizerUnitFor(rateUnit: string): string | null {
+  if (rateUnit === "m³/h") return "m³";
+  if (rateUnit === "l/min" || rateUnit === "l/h") return "l";
+  if (rateUnit === "kW") return "kWh";
+  if (rateUnit === "W") return "Wh";
+  return null;
+}
+
 // Mapping from Loxone /all output names to our internal state names
 const LOXONE_OUTPUT_TO_STATE: Record<string, string> = {
   "Pf": "actual",       // Power (Leistung)
