@@ -1,39 +1,74 @@
-## Ursache (verifiziert)
+# Warum Wasser spikt, Gas aber nicht
 
-Beide Widgets lesen dieselben 5-Min-Aggregate (`get_power_readings_5min` bzw. `meter_power_readings_5min`). Der Unterschied liegt allein in der Interpolation:
+## Kurzantwort (bestätigt durch Codeprüfung + DB-Check)
 
-- **`EnergyChart.tsx` („Energieverbrauch (kW)")** — Zeilen 386–440: baut ein festes 288-Slot-Raster (5 min) und **forward-fillt** jeden leeren Slot mit dem letzten realen Wert (bis zu 36 Slots / 3 h). Bei 15-Min-Poll liegen zwischen zwei echten Messungen zwei Kopien → klassische **Rechteck-/Plateau-Optik**.
-- **`CustomWidget.tsx` („Wasser und Gas · m³/h")** — Zeilen 268–283: leere Slots bleiben `null`, gerendert mit `type="monotone"` und `connectNulls={true}` → Recharts zieht eine glatte Spline zwischen echten Punkten.
+Die Hardware ist gleich (Shelly-Pulse → Miniserver), aber in Loxone sind Gas und Wasser **unterschiedlich modelliert** — und der `loxone-ws-worker` klassifiziert die States dieser beiden Block-Typen unterschiedlich.
 
-Zusätzlich rendert `EnergyChart` mit `connectNulls={false}`, was das Bild bei ausgefallenen Reihen zusätzlich abhackt.
+### Was der Worker macht (`docs/loxone-ws-worker/index.ts`, Zeile ~598–655)
 
-Kein Daten- oder Einheiten-Problem — reine Render-Logik. Ein 5-Min-Poll würde die Optik ebenfalls glätten, aber ~3× mehr IO erzeugen — daher lösen wir es im Code.
+Für jeden Meter-Block liest er aus `LoxAPP3.json` alle `states` und mappt sie über Regex auf Rollen:
 
-## Umsetzung — Option A (energieartabhängige Interpolation)
+```text
+today  → EnergyToday / Today / Daily / Tagesverbrauch / Cd
+month  → EnergyMonth / …
+year   → EnergyYear / …
+total  → EnergyTotal / Total / TotalEnergy / Zaehlerstand / Meter / Mr
+pwr    → Pwr / Power / CurrentPower / Actual / ActualPower / Value / P / Cp / …
+```
 
-Nur `src/components/dashboard/EnergyChart.tsx` wird angefasst. Kein DB-, Worker- oder RPC-Eingriff.
+Nur Einträge mit `role="pwr"` landen später als Momentanleistung in `meter_power_readings(_5min)` (Zeile 503). Alle anderen Rollen werden getrennt als Energiestände geschrieben.
 
-### Änderung 1 — Forward-Fill überspringen für Wasser/Gas
-In der per-Meter-Forward-Fill-Schleife ab Zeile ~430:
-- Vor dem Forward-Fill die `energy_type` des Meters prüfen.
-- Für `wasser` und `gas`: kein Fill — Slots bleiben `null`, echte Messpunkte bleiben erhalten.
-- Für `strom` und `waerme`: Verhalten unverändert (Forward-Fill mit Poll-Intervall + Toleranz), damit die stabile Summenlinie bei 15-Min-Pollern bleibt.
+### Der entscheidende Unterschied Gas ↔ Wasser
 
-### Änderung 2 — `connectNulls` energieartabhängig setzen
-Line-Rendering Zeile 789:
-- `connectNulls={key === "wasser" || key === "gas"}` statt fix `false`.
-- Damit zeichnet Recharts für Wasser/Gas eine durchgehende Monotone-Spline zwischen den echten Punkten (wie im Custom-Widget); Strom/Wärme behalten das bisherige Verhalten (echte Ausfälle sichtbar als Lücke).
+- **Gaszähler** in Loxone ist typischerweise als *Energie-Meter* mit **kWh-Bewertung pro Impuls** angelegt (`source_unit_power = "kW"` in der DB bestätigt das für alle 5 Gaszähler dieses Tenants). Der Loxone-Block liefert dadurch einen echten `Pwr`-State (aktuelle Leistung in kW) **und** einen `Total`-State — der Worker mappt sauber `Pwr → pwr` und `Total → total`. Die pwr-Werte sind kleine, sinnvolle Zahlen.
 
-### Änderung 3 — Gap-Overlay für Wasser/Gas deaktivieren
-Das gepunktete „Gap"-Overlay (Zeilen ~795 ff.) ist für Strom gedacht, um echte Datenausfälle sichtbar zu machen. Für Wasser/Gas wird es überflüssig, weil die Slots leer bleiben und die Spline die Lücke bereits visuell schließt — für diese Keys nicht mehr rendern, damit keine doppelten oder verwirrenden Linien erscheinen.
+- **Wasserzähler „Hausanschluss"** hat in der DB `source_unit_power = "m³"` (nicht "kW") — d. h. der Loxone-Meter-Block ist als reiner **Impuls-/Zählerstands-Block ohne echten Momentanwert** konfiguriert. Er exponiert entweder gar keinen `Pwr`, oder er exponiert einen State namens `Actual`/`Value`, der aber tatsächlich den kumulativen Zählerstand (m³) enthält.
+  Die aktuelle Regex für `pwr` schluckt `Actual` und `Value` — dadurch wird der **Zählerstand als Leistung** interpretiert und geschrieben → 660 kW/m³ Spikes.
 
-## Verifikation
+- Der zweite Wasserzähler „Wasserimpuls_01" (source_unit_power `kW`, aktuell konstant 0) zeigt, dass es auch Wasser-Blöcke mit echtem Pwr gibt — nur der Hausanschluss-Block ist unglücklich modelliert.
 
-- Frontend-Vergleich: Im Dashboard „Energieverbrauch"-Widget Gas bzw. Wasser aktivieren und mit dem Custom-Widget „Wasser und Gas · m³/h" nebeneinander vergleichen → Kurvenverlauf muss deckungsgleich sein (bis auf Skalierungsunterschied der Y-Achse).
-- Strom-Ansicht (Standardfall) darf sich **nicht** verändern — visuelle Regression prüfen: gleiche Treppen-/Halte-Optik wie zuvor bei 15-Min-Poll-Zählern.
-- Keine DB-, Edge-Function- oder Worker-Änderung. Kein IO-Impact.
+Gas erwischt es nicht, weil dort ein echtes `Pwr` existiert und die Regex-Reihenfolge irrelevant wird — beim Wasser-Hausanschluss ist `Actual`/`Value` die einzige Quelle, die als „pwr" durchgeht.
 
-## Nicht-Ziele
+### Warum das im DB-Check gerade unsichtbar ist
 
-- Poll-Intervall bleibt bei 15 min (Empfehlung im UI unverändert).
-- Datenkorrektur der bereits als „pwr" falsch klassifizierten Wasser-Readings ist ein separates Thema (siehe frühere Worker-v1.8-Diskussion) und wird hier **nicht** angefasst.
+Die letzten 24 h in `meter_power_readings` sind aktuell sauber (max 0,95 für Wasser Hausanschluss). Das passt: die Spikes traten **während der WS-Bridge-Phase** auf und wurden durch das vorherige Cleanup + den Notfall-Pause-Guard entfernt. Sobald die WS-Bridge wieder pusht (v1.6/1.7), kommen sie ohne den unten geplanten Fix zurück.
+
+---
+
+## Plan zur endgültigen Behebung
+
+### 1. Worker-Klassifizierung härten (`docs/loxone-ws-worker/index.ts`)
+
+- `pwr`-Regex **entschärfen**: `Actual` und `Value` **nicht** mehr als pwr akzeptieren, wenn parallel im selben Block ein `Total`/`Meter`/`Zaehlerstand`-State existiert und **kein** eindeutiger `Pwr`/`Power`/`CurrentPower`-State vorhanden ist.
+- Neue Regel: wenn ein Block **nur** ambivalente Keys (`Actual`, `Value`, `P`) und **einen** Total-State hat, wird der Block als *Total-only* geführt (kein pwr-Sub). Der Worker berechnet dann optional selbst den Durchfluss aus Δ(Total)/Δt für die 5-Min-Aggregation (positiv, keine Spikes durch kumulativen Zählerstand als Momentanwert).
+- Fallback-Zweig (Zeile 649) analog absichern: wenn nur die Block-UUID selbst als „pwr" verwendet wird, aber der Meter-Typ `wasser`/`gas` ist und `source_unit_power` nicht `kW`/`W` ist → nicht als pwr subscriben.
+
+### 2. Ingest-Guard als zweite Verteidigungslinie (`supabase/functions/gateway-ingest/index.ts`)
+
+- In `handleBridgePower5min` (und im Direkt-Reading-Handler) für Meter mit `energy_type in ('wasser','gas')` und `source_unit_power ∈ (null,'m³','L')`: Werte, deren Betrag den vom Typ plausiblen Maximaldurchfluss (Wasser 2 m³/h, Gas 20 kW) **um Faktor > 10** übersteigt, verwerfen und einmalig als `integration_error` melden.
+- So bleibt ein falsch modellierter Loxone-Block auch bei künftigen Kunden ohne Spikes im Chart.
+
+### 3. Bestandsdaten prüfen (kein Cleanup nötig, wenn schon leer)
+
+- Ein Query auf `meter_power_readings_5min` der letzten 30 Tage für die betroffenen Wasser-Meter (Wert > 50 kW/m³) — falls Reste vorhanden, punktuell löschen. Aktueller Check der letzten 24 h in `meter_power_readings` ist sauber.
+
+### 4. UI/Zählerkonfiguration transparent machen (klein)
+
+- In der Zähler-Detailansicht warnen, wenn `energy_type = wasser|gas` UND `source_unit_power` nicht auf ein Fluss-/Leistungs-Feld deutet — als Hinweis, dass der Loxone-Block einen Pwr-State bereitstellen sollte.
+
+### 5. Kein Änderungsbedarf an EnergyChart / CustomWidget
+
+Die kürzlich umgestellte Interpolation bleibt korrekt; sie war nie die Ursache der 660-kW-Spitzen.
+
+## Technische Details (Referenzen)
+
+- Klassifizierung: `docs/loxone-ws-worker/index.ts` Zeilen ~598–655
+- Nur pwr wird als Momentanleistung geschrieben: Zeile 503
+- Fallback (Block-UUID als pwr): Zeile 649
+- DB-Belege für unterschiedliche `source_unit_power` je Meter im `meters`-Table (Wasser Hausanschluss = `m³`, alle Gas-Meter = `kW`).
+
+## Reihenfolge / Aufwand
+
+1. Ingest-Guard (klein, sofort wirksam, ~30 min)
+2. Worker v1.9 (Klassifizierung + Total-only-Modus, ~1–2 h, Rollout auf Bridge-VM)
+3. UI-Hinweis (klein, ~20 min)
