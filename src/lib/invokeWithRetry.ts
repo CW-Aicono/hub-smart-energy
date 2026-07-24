@@ -110,6 +110,7 @@ export async function invokeWithRetry<T = any>(
 
   const request = (async () => {
     let lastResult: { data: any; error: any } = { data: null, error: null };
+    let refreshedForAuth = false;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       let res: { data: any; error: any };
       try {
@@ -121,7 +122,19 @@ export async function invokeWithRetry<T = any>(
       lastResult = res as any;
       const msg = await getErrorSignal(res as any);
       const isTransient = TRANSIENT_EDGE_ERROR.test(msg);
+      const is401 = res.error?.status === 401 && !res.error?.noSession;
       if (!res.error && (res.data as any)?.success !== false) return res as any;
+      if (is401 && !refreshedForAuth) {
+        refreshedForAuth = true;
+        try {
+          res = await invokeFunction(normalized.fnName, normalized.options, true);
+          lastResult = res as any;
+          if (!res.error && (res.data as any)?.success !== false) return res as any;
+        } catch (error) {
+          lastResult = { data: null, error };
+        }
+        continue;
+      }
       if (!isTransient) return res as any;
       if (attempt === maxAttempts - 1) return res as any;
       await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
