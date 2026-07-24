@@ -15,6 +15,7 @@ export interface WidgetAvailabilitySignals {
   hasSavingsContract: boolean;
   
   hasMultipleLocations: boolean;
+  hasAnyLocation: boolean;
   arbitrageModuleEnabled: boolean;
   gainSharingModuleEnabled: boolean;
 }
