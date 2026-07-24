@@ -184,7 +184,7 @@ const EnergyData = () => {
             Energieart: labelEnergy(m?.energy_type || ""),
             Datum: r.reading_date,
             Wert: r.value,
-            Einheit: m?.unit || "kWh",
+            Einheit: energyUnitForMeter(m),
             Erfassung: r.capture_method === "manual" ? "Manual" : r.capture_method === "ai" ? "AI-OCR" : r.capture_method,
           };
         });
