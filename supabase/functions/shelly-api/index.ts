@@ -194,7 +194,29 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    if (action === "getSensors") {
+    if (action === "getSensorsCached") {
+      const snap = await readSensorSnapshot(supabase, locationIntegrationId);
+      if (snap) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            sensors: snap.sensors ?? [],
+            systemMessages: snap.system_messages ?? [],
+            cached: true,
+            snapshotStatus: snap.status,
+            fetchedAt: snap.fetched_at,
+            errorMessage: snap.error_message,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({ success: true, sensors: [], systemMessages: [], cached: true, snapshotStatus: "missing" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (action === "getSensors" || action === "refreshSensors") {
       await updateSyncStatus(supabase, locationIntegrationId, "syncing");
 
       // Step 1: Fetch all device statuses
