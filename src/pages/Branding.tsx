@@ -49,6 +49,7 @@ const Branding = () => {
           <WeekStartSetting />
           <AutoLogoutSetting />
           <ManualMetersSetting />
+          <EmptyWidgetsSetting />
           <BrandingSettings />
         </div>
       </main>
