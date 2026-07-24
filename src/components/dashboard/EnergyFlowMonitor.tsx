@@ -1924,17 +1924,18 @@ export function MeterDetailDialog({
                     ]}
                     width={70}
                   >
-                    <AxisLabel value="Energie (kWh)" angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
+                    <AxisLabel value={`Energie (${energyUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
                   {stats?.bidirectional && <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />}
                   <RTooltip
                     contentStyle={{ fontSize: 11 }}
                     labelFormatter={(v) => new Date(v as number).toLocaleString("de-DE")}
                     formatter={(v: any, name: string) => [
-                      `${fmtDeNum(Math.abs(Number(v)))} kWh`,
+                      `${fmtDeNum(Math.abs(Number(v)))} ${energyUnit}`,
                       name === "import" ? "Bezug" : "Einspeisung",
                     ]}
                   />
+
                   <Legend
                     verticalAlign="top"
                     wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
