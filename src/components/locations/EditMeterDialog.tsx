@@ -610,7 +610,16 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="m³">m³</SelectItem>
+                      <SelectItem value="m³/h">m³/h</SelectItem>
                       <SelectItem value="kWh">kWh</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : energyType === "wasser" ? (
+                  <Select value={unit} onValueChange={setUnit}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="m³">m³</SelectItem>
+                      <SelectItem value="m³/h">m³/h</SelectItem>
                     </SelectContent>
                   </Select>
                 ) : (
