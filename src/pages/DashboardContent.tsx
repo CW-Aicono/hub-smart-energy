@@ -148,6 +148,8 @@ const DashboardContent = () => {
   const dateLocale = language === "de" ? "de-DE" : language === "nl" ? "nl-NL" : language === "es" ? "es-ES" : "en-US";
 
   const { signals: availabilitySignals } = useWidgetAvailability(selectedLocationId);
+  const { tenant } = useTenant();
+  const showEmptyWidgets = tenant?.show_empty_widgets ?? false;
 
   const filteredVisibleWidgets = useMemo(() => {
     return visibleWidgets.filter((w) => {
@@ -155,9 +157,10 @@ const DashboardContent = () => {
       if (moduleCode && !isModuleEnabled(moduleCode)) return false;
       // Custom widgets bypass the data-requirement filter.
       if (w.widget_type.startsWith("custom_")) return true;
+      if (showEmptyWidgets) return true;
       return isWidgetAvailable(w.widget_type, availabilitySignals);
     });
-  }, [visibleWidgets, isModuleEnabled, availabilitySignals]);
+  }, [visibleWidgets, isModuleEnabled, availabilitySignals, showEmptyWidgets]);
 
   if (widgetsLoading) {
     return (
