@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { OcppIntegrationContent } from "./OcppIntegration";
 import ChargingInvoiceSettingsForm from "@/components/charging/ChargingInvoiceSettingsForm";
 import RoamingTab from "@/components/charging/RoamingTab";
+import AdHocPaymentTab from "@/components/charging/AdHocPaymentTab";
 import ChargingAppContent from "./ChargingAppContent";
 
 const ChargingSettings = () => {
