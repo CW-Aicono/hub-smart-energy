@@ -175,7 +175,7 @@ export function EditIntegrationDialog({
 
         <div className="space-y-4">
           <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-            <FormLabel htmlFor="custom-name">Anzeigename</FormLabel>
+            <Label htmlFor="custom-name">Anzeigename</Label>
             <div className="flex gap-2">
               <Input
                 id="custom-name"
