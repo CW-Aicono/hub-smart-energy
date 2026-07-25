@@ -44,6 +44,7 @@ export interface LocationIntegration {
   last_sync_at: string | null;
   sync_status: string;
   loxone_remote_connect_ws_enabled: boolean | null;
+  custom_name?: string | null;
   created_at: string;
   updated_at: string;
   integration?: Integration;

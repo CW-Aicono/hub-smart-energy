@@ -6486,6 +6486,7 @@ export type Database = {
         Row: {
           config: Json | null
           created_at: string
+          custom_name: string | null
           id: string
           integration_id: string
           is_enabled: boolean | null
@@ -6498,6 +6499,7 @@ export type Database = {
         Insert: {
           config?: Json | null
           created_at?: string
+          custom_name?: string | null
           id?: string
           integration_id: string
           is_enabled?: boolean | null
@@ -6510,6 +6512,7 @@ export type Database = {
         Update: {
           config?: Json | null
           created_at?: string
+          custom_name?: string | null
           id?: string
           integration_id?: string
           is_enabled?: boolean | null
