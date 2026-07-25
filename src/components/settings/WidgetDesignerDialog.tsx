@@ -339,7 +339,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
           </TabsContent>
 
           <TabsContent value="data" className="space-y-4 mt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div className="space-y-1">
                 <Label className="text-xs">Liegenschaft</Label>
                 <Select
