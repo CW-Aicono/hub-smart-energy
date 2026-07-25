@@ -14,10 +14,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
-import { Loader2, Settings, Wifi } from "lucide-react";
+import { Loader2, Settings, Wifi, AlertTriangle } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
 import { AiconoGatewayCredentials } from "./gateway/AiconoGatewayCredentials";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface EditIntegrationDialogProps {
   locationIntegration: LocationIntegration | null;
