@@ -241,13 +241,14 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
       if (filterLocation !== "__all__" && m.location_id !== filterLocation) return false;
       if (filterFloor !== "__all__" && m.floor_id !== filterFloor) return false;
       if (filterRoom !== "__all__" && m.room_id !== filterRoom) return false;
+      if (filterClass !== "__all__" && (m.device_type ?? "meter") !== filterClass) return false;
       if (q) {
         const hay = `${m.name ?? ""} ${m.meter_number ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [meters, filterLocation, filterFloor, filterRoom, meterSearch]);
+  }, [meters, filterLocation, filterFloor, filterRoom, filterClass, meterSearch]);
 
   const meterGroups = filteredMeters.reduce<Record<string, typeof meters>>((acc, meter) => {
     const type = (meter as any).energy_type || "Sonstige";
