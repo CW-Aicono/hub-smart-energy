@@ -42,12 +42,12 @@ export function LoxoneWsStatus({ locationIntegrationId, enabled }: LoxoneWsStatu
 
   if (!enabled) return null;
 
-  // Stale-Schwelle (Sekunden) ist im Super-Admin konfigurierbar
-  // (system_settings.public.loxone_ws_stale_threshold_seconds). Fallback 120 s.
-  const staleThresholdSec = useSystemSettingNumber(
-    "public.loxone_ws_stale_threshold_seconds",
-    120,
-  );
+  // Stale-Schwelle (Sekunden) ist im Super-Admin konfigurierbar.
+  // Bevorzuge unpräfixierten Key (wird auch von der Edge Function gelesen);
+  // präfixierter Key als Fallback für ältere Deployments.
+  const staleUnprefixed = useSystemSettingNumber("loxone_ws_stale_threshold_seconds", 0);
+  const stalePrefixed = useSystemSettingNumber("public.loxone_ws_stale_threshold_seconds", 0);
+  const staleThresholdSec = staleUnprefixed > 0 ? staleUnprefixed : (stalePrefixed > 0 ? stalePrefixed : 120);
   const staleThresholdMs = Math.max(30, staleThresholdSec) * 1000;
 
   // Status-Logik:
