@@ -42,6 +42,8 @@ export function EditIntegrationDialog({
   const [customName, setCustomName] = useState<string>("");
   const [savingName, setSavingName] = useState(false);
   const [enablingWs, setEnablingWs] = useState(false);
+  const [disableWsConfirmOpen, setDisableWsConfirmOpen] = useState(false);
+  const [disablingWs, setDisablingWs] = useState(false);
   const { toast } = useToast();
   const { t } = useTranslation();
 
