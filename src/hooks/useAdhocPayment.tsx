@@ -26,8 +26,8 @@ export function useAdhocProviders() {
     mutationFn: async (payload: Partial<any> & { id?: string }) => {
       const row = { ...payload, tenant_id: tenant!.id };
       const { data, error } = payload.id
-        ? await supabase.from("payment_providers").update(row).eq("id", payload.id).select().single()
-        : await supabase.from("payment_providers").insert(row).select().single();
+        ? await supabase.from("payment_providers").update(row as any).eq("id", payload.id).select().single()
+        : await supabase.from("payment_providers").insert(row as any).select().single();
       if (error) throw error;
       return data;
     },
@@ -73,8 +73,8 @@ export function useAdhocTerminals() {
     mutationFn: async (payload: Partial<any> & { id?: string }) => {
       const row = { ...payload, tenant_id: tenant!.id };
       const { data, error } = payload.id
-        ? await supabase.from("payment_terminals").update(row).eq("id", payload.id).select().single()
-        : await supabase.from("payment_terminals").insert(row).select().single();
+        ? await supabase.from("payment_terminals").update(row as any).eq("id", payload.id).select().single()
+        : await supabase.from("payment_terminals").insert(row as any).select().single();
       if (error) throw error;
       return data;
     },
@@ -148,8 +148,8 @@ export function useAdhocRules() {
     mutationFn: async (payload: Partial<any> & { id?: string }) => {
       const row = { ...payload, tenant_id: tenant!.id };
       const { data, error } = payload.id
-        ? await supabase.from("adhoc_payment_rules").update(row).eq("id", payload.id).select().single()
-        : await supabase.from("adhoc_payment_rules").insert(row).select().single();
+        ? await supabase.from("adhoc_payment_rules").update(row as any).eq("id", payload.id).select().single()
+        : await supabase.from("adhoc_payment_rules").insert(row as any).select().single();
       if (error) throw error;
       return data;
     },
