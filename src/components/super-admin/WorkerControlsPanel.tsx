@@ -135,24 +135,35 @@ function WorkerRow({ w, onToggle }: { w: WorkerControl; onToggle: (next: boolean
 // Stored in public.system_settings under key public.loxone_ws_stale_threshold_seconds.
 // ---------------------------------------------------------------------------
 function LoxoneStaleThresholdEditor() {
-  const KEY = "public.loxone_ws_stale_threshold_seconds";
-  const { data, isLoading } = useSystemSetting(KEY);
+  const KEY_UNPREFIXED = "loxone_ws_stale_threshold_seconds";
+  const KEY_PREFIXED = "public.loxone_ws_stale_threshold_seconds";
+  // Prefer unprefixed value (what the edge function actually reads); fall back to prefixed.
+  const { data: unprefixed, isLoading: loadingA } = useSystemSetting(KEY_UNPREFIXED);
+  const { data: prefixed, isLoading: loadingB } = useSystemSetting(KEY_PREFIXED);
   const setSetting = useSetSystemSetting();
   const [value, setValue] = useState<string>("");
+  const isLoading = loadingA || loadingB;
 
+  const current = unprefixed ?? prefixed;
   useEffect(() => {
-    if (data != null) setValue(data);
-  }, [data]);
+    if (current != null) setValue(current);
+  }, [current]);
 
   const numeric = Number(value);
   const invalid = !Number.isFinite(numeric) || numeric < 30 || numeric > 7200;
+
+  const saveBoth = () => {
+    // Dual-write: unprefixed (edge function) + prefixed (tenant RLS-readable).
+    setSetting.mutate({ key: KEY_UNPREFIXED, value: String(numeric) });
+    setSetting.mutate({ key: KEY_PREFIXED, value: String(numeric) });
+  };
 
   return (
     <div className="rounded-md border bg-muted/30 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <label className="text-xs font-medium">Stale-Schwelle (Sekunden)</label>
         <span className="text-[10px] text-muted-foreground">
-          system_settings · {KEY.replace("public.", "")}
+          system_settings · {KEY_UNPREFIXED}
         </span>
       </div>
       <div className="flex items-center gap-2">
@@ -169,8 +180,8 @@ function LoxoneStaleThresholdEditor() {
         <Button
           size="sm"
           variant="secondary"
-          disabled={invalid || setSetting.isPending || value === (data ?? "")}
-          onClick={() => setSetting.mutate({ key: KEY, value: String(numeric) })}
+          disabled={invalid || setSetting.isPending || value === (current ?? "")}
+          onClick={saveBoth}
         >
           {setSetting.isPending ? (
             <Loader2 className="w-3 h-3 mr-1 animate-spin" />
