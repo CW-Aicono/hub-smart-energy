@@ -34,6 +34,8 @@ export function EditIntegrationDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [baseConfig, setBaseConfig] = useState<Record<string, any>>({});
   const [pollIntervalMin, setPollIntervalMin] = useState<number>(5);
+  const [customName, setCustomName] = useState<string>("");
+  const [savingName, setSavingName] = useState(false);
   const [enablingWs, setEnablingWs] = useState(false);
   const { toast } = useToast();
   const { t } = useTranslation();
