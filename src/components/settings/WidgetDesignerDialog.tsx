@@ -81,6 +81,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
   const [filterLocation, setFilterLocation] = useState<string>("__all__");
   const [filterFloor, setFilterFloor] = useState<string>("__all__");
   const [filterRoom, setFilterRoom] = useState<string>("__all__");
+  const [filterClass, setFilterClass] = useState<string>("__all__");
 
   const { tenant } = useTenant();
   const { locations } = useLocations();
