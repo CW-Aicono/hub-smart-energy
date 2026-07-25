@@ -164,6 +164,28 @@ export function EditIntegrationDialog({
     }
   };
 
+  const handleDisableWs = async () => {
+    if (!locationIntegration) return;
+    setDisablingWs(true);
+    const { error } = await onUpdate(locationIntegration.id, {
+      loxone_remote_connect_ws_enabled: false,
+    });
+    setDisablingWs(false);
+    setDisableWsConfirmOpen(false);
+    if (error) {
+      toast({
+        title: t("common.error" as any),
+        description: "Fehler beim Deaktivieren von Remote Connect WebSocket.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Remote Connect WebSocket deaktiviert",
+        description: "Live-Daten sind für diesen Standort deaktiviert. Werte kommen nur noch über HTTP-Pull.",
+      });
+    }
+  };
+
   const hasConfigFields = (gatewayDef?.configFields.length ?? 0) > 0;
 
   return (
