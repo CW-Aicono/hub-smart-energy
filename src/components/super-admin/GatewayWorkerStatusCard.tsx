@@ -81,33 +81,39 @@ export default function GatewayWorkerStatusCard() {
     ? formatDistanceToNow(new Date(data.last_heartbeat), { addSuffix: true, locale: de })
     : "noch nie";
 
+  const staleSeconds = data?.stale_threshold_seconds ?? 300;
+  const staleLabel = staleSeconds >= 60
+    ? `${Math.round(staleSeconds / 60)} Min`
+    : `${staleSeconds} s`;
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <Cpu className="h-4 w-4" />
-          Gateway-Worker (Hetzner)
+          Loxone-WebSocket-Worker (Hetzner)
           <span className="ml-auto">{statusBadge}</span>
         </CardTitle>
+        <p className="text-xs text-muted-foreground mt-1">
+          Betrifft nur Loxone-Miniserver. AICONO Gateways laufen unabhängig und werden über die
+          Geräte-HUB-Karten überwacht.
+        </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
           <div>
             <p className="text-muted-foreground">Letzter Heartbeat</p>
             <p className="font-semibold">{heartbeatLabel}</p>
             {data?.heartbeat_age_seconds !== null && data?.heartbeat_age_seconds !== undefined && (
-              <p className="text-xs text-muted-foreground">{data.heartbeat_age_seconds}s</p>
+              <p className="text-xs text-muted-foreground">
+                {data.heartbeat_age_seconds}s (Schwelle {staleSeconds}s)
+              </p>
             )}
           </div>
           <div>
             <p className="text-muted-foreground">Inserts (5 Min)</p>
             <p className="font-semibold">{data?.inserts_last_5min ?? 0}</p>
             <p className="text-xs text-muted-foreground">meter_power_readings</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Aktive Geräte-HUBs</p>
-            <p className="font-semibold">{data?.active_devices ?? 0}</p>
-            <p className="text-xs text-muted-foreground">HA-Add-ons (5 Min)</p>
           </div>
           <div>
             <p className="text-muted-foreground">Worker-Version</p>
@@ -124,8 +130,11 @@ export default function GatewayWorkerStatusCard() {
               Worker als primäre Datenquelle
             </Label>
             <p className="text-xs text-muted-foreground">
-              Wenn aktiv und Heartbeat &lt; 5 Min: Edge Functions (loxone-api) überspringen den Schreibpfad.
-              Bei stillem Worker schreiben sie automatisch wieder (Sicherheits-Fallback).
+              Wenn aktiv und Heartbeat frisch (&lt; {staleLabel} laut Stale-Schwelle):
+              die Edge Function <code>loxone-api</code> überspringt den DB-Schreibpfad,
+              weil der Worker bereits schreibt. Fällt der Worker aus, schreibt{" "}
+              <code>loxone-api</code> automatisch wieder als Sicherheits-Fallback.
+              Betrifft nur Loxone — AICONO Gateways sind davon nicht betroffen.
             </p>
           </div>
           <Switch
