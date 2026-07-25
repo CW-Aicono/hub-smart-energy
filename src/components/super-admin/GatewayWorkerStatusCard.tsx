@@ -85,7 +85,7 @@ export default function GatewayWorkerStatusCard() {
   }
 
   const heartbeatLabel = data?.last_heartbeat
-    ? formatDistanceToNow(new Date(data.last_heartbeat), { addSuffix: true, locale: de })
+    ? formatAge(data?.heartbeat_age_seconds)
     : "noch nie";
 
   const staleSeconds = data?.stale_threshold_seconds ?? 300;
