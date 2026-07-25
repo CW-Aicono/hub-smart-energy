@@ -16,9 +16,11 @@ interface WorkerStatus {
   last_heartbeat: string | null;
   heartbeat_fresh: boolean;
   heartbeat_age_seconds: number | null;
+  stale_threshold_seconds?: number;
   inserts_last_5min: number;
-  active_devices: number;
-  worker_meta: { worker_id?: string; version?: string; last_seen?: string } | null;
+  active_devices?: number;
+  worker_meta: { worker_id?: string; version?: string; host?: string; last_seen?: string } | null;
+  worker_status?: string | null;
   checked_at: string;
 }
 
