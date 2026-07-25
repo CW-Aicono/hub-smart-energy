@@ -8047,6 +8047,7 @@ export type Database = {
       }
       monitoring_alert_events: {
         Row: {
+          archived_at: string | null
           comparator: string
           created_at: string
           id: string
@@ -8062,6 +8063,7 @@ export type Database = {
           triggered_at: string
         }
         Insert: {
+          archived_at?: string | null
           comparator: string
           created_at?: string
           id?: string
@@ -8077,6 +8079,7 @@ export type Database = {
           triggered_at?: string
         }
         Update: {
+          archived_at?: string | null
           comparator?: string
           created_at?: string
           id?: string
