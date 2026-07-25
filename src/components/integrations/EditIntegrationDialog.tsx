@@ -63,7 +63,9 @@ export function EditIntegrationDialog({
   });
 
   useEffect(() => {
-    if (!locationIntegration || !gatewayDef || !open) return;
+    if (!locationIntegration || !open) return;
+    setCustomName(locationIntegration.custom_name ?? "");
+    if (!gatewayDef) return;
 
     const nextConfig = (locationIntegration.config as Record<string, any> | undefined) ?? {};
     const vals: Record<string, string> = {};
@@ -76,6 +78,30 @@ export function EditIntegrationDialog({
     setPollIntervalMin(Number.isFinite(raw) && raw >= 5 && raw <= 60 ? Math.floor(raw) : 15);
     form.reset(vals);
   }, [locationIntegration, gatewayDef, form, open]);
+
+  const handleSaveName = async () => {
+    if (!locationIntegration) return;
+    setSavingName(true);
+    const trimmed = customName.trim();
+    const { error } = await onUpdate(locationIntegration.id, {
+      custom_name: trimmed ? trimmed : null,
+    } as any);
+    setSavingName(false);
+    if (error) {
+      toast({
+        title: t("common.error" as any),
+        description: "Name konnte nicht gespeichert werden.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Name gespeichert",
+        description: trimmed
+          ? `Anzeigename: ${trimmed}`
+          : "Anzeigename zurückgesetzt (Vorlagenname wird verwendet).",
+      });
+    }
+  };
 
   const onSubmit = async (data: Record<string, string>) => {
     if (!locationIntegration) return;
