@@ -235,7 +235,7 @@ export function EditIntegrationDialog({
 
                 {isLoxone && (
                   <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-                    <FormLabel htmlFor="poll-interval">Abfrage-Intervall (Minuten)</FormLabel>
+                    <Label htmlFor="poll-interval">Abfrage-Intervall (Minuten)</Label>
                     <Input
                       id="poll-interval"
                       type="number"
