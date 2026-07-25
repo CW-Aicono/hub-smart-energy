@@ -52,13 +52,18 @@ Deno.serve(async (req) => {
         "worker_last_heartbeat",
         "worker_meta",
         "loxone_ws_stale_threshold_seconds",
+        "public.loxone_ws_stale_threshold_seconds",
       ]);
 
     const settingsMap = new Map((settings || []).map((r: any) => [r.key, r.value]));
     const workerActive = settingsMap.get("worker_active") === "true";
-    const staleParsed = Number(settingsMap.get("loxone_ws_stale_threshold_seconds"));
+    // Read both key variants (unprefixed preferred, prefixed as fallback for legacy writers).
+    const staleRaw =
+      settingsMap.get("loxone_ws_stale_threshold_seconds") ??
+      settingsMap.get("public.loxone_ws_stale_threshold_seconds");
+    const staleParsed = Number(staleRaw);
     const staleThresholdSeconds =
-      Number.isFinite(staleParsed) && staleParsed >= 30 && staleParsed <= 3600
+      Number.isFinite(staleParsed) && staleParsed >= 30 && staleParsed <= 7200
         ? staleParsed
         : DEFAULT_STALE_SECONDS;
     const freshMs = staleThresholdSeconds * 1000;
