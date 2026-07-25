@@ -9,6 +9,7 @@ import {
   Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -174,7 +175,7 @@ export function EditIntegrationDialog({
 
         <div className="space-y-4">
           <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-            <FormLabel htmlFor="custom-name">Anzeigename</FormLabel>
+            <Label htmlFor="custom-name">Anzeigename</Label>
             <div className="flex gap-2">
               <Input
                 id="custom-name"
@@ -234,7 +235,7 @@ export function EditIntegrationDialog({
 
                 {isLoxone && (
                   <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-                    <FormLabel htmlFor="poll-interval">Abfrage-Intervall (Minuten)</FormLabel>
+                    <Label htmlFor="poll-interval">Abfrage-Intervall (Minuten)</Label>
                     <Input
                       id="poll-interval"
                       type="number"
