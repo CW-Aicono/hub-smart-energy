@@ -2,7 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { isWorkerEnabled } from "../_shared/workerKillswitch.ts";
-import { isWorkerPrimary } from "../_shared/workerStatus.ts";
+// isWorkerPrimary wird hier nicht mehr benötigt — der HTTP-Pull läuft immer im
+// konfigurierten Intervall; `loxone-api` entscheidet pro Aufruf, ob Live-Werte
+// geschrieben werden.
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -128,7 +130,7 @@ serve(async (req) => {
           const lastBucket = Math.floor(lastMs / intervalMs);
           if (currentBucket === lastBucket) {
             const remainingSec = Math.ceil(((currentBucket + 1) * intervalMs - nowMs) / 1000);
-            console.log(`Skipping integration ${integrationId} – same wall-clock bucket, next slot in ${remainingSec}s (interval=${intervalMin}min${workerPrimary && intervalMin !== configuredMin ? `, raised from ${configuredMin} because WS worker primary` : ""})`);
+            console.log(`Skipping integration ${integrationId} – same wall-clock bucket, next slot in ${remainingSec}s (interval=${intervalMin}min)`);
             results.push({ id: integrationId, success: true, skipped: true });
             skippedCount++;
             continue;
