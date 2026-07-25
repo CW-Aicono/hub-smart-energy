@@ -2765,6 +2765,12 @@ export const translations = {
     es: "Ajustes",
     nl: "Instellingen",
   },
+  "nav.chargingTransactions": {
+    de: "Ad-Hoc Transaktionen",
+    en: "Ad-Hoc Transactions",
+    es: "Transacciones Ad-Hoc",
+    nl: "Ad-Hoc Transacties",
+  },
   "nav.solarCharging": {
     de: "PV-Überschussladen",
     en: "Solar Surplus Charging",

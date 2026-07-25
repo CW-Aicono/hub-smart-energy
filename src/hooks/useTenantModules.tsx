@@ -32,6 +32,7 @@ export const ALL_MODULES = [
   { code: "c_level_dashboard", label: "C-Level Dashboard (board.aicono.org)" },
   { code: "gain_sharing", label: "Gain-Sharing (Einsparbeteiligung)" },
   { code: "documentation", label: "Dokumentation" },
+  { code: "adhoc_payment", label: "Ad-Hoc Payment (Kartenzahlung Ladepunkt)" },
 ] as const;
 
 export function useTenantModules(tenantId: string | null) {
