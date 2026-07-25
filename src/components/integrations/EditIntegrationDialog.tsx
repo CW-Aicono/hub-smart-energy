@@ -14,10 +14,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
-import { Loader2, Settings, Wifi } from "lucide-react";
+import { Loader2, Settings, Wifi, AlertTriangle } from "lucide-react";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
 import { AiconoGatewayCredentials } from "./gateway/AiconoGatewayCredentials";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface EditIntegrationDialogProps {
   locationIntegration: LocationIntegration | null;
@@ -38,6 +42,8 @@ export function EditIntegrationDialog({
   const [customName, setCustomName] = useState<string>("");
   const [savingName, setSavingName] = useState(false);
   const [enablingWs, setEnablingWs] = useState(false);
+  const [disableWsConfirmOpen, setDisableWsConfirmOpen] = useState(false);
+  const [disablingWs, setDisablingWs] = useState(false);
   const { toast } = useToast();
   const { t } = useTranslation();
 
@@ -158,6 +164,28 @@ export function EditIntegrationDialog({
     }
   };
 
+  const handleDisableWs = async () => {
+    if (!locationIntegration) return;
+    setDisablingWs(true);
+    const { error } = await onUpdate(locationIntegration.id, {
+      loxone_remote_connect_ws_enabled: false,
+    });
+    setDisablingWs(false);
+    setDisableWsConfirmOpen(false);
+    if (error) {
+      toast({
+        title: t("common.error" as any),
+        description: "Fehler beim Deaktivieren von Remote Connect WebSocket.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Remote Connect WebSocket deaktiviert",
+        description: "Live-Daten sind für diesen Standort deaktiviert. Werte kommen nur noch über HTTP-Pull.",
+      });
+    }
+  };
+
   const hasConfigFields = (gatewayDef?.configFields.length ?? 0) > 0;
 
   return (
@@ -253,13 +281,24 @@ export function EditIntegrationDialog({
 
                 {isLoxone && (
                   <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Wifi className="h-4 w-4 text-primary" />
                         <span className="font-medium">Remote Connect WebSocket</span>
                       </div>
                       {locationIntegration?.loxone_remote_connect_ws_enabled ? (
-                        <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-500/30 text-xs">Aktiviert</Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-500/30 text-xs">Aktiviert</Badge>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setDisableWsConfirmOpen(true)}
+                            disabled={disablingWs}
+                          >
+                            Deaktivieren
+                          </Button>
+                        </div>
                       ) : (
                         <Button type="button" size="sm" onClick={handleEnableWs} disabled={enablingWs}>
                           {enablingWs ? (
@@ -274,7 +313,7 @@ export function EditIntegrationDialog({
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Ermöglicht Echtzeit-Daten über Loxone Remote Connect WebSocket.
+                      Ermöglicht Echtzeit-Daten über Loxone Remote Connect WebSocket. Ohne WebSocket kommen Werte nur alle {pollIntervalMin} Min per HTTP-Pull — keine Live-Anzeige, verzögerte Automationen.
                     </p>
                   </div>
                 )}
@@ -307,6 +346,44 @@ export function EditIntegrationDialog({
           )}
         </div>
       </DialogContent>
+
+      <AlertDialog open={disableWsConfirmOpen} onOpenChange={setDisableWsConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Remote Connect WebSocket wirklich deaktivieren?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  Nach dem Deaktivieren gilt für diese Loxone-Integration:
+                </p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li><strong>Keine Live-Werte mehr</strong> im Dashboard und Energie-Fluss.</li>
+                  <li>Zählerwerte kommen nur noch alle {pollIntervalMin} Min per HTTP-Pull.</li>
+                  <li>Automationen reagieren <strong>bis zu {pollIntervalMin} Min verzögert</strong> statt in Sekunden.</li>
+                  <li>Die 5-Minuten-Aggregate werden gröber (nur noch aus HTTP-Fallback).</li>
+                </ul>
+                <p className="pt-2">
+                  Tagessummen, Steuerbefehle und Geräteerkennung bleiben unverändert (laufen ohnehin über HTTP).
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={disablingWs}>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleDisableWs(); }}
+              disabled={disablingWs}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {disablingWs ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Deaktivieren
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
