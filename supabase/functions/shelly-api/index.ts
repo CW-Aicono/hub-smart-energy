@@ -384,6 +384,14 @@ serve(async (req) => {
       // controlUuid format: "<deviceId>_switch<ch>" or "<deviceId>_relay<ch>"
       if (!controlUuid) throw new Error("controlUuid ist erforderlich");
 
+      // Guard: HA-Entity-Pattern (e.g. "switch.shelly_plug_s") gehört zum AICONO Gateway,
+      // nicht zur Shelly-Cloud-Integration. Klarer Fehler statt kryptischer Meldung.
+      if (/^[a-z_]+\.[a-z0-9_]+$/i.test(controlUuid)) {
+        throw new Error(
+          `Aktor ${controlUuid} gehört zum AICONO Gateway. Bitte die Automation neu speichern, damit sie über das Gateway läuft.`
+        );
+      }
+
       // Parse deviceId and channel from controlUuid
       const switchMatch = controlUuid.match(/^(.+)_switch(\d+)$/);
       const relayMatch = controlUuid.match(/^(.+)_relay(\d+)$/);

@@ -1073,18 +1073,18 @@ export function AutomationRuleBuilder({
                     </SelectItem>
                     <SelectItem value="loxone_local" disabled={templateRequiresCloud}>
                       <div className="flex flex-col text-left">
-                        <span className="text-sm font-medium">Loxone lokal</span>
+                        <span className="text-sm font-medium">Gateway lokal</span>
                         <span className="text-[10px] text-muted-foreground">
                           {templateRequiresCloud
                             ? "Nicht verfügbar – dieser Baustein benötigt Cloud-Werte"
-                            : "Regel läuft ausschließlich auf dem Miniserver"}
+                            : "Regel läuft ausschließlich auf dem Gateway (Miniserver / AICONO Gateway)"}
                         </span>
                       </div>
                     </SelectItem>
                     <SelectItem value="hybrid">
                       <div className="flex flex-col text-left">
                         <span className="text-sm font-medium">Hybrid</span>
-                        <span className="text-[10px] text-muted-foreground">Loxone lokal, Cloud als Fallback</span>
+                        <span className="text-[10px] text-muted-foreground">Gateway lokal, Cloud als Fallback</span>
                       </div>
                     </SelectItem>
                   </SelectContent>
@@ -1094,8 +1094,8 @@ export function AutomationRuleBuilder({
                     <Cloud className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                     <span>
                       Dieser Baustein wird von der Cloud mit Werten versorgt (z. B. Arbitrage-Fahrplan,
-                      CO₂-Fenster). „Loxone lokal" ist nicht möglich – bei Internet-Ausfall pausiert die
-                      Aktualisierung und der Miniserver behält den zuletzt empfangenen Wert.
+                      CO₂-Fenster). „Gateway lokal" ist nicht möglich – bei Internet-Ausfall pausiert die
+                      Aktualisierung und das Gateway behält den zuletzt empfangenen Wert.
                     </span>
                   </div>
                 )}

@@ -1,61 +1,72 @@
-## Verifizierte Ursache (neu)
+# Automation wird nicht zum Gateway synchronisiert – Ursache & Fix
 
-Der ursprüngliche Verdacht "Basic-Auth schlägt fehl" war falsch. Was tatsächlich passiert:
+## Diagnose (verifiziert)
 
-**`handleDeviceSnapshot` behandelt das Ergebnis von `validateApiKey` falsch und crasht bei jedem erfolgreichen Auth mit HTTP 502.**
+Die Automation „Test Shelly On/Off" ist in der DB so gespeichert:
 
-Belege (verifiziert soeben):
-- Curl mit korrekten Basic-Auth-Credentials (`aicono` / `Aicono2023!`, `x-gateway-mac: b827eb2b1d07`) → **HTTP 502 Bad Gateway**.
-- Function-Logs: `TypeError: First argument to 'respondWith' must be a Response or a promise resolving to a Response` — mehrfach 11:23–11:24 Uhr, exakt getaktet mit den Push-Versuchen des Add-ons.
-- Log-Zeile `[device-snapshot] auth failed` ist **irreführend** — sie feuert auch bei erfolgreichem Auth, weil die Bedingung nur die Wahrheit prüft.
+- `actuator_uuid = "switch.shelly_plug_s"` (Home-Assistant-Entity-ID)
+- `location_integration_id = aaeaac5a…` → Integration-Typ **`shelly_cloud`**
+- `execution_mode = "cloud"`
 
-Code (`supabase/functions/gateway-ingest/index.ts`, Zeilen 2405–2410):
+Daraus folgen beide beobachteten Fehler:
 
-```ts
-async function handleDeviceSnapshot(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) {                    // ❌ falsch
-    console.warn("[device-snapshot] auth failed");
-    return authErr;                 // gibt bei Erfolg ein GatewayAuthContext-Objekt zurück
-  }
-  ...
-}
-```
+1. **Kein Sync zum AICONO Gateway.** `gateway-ingest` → `handleSyncAutomations` (Zeile 2237–2316) filtert per `location_integration_id = <AICONO-Gateway-Integration>`. Die Automation hängt an der Shelly-Cloud-Integration → 0 Automationen für das Gateway → „Keine lokalen Automationen".
 
-`validateApiKey` gibt entweder eine `Response` (Fehler) oder ein `GatewayAuthContext` (`{ tenantId }`) zurück. Bei Erfolg ist das Objekt truthy → wird als "Response" zurückgegeben → Deno-Runtime crasht → 502.
+2. **„Kein schaltbarer Aktor: switch.shelly_plug_s".** Der Cloud-Scheduler ruft `shelly-api` mit dem HA-Entity-Namen auf. `shelly-api` (Zeile 391) versteht nur Shelly-Control-UUIDs (`5a86e3_relay0`), nicht HA-Entities → Fehler.
 
-Alle anderen Handler in derselben Datei verwenden korrekt den Type-Guard `isAuthError(...)` (siehe z. B. Zeile 549, 649, 830, 952, 1137 …). Nur `handleDeviceSnapshot` wurde bei einem früheren Refactor falsch gemustert.
+Der Aktor existiert real nur im AICONO Gateway (Home Assistant). Er wurde im Editor unter der Shelly-Cloud-Integration angeboten und ausgewählt, was er nicht sein dürfte.
 
-Warum das WS-Onboarding trotzdem funktioniert: der WebSocket-Kanal (`gateway-ws`) hat einen eigenen Auth-Pfad, ist deshalb "Online" — nur der HTTP-Snapshot-Push schlägt fehl.
+## Ziel
 
-Warum bei früheren Test-Gateways alles ging: die früheren Inventory-Einträge (`21afa7b1` = 31 Zeilen etc.) stammen aus einer Version **vor** diesem Bug. Seit dem Refactor wird kein Snapshot mehr erfolgreich verarbeitet — nur alte Zeilen sind noch sichtbar. Das erklärt auch, warum du bei dem neuen Gateway nichts siehst: es hatte noch nie einen erfolgreichen Snapshot.
+- AICONO Gateway wird im Editor / Sync / Executor exakt wie der Loxone Miniserver behandelt (lokale Ausführung, Sync, Hybrid-Fallback).
+- UI-Text „Loxone lokal" → **„Gateway lokal"**, überall wo er auftaucht (Dropdown-Label, Kurzbeschreibung, Badges, Hilfetexte, Übersetzungen für DE/EN/ES/NL).
+- Aktor-Auswahl bietet ein Gerät nur unter der Integration an, die es tatsächlich steuern kann.
 
-## Fix (minimal)
+## Umsetzung
 
-`supabase/functions/gateway-ingest/index.ts` Zeilen 2405–2410:
+### 1. UI-Umbenennung „Loxone lokal" → „Gateway lokal"
 
-```ts
-async function handleDeviceSnapshot(req: Request): Promise<Response> {
-  const auth = await validateApiKey(req);
-  if (isAuthError(auth)) {
-    console.warn("[device-snapshot] auth failed");
-    return auth;
-  }
-  ...
-}
-```
+Betroffen: `AutomationRuleBuilder.tsx`, `AutomationCard.tsx`, alle Stellen mit `execution_mode`-Labels sowie `src/i18n/translations.ts` (Keys wie `auto.execMode.loxoneLocal`, Beschreibungstext, Badges). Wert `"loxone_local"` in der DB bleibt aus Kompatibilitätsgründen bestehen, wird aber immer als „Gateway lokal" gerendert.
 
-Ein einziger Handler, ein Type-Guard-Aufruf. Kein weiterer Change nötig — das restliche `handleDeviceSnapshot` funktioniert bereits korrekt (verwendet weiter unten `getSupabase()`, MAC-Lookup und Upsert, alles unverändert).
+### 2. Ausführungsmodus für AICONO Gateway freigeben
 
-## Verifikation nach dem Fix
+`packages/automation-core/*` und Cloud-Scheduler behandeln bereits `execution_mode = "loxone_local"` / `"hybrid"` als „lokal ausgeführt, Cloud-Fallback". `gateway-ingest → handleSyncAutomations` liefert Automationen an das Gateway. Ich stelle sicher, dass:
+- AICONO-Gateway-Integrationen im Dropdown genauso wählbar sind wie Miniserver.
+- Der Sync-Filter für Gateway-Devices funktioniert (bereits vorhanden, wird nur validiert).
+- Cloud-Fallback (Hybrid) für HA-Entities über `home-assistant-api` ausgeführt wird (Executor-Mapping ist da, wird nur konsistent verdrahtet).
 
-1. Curl `POST /gateway-ingest?action=device-snapshot` (Basic Auth) liefert 200 statt 502.
-2. Function-Logs: kein `respondWith`-TypeError mehr; stattdessen `Upserted N device inventory rows`.
-3. `SELECT count(*) FROM gateway_device_inventory WHERE gateway_device_id='7d08d320…'` > 0 innerhalb von 2 Min (nächster Add-on-Push-Tick).
-4. Dialog „Gefundene Geräte" im Cloud-UI listet Shelly-Plug-S, shellyht-3E4480 etc. auf.
+### 3. Datenkorrektur (Migration)
 
-## Was NICHT gemacht wird
+Für alle Automationen mit HA-Entity-Pattern im `actuator_uuid` (`^[a-z_]+\.`), die aktuell auf eine falsche Integration zeigen:
+- `location_integration_id` auf die aktive `aicono_gateway`-Integration desselben Standorts umbiegen.
+- `execution_mode = 'hybrid'` setzen (Gateway lokal bevorzugt, Cloud als Fallback).
+- Log-Report der geänderten Rows.
 
-- Kein UX-Hinweis im `SensorsDialog` (Problem verschwindet an der Wurzel).
-- Kein Add-on-Update — der Add-on-Code ist korrekt.
-- Kein Passwort-Reset — Credentials sind bereits richtig gesetzt.
+### 4. Automation-Editor: Aktor-Quelle korrigieren
+
+`AutomationRuleBuilder` + Aktor-Loader:
+- Aktoren aus dem AICONO-Gateway-Inventory (HA-Entities) erscheinen ausschließlich in der Aktor-Liste der Gateway-Integration – nicht bei Shelly Cloud, Loxone etc.
+- Beim Speichern wird `location_integration_id` immer aus dem gewählten Aktor abgeleitet.
+- Wechsel der Integration leert die Aktor-Auswahl.
+
+### 5. Guardrails (verhindern Wiederauftreten)
+
+- **`handleSyncAutomations`**: Automationen mit HA-Entity-Pattern werden zusätzlich an das AICONO Gateway des Standorts ausgeliefert, auch wenn `location_integration_id` (historisch) auf eine andere Integration zeigt.
+- **Cloud-Executor**: Wird `shelly-api` mit HA-Entity-Pattern aufgerufen, sofortiger Fehler „Aktor gehört zum Gateway – Automation neu speichern" statt stiller Fehlausführung.
+
+### 6. Validierung
+
+- DB-Query: keine Automation mehr mit Nicht-Gateway-Integration + HA-Entity-Actuator.
+- Add-on-Log zeigt Automationen > 0 für Hetzner-Standort.
+- „Test" schaltet den Shelly-Plug lokal über das Gateway; Ausführungsort-Dropdown zeigt „Gateway lokal".
+
+## Technische Details
+
+Betroffene Dateien:
+- `src/components/locations/AutomationRuleBuilder.tsx`, `AutomationCard.tsx`, zugehörige Aktor-Hooks
+- `src/i18n/translations.ts` (DE/EN/ES/NL)
+- `supabase/functions/gateway-ingest/index.ts` (`handleSyncAutomations` Guardrail)
+- `packages/automation-core/executor.ts` (Executor-Guard)
+- `supabase/migrations/*` (Datenkorrektur)
+
+Kein Schema-Change; keine Add-on-Änderung nötig – sobald der Sync die Regel liefert, greift die bestehende lokale Engine.
