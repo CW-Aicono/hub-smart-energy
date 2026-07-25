@@ -173,6 +173,28 @@ export function EditIntegrationDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+            <FormLabel htmlFor="custom-name">Anzeigename</FormLabel>
+            <div className="flex gap-2">
+              <Input
+                id="custom-name"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder={locationIntegration?.integration?.name || "z. B. Miniserver Keller"}
+              />
+              <Button
+                type="button"
+                onClick={handleSaveName}
+                disabled={savingName || (customName ?? "") === (locationIntegration?.custom_name ?? "")}
+              >
+                {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : t("common.save" as any)}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Eigener Name für diese Integration an diesem Standort. Leer lassen, um den Vorlagenname „{locationIntegration?.integration?.name || ""}" zu verwenden.
+            </p>
+          </div>
+
           {isAiconoGateway && locationIntegration && (
             <div className="rounded-lg border border-border bg-muted/20 p-4">
               <AiconoGatewayCredentials
