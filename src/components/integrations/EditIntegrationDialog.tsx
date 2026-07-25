@@ -9,6 +9,7 @@ import {
   Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -34,6 +35,8 @@ export function EditIntegrationDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [baseConfig, setBaseConfig] = useState<Record<string, any>>({});
   const [pollIntervalMin, setPollIntervalMin] = useState<number>(5);
+  const [customName, setCustomName] = useState<string>("");
+  const [savingName, setSavingName] = useState(false);
   const [enablingWs, setEnablingWs] = useState(false);
   const { toast } = useToast();
   const { t } = useTranslation();
@@ -61,7 +64,9 @@ export function EditIntegrationDialog({
   });
 
   useEffect(() => {
-    if (!locationIntegration || !gatewayDef || !open) return;
+    if (!locationIntegration || !open) return;
+    setCustomName(locationIntegration.custom_name ?? "");
+    if (!gatewayDef) return;
 
     const nextConfig = (locationIntegration.config as Record<string, any> | undefined) ?? {};
     const vals: Record<string, string> = {};
@@ -74,6 +79,30 @@ export function EditIntegrationDialog({
     setPollIntervalMin(Number.isFinite(raw) && raw >= 5 && raw <= 60 ? Math.floor(raw) : 15);
     form.reset(vals);
   }, [locationIntegration, gatewayDef, form, open]);
+
+  const handleSaveName = async () => {
+    if (!locationIntegration) return;
+    setSavingName(true);
+    const trimmed = customName.trim();
+    const { error } = await onUpdate(locationIntegration.id, {
+      custom_name: trimmed ? trimmed : null,
+    } as any);
+    setSavingName(false);
+    if (error) {
+      toast({
+        title: t("common.error" as any),
+        description: "Name konnte nicht gespeichert werden.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Name gespeichert",
+        description: trimmed
+          ? `Anzeigename: ${trimmed}`
+          : "Anzeigename zurückgesetzt (Vorlagenname wird verwendet).",
+      });
+    }
+  };
 
   const onSubmit = async (data: Record<string, string>) => {
     if (!locationIntegration) return;
@@ -145,6 +174,28 @@ export function EditIntegrationDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+            <Label htmlFor="custom-name">Anzeigename</Label>
+            <div className="flex gap-2">
+              <Input
+                id="custom-name"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder={locationIntegration?.integration?.name || "z. B. Miniserver Keller"}
+              />
+              <Button
+                type="button"
+                onClick={handleSaveName}
+                disabled={savingName || (customName ?? "") === (locationIntegration?.custom_name ?? "")}
+              >
+                {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : t("common.save" as any)}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Eigener Name für diese Integration an diesem Standort. Leer lassen, um den Vorlagenname „{locationIntegration?.integration?.name || ""}" zu verwenden.
+            </p>
+          </div>
+
           {isAiconoGateway && locationIntegration && (
             <div className="rounded-lg border border-border bg-muted/20 p-4">
               <AiconoGatewayCredentials
@@ -184,7 +235,7 @@ export function EditIntegrationDialog({
 
                 {isLoxone && (
                   <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-                    <FormLabel htmlFor="poll-interval">Abfrage-Intervall (Minuten)</FormLabel>
+                    <Label htmlFor="poll-interval">Abfrage-Intervall (Minuten)</Label>
                     <Input
                       id="poll-interval"
                       type="number"

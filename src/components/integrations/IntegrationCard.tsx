@@ -185,7 +185,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
               <div className="p-2 rounded-lg bg-primary/10"><Server className="h-5 w-5 text-primary" /></div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <h4 className="font-medium">{integration?.name || "Integration"}</h4>
+                  <h4 className="font-medium">{locationIntegration.custom_name?.trim() || integration?.name || "Integration"}</h4>
                   {getSyncStatusBadge()}
                 </div>
                 <p className="text-sm text-muted-foreground">{configSubtitle}</p>

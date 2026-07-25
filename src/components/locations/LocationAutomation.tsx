@@ -454,6 +454,20 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
       action_value: "template",
     } as any;
 
+    // Determine the correct location_integration_id: the primary action's actuator
+    // decides which gateway executes the automation. Fallback to defaultIntegration
+    // only when nothing can be resolved (e.g. pure template automations).
+    const resolvedIntegrationId: string =
+      (primary as any)?.gateway_id
+      || (primary?.actuator_uuid
+        ? allSensorsWithSource.find((s) => s.id === primary.actuator_uuid)?._integrationId
+        : undefined)
+      || defaultIntegration.id;
+
+    const resolvedIntegrationType: string | undefined =
+      allSensorsWithSource.find((s) => s._integrationId === resolvedIntegrationId)?._integrationType
+      || defaultIntegration?.integration?.type;
+
     const commonPayload: any = {
       name: data.name,
       description: data.description || undefined,
@@ -467,27 +481,29 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
       logic_operator: data.logic_operator,
       is_active: data.is_active,
       execution_mode: data.execution_mode,
+      location_integration_id: resolvedIntegrationId,
       loxone_template_key: isTemplateRule ? data.loxone_template_key : null,
       loxone_template_instance_id: isTemplateRule ? data.loxone_template_instance_id ?? null : null,
       loxone_template_bindings: isTemplateRule ? (data.loxone_template_bindings ?? {}) : null,
     };
 
+    const isLoxoneIntegration = resolvedIntegrationType === "loxone_miniserver" || resolvedIntegrationType === "loxone_miniserver_go";
+
     if (editAutomation) {
       const { error } = await updateAutomation(editAutomation.id, commonPayload);
       if (error) throw error;
       toast.success(T("auto.updated"));
-      if (data.execution_mode && data.execution_mode !== "cloud" && data.is_active) {
+      if (data.execution_mode && data.execution_mode !== "cloud" && data.is_active && isLoxoneIntegration) {
         await pushToLoxone(editAutomation.id);
       }
     } else {
       const { data: created, error } = await createAutomation({
         location_id: locationId,
-        location_integration_id: defaultIntegration.id,
         ...commonPayload,
       });
       if (error) throw error;
       toast.success(T("auto.created"));
-      if (created?.id && data.execution_mode && data.execution_mode !== "cloud" && data.is_active) {
+      if (created?.id && data.execution_mode && data.execution_mode !== "cloud" && data.is_active && isLoxoneIntegration) {
         await pushToLoxone(created.id);
       }
     }

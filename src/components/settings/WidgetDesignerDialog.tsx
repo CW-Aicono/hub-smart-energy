@@ -81,6 +81,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
   const [filterLocation, setFilterLocation] = useState<string>("__all__");
   const [filterFloor, setFilterFloor] = useState<string>("__all__");
   const [filterRoom, setFilterRoom] = useState<string>("__all__");
+  const [filterClass, setFilterClass] = useState<string>("__all__");
 
   const { tenant } = useTenant();
   const { locations } = useLocations();
@@ -240,13 +241,14 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
       if (filterLocation !== "__all__" && m.location_id !== filterLocation) return false;
       if (filterFloor !== "__all__" && m.floor_id !== filterFloor) return false;
       if (filterRoom !== "__all__" && m.room_id !== filterRoom) return false;
+      if (filterClass !== "__all__" && (m.device_type ?? "meter") !== filterClass) return false;
       if (q) {
         const hay = `${m.name ?? ""} ${m.meter_number ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [meters, filterLocation, filterFloor, filterRoom, meterSearch]);
+  }, [meters, filterLocation, filterFloor, filterRoom, filterClass, meterSearch]);
 
   const meterGroups = filteredMeters.reduce<Record<string, typeof meters>>((acc, meter) => {
     const type = (meter as any).energy_type || "Sonstige";
@@ -337,7 +339,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
           </TabsContent>
 
           <TabsContent value="data" className="space-y-4 mt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div className="space-y-1">
                 <Label className="text-xs">Liegenschaft</Label>
                 <Select
@@ -392,6 +394,18 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Klasse</Label>
+                <Select value={filterClass} onValueChange={setFilterClass}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Alle Klassen</SelectItem>
+                    <SelectItem value="meter">Zähler</SelectItem>
+                    <SelectItem value="sensor">Sensor</SelectItem>
+                    <SelectItem value="actuator">Aktor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="relative">
@@ -433,7 +447,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
                   <p className="text-sm text-muted-foreground text-center py-4">Keine Zähler gefunden</p>
                 )}
               </div>
-              {(filterLocation !== "__all__" || filterFloor !== "__all__" || filterRoom !== "__all__" || meterSearch) && (
+              {(filterLocation !== "__all__" || filterFloor !== "__all__" || filterRoom !== "__all__" || filterClass !== "__all__" || meterSearch) && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -443,6 +457,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
                     setFilterLocation("__all__");
                     setFilterFloor("__all__");
                     setFilterRoom("__all__");
+                    setFilterClass("__all__");
                     setMeterSearch("");
                   }}
                 >

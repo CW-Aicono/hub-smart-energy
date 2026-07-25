@@ -1,52 +1,46 @@
-## Ziel
+## Beobachtung / Diagnose
 
-Im Automation-Editor werden Sensor- und Aktor-Dropdowns strikt an den gewählten **Ausführungsort** gekoppelt. Sobald *nicht* „Cloud" gewählt ist (also „Loxone lokal" oder „Hybrid"), dürfen ausschließlich Geräte angeboten werden, die auch lokal ansprechbar sind. Cloud-API-Geräte (Shelly Cloud, Tuya, ABB, Siemens Building X, Homematic IP, Omada, Schneider Cloud, …) werden dann ausgeblendet.
+Die Karte **„Gateway-Worker (Hetzner)"** im Infrastruktur-Monitoring (`src/components/super-admin/GatewayWorkerStatusCard.tsx`) und die zugehörige Edge-Function `gateway-worker-status` überwachen ausschließlich den **Loxone-WebSocket-Worker** auf Hetzner. Der Name ist irreführend — mit dem AICONO Gateway (HA-Add-on) hat diese Karte nichts zu tun.
 
-## Warum
+Konkret:
+- Die Karte liest `system_settings.worker_last_heartbeat` und das Flag `system_settings.worker_active`.
+- Diesen Key setzt heute nur der **Loxone-WS-Worker** (`docs/loxone-ws-worker/index.ts`). Das AICONO Gateway hat seinen eigenen, unabhängigen Heartbeat (`gateway_devices.last_heartbeat_at`, im UI unter „Aktive Geräte-HUBs").
+- Der Schalter „Worker als primäre Datenquelle" wirkt ausschließlich auf den Schreibpfad der Edge Function `loxone-api` — er hat keinen Effekt auf AICONO-Gateway-Daten.
+- „Heartbeat veraltet / vor 3 Monaten" bedeutet: Seit ~96 Tagen hat kein Loxone-WS-Worker mehr `worker_last_heartbeat` geschrieben. Die aktuelle Worker-Version schreibt nur noch `bridge_workers.last_heartbeat_at` und `ws-session-heartbeat`, nicht mehr den alten `system_settings`-Key → die Karte sieht dadurch immer „stale" aus, obwohl der Worker läuft.
+- Die Formulierung „< 5 Min" ist ein Altbestand aus der Zeit vor der einstellbaren Stale-Schwelle (`system_settings.loxone_ws_stale_threshold_seconds`, aktuell 180 s, Default 300 s).
 
-„Loxone lokal" bedeutet: die Regel läuft ausschließlich auf dem Miniserver. Ein Cloud-Aktor kann von dort nicht angesteuert werden – die Kombination widerspricht sich. „Hybrid" fällt bei Cloud-Ausfall auf lokale Ausführung zurück; auch dort sind Cloud-Geräte nicht sinnvoll.
+Bestätigt an: `src/components/super-admin/GatewayWorkerStatusCard.tsx`, `supabase/functions/gateway-worker-status/index.ts`, `docs/loxone-ws-worker/index.ts`.
 
-## Klassifizierung der Integrationen
+## Antwort auf die drei Fragen
 
-Neuer zentraler Helper `src/lib/gatewayExecution.ts`:
+1. **„Heartbeat veraltet"**: Karte liest einen veralteten System-Settings-Key, den der aktuelle Worker nicht mehr aktualisiert. Der Worker selbst ist gesund (siehe `bridge_workers`/`meter_power_readings`-Inserts).
+2. **Text-Bedeutung**: Bezieht sich nur auf `loxone-api`. Wenn Flag an + Heartbeat frisch → `loxone-api` überspringt eigenes DB-Schreiben, weil der Worker bereits schreibt (Doppel-Insert vermeiden). Fällt der Worker aus, übernimmt `loxone-api` automatisch wieder als Sicherheitsnetz. Für AICONO-Gateways irrelevant — die pushen direkt an `gateway-ingest`.
+3. **300 s Schwelle**: Ja. Der neue Standard ist die tenant-weite Stale-Schwelle aus `system_settings.loxone_ws_stale_threshold_seconds` (aktuell 180 s, Default 300 s). Der fixe „< 5 Min"-Text muss weg bzw. dynamisch werden.
 
-- `LOCAL_CAPABLE_TYPES = ["loxone_miniserver", "aicono_gateway", "schneider_panel_server", "siemens_iot2050", "sentron_powercenter_3000", "mqtt_generic", "shelly_mqtt", "smart_meter_imsys"]`
-- `CLOUD_ONLY_TYPES = ["shelly_cloud", "tuya_cloud", "abb_free_at_home", "siemens_building_x", "homematic_ip", "omada_cloud", "schneider_cloud"]`
-- `isCloudOnlyIntegration(type)` / `isLocalCapableIntegration(type)`
+## Plan (nur UI/Monitoring, keine Worker-Logik)
 
-Für „Loxone lokal"-Templates gilt zusätzlich: nur `loxone_miniserver`-Geräte des jeweils gewählten Miniservers sind zulässig (Templates laufen im Miniserver-Programm).
+1. **Karte klar auf „Loxone-WebSocket-Worker" umbenennen**
+   - Titel: „Loxone-WebSocket-Worker (Hetzner)" statt „Gateway-Worker (Hetzner)".
+   - Icon bleibt, Sub-Text ergänzt: „Nur Loxone-Miniserver. AICONO Gateways laufen unabhängig und werden unter ,Geräte-HUBs' überwacht."
+   - Feld „Aktive Geräte-HUBs" aus dieser Karte entfernen (gehört inhaltlich nicht zum Loxone-WS-Worker; wird ohnehin an anderer Stelle als AICONO-Kachel angezeigt).
 
-## Änderungen
+2. **Heartbeat-Quelle korrigieren**
+   - `supabase/functions/gateway-worker-status/index.ts`: statt `system_settings.worker_last_heartbeat` den frischesten Eintrag aus `bridge_workers.last_heartbeat_at` (Worker-Typ = Loxone-WS) lesen. `worker_meta` analog aus `bridge_workers.meta`.
+   - Fallback auf alten Key beibehalten, damit ältere Worker weiterhin sichtbar bleiben.
+   - Frisch-Schwelle: aus `system_settings.loxone_ws_stale_threshold_seconds` lesen (Fallback 300 s) statt hardcoded 180 s.
 
-### 1. `src/lib/gatewayExecution.ts` (neu)
-Klassifizierungs-Helper wie oben.
+3. **Info-Text dynamisch machen**
+   - Text unter dem Schalter: „Wenn aktiv und Heartbeat frisch (< {N} s laut Stale-Schwelle): `loxone-api` überspringt den DB-Schreibpfad, weil der Worker bereits schreibt. Fällt der Worker aus, schreibt `loxone-api` automatisch wieder als Sicherheits-Fallback. Betrifft nur Loxone — AICONO Gateways sind davon nicht betroffen."
+   - {N} kommt aus dem gleichen Wert wie in `WorkerControlsPanel` (Stale-Schwelle-Editor).
 
-### 2. `src/components/locations/AutomationRuleBuilder.tsx`
-- `GatewayOption` um `integrationType: string` erweitern.
-- Neue Prop `integrationType?: string` für den Single-Gateway-Modus (Nicht-MLA).
-- In `ConditionEditor` und `ActionEditor`:
-  - Wenn `executionMode !== "cloud"`:
-    - **MLA**: `gatewayOptions` beim Rendern des Gateway-Dropdowns filtern (`isLocalCapableIntegration`), und bei „Loxone lokal" mit gewähltem Template weiter auf `loxone_miniserver` reduzieren.
-    - **Single-Gateway**: Wenn die Integration cloud-only ist, Sensor-/Aktor-Auswahl deaktivieren und einen Hinweis anzeigen: „Diese Integration ist nur mit Ausführungsort ‚Cloud' verfügbar."
-  - Bereits gewählte `sensor_uuid`/`actuator_uuid`, die durch den Wechsel nicht mehr zulässig sind, werden geleert und rot markiert („Gerät nicht mit gewähltem Ausführungsort kompatibel").
-- `executionMode`-Änderung: `useEffect` bereinigt betroffene Conditions/Actions (Reset auf leere Auswahl statt stillem Fortbestand).
-- Speichern-Button wird deaktiviert, solange inkompatible Referenzen existieren.
+4. **Optional — separate AICONO-Karte prüfen**
+   - Falls im Infrastruktur-Monitoring noch keine dedizierte „AICONO Gateway-Flotte"-Karte existiert, klein ergänzen: Anzahl aktiver HA-Add-ons (`gateway_devices.last_heartbeat_at < 5 min`), Version, letzter Snapshot. Nicht Teil dieses Umbau-Tickets, nur Hinweis wenn gewünscht.
 
-### 3. `src/components/locations/LocationAutomation.tsx`
-- `integrationType` des lokalen Gateways an `AutomationRuleBuilder` durchreichen.
-- MLA-Modus: `gatewayOptions` um `integrationType` (aus `gatewayIntegrations[i].integration?.type`) anreichern.
+### Nicht Teil des Plans
+- Keine Änderung am Worker selbst, an `loxone-api` oder am AICONO-Ingest.
+- Kein Wechsel des DB-Flags-Verhaltens.
 
-### 4. i18n / Texte
-Neue Strings in `src/i18n/de.ts` (+ EN/ES/NL Aliasse):
-- `automation.cloudOnlyDeviceHidden`: „Cloud-Geräte sind bei lokaler Ausführung nicht verfügbar."
-- `automation.incompatibleSelection`: „Diese Auswahl passt nicht zum Ausführungsort und wurde entfernt."
-
-### 5. Tests
-- Unit-Test `AutomationRuleBuilder.test.tsx`: Wechsel des Ausführungsorts entfernt Shelly-Cloud-Aktor aus dem Dropdown und aus einer bereits bestehenden Aktion.
-- Snapshot der Gateway-Filterlogik in `gatewayExecution.test.ts`.
-
-## Was nicht geändert wird
-
-- Bestehende Automations in der DB bleiben unverändert. Beim Öffnen im Editor werden sie normal geladen; erst beim Wechsel des Ausführungsorts durch den User wird bereinigt.
-- Cloud-Ausführung („Cloud" gewählt) verhält sich exakt wie heute – alle Integrationen bleiben verfügbar.
-- Keine Änderungen an Edge Functions oder DB-Schema.
+### Technische Details
+- Betroffene Dateien: `src/components/super-admin/GatewayWorkerStatusCard.tsx`, `supabase/functions/gateway-worker-status/index.ts`.
+- Neue Abfrage: `select max(last_heartbeat_at), meta from bridge_workers where worker_type = 'loxone_ws' order by last_heartbeat_at desc limit 1`.
+- Neue Query für Stale-Schwelle über bestehenden Hook / direktes `system_settings`-Select in derselben Edge-Function.
