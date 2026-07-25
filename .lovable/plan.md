@@ -1,46 +1,56 @@
-## Zu deinen zwei Fragen
+# Stale-Schwelle: Key-Fix + Migration
 
-### 1) „267s" vs. „vor 8 Minuten" – was bedeutet was?
+## Was aktuell schiefläuft
 
-Beide Angaben sollen dasselbe zeigen (Alter des letzten Heartbeats), stammen aber aus **zwei unterschiedlichen Berechnungen**, die auseinanderlaufen:
+- Zwei verschiedene Keys für dieselbe Einstellung:
+  - Panel/Frontend schreibt+liest `public.loxone_ws_stale_threshold_seconds`
+  - Edge Function `gateway-worker-status` liest nur `loxone_ws_stale_threshold_seconds` (ohne Präfix)
+- Edge Function cappt zusätzlich auf 30–3600s (max. 1h), obwohl das Panel bis 7200s erlaubt.
+- Hetzner-Live-Supabase hat den Key nie gesetzt → Anzeige fällt auf Default 300s zurück.
 
-- **`267s (Schwelle 900s)`** – vom Server (Edge Function `gateway-worker-status`) beim letzten Fetch berechnet: `now() − last_heartbeat_at` in Sekunden. Aktualisiert sich nur alle 60 s (React-Query-Refetch).
-- **„vor 8 Minuten"** – im Browser via `formatDistanceToNow(last_heartbeat)` bei jedem Re-Render neu formatiert, gegen die **Client-Uhr**.
+## Änderungen
 
-Zwischen zwei Refetches rendert React die Karte mehrfach (z. B. weil andere Queries laufen). Dann bleibt der Server-Wert `267s` stehen, während der Client-Text `vor X Minuten` weiterläuft. Ergebnis: beide zeigen das gleiche Feld, aber gefühlt „unterschiedliche" Zeiten.
+### 1. Migration (läuft in jeder Umgebung — auch Hetzner beim Deploy)
 
-**Zusatz-Verwirrung möglich:** Wenn Client- und Server-Uhr um ein paar Minuten abweichen, driftet das dauerhaft.
+Idempotent beide Keys auf 900 setzen, falls sie fehlen oder auf 300 (Default) stehen:
 
-**Aktueller DB-Stand** (gerade abgefragt): `last_heartbeat_at` war 25 s alt – der Worker heartbeatet also normal.
+```sql
+INSERT INTO public.system_settings (key, value)
+VALUES
+  ('loxone_ws_stale_threshold_seconds', '900'),
+  ('public.loxone_ws_stale_threshold_seconds', '900')
+ON CONFLICT (key) DO NOTHING;
+```
 
-### 2) Kommen die Werte jetzt ausschließlich über den WS-Worker?
+Der `DO NOTHING` schützt manuell gesetzte Werte. Wer bewusst 600 o.ä. gesetzt hat, behält seinen Wert.
 
-**Sehr wahrscheinlich ja, aber nicht 100 % beweisbar aus der DB allein**, weil `meter_power_readings` keine Quellen-Spalte hat (Worker vs. `loxone-api` schreiben in dieselbe Tabelle).
+### 2. Edge Function `gateway-worker-status`
 
-Indizien, die dafür sprechen:
-- **Insert-Muster der letzten 20 Min:** gleichmäßig jede Minute (alternierend 44/70 Rows). Passt zum Worker-Aggregations-Flush. Kein sichtbarer 15-Min-Spike, den ein zusätzlicher HTTP-Pull erzeugen würde.
-- **Flag + Heartbeat:** `worker_active=true` und Heartbeat frisch (25 s < 900 s Schwelle) → `isWorkerPrimary()` in `loxone-api` liefert `true` → HTTP-Schreibpfad wird übersprungen.
+- Liest **beide** Keys, bevorzugt den unpräfixierten, fällt sonst auf den präfixierten zurück.
+- Cap von 3600 auf **7200** erhöhen (Deckungsgleich mit Panel-Input-Limit).
 
-Um es sauber zu bestätigen, will ich zwei kurze Checks machen:
-- Edge-Function-Logs von `loxone-api` der letzten 20 Min auf „skipped (worker primary)" prüfen.
-- Optional temporär eine `source`-Spalte oder ein Log-Marker, damit man Worker- vs. HTTP-Inserts dauerhaft unterscheiden kann (nicht Teil dieses Plans, nur Vorschlag).
+### 3. Frontend `WorkerControlsPanel` + `LoxoneWsStatus`
 
-## Plan: Anzeige konsistent machen
+- Beim Speichern **beide** Keys via Upsert aktualisieren (Backwards-Compat, bis alle Deployments neu laufen).
+- Beim Lesen unpräfixierten Key bevorzugen, präfixierten als Fallback.
 
-Nur UI-Fix, keine Backend-Änderung.
+### 4. Karte `GatewayWorkerStatusCard`
 
-**Datei:** `src/components/super-admin/GatewayWorkerStatusCard.tsx`
+- Kein Codefix nötig — sie zeigt `data.stale_threshold_seconds` vom Server. Nach Fix in (2) zeigt Hetzner nach Redeploy 900s.
 
-- „Letzter Heartbeat"-Label nicht mehr per `formatDistanceToNow(last_heartbeat)` aus der Client-Uhr rechnen, sondern **aus `heartbeat_age_seconds` des Servers** ableiten (`vor Xs` / `vor X Min` / `vor X Std`). So kann es keinen Drift zwischen den beiden Angaben mehr geben.
-- Detailzeile bleibt: `Xs (Schwelle 900s)`.
-- Fallback: wenn `heartbeat_age_seconds` `null` ist → „noch nie".
+## Antworten auf die Diagnose-Fragen
 
-**Verifikation nach der Umsetzung:**
-1. Karte im Super-Admin neu laden → beide Werte identisch.
-2. 90 s warten (ohne Refetch) → beide Werte bleiben stabil, springen dann gemeinsam beim nächsten Fetch.
-3. Edge-Log `loxone-api` prüfen: Meldungen „skipped, worker primary" vorhanden → belegt Exklusivität.
+- **300s auf Hetzner**: Key fehlte in dortiger `system_settings` → Default. Migration (1) behebt das.
+- **Code identisch, Anzeige unterschiedlich**: Ja, Code ist identisch — Unterschied lag ausschließlich in DB-Daten.
+- **Worker-Versionen unterschiedlich möglich**: Ja. `bridge_workers.version` in der jeweiligen Cloud-DB zeigt die aktive Version. Aktuell in Lovable-Cloud: `phase7.5-auth-status` auf `hetzner-staging-1`. Für Hetzner-Live selbes Feld in dortiger DB prüfen.
+- **Heartbeats gesund?** In Lovable-Cloud ja (Alter ~162s bei 300s-Sende-Intervall, Status `online`). Screenshot Hetzner: „vor 31s" → ebenfalls gesund.
 
-## Nicht Teil dieses Plans
+## Nach dem Deploy
 
-- Kein Umbau an Worker, Stale-Schwelle oder `loxone-api`.
-- Keine neue DB-Spalte „source" (kann ich separat vorschlagen, wenn du dauerhafte Nachweisbarkeit willst).
+Auf Hetzner-Supabase einmalig prüfen:
+
+```sql
+SELECT key, value FROM system_settings WHERE key LIKE '%stale%';
+```
+
+Sollten beide Zeilen mit `900` erscheinen. Danach zeigt die Karte „Schwelle 900s".
