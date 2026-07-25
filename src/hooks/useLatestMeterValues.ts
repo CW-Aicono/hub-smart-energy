@@ -45,12 +45,10 @@ export function useLatestMeterValues(meters: Meter[]) {
       }
 
       if (otherIds.length > 0) {
-        const { data } = await supabase
-          .from("meter_cumulative_readings")
-          .select("meter_id, kwh_total, reading_at")
-          .in("meter_id", otherIds)
-          .order("reading_at", { ascending: false })
-          .limit(1000);
+        // Use RPC to avoid full index scan + sort over all rows.
+        const { data } = await supabase.rpc("latest_meter_cumulative", {
+          _meter_ids: otherIds,
+        });
         (data ?? []).forEach((r: any) => {
           if (!next.has(r.meter_id)) next.set(r.meter_id, { value: Number(r.kwh_total), at: r.reading_at });
         });
