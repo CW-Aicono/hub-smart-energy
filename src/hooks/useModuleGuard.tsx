@@ -29,6 +29,7 @@ const ROUTE_MODULE_MAP: Record<string, string> = {
   "/ppa/offsite": "ppa_offsite",
   "/super-admin/savings-share": "gain_sharing",
   "/documents": "documentation",
+  "/charging/transactions": "adhoc_payment",
 };
 
 /**
@@ -54,6 +55,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/ppa/onsite": "ppa_onsite",
   "/ppa/offsite": "ppa_offsite",
   "/documents": "documentation",
+  "/charging/transactions": "adhoc_payment",
 };
 
 export function useModuleGuard() {

@@ -14,6 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
+      adhoc_invoice_counter: {
+        Row: {
+          next_number: number
+          tenant_id: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          next_number?: number
+          tenant_id: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          next_number?: number
+          tenant_id?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adhoc_invoice_counter_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      adhoc_payment_rules: {
+        Row: {
+          created_at: string
+          currency: string
+          enabled: boolean
+          id: string
+          max_kwh: number | null
+          max_minutes: number | null
+          min_amount_cents: number
+          name: string
+          preauth_amount_cents: number
+          preauth_expiry_minutes: number
+          priority: number
+          rounding_step_cents: number
+          scope: Database["public"]["Enums"]["adhoc_rule_scope"]
+          scope_id: string | null
+          tariff_id: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          enabled?: boolean
+          id?: string
+          max_kwh?: number | null
+          max_minutes?: number | null
+          min_amount_cents?: number
+          name: string
+          preauth_amount_cents?: number
+          preauth_expiry_minutes?: number
+          priority?: number
+          rounding_step_cents?: number
+          scope: Database["public"]["Enums"]["adhoc_rule_scope"]
+          scope_id?: string | null
+          tariff_id?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          enabled?: boolean
+          id?: string
+          max_kwh?: number | null
+          max_minutes?: number | null
+          min_amount_cents?: number
+          name?: string
+          preauth_amount_cents?: number
+          preauth_expiry_minutes?: number
+          priority?: number
+          rounding_step_cents?: number
+          scope?: Database["public"]["Enums"]["adhoc_rule_scope"]
+          scope_id?: string | null
+          tariff_id?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adhoc_payment_rules_tariff_id_fkey"
+            columns: ["tariff_id"]
+            isOneToOne: false
+            referencedRelation: "charging_tariffs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_rules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       adhoc_payment_sessions: {
         Row: {
           captured_amount_cents: number
@@ -24,16 +128,25 @@ export type Database = {
           connector_id: number | null
           created_at: string
           currency: string
+          customer_address: string | null
+          customer_email: string | null
+          customer_name: string | null
+          duration_minutes: number | null
           ended_at: string | null
+          energy_kwh: number | null
           error: Json | null
           id: string
+          invoice_number: string | null
+          invoice_pdf_path: string | null
           ocpp_transaction_id: string | null
           preauth_amount_cents: number
           provider_id: string | null
           psp_reference: string | null
           refunded_amount_cents: number
+          rule_id: string | null
           started_at: string
           state: Database["public"]["Enums"]["adhoc_payment_state"]
+          tariff_snapshot: Json
           tenant_id: string
           terminal_id: string | null
           updated_at: string
@@ -47,16 +160,25 @@ export type Database = {
           connector_id?: number | null
           created_at?: string
           currency?: string
+          customer_address?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          duration_minutes?: number | null
           ended_at?: string | null
+          energy_kwh?: number | null
           error?: Json | null
           id?: string
+          invoice_number?: string | null
+          invoice_pdf_path?: string | null
           ocpp_transaction_id?: string | null
           preauth_amount_cents?: number
           provider_id?: string | null
           psp_reference?: string | null
           refunded_amount_cents?: number
+          rule_id?: string | null
           started_at?: string
           state?: Database["public"]["Enums"]["adhoc_payment_state"]
+          tariff_snapshot?: Json
           tenant_id: string
           terminal_id?: string | null
           updated_at?: string
@@ -70,16 +192,25 @@ export type Database = {
           connector_id?: number | null
           created_at?: string
           currency?: string
+          customer_address?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          duration_minutes?: number | null
           ended_at?: string | null
+          energy_kwh?: number | null
           error?: Json | null
           id?: string
+          invoice_number?: string | null
+          invoice_pdf_path?: string | null
           ocpp_transaction_id?: string | null
           preauth_amount_cents?: number
           provider_id?: string | null
           psp_reference?: string | null
           refunded_amount_cents?: number
+          rule_id?: string | null
           started_at?: string
           state?: Database["public"]["Enums"]["adhoc_payment_state"]
+          tariff_snapshot?: Json
           tenant_id?: string
           terminal_id?: string | null
           updated_at?: string
@@ -104,6 +235,13 @@ export type Database = {
             columns: ["provider_id"]
             isOneToOne: false
             referencedRelation: "payment_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_sessions_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "adhoc_payment_rules"
             referencedColumns: ["id"]
           },
           {
@@ -1269,6 +1407,61 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charge_point_terminals: {
+        Row: {
+          charge_point_id: string
+          connector_id: number | null
+          created_at: string
+          id: string
+          is_primary: boolean
+          tenant_id: string
+          terminal_id: string
+          updated_at: string
+        }
+        Insert: {
+          charge_point_id: string
+          connector_id?: number | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          tenant_id: string
+          terminal_id: string
+          updated_at?: string
+        }
+        Update: {
+          charge_point_id?: string
+          connector_id?: number | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          tenant_id?: string
+          terminal_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_terminals_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_terminals_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_terminals_terminal_id_fkey"
+            columns: ["terminal_id"]
+            isOneToOne: false
+            referencedRelation: "payment_terminals"
             referencedColumns: ["id"]
           },
         ]
@@ -14171,6 +14364,10 @@ export type Database = {
           reading_at: string
         }[]
       }
+      next_adhoc_invoice_number: {
+        Args: { _tenant_id: string }
+        Returns: string
+      }
       next_charging_invoice_number: {
         Args: { p_tenant_id: string; p_year: number }
         Returns: string
@@ -14273,6 +14470,7 @@ export type Database = {
         | "refunded"
         | "cancelled"
         | "failed"
+      adhoc_rule_scope: "tenant" | "group" | "charge_point"
       app_role:
         | "admin"
         | "user"
@@ -14482,6 +14680,7 @@ export const Constants = {
         "cancelled",
         "failed",
       ],
+      adhoc_rule_scope: ["tenant", "group", "charge_point"],
       app_role: [
         "admin",
         "user",
