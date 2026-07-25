@@ -182,7 +182,9 @@ function LoxoneStaleThresholdEditor() {
       </div>
       <p className="text-[11px] text-muted-foreground leading-relaxed">
         Ab dieser Zeit ohne Session-Heartbeat markiert das Standort-UI die Loxone-WebSocket-Verbindung
-        als "stale" (gelb). Der Worker sendet den Heartbeat alle 60 s — 120–240 s sind sinnvoll.
+        als "stale" (gelb). Der Worker sendet den Heartbeat alle 60 s, unter Last kann er jedoch
+        gelegentlich verzögert eintreffen. Empfohlen: <strong>240–360 s</strong> (Default 300 s).
+        Werte unter 180 s führen erfahrungsgemäß zu falschen "stale"-Meldungen.
       </p>
     </div>
   );
