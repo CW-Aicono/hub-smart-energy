@@ -14,7 +14,7 @@ const ChargingSettings = () => {
         <div className="min-w-0">
           <h1 className="text-xl font-bold tracking-tight">Einstellungen</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            OCPP-Integration, Rechnungsdesign, Roaming und Lade-App für Ihre Ladeinfrastruktur
+            OCPP-Integration, Rechnungsdesign, Roaming, Ad-Hoc Payment und Lade-App für Ihre Ladeinfrastruktur
           </p>
         </div>
 
@@ -24,6 +24,7 @@ const ChargingSettings = () => {
             <TabsTrigger value="ocpp">OCPP Integration</TabsTrigger>
             <TabsTrigger value="invoice">Rechnungsdesign</TabsTrigger>
             <TabsTrigger value="roaming">Roaming</TabsTrigger>
+            <TabsTrigger value="adhoc">Ad-Hoc Payment</TabsTrigger>
             <TabsTrigger value="app">Lade-App</TabsTrigger>
           </TabsList>
 
