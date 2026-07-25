@@ -394,6 +394,18 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Klasse</Label>
+                <Select value={filterClass} onValueChange={setFilterClass}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Alle Klassen</SelectItem>
+                    <SelectItem value="meter">Zähler</SelectItem>
+                    <SelectItem value="sensor">Sensor</SelectItem>
+                    <SelectItem value="actuator">Aktor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="relative">
