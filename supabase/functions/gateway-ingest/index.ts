@@ -2300,7 +2300,7 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
   // Sync ALL automations (active + inactive) so the local engine can manage state
   let query = supabase
     .from("location_automations")
-    .select("*, locations!location_automations_location_id_fkey(timezone)")
+    .select("*, locations!location_automations_location_id_fkey(timezone), location_integrations!location_automations_location_integration_id_fkey(integration:integrations(type))")
     .eq("tenant_id", tenantId);
 
   // Filter by location_integration_id (preferred – only automations this gateway can execute)
@@ -2321,7 +2321,41 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
     return json({ error: "Internal error" }, 500);
   }
 
-  const automations = (data || []).map((auto: any) => ({
+  let rows = data || [];
+
+  // Guardrail: if this caller is an AICONO gateway, also include HA-entity automations
+  // on the same location that were (historically) tagged with a different integration.
+  if (locationIntegrationId && locationId) {
+    const { data: liRow } = await supabase
+      .from("location_integrations")
+      .select("integration:integrations(type)")
+      .eq("id", locationIntegrationId)
+      .maybeSingle();
+    const callerType = (liRow as any)?.integration?.type;
+    if (callerType === "aicono_gateway") {
+      const { data: extras } = await supabase
+        .from("location_automations")
+        .select("*, locations!location_automations_location_id_fkey(timezone)")
+        .eq("tenant_id", tenantId)
+        .eq("location_id", locationId)
+        .neq("location_integration_id", locationIntegrationId);
+      const haEntityRe = /^[a-z_]+\.[a-z0-9_]+$/i;
+      const extraHa = (extras || []).filter((a: any) => {
+        if (a.actuator_uuid && haEntityRe.test(a.actuator_uuid)) return true;
+        const actions = Array.isArray(a.actions) ? a.actions : [];
+        return actions.some((ac: any) => ac?.actuator_uuid && haEntityRe.test(ac.actuator_uuid));
+      });
+      const seen = new Set(rows.map((r: any) => r.id));
+      for (const r of extraHa) {
+        if (!seen.has(r.id)) {
+          rows.push(r);
+          seen.add(r.id);
+        }
+      }
+    }
+  }
+
+  const automations = rows.map((auto: any) => ({
     id: auto.id,
     name: auto.name,
     tenant_id: auto.tenant_id,
