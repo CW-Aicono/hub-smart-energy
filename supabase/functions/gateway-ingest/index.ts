@@ -2403,10 +2403,10 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
  * damit die Cloud-UI Sensoren/Aktoren/Zähler zur Zuordnung anbieten kann.
  */
 async function handleDeviceSnapshot(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) {
+  const auth = await validateApiKey(req);
+  if (isAuthError(auth)) {
     console.warn("[device-snapshot] auth failed");
-    return authErr;
+    return auth;
   }
 
   let bodyText = "";
