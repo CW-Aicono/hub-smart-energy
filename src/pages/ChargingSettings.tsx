@@ -44,6 +44,10 @@ const ChargingSettings = () => {
             <RoamingTab />
           </TabsContent>
 
+          <TabsContent value="adhoc" className="mt-4">
+            <AdHocPaymentTab />
+          </TabsContent>
+
           <TabsContent value="app" className="mt-4">
             <ChargingAppContent />
           </TabsContent>
