@@ -96,13 +96,11 @@ serve(async (req) => {
     const nowMs = Date.now();
     const TOLERANCE_MS = 15_000; // 15 s Toleranz, damit Cron-Ticks nicht knapp daneben liegen
 
-    // Wenn der Loxone-WS-Worker frisch heartbeatet, ist er die primäre Live-Quelle.
-    // Der HTTP-Pull muss dann nur noch Tagessummen/Discovery liefern → wir heben
-    // das effektive Poll-Intervall auf mindestens 30 Min an (spart Edge-Function-
-    // Aufrufe & Schreiblast). Fällt der Worker aus, greift wieder das konfigurierte
-    // Intervall (typ. 15 Min) → nahtloser Fallback ohne Datenlücke.
-    const workerPrimary = await isWorkerPrimary(supabase);
-    const MIN_INTERVAL_WHEN_WS_PRIMARY = 30;
+    // HTTP-Poll läuft immer im konfigurierten Intervall (typ. 15 Min), unabhängig vom
+    // Worker-Status. Die Live-Werte werden in `loxone-api` via `isWorkerPrimary()`
+    // ohnehin übersprungen, solange der WS-Worker frisch heartbeatet. Vorteil des
+    // konstanten Intervalls: bei Worker-Ausfall greift der Fallback innerhalb einer
+    // HTTP-Runde (≤ 15 Min), passend zur Stale-Schwelle (Default 900 s).
 
     for (const li of loxoneIntegrations) {
       const integrationId = li.id;
@@ -120,9 +118,7 @@ serve(async (req) => {
           : Number.isFinite(rawInterval) && rawInterval > 0 && rawInterval < 5
             ? 5
             : 15;
-        const intervalMin = workerPrimary
-          ? Math.max(MIN_INTERVAL_WHEN_WS_PRIMARY, configuredMin)
-          : configuredMin;
+        const intervalMin = configuredMin;
         const intervalMs = intervalMin * 60_000;
         const lastSyncIso = (li as any).last_sync_at as string | null;
         if (lastSyncIso) {
