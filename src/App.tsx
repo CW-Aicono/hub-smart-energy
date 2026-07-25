@@ -81,6 +81,7 @@ const ChargingSettings = lazy(() => import("./pages/ChargingSettings"));
 const ChargePointDetail = lazy(() => import("./pages/ChargePointDetail"));
 const ChargingBilling = lazy(() => import("./pages/ChargingBilling"));
 const ChargingReporting = lazy(() => import("./pages/ChargingReporting"));
+const ChargingAdHocTransactions = lazy(() => import("./pages/ChargingAdHocTransactions"));
 const ChargingUsersPage = lazy(() => import("./pages/ChargingUsersPage"));
 const Automation = lazy(() => import("./pages/Automation"));
 const EmailTemplates = lazy(() => import("./pages/EmailTemplates"));
@@ -276,9 +277,11 @@ const App = () => (
                       <Route path="/charging/billing" element={<M><ChargingBilling /></M>} />
                       <Route path="/charging/users" element={<M><ChargingUsersPage /></M>} />
                       <Route path="/charging/reporting" element={<M><ChargingReporting /></M>} />
+                      <Route path="/charging/transactions" element={<M><ChargingAdHocTransactions /></M>} />
                       <Route path="/charging/app" element={<M><ChargingAppAdmin /></M>} />
                       <Route path="/charging/ocpp-integration" element={<M><OcppIntegration /></M>} />
                       <Route path="/charging/settings" element={<M><ChargingSettings /></M>} />
+                      
                       
                       <Route path="/automation" element={<M><Automation /></M>} />
                       <Route path="/tasks" element={<M><Tasks /></M>} />
