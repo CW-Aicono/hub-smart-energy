@@ -447,7 +447,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
                   <p className="text-sm text-muted-foreground text-center py-4">Keine Zähler gefunden</p>
                 )}
               </div>
-              {(filterLocation !== "__all__" || filterFloor !== "__all__" || filterRoom !== "__all__" || meterSearch) && (
+              {(filterLocation !== "__all__" || filterFloor !== "__all__" || filterRoom !== "__all__" || filterClass !== "__all__" || meterSearch) && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -457,6 +457,7 @@ export function WidgetDesignerDialog({ open, onOpenChange, editingWidget }: Widg
                     setFilterLocation("__all__");
                     setFilterFloor("__all__");
                     setFilterRoom("__all__");
+                    setFilterClass("__all__");
                     setMeterSearch("");
                   }}
                 >
