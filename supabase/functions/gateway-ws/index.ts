@@ -175,8 +175,8 @@ async function authorizeHttpCaller(
     return jsonResponse(req, { success: false, error: "Authorization check failed" }, 500);
   }
   const ownerTenantId = (liRow as any)?.location?.tenant_id ?? null;
-  if (!ownerTenantId) {
-    return jsonResponse(req, { success: false, error: "Forbidden" }, 403);
+  if (!liRow || !ownerTenantId) {
+    return jsonResponse(req, { success: false, error: "Integration nicht gefunden" }, 404);
   }
 
   // Caller's tenant from profiles.
