@@ -281,13 +281,24 @@ export function EditIntegrationDialog({
 
                 {isLoxone && (
                   <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Wifi className="h-4 w-4 text-primary" />
                         <span className="font-medium">Remote Connect WebSocket</span>
                       </div>
                       {locationIntegration?.loxone_remote_connect_ws_enabled ? (
-                        <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-500/30 text-xs">Aktiviert</Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-500/30 text-xs">Aktiviert</Badge>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setDisableWsConfirmOpen(true)}
+                            disabled={disablingWs}
+                          >
+                            Deaktivieren
+                          </Button>
+                        </div>
                       ) : (
                         <Button type="button" size="sm" onClick={handleEnableWs} disabled={enablingWs}>
                           {enablingWs ? (
@@ -302,7 +313,7 @@ export function EditIntegrationDialog({
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Ermöglicht Echtzeit-Daten über Loxone Remote Connect WebSocket.
+                      Ermöglicht Echtzeit-Daten über Loxone Remote Connect WebSocket. Ohne WebSocket kommen Werte nur alle {pollIntervalMin} Min per HTTP-Pull — keine Live-Anzeige, verzögerte Automationen.
                     </p>
                   </div>
                 )}
