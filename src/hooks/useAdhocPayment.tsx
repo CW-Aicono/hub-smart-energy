@@ -102,7 +102,7 @@ export function useAdhocTerminals() {
         charge_point_id: args.charge_point_id,
         connector_id: args.connector_id ?? null,
         is_primary: args.is_primary ?? false,
-      });
+      } as any);
       if (error) throw error;
     },
     onSuccess: () => {
