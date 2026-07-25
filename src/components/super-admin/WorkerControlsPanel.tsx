@@ -145,7 +145,7 @@ function LoxoneStaleThresholdEditor() {
   }, [data]);
 
   const numeric = Number(value);
-  const invalid = !Number.isFinite(numeric) || numeric < 30 || numeric > 3600;
+  const invalid = !Number.isFinite(numeric) || numeric < 30 || numeric > 7200;
 
   return (
     <div className="rounded-md border bg-muted/30 p-3 space-y-2">
@@ -159,7 +159,7 @@ function LoxoneStaleThresholdEditor() {
         <Input
           type="number"
           min={30}
-          max={3600}
+          max={7200}
           step={10}
           value={value}
           disabled={isLoading}
@@ -181,10 +181,13 @@ function LoxoneStaleThresholdEditor() {
         </Button>
       </div>
       <p className="text-[11px] text-muted-foreground leading-relaxed">
-        Ab dieser Zeit ohne Session-Heartbeat markiert das Standort-UI die Loxone-WebSocket-Verbindung
-        als "stale" (gelb). Der Worker sendet den Heartbeat alle 60 s, unter Last kann er jedoch
-        gelegentlich verzögert eintreffen. Empfohlen: <strong>240–360 s</strong> (Default 300 s).
-        Werte unter 180 s führen erfahrungsgemäß zu falschen "stale"-Meldungen.
+        Ab dieser Zeit ohne Heartbeat markiert die Cloud den Loxone-WebSocket-Worker als "stale"
+        und der HTTP-Pull übernimmt automatisch als Fallback. Der Worker sendet den Heartbeat
+        aktuell alle <strong>300 s</strong> (<code>BRIDGE_HEARTBEAT_MS</code>). Empfohlen:
+        <strong> 600–1200 s</strong> (Default 900 s / 15 Min) — das entspricht 2–4 Heartbeat-Zyklen
+        Sicherheitsmarge und deckt sich mit dem HTTP-Pull-Intervall, sodass beim Failover keine
+        Datenlücke entsteht. Werte unter 600 s führen zu unnötigem Failover-Flapping bei einzelnen
+        verspäteten Heartbeats.
       </p>
     </div>
   );

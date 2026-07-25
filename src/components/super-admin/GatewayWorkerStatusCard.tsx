@@ -7,8 +7,15 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Cpu, Activity, AlertTriangle, CheckCircle2, ServerCrash } from "lucide-react";
 import { toast } from "sonner";
-import { formatDistanceToNow } from "date-fns";
-import { de } from "date-fns/locale";
+
+function formatAge(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || !isFinite(seconds)) return "noch nie";
+  if (seconds < 60) return `vor ${seconds}s`;
+  if (seconds < 3600) return `vor ${Math.round(seconds / 60)} Min`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return m > 0 ? `vor ${h} Std ${m} Min` : `vor ${h} Std`;
+}
 
 interface WorkerStatus {
   success: boolean;
@@ -78,7 +85,7 @@ export default function GatewayWorkerStatusCard() {
   }
 
   const heartbeatLabel = data?.last_heartbeat
-    ? formatDistanceToNow(new Date(data.last_heartbeat), { addSuffix: true, locale: de })
+    ? formatAge(data?.heartbeat_age_seconds)
     : "noch nie";
 
   const staleSeconds = data?.stale_threshold_seconds ?? 300;

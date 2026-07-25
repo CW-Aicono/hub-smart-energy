@@ -2,6 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { isWorkerEnabled } from "../_shared/workerKillswitch.ts";
+// isWorkerPrimary wird hier nicht mehr benötigt — der HTTP-Pull läuft immer im
+// konfigurierten Intervall; `loxone-api` entscheidet pro Aufruf, ob Live-Werte
+// geschrieben werden.
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -95,6 +98,12 @@ serve(async (req) => {
     const nowMs = Date.now();
     const TOLERANCE_MS = 15_000; // 15 s Toleranz, damit Cron-Ticks nicht knapp daneben liegen
 
+    // HTTP-Poll läuft immer im konfigurierten Intervall (typ. 15 Min), unabhängig vom
+    // Worker-Status. Die Live-Werte werden in `loxone-api` via `isWorkerPrimary()`
+    // ohnehin übersprungen, solange der WS-Worker frisch heartbeatet. Vorteil des
+    // konstanten Intervalls: bei Worker-Ausfall greift der Fallback innerhalb einer
+    // HTTP-Runde (≤ 15 Min), passend zur Stale-Schwelle (Default 900 s).
+
     for (const li of loxoneIntegrations) {
       const integrationId = li.id;
       const locationId = (li as any).location_id;
@@ -106,11 +115,12 @@ serve(async (req) => {
       if (respectPollInterval) {
         const cfg = ((li as any).config as Record<string, any> | null) || {};
         const rawInterval = Number(cfg.poll_interval_minutes);
-        const intervalMin = Number.isFinite(rawInterval) && rawInterval >= 5 && rawInterval <= 60
+        const configuredMin = Number.isFinite(rawInterval) && rawInterval >= 5 && rawInterval <= 60
           ? Math.floor(rawInterval)
           : Number.isFinite(rawInterval) && rawInterval > 0 && rawInterval < 5
             ? 5
             : 15;
+        const intervalMin = configuredMin;
         const intervalMs = intervalMin * 60_000;
         const lastSyncIso = (li as any).last_sync_at as string | null;
         if (lastSyncIso) {
