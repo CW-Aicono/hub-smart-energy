@@ -117,8 +117,10 @@ export function SensorHistoryChart({ meterId, unit, label }: { meterId: string; 
     },
   });
 
-  // Boolean detection: unit leer und alle Werte ∈ {0,1}
-  const isBool = !displayUnit && data.length > 0 && data.every((d: any) => d.v === 0 || d.v === 1);
+  // Boolean detection: Einheit "bool"/leer ODER alle Werte ∈ {0,1}
+  const unitLower = displayUnit.toLowerCase();
+  const isBoolUnit = unitLower === "bool" || unitLower === "boolean" || unitLower === "on/off" || unitLower === "an/aus";
+  const isBool = data.length > 0 && (isBoolUnit || data.every((d: any) => d.v === 0 || d.v === 1));
 
   const xTickMode: "time" | "day" | "month" =
     range === "24h" ? "time" : range === "12m" ? "month" : "day";
