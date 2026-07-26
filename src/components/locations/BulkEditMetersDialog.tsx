@@ -28,6 +28,7 @@ interface Props {
   meters: Meter[];
   locationId: string;
   onDone: () => void;
+  entityType?: "meters" | "sensors" | "actuators";
 }
 
 const METER_FUNCTIONS: Array<{ value: string; label: string }> = [
@@ -36,7 +37,14 @@ const METER_FUNCTIONS: Array<{ value: string; label: string }> = [
   { value: "bidirectional", label: "Bidirektional" },
 ];
 
-export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, onDone }: Props) {
+const ENTITY_LABELS: Record<NonNullable<Props["entityType"]>, { singular: string; plural: string }> = {
+  meters: { singular: "Zähler", plural: "Zähler" },
+  sensors: { singular: "Sensor", plural: "Sensoren" },
+  actuators: { singular: "Aktor", plural: "Aktoren" },
+};
+
+export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, onDone, entityType = "meters" }: Props) {
+  const labels = ENTITY_LABELS[entityType];
   const { floors } = useFloors(locationId);
   const [floorId, setFloorId] = useState<string>("__none__");
   const { rooms } = useFloorRooms(floorId !== "__none__" && floorId !== "__clear__" ? floorId : undefined);
