@@ -950,30 +950,30 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 </Button>
               </div>
             )}
+            {isAdmin && selectedMeterIds.size > 0 && (
+              <BulkToolbar
+                count={selectedMeterIds.size}
+                showArchived={showArchived}
+                onBulkEdit={() => setBulkEditOpen(true)}
+                onArchive={async () => {
+                  for (const id of Array.from(selectedMeterIds)) await archiveMeter(id, !showArchived);
+                  setSelectedMeterIds(new Set());
+                }}
+                onDelete={async () => {
+                  const ok = await confirmDialog({
+                    title: `${selectedMeterIds.size} Sensoren endgültig löschen?`,
+                    description: "Historische Messwerte bleiben erhalten, sind aber nicht mehr zugeordnet.",
+                    confirmLabel: "Endgültig löschen",
+                  });
+                  if (!ok) return;
+                  await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
+                  setSelectedMeterIds(new Set());
+                }}
+                onClear={() => setSelectedMeterIds(new Set())}
+              />
+            )}
             {displayedSensors.length > 0 && (
               <>
-                {isAdmin && selectedMeterIds.size > 0 && (
-                  <BulkToolbar
-                    count={selectedMeterIds.size}
-                    showArchived={showArchived}
-                    onBulkEdit={() => setBulkEditOpen(true)}
-                    onArchive={async () => {
-                      for (const id of Array.from(selectedMeterIds)) await archiveMeter(id, !showArchived);
-                      setSelectedMeterIds(new Set());
-                    }}
-                    onDelete={async () => {
-                      const ok = await confirmDialog({
-                        title: `${selectedMeterIds.size} Sensoren endgültig löschen?`,
-                        description: "Historische Messwerte bleiben erhalten, sind aber nicht mehr zugeordnet.",
-                        confirmLabel: "Endgültig löschen",
-                      });
-                      if (!ok) return;
-                      await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
-                      setSelectedMeterIds(new Set());
-                    }}
-                    onClear={() => setSelectedMeterIds(new Set())}
-                  />
-                )}
                 <Table>
                   <TableHeader>
                     <TableRow>
