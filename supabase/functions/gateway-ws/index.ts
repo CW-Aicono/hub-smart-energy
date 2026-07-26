@@ -481,6 +481,14 @@ async function handleHttpAction(req: Request): Promise<Response | null> {
     if (tenantId) row.tenant_id = tenantId;
     if (locationId) row.location_id = locationId;
     await sb.from("gateway_sensor_snapshots").upsert(row, { onConflict: "location_integration_id" });
+    // Sensor-Verlauf: Rohwerte in sensor_readings_raw persistieren (Delta-Guard aktiv)
+    const { persistSensorHistory } = await import("../_shared/sensorHistory.ts");
+    await persistSensorHistory(sb, {
+      locationIntegrationId,
+      tenantId,
+      locationId,
+      sensors: allSensors,
+    });
   } catch (snapErr) {
     console.warn("[gateway-ws] snapshot write failed:", snapErr);
   }
