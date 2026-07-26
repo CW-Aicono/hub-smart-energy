@@ -102,6 +102,7 @@ async function writeSensorSnapshot(
     if (error) console.warn("[shelly snapshot] upsert failed:", error.message);
     // Sensor-Verlauf: Rohwerte in sensor_readings_raw persistieren
     const { persistSensorHistory } = await import("../_shared/sensorHistory.ts");
+    console.log(`[shelly snapshot] persistSensorHistory li=${locationIntegrationId} sensors=${Array.isArray(sensors) ? sensors.length : 0} tenant=${tenantId ?? "-"}`);
     await persistSensorHistory(supabase, {
       locationIntegrationId,
       tenantId,
