@@ -6082,6 +6082,56 @@ export type Database = {
           },
         ]
       }
+      gateway_ws_session_log: {
+        Row: {
+          disconnect_code: number | null
+          disconnect_reason: string | null
+          ended_at: string | null
+          events_received: number
+          gateway_device_id: string
+          id: string
+          reconnect_count: number
+          seamless_recycle_count: number
+          started_at: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          disconnect_code?: number | null
+          disconnect_reason?: string | null
+          ended_at?: string | null
+          events_received?: number
+          gateway_device_id: string
+          id?: string
+          reconnect_count?: number
+          seamless_recycle_count?: number
+          started_at?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          disconnect_code?: number | null
+          disconnect_reason?: string | null
+          ended_at?: string | null
+          events_received?: number
+          gateway_device_id?: string
+          id?: string
+          reconnect_count?: number
+          seamless_recycle_count?: number
+          started_at?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_ws_session_log_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       grid_curtailment_events: {
         Row: {
           applied_at: string | null
@@ -14026,6 +14076,19 @@ export type Database = {
         Args: { p_from?: string; p_to?: string }
         Returns: number
       }
+      aicono_fleet_stats_24h: {
+        Args: never
+        Returns: {
+          events_24h: number
+          gateway_device_id: string
+          last_disconnect_at: string
+          last_disconnect_code: number
+          last_disconnect_reason: string
+          reconnects_24h: number
+          seamless_recycles_24h: number
+          sessions_24h: number
+        }[]
+      }
       bootstrap_cron_settings: {
         Args: { p_key: string; p_url: string }
         Returns: undefined
@@ -14054,6 +14117,7 @@ export type Database = {
       cleanup_old_ocpp_logs: { Args: never; Returns: number }
       cleanup_pg_net_responses: { Args: never; Returns: number }
       cleanup_stale_integration_errors: { Args: never; Returns: number }
+      close_orphan_gateway_ws_sessions: { Args: never; Returns: number }
       close_orphan_loxone_ws_sessions: {
         Args: { _location_integration_id: string; _tenant_id: string }
         Returns: number
