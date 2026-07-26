@@ -524,7 +524,19 @@ async function handleExecuteCommand(req: Request, body: any): Promise<Response> 
   });
 }
 
-/** Mark device offline + tear down realtime subscription. */
+/**
+ * Tear down realtime subscription on socket close.
+ *
+ * IMPORTANT: We do NOT mark the device offline or clear `ws_connected_since`
+ * here. Supabase Edge Function isolates are recycled roughly every ~3 minutes
+ * for long-lived WebSockets, which triggers `onclose` even though the addon
+ * on the Pi is perfectly healthy and reconnects within ~5s. Nulling the
+ * connection state on every isolate recycle caused the UI to report a
+ * "reconnect every 3 minutes" flap.
+ *
+ * True offline detection is done in the UI / a scheduled job based on
+ * `last_heartbeat_at` staleness (> configured stale threshold).
+ */
 async function tearDown(session: Session) {
   if (session.closeRequested) return;
   session.closeRequested = true;
@@ -534,18 +546,6 @@ async function tearDown(session: Session) {
     }
   } catch (e) {
     console.warn("[gateway-ws] removeChannel failed", e);
-  }
-  try {
-    await svc()
-      .from("gateway_devices")
-      .update({
-        status: "offline",
-        ws_connected_since: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", session.deviceId);
-  } catch (e) {
-    console.warn("[gateway-ws] mark offline failed", e);
   }
 }
 
@@ -661,7 +661,9 @@ async function handleAuth(
       location_integration_id,
       gateway_username,
       gateway_password_hash,
-      mac_address
+      mac_address,
+      ws_connected_since,
+      last_heartbeat_at
     `)
     .eq("mac_address", mac)
     .maybeSingle();
@@ -735,21 +737,37 @@ async function handleAuth(
     return null;
   }
 
-  // Update presence fields + optional metadata from auth frame
+  // Update presence fields + optional metadata from auth frame.
+  //
+  // SEAMLESS RECONNECT: Supabase Edge Function isolates are recycled every
+  // few minutes, causing the WSS socket to close even though the gateway
+  // itself never went offline. To avoid the UI showing a "reconnect every
+  // 3 minutes" flap, we preserve `ws_connected_since` when the previous
+  // session was clearly alive (last heartbeat within 5 minutes).
   const nowIso = new Date().toISOString();
+  const prevHbMs = (device as any).last_heartbeat_at
+    ? Date.parse((device as any).last_heartbeat_at)
+    : NaN;
+  const prevConnectedSince = (device as any).ws_connected_since ?? null;
+  const seamless =
+    !!prevConnectedSince &&
+    Number.isFinite(prevHbMs) &&
+    Date.now() - prevHbMs < 5 * 60 * 1000;
+
+  const presenceUpdate: Record<string, unknown> = {
+    status: "online",
+    ws_connected_since: seamless ? prevConnectedSince : nowIso,
+    last_heartbeat_at: nowIso,
+    last_ws_ping_at: nowIso,
+    addon_version: raw.addon_version ?? undefined,
+    ha_version: raw.ha_version ?? undefined,
+    local_ip: raw.local_ip ?? undefined,
+    local_time: raw.local_time ?? undefined,
+    updated_at: nowIso,
+  };
   await sb
     .from("gateway_devices")
-    .update({
-      status: "online",
-      ws_connected_since: nowIso,
-      last_heartbeat_at: nowIso,
-      last_ws_ping_at: nowIso,
-      addon_version: raw.addon_version ?? undefined,
-      ha_version: raw.ha_version ?? undefined,
-      local_ip: raw.local_ip ?? undefined,
-      local_time: raw.local_time ?? undefined,
-      updated_at: nowIso,
-    })
+    .update(presenceUpdate)
     .eq("id", device.id);
 
   // Mark the parent location_integration as successfully connected so the

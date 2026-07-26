@@ -1,84 +1,47 @@
-# Phase 2a — Ad-Hoc Payment: Vorarbeit ohne CCV-Sandbox
+# Periodische WS-Reconnects AICONO-HA-Gateway – Diagnose-Plan
 
-Ziel: Alles bauen, was CCV-unabhängig ist. Sobald der Sandbox-Zugang da ist, wird nur der Adapter „scharf geschaltet".
+## Bestätigter Befund
+Die Anzeige „Verbunden seit 3 Minuten" in der Super-Admin-Gateway-Flotte ist korrekt.
+`gateway_devices.ws_connected_since` für `aicono-ems-2b1d07` steht unverändert auf `2026-07-26 07:33:24Z` (Alter ~3 Min), während `last_heartbeat_at` weiter im 60-Sekunden-Takt aktualisiert wird. `ws_connected_since` wird ausschließlich beim WS-Auth-Handshake (`gateway-ws/index.ts:744`) neu gesetzt und bei `tearDown` (`:543`) genullt — ein junger Wert = neuer WS-Reconnect.
 
-## Was jetzt umsetzbar ist
+Aus Anwendersicht wirkt das Gateway „online", weil der HA-Addon selbst durchläuft und der HTTP-Heartbeat unverändert weiterläuft; nur der persistente WebSocket zu `gateway-ws` bricht zyklisch ab.
 
-### 1. Terminal-Verwaltung (UI + CRUD)
+## Ziel des Plans
+Herausfinden, **wer** die WS-Verbindung alle paar Minuten schließt (Client / Edge Function / Netz-Zwischenschicht) und den Reconnect-Zyklus stoppen, ohne das Heartbeat-/Command-Handling zu regressen.
 
-Auf `payment_terminals` (bereits in Phase 1 angelegt):
+## Vorgehen
 
-- Liste, Anlegen, Bearbeiten, Deaktivieren von Terminals (Modell IM15/IM25/IM30, Seriennummer, Standort, Notizen).
-- Zuordnung Terminal ↔ Ladepunkt bzw. Terminal ↔ Ladepunkt-Gruppe (n:m oder 1:n — siehe Frage unten).
-- Status-Feld (`online/offline/unknown`) wird zunächst manuell/pending gepflegt, später vom Adapter aktualisiert.
-- Berechtigung: `charging.payments.configure`.
+1. **Reconnect-Kadenz bestätigen**
+   - Über 30 Minuten alle 60 s `ws_connected_since`, `last_heartbeat_at`, `last_ws_ping_at`, `status` für alle `device_type='aicono_ems'` sampeln (temporäre Log-Tabelle oder Skript-Notiz).
+   - Erwartet: monoton wachsender `conn_min`, das dann sichtbar auf 0 zurückspringt.
 
-### 2. Payment-Regeln pro Ladepunkt
+2. **Serverseitige Ursache prüfen (`gateway-ws` Edge Function)**
+   - Edge-Function-Logs (`gateway-ws`) auf `close`-, `auth_error`-, `pong-timeout`-, `heartbeat overdue`-Meldungen filtern, jeweils rund um die aus Schritt 1 identifizierten Reconnect-Zeitpunkte.
+   - `pingIntervalMs`, `pongTimeoutMs`, `authTimeoutMs`, `maxIdleMs` in `gateway-ws/index.ts` verifizieren; Supabase-Edge-Funktions-Idle-Timeout (150 s) gegen eingesetzten Ping-Takt abgleichen.
 
-Neuer Abschnitt „Ad-Hoc Payment" in den Ladepunkt-Einstellungen bzw. im Tab:
+3. **Clientseitige Ursache prüfen (HA-Addon)**
+   - Add-on-Logs auf dem Gateway (`docs/ha-addon/`) für Reconnect-/Backoff-/Ping-Log-Zeilen sichten.
+   - Ping/Pong-Intervall des HA-Addons und Reaktion auf `close`-Frames prüfen; bei Bedarf `keepalive` und `heartbeat`-Kadenz erhöhen (aktuell 60 s) bzw. WS-Ping deckungsgleich zu Edge-Function-Timeout setzen.
 
-- Toggle „Ad-Hoc erlaubt" pro Ladepunkt.
-- Tarif-Auswahl für Ad-Hoc (nutzt bestehende `charging_tariffs`).
-- Preauth-Betrag (Standard z. B. 50 €, überschreibbar) und Preauth-Ablauf.
-- Min-/Max-Sessiondauer, Max-kWh-Cap.
-- Optional: Rundungsregeln, Mindestbetrag.
-- Anzeige der aktuell gültigen Regel in der Ladepunkt-Kachel.
+4. **Zwischenschicht ausschließen**
+   - Cloudflare/Tunnel-Timeouts (`cloudflare-tunnel-domain` Memo) auf Idle-Cut prüfen (typisch 100 s Idle).
+   - Falls Idle-Cut vermutet: WS-Ping-Intervall < 60 s setzen, sowohl clientseitig als auch serverseitig.
 
-### 3. State-Machine `adhoc-charge-orchestrator` mit Mock-Adapter
+5. **Fix umsetzen**
+   Genaue Änderung ergibt sich aus Schritt 2–4. Wahrscheinlichste Kandidaten:
+   - Ping-Intervall in `gateway-ws` und HA-Addon angleichen (z. B. 45 s Client-Ping, 90 s Server-Timeout).
+   - Fehlenden `pong`-Handler bzw. zu strengen `pong`-Timeout auf Serverseite entschärfen.
 
-Edge Function, die den gesamten Lifecycle abbildet:
-`created → preauth_pending → preauth_ok → charging → capture_pending → captured` (plus `failed/cancelled/refunded`).
+6. **Verifikation**
+   - Nach dem Fix erneut 30 min sampeln; erwartet: `ws_connected_since` bleibt stabil (Alter wächst monoton, keine Sprünge auf 0).
+   - `offline_buffer_count` bleibt 0, `pending_ocpp_commands`-Latenz unverändert.
 
-- Adapter-Interface (`PaymentAdapter`) mit Methoden `preauth`, `capture`, `refund`, `cancel`.
-- **MockAdapter** für lokale Tests (deterministische Antworten, konfigurierbare Fehlerszenarien).
-- Späterer **CcvAdapter** implementiert dasselbe Interface — Umschaltung per Provider-Konfiguration.
-- Vollständige Event-Historie in `payment_events`.
+## Nicht Teil dieses Plans
+- Anzeige-/UI-Änderungen in der Gateway-Flotte (Wert ist korrekt).
+- Änderungen am Loxone-WS-Worker (unabhängige Komponente).
+- Änderungen am HTTP-Heartbeat- oder Ingest-Pfad.
 
-### 4. EMS-PDF-Rechnung für Ad-Hoc-Sessions
-
-- Vorlage analog zu bestehenden `charging_invoices` (Nummernkreis, Layout).
-- Automatische Erzeugung bei `captured`, Ablage in Storage, Download-Link in Session-Detail.
-- Feld für Käufer-Angaben (E-Mail für Zusendung, optional Name/Anschrift bei Nachforderung).
-
-### 5. Transaktions-/Session-Übersicht
-
-Neue Seite `src/pages/ChargingAdHocTransactions.tsx`:
-
-- Filter (Zeitraum, Standort, Ladepunkt, Status).
-- Detail-Drawer mit Event-Timeline, Beleg-Download, Refund-Button (Permission `charging.payments.refund`).
-- Export CSV/XLSX (deutsches Zahlenformat).
-
-### 6. Super-Admin-Sicht
-
-- Ansicht aller Payment-Provider-Konfigurationen tenant-übergreifend.
-- Modul-Preis „Ad-Hoc Payment" in `module_prices` einpflegen (Preis noch offen — siehe Frage).
-- Sichtbarkeit über bestehenden `ModuleGuard`.
-
-## Was auf CCV-Sandbox wartet
-
-- Konkrete Endpoint-URLs, Auth-Header, OCPI-Token-Austausch.
-- Webhook-Signaturprüfung (Secret via `add_secret`).
-- Ende-zu-Ende-Test gegen echte Terminals.
-- `CcvAdapter`-Implementierung inkl. Fehler-Mapping.
-
-## Technische Details
-
-- Keine Schema-Änderungen nötig, außer ggf. `payment_terminals.charge_point_id` bzw. Join-Tabelle je nach Antwort auf Frage 1.
-- Neue Edge Functions: `adhoc-charge-orchestrator`, `adhoc-invoice-generate`.
-- Neue Frontend-Komponenten unter `src/components/charging/adhoc/` (Terminals-Liste, Regel-Editor, Session-Drawer).
-- Mock-Adapter aktivierbar über Feature-Flag/Provider-Eintrag `provider_type='mock'`.
-
-## Offene Fragen vor Umsetzung
-
-1. **Terminal ↔ Ladepunkt**: 1 Terminal bedient genau 1 Ladepunkt, oder 1 Terminal für mehrere Ladepunkte (Multi-Charger-Setup wie bei Tank & Rast)?
-2. **Preauth-Standardbetrag**: Systemweiter Default (z. B. 50 €) oder pro Tenant konfigurierbar?
-3. **Refund-Freigabe**: Darf ein Tenant-Admin direkt refunden, oder muss Super-Admin freigeben?
-
-**Modul-Preis**: Welchen Listenpreis für „Ad-Hoc Payment" in `module_prices` hinterlegen (oder erst später vom Super-Admin setzen lassen)?  
-  
-Antworten:  
-1. Alle Versionen werden wir umsetzen können müssen, insofern bitte auch entsprechend vorbereiten und auslegen.  
-2. Nicht nur pro Tenant, wahrscheinlich werden wir das mindesten auch pro Ladepunkt-Gruppe konfigurieren müssen.  
-3. Tenant-Admin darf refunden.
-
-&nbsp;
+## Technischer Kontext
+- Betroffenes Gerät: `aicono-ems-2b1d07` (Realschule am Buchenberg, Stadt Steinfurt), Addon 3.3.0, HA 2026.5.2.
+- Relevante Dateien: `supabase/functions/gateway-ws/index.ts`, `docs/ha-addon/`, `src/pages/SuperAdminGatewayFleet.tsx` (nur Lese-Referenz).
+- Erwartetes Ergebnis: dauerhaft stabile WS-Verbindung (Alter im Stunden-/Tagesbereich statt Minuten), kein Delta zwischen Anzeige und Anwenderwahrnehmung mehr.
