@@ -1786,8 +1786,8 @@ export function MeterDetailDialog({
             </div>
             <div className="text-base font-semibold tabular-nums">
               {isSensor
-                ? (latestSensor?.value != null
-                    ? `${fmtDeNum(Number(latestSensor.value))}${displayUnit ? " " + displayUnit : ""}`
+                ? (effectiveSensorLatest?.value != null
+                    ? `${fmtDeNum(Number(effectiveSensorLatest.value))}${displayUnit ? " " + displayUnit : ""}`
                     : "–")
                 : (stats?.bidirectional
                     ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
