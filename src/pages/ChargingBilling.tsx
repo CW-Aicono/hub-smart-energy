@@ -536,8 +536,8 @@ const ChargingBilling = () => {
         <div><Label>MwSt-Satz (%)</Label><Input type="number" step="0.1" min="0" max="100" value={tariffForm.tax_rate_percent} onChange={(e) => setTariffForm({ ...tariffForm, tax_rate_percent: e.target.value })} /></div>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <div><Label>{t("charging.pricePerKwh" as any)} ({curSym}) <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={tariffForm.price_per_kwh} onChange={(e) => setTariffForm({ ...tariffForm, price_per_kwh: e.target.value })} /></div>
-        <div><Label>{t("charging.baseFee" as any)} ({curSym}) <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={tariffForm.base_fee} onChange={(e) => setTariffForm({ ...tariffForm, base_fee: e.target.value })} /></div>
+        <div><Label>{String(t("charging.pricePerKwh" as any)).replace(/\s*\(€\)/, "")} ({curSym}) <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={tariffForm.price_per_kwh} onChange={(e) => setTariffForm({ ...tariffForm, price_per_kwh: e.target.value })} /></div>
+        <div><Label>{String(t("charging.baseFee" as any)).replace(/\s*\(€\)/, "")} ({curSym}) <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={tariffForm.base_fee} onChange={(e) => setTariffForm({ ...tariffForm, base_fee: e.target.value })} /></div>
       </div>
       <p className="text-xs text-muted-foreground -mt-2">Alle Preisangaben verstehen sich inklusive der angegebenen Mehrwertsteuer.</p>
       <div className="border-t pt-4">
