@@ -32,7 +32,7 @@ function fmtValue(v: number, unit: string): string {
   return `${v.toLocaleString("de-DE", { maximumFractionDigits: 2 })}${unit ? " " + unit : ""}`;
 }
 
-export function SensorHistoryChart({ meterId, unit }: { meterId: string; unit?: string | null }) {
+export function SensorHistoryChart({ meterId, unit, label }: { meterId: string; unit?: string | null; label?: string | null }) {
   const [range, setRange] = useState<Range>("24h");
   const sinceIso = useMemo(() => new Date(Date.now() - RANGE_MS[range]).toISOString(), [range]);
   const displayUnit = (unit ?? "").trim();
@@ -123,7 +123,8 @@ export function SensorHistoryChart({ meterId, unit }: { meterId: string; unit?: 
   const xTickMode: "time" | "day" | "month" =
     range === "24h" ? "time" : range === "12m" ? "month" : "day";
 
-  const title = displayUnit ? `Verlauf · ${displayUnit}` : "Verlauf";
+  const titleBase = label?.trim() || "Verlauf";
+  const title = displayUnit ? `${titleBase} · ${displayUnit}` : titleBase;
 
   return (
     <Card>

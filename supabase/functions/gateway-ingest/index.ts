@@ -2563,6 +2563,7 @@ async function handleDeviceSnapshot(req: Request): Promise<Response> {
     const sensorItems = incoming.map((row) => ({
       id: row.entity_id,
       value: row.state,
+      state: row.state,
       unit: row.unit,
     }));
     await persistSensorHistory(supabase, {

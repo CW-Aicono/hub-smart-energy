@@ -7,6 +7,7 @@ type SensorItem = {
   uuid?: string;
   rawValue?: unknown;
   value?: unknown;
+  state?: unknown;
   unit?: string;
   type?: string;
   status?: string;
@@ -70,24 +71,40 @@ export async function persistSensorHistory(supabase: any, opts: Options): Promis
     for (const s of opts.sensors) {
       const rawId = s?.id ?? s?.uuid;
       if (!rawId) continue;
-      const num = toNumber(s?.rawValue) ?? toNumber(s?.value);
+      const num = toNumber(s?.rawValue) ?? toNumber(s?.value) ?? toNumber(s?.state);
       if (num == null) continue;
       valueByUuid.set(String(rawId).toLowerCase(), { value: num, unit: (s?.unit ?? null) as string | null });
     }
     if (valueByUuid.size === 0) return;
 
-    // Resolve meters (tenant-scoped when possible)
-    const uuids = [...valueByUuid.keys()];
+    // Resolve meters tenant-/integration-scoped and match UUIDs case-insensitively in JS.
+    // Avoids large PostgREST IN URLs and catches Home Assistant entity-id casing drift.
     let meterQ = supabase
       .from("meters")
-      .select("id, tenant_id, sensor_uuid")
-      .in("sensor_uuid", uuids)
+      .select("id, tenant_id, sensor_uuid, location_integration_id")
+      .not("sensor_uuid", "is", null)
       .eq("is_archived", false);
     if (opts.tenantId) meterQ = meterQ.eq("tenant_id", opts.tenantId);
-    const { data: meters, error: mErr } = await meterQ;
+    if (opts.locationIntegrationId) meterQ = meterQ.eq("location_integration_id", opts.locationIntegrationId);
+
+    let { data: meters, error: mErr } = await meterQ.limit(1000);
     if (mErr) {
       console.warn("[sensor-history] meter lookup failed:", mErr.message);
       return;
+    }
+    if ((!meters || meters.length === 0) && opts.tenantId) {
+      const fallback = await supabase
+        .from("meters")
+        .select("id, tenant_id, sensor_uuid, location_integration_id")
+        .not("sensor_uuid", "is", null)
+        .eq("tenant_id", opts.tenantId)
+        .eq("is_archived", false)
+        .limit(1000);
+      if (fallback.error) {
+        console.warn("[sensor-history] fallback meter lookup failed:", fallback.error.message);
+        return;
+      }
+      meters = fallback.data;
     }
     if (!meters || meters.length === 0) return;
 
