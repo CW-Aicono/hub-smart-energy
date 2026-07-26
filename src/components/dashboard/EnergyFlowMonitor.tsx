@@ -27,6 +27,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { SensorHistoryChart } from "@/components/sensors/SensorHistoryChart";
 import {
   ResponsiveContainer,
   AreaChart,
