@@ -1,56 +1,58 @@
-# Stale-Schwelle: Key-Fix + Migration
+## Ziel
 
-## Was aktuell schiefläuft
+Ein eigenständiges Pitchdeck `**AICONO_CCV_Kooperationsangebot.pptx**` (Ablage `/mnt/documents/`), das bei CCV Interesse an einer strategischen Partnerschaft für **alle Payment-Vorgänge im AICONO EMS** weckt — nicht nur Ad-hoc am Ladepunkt, sondern auch Energy Sharing, PPA-Abrechnung, Mieterstrom und künftige In-App-Zahlungen.
 
-- Zwei verschiedene Keys für dieselbe Einstellung:
-  - Panel/Frontend schreibt+liest `public.loxone_ws_stale_threshold_seconds`
-  - Edge Function `gateway-worker-status` liest nur `loxone_ws_stale_threshold_seconds` (ohne Präfix)
-- Edge Function cappt zusätzlich auf 30–3600s (max. 1h), obwohl das Panel bis 7200s erlaubt.
-- Hetzner-Live-Supabase hat den Key nie gesetzt → Anzeige fällt auf Default 300s zurück.
+Basis-Look & Wording aus `AICONO_EMS_Kundenpraesentation.pptx` (dunkler Header „AUSGANGSLAGE / LÖSUNG / …", Footer-Kicker, Blau/Teal, Montserrat/Inter). Deutschsprachig, ~14 Slides, projektionstauglich (Titel ≥40 pt, Body ≥24 pt).
 
-## Änderungen
+## Recherche-Basis (CCV)
 
-### 1. Migration (läuft in jeder Umgebung — auch Hetzner beim Deploy)
+- CCV positioniert sich als Full-Stack Payment-Partner (Terminals + PSP + Acquiring + Vor-Ort-Service DE/NL/BE), Fokus u. a. Retail, Vending/Unattended, **E-Mobility** (Cloud-Connect für AFIR-Ladepunkte via OCPI).
+- Verkaufsargumente CCV: persönlicher Support ohne Warteschleife, flexible Verträge (ab 1 Monat), deutschlandweiter Außendienst, breites Terminal-Portfolio inkl. unattended.
+- Für AICONO relevant: **CCV Cloud-Connect (OCPI 2.2.1)** für Ad-hoc am Ladepunkt sowie CCV-PSP/Acquiring für alle sonstigen In-Product-Zahlungen (Mieterstrom, PPA, Energy-Sharing-Abrechnungen, EV-App).
 
-Idempotent beide Keys auf 900 setzen, falls sie fehlen oder auf 300 (Default) stehen:
+## Argumentationslinie des Decks
 
-```sql
-INSERT INTO public.system_settings (key, value)
-VALUES
-  ('loxone_ws_stale_threshold_seconds', '900'),
-  ('public.loxone_ws_stale_threshold_seconds', '900')
-ON CONFLICT (key) DO NOTHING;
-```
+1. **Wer wir sind** — AICONO EMS Kurzprofil (aus Kundenpräsentation abgeleitet: modulares B2B/Kommunen-EMS, Mandanten, Gateway, Cloud).
+2. **Warum jetzt** — AFIR-Pflicht für DC ≥ 50 kW, Wachstum Mieterstrom/Energy Sharing/PPA → EMS-Plattformen brauchen einen Payment-Partner, der beide Welten kann: **Unattended am Ladepunkt + digitale Wiederkehr-Zahlungen**.
+3. **Payment-Landkarte im AICONO EMS** — vier Payment-Flüsse in einer Grafik:
+  - Ad-hoc am DC-Ladepunkt (Terminal, OCPI)
+  - EV-App PWA (Web/Mobile Payments, Wallet)
+  - Energy Sharing (Abrechnung Erzeuger ↔ Verbraucher, SEPA/Karte)
+  - PPA-Settlements (B2B-Rechnung, Lastschrift/Überweisung)
+4. **Warum CCV** — Terminals + PSP + Acquiring aus einer Hand, DE-Support, OCPI-fähig, AFIR-konform, Vertragsflexibilität — spiegelt CCV-Wording.
+5. **Technische Anschlussfähigkeit** — was bei AICONO bereits gebaut ist (Adapter-Interface `PaymentAdapter`, Mock-Adapter, Provider/Terminal/Rules-Verwaltung, Orchestrator-Edge-Function). CCV muss nur den Adapter aktivieren.
+6. **Pilot-Vorschlag** — 1 Kommune + 1 Stadtwerk als Referenz, Sandbox → Live in 60 Tagen.
+7. **Kommerzielles Modell** — Revenue-Share/Rev-Sharing-Optionen, White-Label, gemeinsame Go-to-Market.
+8. **Call to Action** — Termin für technisches Sandbox-Onboarding.
 
-Der `DO NOTHING` schützt manuell gesetzte Werte. Wer bewusst 600 o.ä. gesetzt hat, behält seinen Wert.
+## Slide-Struktur (14 Slides)
 
-### 2. Edge Function `gateway-worker-status`
+1. **Cover** — „Kooperationsangebot an CCV. Payment für die Energiewende." + AICONO-Logo-Feld.
+2. **Über AICONO** — 3–4 Kennzahlen/Facts (modulares EMS, Mandanten, Gateway, DE-Hosting).
+3. **Der Markt** — AFIR + Mieterstrom + Energy Sharing + PPA als wachsende Payment-Cases (mit Zahlen/Trends).
+4. **Payment im EMS heute** — Status quo Fragmentierung (Terminal-Provider ≠ PSP ≠ Acquirer ≠ Softwarehaus).
+5. **Vision** — Ein Payment-Partner für alle Flows (Grafik mit vier Flüssen, mittig CCV-Logo-Slot).
+6. **Flow 1: Ad-hoc am Ladepunkt** — CCV Cloud-Connect + OCPI 2.2.1, AFIR-konform.
+7. **Flow 2: EV-App-PWA** — Web/Mobile Payments, wiederkehrende Zahlungen.
+8. **Flow 3: Energy Sharing** — Peer-zu-Peer-Abrechnung, SEPA + Karte.
+9. **Flow 4: PPA-Settlements** — B2B, größere Volumina, monatliche Auto-Rechnung.
+10. **Warum CCV** — spiegelt CCV-USPs (Support DE, Außendienst, Vertragsflexibilität, E-Mobility-Erfahrung).
+11. **Technische Anschlussfähigkeit** — Screenshot/Wireframe des vorhandenen Adapter-Layers, „CCV = Adapter ersetzt Mock".
+12. **Pilot & Roadmap** — Sandbox (M1), Live-Pilot 2 Standorte (M2), Rollout Kommunen/B2B (M3+).
+13. **Kommerzielles Modell** — Optionen: Rev-Share, White-Label, gemeinsame Leadliste, Referenz-Nutzung.
+14. **Nächste Schritte / Kontakt** — konkreter Termin-CTA + Ansprechpartner.
 
-- Liest **beide** Keys, bevorzugt den unpräfixierten, fällt sonst auf den präfixierten zurück.
-- Cap von 3600 auf **7200** erhöhen (Deckungsgleich mit Panel-Input-Limit).
+## Technische Umsetzung
 
-### 3. Frontend `WorkerControlsPanel` + `LoxoneWsStatus`
+- Skill `**pptx**` verwenden, Erstellung via `pptxgenjs` (Node), Basis-Farben aus Kundenpräsentation ableiten (Deep Navy + Teal-Accent + Off-White).
+- Typografie: Montserrat (Headline) / Inter (Body), Kicker 22 pt, Titel 44 pt, Body 24 pt, Chrome 18 pt — kompatibel mit den in der Basis verwendeten Größen.
+- Layouts variieren: Cover, Section-Header (dunkel), 3er/4er-Kachelraster, zweispaltig Text+Icon, Prozess-Flow, Roadmap-Timeline, Kontakt-Slide.
+- Kein CCV-Logo einbetten (rechtlich unklar) — stattdessen Platzhalter „CCV" in Textform mit klarer Kennzeichnung als Entwurf.
+- QA-Pflichtlauf gemäß pptx-Skill: `python -m markitdown` + Slide-für-Slide-Rendering (`soffice → pdftoppm`) + Screenshot-Review, bevor die Datei ausgeliefert wird.
+- Ausgabe: `/mnt/documents/AICONO_CCV_Kooperationsangebot.pptx`, danach `<presentation-artifact>`-Tag.
 
-- Beim Speichern **beide** Keys via Upsert aktualisieren (Backwards-Compat, bis alle Deployments neu laufen).
-- Beim Lesen unpräfixierten Key bevorzugen, präfixierten als Fallback.
+## Nicht Bestandteil
 
-### 4. Karte `GatewayWorkerStatusCard`
-
-- Kein Codefix nötig — sie zeigt `data.stale_threshold_seconds` vom Server. Nach Fix in (2) zeigt Hetzner nach Redeploy 900s.
-
-## Antworten auf die Diagnose-Fragen
-
-- **300s auf Hetzner**: Key fehlte in dortiger `system_settings` → Default. Migration (1) behebt das.
-- **Code identisch, Anzeige unterschiedlich**: Ja, Code ist identisch — Unterschied lag ausschließlich in DB-Daten.
-- **Worker-Versionen unterschiedlich möglich**: Ja. `bridge_workers.version` in der jeweiligen Cloud-DB zeigt die aktive Version. Aktuell in Lovable-Cloud: `phase7.5-auth-status` auf `hetzner-staging-1`. Für Hetzner-Live selbes Feld in dortiger DB prüfen.
-- **Heartbeats gesund?** In Lovable-Cloud ja (Alter ~162s bei 300s-Sende-Intervall, Status `online`). Screenshot Hetzner: „vor 31s" → ebenfalls gesund.
-
-## Nach dem Deploy
-
-Auf Hetzner-Supabase einmalig prüfen:
-
-```sql
-SELECT key, value FROM system_settings WHERE key LIKE '%stale%';
-```
-
-Sollten beide Zeilen mit `900` erscheinen. Danach zeigt die Karte „Schwelle 900s".
+- Keine Code-/DB-Änderungen im EMS-Projekt.
+- Keine E-Mail-/Outreach-Vorlagen (kann separat folgen).
+- Keine finalen kommerziellen Konditionen — nur Modell-Optionen als Diskussionsbasis.

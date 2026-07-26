@@ -14,6 +14,252 @@ export type Database = {
   }
   public: {
     Tables: {
+      adhoc_invoice_counter: {
+        Row: {
+          next_number: number
+          tenant_id: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          next_number?: number
+          tenant_id: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          next_number?: number
+          tenant_id?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adhoc_invoice_counter_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      adhoc_payment_rules: {
+        Row: {
+          created_at: string
+          currency: string
+          enabled: boolean
+          id: string
+          max_kwh: number | null
+          max_minutes: number | null
+          min_amount_cents: number
+          name: string
+          preauth_amount_cents: number
+          preauth_expiry_minutes: number
+          priority: number
+          rounding_step_cents: number
+          scope: Database["public"]["Enums"]["adhoc_rule_scope"]
+          scope_id: string | null
+          tariff_id: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          enabled?: boolean
+          id?: string
+          max_kwh?: number | null
+          max_minutes?: number | null
+          min_amount_cents?: number
+          name: string
+          preauth_amount_cents?: number
+          preauth_expiry_minutes?: number
+          priority?: number
+          rounding_step_cents?: number
+          scope: Database["public"]["Enums"]["adhoc_rule_scope"]
+          scope_id?: string | null
+          tariff_id?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          enabled?: boolean
+          id?: string
+          max_kwh?: number | null
+          max_minutes?: number | null
+          min_amount_cents?: number
+          name?: string
+          preauth_amount_cents?: number
+          preauth_expiry_minutes?: number
+          priority?: number
+          rounding_step_cents?: number
+          scope?: Database["public"]["Enums"]["adhoc_rule_scope"]
+          scope_id?: string | null
+          tariff_id?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adhoc_payment_rules_tariff_id_fkey"
+            columns: ["tariff_id"]
+            isOneToOne: false
+            referencedRelation: "charging_tariffs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_rules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      adhoc_payment_sessions: {
+        Row: {
+          captured_amount_cents: number
+          card_brand: string | null
+          card_last4: string | null
+          charge_point_id: string | null
+          charging_session_id: string | null
+          connector_id: number | null
+          created_at: string
+          currency: string
+          customer_address: string | null
+          customer_email: string | null
+          customer_name: string | null
+          duration_minutes: number | null
+          ended_at: string | null
+          energy_kwh: number | null
+          error: Json | null
+          id: string
+          invoice_number: string | null
+          invoice_pdf_path: string | null
+          ocpp_transaction_id: string | null
+          preauth_amount_cents: number
+          provider_id: string | null
+          psp_reference: string | null
+          refunded_amount_cents: number
+          rule_id: string | null
+          started_at: string
+          state: Database["public"]["Enums"]["adhoc_payment_state"]
+          tariff_snapshot: Json
+          tenant_id: string
+          terminal_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          captured_amount_cents?: number
+          card_brand?: string | null
+          card_last4?: string | null
+          charge_point_id?: string | null
+          charging_session_id?: string | null
+          connector_id?: number | null
+          created_at?: string
+          currency?: string
+          customer_address?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          duration_minutes?: number | null
+          ended_at?: string | null
+          energy_kwh?: number | null
+          error?: Json | null
+          id?: string
+          invoice_number?: string | null
+          invoice_pdf_path?: string | null
+          ocpp_transaction_id?: string | null
+          preauth_amount_cents?: number
+          provider_id?: string | null
+          psp_reference?: string | null
+          refunded_amount_cents?: number
+          rule_id?: string | null
+          started_at?: string
+          state?: Database["public"]["Enums"]["adhoc_payment_state"]
+          tariff_snapshot?: Json
+          tenant_id: string
+          terminal_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          captured_amount_cents?: number
+          card_brand?: string | null
+          card_last4?: string | null
+          charge_point_id?: string | null
+          charging_session_id?: string | null
+          connector_id?: number | null
+          created_at?: string
+          currency?: string
+          customer_address?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          duration_minutes?: number | null
+          ended_at?: string | null
+          energy_kwh?: number | null
+          error?: Json | null
+          id?: string
+          invoice_number?: string | null
+          invoice_pdf_path?: string | null
+          ocpp_transaction_id?: string | null
+          preauth_amount_cents?: number
+          provider_id?: string | null
+          psp_reference?: string | null
+          refunded_amount_cents?: number
+          rule_id?: string | null
+          started_at?: string
+          state?: Database["public"]["Enums"]["adhoc_payment_state"]
+          tariff_snapshot?: Json
+          tenant_id?: string
+          terminal_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adhoc_payment_sessions_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_sessions_charging_session_id_fkey"
+            columns: ["charging_session_id"]
+            isOneToOne: false
+            referencedRelation: "charging_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_sessions_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "payment_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_sessions_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "adhoc_payment_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_sessions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_sessions_terminal_id_fkey"
+            columns: ["terminal_id"]
+            isOneToOne: false
+            referencedRelation: "payment_terminals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       alert_rules: {
         Row: {
           created_at: string
@@ -1161,6 +1407,61 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charge_point_terminals: {
+        Row: {
+          charge_point_id: string
+          connector_id: number | null
+          created_at: string
+          id: string
+          is_primary: boolean
+          tenant_id: string
+          terminal_id: string
+          updated_at: string
+        }
+        Insert: {
+          charge_point_id: string
+          connector_id?: number | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          tenant_id: string
+          terminal_id: string
+          updated_at?: string
+        }
+        Update: {
+          charge_point_id?: string
+          connector_id?: number | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          tenant_id?: string
+          terminal_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_terminals_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_terminals_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_terminals_terminal_id_fkey"
+            columns: ["terminal_id"]
+            isOneToOne: false
+            referencedRelation: "payment_terminals"
             referencedColumns: ["id"]
           },
         ]
@@ -5781,6 +6082,56 @@ export type Database = {
           },
         ]
       }
+      gateway_ws_session_log: {
+        Row: {
+          disconnect_code: number | null
+          disconnect_reason: string | null
+          ended_at: string | null
+          events_received: number
+          gateway_device_id: string
+          id: string
+          reconnect_count: number
+          seamless_recycle_count: number
+          started_at: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          disconnect_code?: number | null
+          disconnect_reason?: string | null
+          ended_at?: string | null
+          events_received?: number
+          gateway_device_id: string
+          id?: string
+          reconnect_count?: number
+          seamless_recycle_count?: number
+          started_at?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          disconnect_code?: number | null
+          disconnect_reason?: string | null
+          ended_at?: string | null
+          events_received?: number
+          gateway_device_id?: string
+          id?: string
+          reconnect_count?: number
+          seamless_recycle_count?: number
+          started_at?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_ws_session_log_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       grid_curtailment_events: {
         Row: {
           applied_at: string | null
@@ -8304,6 +8655,125 @@ export type Database = {
         }
         Relationships: []
       }
+      ocpi_endpoints: {
+        Row: {
+          base_url: string
+          country_code: string
+          created_at: string
+          id: string
+          last_registered_at: string | null
+          notes: string | null
+          party_id: string
+          role: Database["public"]["Enums"]["ocpi_role"]
+          status: string
+          tenant_id: string
+          token_a: string | null
+          token_b: string | null
+          token_c: string | null
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          base_url: string
+          country_code: string
+          created_at?: string
+          id?: string
+          last_registered_at?: string | null
+          notes?: string | null
+          party_id: string
+          role: Database["public"]["Enums"]["ocpi_role"]
+          status?: string
+          tenant_id: string
+          token_a?: string | null
+          token_b?: string | null
+          token_c?: string | null
+          updated_at?: string
+          version?: string
+        }
+        Update: {
+          base_url?: string
+          country_code?: string
+          created_at?: string
+          id?: string
+          last_registered_at?: string | null
+          notes?: string | null
+          party_id?: string
+          role?: Database["public"]["Enums"]["ocpi_role"]
+          status?: string
+          tenant_id?: string
+          token_a?: string | null
+          token_b?: string | null
+          token_c?: string | null
+          updated_at?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ocpi_endpoints_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ocpi_tokens: {
+        Row: {
+          contract_id: string | null
+          created_at: string
+          endpoint_id: string | null
+          id: string
+          issuer: string | null
+          last_updated: string
+          tenant_id: string
+          token_type: string
+          uid: string
+          valid: boolean
+          whitelist: string
+        }
+        Insert: {
+          contract_id?: string | null
+          created_at?: string
+          endpoint_id?: string | null
+          id?: string
+          issuer?: string | null
+          last_updated?: string
+          tenant_id: string
+          token_type?: string
+          uid: string
+          valid?: boolean
+          whitelist?: string
+        }
+        Update: {
+          contract_id?: string | null
+          created_at?: string
+          endpoint_id?: string | null
+          id?: string
+          issuer?: string | null
+          last_updated?: string
+          tenant_id?: string
+          token_type?: string
+          uid?: string
+          valid?: boolean
+          whitelist?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ocpi_tokens_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "ocpi_endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ocpi_tokens_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ocpp_integration_guides: {
         Row: {
           charger_model_id: string | null
@@ -8605,6 +9075,209 @@ export type Database = {
           white_label_enabled?: boolean
         }
         Relationships: []
+      }
+      payment_events: {
+        Row: {
+          direction: Database["public"]["Enums"]["payment_event_direction"]
+          event_type: string
+          id: string
+          payload: Json
+          provider_event_id: string | null
+          provider_id: string | null
+          received_at: string
+          session_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          direction: Database["public"]["Enums"]["payment_event_direction"]
+          event_type: string
+          id?: string
+          payload?: Json
+          provider_event_id?: string | null
+          provider_id?: string | null
+          received_at?: string
+          session_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          direction?: Database["public"]["Enums"]["payment_event_direction"]
+          event_type?: string
+          id?: string
+          payload?: Json
+          provider_event_id?: string | null
+          provider_id?: string | null
+          received_at?: string
+          session_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_events_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "payment_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "adhoc_payment_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_providers: {
+        Row: {
+          base_url: string | null
+          config: Json
+          country_code: string | null
+          created_at: string
+          credentials_secret_ref: string | null
+          display_name: string
+          environment: Database["public"]["Enums"]["payment_provider_env"]
+          id: string
+          is_active: boolean
+          last_error: string | null
+          last_verified_at: string | null
+          party_id: string | null
+          provider_type: Database["public"]["Enums"]["payment_provider_type"]
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          base_url?: string | null
+          config?: Json
+          country_code?: string | null
+          created_at?: string
+          credentials_secret_ref?: string | null
+          display_name: string
+          environment?: Database["public"]["Enums"]["payment_provider_env"]
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_verified_at?: string | null
+          party_id?: string | null
+          provider_type: Database["public"]["Enums"]["payment_provider_type"]
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          base_url?: string | null
+          config?: Json
+          country_code?: string | null
+          created_at?: string
+          credentials_secret_ref?: string | null
+          display_name?: string
+          environment?: Database["public"]["Enums"]["payment_provider_env"]
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_verified_at?: string | null
+          party_id?: string | null
+          provider_type?: Database["public"]["Enums"]["payment_provider_type"]
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_providers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_terminals: {
+        Row: {
+          brand_profile: Json
+          charge_point_id: string | null
+          connector_id: number | null
+          created_at: string
+          firmware: string | null
+          id: string
+          last_seen_at: string | null
+          location_id: string | null
+          notes: string | null
+          provider_id: string
+          status: Database["public"]["Enums"]["payment_terminal_status"]
+          tenant_id: string
+          terminal_model: string | null
+          terminal_serial: string
+          updated_at: string
+        }
+        Insert: {
+          brand_profile?: Json
+          charge_point_id?: string | null
+          connector_id?: number | null
+          created_at?: string
+          firmware?: string | null
+          id?: string
+          last_seen_at?: string | null
+          location_id?: string | null
+          notes?: string | null
+          provider_id: string
+          status?: Database["public"]["Enums"]["payment_terminal_status"]
+          tenant_id: string
+          terminal_model?: string | null
+          terminal_serial: string
+          updated_at?: string
+        }
+        Update: {
+          brand_profile?: Json
+          charge_point_id?: string | null
+          connector_id?: number | null
+          created_at?: string
+          firmware?: string | null
+          id?: string
+          last_seen_at?: string | null
+          location_id?: string | null
+          notes?: string | null
+          provider_id?: string
+          status?: Database["public"]["Enums"]["payment_terminal_status"]
+          tenant_id?: string
+          terminal_model?: string | null
+          terminal_serial?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_terminals_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_terminals_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_terminals_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "payment_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_terminals_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       peak_shaving_configs: {
         Row: {
@@ -13403,6 +14076,19 @@ export type Database = {
         Args: { p_from?: string; p_to?: string }
         Returns: number
       }
+      aicono_fleet_stats_24h: {
+        Args: never
+        Returns: {
+          events_24h: number
+          gateway_device_id: string
+          last_disconnect_at: string
+          last_disconnect_code: number
+          last_disconnect_reason: string
+          reconnects_24h: number
+          seamless_recycles_24h: number
+          sessions_24h: number
+        }[]
+      }
       bootstrap_cron_settings: {
         Args: { p_key: string; p_url: string }
         Returns: undefined
@@ -13431,6 +14117,7 @@ export type Database = {
       cleanup_old_ocpp_logs: { Args: never; Returns: number }
       cleanup_pg_net_responses: { Args: never; Returns: number }
       cleanup_stale_integration_errors: { Args: never; Returns: number }
+      close_orphan_gateway_ws_sessions: { Args: never; Returns: number }
       close_orphan_loxone_ws_sessions: {
         Args: { _location_integration_id: string; _tenant_id: string }
         Returns: number
@@ -13741,6 +14428,10 @@ export type Database = {
           reading_at: string
         }[]
       }
+      next_adhoc_invoice_number: {
+        Args: { _tenant_id: string }
+        Returns: string
+      }
       next_charging_invoice_number: {
         Args: { p_tenant_id: string; p_year: number }
         Returns: string
@@ -13831,6 +14522,19 @@ export type Database = {
       }
     }
     Enums: {
+      adhoc_payment_state:
+        | "created"
+        | "preauth_pending"
+        | "preauth_ok"
+        | "preauth_failed"
+        | "charging"
+        | "capture_pending"
+        | "captured"
+        | "partially_refunded"
+        | "refunded"
+        | "cancelled"
+        | "failed"
+      adhoc_rule_scope: "tenant" | "group" | "charge_point"
       app_role:
         | "admin"
         | "user"
@@ -13877,7 +14581,17 @@ export type Database = {
         | "sonstiges"
         | "gewerbe"
         | "privat"
+      ocpi_role: "CPO" | "EMSP" | "HUB"
       partner_member_role: "partner_admin" | "partner_user"
+      payment_event_direction: "inbound" | "outbound"
+      payment_provider_env: "sandbox" | "production"
+      payment_provider_type: "ccv" | "nayax" | "payter" | "adyen" | "other"
+      payment_terminal_status:
+        | "unknown"
+        | "online"
+        | "offline"
+        | "disabled"
+        | "error"
       savings_baseline_source:
         | "auto_from_meters"
         | "manual_override"
@@ -14017,6 +14731,20 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      adhoc_payment_state: [
+        "created",
+        "preauth_pending",
+        "preauth_ok",
+        "preauth_failed",
+        "charging",
+        "capture_pending",
+        "captured",
+        "partially_refunded",
+        "refunded",
+        "cancelled",
+        "failed",
+      ],
+      adhoc_rule_scope: ["tenant", "group", "charge_point"],
       app_role: [
         "admin",
         "user",
@@ -14068,7 +14796,18 @@ export const Constants = {
         "gewerbe",
         "privat",
       ],
+      ocpi_role: ["CPO", "EMSP", "HUB"],
       partner_member_role: ["partner_admin", "partner_user"],
+      payment_event_direction: ["inbound", "outbound"],
+      payment_provider_env: ["sandbox", "production"],
+      payment_provider_type: ["ccv", "nayax", "payter", "adyen", "other"],
+      payment_terminal_status: [
+        "unknown",
+        "online",
+        "offline",
+        "disabled",
+        "error",
+      ],
       savings_baseline_source: [
         "auto_from_meters",
         "manual_override",

@@ -75,7 +75,69 @@ interface Session {
   locationIntegrationId: string | null;
   channel: ReturnType<SupabaseClient["channel"]> | null;
   closeRequested: boolean;
+  // Session-log bookkeeping
+  sessionLogId: string | null;
+  pendingEvents: number;
+  lastFlushMs: number;
+  flushTimer: number | null;
 }
+
+interface AuthCacheEntry {
+  device: any;
+  tenantName: string | null;
+  resolvedLocationId: string | null;
+  locationName: string | null;
+  expiresAt: number;
+}
+
+// In-memory auth cache to reduce DB load when the gateway reconnects rapidly
+// after Edge Function isolate recycling (happens every ~3 minutes).
+// Keyed by normalized MAC. TTL is intentionally short so credential rotations
+// propagate within one minute.
+const authCache = new Map<string, AuthCacheEntry>();
+const AUTH_CACHE_TTL_MS = 60_000;
+
+// Session-log flush cadence: buffer event counts and flush at most once per
+// minute to avoid per-frame writes (protects IO budget, consistent with worker
+// aggregation policy).
+const SESSION_FLUSH_INTERVAL_MS = 60_000;
+
+async function flushSessionCounters(session: Session, opts?: { force?: boolean }) {
+  if (!session.sessionLogId) return;
+  const delta = session.pendingEvents;
+  if (delta === 0 && !opts?.force) return;
+  session.pendingEvents = 0;
+  session.lastFlushMs = Date.now();
+  try {
+    // Increment via RPC-less pattern: read-then-write is racy across isolates
+    // but each session lives in exactly one isolate, so a plain UPDATE with
+    // arithmetic is safe.
+    if (delta > 0) {
+      const sb = svc();
+      const { data: cur } = await sb
+        .from("gateway_ws_session_log")
+        .select("events_received")
+        .eq("id", session.sessionLogId)
+        .maybeSingle();
+      const next = ((cur as any)?.events_received ?? 0) + delta;
+      await sb
+        .from("gateway_ws_session_log")
+        .update({ events_received: next, updated_at: new Date().toISOString() })
+        .eq("id", session.sessionLogId);
+    }
+  } catch (e) {
+    console.warn("[gateway-ws] session flush failed", e);
+  }
+}
+
+function scheduleFlush(session: Session) {
+  if (session.flushTimer != null) return;
+  session.flushTimer = setTimeout(async () => {
+    session.flushTimer = null;
+    await flushSessionCounters(session);
+  }, SESSION_FLUSH_INTERVAL_MS) as unknown as number;
+}
+
 
 /** Send safely (no throw if socket already closed). */
 function safeSend(ws: WebSocket, msg: unknown) {
@@ -524,10 +586,42 @@ async function handleExecuteCommand(req: Request, body: any): Promise<Response> 
   });
 }
 
-/** Mark device offline + tear down realtime subscription. */
-async function tearDown(session: Session) {
+/**
+ * Tear down realtime subscription on socket close.
+ *
+ * IMPORTANT: We do NOT mark the device offline or clear `ws_connected_since`
+ * here. Supabase Edge Function isolates are recycled roughly every ~3 minutes
+ * for long-lived WebSockets, which triggers `onclose` even though the addon
+ * on the Pi is perfectly healthy and reconnects within ~5s. Nulling the
+ * connection state on every isolate recycle caused the UI to report a
+ * "reconnect every 3 minutes" flap.
+ *
+ * True offline detection is done in the UI / a scheduled job based on
+ * `last_heartbeat_at` staleness (> configured stale threshold).
+ */
+async function tearDown(session: Session, reason?: string, code?: number) {
   if (session.closeRequested) return;
   session.closeRequested = true;
+  if (session.flushTimer != null) {
+    try { clearTimeout(session.flushTimer as unknown as number); } catch { /* ignore */ }
+    session.flushTimer = null;
+  }
+  await flushSessionCounters(session, { force: true });
+  if (session.sessionLogId) {
+    try {
+      await svc()
+        .from("gateway_ws_session_log")
+        .update({
+          ended_at: new Date().toISOString(),
+          disconnect_reason: reason ?? "socket_closed",
+          disconnect_code: typeof code === "number" ? code : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", session.sessionLogId);
+    } catch (e) {
+      console.warn("[gateway-ws] session close failed", e);
+    }
+  }
   try {
     if (session.channel) {
       await svc().removeChannel(session.channel);
@@ -535,19 +629,8 @@ async function tearDown(session: Session) {
   } catch (e) {
     console.warn("[gateway-ws] removeChannel failed", e);
   }
-  try {
-    await svc()
-      .from("gateway_devices")
-      .update({
-        status: "offline",
-        ws_connected_since: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", session.deviceId);
-  } catch (e) {
-    console.warn("[gateway-ws] mark offline failed", e);
-  }
 }
+
 
 /** Try to send a command to the Pi over WS, mark sent_at. */
 async function pushCommand(session: Session, cmd: any) {
@@ -634,51 +717,8 @@ async function subscribeCommands(session: Session) {
     .subscribe();
 }
 
-/** Handle the very first frame: must be `auth`. */
-async function handleAuth(
-  socket: WebSocket,
-  raw: any,
-): Promise<Session | null> {
-  if (raw?.type !== "auth") {
-    safeSend(socket, { type: "auth_error", error: "First frame must be 'auth'" });
-    return null;
-  }
-  const mac = normalizeMac(String(raw.mac || ""));
-  const username = String(raw.username || "").trim();
-  const password = String(raw.password || "");
-  if (!mac || mac.length !== 12 || !username || !password) {
-    safeSend(socket, { type: "auth_error", error: "Missing/invalid credentials" });
-    return null;
-  }
-
-  const sb = svc();
-  const { data: device, error } = await sb
-    .from("gateway_devices")
-    .select(`
-      id,
-      tenant_id,
-      location_id,
-      location_integration_id,
-      gateway_username,
-      gateway_password_hash,
-      mac_address
-    `)
-    .eq("mac_address", mac)
-    .maybeSingle();
-
-  if (error || !device) {
-    safeSend(socket, { type: "auth_error", error: "Unknown device (MAC not provisioned)" });
-    return null;
-  }
-  if (!device.tenant_id) {
-    safeSend(socket, { type: "auth_error", error: "Device not yet assigned to a tenant" });
-    return null;
-  }
-  if (!device.gateway_username || !device.gateway_password_hash) {
-    safeSend(socket, { type: "auth_error", error: "Device has no credentials configured" });
-    return null;
-  }
-
+/** Resolve tenant/location names for a device row. Cached per MAC. */
+async function resolveAuthContext(sb: SupabaseClient, device: any): Promise<Omit<AuthCacheEntry, "expiresAt">> {
   let tenantName: string | null = null;
   let resolvedLocationId: string | null = device.location_id ?? null;
   let locationName: string | null = null;
@@ -725,31 +765,121 @@ async function handleAuth(
     }
   }
 
+  return { device, tenantName, resolvedLocationId, locationName };
+}
+
+/** Handle the very first frame: must be `auth`. */
+async function handleAuth(
+  socket: WebSocket,
+  raw: any,
+): Promise<Session | null> {
+  if (raw?.type !== "auth") {
+    safeSend(socket, { type: "auth_error", error: "First frame must be 'auth'" });
+    return null;
+  }
+  const mac = normalizeMac(String(raw.mac || ""));
+  const username = String(raw.username || "").trim();
+  const password = String(raw.password || "");
+  if (!mac || mac.length !== 12 || !username || !password) {
+    safeSend(socket, { type: "auth_error", error: "Missing/invalid credentials" });
+    return null;
+  }
+
+  const sb = svc();
+
+  // 1) Device lookup must always hit the DB so we can read the latest
+  //    heartbeat / ws_connected_since timestamps for seamless reconnect logic.
+  const { data: device, error } = await sb
+    .from("gateway_devices")
+    .select(`
+      id,
+      tenant_id,
+      location_id,
+      location_integration_id,
+      gateway_username,
+      gateway_password_hash,
+      mac_address,
+      ws_connected_since,
+      last_heartbeat_at
+    `)
+    .eq("mac_address", mac)
+    .maybeSingle();
+
+  if (error || !device) {
+    safeSend(socket, { type: "auth_error", error: "Unknown device (MAC not provisioned)" });
+    return null;
+  }
+  if (!device.tenant_id) {
+    safeSend(socket, { type: "auth_error", error: "Device not yet assigned to a tenant" });
+    return null;
+  }
+  if (!device.gateway_username || !device.gateway_password_hash) {
+    safeSend(socket, { type: "auth_error", error: "Device has no credentials configured" });
+    return null;
+  }
+
   if (device.gateway_username !== username) {
     safeSend(socket, { type: "auth_error", error: "Invalid username/password" });
     return null;
   }
-  const ok = await bcryptVerify(password, device.gateway_password_hash);
-  if (!ok) {
-    safeSend(socket, { type: "auth_error", error: "Invalid username/password" });
-    return null;
+
+  // 2) Password verification is expensive (bcrypt). Cache a successful result
+  //    for rapid reconnects after Edge Function isolate recycling.
+  let cached = authCache.get(mac);
+  let passwordOk = false;
+  if (cached && cached.expiresAt > Date.now() && cached.device?.id === device.id) {
+    passwordOk = true;
+    console.log(`[gateway-ws] auth cache hit for ${mac.slice(0, 8)}…`);
+  } else {
+    passwordOk = await bcryptVerify(password, device.gateway_password_hash);
+    if (!passwordOk) {
+      safeSend(socket, { type: "auth_error", error: "Invalid username/password" });
+      return null;
+    }
+    // Prime cache asynchronously after successful verify.
+    cached = undefined as any;
   }
 
-  // Update presence fields + optional metadata from auth frame
+  // 3) Resolve tenant/location context (cached when available).
+  let ctx: Omit<AuthCacheEntry, "expiresAt">;
+  if (cached) {
+    ctx = cached;
+  } else {
+    ctx = await resolveAuthContext(sb, device);
+    authCache.set(mac, { ...ctx, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
+  }
+
+  // 4) Update presence fields + optional metadata from auth frame.
+  //
+  // SEAMLESS RECONNECT: Supabase Edge Function isolates are recycled every
+  // few minutes, causing the WSS socket to close even though the gateway
+  // itself never went offline. To avoid the UI showing a "reconnect every
+  // 3 minutes" flap, we preserve `ws_connected_since` when the previous
+  // session was clearly alive (last heartbeat within 5 minutes).
   const nowIso = new Date().toISOString();
+  const prevHbMs = (device as any).last_heartbeat_at
+    ? Date.parse((device as any).last_heartbeat_at)
+    : NaN;
+  const prevConnectedSince = (device as any).ws_connected_since ?? null;
+  const seamless =
+    !!prevConnectedSince &&
+    Number.isFinite(prevHbMs) &&
+    Date.now() - prevHbMs < 5 * 60 * 1000;
+
+  const presenceUpdate: Record<string, unknown> = {
+    status: "online",
+    ws_connected_since: seamless ? prevConnectedSince : nowIso,
+    last_heartbeat_at: nowIso,
+    last_ws_ping_at: nowIso,
+    addon_version: raw.addon_version ?? undefined,
+    ha_version: raw.ha_version ?? undefined,
+    local_ip: raw.local_ip ?? undefined,
+    local_time: raw.local_time ?? undefined,
+    updated_at: nowIso,
+  };
   await sb
     .from("gateway_devices")
-    .update({
-      status: "online",
-      ws_connected_since: nowIso,
-      last_heartbeat_at: nowIso,
-      last_ws_ping_at: nowIso,
-      addon_version: raw.addon_version ?? undefined,
-      ha_version: raw.ha_version ?? undefined,
-      local_ip: raw.local_ip ?? undefined,
-      local_time: raw.local_time ?? undefined,
-      updated_at: nowIso,
-    })
+    .update(presenceUpdate)
     .eq("id", device.id);
 
   // Mark the parent location_integration as successfully connected so the
@@ -764,29 +894,86 @@ async function handleAuth(
   }
 
 
+  // Session-log bookkeeping: reuse the open row when we detect a seamless
+  // isolate recycle, otherwise open a fresh session and count the reconnect.
+  let sessionLogId: string | null = null;
+  try {
+    if (seamless) {
+      const { data: openRow } = await sb
+        .from("gateway_ws_session_log")
+        .select("id, seamless_recycle_count")
+        .eq("gateway_device_id", device.id)
+        .is("ended_at", null)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (openRow) {
+        sessionLogId = (openRow as any).id;
+        await sb
+          .from("gateway_ws_session_log")
+          .update({
+            seamless_recycle_count: ((openRow as any).seamless_recycle_count ?? 0) + 1,
+            updated_at: nowIso,
+          })
+          .eq("id", sessionLogId);
+      }
+    }
+    if (!sessionLogId) {
+      // Close any leftover open rows first so aggregates stay clean.
+      await sb
+        .from("gateway_ws_session_log")
+        .update({ ended_at: nowIso, disconnect_reason: "superseded", updated_at: nowIso })
+        .eq("gateway_device_id", device.id)
+        .is("ended_at", null);
+      // Count the reconnect on the freshly opened row.
+      const { data: inserted } = await sb
+        .from("gateway_ws_session_log")
+        .insert({
+          gateway_device_id: device.id,
+          tenant_id: device.tenant_id,
+          started_at: nowIso,
+          reconnect_count: 1,
+        })
+        .select("id")
+        .single();
+      sessionLogId = (inserted as any)?.id ?? null;
+    }
+  } catch (e) {
+    console.warn("[gateway-ws] session log setup failed", e);
+  }
+
   safeSend(socket, {
     type: "auth_ok",
     device_id: device.id,
     tenant_id: device.tenant_id,
-    location_id: resolvedLocationId,
+    location_id: ctx.resolvedLocationId,
     location_integration_id: device.location_integration_id,
-    tenant_name: tenantName,
-    location_name: locationName,
+    tenant_name: ctx.tenantName,
+    location_name: ctx.locationName,
+    seamless_reconnect: seamless,
   });
 
   return {
     socket,
     deviceId: device.id,
     tenantId: device.tenant_id,
-    locationId: resolvedLocationId,
+    locationId: ctx.resolvedLocationId,
     locationIntegrationId: device.location_integration_id ?? null,
     channel: null,
     closeRequested: false,
+    sessionLogId,
+    pendingEvents: 0,
+    lastFlushMs: Date.now(),
+    flushTimer: null,
   };
 }
 
+
 /** Handle subsequent frames after auth. */
 async function handleFrame(session: Session, raw: any) {
+  // Count every valid frame as one received event; flushed on a 60 s cadence.
+  session.pendingEvents += 1;
+  scheduleFlush(session);
   switch (raw?.type) {
     case "heartbeat":
     case "ping": {
@@ -967,13 +1154,13 @@ Deno.serve((req) => {
     );
   };
 
-  socket.onclose = async () => {
+  socket.onclose = async (ev) => {
     if (authTimeout) clearTimeout(authTimeout);
-    if (session) await tearDown(session);
+    if (session) await tearDown(session, (ev as CloseEvent)?.reason || "socket_closed", (ev as CloseEvent)?.code);
   };
   socket.onerror = async (e) => {
     console.error("[gateway-ws] socket error", e);
-    if (session) await tearDown(session);
+    if (session) await tearDown(session, "socket_error");
   };
 
   return response;

@@ -386,6 +386,7 @@ const ChargingBilling = () => {
       idle_fee_per_minute: parseFloat(tariffForm.idle_fee_per_minute),
       idle_fee_grace_minutes: parseInt(tariffForm.idle_fee_grace_minutes),
       tax_rate_percent: parseFloat(tariffForm.tax_rate_percent),
+      currency: tariffForm.currency,
     } as any);
     setEditTariff(null);
     resetTariffForm();
@@ -510,21 +511,39 @@ const ChargingBilling = () => {
   const groupsPaged = paginate(groupedSessionRows, groupPage);
 
 
+  const currencySymbol = (c?: string) => ({ EUR: "€", CHF: "CHF", GBP: "£", USD: "$" } as Record<string, string>)[c ?? "EUR"] ?? c ?? "€";
+  const curSym = currencySymbol(tariffForm.currency);
+  const fmtTariffPrice = (value: number, currency?: string, decimals: number = 2) =>
+    `${fmtNum(value, decimals)} ${currencySymbol(currency)}`;
+
   const tariffFormFields = (
     <div className="space-y-4">
       <div><Label>{t("charging.name" as any)}</Label><Input value={tariffForm.name} onChange={(e) => setTariffForm({ ...tariffForm, name: e.target.value })} /></div>
       <div className="grid grid-cols-2 gap-4">
-        <div><Label>{t("charging.pricePerKwh" as any)} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={tariffForm.price_per_kwh} onChange={(e) => setTariffForm({ ...tariffForm, price_per_kwh: e.target.value })} /></div>
-        <div><Label>{t("charging.baseFee" as any)} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={tariffForm.base_fee} onChange={(e) => setTariffForm({ ...tariffForm, base_fee: e.target.value })} /></div>
+        <div>
+          <Label>Währung</Label>
+          <Select value={tariffForm.currency} onValueChange={(v) => setTariffForm({ ...tariffForm, currency: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="EUR">EUR (€)</SelectItem>
+              <SelectItem value="CHF">CHF</SelectItem>
+              <SelectItem value="GBP">GBP (£)</SelectItem>
+              <SelectItem value="USD">USD ($)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1">Gilt auch für Ad-hoc-Zahlungsregeln, die diesen Tarif nutzen.</p>
+        </div>
+        <div><Label>MwSt-Satz (%)</Label><Input type="number" step="0.1" min="0" max="100" value={tariffForm.tax_rate_percent} onChange={(e) => setTariffForm({ ...tariffForm, tax_rate_percent: e.target.value })} /></div>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <div><Label>MwSt-Satz (%)</Label><Input type="number" step="0.1" min="0" max="100" value={tariffForm.tax_rate_percent} onChange={(e) => setTariffForm({ ...tariffForm, tax_rate_percent: e.target.value })} /></div>
+        <div><Label>{String(t("charging.pricePerKwh" as any)).replace(/\s*\(€\)/, "")} ({curSym}) <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={tariffForm.price_per_kwh} onChange={(e) => setTariffForm({ ...tariffForm, price_per_kwh: e.target.value })} /></div>
+        <div><Label>{String(t("charging.baseFee" as any)).replace(/\s*\(€\)/, "")} ({curSym}) <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={tariffForm.base_fee} onChange={(e) => setTariffForm({ ...tariffForm, base_fee: e.target.value })} /></div>
       </div>
       <p className="text-xs text-muted-foreground -mt-2">Alle Preisangaben verstehen sich inklusive der angegebenen Mehrwertsteuer.</p>
       <div className="border-t pt-4">
         <Label className="text-sm font-medium flex items-center gap-2 mb-3"><Clock className="h-4 w-4" />{t("charging.idleFee" as any)}</Label>
         <div className="grid grid-cols-2 gap-4">
-          <div><Label>{t("charging.idleFeePerMin" as any)} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" min="0" value={tariffForm.idle_fee_per_minute} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_per_minute: e.target.value })} /></div>
+          <div><Label>{String(t("charging.idleFeePerMin" as any)).replace(/\s*\(€\)/, "")} ({curSym}) <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" min="0" value={tariffForm.idle_fee_per_minute} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_per_minute: e.target.value })} /></div>
           <div><Label>{t("charging.idleFeeGrace" as any)}</Label><Input type="number" step="1" min="0" value={tariffForm.idle_fee_grace_minutes} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_grace_minutes: e.target.value })} /></div>
         </div>
         <p className="text-xs text-muted-foreground mt-2">{t("charging.idleFeeDesc" as any)}</p>
@@ -768,9 +787,9 @@ const ChargingBilling = () => {
                               {tariff.name}
                               {tariff.is_default && <Badge variant="secondary" className="ml-2">Standard</Badge>}
                             </TableCell>
-                            <TableCell>{fmtCurrency(tariff.price_per_kwh)}</TableCell>
-                            <TableCell>{fmtCurrency(tariff.base_fee)}</TableCell>
-                            <TableCell>{tariff.idle_fee_per_minute > 0 ? <span className="text-sm">{fmtCurrency(tariff.idle_fee_per_minute)}/Min. <span className="text-muted-foreground">ab {tariff.idle_fee_grace_minutes} Min.</span></span> : <span className="text-muted-foreground">—</span>}</TableCell>
+                            <TableCell>{fmtTariffPrice(tariff.price_per_kwh, tariff.currency)}</TableCell>
+                            <TableCell>{fmtTariffPrice(tariff.base_fee, tariff.currency)}</TableCell>
+                            <TableCell>{tariff.idle_fee_per_minute > 0 ? <span className="text-sm">{fmtTariffPrice(tariff.idle_fee_per_minute, tariff.currency)}/Min. <span className="text-muted-foreground">ab {tariff.idle_fee_grace_minutes} Min.</span></span> : <span className="text-muted-foreground">—</span>}</TableCell>
                             <TableCell>{fmtNum(tariff.tax_rate_percent ?? 19, 0)} %</TableCell>
                             <TableCell>
                               <Switch

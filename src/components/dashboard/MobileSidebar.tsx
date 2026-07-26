@@ -14,7 +14,7 @@ import {
   LayoutDashboard, LogOut, Shield, Settings, Users, ChevronRight,
   MapPin, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download,
   Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks,
-  TrendingUp, Home, Menu, Sparkles, FileText, FileSignature, Share2, BarChart3,
+  TrendingUp, Home, Menu, Sparkles, FileText, FileSignature, Share2, BarChart3, CreditCard,
 } from "lucide-react";
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
@@ -64,6 +64,7 @@ export function MobileHeader() {
         { to: "/charging/points", icon: PlugZap, labelKey: "nav.chargingPoints" as TranslationKey },
         { to: "/charging/users", icon: Users, labelKey: "nav.chargingUsers" as TranslationKey },
         { to: "/charging/billing", icon: Receipt, labelKey: "nav.chargingBilling" as TranslationKey },
+        { to: "/charging/transactions", icon: CreditCard, labelKey: "nav.chargingTransactions" as TranslationKey },
         { to: "/charging/reporting", icon: BarChart3, labelKey: "nav.chargingReporting" as TranslationKey },
         { to: "/charging/settings", icon: Settings, labelKey: "nav.chargingSettings" as TranslationKey },
       ]
