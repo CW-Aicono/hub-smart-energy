@@ -245,6 +245,20 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
                 </Select>
               </FieldBlock>
             </div>
+
+            <Separator />
+
+            {/* Gerätetyp umstellen */}
+            <FieldBlock apply={applyDeviceType} setApply={setApplyDeviceType} label="Gerätetyp umstellen">
+              <Select value={deviceType} onValueChange={setDeviceType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="meter">Zähler</SelectItem>
+                  <SelectItem value="sensor">Sensor</SelectItem>
+                  <SelectItem value="actuator">Aktor</SelectItem>
+                </SelectContent>
+              </Select>
+            </FieldBlock>
           </div>
         </ScrollArea>
 
