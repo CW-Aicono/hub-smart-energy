@@ -72,6 +72,32 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
   const [parentId, setParentId] = useState<string>("__none__");
   const [saving, setSaving] = useState(false);
 
+  // Reset all "apply" flags and values when the dialog is closed,
+  // so the next open starts with a clean state (no leftover checkboxes).
+  useEffect(() => {
+    if (open) return;
+    setApplyFloor(false);
+    setApplyRoom(false);
+    setApplyEnergy(false);
+    setApplyUnit(false);
+    setApplyMedium(false);
+    setApplyMain(false);
+    setApplyBidir(false);
+    setApplyFunction(false);
+    setApplyParent(false);
+    setApplyDeviceType(false);
+    setFloorId("__none__");
+    setRoomId("__none__");
+    setEnergyType("strom");
+    setUnit("kWh");
+    setMedium("");
+    setIsMain(false);
+    setIsBidir(false);
+    setMeterFunction("consumption");
+    setParentId("__none__");
+    setDeviceType("meter");
+  }, [open]);
+
   const parentOptions = useMemo(
     () => meters.filter((m) => !m.is_archived),
     [meters],
