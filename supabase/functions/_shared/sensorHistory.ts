@@ -150,9 +150,17 @@ export async function persistSensorHistory(supabase: any, opts: Options): Promis
       for (const k of lastCache.keys()) { if (i++ >= excess) break; lastCache.delete(k); }
     }
 
-    if (rows.length === 0) return;
+    if (rows.length === 0) {
+      console.log(`[sensor-history] li=${opts.locationIntegrationId} nothing to insert (delta-guard filtered ${meters.length} candidates)`);
+      return;
+    }
     const { error } = await supabase.from("sensor_readings_raw").insert(rows);
-    if (error) console.warn("[sensor-history] insert failed:", error.message);
+    if (error) console.warn(`[sensor-history] insert failed for li=${opts.locationIntegrationId} rows=${rows.length}:`, error.message);
+    else console.log(`[sensor-history] li=${opts.locationIntegrationId} inserted ${rows.length} rows`);
+  } catch (err) {
+    console.warn("[sensor-history] unexpected error:", err);
+  }
+}
   } catch (err) {
     console.warn("[sensor-history] unexpected error:", err);
   }
