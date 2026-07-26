@@ -75,6 +75,11 @@ interface Session {
   locationIntegrationId: string | null;
   channel: ReturnType<SupabaseClient["channel"]> | null;
   closeRequested: boolean;
+  // Session-log bookkeeping
+  sessionLogId: string | null;
+  pendingEvents: number;
+  lastFlushMs: number;
+  flushTimer: number | null;
 }
 
 interface AuthCacheEntry {
@@ -91,6 +96,48 @@ interface AuthCacheEntry {
 // propagate within one minute.
 const authCache = new Map<string, AuthCacheEntry>();
 const AUTH_CACHE_TTL_MS = 60_000;
+
+// Session-log flush cadence: buffer event counts and flush at most once per
+// minute to avoid per-frame writes (protects IO budget, consistent with worker
+// aggregation policy).
+const SESSION_FLUSH_INTERVAL_MS = 60_000;
+
+async function flushSessionCounters(session: Session, opts?: { force?: boolean }) {
+  if (!session.sessionLogId) return;
+  const delta = session.pendingEvents;
+  if (delta === 0 && !opts?.force) return;
+  session.pendingEvents = 0;
+  session.lastFlushMs = Date.now();
+  try {
+    // Increment via RPC-less pattern: read-then-write is racy across isolates
+    // but each session lives in exactly one isolate, so a plain UPDATE with
+    // arithmetic is safe.
+    if (delta > 0) {
+      const sb = svc();
+      const { data: cur } = await sb
+        .from("gateway_ws_session_log")
+        .select("events_received")
+        .eq("id", session.sessionLogId)
+        .maybeSingle();
+      const next = ((cur as any)?.events_received ?? 0) + delta;
+      await sb
+        .from("gateway_ws_session_log")
+        .update({ events_received: next, updated_at: new Date().toISOString() })
+        .eq("id", session.sessionLogId);
+    }
+  } catch (e) {
+    console.warn("[gateway-ws] session flush failed", e);
+  }
+}
+
+function scheduleFlush(session: Session) {
+  if (session.flushTimer != null) return;
+  session.flushTimer = setTimeout(async () => {
+    session.flushTimer = null;
+    await flushSessionCounters(session);
+  }, SESSION_FLUSH_INTERVAL_MS) as unknown as number;
+}
+
 
 /** Send safely (no throw if socket already closed). */
 function safeSend(ws: WebSocket, msg: unknown) {
@@ -552,9 +599,29 @@ async function handleExecuteCommand(req: Request, body: any): Promise<Response> 
  * True offline detection is done in the UI / a scheduled job based on
  * `last_heartbeat_at` staleness (> configured stale threshold).
  */
-async function tearDown(session: Session) {
+async function tearDown(session: Session, reason?: string, code?: number) {
   if (session.closeRequested) return;
   session.closeRequested = true;
+  if (session.flushTimer != null) {
+    try { clearTimeout(session.flushTimer as unknown as number); } catch { /* ignore */ }
+    session.flushTimer = null;
+  }
+  await flushSessionCounters(session, { force: true });
+  if (session.sessionLogId) {
+    try {
+      await svc()
+        .from("gateway_ws_session_log")
+        .update({
+          ended_at: new Date().toISOString(),
+          disconnect_reason: reason ?? "socket_closed",
+          disconnect_code: typeof code === "number" ? code : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", session.sessionLogId);
+    } catch (e) {
+      console.warn("[gateway-ws] session close failed", e);
+    }
+  }
   try {
     if (session.channel) {
       await svc().removeChannel(session.channel);
@@ -563,6 +630,7 @@ async function tearDown(session: Session) {
     console.warn("[gateway-ws] removeChannel failed", e);
   }
 }
+
 
 /** Try to send a command to the Pi over WS, mark sent_at. */
 async function pushCommand(session: Session, cmd: any) {
@@ -825,6 +893,55 @@ async function handleAuth(
     });
   }
 
+
+  // Session-log bookkeeping: reuse the open row when we detect a seamless
+  // isolate recycle, otherwise open a fresh session and count the reconnect.
+  let sessionLogId: string | null = null;
+  try {
+    if (seamless) {
+      const { data: openRow } = await sb
+        .from("gateway_ws_session_log")
+        .select("id, seamless_recycle_count")
+        .eq("gateway_device_id", device.id)
+        .is("ended_at", null)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (openRow) {
+        sessionLogId = (openRow as any).id;
+        await sb
+          .from("gateway_ws_session_log")
+          .update({
+            seamless_recycle_count: ((openRow as any).seamless_recycle_count ?? 0) + 1,
+            updated_at: nowIso,
+          })
+          .eq("id", sessionLogId);
+      }
+    }
+    if (!sessionLogId) {
+      // Close any leftover open rows first so aggregates stay clean.
+      await sb
+        .from("gateway_ws_session_log")
+        .update({ ended_at: nowIso, disconnect_reason: "superseded", updated_at: nowIso })
+        .eq("gateway_device_id", device.id)
+        .is("ended_at", null);
+      // Count the reconnect on the freshly opened row.
+      const { data: inserted } = await sb
+        .from("gateway_ws_session_log")
+        .insert({
+          gateway_device_id: device.id,
+          tenant_id: device.tenant_id,
+          started_at: nowIso,
+          reconnect_count: 1,
+        })
+        .select("id")
+        .single();
+      sessionLogId = (inserted as any)?.id ?? null;
+    }
+  } catch (e) {
+    console.warn("[gateway-ws] session log setup failed", e);
+  }
+
   safeSend(socket, {
     type: "auth_ok",
     device_id: device.id,
@@ -844,11 +961,19 @@ async function handleAuth(
     locationIntegrationId: device.location_integration_id ?? null,
     channel: null,
     closeRequested: false,
+    sessionLogId,
+    pendingEvents: 0,
+    lastFlushMs: Date.now(),
+    flushTimer: null,
   };
 }
 
+
 /** Handle subsequent frames after auth. */
 async function handleFrame(session: Session, raw: any) {
+  // Count every valid frame as one received event; flushed on a 60 s cadence.
+  session.pendingEvents += 1;
+  scheduleFlush(session);
   switch (raw?.type) {
     case "heartbeat":
     case "ping": {
@@ -1029,13 +1154,13 @@ Deno.serve((req) => {
     );
   };
 
-  socket.onclose = async () => {
+  socket.onclose = async (ev) => {
     if (authTimeout) clearTimeout(authTimeout);
-    if (session) await tearDown(session);
+    if (session) await tearDown(session, (ev as CloseEvent)?.reason || "socket_closed", (ev as CloseEvent)?.code);
   };
   socket.onerror = async (e) => {
     console.error("[gateway-ws] socket error", e);
-    if (session) await tearDown(session);
+    if (session) await tearDown(session, "socket_error");
   };
 
   return response;

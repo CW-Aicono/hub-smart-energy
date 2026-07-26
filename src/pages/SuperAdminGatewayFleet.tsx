@@ -256,7 +256,19 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
   return result;
 }
 
-function aiconoToUnifiedRow(d: FleetDevice, tenantNameMap: Record<string, string>): UnifiedRow {
+interface AiconoStats24h {
+  events_24h: number | null;
+  reconnects_24h: number | null;
+  sessions_24h: number | null;
+  last_disconnect_at: string | null;
+  last_disconnect_reason: string | null;
+}
+
+function aiconoToUnifiedRow(
+  d: FleetDevice,
+  tenantNameMap: Record<string, string>,
+  stats?: AiconoStats24h,
+): UnifiedRow {
   const now = Date.now();
   const hbAge = d.last_heartbeat_at ? now - new Date(d.last_heartbeat_at).getTime() : null;
   const connectedAge = d.ws_connected_since ? now - new Date(d.ws_connected_since).getTime() : null;
@@ -273,6 +285,9 @@ function aiconoToUnifiedRow(d: FleetDevice, tenantNameMap: Record<string, string
     status = d.status === "online" ? "online" : "offline";
     statusLabel = d.status;
   }
+  const lastDisconnect = stats?.last_disconnect_at
+    ? `${new Date(stats.last_disconnect_at).toLocaleString("de-DE")}${stats.last_disconnect_reason ? ` · ${stats.last_disconnect_reason}` : ""}`
+    : null;
   return {
     key: `aicono:${d.id}`,
     type: "AICONO EMS",
@@ -282,18 +297,19 @@ function aiconoToUnifiedRow(d: FleetDevice, tenantNameMap: Record<string, string
     connectedSince: d.ws_connected_since,
     lastHeartbeat: d.last_heartbeat_at,
     heartbeatAgeMs: hbAge,
-    eventsLast24h: null,
-    reconnectsLast24h: null,
+    eventsLast24h: stats?.events_24h ?? null,
+    reconnectsLast24h: stats?.reconnects_24h ?? null,
     uptimeRatio24h: status === "active" ? 1 : null,
-    sessionsLast24h: null,
+    sessionsLast24h: stats?.sessions_24h ?? null,
     worker: null,
-    lastDisconnect: null,
+    lastDisconnect,
     serials: [],
     device: d,
     // Derived flag used by the UI to show a seamless-recycle hint.
     isSeamlessRecycle: connectedAge !== null && hbAge !== null && connectedAge < hbAge,
   };
 }
+
 
 function UnifiedStatusBadge({ status, label }: { status: UnifiedRow["status"]; label: string }) {
   if (status === "active") {
@@ -460,8 +476,29 @@ const SuperAdminGatewayFleet = () => {
     refetchInterval: 15_000,
   });
 
+  const { data: aiconoStatsMap = {} } = useQuery({
+    queryKey: ["sa-aicono-fleet-stats-24h"],
+    enabled: !!isSuperAdmin,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("aicono_fleet_stats_24h");
+      if (error) throw error;
+      const map: Record<string, AiconoStats24h> = {};
+      for (const r of (data ?? []) as any[]) {
+        map[r.gateway_device_id] = {
+          events_24h: r.events_24h ?? 0,
+          reconnects_24h: r.reconnects_24h ?? 0,
+          sessions_24h: r.sessions_24h ?? 0,
+          last_disconnect_at: r.last_disconnect_at ?? null,
+          last_disconnect_reason: r.last_disconnect_reason ?? null,
+        };
+      }
+      return map;
+    },
+  });
+
   const unifiedRows: UnifiedRow[] = useMemo(() => {
-    const aicono = (fleet ?? []).map((d) => aiconoToUnifiedRow(d, tenantNameMap));
+    const aicono = (fleet ?? []).map((d) => aiconoToUnifiedRow(d, tenantNameMap, aiconoStatsMap[d.id]));
     const all = [...aicono, ...loxoneRows];
     all.sort((a, b) => {
       const aActive = a.status === "active" ? 0 : 1;
@@ -470,7 +507,8 @@ const SuperAdminGatewayFleet = () => {
       return a.locationName.localeCompare(b.locationName);
     });
     return all;
-  }, [fleet, loxoneRows, tenantNameMap]);
+  }, [fleet, loxoneRows, tenantNameMap, aiconoStatsMap]);
+
 
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
