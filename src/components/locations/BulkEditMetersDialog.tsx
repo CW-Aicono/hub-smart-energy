@@ -5,7 +5,7 @@
  * Jeder Feld-Block hat ein "Anwenden"-Checkbox — nur aktivierte Felder
  * werden in einem Update an alle Ziel-Zähler geschrieben.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
