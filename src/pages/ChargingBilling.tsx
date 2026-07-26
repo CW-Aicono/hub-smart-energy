@@ -386,6 +386,7 @@ const ChargingBilling = () => {
       idle_fee_per_minute: parseFloat(tariffForm.idle_fee_per_minute),
       idle_fee_grace_minutes: parseInt(tariffForm.idle_fee_grace_minutes),
       tax_rate_percent: parseFloat(tariffForm.tax_rate_percent),
+      currency: tariffForm.currency,
     } as any);
     setEditTariff(null);
     resetTariffForm();
