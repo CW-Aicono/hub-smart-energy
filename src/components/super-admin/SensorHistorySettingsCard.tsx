@@ -8,6 +8,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 export function SensorHistorySettingsCard() {
   const queryClient = useQueryClient();
+  const formatCapped = (value?: number, capped?: boolean) => {
+    const formatted = (value ?? 0).toLocaleString("de-DE");
+    return capped ? `≥ ${formatted}` : formatted;
+  };
 
   const { data: setting, isLoading } = useQuery({
     queryKey: ["system_settings", "sensor_history_enabled"],
@@ -29,15 +33,19 @@ export function SensorHistorySettingsCard() {
     queryKey: ["sensor-history-counts"],
     refetchInterval: 30_000,
     queryFn: async () => {
+      const limit = 1000;
       const [raw24, raw1, agg24] = await Promise.all([
-        supabase.from("sensor_readings_raw").select("id", { count: "exact", head: true }).gte("recorded_at", since24h),
-        supabase.from("sensor_readings_raw").select("id", { count: "exact", head: true }).gte("recorded_at", since1h),
-        supabase.from("sensor_readings_5min").select("id", { count: "exact", head: true }).gte("bucket", since24h),
+        supabase.from("sensor_readings_raw").select("id").gte("recorded_at", since24h).order("recorded_at", { ascending: false }).limit(limit),
+        supabase.from("sensor_readings_raw").select("id").gte("recorded_at", since1h).order("recorded_at", { ascending: false }).limit(limit),
+        supabase.from("sensor_readings_5min").select("id").gte("bucket", since24h).order("bucket", { ascending: false }).limit(limit),
       ]);
       return {
-        raw24: raw24.count ?? 0,
-        raw1: raw1.count ?? 0,
-        agg24: agg24.count ?? 0,
+        raw24: raw24.data?.length ?? 0,
+        raw1: raw1.data?.length ?? 0,
+        agg24: agg24.data?.length ?? 0,
+        raw24Capped: (raw24.data?.length ?? 0) >= limit,
+        raw1Capped: (raw1.data?.length ?? 0) >= limit,
+        agg24Capped: (agg24.data?.length ?? 0) >= limit,
       };
     },
   });
@@ -86,15 +94,15 @@ export function SensorHistorySettingsCard() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="p-3 border rounded-lg">
             <div className="text-xs text-muted-foreground">Rohwerte (letzte Stunde)</div>
-            <div className="text-2xl font-bold tabular-nums">{(counts?.raw1 ?? 0).toLocaleString("de-DE")}</div>
+            <div className="text-2xl font-bold tabular-nums">{formatCapped(counts?.raw1, counts?.raw1Capped)}</div>
           </div>
           <div className="p-3 border rounded-lg">
             <div className="text-xs text-muted-foreground">Rohwerte (24 h)</div>
-            <div className="text-2xl font-bold tabular-nums">{(counts?.raw24 ?? 0).toLocaleString("de-DE")}</div>
+            <div className="text-2xl font-bold tabular-nums">{formatCapped(counts?.raw24, counts?.raw24Capped)}</div>
           </div>
           <div className="p-3 border rounded-lg">
             <div className="text-xs text-muted-foreground">5-Min-Buckets (24 h)</div>
-            <div className="text-2xl font-bold tabular-nums">{(counts?.agg24 ?? 0).toLocaleString("de-DE")}</div>
+            <div className="text-2xl font-bold tabular-nums">{formatCapped(counts?.agg24, counts?.agg24Capped)}</div>
           </div>
         </div>
 
