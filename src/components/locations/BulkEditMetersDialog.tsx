@@ -114,7 +114,12 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
     if (applyFloor) updates.floor_id = floorId === "__clear__" ? null : floorId === "__none__" ? null : floorId;
     if (applyRoom) updates.room_id = roomId === "__clear__" ? null : roomId === "__none__" ? null : roomId;
     if (applyEnergy) updates.energy_type = energyType;
-    if (applyUnit) updates.unit = unit;
+    if (applyUnit) {
+      updates.unit = unit;
+      // Für Sensoren/Zähler mit Gateway-Anbindung wird die Anzeige-Einheit primär
+      // aus source_unit_power gezogen – sonst würde die Änderung nicht sichtbar.
+      (updates as any).source_unit_power = unit;
+    }
     if (applyMedium) updates.medium = medium.trim() || null;
     if (applyMain) updates.is_main_meter = isMain;
     if (applyBidir) (updates as any).is_bidirectional = isBidir;
