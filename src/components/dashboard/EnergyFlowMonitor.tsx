@@ -27,6 +27,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { SensorHistoryChart } from "@/components/sensors/SensorHistoryChart";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -1978,6 +1979,11 @@ export function MeterDetailDialog({
             <div className="font-mono text-[10px] truncate" title={node.meter_id}>{node.meter_id || "–"}</div>
           </div>
         </div>
+        {node.meter_id && (
+          <div className="mt-4">
+            <SensorHistoryChart meterId={node.meter_id} unit={meterUnitRaw || null} />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
