@@ -1098,30 +1098,30 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 </Button>
               </div>
             )}
+            {isAdmin && selectedMeterIds.size > 0 && (
+              <BulkToolbar
+                count={selectedMeterIds.size}
+                showArchived={showArchived}
+                onBulkEdit={() => setBulkEditOpen(true)}
+                onArchive={async () => {
+                  for (const id of Array.from(selectedMeterIds)) await archiveMeter(id, !showArchived);
+                  setSelectedMeterIds(new Set());
+                }}
+                onDelete={async () => {
+                  const ok = await confirmDialog({
+                    title: `${selectedMeterIds.size} Aktoren endgültig löschen?`,
+                    description: "Diese Aktion kann nicht rückgängig gemacht werden.",
+                    confirmLabel: "Endgültig löschen",
+                  });
+                  if (!ok) return;
+                  await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
+                  setSelectedMeterIds(new Set());
+                }}
+                onClear={() => setSelectedMeterIds(new Set())}
+              />
+            )}
             {displayedActuators.length > 0 && (
               <>
-                {isAdmin && selectedMeterIds.size > 0 && (
-                  <BulkToolbar
-                    count={selectedMeterIds.size}
-                    showArchived={showArchived}
-                    onBulkEdit={() => setBulkEditOpen(true)}
-                    onArchive={async () => {
-                      for (const id of Array.from(selectedMeterIds)) await archiveMeter(id, !showArchived);
-                      setSelectedMeterIds(new Set());
-                    }}
-                    onDelete={async () => {
-                      const ok = await confirmDialog({
-                        title: `${selectedMeterIds.size} Aktoren endgültig löschen?`,
-                        description: "Diese Aktion kann nicht rückgängig gemacht werden.",
-                        confirmLabel: "Endgültig löschen",
-                      });
-                      if (!ok) return;
-                      await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
-                      setSelectedMeterIds(new Set());
-                    }}
-                    onClear={() => setSelectedMeterIds(new Set())}
-                  />
-                )}
                 <Table>
                   <TableHeader>
                     <TableRow>
