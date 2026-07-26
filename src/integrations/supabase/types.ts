@@ -11625,6 +11625,100 @@ export type Database = {
           },
         ]
       }
+      sensor_readings_5min: {
+        Row: {
+          bucket: string
+          created_at: string
+          id: string
+          meter_id: string
+          sample_count: number
+          tenant_id: string
+          unit: string | null
+          updated_at: string
+          value_avg: number
+          value_last: number
+          value_max: number
+          value_min: number
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          id?: string
+          meter_id: string
+          sample_count?: number
+          tenant_id: string
+          unit?: string | null
+          updated_at?: string
+          value_avg: number
+          value_last: number
+          value_max: number
+          value_min: number
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          id?: string
+          meter_id?: string
+          sample_count?: number
+          tenant_id?: string
+          unit?: string | null
+          updated_at?: string
+          value_avg?: number
+          value_last?: number
+          value_max?: number
+          value_min?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sensor_readings_5min_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sensor_readings_raw: {
+        Row: {
+          created_at: string
+          id: string
+          meter_id: string
+          recorded_at: string
+          sensor_uuid: string | null
+          tenant_id: string
+          unit: string | null
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meter_id: string
+          recorded_at?: string
+          sensor_uuid?: string | null
+          tenant_id: string
+          unit?: string | null
+          value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meter_id?: string
+          recorded_at?: string
+          sensor_uuid?: string | null
+          tenant_id?: string
+          unit?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sensor_readings_raw_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       simulation_meter_state: {
         Row: {
           current_value: number
@@ -14116,6 +14210,8 @@ export type Database = {
       cleanup_old_node_metrics: { Args: never; Returns: number }
       cleanup_old_ocpp_logs: { Args: never; Returns: number }
       cleanup_pg_net_responses: { Args: never; Returns: number }
+      cleanup_sensor_readings_5min: { Args: never; Returns: undefined }
+      cleanup_sensor_readings_raw: { Args: never; Returns: undefined }
       cleanup_stale_integration_errors: { Args: never; Returns: number }
       close_orphan_gateway_ws_sessions: { Args: never; Returns: number }
       close_orphan_loxone_ws_sessions: {
