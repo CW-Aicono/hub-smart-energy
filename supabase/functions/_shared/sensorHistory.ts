@@ -106,7 +106,11 @@ export async function persistSensorHistory(supabase: any, opts: Options): Promis
       }
       meters = fallback.data;
     }
-    if (!meters || meters.length === 0) return;
+    if (!meters || meters.length === 0) {
+      console.log(`[sensor-history] no meters matched for li=${opts.locationIntegrationId} tenant=${opts.tenantId} (snapshot uuids=${valueByUuid.size})`);
+      return;
+    }
+    console.log(`[sensor-history] li=${opts.locationIntegrationId} meters=${meters.length} snapshotUuids=${valueByUuid.size}`);
 
     const nowMs = Date.now();
     const nowIso = new Date(nowMs).toISOString();
