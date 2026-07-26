@@ -159,7 +159,13 @@ export function useAdhocRules() {
       qc.invalidateQueries({ queryKey: ["adhoc-rules", tenant?.id] });
       toast({ title: "Regel gespeichert" });
     },
-    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+    onError: (e: any) => {
+      const msg = String(e?.message ?? "");
+      const friendly = msg.includes("idx_adhoc_rules_tenant_unique")
+        ? "Es existiert bereits eine Basis-Regel für diesen Mandanten. Bitte bestehende Regel bearbeiten oder als Geltungsbereich Ladepunkt-Gruppe oder einzelnen Ladepunkt wählen."
+        : msg;
+      toast({ title: "Fehler", description: friendly, variant: "destructive" });
+    },
   });
 
   const remove = useMutation({
