@@ -1376,6 +1376,35 @@ export function MeterDetailDialog({
     return { rateUnit: `${u}/h`, energyUnit: u };
   })();
 
+  // Sensor detection: non-metering unit (°C, %, V, A, lx, bar, ppm, hPa, dB …)
+  // or a boolean/state signal without a metering energy_type.
+  const isSensor = (() => {
+    const u = meterUnitRaw.toLowerCase();
+    const meteringEnergyTypes = new Set(["strom", "gas", "wasser", "waerme"]);
+    if (meteringEnergyTypes.has(meterEnergyType)) return false;
+    if (!u) return false; // ohne Einheit lassen wir das bisherige Verhalten
+    // Metering-Einheiten explizit ausschließen
+    if (/^(k?wh?|m³|m3|l|liter)(\/h|\/min)?$/i.test(u)) return false;
+    return true;
+  })();
+
+  const { data: latestSensor } = useQuery({
+    queryKey: ["sensor-latest-value", node.meter_id],
+    enabled: isSensor && !!node.meter_id,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("sensor_readings_raw")
+        .select("value, recorded_at")
+        .eq("meter_id", node.meter_id!)
+        .order("recorded_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data as { value: number; recorded_at: string } | null;
+    },
+  });
+
 
 
   const { data: storageInfo, isLoading: isStorageLoading } = useQuery({
@@ -1718,15 +1747,20 @@ export function MeterDetailDialog({
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">
-              Energie{stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}
+              {isSensor ? "Momentanwert" : `Energie${stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}`}
             </div>
             <div className="text-base font-semibold tabular-nums">
-              {stats?.bidirectional
-                ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
-                : `${fmtDeNum(totalImport - totalExport)} ${energyUnit}`}
+              {isSensor
+                ? (latestSensor?.value != null
+                    ? `${fmtDeNum(Number(latestSensor.value))}${meterUnitRaw ? " " + meterUnitRaw : ""}`
+                    : "–")
+                : (stats?.bidirectional
+                    ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
+                    : `${fmtDeNum(totalImport - totalExport)} ${energyUnit}`)}
             </div>
           </div>
         </div>
+
 
 
         {isHouse && (
@@ -1738,8 +1772,9 @@ export function MeterDetailDialog({
           />
         )}
 
-        {/* Chart 1: Leistungsverlauf (+ optional SOC bei Speichern) */}
+        {/* Chart 1: Leistungsverlauf (+ optional SOC bei Speichern) — nur für Zähler, nicht für Sensoren */}
 
+        {!isSensor && (
         <div>
           <div className="mb-1 flex items-center justify-between gap-2">
             <div className="text-sm font-medium">
@@ -1893,10 +1928,12 @@ export function MeterDetailDialog({
             )}
           </div>
         </div>
+        )}
 
 
-        {/* Chart 2: Energie pro Bucket */}
-        {energyBuckets.length > 0 && (
+        {/* Chart 2: Energie pro Bucket — nur für Zähler */}
+        {!isSensor && energyBuckets.length > 0 && (
+
           <div>
             <div className="text-sm font-medium mb-1">
               Energie pro {range === "1h" ? "5 Min" : range === "24h" ? "Stunde" : range === "7d" ? "6 h" : "Tag"}
