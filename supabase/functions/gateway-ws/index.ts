@@ -77,6 +77,21 @@ interface Session {
   closeRequested: boolean;
 }
 
+interface AuthCacheEntry {
+  device: any;
+  tenantName: string | null;
+  resolvedLocationId: string | null;
+  locationName: string | null;
+  expiresAt: number;
+}
+
+// In-memory auth cache to reduce DB load when the gateway reconnects rapidly
+// after Edge Function isolate recycling (happens every ~3 minutes).
+// Keyed by normalized MAC. TTL is intentionally short so credential rotations
+// propagate within one minute.
+const authCache = new Map<string, AuthCacheEntry>();
+const AUTH_CACHE_TTL_MS = 60_000;
+
 /** Send safely (no throw if socket already closed). */
 function safeSend(ws: WebSocket, msg: unknown) {
   try {
@@ -634,53 +649,8 @@ async function subscribeCommands(session: Session) {
     .subscribe();
 }
 
-/** Handle the very first frame: must be `auth`. */
-async function handleAuth(
-  socket: WebSocket,
-  raw: any,
-): Promise<Session | null> {
-  if (raw?.type !== "auth") {
-    safeSend(socket, { type: "auth_error", error: "First frame must be 'auth'" });
-    return null;
-  }
-  const mac = normalizeMac(String(raw.mac || ""));
-  const username = String(raw.username || "").trim();
-  const password = String(raw.password || "");
-  if (!mac || mac.length !== 12 || !username || !password) {
-    safeSend(socket, { type: "auth_error", error: "Missing/invalid credentials" });
-    return null;
-  }
-
-  const sb = svc();
-  const { data: device, error } = await sb
-    .from("gateway_devices")
-    .select(`
-      id,
-      tenant_id,
-      location_id,
-      location_integration_id,
-      gateway_username,
-      gateway_password_hash,
-      mac_address,
-      ws_connected_since,
-      last_heartbeat_at
-    `)
-    .eq("mac_address", mac)
-    .maybeSingle();
-
-  if (error || !device) {
-    safeSend(socket, { type: "auth_error", error: "Unknown device (MAC not provisioned)" });
-    return null;
-  }
-  if (!device.tenant_id) {
-    safeSend(socket, { type: "auth_error", error: "Device not yet assigned to a tenant" });
-    return null;
-  }
-  if (!device.gateway_username || !device.gateway_password_hash) {
-    safeSend(socket, { type: "auth_error", error: "Device has no credentials configured" });
-    return null;
-  }
-
+/** Resolve tenant/location names for a device row. Cached per MAC. */
+async function resolveAuthContext(sb: SupabaseClient, device: any): Promise<Omit<AuthCacheEntry, "expiresAt">> {
   let tenantName: string | null = null;
   let resolvedLocationId: string | null = device.location_id ?? null;
   let locationName: string | null = null;
@@ -727,17 +697,91 @@ async function handleAuth(
     }
   }
 
+  return { device, tenantName, resolvedLocationId, locationName };
+}
+
+/** Handle the very first frame: must be `auth`. */
+async function handleAuth(
+  socket: WebSocket,
+  raw: any,
+): Promise<Session | null> {
+  if (raw?.type !== "auth") {
+    safeSend(socket, { type: "auth_error", error: "First frame must be 'auth'" });
+    return null;
+  }
+  const mac = normalizeMac(String(raw.mac || ""));
+  const username = String(raw.username || "").trim();
+  const password = String(raw.password || "");
+  if (!mac || mac.length !== 12 || !username || !password) {
+    safeSend(socket, { type: "auth_error", error: "Missing/invalid credentials" });
+    return null;
+  }
+
+  const sb = svc();
+
+  // 1) Device lookup must always hit the DB so we can read the latest
+  //    heartbeat / ws_connected_since timestamps for seamless reconnect logic.
+  const { data: device, error } = await sb
+    .from("gateway_devices")
+    .select(`
+      id,
+      tenant_id,
+      location_id,
+      location_integration_id,
+      gateway_username,
+      gateway_password_hash,
+      mac_address,
+      ws_connected_since,
+      last_heartbeat_at
+    `)
+    .eq("mac_address", mac)
+    .maybeSingle();
+
+  if (error || !device) {
+    safeSend(socket, { type: "auth_error", error: "Unknown device (MAC not provisioned)" });
+    return null;
+  }
+  if (!device.tenant_id) {
+    safeSend(socket, { type: "auth_error", error: "Device not yet assigned to a tenant" });
+    return null;
+  }
+  if (!device.gateway_username || !device.gateway_password_hash) {
+    safeSend(socket, { type: "auth_error", error: "Device has no credentials configured" });
+    return null;
+  }
+
   if (device.gateway_username !== username) {
     safeSend(socket, { type: "auth_error", error: "Invalid username/password" });
     return null;
   }
-  const ok = await bcryptVerify(password, device.gateway_password_hash);
-  if (!ok) {
-    safeSend(socket, { type: "auth_error", error: "Invalid username/password" });
-    return null;
+
+  // 2) Password verification is expensive (bcrypt). Cache a successful result
+  //    for rapid reconnects after Edge Function isolate recycling.
+  let cached = authCache.get(mac);
+  let passwordOk = false;
+  if (cached && cached.expiresAt > Date.now() && cached.device?.id === device.id) {
+    passwordOk = true;
+    console.log(`[gateway-ws] auth cache hit for ${mac.slice(0, 8)}…`);
+  } else {
+    passwordOk = await bcryptVerify(password, device.gateway_password_hash);
+    if (!passwordOk) {
+      safeSend(socket, { type: "auth_error", error: "Invalid username/password" });
+      return null;
+    }
+    // Prime cache asynchronously after successful verify.
+    cached = undefined as any;
   }
 
-  // Update presence fields + optional metadata from auth frame.
+  // 3) Resolve tenant/location context (cached when available).
+  let ctx: Omit<AuthCacheEntry, "expiresAt">;
+  if (cached) {
+    ctx = cached;
+  } else {
+    ctx = await resolveAuthContext(sb, device);
+    authCache.set(mac, { ...ctx, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
+  }
+
+  // 4) Update presence fields + optional metadata from auth frame.
   //
   // SEAMLESS RECONNECT: Supabase Edge Function isolates are recycled every
   // few minutes, causing the WSS socket to close even though the gateway
@@ -781,22 +825,22 @@ async function handleAuth(
     });
   }
 
-
   safeSend(socket, {
     type: "auth_ok",
     device_id: device.id,
     tenant_id: device.tenant_id,
-    location_id: resolvedLocationId,
+    location_id: ctx.resolvedLocationId,
     location_integration_id: device.location_integration_id,
-    tenant_name: tenantName,
-    location_name: locationName,
+    tenant_name: ctx.tenantName,
+    location_name: ctx.locationName,
+    seamless_reconnect: seamless,
   });
 
   return {
     socket,
     deviceId: device.id,
     tenantId: device.tenant_id,
-    locationId: resolvedLocationId,
+    locationId: ctx.resolvedLocationId,
     locationIntegrationId: device.location_integration_id ?? null,
     channel: null,
     closeRequested: false,
