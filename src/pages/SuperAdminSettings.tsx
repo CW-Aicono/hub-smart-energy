@@ -96,6 +96,10 @@ export default function SuperAdminSettings() {
                 <FileText className="h-4 w-4" />
                 Rechtliches
               </TabsTrigger>
+              <TabsTrigger value="sensor-history" className="gap-2">
+                <Activity className="h-4 w-4" />
+                Sensor-Historie
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="company">
