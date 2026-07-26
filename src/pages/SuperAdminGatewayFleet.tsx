@@ -476,8 +476,29 @@ const SuperAdminGatewayFleet = () => {
     refetchInterval: 15_000,
   });
 
+  const { data: aiconoStatsMap = {} } = useQuery({
+    queryKey: ["sa-aicono-fleet-stats-24h"],
+    enabled: !!isSuperAdmin,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("aicono_fleet_stats_24h");
+      if (error) throw error;
+      const map: Record<string, AiconoStats24h> = {};
+      for (const r of (data ?? []) as any[]) {
+        map[r.gateway_device_id] = {
+          events_24h: r.events_24h ?? 0,
+          reconnects_24h: r.reconnects_24h ?? 0,
+          sessions_24h: r.sessions_24h ?? 0,
+          last_disconnect_at: r.last_disconnect_at ?? null,
+          last_disconnect_reason: r.last_disconnect_reason ?? null,
+        };
+      }
+      return map;
+    },
+  });
+
   const unifiedRows: UnifiedRow[] = useMemo(() => {
-    const aicono = (fleet ?? []).map((d) => aiconoToUnifiedRow(d, tenantNameMap));
+    const aicono = (fleet ?? []).map((d) => aiconoToUnifiedRow(d, tenantNameMap, aiconoStatsMap[d.id]));
     const all = [...aicono, ...loxoneRows];
     all.sort((a, b) => {
       const aActive = a.status === "active" ? 0 : 1;
@@ -486,7 +507,8 @@ const SuperAdminGatewayFleet = () => {
       return a.locationName.localeCompare(b.locationName);
     });
     return all;
-  }, [fleet, loxoneRows, tenantNameMap]);
+  }, [fleet, loxoneRows, tenantNameMap, aiconoStatsMap]);
+
 
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
