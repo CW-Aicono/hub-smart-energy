@@ -75,6 +75,11 @@ interface Session {
   locationIntegrationId: string | null;
   channel: ReturnType<SupabaseClient["channel"]> | null;
   closeRequested: boolean;
+  // Session-log bookkeeping
+  sessionLogId: string | null;
+  pendingEvents: number;
+  lastFlushMs: number;
+  flushTimer: number | null;
 }
 
 interface AuthCacheEntry {
