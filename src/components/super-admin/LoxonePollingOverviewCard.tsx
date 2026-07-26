@@ -191,9 +191,8 @@ export default function LoxonePollingOverviewCard() {
 
         {loading ? (
           <p className="text-sm text-muted-foreground">Lade…</p>
-        ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Keine aktiven Loxone-Integrationen.</p>
-        ) : (
+        ) : rows.length === 0 ? null : (
+
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
