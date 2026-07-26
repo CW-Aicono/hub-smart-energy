@@ -893,6 +893,55 @@ async function handleAuth(
     });
   }
 
+
+  // Session-log bookkeeping: reuse the open row when we detect a seamless
+  // isolate recycle, otherwise open a fresh session and count the reconnect.
+  let sessionLogId: string | null = null;
+  try {
+    if (seamless) {
+      const { data: openRow } = await sb
+        .from("gateway_ws_session_log")
+        .select("id, seamless_recycle_count")
+        .eq("gateway_device_id", device.id)
+        .is("ended_at", null)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (openRow) {
+        sessionLogId = (openRow as any).id;
+        await sb
+          .from("gateway_ws_session_log")
+          .update({
+            seamless_recycle_count: ((openRow as any).seamless_recycle_count ?? 0) + 1,
+            updated_at: nowIso,
+          })
+          .eq("id", sessionLogId);
+      }
+    }
+    if (!sessionLogId) {
+      // Close any leftover open rows first so aggregates stay clean.
+      await sb
+        .from("gateway_ws_session_log")
+        .update({ ended_at: nowIso, disconnect_reason: "superseded", updated_at: nowIso })
+        .eq("gateway_device_id", device.id)
+        .is("ended_at", null);
+      // Count the reconnect on the freshly opened row.
+      const { data: inserted } = await sb
+        .from("gateway_ws_session_log")
+        .insert({
+          gateway_device_id: device.id,
+          tenant_id: device.tenant_id,
+          started_at: nowIso,
+          reconnect_count: 1,
+        })
+        .select("id")
+        .single();
+      sessionLogId = (inserted as any)?.id ?? null;
+    }
+  } catch (e) {
+    console.warn("[gateway-ws] session log setup failed", e);
+  }
+
   safeSend(socket, {
     type: "auth_ok",
     device_id: device.id,
@@ -912,8 +961,13 @@ async function handleAuth(
     locationIntegrationId: device.location_integration_id ?? null,
     channel: null,
     closeRequested: false,
+    sessionLogId,
+    pendingEvents: 0,
+    lastFlushMs: Date.now(),
+    flushTimer: null,
   };
 }
+
 
 /** Handle subsequent frames after auth. */
 async function handleFrame(session: Session, raw: any) {
