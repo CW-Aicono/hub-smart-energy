@@ -787,9 +787,9 @@ const ChargingBilling = () => {
                               {tariff.name}
                               {tariff.is_default && <Badge variant="secondary" className="ml-2">Standard</Badge>}
                             </TableCell>
-                            <TableCell>{fmtCurrency(tariff.price_per_kwh)}</TableCell>
-                            <TableCell>{fmtCurrency(tariff.base_fee)}</TableCell>
-                            <TableCell>{tariff.idle_fee_per_minute > 0 ? <span className="text-sm">{fmtCurrency(tariff.idle_fee_per_minute)}/Min. <span className="text-muted-foreground">ab {tariff.idle_fee_grace_minutes} Min.</span></span> : <span className="text-muted-foreground">—</span>}</TableCell>
+                            <TableCell>{fmtTariffPrice(tariff.price_per_kwh, tariff.currency)}</TableCell>
+                            <TableCell>{fmtTariffPrice(tariff.base_fee, tariff.currency)}</TableCell>
+                            <TableCell>{tariff.idle_fee_per_minute > 0 ? <span className="text-sm">{fmtTariffPrice(tariff.idle_fee_per_minute, tariff.currency)}/Min. <span className="text-muted-foreground">ab {tariff.idle_fee_grace_minutes} Min.</span></span> : <span className="text-muted-foreground">—</span>}</TableCell>
                             <TableCell>{fmtNum(tariff.tax_rate_percent ?? 19, 0)} %</TableCell>
                             <TableCell>
                               <Switch
