@@ -688,7 +688,11 @@ const SuperAdminGatewayFleet = () => {
           </Button>
         </header>
 
-        <div className="p-6">
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <GatewayWorkerStatusCard />
+            <LoxonePollingOverviewCard />
+          </div>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger value="fleet">Flotte ({filteredRows.length})</TabsTrigger>
