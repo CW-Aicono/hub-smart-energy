@@ -137,12 +137,10 @@ export default function LoxonePollingOverviewCard() {
         <CardTitle className="text-base flex items-center gap-2 flex-wrap">
           <Timer className="h-4 w-4" />
           Loxone-Abfrage-Intervalle
-          <Badge variant={flagEnabled ? "default" : "secondary"} className="ml-2">
-            {flagEnabled ? "Drosselung aktiv" : "Drosselung AUS (alle 1 Min)"}
-          </Badge>
           <Badge variant={floorActive ? "destructive" : "outline"}>
             {floorActive ? `Master-Floor: ${floorMinutes.toLocaleString("de-DE")} Min` : "Master-Floor: Aus"}
           </Badge>
+
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -193,9 +191,8 @@ export default function LoxonePollingOverviewCard() {
 
         {loading ? (
           <p className="text-sm text-muted-foreground">Lade…</p>
-        ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Keine aktiven Loxone-Integrationen.</p>
-        ) : (
+        ) : rows.length === 0 ? null : (
+
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
