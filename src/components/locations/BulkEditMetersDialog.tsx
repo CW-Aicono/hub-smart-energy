@@ -100,7 +100,7 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
       toast.error(`Bulk-Update fehlgeschlagen: ${error.message}`);
       return;
     }
-    toast.success(`${targetIds.length} Zähler aktualisiert`);
+    toast.success(`${targetIds.length} ${labels.plural} aktualisiert`);
     onDone();
     onOpenChange(false);
   };
@@ -109,9 +109,9 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Mehrere Zähler bearbeiten ({meters.length})</DialogTitle>
+          <DialogTitle>Mehrere {labels.plural} bearbeiten ({meters.length})</DialogTitle>
           <DialogDescription>
-            Aktivieren Sie nur die Felder, die geändert werden sollen. Alle anderen Werte bleiben pro Zähler unverändert.
+            Aktivieren Sie nur die Felder, die geändert werden sollen. Alle anderen Werte bleiben pro {labels.singular} unverändert.
           </DialogDescription>
         </DialogHeader>
 
@@ -248,7 +248,7 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
           <Button onClick={handleSave} disabled={!anySelected || saving}>
-            {saving ? "Speichere …" : `Auf ${meters.length} Zähler anwenden`}
+            {saving ? "Speichere …" : `Auf ${meters.length} ${labels.plural} anwenden`}
           </Button>
         </DialogFooter>
       </DialogContent>
