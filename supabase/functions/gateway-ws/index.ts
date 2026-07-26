@@ -524,7 +524,19 @@ async function handleExecuteCommand(req: Request, body: any): Promise<Response> 
   });
 }
 
-/** Mark device offline + tear down realtime subscription. */
+/**
+ * Tear down realtime subscription on socket close.
+ *
+ * IMPORTANT: We do NOT mark the device offline or clear `ws_connected_since`
+ * here. Supabase Edge Function isolates are recycled roughly every ~3 minutes
+ * for long-lived WebSockets, which triggers `onclose` even though the addon
+ * on the Pi is perfectly healthy and reconnects within ~5s. Nulling the
+ * connection state on every isolate recycle caused the UI to report a
+ * "reconnect every 3 minutes" flap.
+ *
+ * True offline detection is done in the UI / a scheduled job based on
+ * `last_heartbeat_at` staleness (> configured stale threshold).
+ */
 async function tearDown(session: Session) {
   if (session.closeRequested) return;
   session.closeRequested = true;
@@ -534,18 +546,6 @@ async function tearDown(session: Session) {
     }
   } catch (e) {
     console.warn("[gateway-ws] removeChannel failed", e);
-  }
-  try {
-    await svc()
-      .from("gateway_devices")
-      .update({
-        status: "offline",
-        ws_connected_since: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", session.deviceId);
-  } catch (e) {
-    console.warn("[gateway-ws] mark offline failed", e);
   }
 }
 
