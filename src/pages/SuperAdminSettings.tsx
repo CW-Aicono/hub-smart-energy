@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, MapPin, Receipt, Landmark, Save, FileText } from "lucide-react";
+import { Building2, MapPin, Receipt, Landmark, Save, FileText, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { LegalPagesSettings } from "@/components/settings/LegalPagesSettings";
 
