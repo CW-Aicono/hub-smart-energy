@@ -97,6 +97,48 @@ interface AuthCacheEntry {
 const authCache = new Map<string, AuthCacheEntry>();
 const AUTH_CACHE_TTL_MS = 60_000;
 
+// Session-log flush cadence: buffer event counts and flush at most once per
+// minute to avoid per-frame writes (protects IO budget, consistent with worker
+// aggregation policy).
+const SESSION_FLUSH_INTERVAL_MS = 60_000;
+
+async function flushSessionCounters(session: Session, opts?: { force?: boolean }) {
+  if (!session.sessionLogId) return;
+  const delta = session.pendingEvents;
+  if (delta === 0 && !opts?.force) return;
+  session.pendingEvents = 0;
+  session.lastFlushMs = Date.now();
+  try {
+    // Increment via RPC-less pattern: read-then-write is racy across isolates
+    // but each session lives in exactly one isolate, so a plain UPDATE with
+    // arithmetic is safe.
+    if (delta > 0) {
+      const sb = svc();
+      const { data: cur } = await sb
+        .from("gateway_ws_session_log")
+        .select("events_received")
+        .eq("id", session.sessionLogId)
+        .maybeSingle();
+      const next = ((cur as any)?.events_received ?? 0) + delta;
+      await sb
+        .from("gateway_ws_session_log")
+        .update({ events_received: next, updated_at: new Date().toISOString() })
+        .eq("id", session.sessionLogId);
+    }
+  } catch (e) {
+    console.warn("[gateway-ws] session flush failed", e);
+  }
+}
+
+function scheduleFlush(session: Session) {
+  if (session.flushTimer != null) return;
+  session.flushTimer = setTimeout(async () => {
+    session.flushTimer = null;
+    await flushSessionCounters(session);
+  }, SESSION_FLUSH_INTERVAL_MS) as unknown as number;
+}
+
+
 /** Send safely (no throw if socket already closed). */
 function safeSend(ws: WebSocket, msg: unknown) {
   try {
