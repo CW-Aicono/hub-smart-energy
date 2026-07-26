@@ -971,6 +971,9 @@ async function handleAuth(
 
 /** Handle subsequent frames after auth. */
 async function handleFrame(session: Session, raw: any) {
+  // Count every valid frame as one received event; flushed on a 60 s cadence.
+  session.pendingEvents += 1;
+  scheduleFlush(session);
   switch (raw?.type) {
     case "heartbeat":
     case "ping": {
