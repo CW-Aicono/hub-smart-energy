@@ -71,7 +71,8 @@ export function useAdhocTerminals() {
 
   const upsert = useMutation({
     mutationFn: async (payload: Partial<any> & { id?: string }) => {
-      const row = { ...payload, tenant_id: tenant!.id };
+      const { assignments, provider, charge_points, ...clean } = payload as any;
+      const row = { ...clean, tenant_id: tenant!.id };
       const { data, error } = payload.id
         ? await supabase.from("payment_terminals").update(row as any).eq("id", payload.id).select().single()
         : await supabase.from("payment_terminals").insert(row as any).select().single();
