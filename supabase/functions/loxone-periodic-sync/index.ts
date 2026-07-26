@@ -54,18 +54,25 @@ serve(async (req) => {
   try {
     // Feature-Flag: globaler Kill-Switch für die Intervall-Drosselung
     let respectPollInterval = true;
+    let masterFloorMin = 0; // 0 = deaktiviert
     try {
-      const { data: flagRow } = await supabase
+      const { data: settingsRows } = await supabase
         .from("system_settings")
-        .select("value")
-        .eq("key", "loxone_respect_poll_interval")
-        .maybeSingle();
-      if (flagRow && String(flagRow.value).toLowerCase() === "false") {
-        respectPollInterval = false;
+        .select("key, value")
+        .in("key", ["loxone_respect_poll_interval", "loxone_master_poll_floor_minutes"]);
+      for (const row of (settingsRows || []) as Array<{ key: string; value: string }>) {
+        if (row.key === "loxone_respect_poll_interval" && String(row.value).toLowerCase() === "false") {
+          respectPollInterval = false;
+        }
+        if (row.key === "loxone_master_poll_floor_minutes") {
+          const n = Number(row.value);
+          if (Number.isFinite(n) && n >= 1 && n <= 60) masterFloorMin = Math.floor(n);
+        }
       }
     } catch (_) {
-      // Tabelle/Schlüssel fehlt → Default true
+      // Tabelle/Schlüssel fehlt → Defaults
     }
+
 
     const { data: locationIntegrations, error } = await supabase
       .from("location_integrations")
