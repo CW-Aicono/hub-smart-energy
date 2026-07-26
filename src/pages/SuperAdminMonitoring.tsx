@@ -4,11 +4,7 @@ import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import { useInfraMetrics } from "@/hooks/useInfraMetrics";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
-import LoxonePollingOverviewCard from "@/components/super-admin/LoxonePollingOverviewCard";
-
-
 import HetznerNodesCard from "@/components/super-admin/HetznerNodesCard";
-import LoxonePollingOverviewCard from "@/components/super-admin/LoxonePollingOverviewCard";
 import AlertRulesCard from "@/components/super-admin/AlertRulesCard";
 import AlertEventsHistoryCard from "@/components/super-admin/AlertEventsHistoryCard";
 import { Button } from "@/components/ui/button";
