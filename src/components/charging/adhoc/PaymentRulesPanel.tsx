@@ -186,7 +186,14 @@ export default function PaymentRulesPanel() {
                     <Select value={editing.scope} onValueChange={(v) => setEditing({ ...editing, scope: v, scope_id: null })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="tenant">Mandant (Basis)</SelectItem>
+                        {(() => {
+                          const tenantTaken = !editing.id && rules.some((r: any) => r.scope === "tenant");
+                          return (
+                            <SelectItem value="tenant" disabled={tenantTaken}>
+                              Mandant (Basis){tenantTaken ? " – bereits vergeben" : ""}
+                            </SelectItem>
+                          );
+                        })()}
                         <SelectItem value="group">Ladepunkt-Gruppe</SelectItem>
                         <SelectItem value="charge_point">Einzelner Ladepunkt</SelectItem>
                       </SelectContent>
