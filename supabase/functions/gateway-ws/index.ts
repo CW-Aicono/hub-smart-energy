@@ -599,9 +599,29 @@ async function handleExecuteCommand(req: Request, body: any): Promise<Response> 
  * True offline detection is done in the UI / a scheduled job based on
  * `last_heartbeat_at` staleness (> configured stale threshold).
  */
-async function tearDown(session: Session) {
+async function tearDown(session: Session, reason?: string, code?: number) {
   if (session.closeRequested) return;
   session.closeRequested = true;
+  if (session.flushTimer != null) {
+    try { clearTimeout(session.flushTimer as unknown as number); } catch { /* ignore */ }
+    session.flushTimer = null;
+  }
+  await flushSessionCounters(session, { force: true });
+  if (session.sessionLogId) {
+    try {
+      await svc()
+        .from("gateway_ws_session_log")
+        .update({
+          ended_at: new Date().toISOString(),
+          disconnect_reason: reason ?? "socket_closed",
+          disconnect_code: typeof code === "number" ? code : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", session.sessionLogId);
+    } catch (e) {
+      console.warn("[gateway-ws] session close failed", e);
+    }
+  }
   try {
     if (session.channel) {
       await svc().removeChannel(session.channel);
@@ -610,6 +630,7 @@ async function tearDown(session: Session) {
     console.warn("[gateway-ws] removeChannel failed", e);
   }
 }
+
 
 /** Try to send a command to the Pi over WS, mark sent_at. */
 async function pushCommand(session: Session, cmd: any) {
