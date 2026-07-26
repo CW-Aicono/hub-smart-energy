@@ -409,13 +409,12 @@ const LiveValues = () => {
       for (const m of autoMeters) {
         const polling = pollingLatest.get(m.id);
         const bridge = bridgeLatest.get(m.sensor_uuid!.toLowerCase());
-        let chosen: { value: number } | undefined;
-        // Neueres Sample gewinnt; Bridge bei Gleichstand bevorzugt
-        if (bridge && polling) {
-          chosen = bridge.at >= polling.at ? bridge : polling;
-        } else {
-          chosen = bridge ?? polling;
-        }
+        const snapshot = snapshotLatest.get(m.sensor_uuid!.toLowerCase());
+        // Neuestes Sample gewinnt (Bridge > Snapshot > Polling bei Gleichstand)
+        const candidates = [bridge, snapshot, polling].filter(Boolean) as { value: number; at: number }[];
+        const chosen = candidates.length
+          ? candidates.reduce((best, cur) => (cur.at >= best.at ? cur : best))
+          : undefined;
         const periods = periodMap.get(m.id) ?? { totalDay: null, totalMonth: null, totalYear: null };
         const dbReading = cumulativeLatest.get(m.id) ?? null;
         const existing = next.get(m.id);
