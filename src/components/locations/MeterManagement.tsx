@@ -715,6 +715,78 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 </Button>
               )}
             </div>
+            {isAdmin && selectedMeterIds.size > 0 && (
+              <div className="flex items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
+                <span className="font-medium">{selectedMeterIds.size} ausgewählt</span>
+                <div className="flex-1" />
+                {!showArchived && (
+                  <Button size="sm" variant="outline" onClick={() => setBulkEditOpen(true)}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" /> Bearbeiten
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    const ids = Array.from(selectedMeterIds);
+                    for (const id of ids) await archiveMeter(id, !showArchived);
+                    setSelectedMeterIds(new Set());
+                  }}
+                >
+                  {showArchived ? <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> : <Archive className="h-3.5 w-3.5 mr-1" />}
+                  {showArchived ? "Wiederherstellen" : "Archivieren"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    // Export selection from BOTH tables: top (virtual/manual) + gateway-linked meters.
+                    const rows = meters.filter((m) => selectedMeterIds.has(m.id));
+                    const header = ["Name", "Raum", "Energieart", "Erfassung", "Wert", "Einheit"];
+                    const csv = [header.join(";")]
+                      .concat(
+                        rows.map((r) => {
+                          const room = r.room_id ? roomNameById.get(r.room_id) || "" : "";
+                          const unit = energyUnitForMeter(r);
+                          const v = latestMeterValues.get(r.id)?.value;
+                          const val = v != null ? v.toLocaleString("de-DE", { maximumFractionDigits: 2 }) : "";
+                          return [r.name, room, r.energy_type ?? "", r.capture_type ?? "", val, unit]
+                            .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+                            .join(";");
+                        }),
+                      )
+                      .join("\n");
+                    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `zaehler-export-${new Date().toISOString().slice(0, 10)}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  CSV-Export
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={async () => {
+                    const ok = await confirmDialog({
+                      title: `${selectedMeterIds.size} Zähler endgültig löschen?`,
+                      description: "Historische Messwerte bleiben erhalten, sind aber nicht mehr zugeordnet.",
+                      confirmLabel: "Endgültig löschen",
+                    });
+                    if (!ok) return;
+                    const { error } = await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
+                    if (error) return;
+                    setSelectedMeterIds(new Set());
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Löschen
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setSelectedMeterIds(new Set())}>Auswahl leeren</Button>
+              </div>
+            )}
             {metersLoading ? (
               <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
             ) : displayedMeters.length === 0 ? (
@@ -723,77 +795,6 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               </p>
             ) : (
               <>
-                {isAdmin && selectedMeterIds.size > 0 && (
-                  <div className="flex items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
-                    <span className="font-medium">{selectedMeterIds.size} ausgewählt</span>
-                    <div className="flex-1" />
-                    {!showArchived && (
-                      <Button size="sm" variant="outline" onClick={() => setBulkEditOpen(true)}>
-                        <Pencil className="h-3.5 w-3.5 mr-1" /> Bearbeiten
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={async () => {
-                        const ids = Array.from(selectedMeterIds);
-                        for (const id of ids) await archiveMeter(id, !showArchived);
-                        setSelectedMeterIds(new Set());
-                      }}
-                    >
-                      {showArchived ? <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> : <Archive className="h-3.5 w-3.5 mr-1" />}
-                      {showArchived ? "Wiederherstellen" : "Archivieren"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        const rows = displayedMeters.filter((m) => selectedMeterIds.has(m.id));
-                        const header = ["Name", "Raum", "Energieart", "Erfassung", "Wert", "Einheit"];
-                        const csv = [header.join(";")]
-                          .concat(
-                            rows.map((r) => {
-                              const room = r.room_id ? roomNameById.get(r.room_id) || "" : "";
-                              const unit = energyUnitForMeter(r);
-                              const v = latestMeterValues.get(r.id)?.value;
-                              const val = v != null ? v.toLocaleString("de-DE", { maximumFractionDigits: 2 }) : "";
-                              return [r.name, room, r.energy_type ?? "", r.capture_type ?? "", val, unit]
-                                .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-                                .join(";");
-                            }),
-                          )
-                          .join("\n");
-                        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = `zaehler-export-${new Date().toISOString().slice(0, 10)}.csv`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      }}
-                    >
-                      CSV-Export
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={async () => {
-                        const ok = await confirmDialog({
-                          title: `${selectedMeterIds.size} Zähler endgültig löschen?`,
-                          description: "Historische Messwerte bleiben erhalten, sind aber nicht mehr zugeordnet.",
-                          confirmLabel: "Endgültig löschen",
-                        });
-                        if (!ok) return;
-                        const { error } = await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
-                        if (error) return;
-                        setSelectedMeterIds(new Set());
-                      }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Löschen
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setSelectedMeterIds(new Set())}>Auswahl leeren</Button>
-                  </div>
-                )}
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -949,30 +950,30 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 </Button>
               </div>
             )}
+            {isAdmin && selectedMeterIds.size > 0 && (
+              <BulkToolbar
+                count={selectedMeterIds.size}
+                showArchived={showArchived}
+                onBulkEdit={() => setBulkEditOpen(true)}
+                onArchive={async () => {
+                  for (const id of Array.from(selectedMeterIds)) await archiveMeter(id, !showArchived);
+                  setSelectedMeterIds(new Set());
+                }}
+                onDelete={async () => {
+                  const ok = await confirmDialog({
+                    title: `${selectedMeterIds.size} Sensoren endgültig löschen?`,
+                    description: "Historische Messwerte bleiben erhalten, sind aber nicht mehr zugeordnet.",
+                    confirmLabel: "Endgültig löschen",
+                  });
+                  if (!ok) return;
+                  await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
+                  setSelectedMeterIds(new Set());
+                }}
+                onClear={() => setSelectedMeterIds(new Set())}
+              />
+            )}
             {displayedSensors.length > 0 && (
               <>
-                {isAdmin && selectedMeterIds.size > 0 && (
-                  <BulkToolbar
-                    count={selectedMeterIds.size}
-                    showArchived={showArchived}
-                    onBulkEdit={() => setBulkEditOpen(true)}
-                    onArchive={async () => {
-                      for (const id of Array.from(selectedMeterIds)) await archiveMeter(id, !showArchived);
-                      setSelectedMeterIds(new Set());
-                    }}
-                    onDelete={async () => {
-                      const ok = await confirmDialog({
-                        title: `${selectedMeterIds.size} Sensoren endgültig löschen?`,
-                        description: "Historische Messwerte bleiben erhalten, sind aber nicht mehr zugeordnet.",
-                        confirmLabel: "Endgültig löschen",
-                      });
-                      if (!ok) return;
-                      await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
-                      setSelectedMeterIds(new Set());
-                    }}
-                    onClear={() => setSelectedMeterIds(new Set())}
-                  />
-                )}
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1097,30 +1098,30 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 </Button>
               </div>
             )}
+            {isAdmin && selectedMeterIds.size > 0 && (
+              <BulkToolbar
+                count={selectedMeterIds.size}
+                showArchived={showArchived}
+                onBulkEdit={() => setBulkEditOpen(true)}
+                onArchive={async () => {
+                  for (const id of Array.from(selectedMeterIds)) await archiveMeter(id, !showArchived);
+                  setSelectedMeterIds(new Set());
+                }}
+                onDelete={async () => {
+                  const ok = await confirmDialog({
+                    title: `${selectedMeterIds.size} Aktoren endgültig löschen?`,
+                    description: "Diese Aktion kann nicht rückgängig gemacht werden.",
+                    confirmLabel: "Endgültig löschen",
+                  });
+                  if (!ok) return;
+                  await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
+                  setSelectedMeterIds(new Set());
+                }}
+                onClear={() => setSelectedMeterIds(new Set())}
+              />
+            )}
             {displayedActuators.length > 0 && (
               <>
-                {isAdmin && selectedMeterIds.size > 0 && (
-                  <BulkToolbar
-                    count={selectedMeterIds.size}
-                    showArchived={showArchived}
-                    onBulkEdit={() => setBulkEditOpen(true)}
-                    onArchive={async () => {
-                      for (const id of Array.from(selectedMeterIds)) await archiveMeter(id, !showArchived);
-                      setSelectedMeterIds(new Set());
-                    }}
-                    onDelete={async () => {
-                      const ok = await confirmDialog({
-                        title: `${selectedMeterIds.size} Aktoren endgültig löschen?`,
-                        description: "Diese Aktion kann nicht rückgängig gemacht werden.",
-                        confirmLabel: "Endgültig löschen",
-                      });
-                      if (!ok) return;
-                      await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
-                      setSelectedMeterIds(new Set());
-                    }}
-                    onClear={() => setSelectedMeterIds(new Set())}
-                  />
-                )}
                 <Table>
                   <TableHeader>
                     <TableRow>

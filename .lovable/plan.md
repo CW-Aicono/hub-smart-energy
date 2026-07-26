@@ -1,51 +1,57 @@
-## Ziel
+## Korrigierte Ursache
 
-Die beiden Karten „Loxone-Abfrage-Intervalle" und „Loxone-WebSocket-Worker (Hetzner)" gehören inhaltlich zur Gateway-Flotte und werden dorthin verschoben. Zusätzlich bekommt die Karte „Loxone-Abfrage-Intervalle" eine echte Funktion: eine **Master-Drosselung (Hard Floor)** für IO-Notfälle.
+Du hast recht — die obere Tabelle zeigt **nur virtuelle und manuelle Zähler**, nicht alle. Das kommt aus der Deduplizierungs-Logik in `src/components/locations/MeterManagement.tsx`:
 
-## Verschiebung
+```ts
+// Zeile 495–498
+const meterTypeMeters = activeMeters.filter(
+  (m) =>
+    ((m as any).device_type === "meter" || !(m as any).device_type) &&
+    !(m.sensor_uuid && gatewayDeviceIds.has(m.sensor_uuid)),
+);
+// Zeile 508
+const displayedMeters = showArchived ? archivedMetersByType : meterTypeMeters;
+```
 
-- Beide Karten aus der bisherigen Super-Admin-Übersicht entfernen und in die Seite **Gateway-Flotte** (Super-Admin) einhängen, direkt unter der bestehenden Flottenübersicht.
-- Layout: zweispaltig auf Desktop, gestapelt auf Mobile.
-- Bestehende Datenquellen und Polling (30 s) bleiben unverändert.
+Zähler mit `sensor_uuid`, das vom Gateway geliefert wird, werden aus der oberen Tabelle **ausgeblendet** und stattdessen nur in der unteren „Vom Gateway gelieferte Zähler-Geräte"-Tabelle angezeigt (`assignedMeterDevices`, Zeile 913 ff.). Die obere Tabelle enthält damit ausschließlich:
+- virtuelle Zähler (z. B. „Ladeinfrastruktur" auf Hetzner)
+- rein manuelle Zähler ohne Gateway-Bindung
 
-## Master-Drosselung (Hard Floor)
+Der eigentliche Bug ist die **Verschachtelung der Bulk-Toolbar** (Zeilen 720–796):
 
-**Konzept**
-- Neuer Wert in `system_settings`: `loxone_master_poll_floor_minutes` (Integer, 1–60, `null`/leer = deaktiviert).
-- Semantik im HTTP-Pull (`loxone-periodic-sync`): effektives Intervall = `max(tenant_config_minutes, master_floor_minutes)`.
-- Wirkt nur nach oben (verlängert Intervalle) — Tenants mit ohnehin längerem Intervall bleiben unberührt.
-- Kein Opt-out pro Standort (bewusst einfach gehalten).
+```tsx
+) : displayedMeters.length === 0 ? (
+  <p>Keine Zähler angelegt.</p>
+) : (
+  <>
+    {isAdmin && selectedMeterIds.size > 0 && (
+      /* ⬅ Toolbar sitzt HIER, im else-Zweig */
+    )}
+    <Table>…</Table>
+  </>
+)}
+{/* Gateway-Devices-Tabelle steht danach — außerhalb des if/else */}
+```
 
-**UI in der Karte „Loxone-Abfrage-Intervalle" (auf Gateway-Flotte)**
-- Kopfzeile mit zwei Badges:
-  - Drosselungs-Flag (`loxone_respect_poll_interval`) — unverändert.
-  - **Neu:** Master-Floor-Status (`Aus` / `Aktiv: N Min`).
-- Kompakter Steuerblock (nur `super_admin`): Nummerneingabe 1–60 + Speichern + „Deaktivieren"-Button. Kurzer Hilfetext: „Überschreibt kürzere Tenant-Intervalle. Für IO-Notfälle."
-- Preset-Buttons: `Aus`, `15 Min`, `30 Min`, `60 Min` für Ein-Klick-Notfall.
-- Tabelle bekommt eine zusätzliche Spalte **Effektiv (Min)** — zeigt `max(konfiguriert, floor)`; wenn Floor greift, Badge „durch Master-Floor" an der Zeile.
+Beide Tabellen (obere Virtuell/Manuell + untere Gateway-Devices) schreiben in dieselbe `selectedMeterIds`-Set. Aber die Toolbar wird **nur gerendert, wenn `displayedMeters` nicht leer ist**.
 
-## Backend
+- **Hetzner**: 1 virtueller Zähler „Ladeinfrastruktur" existiert → `displayedMeters.length > 0` → Toolbar wird gerendert → Auswahl der 15 Gateway-Zähler unten ergibt sichtbar „15 ausgewählt".
+- **Lovable**: keine virtuellen oder manuellen Zähler → `displayedMeters.length === 0` → Empty-State-Text „Keine Zähler angelegt." → Toolbar existiert im DOM überhaupt nicht, obwohl unten Gateway-Zähler selektiert sind.
 
-- `system_settings`-Zeile wird lazy angelegt (kein Migration nötig, `useSetSystemSetting` upsertet bereits).
-- `supabase/functions/loxone-periodic-sync/index.ts` (bzw. der Ort, an dem `poll_interval_minutes` gelesen wird): Master-Floor einmal pro Run laden und auf jedes Tenant-Intervall anwenden.
-- Kurzer In-Function-Cache (60 s), um zusätzliche `system_settings`-Reads zu vermeiden.
+## Fix
 
-## Audit
+**Datei**: `src/components/locations/MeterManagement.tsx`
 
-- Änderungen des Master-Floors werden über `writeAuditLog` protokolliert (`action: "loxone.master_floor.update"`, before/after).
+1. **Toolbar aus dem `else`-Zweig herausziehen** und vor die `displayedMeters.length === 0 ? … : …`-Verzweigung platzieren (Zeilen 718–796). So bleibt sie sichtbar, sobald `selectedMeterIds.size > 0` — egal ob die obere Tabelle leer ist oder nicht.
 
-## Nicht enthalten
+2. **„Select all"-Verhalten anpassen** (Zeile 803–807): Die „Alle auswählen"-Checkbox in der oberen Table-Header sollte nur alle `displayedMeters` toggeln (bleibt so). Sie steuert bewusst nicht die Gateway-Devices-Tabelle darunter — diese hat eine eigene Header-Checkbox (`toggleSelectAll` → `DeviceTable`, Zeilen 934/935), was korrekt bleibt.
 
-- Kein Worker-Kill-Switch (bewusst ausgeklammert).
-- Keine Standort-Ausnahmen.
-- Keine Änderungen am WS-Worker-Verhalten.
+3. **Empty-State-Text zusätzlich einblenden**: „Keine Zähler angelegt." weiterhin zeigen, wenn `displayedMeters.length === 0` — aber unabhängig davon die Toolbar oberhalb rendern, damit Bulk-Aktionen für die unten selektierten Gateway-Zähler funktionieren.
 
-## Technische Details
+4. **Analog Sensoren- & Aktoren-Tab prüfen** (Zeilen ~1030, ~1178). Struktur ist parallel aufgebaut; dort dieselbe Umstellung, falls das gleiche Verschachtelungs-Muster verwendet wird.
 
-- Neue Komponenten: keine — bestehende `LoxonePollingOverviewCard` erweitern und in die Gateway-Flotte-Seite einhängen; die bestehende Karte für den WS-Worker (Hetzner) 1:1 mitverschieben.
-- Betroffene Dateien (ungefähr):
-  - `src/pages/SuperAdminGatewayFleet.tsx` (oder Äquivalent) — beide Karten einhängen.
-  - Bisheriger Einbindungsort — Karten entfernen.
-  - `src/components/super-admin/LoxonePollingOverviewCard.tsx` — Master-Floor-UI + effektive Spalte.
-  - `supabase/functions/loxone-periodic-sync/index.ts` — Floor anwenden.
-- Zugriff: Steuerblock nur bei `is_support_user`/`super_admin`; Lesezugriff bleibt wie bisher.
+## Umfang
+
+- 1 Datei, rein strukturelle JSX-Umsortierung.
+- Kein Datenbank-, RLS-, oder Backend-Änderung.
+- Keine Business-Logik-Änderung — `selectedMeterIds` und die Bulk-Handler bleiben unverändert.
