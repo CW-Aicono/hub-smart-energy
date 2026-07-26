@@ -318,8 +318,13 @@ const LiveValues = () => {
     const firstOfMonth = today.substring(0, 7) + "-01";
     const firstOfYear = today.substring(0, 4) + "-01-01";
 
-    // Parallel: DB-Polling-Wert, Bridge-Raw-Wert (Live), Perioden-Totals, Zählerstand (kumulativ)
-    const [powerRes, bridgeRes, periodRes, cumulativeRes] = await Promise.all([
+    // Unique location_integration_ids für Sensor-Snapshots (AICONO-Gateway / Shelly-Cloud)
+    const liIds = Array.from(
+      new Set(autoMeters.map((m) => m.location_integration_id).filter(Boolean) as string[])
+    );
+
+    // Parallel: DB-Polling-Wert, Bridge-Raw-Wert (Live), Perioden-Totals, Zählerstand (kumulativ), Sensor-Snapshots
+    const [powerRes, bridgeRes, periodRes, cumulativeRes, snapshotRes] = await Promise.all([
       supabase
         .from("meter_power_readings")
         .select("meter_id, power_value, recorded_at")
@@ -339,7 +344,33 @@ const LiveValues = () => {
         .in("period_type", ["day", "month", "year"])
         .in("period_start", [today, firstOfMonth, firstOfYear]),
       supabase.rpc("latest_meter_cumulative" as any, { _meter_ids: meterIds }),
+      liIds.length > 0
+        ? supabase
+            .from("gateway_sensor_snapshots")
+            .select("location_integration_id, sensors, fetched_at")
+            .in("location_integration_id", liIds)
+            .gte("fetched_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
+            .order("fetched_at", { ascending: false })
+        : Promise.resolve({ data: [] as any[] } as any),
     ]);
+
+    // Neuester Snapshot pro location_integration_id → uuid → rawValue
+    const snapshotLatest = new Map<string, { value: number; at: number }>();
+    const seenLi = new Set<string>();
+    for (const row of (snapshotRes as any).data ?? []) {
+      if (seenLi.has(row.location_integration_id)) continue;
+      seenLi.add(row.location_integration_id);
+      const at = new Date(row.fetched_at).getTime();
+      const arr = Array.isArray(row.sensors) ? row.sensors : [];
+      for (const s of arr) {
+        const rawId = s?.id ?? s?.uuid;
+        if (!rawId) continue;
+        const raw = s?.rawValue ?? s?.value;
+        const num = typeof raw === "number" ? raw : Number(raw);
+        if (!Number.isFinite(num)) continue;
+        snapshotLatest.set(String(rawId).toLowerCase(), { value: num, at });
+      }
+    }
 
 
     // Letzten Bridge-Wert pro UUID extrahieren
