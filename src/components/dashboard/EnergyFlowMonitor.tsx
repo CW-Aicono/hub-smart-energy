@@ -1376,16 +1376,17 @@ export function MeterDetailDialog({
     return { rateUnit: `${u}/h`, energyUnit: u };
   })();
 
-  // Sensor detection: non-metering unit (°C, %, V, A, lx, bar, ppm, hPa, dB …)
-  // or a boolean/state signal without a metering energy_type.
+  // Sensor detection: alles was keine Metering-Einheit (Energie/Leistung/Volumen) ist.
   const isSensor = (() => {
-    const u = meterUnitRaw.toLowerCase();
-    const meteringEnergyTypes = new Set(["strom", "gas", "wasser", "waerme"]);
-    if (meteringEnergyTypes.has(meterEnergyType)) return false;
-    if (!u) return false; // ohne Einheit lassen wir das bisherige Verhalten
-    // Metering-Einheiten explizit ausschließen
-    if (/^(k?wh?|m³|m3|l|liter)(\/h|\/min)?$/i.test(u)) return false;
-    return true;
+    const u = meterUnitRaw.toLowerCase().replace(/\s+/g, "");
+    const meteringUnits = new Set([
+      "wh","kwh","mwh","gwh",
+      "w","kw","mw","gw",
+      "va","kva","var","kvar",
+      "m³","m3","l","l/h","l/min","m³/h","m3/h",
+    ]);
+    if (!u) return false; // ohne Einheit: altes Verhalten (Zähler)
+    return !meteringUnits.has(u);
   })();
 
   const { data: latestSensor } = useQuery({
