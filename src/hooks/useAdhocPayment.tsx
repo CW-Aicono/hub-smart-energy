@@ -147,7 +147,8 @@ export function useAdhocRules() {
 
   const upsert = useMutation({
     mutationFn: async (payload: Partial<any> & { id?: string }) => {
-      const row = { ...payload, tenant_id: tenant!.id };
+      const { tariff, ...clean } = payload as any;
+      const row = { ...clean, tenant_id: tenant!.id };
       const { data, error } = payload.id
         ? await supabase.from("adhoc_payment_rules").update(row as any).eq("id", payload.id).select().single()
         : await supabase.from("adhoc_payment_rules").insert(row as any).select().single();
