@@ -661,7 +661,9 @@ async function handleAuth(
       location_integration_id,
       gateway_username,
       gateway_password_hash,
-      mac_address
+      mac_address,
+      ws_connected_since,
+      last_heartbeat_at
     `)
     .eq("mac_address", mac)
     .maybeSingle();
