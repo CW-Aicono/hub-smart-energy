@@ -1772,8 +1772,9 @@ export function MeterDetailDialog({
           />
         )}
 
-        {/* Chart 1: Leistungsverlauf (+ optional SOC bei Speichern) */}
+        {/* Chart 1: Leistungsverlauf (+ optional SOC bei Speichern) — nur für Zähler, nicht für Sensoren */}
 
+        {!isSensor && (
         <div>
           <div className="mb-1 flex items-center justify-between gap-2">
             <div className="text-sm font-medium">
