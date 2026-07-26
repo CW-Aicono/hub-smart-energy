@@ -92,7 +92,7 @@ export function SensorHistoryChart({ meterId, unit }: { meterId: string; unit?: 
                   type="number"
                   domain={["dataMin", "dataMax"]}
                   scale="time"
-                  tickFormatter={(t) => formatInBerlin(new Date(t), range === "24h" ? "HH:mm" : "dd.MM")}
+                  tickFormatter={(t) => fmtBerlin(new Date(t), range === "24h" ? "time" : "day")}
                   tick={{ fontSize: 11 }}
                 />
                 <YAxis
@@ -100,7 +100,7 @@ export function SensorHistoryChart({ meterId, unit }: { meterId: string; unit?: 
                   tickFormatter={(v) => v.toLocaleString("de-DE", { maximumFractionDigits: 2 })}
                 />
                 <Tooltip
-                  labelFormatter={(t) => formatInBerlin(new Date(Number(t)), "dd.MM.yyyy HH:mm")}
+                  labelFormatter={(t) => fmtBerlin(new Date(Number(t)), "full")}
                   formatter={(v: any) => [
                     `${Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${displayUnit}`.trim(),
                     "Wert",
