@@ -7,7 +7,16 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useState } from "react";
-import { formatInBerlin } from "@/lib/timezone";
+
+const BERLIN_TZ = "Europe/Berlin";
+function fmtBerlin(d: Date, mode: "time" | "day" | "full"): string {
+  const opts: Intl.DateTimeFormatOptions = mode === "time"
+    ? { timeZone: BERLIN_TZ, hour: "2-digit", minute: "2-digit" }
+    : mode === "day"
+      ? { timeZone: BERLIN_TZ, day: "2-digit", month: "2-digit" }
+      : { timeZone: BERLIN_TZ, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" };
+  return new Intl.DateTimeFormat("de-DE", opts).format(d);
+}
 
 type Range = "24h" | "7d" | "30d";
 const RANGE_MS: Record<Range, number> = {
