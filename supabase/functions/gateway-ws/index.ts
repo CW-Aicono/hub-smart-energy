@@ -1154,13 +1154,13 @@ Deno.serve((req) => {
     );
   };
 
-  socket.onclose = async () => {
+  socket.onclose = async (ev) => {
     if (authTimeout) clearTimeout(authTimeout);
-    if (session) await tearDown(session);
+    if (session) await tearDown(session, (ev as CloseEvent)?.reason || "socket_closed", (ev as CloseEvent)?.code);
   };
   socket.onerror = async (e) => {
     console.error("[gateway-ws] socket error", e);
-    if (session) await tearDown(session);
+    if (session) await tearDown(session, "socket_error");
   };
 
   return response;
