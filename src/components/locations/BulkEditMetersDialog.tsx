@@ -28,6 +28,7 @@ interface Props {
   meters: Meter[];
   locationId: string;
   onDone: () => void;
+  entityType?: "meters" | "sensors" | "actuators";
 }
 
 const METER_FUNCTIONS: Array<{ value: string; label: string }> = [
@@ -36,7 +37,14 @@ const METER_FUNCTIONS: Array<{ value: string; label: string }> = [
   { value: "bidirectional", label: "Bidirektional" },
 ];
 
-export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, onDone }: Props) {
+const ENTITY_LABELS: Record<NonNullable<Props["entityType"]>, { singular: string; plural: string }> = {
+  meters: { singular: "Zähler", plural: "Zähler" },
+  sensors: { singular: "Sensor", plural: "Sensoren" },
+  actuators: { singular: "Aktor", plural: "Aktoren" },
+};
+
+export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, onDone, entityType = "meters" }: Props) {
+  const labels = ENTITY_LABELS[entityType];
   const { floors } = useFloors(locationId);
   const [floorId, setFloorId] = useState<string>("__none__");
   const { rooms } = useFloorRooms(floorId !== "__none__" && floorId !== "__clear__" ? floorId : undefined);
@@ -92,7 +100,7 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
       toast.error(`Bulk-Update fehlgeschlagen: ${error.message}`);
       return;
     }
-    toast.success(`${targetIds.length} Zähler aktualisiert`);
+    toast.success(`${targetIds.length} ${labels.plural} aktualisiert`);
     onDone();
     onOpenChange(false);
   };
@@ -101,9 +109,9 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Mehrere Zähler bearbeiten ({meters.length})</DialogTitle>
+          <DialogTitle>Mehrere {labels.plural} bearbeiten ({meters.length})</DialogTitle>
           <DialogDescription>
-            Aktivieren Sie nur die Felder, die geändert werden sollen. Alle anderen Werte bleiben pro Zähler unverändert.
+            Aktivieren Sie nur die Felder, die geändert werden sollen. Alle anderen Werte bleiben pro {labels.singular} unverändert.
           </DialogDescription>
         </DialogHeader>
 
@@ -240,7 +248,7 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
           <Button onClick={handleSave} disabled={!anySelected || saving}>
-            {saving ? "Speichere …" : `Auf ${meters.length} Zähler anwenden`}
+            {saving ? "Speichere …" : `Auf ${meters.length} ${labels.plural} anwenden`}
           </Button>
         </DialogFooter>
       </DialogContent>
