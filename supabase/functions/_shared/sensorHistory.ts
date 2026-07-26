@@ -161,7 +161,3 @@ export async function persistSensorHistory(supabase: any, opts: Options): Promis
     console.warn("[sensor-history] unexpected error:", err);
   }
 }
-  } catch (err) {
-    console.warn("[sensor-history] unexpected error:", err);
-  }
-}
