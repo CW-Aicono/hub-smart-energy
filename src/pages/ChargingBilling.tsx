@@ -543,7 +543,7 @@ const ChargingBilling = () => {
       <div className="border-t pt-4">
         <Label className="text-sm font-medium flex items-center gap-2 mb-3"><Clock className="h-4 w-4" />{t("charging.idleFee" as any)}</Label>
         <div className="grid grid-cols-2 gap-4">
-          <div><Label>{t("charging.idleFeePerMin" as any)} ({curSym}) <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" min="0" value={tariffForm.idle_fee_per_minute} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_per_minute: e.target.value })} /></div>
+          <div><Label>{String(t("charging.idleFeePerMin" as any)).replace(/\s*\(€\)/, "")} ({curSym}) <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" min="0" value={tariffForm.idle_fee_per_minute} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_per_minute: e.target.value })} /></div>
           <div><Label>{t("charging.idleFeeGrace" as any)}</Label><Input type="number" step="1" min="0" value={tariffForm.idle_fee_grace_minutes} onChange={(e) => setTariffForm({ ...tariffForm, idle_fee_grace_minutes: e.target.value })} /></div>
         </div>
         <p className="text-xs text-muted-foreground mt-2">{t("charging.idleFeeDesc" as any)}</p>
