@@ -1376,6 +1376,35 @@ export function MeterDetailDialog({
     return { rateUnit: `${u}/h`, energyUnit: u };
   })();
 
+  // Sensor detection: non-metering unit (°C, %, V, A, lx, bar, ppm, hPa, dB …)
+  // or a boolean/state signal without a metering energy_type.
+  const isSensor = (() => {
+    const u = meterUnitRaw.toLowerCase();
+    const meteringEnergyTypes = new Set(["strom", "gas", "wasser", "waerme"]);
+    if (meteringEnergyTypes.has(meterEnergyType)) return false;
+    if (!u) return false; // ohne Einheit lassen wir das bisherige Verhalten
+    // Metering-Einheiten explizit ausschließen
+    if (/^(k?wh?|m³|m3|l|liter)(\/h|\/min)?$/i.test(u)) return false;
+    return true;
+  })();
+
+  const { data: latestSensor } = useQuery({
+    queryKey: ["sensor-latest-value", node.meter_id],
+    enabled: isSensor && !!node.meter_id,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("sensor_readings_raw")
+        .select("value, recorded_at")
+        .eq("meter_id", node.meter_id!)
+        .order("recorded_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data as { value: number; recorded_at: string } | null;
+    },
+  });
+
 
 
   const { data: storageInfo, isLoading: isStorageLoading } = useQuery({
