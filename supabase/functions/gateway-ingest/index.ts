@@ -17,6 +17,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { recordWorkerHeartbeat } from "../_shared/workerStatus.ts";
+import { persistSensorHistory } from "../_shared/sensorHistory.ts";
 
 // Module-level default for helpers called outside handler context
 let corsHeaders: Record<string, string> = getCorsHeaders();
