@@ -149,7 +149,7 @@ export default function PaymentRulesPanel() {
                     </div>
                   </TableCell>
                   <TableCell>{r.tariff?.name ?? "—"}</TableCell>
-                  <TableCell className="text-right">{(r.preauth_amount_cents / 100).toLocaleString("de-DE", { style: "currency", currency: r.currency })}</TableCell>
+                  <TableCell className="text-right">{(r.preauth_amount_cents / 100).toLocaleString("de-DE", { style: "currency", currency: r.tariff?.currency ?? r.currency ?? "EUR" })}</TableCell>
                   <TableCell className="text-right">{r.max_kwh ? r.max_kwh.toLocaleString("de-DE") : "—"}</TableCell>
                   <TableCell className="text-right">{r.max_minutes ?? "—"}</TableCell>
                   <TableCell>
