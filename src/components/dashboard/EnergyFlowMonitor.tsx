@@ -1362,6 +1362,10 @@ export function MeterDetailDialog({
   // Derive display units from the meter's configured unit so non-electric
   // media (water m³, gas m³, …) are not shown as kW/kWh.
   const meterUnitRaw = (nodeMeter?.unit ?? "").toString().trim();
+  const meterSourceUnitRaw = ((nodeMeter as any)?.source_unit_power ?? "").toString().trim();
+  const meterDeviceType = ((nodeMeter as any)?.device_type ?? "").toString().trim().toLowerCase();
+  // Fallback: leere unit → source_unit_power (Gateway-Sensoren haben oft nur letzteres gepflegt)
+  const displayUnit = meterUnitRaw || meterSourceUnitRaw;
   const meterEnergyType = (nodeMeter?.energy_type ?? "").toString().trim();
   const { rateUnit, energyUnit } = (() => {
     const u = meterUnitRaw;
@@ -1376,18 +1380,20 @@ export function MeterDetailDialog({
     return { rateUnit: `${u}/h`, energyUnit: u };
   })();
 
-  // Sensor detection: alles was keine Metering-Einheit (Energie/Leistung/Volumen) ist.
+  // Sensor detection: primär device_type, fallback auf Einheit (unit ODER source_unit_power).
   const isSensor = (() => {
-    const u = meterUnitRaw.toLowerCase().replace(/\s+/g, "");
+    if (meterDeviceType === "sensor" || meterDeviceType === "actuator") return true;
+    const u = (displayUnit || "").toLowerCase().replace(/\s+/g, "");
     const meteringUnits = new Set([
       "wh","kwh","mwh","gwh",
       "w","kw","mw","gw",
       "va","kva","var","kvar",
       "m³","m3","l","l/h","l/min","m³/h","m3/h",
     ]);
-    if (!u) return false; // ohne Einheit: altes Verhalten (Zähler)
+    if (!u) return false; // ohne jegliche Einheit + device_type=meter/undef: altes Verhalten
     return !meteringUnits.has(u);
   })();
+
 
   const { data: latestSensor } = useQuery({
     queryKey: ["sensor-latest-value", node.meter_id],
@@ -1753,7 +1759,7 @@ export function MeterDetailDialog({
             <div className="text-base font-semibold tabular-nums">
               {isSensor
                 ? (latestSensor?.value != null
-                    ? `${fmtDeNum(Number(latestSensor.value))}${meterUnitRaw ? " " + meterUnitRaw : ""}`
+                    ? `${fmtDeNum(Number(latestSensor.value))}${displayUnit ? " " + displayUnit : ""}`
                     : "–")
                 : (stats?.bidirectional
                     ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
@@ -2019,7 +2025,7 @@ export function MeterDetailDialog({
         </div>
         {node.meter_id && (
           <div className="mt-4">
-            <SensorHistoryChart meterId={node.meter_id} unit={meterUnitRaw || null} label="Sensor-Verlauf" />
+            <SensorHistoryChart meterId={node.meter_id} unit={displayUnit || null} label="Sensor-Verlauf" />
           </div>
         )}
       </DialogContent>
