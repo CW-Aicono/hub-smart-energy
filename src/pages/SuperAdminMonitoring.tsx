@@ -121,23 +121,16 @@ const SuperAdminMonitoring = () => {
             </div>
           ) : (
             <>
-              {/* Gateway Worker Status (Hetzner) */}
-              <GatewayWorkerStatusCard />
-
-
-
-
               {/* Hetzner Node Live-Metriken (CPU/RAM/Disk) */}
               <HetznerNodesCard />
-
-              {/* Loxone-Abfrage-Intervalle pro Liegenschaft */}
-              <LoxonePollingOverviewCard />
 
               {/* Alert-Regeln */}
               <AlertRulesCard getLatest={getLatest} />
 
               {/* Alert-Historie (Ursache + Zeitstempel) */}
               <AlertEventsHistoryCard />
+
+
 
 
 
