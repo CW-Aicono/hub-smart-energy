@@ -1343,7 +1343,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
           entityType={bulkEditType ?? "meters"}
           meters={meters.filter((m) => selectedMeterIds.has(m.id))}
           locationId={locationId}
-          onDone={() => setSelectedMeterIds(new Set())}
+          onDone={() => { setSelectedMeterIds(new Set()); refetch(); }}
         />
       </CardContent>
       </CollapsibleContent>
