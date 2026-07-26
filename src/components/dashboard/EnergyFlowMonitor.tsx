@@ -1747,15 +1747,20 @@ export function MeterDetailDialog({
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">
-              Energie{stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}
+              {isSensor ? "Momentanwert" : `Energie${stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}`}
             </div>
             <div className="text-base font-semibold tabular-nums">
-              {stats?.bidirectional
-                ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
-                : `${fmtDeNum(totalImport - totalExport)} ${energyUnit}`}
+              {isSensor
+                ? (latestSensor?.value != null
+                    ? `${fmtDeNum(Number(latestSensor.value))}${meterUnitRaw ? " " + meterUnitRaw : ""}`
+                    : "–")
+                : (stats?.bidirectional
+                    ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
+                    : `${fmtDeNum(totalImport - totalExport)} ${energyUnit}`)}
             </div>
           </div>
         </div>
+
 
 
         {isHouse && (
