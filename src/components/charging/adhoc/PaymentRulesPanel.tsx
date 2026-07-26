@@ -30,7 +30,7 @@ export default function PaymentRulesPanel() {
   const [editing, setEditing] = useState<any>(null);
 
   const { data: tariffs = [] } = useQuery({
-    queryKey: ["tariffs-list", tenant?.id],
+    queryKey: ["charging-tariffs", tenant?.id],
     enabled: !!tenant?.id,
     queryFn: async () => {
       const { data, error } = await supabase.from("charging_tariffs").select("id, name, price_per_kwh, currency, is_active").eq("tenant_id", tenant!.id).eq("is_active", true).order("name");
