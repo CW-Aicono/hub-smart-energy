@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Cpu, RefreshCw, RocketIcon, CheckCircle2, XCircle, Clock, Loader2, ChevronRight, ChevronDown, Radio, Activity, AlertCircle, Search } from "lucide-react";
@@ -120,6 +121,7 @@ interface UnifiedRow {
   serials: string[];
   device?: FleetDevice;
   loxone?: LoxoneDetails;
+  isSeamlessRecycle?: boolean;
 }
 
 
@@ -257,10 +259,14 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
 function aiconoToUnifiedRow(d: FleetDevice, tenantNameMap: Record<string, string>): UnifiedRow {
   const now = Date.now();
   const hbAge = d.last_heartbeat_at ? now - new Date(d.last_heartbeat_at).getTime() : null;
+  const connectedAge = d.ws_connected_since ? now - new Date(d.ws_connected_since).getTime() : null;
   let status: UnifiedRow["status"] = "unknown";
   let statusLabel = d.status || "—";
+  // Heartbeat is the authoritative liveness signal. A fresh heartbeat means the
+  // gateway (and the WS channel) is live, even if the Edge Function isolate was
+  // recycled and ws_connected_since reset.
   if (hbAge !== null && hbAge < AICONO_FRESH_HEARTBEAT_MS) {
-    status = "active"; statusLabel = "Aktiv";
+    status = "active"; statusLabel = "Live";
   } else if (d.status === "online") {
     status = "stale"; statusLabel = "Stale";
   } else if (d.status) {
@@ -284,7 +290,8 @@ function aiconoToUnifiedRow(d: FleetDevice, tenantNameMap: Record<string, string
     lastDisconnect: null,
     serials: [],
     device: d,
-
+    // Derived flag used by the UI to show a seamless-recycle hint.
+    isSeamlessRecycle: connectedAge !== null && hbAge !== null && connectedAge < hbAge,
   };
 }
 
@@ -733,7 +740,29 @@ const SuperAdminGatewayFleet = () => {
                               <TableCell><Badge variant="outline" className="text-xs">{r.type}</Badge></TableCell>
                               <TableCell><UnifiedStatusBadge status={r.status} label={r.statusLabel} /></TableCell>
                               <TableCell className="text-xs text-muted-foreground">
-                                {r.connectedSince ? formatDistanceToNow(new Date(r.connectedSince), { addSuffix: false, locale: de }) : "—"}
+                                {r.connectedSince ? (
+                                  <TooltipProvider delayDuration={100}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="cursor-help underline decoration-dotted">
+                                          {formatDistanceToNow(new Date(r.connectedSince), { addSuffix: false, locale: de })}
+                                          {r.isSeamlessRecycle && <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400">(R)</span>}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top" className="max-w-xs">
+                                        <div className="space-y-1 text-xs">
+                                          <div><span className="text-muted-foreground">WS-Kanal seit:</span> {new Date(r.connectedSince).toLocaleString("de-DE")}</div>
+                                          <div><span className="text-muted-foreground">Letzter Heartbeat:</span> {r.lastHeartbeat ? new Date(r.lastHeartbeat).toLocaleString("de-DE") : "—"}</div>
+                                          {r.isSeamlessRecycle && (
+                                            <div className="text-amber-600 dark:text-amber-400">
+                                              Edge-Function-Recycle erkannt: Gateway war durchgehend online, nur die Cloud-Isolate wurde getauscht.
+                                            </div>
+                                          )}
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : "—"}
                               </TableCell>
                               <TableCell className="text-xs text-muted-foreground">
                                 {r.heartbeatAgeMs != null ? `vor ${Math.round(r.heartbeatAgeMs / 1000)} s` : "—"}

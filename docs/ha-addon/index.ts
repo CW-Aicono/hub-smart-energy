@@ -1459,9 +1459,12 @@ async function fetchHAVersion(): Promise<void> {
 
 let cloudWs: import("ws") | null = null;
 let cloudWsConnected = false;
-let cloudWsReconnectDelay = 5_000;
+// Start with a short initial delay so that reconnects after Edge Function
+// isolate recycling (observed every ~3 minutes) happen quickly.
+let cloudWsReconnectDelay = 1_000;
 const CLOUD_WS_RECONNECT_MAX = 60_000;
 let cloudWsHeartbeatTimer: NodeJS.Timeout | null = null;
+let cloudWsReconnectSeq = 0;
 let startServerPromise: Promise<void> | null = null;
 let cloudWsAssignment: {
   device_id?: string;
@@ -1544,17 +1547,19 @@ async function connectCloudWebSocket(): Promise<void> {
     return;
   }
 
-  console.log(`[cloud-ws] Connecting to ${GATEWAY_WS_URL} (mac=${mac.slice(0, 4)}…)`);
+  cloudWsReconnectSeq += 1;
+  const currentSeq = cloudWsReconnectSeq;
+  console.log(`[cloud-ws] Connecting to ${GATEWAY_WS_URL} (mac=${mac.slice(0, 4)}…, seq=${currentSeq})`);
   try {
     cloudWs = new WebSocketClient(GATEWAY_WS_URL);
   } catch (err) {
     console.error("[cloud-ws] Constructor failed:", err);
-    scheduleCloudReconnect();
+    scheduleCloudReconnect(0);
     return;
   }
 
   cloudWs.on("open", async () => {
-    console.log("[cloud-ws] TCP/WS open – sending auth frame");
+    console.log(`[cloud-ws] TCP/WS open – sending auth frame (seq=${currentSeq})`);
     safeWsSend(cloudWs, {
       type: "auth",
       mac,
@@ -1564,6 +1569,7 @@ async function connectCloudWebSocket(): Promise<void> {
       ha_version: haVersion,
       local_ip: await getLocalIP(),
       local_time: new Date().toISOString(),
+      reconnect_seq: currentSeq,
     });
   });
 
@@ -1574,6 +1580,9 @@ async function connectCloudWebSocket(): Promise<void> {
     switch (msg?.type) {
       case "auth_ok": {
         cloudWsConnected = true;
+        // After a successful auth, keep the delay short for a while so that
+        // rapid reconnects after isolate recycling stay fast, but cap it at
+        // the normal 5s once the connection is stable.
         cloudWsReconnectDelay = 5_000;
         cloudWsAssignment = {
           device_id: msg.device_id,
@@ -1590,7 +1599,8 @@ async function connectCloudWebSocket(): Promise<void> {
             : "unknown";
         saveGatewayAssignmentToCache(cloudWsAssignment, currentAssignmentStatus);
         markCloudReachable();
-        console.log(`[cloud-ws] Authenticated. device=${msg.device_id} tenant=${msg.tenant_id || "(none)"}`);
+        const seamless = msg.seamless_reconnect === true;
+        console.log(`[cloud-ws] Authenticated. device=${msg.device_id} tenant=${msg.tenant_id || "(none)"}${seamless ? " (seamless recycle)" : ""}`);
         // Sofort einen Heartbeat senden, damit Backend-UI die Werte hat
         await sendCloudHeartbeat();
         // Periodischer Heartbeat
@@ -1645,7 +1655,7 @@ async function connectCloudWebSocket(): Promise<void> {
       cloudWsHeartbeatTimer = null;
     }
     console.warn(`[cloud-ws] closed (code=${code}, reason=${reason.toString().slice(0, 80) || "n/a"})`);
-    scheduleCloudReconnect();
+    scheduleCloudReconnect(code, reason);
   });
 
   cloudWs.on("error", (err: Error) => {
@@ -1654,10 +1664,13 @@ async function connectCloudWebSocket(): Promise<void> {
   });
 }
 
-function scheduleCloudReconnect(): void {
+function scheduleCloudReconnect(code?: number, reason?: Buffer): void {
   const delay = cloudWsReconnectDelay;
-  cloudWsReconnectDelay = Math.min(cloudWsReconnectDelay * 2, CLOUD_WS_RECONNECT_MAX);
-  console.log(`[cloud-ws] reconnect in ${Math.round(delay / 1000)}s`);
+  // For the very first reconnect after startup we want to be fast; after that
+  // we use exponential backoff capped at CLOUD_WS_RECONNECT_MAX.
+  cloudWsReconnectDelay = Math.min(Math.max(cloudWsReconnectDelay * 2, 1_000), CLOUD_WS_RECONNECT_MAX);
+  const reasonStr = reason ? reason.toString().slice(0, 80) : "n/a";
+  console.log(`[cloud-ws] reconnect in ${Math.round(delay / 1000)}s (code=${code ?? "?"}, reason=${reasonStr})`);
   setTimeout(connectCloudWebSocket, delay);
 }
 
