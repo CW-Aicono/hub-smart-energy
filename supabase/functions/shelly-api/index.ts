@@ -100,6 +100,14 @@ async function writeSensorSnapshot(
       .from("gateway_sensor_snapshots")
       .upsert(row, { onConflict: "location_integration_id" });
     if (error) console.warn("[shelly snapshot] upsert failed:", error.message);
+    // Sensor-Verlauf: Rohwerte in sensor_readings_raw persistieren
+    const { persistSensorHistory } = await import("../_shared/sensorHistory.ts");
+    await persistSensorHistory(supabase, {
+      locationIntegrationId,
+      tenantId,
+      locationId,
+      sensors,
+    });
   } catch (err) {
     console.warn("[shelly snapshot] write error:", err);
   }
