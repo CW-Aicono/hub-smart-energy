@@ -1,6 +1,8 @@
 import { Navigate, useSearchParams } from "react-router-dom";
 import WorkerControlsPanel from "@/components/super-admin/WorkerControlsPanel";
 import WorkerKeyPanel from "@/components/super-admin/WorkerKeyPanel";
+import GatewayWorkerStatusCard from "@/components/super-admin/GatewayWorkerStatusCard";
+import LoxonePollingOverviewCard from "@/components/super-admin/LoxonePollingOverviewCard";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
@@ -686,7 +688,11 @@ const SuperAdminGatewayFleet = () => {
           </Button>
         </header>
 
-        <div className="p-6">
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <GatewayWorkerStatusCard />
+            <LoxonePollingOverviewCard />
+          </div>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger value="fleet">Flotte ({filteredRows.length})</TabsTrigger>

@@ -4,10 +4,7 @@ import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import { useInfraMetrics } from "@/hooks/useInfraMetrics";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
-import GatewayWorkerStatusCard from "@/components/super-admin/GatewayWorkerStatusCard";
-
 import HetznerNodesCard from "@/components/super-admin/HetznerNodesCard";
-import LoxonePollingOverviewCard from "@/components/super-admin/LoxonePollingOverviewCard";
 import AlertRulesCard from "@/components/super-admin/AlertRulesCard";
 import AlertEventsHistoryCard from "@/components/super-admin/AlertEventsHistoryCard";
 import { Button } from "@/components/ui/button";
@@ -121,23 +118,16 @@ const SuperAdminMonitoring = () => {
             </div>
           ) : (
             <>
-              {/* Gateway Worker Status (Hetzner) */}
-              <GatewayWorkerStatusCard />
-
-
-
-
               {/* Hetzner Node Live-Metriken (CPU/RAM/Disk) */}
               <HetznerNodesCard />
-
-              {/* Loxone-Abfrage-Intervalle pro Liegenschaft */}
-              <LoxonePollingOverviewCard />
 
               {/* Alert-Regeln */}
               <AlertRulesCard getLatest={getLatest} />
 
               {/* Alert-Historie (Ursache + Zeitstempel) */}
               <AlertEventsHistoryCard />
+
+
 
 
 
