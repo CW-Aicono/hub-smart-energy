@@ -1412,6 +1412,34 @@ export function MeterDetailDialog({
     },
   });
 
+  // Snapshot-Fallback: solange keine Rohwerte in sensor_readings_raw stehen,
+  // den Live-Wert aus gateway_sensor_snapshots ziehen (gleiche Quelle wie die Kachel).
+  const nodeSensorUuid = ((nodeMeter as any)?.sensor_uuid ?? "").toString().toLowerCase();
+  const nodeLocationIntegrationId = (nodeMeter as any)?.location_integration_id ?? null;
+  const { data: snapshotSensor } = useQuery({
+    queryKey: ["sensor-snapshot-value", nodeLocationIntegrationId, nodeSensorUuid],
+    enabled: isSensor && !latestSensor && !!nodeSensorUuid && !!nodeLocationIntegrationId,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("gateway_sensor_snapshots")
+        .select("sensors, fetched_at")
+        .eq("location_integration_id", nodeLocationIntegrationId)
+        .maybeSingle();
+      if (!data?.sensors || !Array.isArray(data.sensors)) return null;
+      const hit = (data.sensors as any[]).find(
+        (s) => String(s?.id ?? s?.uuid ?? "").toLowerCase() === nodeSensorUuid,
+      );
+      if (!hit) return null;
+      const raw = hit.rawValue ?? hit.value ?? hit.state;
+      const num = typeof raw === "number" ? raw : Number(String(raw).replace(",", "."));
+      if (!Number.isFinite(num)) return null;
+      return { value: num, recorded_at: data.fetched_at as string };
+    },
+  });
+  const effectiveSensorLatest = latestSensor ?? snapshotSensor;
+
 
 
   const { data: storageInfo, isLoading: isStorageLoading } = useQuery({
@@ -1758,8 +1786,8 @@ export function MeterDetailDialog({
             </div>
             <div className="text-base font-semibold tabular-nums">
               {isSensor
-                ? (latestSensor?.value != null
-                    ? `${fmtDeNum(Number(latestSensor.value))}${displayUnit ? " " + displayUnit : ""}`
+                ? (effectiveSensorLatest?.value != null
+                    ? `${fmtDeNum(Number(effectiveSensorLatest.value))}${displayUnit ? " " + displayUnit : ""}`
                     : "–")
                 : (stats?.bidirectional
                     ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
