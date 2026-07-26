@@ -737,21 +737,37 @@ async function handleAuth(
     return null;
   }
 
-  // Update presence fields + optional metadata from auth frame
+  // Update presence fields + optional metadata from auth frame.
+  //
+  // SEAMLESS RECONNECT: Supabase Edge Function isolates are recycled every
+  // few minutes, causing the WSS socket to close even though the gateway
+  // itself never went offline. To avoid the UI showing a "reconnect every
+  // 3 minutes" flap, we preserve `ws_connected_since` when the previous
+  // session was clearly alive (last heartbeat within 5 minutes).
   const nowIso = new Date().toISOString();
+  const prevHbMs = (device as any).last_heartbeat_at
+    ? Date.parse((device as any).last_heartbeat_at)
+    : NaN;
+  const prevConnectedSince = (device as any).ws_connected_since ?? null;
+  const seamless =
+    !!prevConnectedSince &&
+    Number.isFinite(prevHbMs) &&
+    Date.now() - prevHbMs < 5 * 60 * 1000;
+
+  const presenceUpdate: Record<string, unknown> = {
+    status: "online",
+    ws_connected_since: seamless ? prevConnectedSince : nowIso,
+    last_heartbeat_at: nowIso,
+    last_ws_ping_at: nowIso,
+    addon_version: raw.addon_version ?? undefined,
+    ha_version: raw.ha_version ?? undefined,
+    local_ip: raw.local_ip ?? undefined,
+    local_time: raw.local_time ?? undefined,
+    updated_at: nowIso,
+  };
   await sb
     .from("gateway_devices")
-    .update({
-      status: "online",
-      ws_connected_since: nowIso,
-      last_heartbeat_at: nowIso,
-      last_ws_ping_at: nowIso,
-      addon_version: raw.addon_version ?? undefined,
-      ha_version: raw.ha_version ?? undefined,
-      local_ip: raw.local_ip ?? undefined,
-      local_time: raw.local_time ?? undefined,
-      updated_at: nowIso,
-    })
+    .update(presenceUpdate)
     .eq("id", device.id);
 
   // Mark the parent location_integration as successfully connected so the
