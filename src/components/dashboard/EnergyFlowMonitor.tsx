@@ -1981,7 +1981,7 @@ export function MeterDetailDialog({
         </div>
         {node.meter_id && (
           <div className="mt-4">
-            <SensorHistoryChart meterId={node.meter_id} unit={meterUnitRaw || null} />
+            <SensorHistoryChart meterId={node.meter_id} unit={meterUnitRaw || null} label="Sensor-Verlauf" />
           </div>
         )}
       </DialogContent>
