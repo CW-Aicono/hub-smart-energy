@@ -256,7 +256,19 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
   return result;
 }
 
-function aiconoToUnifiedRow(d: FleetDevice, tenantNameMap: Record<string, string>): UnifiedRow {
+interface AiconoStats24h {
+  events_24h: number | null;
+  reconnects_24h: number | null;
+  sessions_24h: number | null;
+  last_disconnect_at: string | null;
+  last_disconnect_reason: string | null;
+}
+
+function aiconoToUnifiedRow(
+  d: FleetDevice,
+  tenantNameMap: Record<string, string>,
+  stats?: AiconoStats24h,
+): UnifiedRow {
   const now = Date.now();
   const hbAge = d.last_heartbeat_at ? now - new Date(d.last_heartbeat_at).getTime() : null;
   const connectedAge = d.ws_connected_since ? now - new Date(d.ws_connected_since).getTime() : null;
@@ -273,6 +285,9 @@ function aiconoToUnifiedRow(d: FleetDevice, tenantNameMap: Record<string, string
     status = d.status === "online" ? "online" : "offline";
     statusLabel = d.status;
   }
+  const lastDisconnect = stats?.last_disconnect_at
+    ? `${new Date(stats.last_disconnect_at).toLocaleString("de-DE")}${stats.last_disconnect_reason ? ` · ${stats.last_disconnect_reason}` : ""}`
+    : null;
   return {
     key: `aicono:${d.id}`,
     type: "AICONO EMS",
@@ -282,18 +297,19 @@ function aiconoToUnifiedRow(d: FleetDevice, tenantNameMap: Record<string, string
     connectedSince: d.ws_connected_since,
     lastHeartbeat: d.last_heartbeat_at,
     heartbeatAgeMs: hbAge,
-    eventsLast24h: null,
-    reconnectsLast24h: null,
+    eventsLast24h: stats?.events_24h ?? null,
+    reconnectsLast24h: stats?.reconnects_24h ?? null,
     uptimeRatio24h: status === "active" ? 1 : null,
-    sessionsLast24h: null,
+    sessionsLast24h: stats?.sessions_24h ?? null,
     worker: null,
-    lastDisconnect: null,
+    lastDisconnect,
     serials: [],
     device: d,
     // Derived flag used by the UI to show a seamless-recycle hint.
     isSeamlessRecycle: connectedAge !== null && hbAge !== null && connectedAge < hbAge,
   };
 }
+
 
 function UnifiedStatusBadge({ status, label }: { status: UnifiedRow["status"]; label: string }) {
   if (status === "active") {
