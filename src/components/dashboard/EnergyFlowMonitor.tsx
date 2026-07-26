@@ -1928,10 +1928,12 @@ export function MeterDetailDialog({
             )}
           </div>
         </div>
+        )}
 
 
-        {/* Chart 2: Energie pro Bucket */}
-        {energyBuckets.length > 0 && (
+        {/* Chart 2: Energie pro Bucket — nur für Zähler */}
+        {!isSensor && energyBuckets.length > 0 && (
+
           <div>
             <div className="text-sm font-medium mb-1">
               Energie pro {range === "1h" ? "5 Min" : range === "24h" ? "Stunde" : range === "7d" ? "6 h" : "Tag"}
