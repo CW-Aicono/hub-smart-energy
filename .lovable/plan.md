@@ -1,45 +1,37 @@
-## Aktueller Datenstand (verifiziert)
-
-Recherche in `public`:
-- `gateway_devices` hat nur Heartbeat-/Status-Felder (`last_heartbeat_at`, `ws_connected_since`, `status`, …) — **keine** Zähler für Events, Reconnects, Sitzungen oder Disconnect-Gründe.
-- Es gibt **kein** Analog zu `loxone_ws_session_log` für AICONO. `gateway-ws` protokolliert Auth/Reconnect nur in Konsolen-Logs, nicht in der DB.
-- Loxone-Zeilen befüllen die Spalten aus `bridge_workers` (`events_received`, `reconnect_count`, `worker_host`, `disconnect_reason`). AICONO läuft nicht über einen Worker → diese Quelle existiert bewusst nicht.
-
-Fazit: **Für „Worker“ liegen keine Daten vor und sollen auch keine geben** (AICONO ist Worker-los, „—“ ist korrekt). Für **Events/Reconnects/Sitzungen/Letzter Disconnect** liegen aktuell keine Daten vor — die müssen erst instrumentiert werden.
-
 ## Ziel
 
-Die vier Spalten für AICONO-Gateways mit echten 24 h-Werten füllen, ohne das IO-Budget zu belasten.
+Währung soll **einmal am Ladetarif** festgelegt werden und automatisch für alle daraus abgeleiteten Ad-hoc-Zahlungsregeln, Beträge und Anzeigen gelten. Doppelte/inkonsistente Währungswahl an mehreren Stellen entfällt. Standard bleibt **EUR (€)**.
 
-## Umsetzung
+## Warum diese Lösung
 
-### 1. Neue Tabelle `gateway_ws_session_log` (analog zu `loxone_ws_session_log`)
-Spalten: `id`, `tenant_id`, `gateway_device_id`, `started_at`, `ended_at`, `events_received` (int), `reconnect_count` (int), `disconnect_reason` (text), `disconnect_code` (int), `seamless_recycle_count` (int), `updated_at`.
-Ein Row pro logischer Session (nicht pro Isolate-Recycle → seamless_reconnect erhöht nur `seamless_recycle_count` und `events_received`, öffnet keine neue Session).
-RLS: nur Super-Admin lesen; Service-Role schreibt. GRANTs wie in den Standards.
+- `charging_tariffs.currency` existiert bereits in der DB und wird beim Anlegen mit `EUR` befüllt.
+- Im Tarif-Dialog (`ChargingBilling.tsx`) fehlt aktuell nur das UI-Feld — der Wert wird nie sichtbar/änderbar.
+- Im Ad-hoc-Regel-Dialog wird die Währung dagegen ein zweites Mal separat gewählt, was zu Inkonsistenz führt (Regel = GBP, verknüpfter Tarif = EUR → falsche Anzeige, falsche Preauth-Beträge).
+- Die Ad-hoc-Regel ist immer an genau einen Tarif gebunden (`tariff_id`), daher ist die Währung eindeutig aus dem Tarif ableitbar.
 
-### 2. `gateway-ws` Edge Function instrumentieren
-- Bei `handleAuth` **ohne** seamless_reconnect: neue Session-Zeile anlegen, `session_id` im WS-Context halten.
-- Bei seamless_reconnect: bestehende Session per `ws_connected_since` finden, `seamless_recycle_count++`.
-- Pro empfangenem Nutz-Frame: `events_received` gebuffert im Speicher, **einmal pro 60 s** per `UPDATE` flushen (IO-schonend, konsistent mit Worker-Aggregation-Policy).
-- Bei Disconnect (`tearDown`): `ended_at`, `disconnect_reason`, `disconnect_code` schreiben.
+## Umfang der Änderungen (nur UI/Frontend, keine DB-Migration nötig)
 
-### 3. Aggregations-Read für die Flotte
-Neue View oder RPC `aicono_fleet_stats_24h(device_id)` → summiert `events_received`, zählt Sessions und Reconnects der letzten 24 h, liefert `last_disconnect` (jüngstes `ended_at` + Reason). Wird in `SuperAdminGatewayFleet.tsx` genauso konsumiert wie heute `bridge_workers` für Loxone.
+### 1. Tarif-Dialog erweitern (`src/pages/ChargingBilling.tsx`)
+- Im „Tarif anlegen / bearbeiten"-Dialog ein Dropdown **„Währung"** ergänzen (EUR, CHF, GBP, USD), Default `EUR`.
+- Alle Preis-Labels im Dialog dynamisch mit dem Symbol der gewählten Währung versehen („Preis pro kWh (€/CHF/£/$)", „Grundgebühr", „Blockiergebühr pro Minute").
+- `handleEditTariff` um `currency: tariffForm.currency` ergänzen (fehlt aktuell im Update-Payload).
+- Tarif-Übersichts-Tabelle: Preis-Spalte mit korrektem Währungssymbol pro Zeile anzeigen (`toLocaleString` mit `t.currency`).
 
-### 4. UI (`SuperAdminGatewayFleet.tsx`)
-- `aiconoToUnifiedRow` erhält die Stats aus dem neuen RPC und befüllt `eventsLast24h`, `reconnectsLast24h`, `sessionsLast24h`, `lastDisconnect`.
-- `worker` bleibt `null` → weiter „—“, ergänzt um Tooltip „AICONO-Gateway läuft ohne Worker (Direktverbindung)“, damit der Strich nicht als Bug wirkt.
+### 2. Ad-hoc-Regel-Dialog vereinfachen (`src/components/charging/adhoc/PaymentRulesPanel.tsx`)
+- Das separate Währungs-Select aus dem Regel-Editor entfernen.
+- Die effektive Währung wird beim Öffnen und bei Tarifwechsel automatisch aus dem gewählten Tarif übernommen (`editing.currency = selectedTariff.currency`).
+- Labels („Preauth-Betrag", „Min-Betrag") und die Anzeige in der Regel-Tabelle nutzen weiter die `currencySymbol`-Hilfsfunktion — jetzt aber immer mit der Tarif-Währung.
+- Falls (noch) kein Tarif gewählt wurde, Fallback = `EUR`.
 
-### 5. Retention
-pg_cron-Job: Zeilen älter als 7 Tage löschen (gleiche Policy wie andere Log-Tabellen), Partial-Index auf `(gateway_device_id, started_at DESC) WHERE ended_at IS NULL` für schnellen Session-Lookup.
+### 3. Neue Ad-hoc-Regel: Default aus Tarif
+- Beim „Neue Regel"-Klick keinen Hardcode `currency: "EUR"` mehr setzen — Wert leer lassen und beim Tarif-Select füllen.
 
-## Technischer Kontext
+### 4. Bestehende Daten
+- Kein Backfill nötig: alle Bestands-Tarife haben bereits `EUR`; Bestands-Regeln behalten ihren Wert bis zum nächsten Speichern und werden dann automatisch auf die Tarif-Währung normalisiert.
 
-- Buffered Flush (60 s) statt Per-Frame-Insert ist Pflicht — sonst reproduzieren wir das IO-Problem, das wir gerade für Loxone gelöst haben.
-- Neue Tabelle bekommt in der gleichen Migration `GRANT SELECT ON … TO authenticated` (RLS beschränkt zusätzlich auf Super-Admin), `GRANT ALL … TO service_role`, `ENABLE ROW LEVEL SECURITY`, Policies.
-- Keine Änderungen an HA-Add-on nötig; Zählung passiert cloudseitig.
+## Nicht Teil dieses Plans
+- Keine Änderungen an DB-Schema, RLS, Edge Functions oder Rechnungs-PDF-Erzeugung.
+- Keine Multi-Currency-Umrechnung — pro Tarif gilt exakt eine Währung.
 
-## Nicht Teil des Plans
-- „Worker“-Spalte für AICONO befüllen (per Design leer).
-- Uptime-Metrik ändern (bleibt auf Heartbeat-Basis wie heute).
+## Ergebnis
+Nach Umsetzung wird die Währung ausschließlich am Tarif gepflegt. Der Ad-hoc-Regel-Editor zeigt automatisch das passende Symbol in allen Labels und Beträgen, ohne dass der Nutzer die Währung ein zweites Mal wählen muss.
