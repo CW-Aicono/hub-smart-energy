@@ -5,8 +5,9 @@ import { normalizeChargePointStatus } from "@/lib/chargePointStatus";
  * @param value - The number to format
  * @param decimals - Number of decimal places (default: 2)
  */
-export function fmtNum(value: number, decimals: number = 2): string {
-  return value.toLocaleString("de-DE", {
+export function fmtNum(value: number | null | undefined, decimals: number = 2): string {
+  const n = typeof value === "number" && Number.isFinite(value) ? value : 0;
+  return n.toLocaleString("de-DE", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
