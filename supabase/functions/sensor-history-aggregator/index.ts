@@ -1,4 +1,5 @@
-// Aggregates sensor_readings_raw into 5-minute buckets in sensor_readings_5min.
+// Aggregates sensor_readings_raw into 5-minute buckets using a
+// TIME-WEIGHTED average (trapezoidal integration over recorded_at).
 // Called via pg_cron every 5 minutes. Idempotent (upsert on meter_id+bucket).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
@@ -7,6 +8,8 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 const url = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+const BUCKET_MS = 5 * 60_000;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -14,31 +17,28 @@ Deno.serve(async (req) => {
   const startedAt = Date.now();
 
   try {
-    // Kill-switch
     const { data: ks } = await supabase
       .from("system_settings")
       .select("value")
       .eq("key", "sensor_history_enabled")
       .maybeSingle();
-    const enabled = String((ks as any)?.value ?? "true").toLowerCase() !== "false";
+    const raw = String((ks as any)?.value ?? "true").toLowerCase();
+    const enabled = raw !== "false" && raw !== "0" && raw !== "off";
     if (!enabled) {
       return new Response(JSON.stringify({ success: true, skipped: "kill_switch_off" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Aggregate the last 15 minutes of raw data into 5-min buckets.
-    // Using a single SQL statement executed via RPC would be cheaper, but we
-    // stay pure-Supabase-client to avoid needing a new DB function.
+    // Fenster: letzte 15 Min (drei 5-Min-Buckets) idempotent nachbauen.
     const since = new Date(Date.now() - 15 * 60_000).toISOString();
 
-    // Pull raw rows in chunks (max 5k)
     const { data: raws, error: rErr } = await supabase
       .from("sensor_readings_raw")
       .select("tenant_id, meter_id, value, unit, recorded_at")
       .gte("recorded_at", since)
       .order("recorded_at", { ascending: true })
-      .limit(5000);
+      .limit(20000);
     if (rErr) throw rErr;
     if (!raws || raws.length === 0) {
       return new Response(JSON.stringify({ success: true, rows: 0, ms: Date.now() - startedAt }), {
@@ -46,61 +46,92 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Bucket by (meter_id, floor(recorded_at / 5min))
-    type Agg = {
+    // Sammle Samples je (meter_id, bucketMs) und berechne zeit-gewichteten Mittelwert.
+    type Sample = { ts: number; value: number };
+    type Bucket = {
       tenant_id: string;
       meter_id: string;
-      bucket: string;
+      bucketMs: number;
       unit: string | null;
-      sum: number;
+      samples: Sample[];
       min: number;
       max: number;
-      last: number;
-      lastAt: number;
-      count: number;
     };
-    const buckets = new Map<string, Agg>();
+    const buckets = new Map<string, Bucket>();
+
     for (const r of raws as any[]) {
       const ts = new Date(r.recorded_at).getTime();
-      const bucketMs = Math.floor(ts / (5 * 60_000)) * (5 * 60_000);
+      const bucketMs = Math.floor(ts / BUCKET_MS) * BUCKET_MS;
       const key = `${r.meter_id}|${bucketMs}`;
       const v = Number(r.value);
-      const cur = buckets.get(key);
-      if (!cur) {
-        buckets.set(key, {
+      if (!Number.isFinite(v)) continue;
+      let b = buckets.get(key);
+      if (!b) {
+        b = {
           tenant_id: r.tenant_id,
           meter_id: r.meter_id,
-          bucket: new Date(bucketMs).toISOString(),
+          bucketMs,
           unit: r.unit ?? null,
-          sum: v, min: v, max: v, last: v, lastAt: ts, count: 1,
-        });
-      } else {
-        cur.sum += v;
-        if (v < cur.min) cur.min = v;
-        if (v > cur.max) cur.max = v;
-        if (ts >= cur.lastAt) { cur.last = v; cur.lastAt = ts; }
-        cur.count += 1;
-        if (r.unit && !cur.unit) cur.unit = r.unit;
+          samples: [],
+          min: v,
+          max: v,
+        };
+        buckets.set(key, b);
       }
+      b.samples.push({ ts, value: v });
+      if (v < b.min) b.min = v;
+      if (v > b.max) b.max = v;
+      if (r.unit && !b.unit) b.unit = r.unit;
     }
 
-    const rows = [...buckets.values()].map((b) => ({
-      tenant_id: b.tenant_id,
-      meter_id: b.meter_id,
-      bucket: b.bucket,
-      value_avg: b.sum / b.count,
-      value_min: b.min,
-      value_max: b.max,
-      value_last: b.last,
-      sample_count: b.count,
-      unit: b.unit,
-      updated_at: new Date().toISOString(),
-    }));
+    const rows = [...buckets.values()].map((b) => {
+      // ts-sortiert
+      b.samples.sort((a, z) => a.ts - z.ts);
+      const first = b.samples[0];
+      const last = b.samples[b.samples.length - 1];
+      const bucketEnd = b.bucketMs + BUCKET_MS;
 
-    const { error: upErr } = await supabase
-      .from("sensor_readings_5min")
-      .upsert(rows, { onConflict: "meter_id,bucket" });
-    if (upErr) throw upErr;
+      let twavg: number;
+      if (b.samples.length === 1) {
+        twavg = first.value;
+      } else {
+        // Trapez-Integral über die Sample-Zeitreihe, letzter Wert hält bis bucketEnd.
+        let integral = 0;
+        for (let i = 0; i < b.samples.length - 1; i++) {
+          const a = b.samples[i];
+          const c = b.samples[i + 1];
+          const dt = (c.ts - a.ts) / 1000;
+          if (dt > 0) integral += ((a.value + c.value) / 2) * dt;
+        }
+        // Hold vom letzten Sample bis Bucket-Ende
+        const dtHold = (bucketEnd - last.ts) / 1000;
+        if (dtHold > 0) integral += last.value * dtHold;
+        const totalSpan = (bucketEnd - first.ts) / 1000;
+        twavg = totalSpan > 0 ? integral / totalSpan : last.value;
+      }
+
+      return {
+        tenant_id: b.tenant_id,
+        meter_id: b.meter_id,
+        bucket: new Date(b.bucketMs).toISOString(),
+        value_avg: twavg,
+        value_min: b.min,
+        value_max: b.max,
+        value_last: last.value,
+        sample_count: b.samples.length,
+        unit: b.unit,
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+    // Upsert in Chunks à 500
+    for (let i = 0; i < rows.length; i += 500) {
+      const chunk = rows.slice(i, i + 500);
+      const { error: upErr } = await supabase
+        .from("sensor_readings_5min")
+        .upsert(chunk, { onConflict: "meter_id,bucket" });
+      if (upErr) throw upErr;
+    }
 
     return new Response(JSON.stringify({
       success: true,
