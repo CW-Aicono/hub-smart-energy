@@ -14,6 +14,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Switch } from "@/components/ui/switch";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 
+const currencySymbol = (c?: string) => ({ EUR: "€", CHF: "CHF", GBP: "£", USD: "$" } as Record<string, string>)[c ?? "EUR"] ?? c ?? "€";
+
+
 const SCOPE_LABEL: Record<string, string> = {
   tenant: "Mandant (Basis)",
   group: "Ladepunkt-Gruppe",
@@ -202,7 +205,7 @@ export default function PaymentRulesPanel() {
                     <Select value={editing.tariff_id ?? ""} onValueChange={(v) => setEditing({ ...editing, tariff_id: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {tariffs.map((t: any) => (<SelectItem key={t.id} value={t.id}>{t.name} ({t.price_per_kwh} €/kWh)</SelectItem>))}
+                        {tariffs.map((t: any) => (<SelectItem key={t.id} value={t.id}>{t.name} ({t.price_per_kwh} {currencySymbol(t.currency)}/kWh)</SelectItem>))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -220,7 +223,7 @@ export default function PaymentRulesPanel() {
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="grid gap-1.5">
-                    <Label>Preauth-Betrag (€)</Label>
+                    <Label>Preauth-Betrag ({currencySymbol(editing.currency)})</Label>
                     <Input type="number" step="0.01" value={editing.preauth_amount_cents / 100} onChange={(e) => setEditing({ ...editing, preauth_amount_cents: Math.round(parseFloat(e.target.value || "0") * 100) })} />
                   </div>
                   <div className="grid gap-1.5">
@@ -228,7 +231,7 @@ export default function PaymentRulesPanel() {
                     <Input type="number" value={editing.preauth_expiry_minutes} onChange={(e) => setEditing({ ...editing, preauth_expiry_minutes: parseInt(e.target.value || "30") })} />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label>Min-Betrag (€)</Label>
+                    <Label>Min-Betrag ({currencySymbol(editing.currency)})</Label>
                     <Input type="number" step="0.01" value={editing.min_amount_cents / 100} onChange={(e) => setEditing({ ...editing, min_amount_cents: Math.round(parseFloat(e.target.value || "0") * 100) })} />
                   </div>
                 </div>
