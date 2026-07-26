@@ -127,8 +127,10 @@ serve(async (req) => {
           : Number.isFinite(rawInterval) && rawInterval > 0 && rawInterval < 5
             ? 5
             : 15;
-        const intervalMin = configuredMin;
+        // Master-Floor (Hard Floor): überschreibt kürzere Tenant-Intervalle
+        const intervalMin = masterFloorMin > 0 ? Math.max(configuredMin, masterFloorMin) : configuredMin;
         const intervalMs = intervalMin * 60_000;
+
         const lastSyncIso = (li as any).last_sync_at as string | null;
         if (lastSyncIso) {
           const lastMs = new Date(lastSyncIso).getTime();
