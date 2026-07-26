@@ -1341,12 +1341,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
           open={!!bulkEditType}
           onOpenChange={(v) => { if (!v) setBulkEditType(null); }}
           entityType={bulkEditType ?? "meters"}
-          meters={(bulkEditType === "sensors"
-            ? displayedSensors
-            : bulkEditType === "actuators"
-              ? displayedActuators
-              : displayedMeters
-          ).filter((m) => selectedMeterIds.has(m.id))}
+          meters={meters.filter((m) => selectedMeterIds.has(m.id))}
           locationId={locationId}
           onDone={() => setSelectedMeterIds(new Set())}
         />

@@ -59,6 +59,8 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
   const [applyBidir, setApplyBidir] = useState(false);
   const [applyFunction, setApplyFunction] = useState(false);
   const [applyParent, setApplyParent] = useState(false);
+  const [applyDeviceType, setApplyDeviceType] = useState(false);
+  const [deviceType, setDeviceType] = useState<string>("meter");
 
   const [roomId, setRoomId] = useState<string>("__none__");
   const [energyType, setEnergyType] = useState<string>("strom");
@@ -76,7 +78,7 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
   );
 
   const anySelected =
-    applyFloor || applyRoom || applyEnergy || applyUnit || applyMedium || applyMain || applyBidir || applyFunction || applyParent;
+    applyFloor || applyRoom || applyEnergy || applyUnit || applyMedium || applyMain || applyBidir || applyFunction || applyParent || applyDeviceType;
 
   const targetIds = useMemo(() => meters.map((m) => m.id), [meters]);
 
@@ -92,6 +94,7 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
     if (applyBidir) (updates as any).is_bidirectional = isBidir;
     if (applyFunction) updates.meter_function = meterFunction;
     if (applyParent) updates.parent_meter_id = parentId === "__clear__" || parentId === "__none__" ? null : parentId;
+    if (applyDeviceType) (updates as any).device_type = deviceType;
 
     setSaving(true);
     const { error } = await supabase.from("meters").update(updates as any).in("id", targetIds);
@@ -242,6 +245,20 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
                 </Select>
               </FieldBlock>
             </div>
+
+            <Separator />
+
+            {/* Gerätetyp umstellen */}
+            <FieldBlock apply={applyDeviceType} setApply={setApplyDeviceType} label="Gerätetyp umstellen">
+              <Select value={deviceType} onValueChange={setDeviceType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="meter">Zähler</SelectItem>
+                  <SelectItem value="sensor">Sensor</SelectItem>
+                  <SelectItem value="actuator">Aktor</SelectItem>
+                </SelectContent>
+              </Select>
+            </FieldBlock>
           </div>
         </ScrollArea>
 
