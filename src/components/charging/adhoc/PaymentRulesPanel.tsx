@@ -57,27 +57,34 @@ export default function PaymentRulesPanel() {
     },
   });
 
+  const tariffCurrency = (id?: string | null) => tariffs.find((t: any) => t.id === id)?.currency ?? "EUR";
+
   const openNew = () => {
+    const firstTariff = tariffs[0];
     setEditing({
       scope: "tenant",
       scope_id: null,
       name: "Ad-Hoc Standard",
       enabled: true,
-      tariff_id: tariffs[0]?.id ?? null,
+      tariff_id: firstTariff?.id ?? null,
       preauth_amount_cents: 5000,
       preauth_expiry_minutes: 30,
       max_kwh: null,
       max_minutes: 240,
       min_amount_cents: 50,
-      currency: "EUR",
+      currency: firstTariff?.currency ?? "EUR",
       rounding_step_cents: 1,
       priority: 0,
     });
     setOpen(true);
   };
 
+  const onTariffChange = (v: string) => {
+    setEditing({ ...editing, tariff_id: v, currency: tariffCurrency(v) });
+  };
+
   const save = async () => {
-    const payload = { ...editing };
+    const payload = { ...editing, currency: tariffCurrency(editing.tariff_id) };
     if (payload.scope === "tenant") payload.scope_id = null;
     await upsert.mutateAsync(payload);
     setOpen(false);
