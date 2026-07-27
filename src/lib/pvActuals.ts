@@ -449,10 +449,14 @@ export async function fetchPvActualDailyTotals({
       const todayEnd = new Date(todayStart);
       todayEnd.setDate(todayEnd.getDate() + 1);
 
-      const todayReadings = await fetchMeterPowerReadings(meterIds, todayStart, todayEnd);
+      const rawTodayReadings = await fetchMeterPowerReadings(meterIds, todayStart, todayEnd);
+      const todayReadings = rawTodayReadings.length > 0
+        ? rawTodayReadings
+        : await fetchMeterPower5min(meterIds, todayStart, todayEnd);
       if (todayReadings.length > 0) {
         dayMap[todayStr] = buildDailyActualTotal(todayReadings);
       }
+
     }
   }
 
