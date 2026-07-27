@@ -2137,12 +2137,30 @@ function HouseSelfSufficiencyPanel({
             .gte("recorded_at", since)
             .order("recorded_at", { ascending: true })
             .limit(3000);
-          result[mid] = (data ?? []).map((r: any) => ({
+          let rows = (data ?? []).map((r: any) => ({
             t: new Date(r.recorded_at).getTime(),
             kw: Number(r.power_value),
           }));
+          // Fallback: worker-only meters (no raw rows) → 5-min buckets.
+          if (rows.length === 0) {
+            const { data: agg } = await supabase
+              .from("meter_power_readings_5min")
+              .select("bucket, power_avg")
+              .eq("meter_id", mid)
+              .gte("bucket", since)
+              .order("bucket", { ascending: true })
+              .limit(3000);
+            rows = (agg ?? [])
+              .filter((r: any) => r.power_avg != null)
+              .map((r: any) => ({
+                t: new Date(r.bucket).getTime(),
+                kw: Number(r.power_avg),
+              }));
+          }
+          result[mid] = rows;
         }),
       );
+
       return result;
     },
   });
