@@ -323,8 +323,8 @@ const LiveValues = () => {
       new Set(autoMeters.map((m) => m.location_integration_id).filter(Boolean) as string[])
     );
 
-    // Parallel: DB-Polling-Wert, Bridge-Raw-Wert (Live), Perioden-Totals, Zählerstand (kumulativ), Sensor-Snapshots
-    const [powerRes, bridgeRes, periodRes, cumulativeRes, snapshotRes] = await Promise.all([
+    // Parallel: DB-Polling-Wert, Bridge-Raw-Wert (Live), Perioden-Totals, Zählerstand (kumulativ), Sensor-Snapshots, Sensor-Rohwerte
+    const [powerRes, bridgeRes, periodRes, cumulativeRes, snapshotRes, sensorRawRes] = await Promise.all([
       supabase
         .from("meter_power_readings")
         .select("meter_id, power_value, recorded_at")
@@ -352,7 +352,23 @@ const LiveValues = () => {
             .gte("fetched_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
             .order("fetched_at", { ascending: false })
         : Promise.resolve({ data: [] as any[] } as any),
+      supabase
+        .from("sensor_readings_raw")
+        .select("meter_id, value, recorded_at")
+        .in("meter_id", meterIds)
+        .gte("recorded_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
+        .order("recorded_at", { ascending: false }),
     ]);
+
+    // Neuester Sensor-Rohwert pro Meter (Momentanwerte: °C, %, bool, …).
+    // Diese sind meist frischer als der Snapshot (der u.U. gecacht ist).
+    const sensorRawLatest = new Map<string, { value: number; at: number }>();
+    for (const row of (sensorRawRes as any).data ?? []) {
+      if (sensorRawLatest.has(row.meter_id)) continue;
+      const num = Number(row.value);
+      if (!Number.isFinite(num)) continue;
+      sensorRawLatest.set(row.meter_id, { value: num, at: new Date(row.recorded_at).getTime() });
+    }
 
     // Neuester Snapshot pro location_integration_id → uuid → rawValue
     const snapshotLatest = new Map<string, { value: number; at: number }>();
