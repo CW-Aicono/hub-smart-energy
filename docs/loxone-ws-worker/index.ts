@@ -565,6 +565,7 @@ async function connect(state: ConnState): Promise<void> {
 
   log("info", `[WS] verbinde ${state.serialNumber} → ${host}`);
   try {
+    stage = "ws-open";
     await socket.open(host, state.username, state.password);
     // Phase 6.3: Loxone-Requirement — Strukturdatei muss 1x nach Auth abgerufen werden,
     // sonst sendet der Miniserver keine Status-Änderungen (nur Initial-Snapshot).
@@ -572,6 +573,7 @@ async function connect(state: ConnState): Promise<void> {
     // zugehörigen State-UUIDs (Pwr/EnergyToday/EnergyTotal/...) zu ermitteln.
     let loxApp3: any = null;
     try {
+      stage = "loxapp3-fetch";
       const resp: any = await socket.send("data/LoxAPP3.json");
       loxApp3 = resp?.LL?.value ?? resp?.value ?? resp;
       if (typeof loxApp3 === "string") {
@@ -579,18 +581,22 @@ async function connect(state: ConnState): Promise<void> {
       }
       const controlCount = loxApp3?.controls ? Object.keys(loxApp3.controls).length : 0;
       log("info", `[WS] ${state.serialNumber} LoxAPP3.json geladen — Live-Updates aktiviert (controls=${controlCount})`);
+      stage = "loxapp3-push-cloud";
       await pushLoxoneStructureSnapshot(state, loxApp3);
     } catch (err) {
-      log("warn", `[WS] ${state.serialNumber} LoxAPP3.json fehlgeschlagen: ${describeError(err)}`);
+      log("warn", `[WS] ${state.serialNumber} LoxAPP3 fehlgeschlagen (stage=${stage}): ${describeError(err)}`);
     }
+    stage = "enable-binstatus";
     await socket.send("jdev/sps/enablebinstatusupdate");
     // Phase 5.1: zusätzlich analoge Statusupdates abonnieren (kWh, Power, Temperatur, Zählerstände)
+    stage = "enable-statusupdate";
     await socket.send("jdev/sps/enablestatusupdate");
     state.authenticated = true;
     state.reconnectDelay = 1000;
     state.lastConnectedAt = Date.now();
     state.diagEventCount = 0;
     state.diagCallbacksSeen = new Set<string>();
+    stage = "session-start";
     await sessionStart(state);
     // Auth erfolgreich → falls die Integration vorher als "auth_failed" markiert war,
     // Status im Backend auf "success" zurücksetzen und offene Auth-Fehler auflösen.
