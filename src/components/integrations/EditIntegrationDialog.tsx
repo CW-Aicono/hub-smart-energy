@@ -313,7 +313,7 @@ export function EditIntegrationDialog({
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Ermöglicht Echtzeit-Daten über Loxone Remote Connect WebSocket. Ohne WebSocket kommen Werte nur alle {pollIntervalMin} Min per HTTP-Pull — keine Live-Anzeige, verzögerte Automationen.
+                      Empfohlen: WebSocket (Realtime, geringere Server-Last). Neue Miniserver werden ab sofort standardmäßig mit aktivem WebSocket angelegt. Ohne WebSocket kommen Werte nur alle {pollIntervalMin} Min per HTTP-Pull — keine Live-Anzeige, verzögerte Automationen.
                     </p>
                   </div>
                 )}

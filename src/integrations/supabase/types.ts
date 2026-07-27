@@ -14433,6 +14433,15 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      ensure_bridge_miniserver_link: {
+        Args: {
+          p_connection_kind?: Database["public"]["Enums"]["bridge_connection_kind"]
+          p_location_id: string
+          p_serial: string
+          p_tenant_id: string
+        }
+        Returns: string
+      }
       evaluate_monitoring_rules: { Args: never; Returns: number }
       get_auth_user_email: { Args: never; Returns: string }
       get_charge_point_daily_uptime: {

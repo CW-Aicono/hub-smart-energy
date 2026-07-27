@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Cpu, Thermometer, HardDrive, RefreshCw, Loader2, Clock } from "lucide-react";
+import { Cpu, Thermometer, HardDrive, RefreshCw, Loader2, Clock, AlertTriangle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
 import { invokeWithRetry } from "@/lib/invokeWithRetry";
@@ -8,6 +8,7 @@ interface MiniserverStatusProps {
   locationIntegrationId: string;
   integrationType?: string;
   lastSyncAt?: string | null;
+  syncStatus?: string | null;
 }
 
 interface SystemStatus {
@@ -24,7 +25,7 @@ interface SystemStatusResponse {
   lastSync: string | null;
 }
 
-export function MiniserverStatus({ locationIntegrationId, integrationType, lastSyncAt }: MiniserverStatusProps) {
+export function MiniserverStatus({ locationIntegrationId, integrationType, lastSyncAt, syncStatus }: MiniserverStatusProps) {
   const isLoxone = !integrationType || integrationType === "loxone" || integrationType === "loxone_miniserver";
 
   const { data, isLoading, error } = useQuery({
@@ -49,38 +50,55 @@ export function MiniserverStatus({ locationIntegrationId, integrationType, lastS
   if (!isLoxone) return null;
 
   const systemStatus = data?.systemStatus;
-  const syncTime = lastSyncAt || data?.lastSync;
+  // last_sync_at wird bei jedem Sync-Versuch aktualisiert (auch bei Fehlern).
+  // Wir zeigen ihn nur bei erfolgreichem Sync als "Sync: …" an; bei Fehlern
+  // erscheint stattdessen ein Fehler-Hinweis mit "Letzter Versuch: …".
+  const isErrorStatus = syncStatus === "error" || syncStatus === "auth_failed";
+  const syncTimeRaw = lastSyncAt || data?.lastSync;
+  const syncTime = !isErrorStatus ? syncTimeRaw : null;
 
-  // Show last sync even while loading or on error
   const items = [
     systemStatus?.localTime != null && {
       icon: Clock,
       label: "Uhrzeit",
       value: systemStatus.localTime,
+      tone: "muted" as const,
     },
     systemStatus?.cpu != null && {
       icon: Cpu,
       label: "CPU",
       value: String(systemStatus.cpu).replace(/%$/, '') + '%',
+      tone: "muted" as const,
     },
     systemStatus?.temperature != null && {
       icon: Thermometer,
       label: "Temp",
       value: `${systemStatus.temperature}°C`,
+      tone: "muted" as const,
     },
     systemStatus?.memory != null && {
       icon: HardDrive,
       label: "RAM frei",
       value: `${systemStatus.memory} KB`,
+      tone: "muted" as const,
     },
     syncTime && {
       icon: RefreshCw,
       label: "Sync",
       value: formatDistanceToNow(new Date(syncTime), { addSuffix: true, locale: de }),
+      tone: "muted" as const,
     },
-  ].filter(Boolean) as Array<{ icon: typeof Cpu; label: string; value: string }>;
+    isErrorStatus && {
+      icon: AlertTriangle,
+      label: syncStatus === "auth_failed" ? "Zugangsdaten prüfen" : "Sync fehlgeschlagen",
+      value: syncTimeRaw
+        ? `Letzter Versuch ${formatDistanceToNow(new Date(syncTimeRaw), { addSuffix: true, locale: de })}`
+        : "kein erfolgreicher Sync",
+      tone: "destructive" as const,
+    },
+  ].filter(Boolean) as Array<{ icon: typeof Cpu; label: string; value: string; tone: "muted" | "destructive" }>;
 
-  if (isLoading && !syncTime) {
+  if (isLoading && !syncTime && !isErrorStatus) {
     return (
       <div className="flex items-center gap-1.5 mt-1.5">
         <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
@@ -94,7 +112,10 @@ export function MiniserverStatus({ locationIntegrationId, integrationType, lastS
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
       {items.map((item) => (
-        <span key={item.label} className="flex items-center gap-1 text-xs text-muted-foreground">
+        <span
+          key={item.label}
+          className={`flex items-center gap-1 text-xs ${item.tone === "destructive" ? "text-destructive" : "text-muted-foreground"}`}
+        >
           <item.icon className="h-3 w-3" />
           <span className="font-medium">{item.label}:</span>
           <span>{item.value}</span>
@@ -103,3 +124,4 @@ export function MiniserverStatus({ locationIntegrationId, integrationType, lastS
     </div>
   );
 }
+
