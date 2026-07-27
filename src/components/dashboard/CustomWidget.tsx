@@ -187,18 +187,40 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       if (!config.meter_ids.length) return {};
       const { data } = await supabase
         .from("meters")
-        .select("id, name, unit, source_unit_power, energy_type")
+        .select("id, name, unit, source_unit_power, energy_type, device_type")
         .in("id", config.meter_ids);
       return Object.fromEntries((data ?? []).map((m) => [m.id, m]));
     },
     enabled: config.meter_ids.length > 0,
   });
 
+  // Sensor meters (temperature, humidity, boolean actuators, etc.) don't feed
+  // meter_power_readings. Their history lives in sensor_readings_* tables.
+  const SENSOR_UNITS = new Set(["°c", "°C", "°f", "%", "v", "a", "hz", "ppm", "lux", "bar", "pa", "hpa", "bool", "on/off", "an/aus", "rh"]);
+  const isSensorMeter = (m: any): boolean => {
+    if (!m) return false;
+    if (m.device_type === "sensor" || m.device_type === "actuator") return true;
+    const u = ((m.unit ?? m.source_unit_power) ?? "").toString().trim().toLowerCase();
+    return SENSOR_UNITS.has(u);
+  };
+  const sensorMeterIds = useMemo(
+    () => config.meter_ids.filter((id) => isSensorMeter(meterDetails[id])),
+    [config.meter_ids, meterDetails],
+  );
+  const powerMeterIds = useMemo(
+    () => config.meter_ids.filter((id) => !isSensorMeter(meterDetails[id])),
+    [config.meter_ids, meterDetails],
+  );
+
   const displayUnit = useMemo(() => {
     const primaryMeter = config.meter_ids.map((meterId) => meterDetails[meterId]).find(Boolean) as
       | MeterLike
       | undefined;
     if (!primaryMeter) return config.unit;
+    // For sensor meters, keep the raw unit (°C, %, bool …) instead of forcing kW/kWh.
+    if (isSensorMeter(primaryMeter)) {
+      return (primaryMeter as any).unit || (primaryMeter as any).source_unit_power || config.unit;
+    }
     return selectedPeriod === "day"
       ? powerUnitForMeter(primaryMeter, config.unit)
       : energyUnitForMeter(primaryMeter, config.unit);
