@@ -404,12 +404,18 @@ const LiveValues = () => {
       bridgeLatest.set(u, { value: Number(row.value), at: new Date(row.received_at).getTime() });
     }
 
-    // Letzten Polling-Wert pro Meter extrahieren
+    // Letzten Polling-Wert pro Meter extrahieren (Raw bevorzugt, 5-Min-Aggregat als Fallback)
     const pollingLatest = new Map<string, { value: number; at: number }>();
     for (const row of powerRes.data ?? []) {
       if (pollingLatest.has(row.meter_id)) continue;
       pollingLatest.set(row.meter_id, { value: Number(row.power_value), at: new Date(row.recorded_at).getTime() });
     }
+    for (const row of (power5minRes as any).data ?? []) {
+      if (pollingLatest.has(row.meter_id)) continue;
+      if (row.power_avg == null) continue;
+      pollingLatest.set(row.meter_id, { value: Number(row.power_avg), at: new Date(row.bucket).getTime() });
+    }
+
 
     const periodMap = new Map<string, { totalDay: number | null; totalMonth: number | null; totalYear: number | null }>();
     for (const row of periodRes.data ?? []) {
