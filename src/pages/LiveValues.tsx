@@ -323,14 +323,20 @@ const LiveValues = () => {
       new Set(autoMeters.map((m) => m.location_integration_id).filter(Boolean) as string[])
     );
 
-    // Parallel: DB-Polling-Wert, Bridge-Raw-Wert (Live), Perioden-Totals, Zählerstand (kumulativ), Sensor-Snapshots, Sensor-Rohwerte
-    const [powerRes, bridgeRes, periodRes, cumulativeRes, snapshotRes, sensorRawRes] = await Promise.all([
+    // Parallel: DB-Polling-Wert, 5-Min-Aggregat (Worker-only Fallback), Bridge-Raw-Wert (Live), Perioden-Totals, Zählerstand (kumulativ), Sensor-Snapshots, Sensor-Rohwerte
+    const [powerRes, power5minRes, bridgeRes, periodRes, cumulativeRes, snapshotRes, sensorRawRes] = await Promise.all([
       supabase
         .from("meter_power_readings")
         .select("meter_id, power_value, recorded_at")
         .in("meter_id", meterIds)
         .gte("recorded_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
         .order("recorded_at", { ascending: false }),
+      supabase
+        .from("meter_power_readings_5min")
+        .select("meter_id, power_avg, bucket")
+        .in("meter_id", meterIds)
+        .gte("bucket", new Date(Date.now() - 60 * 60 * 1000).toISOString())
+        .order("bucket", { ascending: false }),
       supabase
         .from("bridge_raw_samples")
         .select("uuid, value, received_at")
@@ -359,6 +365,7 @@ const LiveValues = () => {
         .gte("recorded_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
         .order("recorded_at", { ascending: false }),
     ]);
+
 
     // Neuester Sensor-Rohwert pro Meter (Momentanwerte: °C, %, bool, …).
     // Diese sind meist frischer als der Snapshot (der u.U. gecacht ist).
@@ -397,12 +404,18 @@ const LiveValues = () => {
       bridgeLatest.set(u, { value: Number(row.value), at: new Date(row.received_at).getTime() });
     }
 
-    // Letzten Polling-Wert pro Meter extrahieren
+    // Letzten Polling-Wert pro Meter extrahieren (Raw bevorzugt, 5-Min-Aggregat als Fallback)
     const pollingLatest = new Map<string, { value: number; at: number }>();
     for (const row of powerRes.data ?? []) {
       if (pollingLatest.has(row.meter_id)) continue;
       pollingLatest.set(row.meter_id, { value: Number(row.power_value), at: new Date(row.recorded_at).getTime() });
     }
+    for (const row of (power5minRes as any).data ?? []) {
+      if (pollingLatest.has(row.meter_id)) continue;
+      if (row.power_avg == null) continue;
+      pollingLatest.set(row.meter_id, { value: Number(row.power_avg), at: new Date(row.bucket).getTime() });
+    }
+
 
     const periodMap = new Map<string, { totalDay: number | null; totalMonth: number | null; totalYear: number | null }>();
     for (const row of periodRes.data ?? []) {

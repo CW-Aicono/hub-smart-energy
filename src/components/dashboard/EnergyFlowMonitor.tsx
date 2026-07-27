@@ -311,8 +311,25 @@ export default function EnergyFlowMonitor({
           latest[row.meter_id] = Number(row.power_value);
         }
       }
+      // Fallback: worker-only meters have no rows in meter_power_readings.
+      const missing = meterIds.filter((id) => latest[id] === undefined);
+      if (missing.length > 0) {
+        const { data: agg } = await supabase
+          .from("meter_power_readings_5min")
+          .select("meter_id, power_avg, bucket")
+          .in("meter_id", missing)
+          .gte("bucket", since)
+          .order("bucket", { ascending: false })
+          .limit(2000);
+        for (const row of agg ?? []) {
+          if (latest[row.meter_id] === undefined && row.power_avg != null) {
+            latest[row.meter_id] = Number(row.power_avg);
+          }
+        }
+      }
       return latest;
     },
+
   });
 
   // Seed B: bridge_raw_samples (Loxone WS-Bridge – hier landen Live-Leistungen aus Loxone).
@@ -1162,11 +1179,29 @@ function NodeDetailOverlay({
         .gte("recorded_at", since)
         .order("recorded_at", { ascending: true })
         .limit(500);
-      return (data ?? []).map((r: any) => ({
+      let rows = (data ?? []).map((r: any) => ({
         t: new Date(r.recorded_at).getTime(),
         v: Number(r.power_value) * 1000, // kW → W
       }));
+      // Fallback: worker-only meters (no raw rows) → 5-min buckets.
+      if (rows.length === 0) {
+        const { data: agg } = await supabase
+          .from("meter_power_readings_5min")
+          .select("bucket, power_avg")
+          .eq("meter_id", node.meter_id)
+          .gte("bucket", since)
+          .order("bucket", { ascending: true })
+          .limit(500);
+        rows = (agg ?? [])
+          .filter((r: any) => r.power_avg != null)
+          .map((r: any) => ({
+            t: new Date(r.bucket).getTime(),
+            v: Number(r.power_avg) * 1000,
+          }));
+      }
+      return rows;
     },
+
     enabled: !!node.meter_id,
     staleTime: 60_000,
   });
@@ -2102,12 +2137,30 @@ function HouseSelfSufficiencyPanel({
             .gte("recorded_at", since)
             .order("recorded_at", { ascending: true })
             .limit(3000);
-          result[mid] = (data ?? []).map((r: any) => ({
+          let rows = (data ?? []).map((r: any) => ({
             t: new Date(r.recorded_at).getTime(),
             kw: Number(r.power_value),
           }));
+          // Fallback: worker-only meters (no raw rows) → 5-min buckets.
+          if (rows.length === 0) {
+            const { data: agg } = await supabase
+              .from("meter_power_readings_5min")
+              .select("bucket, power_avg")
+              .eq("meter_id", mid)
+              .gte("bucket", since)
+              .order("bucket", { ascending: true })
+              .limit(3000);
+            rows = (agg ?? [])
+              .filter((r: any) => r.power_avg != null)
+              .map((r: any) => ({
+                t: new Date(r.bucket).getTime(),
+                kw: Number(r.power_avg),
+              }));
+          }
+          result[mid] = rows;
         }),
       );
+
       return result;
     },
   });

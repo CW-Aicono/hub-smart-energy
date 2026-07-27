@@ -74,7 +74,7 @@ export default function BoardEnergyBand() {
     let cancelled = false;
 
     const fetchSeed = async () => {
-      const since = new Date(Date.now() - 10 * 60_000).toISOString();
+      const since = new Date(Date.now() - 15 * 60_000).toISOString();
       const { data } = await supabase
         .from("meter_power_readings")
         .select("meter_id, power_value, recorded_at")
@@ -89,8 +89,27 @@ export default function BoardEnergyBand() {
           latest[row.meter_id] = Number(row.power_value);
         }
       }
+      // Fallback: worker-only meters have no rows in meter_power_readings;
+      // read the latest 5-min bucket for anything still missing.
+      const missing = meterIds.filter((id) => latest[id] === undefined);
+      if (missing.length > 0) {
+        const { data: agg } = await supabase
+          .from("meter_power_readings_5min")
+          .select("meter_id, power_avg, bucket")
+          .in("meter_id", missing)
+          .gte("bucket", since)
+          .order("bucket", { ascending: false })
+          .limit(2000);
+        if (cancelled) return;
+        for (const row of agg ?? []) {
+          if (latest[row.meter_id] === undefined && row.power_avg != null) {
+            latest[row.meter_id] = Number(row.power_avg);
+          }
+        }
+      }
       setSeed(latest);
     };
+
 
     fetchSeed();
     const id = window.setInterval(fetchSeed, 60_000);
