@@ -73,7 +73,7 @@ const SESSION_HEARTBEAT_MS = Math.max(
 );
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.6-stage-marker";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.7-error-attribution";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -446,7 +446,11 @@ async function connect(state: ConnState): Promise<void> {
   let stage: string = "dns-resolve";
   const host = await resolveLoxoneHost(state.serialNumber);
   if (!host) {
-    bridgeLog("warn", "dns_failed", `DNS-Auflösung fehlgeschlagen: ${state.serialNumber}`, state.serialNumber, { stage });
+    bridgeLog("warn", "dns_failed", `DNS-Auflösung fehlgeschlagen: ${state.serialNumber}`, state.serialNumber, {
+      stage,
+      location_integration_id: state.locationIntegrationId,
+      miniserver_serial: state.serialNumber,
+    });
     scheduleReconnect(state, "dns-failed");
     return;
   }
@@ -766,7 +770,14 @@ async function connect(state: ConnState): Promise<void> {
     bridgeLog(auth ? "error" : "error", auth ? "ws_auth_failed" : "ws_connect_failed",
       auth ? `Anmeldung am Miniserver abgelehnt (stage=${stage}, User "${state.username}") — Zugangsdaten in Cloud-Config prüfen`
            : `Verbindung fehlgeschlagen (stage=${stage}): ${reason}`,
-      state.serialNumber, { stage, reason, username_tried: auth ? state.username : undefined });
+      state.serialNumber, {
+        stage,
+        reason,
+        location_integration_id: state.locationIntegrationId,
+        miniserver_serial: state.serialNumber,
+        host,
+        username_tried: auth ? state.username : undefined,
+      });
     state.ws = null;
     if (auth) {
       // Backend über Auth-Fehler informieren → UI zeigt rotes Badge, Reconnect stark verlangsamt.
