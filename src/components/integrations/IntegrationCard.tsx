@@ -199,7 +199,9 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
                   locationIntegrationId={locationIntegration.id}
                   integrationType={integration?.type}
                   lastSyncAt={locationIntegration.last_sync_at}
+                  syncStatus={locationIntegration.sync_status}
                 />
+
                 <LoxoneWsStatus
                   locationIntegrationId={locationIntegration.id}
                   enabled={
