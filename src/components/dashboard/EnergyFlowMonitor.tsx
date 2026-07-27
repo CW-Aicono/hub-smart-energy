@@ -1179,11 +1179,29 @@ function NodeDetailOverlay({
         .gte("recorded_at", since)
         .order("recorded_at", { ascending: true })
         .limit(500);
-      return (data ?? []).map((r: any) => ({
+      let rows = (data ?? []).map((r: any) => ({
         t: new Date(r.recorded_at).getTime(),
         v: Number(r.power_value) * 1000, // kW → W
       }));
+      // Fallback: worker-only meters (no raw rows) → 5-min buckets.
+      if (rows.length === 0) {
+        const { data: agg } = await supabase
+          .from("meter_power_readings_5min")
+          .select("bucket, power_avg")
+          .eq("meter_id", node.meter_id)
+          .gte("bucket", since)
+          .order("bucket", { ascending: true })
+          .limit(500);
+        rows = (agg ?? [])
+          .filter((r: any) => r.power_avg != null)
+          .map((r: any) => ({
+            t: new Date(r.bucket).getTime(),
+            v: Number(r.power_avg) * 1000,
+          }));
+      }
+      return rows;
     },
+
     enabled: !!node.meter_id,
     staleTime: 60_000,
   });
