@@ -1142,6 +1142,39 @@ serve(async (req) => {
         structure = await structureResponse.json() as LoxoneStructure & { messageCenter?: any };
         structureCache.set(cacheKey, { structure, expiresAt: Date.now() + STRUCTURE_CACHE_TTL_MS });
         console.log(`Cached structure for ${STRUCTURE_CACHE_TTL_MS / 1000}s`);
+
+        // ── Auto-link bridge_miniserver_links (idempotent) ──
+        // Trigger only on cache-miss (i.e. structure was actually just fetched)
+        // to keep it cheap. RPC does an UPSERT and backfills missing tenant/location.
+        try {
+          const serialFromStructure =
+            (structure as any)?.msInfo?.serialNr ||
+            (structure as any)?.msInfo?.serial ||
+            config.serial_number;
+          const tenantIdForLink =
+            (locationIntegration as any)?.location?.tenant_id ?? null;
+          const locationIdForLink =
+            (locationIntegration as any)?.location_id ?? null;
+
+          if (serialFromStructure && tenantIdForLink && locationIdForLink) {
+            const { error: linkErr } = await supabase.rpc(
+              "ensure_bridge_miniserver_link",
+              {
+                p_serial: String(serialFromStructure),
+                p_tenant_id: tenantIdForLink,
+                p_location_id: locationIdForLink,
+                p_connection_kind: "cloud_dns",
+              },
+            );
+            if (linkErr) {
+              console.warn("[loxone-api] ensure_bridge_miniserver_link failed:", linkErr.message);
+            } else {
+              console.log(`[loxone-api] bridge_miniserver_links upserted for serial=${serialFromStructure}`);
+            }
+          }
+        } catch (linkCatch) {
+          console.warn("[loxone-api] auto-link exception (non-fatal):", linkCatch);
+        }
       }
 
       const controls = structure.controls || {};
