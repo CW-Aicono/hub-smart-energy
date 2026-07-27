@@ -254,7 +254,7 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
     const info = infoMap.get(intId);
     const heartbeatAge = current ? now - new Date(current.updated_at).getTime() : null;
     let status: UnifiedRow["status"] = "disconnected";
-    let statusLabel = "Getrennt";
+    let statusLabel = intSessions.length === 0 ? "Nie verbunden" : "Getrennt";
     if (current && !current.ended_at) {
       if (heartbeatAge !== null && heartbeatAge < LOXONE_FRESH_HEARTBEAT_MS) {
         status = "active"; statusLabel = "Aktiv";
@@ -262,6 +262,7 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
         status = "stale"; statusLabel = `Stale (${Math.round((heartbeatAge ?? 0) / 1000)}s)`;
       }
     }
+
     result.push({
       key: `loxone:${intId}`,
       type: "Loxone Miniserver",
