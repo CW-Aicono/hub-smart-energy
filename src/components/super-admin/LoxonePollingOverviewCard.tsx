@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Timer, ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Timer, ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, Search, List } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSortableData } from "@/components/ui/sortable-head";
 import { cn } from "@/lib/utils";
@@ -42,8 +43,9 @@ const MASTER_FLOOR_KEY = "loxone_master_poll_floor_minutes";
 
 export default function LoxonePollingOverviewCard() {
   const [rows, setRows] = useState<Row[]>([]);
-  const [flagEnabled, setFlagEnabled] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
   const { data: floorRaw } = useSystemSetting(MASTER_FLOOR_KEY);
   const setSetting = useSetSystemSetting();
@@ -60,15 +62,11 @@ export default function LoxonePollingOverviewCard() {
     let cancelled = false;
     async function load() {
       setLoading(true);
-      const [{ data: flagRow }, { data: liRows }] = await Promise.all([
-        supabase.from("system_settings").select("value").eq("key", "loxone_respect_poll_interval").maybeSingle(),
-        supabase
-          .from("location_integrations")
-          .select("id, location_id, config, last_sync_at, integration:integrations(type), location:locations(name, tenant:tenants(name))")
-          .eq("is_enabled", true),
-      ]);
+      const { data: liRows } = await supabase
+        .from("location_integrations")
+        .select("id, location_id, config, last_sync_at, integration:integrations(type), location:locations(name, tenant:tenants(name))")
+        .eq("is_enabled", true);
       if (cancelled) return;
-      setFlagEnabled(!(flagRow && String((flagRow as any).value).toLowerCase() === "false"));
       const filtered = ((liRows as any[]) || []).filter(
         (r) => r.integration?.type === "loxone" || r.integration?.type === "loxone_miniserver"
       );
@@ -89,8 +87,17 @@ export default function LoxonePollingOverviewCard() {
     return { ...r, _configured: configured, _isDefault: isDefault, _effective: effective, _floorApplies: floorApplies };
   }), [rows, floorActive, floorMinutes]);
 
+  const searched = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return enriched;
+    return enriched.filter((r) =>
+      (r.location?.tenant?.name ?? "").toLowerCase().includes(q) ||
+      (r.location?.name ?? "").toLowerCase().includes(q)
+    );
+  }, [enriched, query]);
+
   const { sorted, sort, toggle } = useSortableData<typeof enriched[number], PollSortKey>(
-    enriched,
+    searched,
     (r, k) => {
       switch (k) {
         case "tenant": return r.location?.tenant?.name ?? "";
@@ -131,6 +138,9 @@ export default function LoxonePollingOverviewCard() {
     saveFloor(Math.floor(n));
   }
 
+  const total = enriched.length;
+  const throttled = enriched.filter((r) => r._floorApplies).length;
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -140,7 +150,6 @@ export default function LoxonePollingOverviewCard() {
           <Badge variant={floorActive ? "destructive" : "outline"}>
             {floorActive ? `Master-Floor: ${floorMinutes.toLocaleString("de-DE")} Min` : "Master-Floor: Aus"}
           </Badge>
-
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -189,56 +198,96 @@ export default function LoxonePollingOverviewCard() {
           </div>
         </div>
 
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Lade…</p>
-        ) : rows.length === 0 ? null : (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-xs text-muted-foreground">
+            {loading ? "Lade…" : (
+              <>
+                {total.toLocaleString("de-DE")} Miniserver aktiv
+                {floorActive && throttled > 0 && (
+                  <> · <span className="text-destructive">{throttled.toLocaleString("de-DE")} durch Master-Floor gedrosselt</span></>
+                )}
+              </>
+            )}
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setOpen(true)} disabled={loading || total === 0} className="gap-2">
+            <List className="h-4 w-4" />
+            Alle Intervalle anzeigen
+          </Button>
+        </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-muted-foreground border-b">
-                  <SortTh<PollSortKey> label="Tenant" sortKey="tenant" sort={sort} onToggle={toggle} />
-                  <SortTh<PollSortKey> label="Liegenschaft" sortKey="location" sort={sort} onToggle={toggle} />
-                  <SortTh<PollSortKey> label="Konfiguriert (Min)" sortKey="interval" sort={sort} onToggle={toggle} />
-                  <SortTh<PollSortKey> label="Effektiv (Min)" sortKey="effective" sort={sort} onToggle={toggle} />
-                  <SortTh<PollSortKey> label="Letzter Sync" sortKey="sync" sort={sort} onToggle={toggle} />
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((r) => {
-                  const lastSync = r.last_sync_at ? new Date(r.last_sync_at) : null;
-                  const ageSec = lastSync ? Math.round((Date.now() - lastSync.getTime()) / 1000) : null;
-                  return (
-                    <tr key={r.id} className="border-b last:border-b-0">
-                      <td className="py-2 pr-4">{r.location?.tenant?.name || "—"}</td>
-                      <td className="py-2 pr-4">{r.location?.name || "—"}</td>
-                      <td className="py-2 pr-4">
-                        <Badge variant={r._isDefault ? "secondary" : "default"}>
-                          {r._configured.toLocaleString("de-DE")}{r._isDefault ? " (Default)" : ""}
-                        </Badge>
-                      </td>
-                      <td className="py-2 pr-4">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={r._floorApplies ? "destructive" : "outline"}>
-                            {r._effective.toLocaleString("de-DE")}
-                          </Badge>
-                          {r._floorApplies && (
-                            <span className="text-xs text-muted-foreground">durch Master-Floor</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-2 pr-4 text-muted-foreground">
-                        {lastSync
-                          ? `vor ${ageSec! < 60 ? `${ageSec}s` : `${Math.round(ageSec! / 60).toLocaleString("de-DE")} Min`}`
-                          : "—"}
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="max-w-5xl w-[95vw] max-h-[85vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Timer className="h-4 w-4" />
+                Loxone-Abfrage-Intervalle — alle Miniserver
+              </DialogTitle>
+            </DialogHeader>
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Nach Tenant oder Liegenschaft suchen…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="pl-8 h-9"
+              />
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {sorted.length.toLocaleString("de-DE")} von {total.toLocaleString("de-DE")} Miniservern
+            </div>
+            <div className="overflow-auto flex-1 border rounded-md">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-background z-10 border-b">
+                  <tr className="text-left text-muted-foreground">
+                    <SortTh<PollSortKey> label="Tenant" sortKey="tenant" sort={sort} onToggle={toggle} className="pl-3" />
+                    <SortTh<PollSortKey> label="Liegenschaft" sortKey="location" sort={sort} onToggle={toggle} />
+                    <SortTh<PollSortKey> label="Konfiguriert (Min)" sortKey="interval" sort={sort} onToggle={toggle} />
+                    <SortTh<PollSortKey> label="Effektiv (Min)" sortKey="effective" sort={sort} onToggle={toggle} />
+                    <SortTh<PollSortKey> label="Letzter Sync" sortKey="sync" sort={sort} onToggle={toggle} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                        Keine Treffer.
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  ) : sorted.map((r) => {
+                    const lastSync = r.last_sync_at ? new Date(r.last_sync_at) : null;
+                    const ageSec = lastSync ? Math.round((Date.now() - lastSync.getTime()) / 1000) : null;
+                    return (
+                      <tr key={r.id} className="border-b last:border-b-0">
+                        <td className="py-2 pr-4 pl-3">{r.location?.tenant?.name || "—"}</td>
+                        <td className="py-2 pr-4">{r.location?.name || "—"}</td>
+                        <td className="py-2 pr-4">
+                          <Badge variant={r._isDefault ? "secondary" : "default"}>
+                            {r._configured.toLocaleString("de-DE")}{r._isDefault ? " (Default)" : ""}
+                          </Badge>
+                        </td>
+                        <td className="py-2 pr-4">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={r._floorApplies ? "destructive" : "outline"}>
+                              {r._effective.toLocaleString("de-DE")}
+                            </Badge>
+                            {r._floorApplies && (
+                              <span className="text-xs text-muted-foreground">durch Master-Floor</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 pr-4 text-muted-foreground">
+                          {lastSync
+                            ? `vor ${ageSec! < 60 ? `${ageSec}s` : `${Math.round(ageSec! / 60).toLocaleString("de-DE")} Min`}`
+                            : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
