@@ -311,8 +311,25 @@ export default function EnergyFlowMonitor({
           latest[row.meter_id] = Number(row.power_value);
         }
       }
+      // Fallback: worker-only meters have no rows in meter_power_readings.
+      const missing = meterIds.filter((id) => latest[id] === undefined);
+      if (missing.length > 0) {
+        const { data: agg } = await supabase
+          .from("meter_power_readings_5min")
+          .select("meter_id, power_avg, bucket")
+          .in("meter_id", missing)
+          .gte("bucket", since)
+          .order("bucket", { ascending: false })
+          .limit(2000);
+        for (const row of agg ?? []) {
+          if (latest[row.meter_id] === undefined && row.power_avg != null) {
+            latest[row.meter_id] = Number(row.power_avg);
+          }
+        }
+      }
       return latest;
     },
+
   });
 
   // Seed B: bridge_raw_samples (Loxone WS-Bridge – hier landen Live-Leistungen aus Loxone).
