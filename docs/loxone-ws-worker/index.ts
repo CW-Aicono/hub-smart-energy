@@ -734,6 +734,7 @@ async function connect(state: ConnState): Promise<void> {
     // Phase 7.1: Initial-Snapshot pro Block-UUID holen (`jdev/sps/io/<block>/all` liefert ALLE States des Blocks).
     // State-UUIDs sind selbst NICHT subscribable (Loxone antwortet code=404). Live-Updates kommen
     // anschließend automatisch via `enablebinstatusupdate` für jede State-UUID.
+    stage = "per-block-snapshot";
     const uniqueBlocks = new Set<string>();
     for (const entry of state.uuidMap.values()) {
       if (entry.block_uuid) uniqueBlocks.add(entry.block_uuid);
@@ -752,6 +753,7 @@ async function connect(state: ConnState): Promise<void> {
         log("warn", `[WS] ${state.serialNumber} block-snapshot ${blockUuid} fehlgeschlagen: ${reason}`);
       }
     }
+    stage = "connected";
     log("info", `[WS] ${state.serialNumber} per-block snapshot: ok=${subscribedOk} err=${subscribedErr} (blocks=${uniqueBlocks.size}, stateUuids=${state.uuidMap.size})`);
     bridgeLog("info", "ws_per_block_snapshot", `Per-block snapshot: ok=${subscribedOk} err=${subscribedErr}`, state.serialNumber, { ok: subscribedOk, err: subscribedErr, blocks: uniqueBlocks.size, stateUuids: state.uuidMap.size, failed: failedBlocks });
   } catch (err) {
@@ -760,11 +762,11 @@ async function connect(state: ConnState): Promise<void> {
     dnsCache.delete(state.serialNumber);
     const reason = describeError(err);
     const auth = isAuthError(err);
-    log(auth ? "error" : "warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${reason}${auth ? " (AUTH)" : ""}`);
+    log(auth ? "error" : "warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber} (stage=${stage}): ${reason}${auth ? " (AUTH)" : ""}`);
     bridgeLog(auth ? "error" : "error", auth ? "ws_auth_failed" : "ws_connect_failed",
-      auth ? `Anmeldung am Miniserver abgelehnt (User "${state.username}") — Zugangsdaten in Cloud-Config prüfen`
-           : `Verbindung fehlgeschlagen: ${reason}`,
-      state.serialNumber, { reason, username_tried: auth ? state.username : undefined });
+      auth ? `Anmeldung am Miniserver abgelehnt (stage=${stage}, User "${state.username}") — Zugangsdaten in Cloud-Config prüfen`
+           : `Verbindung fehlgeschlagen (stage=${stage}): ${reason}`,
+      state.serialNumber, { stage, reason, username_tried: auth ? state.username : undefined });
     state.ws = null;
     if (auth) {
       // Backend über Auth-Fehler informieren → UI zeigt rotes Badge, Reconnect stark verlangsamt.
@@ -772,7 +774,7 @@ async function connect(state: ConnState): Promise<void> {
       // Auth-Backoff: mindestens 5 Min, um den Miniserver nicht zu hämmern (Lockout-Risiko).
       state.reconnectDelay = Math.max(state.reconnectDelay, 300000);
     }
-    scheduleReconnect(state, `connect-error: ${reason}`);
+    scheduleReconnect(state, `connect-error[${stage}]: ${reason}`);
   }
 }
 
