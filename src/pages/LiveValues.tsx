@@ -426,8 +426,9 @@ const LiveValues = () => {
         const polling = pollingLatest.get(m.id);
         const bridge = bridgeLatest.get(m.sensor_uuid!.toLowerCase());
         const snapshot = snapshotLatest.get(m.sensor_uuid!.toLowerCase());
-        // Neuestes Sample gewinnt (Bridge > Snapshot > Polling bei Gleichstand)
-        const candidates = [bridge, snapshot, polling].filter(Boolean) as { value: number; at: number }[];
+        const sensorRaw = sensorRawLatest.get(m.id);
+        // Neuestes Sample gewinnt (Bridge > SensorRaw > Snapshot > Polling bei Gleichstand)
+        const candidates = [bridge, sensorRaw, snapshot, polling].filter(Boolean) as { value: number; at: number }[];
         const chosen = candidates.length
           ? candidates.reduce((best, cur) => (cur.at >= best.at ? cur : best))
           : undefined;
