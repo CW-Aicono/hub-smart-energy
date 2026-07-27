@@ -355,17 +355,40 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
             .limit(2000);
           if (recentError) throw recentError;
 
-          if (recentRaw && recentRaw.length) {
-            mergedRows = mergedRows.filter((row) => new Date(row.recorded_at) < recentCutoff);
-            mergedRows.push(
-              ...recentRaw.map((row) => ({
+          let recentRows = (recentRaw ?? []).map((row) => ({
+            meter_id: row.meter_id,
+            value: row.power_value,
+            recorded_at: row.recorded_at,
+          }));
+
+          // Fallback: worker-only meters without raw rows → 5-min buckets.
+          const covered = new Set(recentRows.map((r) => r.meter_id));
+          const missing = powerMeterIds.filter((id) => !covered.has(id));
+          if (missing.length > 0) {
+            const { data: agg5m } = await supabase
+              .from("meter_power_readings_5min")
+              .select("meter_id, power_avg, bucket")
+              .in("meter_id", missing)
+              .gte("bucket", recentCutoff.toISOString())
+              .lte("bucket", to.toISOString())
+              .order("bucket", { ascending: true })
+              .limit(2000);
+            for (const row of agg5m ?? []) {
+              if (row.power_avg == null) continue;
+              recentRows.push({
                 meter_id: row.meter_id,
-                value: row.power_value,
-                recorded_at: row.recorded_at,
-              })),
-            );
+                value: Number(row.power_avg),
+                recorded_at: row.bucket as string,
+              });
+            }
+          }
+
+          if (recentRows.length) {
+            mergedRows = mergedRows.filter((row) => new Date(row.recorded_at) < recentCutoff);
+            mergedRows.push(...recentRows);
           }
         }
+
 
         for (const row of mergedRows) {
           const label = getDayBucketLabel(new Date(row.recorded_at));
