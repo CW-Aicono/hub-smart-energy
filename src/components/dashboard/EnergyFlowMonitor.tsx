@@ -27,6 +27,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { SensorHistoryChart } from "@/components/sensors/SensorHistoryChart";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -310,8 +311,25 @@ export default function EnergyFlowMonitor({
           latest[row.meter_id] = Number(row.power_value);
         }
       }
+      // Fallback: worker-only meters have no rows in meter_power_readings.
+      const missing = meterIds.filter((id) => latest[id] === undefined);
+      if (missing.length > 0) {
+        const { data: agg } = await supabase
+          .from("meter_power_readings_5min")
+          .select("meter_id, power_avg, bucket")
+          .in("meter_id", missing)
+          .gte("bucket", since)
+          .order("bucket", { ascending: false })
+          .limit(2000);
+        for (const row of agg ?? []) {
+          if (latest[row.meter_id] === undefined && row.power_avg != null) {
+            latest[row.meter_id] = Number(row.power_avg);
+          }
+        }
+      }
       return latest;
     },
+
   });
 
   // Seed B: bridge_raw_samples (Loxone WS-Bridge – hier landen Live-Leistungen aus Loxone).
@@ -1161,11 +1179,29 @@ function NodeDetailOverlay({
         .gte("recorded_at", since)
         .order("recorded_at", { ascending: true })
         .limit(500);
-      return (data ?? []).map((r: any) => ({
+      let rows = (data ?? []).map((r: any) => ({
         t: new Date(r.recorded_at).getTime(),
         v: Number(r.power_value) * 1000, // kW → W
       }));
+      // Fallback: worker-only meters (no raw rows) → 5-min buckets.
+      if (rows.length === 0) {
+        const { data: agg } = await supabase
+          .from("meter_power_readings_5min")
+          .select("bucket, power_avg")
+          .eq("meter_id", node.meter_id)
+          .gte("bucket", since)
+          .order("bucket", { ascending: true })
+          .limit(500);
+        rows = (agg ?? [])
+          .filter((r: any) => r.power_avg != null)
+          .map((r: any) => ({
+            t: new Date(r.bucket).getTime(),
+            v: Number(r.power_avg) * 1000,
+          }));
+      }
+      return rows;
     },
+
     enabled: !!node.meter_id,
     staleTime: 60_000,
   });
@@ -1361,6 +1397,10 @@ export function MeterDetailDialog({
   // Derive display units from the meter's configured unit so non-electric
   // media (water m³, gas m³, …) are not shown as kW/kWh.
   const meterUnitRaw = (nodeMeter?.unit ?? "").toString().trim();
+  const meterSourceUnitRaw = ((nodeMeter as any)?.source_unit_power ?? "").toString().trim();
+  const meterDeviceType = ((nodeMeter as any)?.device_type ?? "").toString().trim().toLowerCase();
+  // Fallback: leere unit → source_unit_power (Gateway-Sensoren haben oft nur letzteres gepflegt)
+  const displayUnit = meterUnitRaw || meterSourceUnitRaw;
   const meterEnergyType = (nodeMeter?.energy_type ?? "").toString().trim();
   const { rateUnit, energyUnit } = (() => {
     const u = meterUnitRaw;
@@ -1374,6 +1414,66 @@ export function MeterDetailDialog({
     }
     return { rateUnit: `${u}/h`, energyUnit: u };
   })();
+
+  // Sensor detection: primär device_type, fallback auf Einheit (unit ODER source_unit_power).
+  const isSensor = (() => {
+    if (meterDeviceType === "sensor" || meterDeviceType === "actuator") return true;
+    const u = (displayUnit || "").toLowerCase().replace(/\s+/g, "");
+    const meteringUnits = new Set([
+      "wh","kwh","mwh","gwh",
+      "w","kw","mw","gw",
+      "va","kva","var","kvar",
+      "m³","m3","l","l/h","l/min","m³/h","m3/h",
+    ]);
+    if (!u) return false; // ohne jegliche Einheit + device_type=meter/undef: altes Verhalten
+    return !meteringUnits.has(u);
+  })();
+
+
+  const { data: latestSensor } = useQuery({
+    queryKey: ["sensor-latest-value", node.meter_id],
+    enabled: isSensor && !!node.meter_id,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("sensor_readings_raw")
+        .select("value, recorded_at")
+        .eq("meter_id", node.meter_id!)
+        .order("recorded_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data as { value: number; recorded_at: string } | null;
+    },
+  });
+
+  // Snapshot-Fallback: solange keine Rohwerte in sensor_readings_raw stehen,
+  // den Live-Wert aus gateway_sensor_snapshots ziehen (gleiche Quelle wie die Kachel).
+  const nodeSensorUuid = ((nodeMeter as any)?.sensor_uuid ?? "").toString().toLowerCase();
+  const nodeLocationIntegrationId = (nodeMeter as any)?.location_integration_id ?? null;
+  const { data: snapshotSensor } = useQuery({
+    queryKey: ["sensor-snapshot-value", nodeLocationIntegrationId, nodeSensorUuid],
+    enabled: isSensor && !latestSensor && !!nodeSensorUuid && !!nodeLocationIntegrationId,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("gateway_sensor_snapshots")
+        .select("sensors, fetched_at")
+        .eq("location_integration_id", nodeLocationIntegrationId)
+        .maybeSingle();
+      if (!data?.sensors || !Array.isArray(data.sensors)) return null;
+      const hit = (data.sensors as any[]).find(
+        (s) => String(s?.id ?? s?.uuid ?? "").toLowerCase() === nodeSensorUuid,
+      );
+      if (!hit) return null;
+      const raw = hit.rawValue ?? hit.value ?? hit.state;
+      const num = typeof raw === "number" ? raw : Number(String(raw).replace(",", "."));
+      if (!Number.isFinite(num)) return null;
+      return { value: num, recorded_at: data.fetched_at as string };
+    },
+  });
+  const effectiveSensorLatest = latestSensor ?? snapshotSensor;
 
 
 
@@ -1717,15 +1817,20 @@ export function MeterDetailDialog({
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">
-              Energie{stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}
+              {isSensor ? "Momentanwert" : `Energie${stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}`}
             </div>
             <div className="text-base font-semibold tabular-nums">
-              {stats?.bidirectional
-                ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
-                : `${fmtDeNum(totalImport - totalExport)} ${energyUnit}`}
+              {isSensor
+                ? (effectiveSensorLatest?.value != null
+                    ? `${fmtDeNum(Number(effectiveSensorLatest.value))}${displayUnit ? " " + displayUnit : ""}`
+                    : "–")
+                : (stats?.bidirectional
+                    ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
+                    : `${fmtDeNum(totalImport - totalExport)} ${energyUnit}`)}
             </div>
           </div>
         </div>
+
 
 
         {isHouse && (
@@ -1737,8 +1842,9 @@ export function MeterDetailDialog({
           />
         )}
 
-        {/* Chart 1: Leistungsverlauf (+ optional SOC bei Speichern) */}
+        {/* Chart 1: Leistungsverlauf (+ optional SOC bei Speichern) — nur für Zähler, nicht für Sensoren */}
 
+        {!isSensor && (
         <div>
           <div className="mb-1 flex items-center justify-between gap-2">
             <div className="text-sm font-medium">
@@ -1892,10 +1998,12 @@ export function MeterDetailDialog({
             )}
           </div>
         </div>
+        )}
 
 
-        {/* Chart 2: Energie pro Bucket */}
-        {energyBuckets.length > 0 && (
+        {/* Chart 2: Energie pro Bucket — nur für Zähler */}
+        {!isSensor && energyBuckets.length > 0 && (
+
           <div>
             <div className="text-sm font-medium mb-1">
               Energie pro {range === "1h" ? "5 Min" : range === "24h" ? "Stunde" : range === "7d" ? "6 h" : "Tag"}
@@ -1978,6 +2086,11 @@ export function MeterDetailDialog({
             <div className="font-mono text-[10px] truncate" title={node.meter_id}>{node.meter_id || "–"}</div>
           </div>
         </div>
+        {node.meter_id && (
+          <div className="mt-4">
+            <SensorHistoryChart meterId={node.meter_id} unit={displayUnit || null} label="Sensor-Verlauf" />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -2024,12 +2137,30 @@ function HouseSelfSufficiencyPanel({
             .gte("recorded_at", since)
             .order("recorded_at", { ascending: true })
             .limit(3000);
-          result[mid] = (data ?? []).map((r: any) => ({
+          let rows = (data ?? []).map((r: any) => ({
             t: new Date(r.recorded_at).getTime(),
             kw: Number(r.power_value),
           }));
+          // Fallback: worker-only meters (no raw rows) → 5-min buckets.
+          if (rows.length === 0) {
+            const { data: agg } = await supabase
+              .from("meter_power_readings_5min")
+              .select("bucket, power_avg")
+              .eq("meter_id", mid)
+              .gte("bucket", since)
+              .order("bucket", { ascending: true })
+              .limit(3000);
+            rows = (agg ?? [])
+              .filter((r: any) => r.power_avg != null)
+              .map((r: any) => ({
+                t: new Date(r.bucket).getTime(),
+                kw: Number(r.power_avg),
+              }));
+          }
+          result[mid] = rows;
         }),
       );
+
       return result;
     },
   });

@@ -3,6 +3,7 @@ import WorkerControlsPanel from "@/components/super-admin/WorkerControlsPanel";
 import WorkerKeyPanel from "@/components/super-admin/WorkerKeyPanel";
 import GatewayWorkerStatusCard from "@/components/super-admin/GatewayWorkerStatusCard";
 import LoxonePollingOverviewCard from "@/components/super-admin/LoxonePollingOverviewCard";
+import { SensorHistorySettingsCard } from "@/components/super-admin/SensorHistorySettingsCard";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useSATranslation } from "@/hooks/useSATranslation";
@@ -692,6 +693,7 @@ const SuperAdminGatewayFleet = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <GatewayWorkerStatusCard />
             <LoxonePollingOverviewCard />
+            <SensorHistorySettingsCard />
           </div>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>

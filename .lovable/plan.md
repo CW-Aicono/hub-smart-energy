@@ -1,57 +1,58 @@
-## Korrigierte Ursache
+## Ursache (verifiziert)
 
-Du hast recht — die obere Tabelle zeigt **nur virtuelle und manuelle Zähler**, nicht alle. Das kommt aus der Deduplizierungs-Logik in `src/components/locations/MeterManagement.tsx`:
+Seit der Umstellung des WS-Workers (v1.6) auf reine 5-Min-Bucket-Aggregation schreibt der Loxone-Kanal für viele Zähler nur noch nach `meter_power_readings_5min` und **nicht mehr** nach der Rohtabelle `meter_power_readings`.
 
-```ts
-// Zeile 495–498
-const meterTypeMeters = activeMeters.filter(
-  (m) =>
-    ((m as any).device_type === "meter" || !(m as any).device_type) &&
-    !(m.sensor_uuid && gatewayDeviceIds.has(m.sensor_uuid)),
-);
-// Zeile 508
-const displayedMeters = showArchived ? archivedMetersByType : meterTypeMeters;
-```
+DB-Check für heute (aktive PV-Zähler):
+- `meter_power_readings`: **0 Zeilen**
+- `meter_power_readings_5min`: **233 Zeilen**
 
-Zähler mit `sensor_uuid`, das vom Gateway geliefert wird, werden aus der oberen Tabelle **ausgeblendet** und stattdessen nur in der unteren „Vom Gateway gelieferte Zähler-Geräte"-Tabelle angezeigt (`assignedMeterDevices`, Zeile 913 ff.). Die obere Tabelle enthält damit ausschließlich:
-- virtuelle Zähler (z. B. „Ladeinfrastruktur" auf Hetzner)
-- rein manuelle Zähler ohne Gateway-Bindung
+Alle Frontend-/Backend-Stellen, die weiterhin nur `meter_power_readings` lesen (Live-Wert, Peak, Historie, Kalibrierung), liefern für diese Zähler leere Ergebnisse und fallen entweder auf 0 zurück oder — im PV-Fall — auf einen Estimate-Pfad, der den Tages-Kumulativwert per Forecast-Gewichten verteilt. Deshalb sehen wir konstanten Test-Wert des PV-Meters als Solar-Peak-Muster.
 
-Der eigentliche Bug ist die **Verschachtelung der Bulk-Toolbar** (Zeilen 720–796):
+## Betroffene Stellen (identisches Symptom, alle bestätigt per `rg`)
 
-```tsx
-) : displayedMeters.length === 0 ? (
-  <p>Keine Zähler angelegt.</p>
-) : (
-  <>
-    {isAdmin && selectedMeterIds.size > 0 && (
-      /* ⬅ Toolbar sitzt HIER, im else-Zweig */
-    )}
-    <Table>…</Table>
-  </>
-)}
-{/* Gateway-Devices-Tabelle steht danach — außerhalb des if/else */}
-```
+Ohne bereits vorhandenen Fallback:
 
-Beide Tabellen (obere Virtuell/Manuell + untere Gateway-Devices) schreiben in dieselbe `selectedMeterIds`-Set. Aber die Toolbar wird **nur gerendert, wenn `displayedMeters` nicht leer ist**.
+- `src/lib/pvActuals.ts` (`fetchMeterPowerReadings`) — Ursprungsproblem, verzerrte Ist-Stundenbalken.
+- `src/components/dashboard/EnergyGaugeWidget.tsx` (Zeilen ~123, ~169) — Live-Leistung pro Zähler und heutiger Peak.
+- `src/components/dashboard/EnergyFlowMonitor.tsx` (Zeilen ~302, ~1159, ~1545, ~2099) — Live-Flow, 24 h Verläufe, Detail-Charts.
+- `src/components/dashboard/CustomWidget.tsx` (Zeile ~349) — Recent-Fenster für Custom-Widgets.
+- `src/components/board/BoardEnergyBand.tsx` (Zeile ~79) — Board-Live-Band.
+- `src/pages/LiveValues.tsx` (Zeile ~329) — „DB-Polling-Wert"-Kandidat für die Kachel.
+- `supabase/functions/pv-forecast/index.ts` (Zeile ~130) — Kalibrierung / AI-Korrekturfaktor beruht auf leerem Ist → verfälschter Prognosekoeffizient.
+- `supabase/functions/peak-shaving-scheduler/index.ts` (Zeile ~82) — aktueller Leistungswert für Peak-Shaving-Trigger.
 
-- **Hetzner**: 1 virtueller Zähler „Ladeinfrastruktur" existiert → `displayedMeters.length > 0` → Toolbar wird gerendert → Auswahl der 15 Gateway-Zähler unten ergibt sichtbar „15 ausgewählt".
-- **Lovable**: keine virtuellen oder manuellen Zähler → `displayedMeters.length === 0` → Empty-State-Text „Keine Zähler angelegt." → Toolbar existiert im DOM überhaupt nicht, obwohl unten Gateway-Zähler selektiert sind.
+Bereits mit 5-Min-Fallback (nur zur Info, kein Fix nötig):
+- `src/hooks/useVirtualBalance.ts` — liest zuerst `meter_power_readings_5min.power_avg`.
+- `src/components/charging/DynamicDlmCard.tsx` — Fallback auf Bucket.
+- `supabase/functions/_shared/meterPower.ts` — liest 5-Min zuerst.
 
 ## Fix
 
-**Datei**: `src/components/locations/MeterManagement.tsx`
+Zwei kleine Änderungen, danach überall wiederverwenden:
 
-1. **Toolbar aus dem `else`-Zweig herausziehen** und vor die `displayedMeters.length === 0 ? … : …`-Verzweigung platzieren (Zeilen 718–796). So bleibt sie sichtbar, sobald `selectedMeterIds.size > 0` — egal ob die obere Tabelle leer ist oder nicht.
+1. **Neuer Helper in `src/lib/pvActuals.ts`**
+   `fetchMeterPower5min(meterIds, from, to)` liest `meter_power_readings_5min` (`meter_id`, `power_avg` als `power_value`, `bucket` als `recorded_at`) und liefert das gleiche Format wie `fetchMeterPowerReadings`, damit `buildHourlyActuals` unverändert bleibt.
+   `fetchPvActualHourly`: nach leerem Raw-Fetch zusätzlich 5-Min lesen; erst wenn beide leer sind, greift der bisherige Estimate-Pfad mit `isEstimated: true`.
 
-2. **„Select all"-Verhalten anpassen** (Zeile 803–807): Die „Alle auswählen"-Checkbox in der oberen Table-Header sollte nur alle `displayedMeters` toggeln (bleibt so). Sie steuert bewusst nicht die Gateway-Devices-Tabelle darunter — diese hat eine eigene Header-Checkbox (`toggleSelectAll` → `DeviceTable`, Zeilen 934/935), was korrekt bleibt.
+2. **Einheitliches Fallback-Muster „Raw → 5-Min" in den restlichen Stellen**
+   Jede der oben genannten Frontend-/Edge-Function-Reads bekommt denselben Ablauf:
+   - Erst wie bisher `meter_power_readings` im gewünschten Zeitfenster lesen.
+   - Wenn leer, dieselbe Query gegen `meter_power_readings_5min` fahren (`bucket` statt `recorded_at`, `power_avg` statt `power_value`, gleiche `meter_id`-/Zeitfilter, `desc/asc`-Sortierung analog).
+   - Verarbeitung/Aggregation bleibt bestehen (Latest-Wert = `power_avg` des jüngsten Buckets; Historie = Punktreihe aus Buckets).
 
-3. **Empty-State-Text zusätzlich einblenden**: „Keine Zähler angelegt." weiterhin zeigen, wenn `displayedMeters.length === 0` — aber unabhängig davon die Toolbar oberhalb rendern, damit Bulk-Aktionen für die unten selektierten Gateway-Zähler funktionieren.
+   Zusätzlich für die „Latest"-Reads mit `.limit(1)` (`EnergyGaugeWidget`, `EnergyFlowMonitor` Zeile 302, `BoardEnergyBand`, `peak-shaving-scheduler`, `LiveValues`): Fenster auf die letzten 15 Min beschränken, damit ein alter 5-Min-Bucket nicht als „Live" durchgereicht wird.
 
-4. **Analog Sensoren- & Aktoren-Tab prüfen** (Zeilen ~1030, ~1178). Struktur ist parallel aufgebaut; dort dieselbe Umstellung, falls das gleiche Verschachtelungs-Muster verwendet wird.
+   Für `pv-forecast/index.ts` (Kalibrierung): identisches Fallback im Ist-Fetch, damit der AI-Korrekturfaktor nicht auf Null-Ist berechnet wird.
 
-## Umfang
+## Nicht im Scope
 
-- 1 Datei, rein strukturelle JSX-Umsortierung.
-- Kein Datenbank-, RLS-, oder Backend-Änderung.
-- Keine Business-Logik-Änderung — `selectedMeterIds` und die Bulk-Handler bleiben unverändert.
+- Keine Backfills nach `meter_power_readings`.
+- Keine Änderungen am WS-Worker, an RPCs oder Migrationen.
+- Kein UI-Redesign, keine Änderungen an `PvForecastWidget.tsx` außerhalb der reinen Datenquelle.
+
+## Erwartetes Ergebnis
+
+- PV-Widget: bei konstantem Test-Meter zeigen die grünen Ist-Balken pro vergangener Stunde vergleichbare kWh-Werte statt Solar-Peak-Verteilung; Label „Stundenwerte aus Tagessumme geschätzt" verschwindet.
+- Dashboards (EnergyGauge, EnergyFlowMonitor, CustomWidget, BoardEnergyBand): Live-/Historien-Werte für Loxone-Zähler erscheinen wieder.
+- LiveValues-Kachel: „DB-Polling"-Kandidat liefert wieder aktuelle Werte für Worker-Zähler.
+- Peak-Shaving-Scheduler und PV-Forecast-Kalibrierung arbeiten wieder mit realen Ist-Werten.

@@ -62,6 +62,38 @@ export async function fetchMeterPowerReadings(meterIds: string[], rangeStart: Da
   return allData.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
 }
 
+// Fallback for meters that only receive worker-aggregated 5-min buckets
+// (no rows in meter_power_readings). Maps 5-min buckets to the same shape
+// as fetchMeterPowerReadings so downstream aggregation (buildHourlyActuals)
+// stays unchanged. Interval per sample is 5 minutes → energy = power_avg × 5/60.
+export async function fetchMeterPower5min(meterIds: string[], rangeStart: Date, rangeEnd: Date) {
+  const allData: MeterPowerReading[] = [];
+  let from = 0;
+  const pageSize = 1000;
+
+  while (true) {
+    const { data: page } = await supabase
+      .from("meter_power_readings_5min")
+      .select("power_avg, bucket")
+      .in("meter_id", meterIds)
+      .gte("bucket", rangeStart.toISOString())
+      .lt("bucket", rangeEnd.toISOString())
+      .order("bucket", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (!page || page.length === 0) break;
+    for (const row of page as any[]) {
+      if (row.power_avg == null) continue;
+      allData.push({ power_value: Number(row.power_avg), recorded_at: row.bucket });
+    }
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return allData.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
+}
+
+
 export function buildHourlyActuals(readings: MeterPowerReading[]) {
   const hourBuckets: Record<string, number> = {};
 
@@ -286,26 +318,39 @@ export async function fetchPvActualHourly({
   const todayStr = toLocalDateKey(new Date());
   const isToday = dayStr === todayStr;
 
-  const rawReadings = await fetchMeterPowerReadings(meterIds, rangeStart, rangeEnd);
-  if (rawReadings.length > 0) {
-    let hourly = buildHourlyActuals(rawReadings);
+  // For today, never fabricate values for hours that haven't happened yet.
+  // Both the raw fetch window and the forecast-weight distribution must stop at "now".
+  const now = new Date();
+  const effectiveEnd = isToday && now < rangeEnd ? now : rangeEnd;
+  const currentHourKey = toLocalHourKey(now.toISOString());
+  const clippedForecast = isToday
+    ? forecastHours.filter((h) => toLocalHourKey(h.timestamp) <= currentHourKey)
+    : forecastHours;
+
+  const rawReadings = await fetchMeterPowerReadings(meterIds, rangeStart, effectiveEnd);
+  const readingsSource = rawReadings.length > 0
+    ? rawReadings
+    : await fetchMeterPower5min(meterIds, rangeStart, effectiveEnd);
+  if (readingsSource.length > 0) {
+    let hourly = buildHourlyActuals(readingsSource);
     if (isToday) {
       const authoritative = await fetchTodayCumulativeKwh(meterIds);
       if (authoritative != null) {
         const sum = Object.values(hourly).reduce((s, v) => s + Math.abs(v), 0);
         hourly = sum > 0
           ? scaleHourlyToTotal(hourly, authoritative)
-          : estimateHourlyActualsFromDailyTotal(dayStr, authoritative, forecastHours);
+          : estimateHourlyActualsFromDailyTotal(dayStr, authoritative, clippedForecast);
       }
     }
     return { readings: hourly, isEstimated: false, isStored: false };
   }
 
+
   if (isToday) {
     const authoritative = await fetchTodayCumulativeKwh(meterIds);
     if (authoritative != null) {
       return {
-        readings: estimateHourlyActualsFromDailyTotal(dayStr, authoritative, forecastHours),
+        readings: estimateHourlyActualsFromDailyTotal(dayStr, authoritative, clippedForecast),
         isEstimated: true,
         isStored: false,
       };
@@ -404,10 +449,14 @@ export async function fetchPvActualDailyTotals({
       const todayEnd = new Date(todayStart);
       todayEnd.setDate(todayEnd.getDate() + 1);
 
-      const todayReadings = await fetchMeterPowerReadings(meterIds, todayStart, todayEnd);
+      const rawTodayReadings = await fetchMeterPowerReadings(meterIds, todayStart, todayEnd);
+      const todayReadings = rawTodayReadings.length > 0
+        ? rawTodayReadings
+        : await fetchMeterPower5min(meterIds, todayStart, todayEnd);
       if (todayReadings.length > 0) {
         dayMap[todayStr] = buildDailyActualTotal(todayReadings);
       }
+
     }
   }
 

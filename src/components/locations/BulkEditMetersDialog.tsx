@@ -5,7 +5,7 @@
  * Jeder Feld-Block hat ein "Anwenden"-Checkbox — nur aktivierte Felder
  * werden in einem Update an alle Ziel-Zähler geschrieben.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -28,6 +28,7 @@ interface Props {
   meters: Meter[];
   locationId: string;
   onDone: () => void;
+  entityType?: "meters" | "sensors" | "actuators";
 }
 
 const METER_FUNCTIONS: Array<{ value: string; label: string }> = [
@@ -36,7 +37,14 @@ const METER_FUNCTIONS: Array<{ value: string; label: string }> = [
   { value: "bidirectional", label: "Bidirektional" },
 ];
 
-export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, onDone }: Props) {
+const ENTITY_LABELS: Record<NonNullable<Props["entityType"]>, { singular: string; plural: string }> = {
+  meters: { singular: "Zähler", plural: "Zähler" },
+  sensors: { singular: "Sensor", plural: "Sensoren" },
+  actuators: { singular: "Aktor", plural: "Aktoren" },
+};
+
+export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, onDone, entityType = "meters" }: Props) {
+  const labels = ENTITY_LABELS[entityType];
   const { floors } = useFloors(locationId);
   const [floorId, setFloorId] = useState<string>("__none__");
   const { rooms } = useFloorRooms(floorId !== "__none__" && floorId !== "__clear__" ? floorId : undefined);
@@ -51,6 +59,8 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
   const [applyBidir, setApplyBidir] = useState(false);
   const [applyFunction, setApplyFunction] = useState(false);
   const [applyParent, setApplyParent] = useState(false);
+  const [applyDeviceType, setApplyDeviceType] = useState(false);
+  const [deviceType, setDeviceType] = useState<string>("meter");
 
   const [roomId, setRoomId] = useState<string>("__none__");
   const [energyType, setEnergyType] = useState<string>("strom");
@@ -62,13 +72,39 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
   const [parentId, setParentId] = useState<string>("__none__");
   const [saving, setSaving] = useState(false);
 
+  // Reset all "apply" flags and values when the dialog is closed,
+  // so the next open starts with a clean state (no leftover checkboxes).
+  useEffect(() => {
+    if (open) return;
+    setApplyFloor(false);
+    setApplyRoom(false);
+    setApplyEnergy(false);
+    setApplyUnit(false);
+    setApplyMedium(false);
+    setApplyMain(false);
+    setApplyBidir(false);
+    setApplyFunction(false);
+    setApplyParent(false);
+    setApplyDeviceType(false);
+    setFloorId("__none__");
+    setRoomId("__none__");
+    setEnergyType("strom");
+    setUnit("kWh");
+    setMedium("");
+    setIsMain(false);
+    setIsBidir(false);
+    setMeterFunction("consumption");
+    setParentId("__none__");
+    setDeviceType("meter");
+  }, [open]);
+
   const parentOptions = useMemo(
     () => meters.filter((m) => !m.is_archived),
     [meters],
   );
 
   const anySelected =
-    applyFloor || applyRoom || applyEnergy || applyUnit || applyMedium || applyMain || applyBidir || applyFunction || applyParent;
+    applyFloor || applyRoom || applyEnergy || applyUnit || applyMedium || applyMain || applyBidir || applyFunction || applyParent || applyDeviceType;
 
   const targetIds = useMemo(() => meters.map((m) => m.id), [meters]);
 
@@ -78,12 +114,18 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
     if (applyFloor) updates.floor_id = floorId === "__clear__" ? null : floorId === "__none__" ? null : floorId;
     if (applyRoom) updates.room_id = roomId === "__clear__" ? null : roomId === "__none__" ? null : roomId;
     if (applyEnergy) updates.energy_type = energyType;
-    if (applyUnit) updates.unit = unit;
+    if (applyUnit) {
+      updates.unit = unit;
+      // Für Sensoren/Zähler mit Gateway-Anbindung wird die Anzeige-Einheit primär
+      // aus source_unit_power gezogen – sonst würde die Änderung nicht sichtbar.
+      (updates as any).source_unit_power = unit;
+    }
     if (applyMedium) updates.medium = medium.trim() || null;
     if (applyMain) updates.is_main_meter = isMain;
     if (applyBidir) (updates as any).is_bidirectional = isBidir;
     if (applyFunction) updates.meter_function = meterFunction;
     if (applyParent) updates.parent_meter_id = parentId === "__clear__" || parentId === "__none__" ? null : parentId;
+    if (applyDeviceType) (updates as any).device_type = deviceType;
 
     setSaving(true);
     const { error } = await supabase.from("meters").update(updates as any).in("id", targetIds);
@@ -92,7 +134,7 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
       toast.error(`Bulk-Update fehlgeschlagen: ${error.message}`);
       return;
     }
-    toast.success(`${targetIds.length} Zähler aktualisiert`);
+    toast.success(`${targetIds.length} ${labels.plural} aktualisiert`);
     onDone();
     onOpenChange(false);
   };
@@ -101,9 +143,9 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Mehrere Zähler bearbeiten ({meters.length})</DialogTitle>
+          <DialogTitle>Mehrere {labels.plural} bearbeiten ({meters.length})</DialogTitle>
           <DialogDescription>
-            Aktivieren Sie nur die Felder, die geändert werden sollen. Alle anderen Werte bleiben pro Zähler unverändert.
+            Aktivieren Sie nur die Felder, die geändert werden sollen. Alle anderen Werte bleiben pro {labels.singular} unverändert.
           </DialogDescription>
         </DialogHeader>
 
@@ -234,13 +276,27 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
                 </Select>
               </FieldBlock>
             </div>
+
+            <Separator />
+
+            {/* Gerätetyp umstellen */}
+            <FieldBlock apply={applyDeviceType} setApply={setApplyDeviceType} label="Gerätetyp umstellen">
+              <Select value={deviceType} onValueChange={setDeviceType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="meter">Zähler</SelectItem>
+                  <SelectItem value="sensor">Sensor</SelectItem>
+                  <SelectItem value="actuator">Aktor</SelectItem>
+                </SelectContent>
+              </Select>
+            </FieldBlock>
           </div>
         </ScrollArea>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
           <Button onClick={handleSave} disabled={!anySelected || saving}>
-            {saving ? "Speichere …" : `Auf ${meters.length} Zähler anwenden`}
+            {saving ? "Speichere …" : `Auf ${meters.length} ${labels.plural} anwenden`}
           </Button>
         </DialogFooter>
       </DialogContent>

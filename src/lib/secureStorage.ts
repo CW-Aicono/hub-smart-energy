@@ -12,21 +12,10 @@ async function getAccessToken(): Promise<string | null> {
   return null;
 }
 
-export async function downloadSecureStorageObject(bucket: string, path: string): Promise<string | null> {
-  if (!path || path.startsWith("blob:")) return path || null;
-  if (/^https?:\/\//i.test(path)) return path;
-
-  const cacheKey = `${bucket}:${path}`;
-  const cached = objectUrlCache.get(cacheKey);
-  if (cached) return cached;
-
-  const token = await getAccessToken();
-  if (!token) return null;
-
+async function callDownload(token: string, bucket: string, path: string) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
     || `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co`;
-
-  const response = await fetch(`${supabaseUrl}/functions/v1/secure-storage-download`, {
+  return fetch(`${supabaseUrl}/functions/v1/secure-storage-download`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -35,6 +24,31 @@ export async function downloadSecureStorageObject(bucket: string, path: string):
     },
     body: JSON.stringify({ bucket, path }),
   });
+}
+
+export async function downloadSecureStorageObject(bucket: string, path: string): Promise<string | null> {
+  if (!path || path.startsWith("blob:")) return path || null;
+  if (/^https?:\/\//i.test(path)) return path;
+
+  const cacheKey = `${bucket}:${path}`;
+  const cached = objectUrlCache.get(cacheKey);
+  if (cached) return cached;
+
+  let token = await getAccessToken();
+  if (!token) return null;
+
+  let response = await callDownload(token, bucket, path);
+
+  // Stale session (logout/login in another tab): refresh once and retry
+  if (response.status === 401) {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error || !data.session?.access_token) {
+      console.warn("Secure storage: session refresh failed", { bucket, path });
+      return null;
+    }
+    token = data.session.access_token;
+    response = await callDownload(token, bucket, path);
+  }
 
   if (!response.ok) {
     console.error("Secure storage download failed", { bucket, path, status: response.status, body: await response.text() });

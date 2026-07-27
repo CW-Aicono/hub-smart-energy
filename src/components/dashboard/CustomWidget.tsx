@@ -187,18 +187,40 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       if (!config.meter_ids.length) return {};
       const { data } = await supabase
         .from("meters")
-        .select("id, name, unit, source_unit_power, energy_type")
+        .select("id, name, unit, source_unit_power, energy_type, device_type")
         .in("id", config.meter_ids);
       return Object.fromEntries((data ?? []).map((m) => [m.id, m]));
     },
     enabled: config.meter_ids.length > 0,
   });
 
+  // Sensor meters (temperature, humidity, boolean actuators, etc.) don't feed
+  // meter_power_readings. Their history lives in sensor_readings_* tables.
+  const SENSOR_UNITS = new Set(["°c", "°C", "°f", "%", "v", "a", "hz", "ppm", "lux", "bar", "pa", "hpa", "bool", "on/off", "an/aus", "rh"]);
+  const isSensorMeter = (m: any): boolean => {
+    if (!m) return false;
+    if (m.device_type === "sensor" || m.device_type === "actuator") return true;
+    const u = ((m.unit ?? m.source_unit_power) ?? "").toString().trim().toLowerCase();
+    return SENSOR_UNITS.has(u);
+  };
+  const sensorMeterIds = useMemo(
+    () => config.meter_ids.filter((id) => isSensorMeter(meterDetails[id])),
+    [config.meter_ids, meterDetails],
+  );
+  const powerMeterIds = useMemo(
+    () => config.meter_ids.filter((id) => !isSensorMeter(meterDetails[id])),
+    [config.meter_ids, meterDetails],
+  );
+
   const displayUnit = useMemo(() => {
     const primaryMeter = config.meter_ids.map((meterId) => meterDetails[meterId]).find(Boolean) as
       | MeterLike
       | undefined;
     if (!primaryMeter) return config.unit;
+    // For sensor meters, keep the raw unit (°C, %, bool …) instead of forcing kW/kWh.
+    if (isSensorMeter(primaryMeter)) {
+      return (primaryMeter as any).unit || (primaryMeter as any).source_unit_power || config.unit;
+    }
     return selectedPeriod === "day"
       ? powerUnitForMeter(primaryMeter, config.unit)
       : energyUnitForMeter(primaryMeter, config.unit);
@@ -206,9 +228,85 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
 
   // Fetch data: 5-min readings for "day", daily totals otherwise
   const { data: chartData = [], isLoading } = useQuery({
-    queryKey: ["custom-widget-data", definition.id, config.meter_ids, locationId, selectedPeriod, from.toISOString(), to.toISOString()],
+    queryKey: ["custom-widget-data", definition.id, config.meter_ids, sensorMeterIds, locationId, selectedPeriod, from.toISOString(), to.toISOString()],
     queryFn: async () => {
       if (!config.meter_ids.length) return [];
+
+      // ---- Sensor rows (°C, %, bool, …) ---------------------------------
+      // Loaded independently and merged into the shared row array so that
+      // mixed dashboards (power + sensor) render both in one chart.
+      const sensorRowsByLabel: Record<string, Record<string, number[]>> = {};
+      const addSensor = (label: string, meterId: string, value: number) => {
+        (sensorRowsByLabel[label] ??= {})[meterId] ??= [];
+        sensorRowsByLabel[label][meterId].push(value);
+      };
+      if (sensorMeterIds.length > 0) {
+        if (selectedPeriod === "day") {
+          const { data: agg } = await supabase
+            .from("sensor_readings_5min")
+            .select("meter_id, bucket, value_avg")
+            .in("meter_id", sensorMeterIds)
+            .gte("bucket", from.toISOString())
+            .lte("bucket", to.toISOString())
+            .order("bucket", { ascending: true })
+            .limit(10000);
+          for (const r of agg ?? []) {
+            addSensor(getDayBucketLabel(new Date(r.bucket)), r.meter_id, Number(r.value_avg));
+          }
+          // Recent raw to cover the last few minutes
+          const recentCutoff = new Date(Math.max(Date.now() - 15 * 60_000, from.getTime()));
+          const { data: raw } = await supabase
+            .from("sensor_readings_raw")
+            .select("meter_id, recorded_at, value")
+            .in("meter_id", sensorMeterIds)
+            .gte("recorded_at", recentCutoff.toISOString())
+            .lte("recorded_at", to.toISOString())
+            .order("recorded_at", { ascending: true })
+            .limit(3000);
+          for (const r of raw ?? []) {
+            addSensor(getDayBucketLabel(new Date(r.recorded_at)), r.meter_id, Number(r.value));
+          }
+        } else {
+          const useDaily = selectedPeriod === "month" || selectedPeriod === "year" || selectedPeriod === "all";
+          if (useDaily) {
+            const { data: agg } = await (supabase as any)
+              .from("sensor_readings_daily")
+              .select("meter_id, bucket, value_twavg")
+              .in("meter_id", sensorMeterIds)
+              .gte("bucket", from.toISOString().slice(0, 10))
+              .lte("bucket", to.toISOString().slice(0, 10))
+              .order("bucket", { ascending: true })
+              .limit(5000);
+            for (const r of agg ?? []) {
+              addSensor(formatLabel(new Date(r.bucket), selectedPeriod), r.meter_id, Number(r.value_twavg));
+            }
+          } else {
+            const { data: agg } = await (supabase as any)
+              .from("sensor_readings_hourly")
+              .select("meter_id, bucket, value_twavg")
+              .in("meter_id", sensorMeterIds)
+              .gte("bucket", from.toISOString())
+              .lte("bucket", to.toISOString())
+              .order("bucket", { ascending: true })
+              .limit(10000);
+            for (const r of agg ?? []) {
+              addSensor(formatLabel(new Date(r.bucket), selectedPeriod), r.meter_id, Number(r.value_twavg));
+            }
+          }
+        }
+      }
+
+      const mergeSensorInto = (rows: any[]) => {
+        for (const row of rows) {
+          const bucket = sensorRowsByLabel[row.name];
+          if (!bucket) continue;
+          for (const mid of sensorMeterIds) {
+            const vals = bucket[mid];
+            if (vals?.length) row[mid] = vals.reduce((s, v) => s + v, 0) / vals.length;
+          }
+        }
+        return rows;
+      };
 
       if (selectedPeriod === "day") {
         const timeline = buildDayTimeline();
@@ -217,15 +315,17 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         );
 
         const aggregatedRows: Array<{ meter_id: string; power_avg: number; bucket: string }> = [];
-        const { data: aggData, error: aggError } = await supabase
-          .rpc("get_power_readings_5min", {
-            p_meter_ids: config.meter_ids,
-            p_start: from.toISOString(),
-            p_end: to.toISOString(),
-          })
-          .range(0, 9999);
-        if (aggError) throw aggError;
-        if (aggData) aggregatedRows.push(...(aggData as Array<{ meter_id: string; power_avg: number; bucket: string }>));
+        if (powerMeterIds.length > 0) {
+          const { data: aggData, error: aggError } = await supabase
+            .rpc("get_power_readings_5min", {
+              p_meter_ids: powerMeterIds,
+              p_start: from.toISOString(),
+              p_end: to.toISOString(),
+            })
+            .range(0, 9999);
+          if (aggError) throw aggError;
+          if (aggData) aggregatedRows.push(...(aggData as Array<{ meter_id: string; power_avg: number; bucket: string }>));
+        }
 
 
         let mergedRows = aggregatedRows.map((row) => ({
@@ -244,26 +344,51 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         const recentCutoff = new Date(
           Math.max(Date.now() - 15 * 60 * 1000, from.getTime()),
         );
-        const { data: recentRaw, error: recentError } = await supabase
-          .from("meter_power_readings")
-          .select("meter_id, power_value, recorded_at")
-          .in("meter_id", config.meter_ids)
-          .gte("recorded_at", recentCutoff.toISOString())
-          .lte("recorded_at", to.toISOString())
-          .order("recorded_at", { ascending: true })
-          .limit(2000);
-        if (recentError) throw recentError;
+        if (powerMeterIds.length > 0) {
+          const { data: recentRaw, error: recentError } = await supabase
+            .from("meter_power_readings")
+            .select("meter_id, power_value, recorded_at")
+            .in("meter_id", powerMeterIds)
+            .gte("recorded_at", recentCutoff.toISOString())
+            .lte("recorded_at", to.toISOString())
+            .order("recorded_at", { ascending: true })
+            .limit(2000);
+          if (recentError) throw recentError;
 
-        if (recentRaw && recentRaw.length) {
-          mergedRows = mergedRows.filter((row) => new Date(row.recorded_at) < recentCutoff);
-          mergedRows.push(
-            ...recentRaw.map((row) => ({
-              meter_id: row.meter_id,
-              value: row.power_value,
-              recorded_at: row.recorded_at,
-            })),
-          );
+          let recentRows = (recentRaw ?? []).map((row) => ({
+            meter_id: row.meter_id,
+            value: row.power_value,
+            recorded_at: row.recorded_at,
+          }));
+
+          // Fallback: worker-only meters without raw rows → 5-min buckets.
+          const covered = new Set(recentRows.map((r) => r.meter_id));
+          const missing = powerMeterIds.filter((id) => !covered.has(id));
+          if (missing.length > 0) {
+            const { data: agg5m } = await supabase
+              .from("meter_power_readings_5min")
+              .select("meter_id, power_avg, bucket")
+              .in("meter_id", missing)
+              .gte("bucket", recentCutoff.toISOString())
+              .lte("bucket", to.toISOString())
+              .order("bucket", { ascending: true })
+              .limit(2000);
+            for (const row of agg5m ?? []) {
+              if (row.power_avg == null) continue;
+              recentRows.push({
+                meter_id: row.meter_id,
+                value: Number(row.power_avg),
+                recorded_at: row.bucket as string,
+              });
+            }
+          }
+
+          if (recentRows.length) {
+            mergedRows = mergedRows.filter((row) => new Date(row.recorded_at) < recentCutoff);
+            mergedRows.push(...recentRows);
+          }
         }
+
 
         for (const row of mergedRows) {
           const label = getDayBucketLabel(new Date(row.recorded_at));
@@ -287,7 +412,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         // an jeder Hover-Position (auch zwischen zwei 15-Min-Polls) einen Wert
         // zeigt. Visuell identisch zur bisherigen Monotone-Spline mit
         // connectNulls, aber jeder Slot trägt jetzt einen konkreten Wert.
-        for (const meterId of config.meter_ids) {
+        for (const meterId of powerMeterIds) {
           const realIdx: number[] = [];
           for (let i = 0; i < rows.length; i++) {
             if (rows[i][meterId] != null) realIdx.push(i);
@@ -305,7 +430,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
           }
         }
 
-        return rows;
+        return mergeSensorInto(rows);
       }
 
       // Non-day periods: use the server-side fallback RPC, which prefers archived
@@ -315,17 +440,20 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       // views and removes the previous ~60 s wait time.
       const toLocalYmd = (d: Date) =>
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      const { data: rpcRows, error: dailyError } = await supabase.rpc(
-        "get_meter_daily_totals_split_with_fallback" as any,
-        {
-          p_meter_ids: config.meter_ids,
-          p_from_date: toLocalYmd(from),
-          p_to_date: toLocalYmd(to),
-        },
-      );
-      if (dailyError) throw dailyError;
-      const rows = (rpcRows ?? []) as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>;
-      if (rows.length === 0) return [];
+      let rows: Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }> = [];
+      if (powerMeterIds.length > 0) {
+        const { data: rpcRows, error: dailyError } = await supabase.rpc(
+          "get_meter_daily_totals_split_with_fallback" as any,
+          {
+            p_meter_ids: powerMeterIds,
+            p_from_date: toLocalYmd(from),
+            p_to_date: toLocalYmd(to),
+          },
+        );
+        if (dailyError) throw dailyError;
+        rows = (rpcRows ?? []) as typeof rows;
+      }
+      if (rows.length === 0 && Object.keys(sensorRowsByLabel).length === 0) return [];
 
       // Check which meters have any einspeisung (bidirectional)
       const hasBidi = new Set<string>();
@@ -350,11 +478,17 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         }
       }
 
-      return Object.entries(dayMap).map(([day, meters]) => ({
+      // Ensure sensor-only labels get their own rows too
+      for (const label of Object.keys(sensorRowsByLabel)) {
+        if (!dayMap[label]) dayMap[label] = {};
+      }
+
+      const finalRows = Object.entries(dayMap).map(([day, meters]) => ({
         name: day,
         ...meters,
         __bidirectionalMeterIds: Array.from(hasBidi),
       }));
+      return mergeSensorInto(finalRows);
     },
     enabled: config.meter_ids.length > 0,
     staleTime: selectedPeriod === "day" ? 60 * 1000 : 5 * 60 * 1000,

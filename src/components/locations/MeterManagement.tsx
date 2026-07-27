@@ -377,7 +377,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [pendingSensorUuid, setPendingSensorUuid] = useState<string | null>(null);
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
-  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkEditType, setBulkEditType] = useState<null | "meters" | "sensors" | "actuators">(null);
 
 
   // Build map of room_id -> room name for all floors of this location (for "Zugeordneter Raum" column)
@@ -720,7 +720,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <span className="font-medium">{selectedMeterIds.size} ausgewählt</span>
                 <div className="flex-1" />
                 {!showArchived && (
-                  <Button size="sm" variant="outline" onClick={() => setBulkEditOpen(true)}>
+                  <Button size="sm" variant="outline" onClick={() => setBulkEditType("meters")}>
                     <Pencil className="h-3.5 w-3.5 mr-1" /> Bearbeiten
                   </Button>
                 )}
@@ -954,7 +954,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               <BulkToolbar
                 count={selectedMeterIds.size}
                 showArchived={showArchived}
-                onBulkEdit={() => setBulkEditOpen(true)}
+                onBulkEdit={() => setBulkEditType("sensors")}
                 onArchive={async () => {
                   for (const id of Array.from(selectedMeterIds)) await archiveMeter(id, !showArchived);
                   setSelectedMeterIds(new Set());
@@ -1102,7 +1102,7 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               <BulkToolbar
                 count={selectedMeterIds.size}
                 showArchived={showArchived}
-                onBulkEdit={() => setBulkEditOpen(true)}
+                onBulkEdit={() => setBulkEditType("actuators")}
                 onArchive={async () => {
                   for (const id of Array.from(selectedMeterIds)) await archiveMeter(id, !showArchived);
                   setSelectedMeterIds(new Set());
@@ -1338,11 +1338,12 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
           />
         )}
         <BulkEditMetersDialog
-          open={bulkEditOpen}
-          onOpenChange={setBulkEditOpen}
-          meters={displayedMeters.filter((m) => selectedMeterIds.has(m.id))}
+          open={!!bulkEditType}
+          onOpenChange={(v) => { if (!v) setBulkEditType(null); }}
+          entityType={bulkEditType ?? "meters"}
+          meters={meters.filter((m) => selectedMeterIds.has(m.id))}
           locationId={locationId}
-          onDone={() => setSelectedMeterIds(new Set())}
+          onDone={() => { setSelectedMeterIds(new Set()); refetch(); }}
         />
       </CardContent>
       </CollapsibleContent>

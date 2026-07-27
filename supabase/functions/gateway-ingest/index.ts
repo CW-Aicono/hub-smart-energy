@@ -17,6 +17,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { recordWorkerHeartbeat } from "../_shared/workerStatus.ts";
+import { persistSensorHistory } from "../_shared/sensorHistory.ts";
 
 // Module-level default for helpers called outside handler context
 let corsHeaders: Record<string, string> = getCorsHeaders();
@@ -2554,6 +2555,24 @@ async function handleDeviceSnapshot(req: Request): Promise<Response> {
       .delete()
       .in("id", stale);
     if (!delErr) pruned = stale.length;
+  }
+
+  // Historisierung: Momentanwerte in sensor_readings_raw (fire-and-forget,
+  // interner Delta-Guard vermeidet IO-Druck).
+  try {
+    const sensorItems = incoming.map((row) => ({
+      id: row.entity_id,
+      value: row.state,
+      state: row.state,
+      unit: row.unit,
+    }));
+    await persistSensorHistory(supabase, {
+      locationIntegrationId: device.location_integration_id ?? device.id,
+      tenantId: device.tenant_id,
+      sensors: sensorItems,
+    });
+  } catch (e) {
+    console.warn("[device-snapshot] sensor history skipped:", (e as Error).message);
   }
 
   return json({ success: true, upserted: changed.length, pruned, unchanged: incoming.length - changed.length });

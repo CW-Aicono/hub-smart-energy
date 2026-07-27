@@ -113,9 +113,12 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
 
   useEffect(() => {
     if (meterIds.length === 0) return;
-    // Fetch the latest reading per meter to seed gauges before first Realtime event
+    // Fetch the latest reading per meter to seed gauges before first Realtime event.
+    // Try meter_power_readings first (highest freshness). For meters without a
+    // recent raw reading (IO-throttled sources, worker-only 5-min buckets), fall
+    // back to meter_power_readings_5min so the gauges don't stay empty.
     const fetchLatest = async () => {
-      const promises = meterIds.map((id) =>
+      const rawPromises = meterIds.map((id) =>
         supabase
           .from("meter_power_readings")
           .select("meter_id, power_value")
@@ -123,13 +126,32 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
           .order("recorded_at", { ascending: false })
           .limit(1)
       );
-      const results = await Promise.all(promises);
+      const rawResults = await Promise.all(rawPromises);
       const current: Record<string, number> = {};
-      for (const { data } of results) {
+      for (const { data } of rawResults) {
         if (data && data.length > 0) {
           current[data[0].meter_id] = data[0].power_value;
         }
       }
+
+      const missing = meterIds.filter((id) => current[id] === undefined);
+      if (missing.length > 0) {
+        const aggPromises = missing.map((id) =>
+          supabase
+            .from("meter_power_readings_5min")
+            .select("meter_id, power_avg")
+            .eq("meter_id", id)
+            .order("bucket", { ascending: false })
+            .limit(1)
+        );
+        const aggResults = await Promise.all(aggPromises);
+        for (const { data } of aggResults) {
+          if (data && data.length > 0 && data[0].power_avg != null) {
+            current[data[0].meter_id] = Number(data[0].power_avg);
+          }
+        }
+      }
+
       setInitialCurrent(current);
       setInitialCurrentLoaded(true);
     };
@@ -150,16 +172,30 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
         .gte("recorded_at", startOfDay(today).toISOString())
         .lte("recorded_at", endOfDay(today).toISOString())
         .order("power_value", { ascending: false });
-      if (!data) return;
       const peaks: Record<string, number> = {};
-      for (const row of data) {
+      for (const row of data ?? []) {
         if ((peaks[row.meter_id] ?? 0) < row.power_value) {
           peaks[row.meter_id] = row.power_value;
+        }
+      }
+      // Fallback: worker-only meters (no raw rows) → use max power_max from 5-min buckets.
+      const missing = meterIds.filter((id) => peaks[id] === undefined);
+      if (missing.length > 0) {
+        const { data: agg } = await supabase
+          .from("meter_power_readings_5min")
+          .select("meter_id, power_max, power_avg")
+          .in("meter_id", missing)
+          .gte("bucket", startOfDay(today).toISOString())
+          .lte("bucket", endOfDay(today).toISOString());
+        for (const row of agg ?? []) {
+          const v = Math.abs(Number(row.power_max ?? row.power_avg ?? 0));
+          if (v > (peaks[row.meter_id] ?? 0)) peaks[row.meter_id] = v;
         }
       }
       setInitialPeaks(peaks);
       setInitialPeaksLoaded(true);
     };
+
     fetchPeaks();
   }, [meterIds.join(",")]);
 

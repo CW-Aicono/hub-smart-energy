@@ -143,8 +143,34 @@ const fetchRawMeterDailyHistory = async (
     offset += RAW_READING_PAGE_SIZE;
   }
 
+  // Fallback: worker-only meters have no rows in meter_power_readings.
+  // Map 5-min buckets to the same shape so integrateDailyEnergyFromRawRows
+  // computes real Ist-Werte instead of returning an empty history.
+  if (rows.length === 0) {
+    let aggOffset = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("meter_power_readings_5min")
+        .select("power_avg, bucket")
+        .eq("meter_id", meterId)
+        .gte("bucket", fromIso)
+        .lt("bucket", toIso)
+        .order("bucket", { ascending: true })
+        .range(aggOffset, aggOffset + RAW_READING_PAGE_SIZE - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      for (const r of data as any[]) {
+        if (r.power_avg == null) continue;
+        rows.push({ power_value: Number(r.power_avg), recorded_at: r.bucket });
+      }
+      if (data.length < RAW_READING_PAGE_SIZE) break;
+      aggOffset += RAW_READING_PAGE_SIZE;
+    }
+  }
+
   const todayKey = toLocalDateKey(new Date().toISOString());
   return integrateDailyEnergyFromRawRows(rows).filter((entry) => entry.day < todayKey);
+
 };
 
 const getDisplayValue = (entry: { ai_adjusted_kwh: number | null; estimated_kwh: number }) => (
