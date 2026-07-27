@@ -73,7 +73,7 @@ const SESSION_HEARTBEAT_MS = Math.max(
 );
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.5-auth-status";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.6-stage-marker";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -440,9 +440,13 @@ async function connect(state: ConnState): Promise<void> {
   if (state.ws) { try { state.ws.close(); } catch { /* ignore */ } state.ws = null; }
   state.authenticated = false;
 
+  // Phase 7.6 (Diagnose): stage-Marker durch den gesamten connect()-Try, damit ein
+  // Fehler eindeutig einer Sub-Phase zugeordnet werden kann (statt „irgendwo im connect").
+  // stage wird sowohl in bridgeLog(details.stage) als auch in der Konsole geloggt.
+  let stage: string = "dns-resolve";
   const host = await resolveLoxoneHost(state.serialNumber);
   if (!host) {
-    bridgeLog("warn", "dns_failed", `DNS-Auflösung fehlgeschlagen: ${state.serialNumber}`, state.serialNumber);
+    bridgeLog("warn", "dns_failed", `DNS-Auflösung fehlgeschlagen: ${state.serialNumber}`, state.serialNumber, { stage });
     scheduleReconnect(state, "dns-failed");
     return;
   }
@@ -561,6 +565,7 @@ async function connect(state: ConnState): Promise<void> {
 
   log("info", `[WS] verbinde ${state.serialNumber} → ${host}`);
   try {
+    stage = "ws-open";
     await socket.open(host, state.username, state.password);
     // Phase 6.3: Loxone-Requirement — Strukturdatei muss 1x nach Auth abgerufen werden,
     // sonst sendet der Miniserver keine Status-Änderungen (nur Initial-Snapshot).
@@ -568,6 +573,7 @@ async function connect(state: ConnState): Promise<void> {
     // zugehörigen State-UUIDs (Pwr/EnergyToday/EnergyTotal/...) zu ermitteln.
     let loxApp3: any = null;
     try {
+      stage = "loxapp3-fetch";
       const resp: any = await socket.send("data/LoxAPP3.json");
       loxApp3 = resp?.LL?.value ?? resp?.value ?? resp;
       if (typeof loxApp3 === "string") {
@@ -575,18 +581,22 @@ async function connect(state: ConnState): Promise<void> {
       }
       const controlCount = loxApp3?.controls ? Object.keys(loxApp3.controls).length : 0;
       log("info", `[WS] ${state.serialNumber} LoxAPP3.json geladen — Live-Updates aktiviert (controls=${controlCount})`);
+      stage = "loxapp3-push-cloud";
       await pushLoxoneStructureSnapshot(state, loxApp3);
     } catch (err) {
-      log("warn", `[WS] ${state.serialNumber} LoxAPP3.json fehlgeschlagen: ${describeError(err)}`);
+      log("warn", `[WS] ${state.serialNumber} LoxAPP3 fehlgeschlagen (stage=${stage}): ${describeError(err)}`);
     }
+    stage = "enable-binstatus";
     await socket.send("jdev/sps/enablebinstatusupdate");
     // Phase 5.1: zusätzlich analoge Statusupdates abonnieren (kWh, Power, Temperatur, Zählerstände)
+    stage = "enable-statusupdate";
     await socket.send("jdev/sps/enablestatusupdate");
     state.authenticated = true;
     state.reconnectDelay = 1000;
     state.lastConnectedAt = Date.now();
     state.diagEventCount = 0;
     state.diagCallbacksSeen = new Set<string>();
+    stage = "session-start";
     await sessionStart(state);
     // Auth erfolgreich → falls die Integration vorher als "auth_failed" markiert war,
     // Status im Backend auf "success" zurücksetzen und offene Auth-Fehler auflösen.
@@ -724,6 +734,7 @@ async function connect(state: ConnState): Promise<void> {
     // Phase 7.1: Initial-Snapshot pro Block-UUID holen (`jdev/sps/io/<block>/all` liefert ALLE States des Blocks).
     // State-UUIDs sind selbst NICHT subscribable (Loxone antwortet code=404). Live-Updates kommen
     // anschließend automatisch via `enablebinstatusupdate` für jede State-UUID.
+    stage = "per-block-snapshot";
     const uniqueBlocks = new Set<string>();
     for (const entry of state.uuidMap.values()) {
       if (entry.block_uuid) uniqueBlocks.add(entry.block_uuid);
@@ -742,6 +753,7 @@ async function connect(state: ConnState): Promise<void> {
         log("warn", `[WS] ${state.serialNumber} block-snapshot ${blockUuid} fehlgeschlagen: ${reason}`);
       }
     }
+    stage = "connected";
     log("info", `[WS] ${state.serialNumber} per-block snapshot: ok=${subscribedOk} err=${subscribedErr} (blocks=${uniqueBlocks.size}, stateUuids=${state.uuidMap.size})`);
     bridgeLog("info", "ws_per_block_snapshot", `Per-block snapshot: ok=${subscribedOk} err=${subscribedErr}`, state.serialNumber, { ok: subscribedOk, err: subscribedErr, blocks: uniqueBlocks.size, stateUuids: state.uuidMap.size, failed: failedBlocks });
   } catch (err) {
@@ -750,11 +762,11 @@ async function connect(state: ConnState): Promise<void> {
     dnsCache.delete(state.serialNumber);
     const reason = describeError(err);
     const auth = isAuthError(err);
-    log(auth ? "error" : "warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${reason}${auth ? " (AUTH)" : ""}`);
+    log(auth ? "error" : "warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber} (stage=${stage}): ${reason}${auth ? " (AUTH)" : ""}`);
     bridgeLog(auth ? "error" : "error", auth ? "ws_auth_failed" : "ws_connect_failed",
-      auth ? `Anmeldung am Miniserver abgelehnt (User "${state.username}") — Zugangsdaten in Cloud-Config prüfen`
-           : `Verbindung fehlgeschlagen: ${reason}`,
-      state.serialNumber, { reason, username_tried: auth ? state.username : undefined });
+      auth ? `Anmeldung am Miniserver abgelehnt (stage=${stage}, User "${state.username}") — Zugangsdaten in Cloud-Config prüfen`
+           : `Verbindung fehlgeschlagen (stage=${stage}): ${reason}`,
+      state.serialNumber, { stage, reason, username_tried: auth ? state.username : undefined });
     state.ws = null;
     if (auth) {
       // Backend über Auth-Fehler informieren → UI zeigt rotes Badge, Reconnect stark verlangsamt.
@@ -762,7 +774,7 @@ async function connect(state: ConnState): Promise<void> {
       // Auth-Backoff: mindestens 5 Min, um den Miniserver nicht zu hämmern (Lockout-Risiko).
       state.reconnectDelay = Math.max(state.reconnectDelay, 300000);
     }
-    scheduleReconnect(state, `connect-error: ${reason}`);
+    scheduleReconnect(state, `connect-error[${stage}]: ${reason}`);
   }
 }
 
