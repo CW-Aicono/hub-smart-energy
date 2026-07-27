@@ -1,35 +1,49 @@
-# Fix: Shelly-Cloud Sensor-Historie schreibt nicht
+Drei separate Bugs auf dem Dashboard — Analyse und geplante Fixes.
 
-## Ursache (verifiziert)
+## 1) Live-Leistung zeigt „Keine aktiven automatischen Hauptzähler vorhanden"
 
-`sensor_readings_raw` (und die Rollups `_5min`, `_hourly`, `_daily`) haben **keine GRANTs** an `service_role` oder `authenticated` — nur an die interne Sandbox-Rolle. Ohne PostgreSQL-Grant kann selbst ein Service-Role-Client kein INSERT ausführen (RLS bypass ≠ Grant bypass).
+**Verifiziert:** In der DB existieren 8 aktive automatische Hauptzähler des Tenants (u. a. „Zähler Gesamtverbrauch", „Shelly Pro 3EM", „Zähler Hauptanschluss", Gas/Wasser). Das Widget `EnergyGaugeWidget` filtert `activeMeters` korrekt, blendet die Kacheln aber zusätzlich per `allowedTypes.has(et)` aus (Hook `useLocationEnergyTypesSet`). Für `locationId = null` (globale Dashboard-Sicht) darf diese Zusatzfilterung nicht greifen.
 
-Warum funktioniert HA-Addon trotzdem? Weil dort ein DB-Trigger (`trg_gateway_inventory_sensor_history`) die Zeilen schreibt — Trigger laufen als Table-Owner und umgehen Grants. Der Shelly-Cloud-Pfad geht dagegen über `shelly-api → persistSensorHistory → supabase.from("sensor_readings_raw").insert()`, und genau dieser Insert wird stumm von PostgREST/Postgres abgewiesen (die diagnostischen Logs erscheinen im Log-Stream deshalb ohne Fehlermeldung, weil PostgREST bei fehlendem Grant je nach Pfad still 0 rows zurückgibt bzw. der Fehler nicht bis in den warn-Pfad reicht).
+**Hypothese (zu bestätigen im Fix-Schritt):** `useLocationEnergyTypesSet(null)` liefert entweder ein leeres Set oder einen Fallback, der nicht alle relevanten Energie-Typen enthält — dadurch fällt `gaugeData` auf 0 und die Leerstands-Meldung erscheint, obwohl `activeMeters.length > 0`.
 
-## Umsetzung
+**Fix-Plan:**
+- `src/hooks/useLocationEnergySources.tsx` prüfen: für `locationId=null` alle Energie-Typen der Meter des Tenants zurückgeben (oder Filter ganz überspringen).
+- Alternativ im `EnergyGaugeWidget` den `allowedTypes`-Filter nur anwenden, wenn `locationId != null`.
+- Kurzlogging temporär einfügen, um `activeMeters.length` vs. `gaugeData.length` bei einem Reload zu bestätigen.
 
-### 1. Migration: Grants nachziehen
+## 2) PV-Prognose zeigt „Ist-Erzeugung" für den ganzen Tag (auch Zukunft)
 
-Für alle vier Sensor-Historien-Tabellen (`sensor_readings_raw`, `sensor_readings_5min`, `sensor_readings_hourly`, `sensor_readings_daily`):
+**Verifiziert (Code):** `PvForecastWidget` ruft `fetchPvActualHourly` mit `dayStart..dayEnd` auf. Wenn für „heute" keine 5-Min-Readings vorliegen, wird über `fetchTodayCumulativeKwh` (`meter_period_totals` mit `period_type='day'`, `period_start=heute`) ein Tages-kWh geholt und dieser Wert per `estimateHourlyActualsFromDailyTotal` **über alle 24 Stunden** verteilt — inklusive der noch nicht vergangenen Stunden. Bild passt: Grüne Balken bis 22 Uhr, obwohl es 10 Uhr ist.
 
-- `GRANT SELECT, INSERT, UPDATE, DELETE ... TO authenticated` (RLS-Policy scoped bereits per Tenant → sicher)
-- `GRANT ALL ... TO service_role` (nötig für `shelly-api`, `loxone-api`, Rollup-Cron)
+**Ursache:** Zwei Schritte zusammen:
+1. `estimateHourlyActualsFromDailyTotal` clippt die Verteilung nicht am aktuellen Zeitpunkt.
+2. Auch der „Skalierungs-Pfad" (`scaleHourlyToTotal`) darf am heutigen Tag nur bis zur aktuellen Stunde skalieren.
 
-`anon` bleibt außen vor — die Tabellen sind auth-only.
+**Fix-Plan (`src/lib/pvActuals.ts` + Widget):**
+- In `fetchPvActualHourly` bei `isToday` das Ziel-Zeitfenster auf `[startOfDay, now]` begrenzen: `forecastHours` und `rawReadings` vorher auf Stunden ≤ jetzt filtern, bevor die Gewichtsverteilung/Skalierung läuft.
+- `estimateHourlyActualsFromDailyTotal(dayStr, total, weights)` um optionalen `maxHourKey` erweitern → alles danach auf 0 setzen (bzw. leerer Key).
+- Legende/Label unverändert („geschätzt"), aber Balken nur bis zur aktuellen Stunde.
 
-### 2. Diagnostische Logs zurückbauen
+## 3) Custom-Widget „Temperatur & Luftfeuchtigkeit" bleibt leer
 
-Die in `_shared/sensorHistory.ts` eingebauten `console.log`-Zeilen (Meter-Count, Insert-Ergebnis) bleiben — sie sind wertvoll und billig. Kein Rollback.
+**Verifiziert (Code):** `CustomWidget` lädt Serien ausschließlich aus `meter_power_readings` (5-Min-Leistung) und `meter_period_totals` (Tagessummen). Sensor-Historie für Momentanwerte (°C, %, Batterie …) wird jedoch in `sensor_readings_raw` / `sensor_readings_5min` / `sensor_readings_hourly` / `sensor_readings_daily` gespeichert (siehe `SensorHistoryChart`). Deshalb liefert das Custom-Widget bei Sensor-Metern (device_type=sensor) 0 Punkte, obwohl Live-Werte da sind.
 
-### 3. Validierung
+**Fix-Plan (`src/components/dashboard/CustomWidget.tsx`):**
+- Vor dem Fetch die Ziel-Meter aus `useMeters` klassifizieren (`device_type === "sensor"` oder Einheit ∈ {°C, %, V, A, bool, on/off …}).
+- Für diese Meter parallel aus den Sensor-Historien-Tabellen laden — passend zum gewählten Intervall des Widgets:
+  - 24 h / kurz → `sensor_readings_raw` (Fallback `sensor_readings_5min`)
+  - Tag/Woche → `sensor_readings_5min` bzw. `sensor_readings_hourly`
+  - Monat/Jahr → `sensor_readings_hourly` / `sensor_readings_daily`
+- Bei Sensor-Serien: keine kWh-Aggregation, sondern zeitgewichteter Mittelwert bzw. Rohwerte; Y-Achse dynamisch (°C, %, bool …), damit die Serie im Chart erscheint.
+- Bool-Sensoren (An/Aus) analog zu `SensorHistoryChart` mit 0/1-Skala rendern.
 
-- Nach Approval + Deploy: 2-3 Sync-Zyklen (~5 min) abwarten
-- `SELECT count(*), max(recorded_at) FROM sensor_readings_raw WHERE meter_id = '76198dac-…6176'` → erwartet >0
-- Detail-Dialog des Shelly-Temperatursensors: Graph füllt sich, KPIs (Ø/Max/Min) folgen mit dem nächsten 5-Min-Rollup
-- Snapshot-Fallback in `EnergyFlowMonitor.tsx` bleibt als Sicherheitsnetz drin
+## Technische Reihenfolge der Umsetzung
 
-## Technisches (Detail)
+```text
+1. useLocationEnergySources.tsx  →  Fix #1 (Gauge-Widget)
+2. src/lib/pvActuals.ts           →  Fix #2 (PV-Balken beschränken)
+   src/components/dashboard/PvForecastWidget.tsx (nur Weitergabe des now-Cutoffs)
+3. src/components/dashboard/CustomWidget.tsx  →  Fix #3 (Sensor-Serien)
+```
 
-- Datei: eine Migration mit vier GRANT-Blöcken
-- Kein Codeänderung an Edge Functions nötig — der Insert-Aufruf ist bereits korrekt
-- Kein IO-Overhead: es wird nur der bereits laufende, aber blockierte Insert freigeschaltet
+Nach jedem Fix: Preview neu laden, Widget prüfen (Kacheln vorhanden / PV-Balken enden bei aktueller Stunde / Temperatur-/Luftfeuchte-Serie sichtbar).
