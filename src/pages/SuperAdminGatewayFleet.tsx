@@ -152,11 +152,32 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
     .order("started_at", { ascending: false });
   if (sErr) throw sErr;
   const rows = (sessions ?? []) as LoxoneSessionRow[];
-  const integrationIds = Array.from(new Set(rows.map((r) => r.location_integration_id)));
+
+  // Alle aktivierten Loxone-Integrationen einbeziehen – auch solche ohne
+  // jemals aufgebaute WS-Sitzung (z. B. offline Testkoffer). Sonst würde
+  // die Fleet-Übersicht diese Geräte komplett verschlucken.
+  const { data: loxoneIntegrationTypes } = await supabase
+    .from("integrations")
+    .select("id, type")
+    .in("type", ["loxone", "loxone_miniserver"]);
+  const loxoneIntegrationIds = (loxoneIntegrationTypes ?? []).map((r: any) => r.id);
+  const { data: allLoxoneLocInts } = loxoneIntegrationIds.length
+    ? await supabase
+        .from("location_integrations")
+        .select("id, location_id, config, is_enabled, sync_status, last_sync_at")
+        .in("integration_id", loxoneIntegrationIds)
+        .eq("is_enabled", true)
+    : { data: [] as any[] };
+
+  const sessionIntegrationIds = new Set(rows.map((r) => r.location_integration_id));
+  const integrationIds = Array.from(new Set([
+    ...sessionIntegrationIds,
+    ...((allLoxoneLocInts ?? []).map((r: any) => r.id) as string[]),
+  ]));
   if (integrationIds.length === 0) return [];
 
   const { data: integrations } = await supabase
-    .from("location_integrations").select("id, location_id, config").in("id", integrationIds);
+    .from("location_integrations").select("id, location_id, config, sync_status, last_sync_at").in("id", integrationIds);
   const locationIds = Array.from(new Set((integrations ?? []).map((i: any) => i.location_id).filter(Boolean)));
   const { data: locations } = locationIds.length
     ? await supabase.from("locations").select("id, name, tenant_id").in("id", locationIds)
@@ -185,7 +206,7 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
 
   const locById = new Map((locations ?? []).map((l: any) => [l.id, l]));
   const tenantById = new Map((tenants ?? []).map((t: any) => [t.id, t]));
-  const infoMap = new Map<string, { tenant: string; location: string; serials: string[] }>();
+  const infoMap = new Map<string, { tenant: string; location: string; serials: string[]; syncStatus: string | null; lastSyncAt: string | null }>();
   (integrations ?? []).forEach((it: any) => {
     const loc: any = locById.get(it.location_id);
     const tenant: any = loc ? tenantById.get(loc.tenant_id) : null;
@@ -197,7 +218,13 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
       : "";
     const serials = [...linkSerials];
     if (cfgSerial && !serials.includes(cfgSerial)) serials.push(cfgSerial);
-    infoMap.set(it.id, { tenant: tenant?.name ?? "—", location: loc?.name ?? "—", serials });
+    infoMap.set(it.id, {
+      tenant: tenant?.name ?? "—",
+      location: loc?.name ?? "—",
+      serials,
+      syncStatus: it.sync_status ?? null,
+      lastSyncAt: it.last_sync_at ?? null,
+    });
   });
 
 
@@ -207,9 +234,9 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
   const result: UnifiedRow[] = [];
   for (const intId of integrationIds) {
     const intSessions = rows.filter((r) => r.location_integration_id === intId);
-    if (intSessions.length === 0) continue;
     const current = intSessions[0];
     let onlineMs = 0, sessionsLast24h = 0, reconnectsLast24h = 0, eventsLast24h = 0;
+
     for (const s of intSessions) {
       const start = new Date(s.started_at).getTime();
       const end = s.ended_at ? new Date(s.ended_at).getTime() : now;
@@ -227,7 +254,7 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
     const info = infoMap.get(intId);
     const heartbeatAge = current ? now - new Date(current.updated_at).getTime() : null;
     let status: UnifiedRow["status"] = "disconnected";
-    let statusLabel = "Getrennt";
+    let statusLabel = intSessions.length === 0 ? "Nie verbunden" : "Getrennt";
     if (current && !current.ended_at) {
       if (heartbeatAge !== null && heartbeatAge < LOXONE_FRESH_HEARTBEAT_MS) {
         status = "active"; statusLabel = "Aktiv";
@@ -235,6 +262,7 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
         status = "stale"; statusLabel = `Stale (${Math.round((heartbeatAge ?? 0) / 1000)}s)`;
       }
     }
+
     result.push({
       key: `loxone:${intId}`,
       type: "Loxone Miniserver",
