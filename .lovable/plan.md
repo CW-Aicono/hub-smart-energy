@@ -1,39 +1,54 @@
-## Zwischenstand (verifiziert)
-
-- Staging-Worker feuert weiter 408, zuletzt 19:45:35 UTC — **nach** deiner Trennung von Rathaus.
-- Rathaus scheidet damit als Verursacher aus.
-- Verbleibende Kandidaten (Sessions in den letzten 72 h): **Zentrale ESB**, **AICONO Zentrale**, **Jugendzentrum Weiss**.
-- Die 408 tragen `stage=ws-open`, `link_id` bleibt aber NULL — der Worker loggt die Ziel-Integration im Fehlerfall noch nicht. Ohne diese Info können wir keinen der drei verlässlich beschuldigen.
+# Plan: WS-Default & Auto-Verknüpfung für neue Miniserver
 
 ## Ziel
+Neue Loxone-Miniserver sollen ab sofort automatisch:
+1. WebSocket-Verbindung als Default-Modus nutzen (statt HTTP-Poll).
+2. Beim ersten erfolgreichen Kontakt einen Eintrag in `bridge_miniserver_links` erhalten (inkl. `tenant_id`, `location_id`, `serial_number`).
 
-408 dem konkreten Miniserver zuordnen — **bevor** irgendeine Änderung an Credentials oder Konfiguration passiert.
+## Ausgangslage (verifiziert)
+- Spalte `location_integrations.loxone_remote_connect_ws_enabled` existiert, **Default = FALSE** (Migration 20260618). Neue Integrationen laufen daher standardmäßig im HTTP-Poll-Modus.
+- Im `EditIntegrationDialog` gibt es bereits einen Toggle (setzt manuell true/false).
+- `bridge_miniserver_links` wird aktuell weder vom `loxone-ws-worker` noch von `loxone-api` beim ersten Kontakt automatisch angelegt — die Einträge stammen aus Seeds/Migrationen bzw. wurden manuell nachgetragen (siehe letzte Migration für AICONO Zentrale, Jugendzentrum, Testkoffer).
 
-## Schritte
+## Umsetzung
 
-### Schritt 1: Worker-Patch — Integration im Fehlerlog mitschicken
+### Teil 1 — WS als Default
+1. **Migration**
+   - `ALTER TABLE location_integrations ALTER COLUMN loxone_remote_connect_ws_enabled SET DEFAULT TRUE;`
+   - Optionaler Backfill: bestehende Loxone-Integrationen mit `NULL`/`FALSE` und aktivem Cloud-DNS auf `TRUE` setzen — **nur nach Rückfrage**, um niemanden ungewollt umzustellen. Standard: nur Default ändern, Bestand unverändert.
+2. **UI-Anpassung** (`EditIntegrationDialog.tsx`)
+   - Initial-State beim Anlegen neuer Loxone-Integrationen auf `true` setzen (Formular-Default), damit auch der explizit übergebene Wert konsistent ist.
+   - Kleiner Hinweistext: „Empfohlen: WebSocket (Realtime, geringere Last)".
 
-In `docs/loxone-ws-worker/index.ts` zwei Anpassungen an der Fehlerstelle im `connect()`-Pfad:
+### Teil 2 — Auto-Verknüpfung `bridge_miniserver_links`
+Zwei Trigger-Punkte, damit sowohl WS- als auch HTTP-Nutzer erfasst werden:
 
-1. `details.location_integration_id` und `details.miniserver_serial` in das `bridgeLog("error", "ws_connect_failed", ...)` mitschreiben. Beide Werte kennt der Worker vor dem `LxCommunicator.open()`.
-2. `details.host` (der aufgelöste Cloud-DNS-Host) zusätzlich mitschicken, um DNS-/Relay-Wechsel als Zweitursache ausschließen zu können.
+**A) im `loxone-ws-worker`** (Hetzner-Repo, außerhalb Lovable — Aufgabe wird nur dokumentiert, nicht hier committet):
+- Nach erfolgreichem WS-Handshake und Auslesen der `msInfo.serialNr`:
+  - `upsert` auf `bridge_miniserver_links` mit `on_conflict=miniserver_serial` — Felder: `miniserver_serial`, `tenant_id`, `location_id`, `location_integration_id`, `last_seen_at=now()`.
 
-Kein Verhalten wird verändert, nur mehr Kontext im Fehlerlog. Version-Bump auf `phase7.7-error-attribution`, damit sichtbar ist, welche Diagnose-Stufe läuft.
+**B) in `supabase/functions/loxone-api/index.ts`** (HTTP-Poll-Pfad, hier im Repo):
+- In der Structure-Fetch-Routine (~Zeile 1092) wird `LoxAPP3.json` geladen; darin steht `msInfo.serialNr`. Direkt danach:
+  - Prüfen ob Link existiert (`select miniserver_serial from bridge_miniserver_links where miniserver_serial=…`).
+  - Falls nicht: `insert` mit den bekannten IDs.
+  - Falls vorhanden aber `location_id`/`tenant_id` NULL: `update` mit Backfill.
+- Fehler dabei nur loggen, nicht die Response brechen.
 
-Keine DB-Migration nötig (`bridge_event_log.details` ist bereits `jsonb`).
+**C) RLS/Grants**
+- `bridge_miniserver_links` hat bereits Policies. Sicherstellen, dass Service-Role write darf (ist der Fall, da Edge Functions mit Service-Role laufen). Kein Migrationsbedarf erwartet.
 
-### Schritt 2: Auswertung (SQL, nach Deploy)
+### Teil 3 — Sichtbarkeit
+- Kein UI-Umbau nötig: Neue Miniserver erscheinen ab dann automatisch mit Seriennummer in „Gateway-Flotte" und werden korrekt in `bridge_event_log` attribuiert.
 
-Nach ~10 Minuten Laufzeit läuft die Aggregation `GROUP BY details->>'location_integration_id'`:
-- Alle 408 aus einer Integration → dieser Miniserver ist der Verursacher.
-- Verteilt → generisches Problem im Cloud-Relay-Pfad, nicht miniserverspezifisch.
+## Nicht im Scope
+- Nachträgliches Umschalten aller bestehenden HTTP-Poll-Integrationen auf WS (opt-in, nicht automatisch).
+- UI zum manuellen Editieren von `bridge_miniserver_links` (kann nachgezogen werden, falls gewünscht).
 
-### Schritt 3: Erst dann Kontrollexperiment
+## Reihenfolge
+1. Migration (Default → TRUE).
+2. Edge Function `loxone-api`: Auto-Link beim Structure-Fetch.
+3. UI-Default im Dialog + Hinweistext.
+4. Worker-Anpassung (Hetzner-Repo, separates Deployment).
 
-Wenn Schritt 2 einen der beiden „dual-homed" Miniserver (AICONO Zentrale) benennt, richtest du auf **genau diesem** einen zweiten User ein. Wenn stattdessen ESB oder Jugendzentrum Weiss auftauchen, ist der zweite-User-Test nicht mehr aussagekräftig (nur AICONO Zentrale läuft laut deiner Aussage parallel auf Hetzner-Live), und wir suchen an anderer Stelle weiter.
-
-## Was ich NICHT tue
-
-- Keine Änderung am `link_id`-Spaltenverhalten (Downstream-Views hängen daran).
-- Keine Retry-/Watchdog-Änderung, bis die Ursache belegt ist.
-- Keine Fixes „auf Verdacht" an den drei verbleibenden Miniservern.
+## Offene Frage
+Sollen bestehende Loxone-Integrationen (HTTP-Poll) in einem einmaligen Backfill mit auf WS umgestellt werden, oder bleibt WS opt-in für Bestand?
