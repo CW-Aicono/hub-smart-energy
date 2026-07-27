@@ -286,7 +286,16 @@ export async function fetchPvActualHourly({
   const todayStr = toLocalDateKey(new Date());
   const isToday = dayStr === todayStr;
 
-  const rawReadings = await fetchMeterPowerReadings(meterIds, rangeStart, rangeEnd);
+  // For today, never fabricate values for hours that haven't happened yet.
+  // Both the raw fetch window and the forecast-weight distribution must stop at "now".
+  const now = new Date();
+  const effectiveEnd = isToday && now < rangeEnd ? now : rangeEnd;
+  const currentHourKey = toLocalHourKey(now.toISOString());
+  const clippedForecast = isToday
+    ? forecastHours.filter((h) => toLocalHourKey(h.timestamp) <= currentHourKey)
+    : forecastHours;
+
+  const rawReadings = await fetchMeterPowerReadings(meterIds, rangeStart, effectiveEnd);
   if (rawReadings.length > 0) {
     let hourly = buildHourlyActuals(rawReadings);
     if (isToday) {
@@ -295,7 +304,7 @@ export async function fetchPvActualHourly({
         const sum = Object.values(hourly).reduce((s, v) => s + Math.abs(v), 0);
         hourly = sum > 0
           ? scaleHourlyToTotal(hourly, authoritative)
-          : estimateHourlyActualsFromDailyTotal(dayStr, authoritative, forecastHours);
+          : estimateHourlyActualsFromDailyTotal(dayStr, authoritative, clippedForecast);
       }
     }
     return { readings: hourly, isEstimated: false, isStored: false };
@@ -305,7 +314,7 @@ export async function fetchPvActualHourly({
     const authoritative = await fetchTodayCumulativeKwh(meterIds);
     if (authoritative != null) {
       return {
-        readings: estimateHourlyActualsFromDailyTotal(dayStr, authoritative, forecastHours),
+        readings: estimateHourlyActualsFromDailyTotal(dayStr, authoritative, clippedForecast),
         isEstimated: true,
         isStored: false,
       };
