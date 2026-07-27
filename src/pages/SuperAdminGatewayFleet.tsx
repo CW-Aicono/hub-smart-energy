@@ -156,7 +156,7 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
   if (integrationIds.length === 0) return [];
 
   const { data: integrations } = await supabase
-    .from("location_integrations").select("id, location_id").in("id", integrationIds);
+    .from("location_integrations").select("id, location_id, config").in("id", integrationIds);
   const locationIds = Array.from(new Set((integrations ?? []).map((i: any) => i.location_id).filter(Boolean)));
   const { data: locations } = locationIds.length
     ? await supabase.from("locations").select("id, name, tenant_id").in("id", locationIds)
@@ -189,9 +189,17 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
   (integrations ?? []).forEach((it: any) => {
     const loc: any = locById.get(it.location_id);
     const tenant: any = loc ? tenantById.get(loc.tenant_id) : null;
-    const serials = loc && tenant ? (serialsByKey.get(`${tenant.id}:${loc.id}`) ?? []) : [];
+    const linkSerials = loc && tenant ? (serialsByKey.get(`${tenant.id}:${loc.id}`) ?? []) : [];
+    // Fallback: konfigurierte Seriennummer aus der Integration übernehmen,
+    // solange der WS-Worker noch keinen bridge_miniserver_links-Eintrag angelegt hat.
+    const cfgSerial = typeof it.config?.serial_number === "string"
+      ? String(it.config.serial_number).trim().toUpperCase()
+      : "";
+    const serials = [...linkSerials];
+    if (cfgSerial && !serials.includes(cfgSerial)) serials.push(cfgSerial);
     infoMap.set(it.id, { tenant: tenant?.name ?? "—", location: loc?.name ?? "—", serials });
   });
+
 
 
   const now = Date.now();
