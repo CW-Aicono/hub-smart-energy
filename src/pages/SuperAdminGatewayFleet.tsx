@@ -254,7 +254,7 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
     const info = infoMap.get(intId);
     const heartbeatAge = current ? now - new Date(current.updated_at).getTime() : null;
     let status: UnifiedRow["status"] = "disconnected";
-    let statusLabel = intSessions.length === 0 ? "Nie verbunden" : "Getrennt";
+    let statusLabel = intSessions.length === 0 ? "Keine WS-Sitzung" : "WS getrennt";
     if (current && !current.ended_at) {
       if (heartbeatAge !== null && heartbeatAge < LOXONE_FRESH_HEARTBEAT_MS) {
         status = "active"; statusLabel = "Aktiv";
