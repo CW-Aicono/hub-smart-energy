@@ -328,8 +328,11 @@ export async function fetchPvActualHourly({
     : forecastHours;
 
   const rawReadings = await fetchMeterPowerReadings(meterIds, rangeStart, effectiveEnd);
-  if (rawReadings.length > 0) {
-    let hourly = buildHourlyActuals(rawReadings);
+  const readingsSource = rawReadings.length > 0
+    ? rawReadings
+    : await fetchMeterPower5min(meterIds, rangeStart, effectiveEnd);
+  if (readingsSource.length > 0) {
+    let hourly = buildHourlyActuals(readingsSource);
     if (isToday) {
       const authoritative = await fetchTodayCumulativeKwh(meterIds);
       if (authoritative != null) {
@@ -341,6 +344,7 @@ export async function fetchPvActualHourly({
     }
     return { readings: hourly, isEstimated: false, isStored: false };
   }
+
 
   if (isToday) {
     const authoritative = await fetchTodayCumulativeKwh(meterIds);
