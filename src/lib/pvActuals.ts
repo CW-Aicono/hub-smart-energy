@@ -62,6 +62,38 @@ export async function fetchMeterPowerReadings(meterIds: string[], rangeStart: Da
   return allData.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
 }
 
+// Fallback for meters that only receive worker-aggregated 5-min buckets
+// (no rows in meter_power_readings). Maps 5-min buckets to the same shape
+// as fetchMeterPowerReadings so downstream aggregation (buildHourlyActuals)
+// stays unchanged. Interval per sample is 5 minutes → energy = power_avg × 5/60.
+export async function fetchMeterPower5min(meterIds: string[], rangeStart: Date, rangeEnd: Date) {
+  const allData: MeterPowerReading[] = [];
+  let from = 0;
+  const pageSize = 1000;
+
+  while (true) {
+    const { data: page } = await supabase
+      .from("meter_power_readings_5min")
+      .select("power_avg, bucket")
+      .in("meter_id", meterIds)
+      .gte("bucket", rangeStart.toISOString())
+      .lt("bucket", rangeEnd.toISOString())
+      .order("bucket", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (!page || page.length === 0) break;
+    for (const row of page as any[]) {
+      if (row.power_avg == null) continue;
+      allData.push({ power_value: Number(row.power_avg), recorded_at: row.bucket });
+    }
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return allData.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
+}
+
+
 export function buildHourlyActuals(readings: MeterPowerReading[]) {
   const hourBuckets: Record<string, number> = {};
 
