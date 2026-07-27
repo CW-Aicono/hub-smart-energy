@@ -770,7 +770,14 @@ async function connect(state: ConnState): Promise<void> {
     bridgeLog(auth ? "error" : "error", auth ? "ws_auth_failed" : "ws_connect_failed",
       auth ? `Anmeldung am Miniserver abgelehnt (stage=${stage}, User "${state.username}") — Zugangsdaten in Cloud-Config prüfen`
            : `Verbindung fehlgeschlagen (stage=${stage}): ${reason}`,
-      state.serialNumber, { stage, reason, username_tried: auth ? state.username : undefined });
+      state.serialNumber, {
+        stage,
+        reason,
+        location_integration_id: state.locationIntegrationId,
+        miniserver_serial: state.serialNumber,
+        host,
+        username_tried: auth ? state.username : undefined,
+      });
     state.ws = null;
     if (auth) {
       // Backend über Auth-Fehler informieren → UI zeigt rotes Badge, Reconnect stark verlangsamt.
