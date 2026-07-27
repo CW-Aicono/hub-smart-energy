@@ -446,7 +446,11 @@ async function connect(state: ConnState): Promise<void> {
   let stage: string = "dns-resolve";
   const host = await resolveLoxoneHost(state.serialNumber);
   if (!host) {
-    bridgeLog("warn", "dns_failed", `DNS-Auflösung fehlgeschlagen: ${state.serialNumber}`, state.serialNumber, { stage });
+    bridgeLog("warn", "dns_failed", `DNS-Auflösung fehlgeschlagen: ${state.serialNumber}`, state.serialNumber, {
+      stage,
+      location_integration_id: state.locationIntegrationId,
+      miniserver_serial: state.serialNumber,
+    });
     scheduleReconnect(state, "dns-failed");
     return;
   }
