@@ -323,14 +323,20 @@ const LiveValues = () => {
       new Set(autoMeters.map((m) => m.location_integration_id).filter(Boolean) as string[])
     );
 
-    // Parallel: DB-Polling-Wert, Bridge-Raw-Wert (Live), Perioden-Totals, Zählerstand (kumulativ), Sensor-Snapshots, Sensor-Rohwerte
-    const [powerRes, bridgeRes, periodRes, cumulativeRes, snapshotRes, sensorRawRes] = await Promise.all([
+    // Parallel: DB-Polling-Wert, 5-Min-Aggregat (Worker-only Fallback), Bridge-Raw-Wert (Live), Perioden-Totals, Zählerstand (kumulativ), Sensor-Snapshots, Sensor-Rohwerte
+    const [powerRes, power5minRes, bridgeRes, periodRes, cumulativeRes, snapshotRes, sensorRawRes] = await Promise.all([
       supabase
         .from("meter_power_readings")
         .select("meter_id, power_value, recorded_at")
         .in("meter_id", meterIds)
         .gte("recorded_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
         .order("recorded_at", { ascending: false }),
+      supabase
+        .from("meter_power_readings_5min")
+        .select("meter_id, power_avg, bucket")
+        .in("meter_id", meterIds)
+        .gte("bucket", new Date(Date.now() - 60 * 60 * 1000).toISOString())
+        .order("bucket", { ascending: false }),
       supabase
         .from("bridge_raw_samples")
         .select("uuid, value, received_at")
@@ -359,6 +365,7 @@ const LiveValues = () => {
         .gte("recorded_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
         .order("recorded_at", { ascending: false }),
     ]);
+
 
     // Neuester Sensor-Rohwert pro Meter (Momentanwerte: °C, %, bool, …).
     // Diese sind meist frischer als der Snapshot (der u.U. gecacht ist).
