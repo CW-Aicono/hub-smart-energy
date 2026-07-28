@@ -291,7 +291,11 @@ function DeviceTable({
                       unit = configured || unit;
                     }
                   }
-                  return `${d.value}${unit ? ` ${unit}` : ""}`;
+                  const num = typeof d.rawValue === "number" ? d.rawValue : parseNumeric(d.value);
+                  const displayVal = num != null && Number.isFinite(num)
+                    ? num.toLocaleString("de-DE", { maximumFractionDigits: 2 })
+                    : d.value;
+                  return `${displayVal}${unit ? ` ${unit}` : ""}`;
                 })()}
               </TableCell>
               <TableCell>
