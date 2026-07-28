@@ -798,12 +798,14 @@ const SuperAdminGatewayFleet = () => {
                         <SortableHead sortKey="status" sort={fleetSort} onToggle={toggleFleetSort}>Status</SortableHead>
                         <SortableHead sortKey="connected" sort={fleetSort} onToggle={toggleFleetSort}>Verbunden seit</SortableHead>
                         <SortableHead sortKey="heartbeat" sort={fleetSort} onToggle={toggleFleetSort}>Letzter Heartbeat</SortableHead>
+                        <SortableHead sortKey="lastOpen" sort={fleetSort} onToggle={toggleFleetSort}>Letzter WS-Open</SortableHead>
                         <SortableHead sortKey="events" sort={fleetSort} onToggle={toggleFleetSort} align="right">Events 24 h</SortableHead>
                         <SortableHead sortKey="reconnects" sort={fleetSort} onToggle={toggleFleetSort} align="right">Reconnects 24 h</SortableHead>
                         <SortableHead sortKey="uptime" sort={fleetSort} onToggle={toggleFleetSort} align="right">Uptime 24 h</SortableHead>
                         <SortableHead sortKey="sessions" sort={fleetSort} onToggle={toggleFleetSort} align="right">Sitzungen 24 h</SortableHead>
                         <SortableHead sortKey="worker" sort={fleetSort} onToggle={toggleFleetSort}>Worker</SortableHead>
                         <TableHead>Letzter Disconnect</TableHead>
+
                       </TableRow>
                     </TableHeader>
                     <TableBody>
