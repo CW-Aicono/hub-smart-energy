@@ -1449,30 +1449,9 @@ export function MeterDetailDialog({
       return { rateUnit: s, energyUnit: s, kind: "sensor" as const };
     }
 
-    if (u === "m³" || u === "m3" || u === "m³/h") return { rateUnit: "m³/h", energyUnit: "m³", kind: "volume" as const };
-    if (ul === "l" || ul === "liter" || u === "l/min" || u === "l/h") return { rateUnit: "l/h", energyUnit: "l", kind: "volume" as const };
+    const u = meterUnitRaw;
+    const ul = u.toLowerCase();
 
-    // Mass units: rate has "/h" suffix, energy is the base mass unit.
-    const massToRate: Record<string, { rateUnit: string; energyUnit: string }> = {
-      mg: { rateUnit: "mg/h", energyUnit: "mg" },
-      g:  { rateUnit: "g/h",  energyUnit: "g"  },
-      kg: { rateUnit: "kg/h", energyUnit: "kg" },
-      t:  { rateUnit: "t/h",  energyUnit: "t"  },
-      "mg/h": { rateUnit: "mg/h", energyUnit: "mg" },
-      "g/h":  { rateUnit: "g/h",  energyUnit: "g"  },
-      "kg/h": { rateUnit: "kg/h", energyUnit: "kg" },
-      "t/h":  { rateUnit: "t/h",  energyUnit: "t"  },
-      "t/a":  { rateUnit: "t/a",  energyUnit: "t"  },
-    };
-    if (massToRate[ul]) return { ...massToRate[ul], kind: "mass" as const };
-
-    // Sensoren (V, °C, %, A, Hz, hPa, lx, ppm, …): keine Leistungs-/Energie-Logik, keine /h-Suffixe.
-    if (isSensor) {
-      const s = displayUnit || "";
-      return { rateUnit: s, energyUnit: s, kind: "sensor" as const };
-    }
-
-    // Power units: rate stays as-is, energy is the matching "hour" unit.
     const powerToEnergy: Record<string, { rateUnit: string; energyUnit: string }> = {
       w: { rateUnit: "W", energyUnit: "Wh" },
       kw: { rateUnit: "kW", energyUnit: "kWh" },
@@ -1494,6 +1473,7 @@ export function MeterDetailDialog({
     }
     return { rateUnit: u, energyUnit: u, kind: "generic" as const };
   })();
+
 
   const rateLabel = kind === "volume" ? "Durchfluss"
     : kind === "mass" ? "Massenstrom"
