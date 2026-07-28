@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -20,7 +21,8 @@ import type { Meter } from "@/hooks/useMeters";
 import { useFloors } from "@/hooks/useFloors";
 import { useFloorRooms } from "@/hooks/useFloorRooms";
 import { ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
-import { SOURCE_UNIT_GROUPS } from "@/lib/sensorUnits";
+import { EXTRA_ENERGY_CUMULATIVE_GROUP } from "@/lib/sensorUnits";
+import { SourceUnitPicker } from "./SourceUnitPicker";
 
 interface Props {
   open: boolean;
@@ -196,25 +198,12 @@ export function BulkEditMetersDialog({ open, onOpenChange, meters, locationId, o
               </FieldBlock>
 
               <FieldBlock apply={applyUnit} setApply={setApplyUnit} label="Einheit">
-                <Select value={unit} onValueChange={setUnit}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {SOURCE_UNIT_GROUPS.map((g) => (
-                      <SelectGroup key={g.label}>
-                        <SelectLabel>{g.label}</SelectLabel>
-                        {g.options.map((o) => (
-                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                    ))}
-                    <SelectGroup>
-                      <SelectLabel>Energie (kumulativ)</SelectLabel>
-                      <SelectItem value="kWh">kWh</SelectItem>
-                      <SelectItem value="Wh">Wh</SelectItem>
-                      <SelectItem value="MWh">MWh</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
+                <SourceUnitPicker
+                  value={unit}
+                  onChange={setUnit}
+                  extraGroups={[EXTRA_ENERGY_CUMULATIVE_GROUP]}
+                />
+
               </FieldBlock>
 
               <FieldBlock apply={applyMedium} setApply={setApplyMedium} label="Medium">

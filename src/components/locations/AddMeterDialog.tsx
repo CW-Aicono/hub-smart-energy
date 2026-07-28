@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SOURCE_UNIT_GROUPS, deriveEnergyUnit } from "@/lib/sensorUnits";
+import { deriveEnergyUnit } from "@/lib/sensorUnits";
+import { SourceUnitPicker } from "./SourceUnitPicker";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -396,19 +397,8 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
               {selectedIntegration && (
                 <div className="space-y-3 pt-2 border-t">
                   <p className="text-xs font-medium text-muted-foreground">Einheit des Gateways</p>
-                  <Select value={sourceUnit} onValueChange={setSourceUnit}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {SOURCE_UNIT_GROUPS.map((group) => (
-                        <SelectGroup key={group.label}>
-                          <SelectLabel>{group.label}</SelectLabel>
-                          {group.options.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                          ))}
-                        </SelectGroup>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SourceUnitPicker value={sourceUnit} onChange={setSourceUnit} compact />
+
                   <p className="text-xs text-muted-foreground">Welche Einheit liefert Ihr Gateway für dieses Gerät? Bei Loxone in der Loxone Config unter den Ausgängen des Zählers sichtbar; bei Sensoren (z. B. Shelly H&T) z. B. °C für Temperatur oder % für Luftfeuchte.</p>
                 </div>
               )}
