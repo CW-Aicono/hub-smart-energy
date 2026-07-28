@@ -1689,6 +1689,87 @@ export function MeterDetailDialog({
     return { min, max, avg, bidirectional };
   }, [series]);
 
+  // Sensor-Statistik (V, °C, %, …): eigene Datenquelle, da meter_power_readings leer.
+  const { data: sensorSeries = [] } = useQuery({
+    queryKey: ["meter-detail-sensor-series", node.meter_id, range, powerStartMs],
+    enabled: isSensor && !!node.meter_id,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const since = new Date(powerStartMs).toISOString();
+      const out: { t: number; v: number; vMin?: number; vMax?: number }[] = [];
+      if (range === "1h") {
+        const { data } = await supabase
+          .from("sensor_readings_raw")
+          .select("recorded_at, value")
+          .eq("meter_id", node.meter_id!)
+          .gte("recorded_at", since)
+          .order("recorded_at", { ascending: true })
+          .limit(2000);
+        for (const r of (data ?? []) as any[]) {
+          const v = Number(r.value);
+          if (Number.isFinite(v)) out.push({ t: new Date(r.recorded_at).getTime(), v });
+        }
+      } else if (range === "24h" || range === "7d") {
+        const { data } = await supabase
+          .from("sensor_readings_5min")
+          .select("bucket, value_avg, value_min, value_max")
+          .eq("meter_id", node.meter_id!)
+          .gte("bucket", since)
+          .order("bucket", { ascending: true })
+          .limit(5000);
+        for (const r of (data ?? []) as any[]) {
+          const v = Number(r.value_avg);
+          if (Number.isFinite(v)) out.push({
+            t: new Date(r.bucket).getTime(),
+            v,
+            vMin: Number(r.value_min),
+            vMax: Number(r.value_max),
+          });
+        }
+      } else {
+        const { data } = await supabase
+          .from("sensor_readings_hourly")
+          .select("bucket, value_twavg, value_min, value_max")
+          .eq("meter_id", node.meter_id!)
+          .gte("bucket", since)
+          .order("bucket", { ascending: true })
+          .limit(5000);
+        for (const r of (data ?? []) as any[]) {
+          const v = Number(r.value_twavg);
+          if (Number.isFinite(v)) out.push({
+            t: new Date(r.bucket).getTime(),
+            v,
+            vMin: Number(r.value_min),
+            vMax: Number(r.value_max),
+          });
+        }
+      }
+      return out;
+    },
+  });
+
+  const sensorStats = useMemo(() => {
+    if (!isSensor || !sensorSeries.length) return null;
+    let min = Infinity, max = -Infinity, sum = 0, n = 0;
+    for (const p of sensorSeries) {
+      const lo = Number.isFinite(p.vMin as number) ? (p.vMin as number) : p.v;
+      const hi = Number.isFinite(p.vMax as number) ? (p.vMax as number) : p.v;
+      if (lo < min) min = lo;
+      if (hi > max) max = hi;
+      sum += p.v;
+      n += 1;
+    }
+    if (!n) return null;
+    return { min, max, avg: sum / n, bidirectional: false };
+  }, [isSensor, sensorSeries]);
+
+  const displayStats = isSensor ? sensorStats : stats;
+  const displayPointCount = isSensor ? sensorSeries.length : series.length;
+  const displayLastTs = isSensor
+    ? (sensorSeries.length ? sensorSeries[sensorSeries.length - 1].t : null)
+    : (series.length ? series[series.length - 1].t : null);
+
+
   // Energie pro Bucket via Trapez-Integration – prefilled über den gesamten Zeitraum
   const energyBuckets = useMemo(() => {
     const bucketMs =
@@ -1823,19 +1904,19 @@ export function MeterDetailDialog({
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">{isSensor ? "Ø Wert" : "Ø Leistung"}</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.avg)}${rateUnit ? " " + rateUnit : ""}` : "–"}
+              {displayStats ? `${fmtDeNum(displayStats.avg)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Max</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.max)}${rateUnit ? " " + rateUnit : ""}` : "–"}
+              {displayStats ? `${fmtDeNum(displayStats.max)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Min</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.min)}${rateUnit ? " " + rateUnit : ""}` : "–"}
+              {displayStats ? `${fmtDeNum(displayStats.min)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
@@ -2096,12 +2177,12 @@ export function MeterDetailDialog({
           </div>
           <div>
             <div className="text-muted-foreground">Datenpunkte</div>
-            <div className="font-medium tabular-nums">{series.length.toLocaleString("de-DE")}</div>
+            <div className="font-medium tabular-nums">{displayPointCount.toLocaleString("de-DE")}</div>
           </div>
           <div>
             <div className="text-muted-foreground">Letzter Wert</div>
             <div className="font-medium">
-              {series.length ? new Date(series[series.length - 1].t).toLocaleString("de-DE") : "–"}
+              {displayLastTs ? new Date(displayLastTs).toLocaleString("de-DE") : "–"}
             </div>
           </div>
           <div className="min-w-0">
