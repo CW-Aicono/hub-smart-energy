@@ -578,7 +578,7 @@ const SuperAdminGatewayFleet = () => {
       })
     : filteredRowsPre;
 
-  const { sorted: filteredRows, sort: fleetSort, toggle: toggleFleetSort } = useSortableData<any, "tenant" | "location" | "type" | "status" | "connected" | "heartbeat" | "events" | "reconnects" | "uptime" | "sessions" | "worker">(
+  const { sorted: filteredRows, sort: fleetSort, toggle: toggleFleetSort } = useSortableData<any, "tenant" | "location" | "type" | "status" | "connected" | "heartbeat" | "lastOpen" | "events" | "reconnects" | "uptime" | "sessions" | "worker">(
     filteredRowsSearched,
     (r, k) => {
       switch (k) {
@@ -588,6 +588,7 @@ const SuperAdminGatewayFleet = () => {
         case "status": return r.statusLabel ?? r.status ?? "";
         case "connected": return r.connectedSince ? new Date(r.connectedSince) : null;
         case "heartbeat": return r.heartbeatAgeMs ?? Number.MAX_SAFE_INTEGER;
+        case "lastOpen": return r.lastOpenSuccessAt ? new Date(r.lastOpenSuccessAt) : null;
         case "events": return r.eventsLast24h ?? -1;
         case "reconnects": return r.reconnectsLast24h ?? -1;
         case "uptime": return r.uptimeRatio24h ?? -1;
@@ -598,6 +599,7 @@ const SuperAdminGatewayFleet = () => {
     },
     { key: "tenant", direction: "asc" },
   );
+
 
   const { data: channels = [], refetch: refetchChannels } = useQuery({
     queryKey: ["sa-gateway-channels"],
