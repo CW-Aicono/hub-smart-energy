@@ -825,10 +825,58 @@ function scheduleReconnect(state: ConnState, reason: string): void {
   }, delay);
 }
 
+// ─── Stuck-Slot-Reset (Phase 7.8) ─────────────────────────────────────────────
+// Erkennt Slots, die über NO_OPEN_TIMEOUT_MIN keine erfolgreiche ws-open hatten,
+// obwohl andere Serials im selben Worker gesund laufen. Das deutet auf einen
+// prozessinternen Cache-Fehler hin (z. B. DNS/Redirect-State). Der Slot wird
+// komplett verworfen und mit frischem Kontext neu aufgebaut.
+function stuckSlotTick(): void {
+  const now = Date.now();
+  // Nur aktiv werden, wenn mindestens ein anderer Serial im selben Worker
+  // aktuell gesund ist. Das verhindert Fehlalarme bei generellen Cloud-Ausfällen.
+  const hasHealthyPeer = Array.from(connections.values()).some((s) => {
+    if (!s.authenticated) return false;
+    const ref = Math.max(s.lastEventAt, s.lastConnectedAt);
+    return ref > 0 && now - ref < WATCHDOG_STALE_MS;
+  });
+  if (!hasHealthyPeer) return;
+
+  for (const state of connections.values()) {
+    if (state.authenticated) continue; // verbundene Slots sind OK
+    if (state.reconnecting) continue; // wird bereits neu verbunden
+    if (!state.lastOpenAttemptAt) continue; // noch nie versucht
+    // Wenn es jemals einen erfolgreichen open gab und der nicht zu lange her ist: OK
+    if (state.lastOpenSuccessAt > 0 && now - state.lastOpenSuccessAt < NO_OPEN_TIMEOUT_MS) continue;
+
+    const lastAttemptAge = now - state.lastOpenAttemptAt;
+    if (lastAttemptAge >= NO_OPEN_TIMEOUT_MS) {
+      log("warn", `[StuckSlot] ${state.serialNumber} kein ws-open seit ${NO_OPEN_TIMEOUT_MIN}min bei gesunden Peers → Slot-Reset`);
+      bridgeLog("warn", "stuck_slot_reset", `Kein ws-open seit ${NO_OPEN_TIMEOUT_MIN}min, Slot-Reset`, state.serialNumber, {
+        no_open_minutes: NO_OPEN_TIMEOUT_MIN,
+        last_attempt_age_ms: lastAttemptAge,
+      });
+      // Slot komplett zerstören: DNS-Cache, WS-Handle, Auth-State, Backoff
+      dnsCache.delete(state.serialNumber);
+      try { state.ws?.close(); } catch { /* ignore */ }
+      state.ws = null;
+      state.authenticated = false;
+      state.reconnecting = false;
+      state.reconnectDelay = 1000;
+      state.lastOpenAttemptAt = 0;
+      if (state.sessionId) {
+        sessionEnd(state, "stuck-slot-reset");
+      }
+      // 60s Cooldown, dann frischer Verbindungsaufbau
+      scheduleReconnect(state, "stuck-slot-reset");
+    }
+  }
+}
+
 // ─── Watchdog (Phase 3) ──────────────────────────────────────────────────────
 // Erkennt "tote" WebSockets, bei denen lxcommunicator zwar noch verbunden ist,
 // aber seit WATCHDOG_STALE_MS keine Events mehr eintreffen. Erzwingt Reconnect.
 function watchdogTick(): void {
+
   const now = Date.now();
   for (const state of connections.values()) {
     if (!state.authenticated || state.uuidMap.size === 0) continue;
