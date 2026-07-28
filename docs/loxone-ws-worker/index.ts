@@ -448,11 +448,13 @@ async function connect(state: ConnState): Promise<void> {
   }
   if (state.ws) { try { state.ws.close(); } catch { /* ignore */ } state.ws = null; }
   state.authenticated = false;
+  state.lastOpenAttemptAt = Date.now();
 
   // Phase 7.6 (Diagnose): stage-Marker durch den gesamten connect()-Try, damit ein
   // Fehler eindeutig einer Sub-Phase zugeordnet werden kann (statt „irgendwo im connect").
   // stage wird sowohl in bridgeLog(details.stage) als auch in der Konsole geloggt.
   let stage: string = "dns-resolve";
+
   const host = await resolveLoxoneHost(state.serialNumber);
   if (!host) {
     bridgeLog("warn", "dns_failed", `DNS-Auflösung fehlgeschlagen: ${state.serialNumber}`, state.serialNumber, {
