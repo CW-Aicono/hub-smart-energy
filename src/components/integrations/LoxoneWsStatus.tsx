@@ -40,8 +40,6 @@ export function LoxoneWsStatus({ locationIntegrationId, enabled }: LoxoneWsStatu
     staleTime: 10_000,
   });
 
-  if (!enabled) return null;
-
   // Stale-Schwelle (Sekunden) ist im Super-Admin konfigurierbar.
   // Bevorzuge unpräfixierten Key (wird auch von der Edge Function gelesen);
   // präfixierter Key als Fallback für ältere Deployments.
@@ -49,6 +47,10 @@ export function LoxoneWsStatus({ locationIntegrationId, enabled }: LoxoneWsStatu
   const stalePrefixed = useSystemSettingNumber("public.loxone_ws_stale_threshold_seconds", 0);
   const staleThresholdSec = staleUnprefixed > 0 ? staleUnprefixed : (stalePrefixed > 0 ? stalePrefixed : 120);
   const staleThresholdMs = Math.max(30, staleThresholdSec) * 1000;
+
+  // Early-Return NACH allen Hooks, damit die Hook-Reihenfolge stabil bleibt,
+  // wenn der WS-Toggle umgeschaltet wird.
+  if (!enabled) return null;
 
   // Status-Logik:
   // - Aktiv = ended_at IS NULL UND updated_at innerhalb der Schwelle
