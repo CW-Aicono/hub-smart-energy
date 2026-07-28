@@ -1926,7 +1926,7 @@ export function MeterDetailDialog({
         {/* KPI-Kacheln */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
           <div className="rounded-md border p-3">
-            <div className="text-muted-foreground">{isSensor ? "Ø Wert" : "Ø Leistung"}</div>
+            <div className="text-muted-foreground">{isSensor ? "Ø Wert" : `Ø ${rateLabel}`}</div>
             <div className="text-base font-semibold tabular-nums">
               {displayStats ? `${fmtDeNum(displayStats.avg)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
@@ -1945,8 +1945,9 @@ export function MeterDetailDialog({
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">
-              {isSensor ? "Momentanwert" : `Energie${stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}`}
+              {isSensor ? "Momentanwert" : `${sumLabel}${stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}`}
             </div>
+
             <div className="text-base font-semibold tabular-nums">
               {isSensor
                 ? (effectiveSensorLatest?.value != null
