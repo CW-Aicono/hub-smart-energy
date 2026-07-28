@@ -1977,7 +1977,7 @@ export function MeterDetailDialog({
         <div>
           <div className="mb-1 flex items-center justify-between gap-2">
             <div className="text-sm font-medium">
-              Leistungsverlauf{showSocAxis ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
+              {rateLabel}verlauf{showSocAxis ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
             </div>
             {!hasSoc && showSocAxis && (
               <Badge variant="outline" className="text-[10px] text-muted-foreground">
