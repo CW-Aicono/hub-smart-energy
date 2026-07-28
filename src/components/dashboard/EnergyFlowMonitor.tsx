@@ -1402,7 +1402,26 @@ export function MeterDetailDialog({
   // Fallback: leere unit → source_unit_power (Gateway-Sensoren haben oft nur letzteres gepflegt)
   const displayUnit = meterUnitRaw || meterSourceUnitRaw;
   const meterEnergyType = (nodeMeter?.energy_type ?? "").toString().trim();
+  // Sensor detection: primär device_type, fallback auf Einheit (unit ODER source_unit_power).
+  const isSensor = (() => {
+    if (meterDeviceType === "sensor" || meterDeviceType === "actuator") return true;
+    const u = (displayUnit || "").toLowerCase().replace(/\s+/g, "");
+    const meteringUnits = new Set([
+      "wh","kwh","mwh","gwh",
+      "w","kw","mw","gw",
+      "va","kva","var","kvar",
+      "m³","m3","l","l/h","l/min","m³/h","m3/h",
+    ]);
+    if (!u) return false; // ohne jegliche Einheit + device_type=meter/undef: altes Verhalten
+    return !meteringUnits.has(u);
+  })();
+
   const { rateUnit, energyUnit } = (() => {
+    // Sensoren (V, °C, %, A, Hz, hPa, lx, ppm, …): keine Leistungs-/Energie-Logik, keine /h-Suffixe.
+    if (isSensor) {
+      const s = displayUnit || "";
+      return { rateUnit: s, energyUnit: s };
+    }
     const u = meterUnitRaw;
     const ul = u.toLowerCase();
     if (u === "m³" || u === "m3" || u === "m³/h") return { rateUnit: "m³/h", energyUnit: "m³" };
@@ -1429,21 +1448,8 @@ export function MeterDetailDialog({
       if (meterEnergyType === "gas") return { rateUnit: "m³/h", energyUnit: "m³" };
       return { rateUnit: "kW", energyUnit: "kWh" };
     }
-    return { rateUnit: `${u}/h`, energyUnit: u };
-  })();
-
-  // Sensor detection: primär device_type, fallback auf Einheit (unit ODER source_unit_power).
-  const isSensor = (() => {
-    if (meterDeviceType === "sensor" || meterDeviceType === "actuator") return true;
-    const u = (displayUnit || "").toLowerCase().replace(/\s+/g, "");
-    const meteringUnits = new Set([
-      "wh","kwh","mwh","gwh",
-      "w","kw","mw","gw",
-      "va","kva","var","kvar",
-      "m³","m3","l","l/h","l/min","m³/h","m3/h",
-    ]);
-    if (!u) return false; // ohne jegliche Einheit + device_type=meter/undef: altes Verhalten
-    return !meteringUnits.has(u);
+    // Unbekannte Einheit: konservativ 1:1 übernehmen, statt "/h" zu erfinden.
+    return { rateUnit: u, energyUnit: u };
   })();
 
 
