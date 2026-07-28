@@ -33,6 +33,7 @@ import {
   DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import TenantPartnerTransferCard from "@/components/super-admin/TenantPartnerTransferCard";
+import TenantMeterDuplicatesCard from "@/components/super-admin/TenantMeterDuplicatesCard";
 import SavingsShareTab from "@/components/super-admin/savings-share/SavingsShareTab";
 
 interface InviteTenantAdminDialogProps {
