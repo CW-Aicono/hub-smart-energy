@@ -1045,11 +1045,14 @@ async function reloadMeters(): Promise<void> {
         reconnectCount: 0,
         lastConnectedAt: 0,
         lastEventAt: 0,
+        lastOpenAttemptAt: 0,
+        lastOpenSuccessAt: 0,
         pendingEndTimer: null,
         pendingEndReason: null,
         diagEventCount: 0,
         diagCallbacksSeen: new Set<string>(),
       };
+
       connections.set(serial, state);
     } else {
       const usernameChanged = state.username !== group.config.username;
