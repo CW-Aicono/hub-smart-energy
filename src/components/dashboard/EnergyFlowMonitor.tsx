@@ -1821,21 +1821,21 @@ export function MeterDetailDialog({
         {/* KPI-Kacheln */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
           <div className="rounded-md border p-3">
-            <div className="text-muted-foreground">Ø Leistung</div>
+            <div className="text-muted-foreground">{isSensor ? "Ø Wert" : "Ø Leistung"}</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.avg)} ${rateUnit}` : "–"}
+              {stats ? `${fmtDeNum(stats.avg)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Max</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.max)} ${rateUnit}` : "–"}
+              {stats ? `${fmtDeNum(stats.max)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Min</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.min)} ${rateUnit}` : "–"}
+              {stats ? `${fmtDeNum(stats.min)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
