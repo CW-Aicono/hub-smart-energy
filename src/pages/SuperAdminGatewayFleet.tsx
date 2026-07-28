@@ -859,7 +859,11 @@ const SuperAdminGatewayFleet = () => {
                               <TableCell className="text-xs text-muted-foreground">
                                 {r.heartbeatAgeMs != null ? `vor ${Math.round(r.heartbeatAgeMs / 1000)} s` : "—"}
                               </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {r.lastOpenSuccessAt ? formatDistanceToNow(new Date(r.lastOpenSuccessAt), { addSuffix: true, locale: de }) : "—"}
+                              </TableCell>
                               <TableCell className="text-right tabular-nums">
+
                                 {r.eventsLast24h != null ? (
                                   <span className="inline-flex items-center gap-1">
                                     <Activity className="h-3 w-3 text-muted-foreground" />
