@@ -128,6 +128,75 @@ export function SensorHistoryChart({ meterId, unit, label }: { meterId: string; 
   const titleBase = label?.trim() || "Verlauf";
   const title = displayUnit ? `${titleBase} · ${displayUnit}` : titleBase;
 
+  // Festes Zeitfenster [now - RANGE, now] – nicht dataMin/dataMax.
+  // Verhindert unregelmäßige Achsenbeschriftung bei Sensoren, deren Rohwerte
+  // das Fenster nicht komplett abdecken.
+  const { xDomain, xTicks, coverageHint } = useMemo(() => {
+    const now = Date.now();
+    const windowMs = RANGE_MS[range];
+    const start = now - windowMs;
+    const domain: [number, number] = [start, now];
+
+    // Tick-Schrittweite je Range
+    const ticks: number[] = [];
+    if (range === "24h") {
+      // alle 2 h, ausgerichtet auf volle Berlin-Stunden
+      const stepMs = 2 * 3600_000;
+      // Erste "volle Stunde" ≥ start finden (in Berlin-Zeit)
+      const d = new Date(start);
+      // Auf nächsten vollen 2h-Slot in UTC-Basis ausrichten reicht optisch;
+      // Ausrichtung an :00 Minuten:
+      d.setUTCMinutes(0, 0, 0);
+      let t = d.getTime();
+      while (t < start) t += 3600_000;
+      // Auf gerade Stunde in Berlin ausrichten (grobe Näherung: modulo 2h ab Epoch)
+      while ((t / 3600_000) % 2 !== 0) t += 3600_000;
+      for (; t <= now; t += stepMs) ticks.push(t);
+    } else if (range === "7d") {
+      const stepMs = 12 * 3600_000;
+      const d = new Date(start);
+      d.setUTCMinutes(0, 0, 0);
+      let t = d.getTime();
+      while (t < start) t += 3600_000;
+      while ((t / 3600_000) % 12 !== 0) t += 3600_000;
+      for (; t <= now; t += stepMs) ticks.push(t);
+    } else if (range === "30d") {
+      const stepMs = 3 * 24 * 3600_000;
+      // An Mitternacht Berlin ausrichten (Approximation via UTC+1/2 vermeiden – nutze lokale Tagesgrenze)
+      const d = new Date(start);
+      d.setHours(0, 0, 0, 0);
+      let t = d.getTime();
+      while (t < start) t += 24 * 3600_000;
+      for (; t <= now; t += stepMs) ticks.push(t);
+    } else {
+      // 12m: Monatserster
+      const d = new Date(start);
+      d.setDate(1);
+      d.setHours(0, 0, 0, 0);
+      let cur = d;
+      if (cur.getTime() < start) cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      while (cur.getTime() <= now) {
+        ticks.push(cur.getTime());
+        cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      }
+    }
+
+    // Coverage-Hinweis
+    let hint: string | null = null;
+    if (data.length > 0) {
+      const first = data[0].t as number;
+      const last = data[data.length - 1].t as number;
+      const gapStart = first - start;
+      const gapEnd = now - last;
+      const threshold = windowMs * 0.1;
+      if (gapStart > threshold || gapEnd > threshold) {
+        hint = `Erfassung ab ${fmtBerlin(new Date(first), "full")} · letzter Wert ${fmtBerlin(new Date(last), "full")}`;
+      }
+    }
+
+    return { xDomain: domain, xTicks: ticks, coverageHint: hint };
+  }, [range, data]);
+
   return (
     <Card>
       <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
@@ -146,44 +215,51 @@ export function SensorHistoryChart({ meterId, unit, label }: { meterId: string; 
             Noch keine Verlaufsdaten – die Aufzeichnung startet ab jetzt.
           </div>
         ) : (
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis
-                  dataKey="t"
-                  type="number"
-                  domain={["dataMin", "dataMax"]}
-                  scale="time"
-                  tickFormatter={(t) => fmtBerlin(new Date(t), xTickMode)}
-                  tick={{ fontSize: 11 }}
-                />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  domain={isBool ? [0, 1] : ["auto", "auto"]}
-                  ticks={isBool ? [0, 1] : undefined}
-                  tickFormatter={(v) => isBool
-                    ? (v === 1 ? "Ein" : "Aus")
-                    : v.toLocaleString("de-DE", { maximumFractionDigits: 2 })}
-                />
-                <Tooltip
-                  labelFormatter={(t) => fmtBerlin(new Date(Number(t)), "full")}
-                  formatter={(v: any) => [
-                    isBool ? (Number(v) === 1 ? "Ein" : "Aus") : fmtValue(Number(v), displayUnit),
-                    "Wert",
-                  ]}
-                />
-                <Line
-                  type={isBool ? "stepAfter" : "monotone"}
-                  dataKey="v"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={data}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="t"
+                    type="number"
+                    domain={xDomain}
+                    ticks={xTicks}
+                    scale="time"
+                    tickFormatter={(t) => fmtBerlin(new Date(t), xTickMode)}
+                    tick={{ fontSize: 11 }}
+                    allowDataOverflow
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    domain={isBool ? [0, 1] : ["auto", "auto"]}
+                    ticks={isBool ? [0, 1] : undefined}
+                    tickFormatter={(v) => isBool
+                      ? (v === 1 ? "Ein" : "Aus")
+                      : v.toLocaleString("de-DE", { maximumFractionDigits: 2 })}
+                  />
+                  <Tooltip
+                    labelFormatter={(t) => fmtBerlin(new Date(Number(t)), "full")}
+                    formatter={(v: any) => [
+                      isBool ? (Number(v) === 1 ? "Ein" : "Aus") : fmtValue(Number(v), displayUnit),
+                      "Wert",
+                    ]}
+                  />
+                  <Line
+                    type={isBool ? "stepAfter" : "monotone"}
+                    dataKey="v"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            {coverageHint && (
+              <div className="mt-2 text-xs text-muted-foreground">{coverageHint}</div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
