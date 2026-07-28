@@ -2094,7 +2094,7 @@ export function MeterDetailDialog({
                     <Legend
                       verticalAlign="top"
                       wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
-                      formatter={(v) => (v === "soc" ? "Ladezustand (SOC %)" : `Leistung (${rateUnit})`)}
+                      formatter={(v) => (v === "soc" ? "Ladezustand (SOC %)" : `${rateLabel} (${rateUnit})`)}
                     />
                   )}
                   <Area
