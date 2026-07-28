@@ -1416,16 +1416,30 @@ export function MeterDetailDialog({
     return !meteringUnits.has(u);
   })();
 
-  const { rateUnit, energyUnit } = (() => {
+  const { rateUnit, energyUnit, kind } = (() => {
     // Sensoren (V, °C, %, A, Hz, hPa, lx, ppm, …): keine Leistungs-/Energie-Logik, keine /h-Suffixe.
     if (isSensor) {
       const s = displayUnit || "";
-      return { rateUnit: s, energyUnit: s };
+      return { rateUnit: s, energyUnit: s, kind: "sensor" as const };
     }
     const u = meterUnitRaw;
     const ul = u.toLowerCase();
-    if (u === "m³" || u === "m3" || u === "m³/h") return { rateUnit: "m³/h", energyUnit: "m³" };
-    if (ul === "l" || ul === "liter" || u === "l/min") return { rateUnit: "l/h", energyUnit: "l" };
+    if (u === "m³" || u === "m3" || u === "m³/h") return { rateUnit: "m³/h", energyUnit: "m³", kind: "volume" as const };
+    if (ul === "l" || ul === "liter" || u === "l/min" || u === "l/h") return { rateUnit: "l/h", energyUnit: "l", kind: "volume" as const };
+
+    // Mass units: rate has "/h" suffix, energy is the base mass unit.
+    const massToRate: Record<string, { rateUnit: string; energyUnit: string }> = {
+      mg: { rateUnit: "mg/h", energyUnit: "mg" },
+      g:  { rateUnit: "g/h",  energyUnit: "g"  },
+      kg: { rateUnit: "kg/h", energyUnit: "kg" },
+      t:  { rateUnit: "t/h",  energyUnit: "t"  },
+      "mg/h": { rateUnit: "mg/h", energyUnit: "mg" },
+      "g/h":  { rateUnit: "g/h",  energyUnit: "g"  },
+      "kg/h": { rateUnit: "kg/h", energyUnit: "kg" },
+      "t/h":  { rateUnit: "t/h",  energyUnit: "t"  },
+      "t/a":  { rateUnit: "t/a",  energyUnit: "t"  },
+    };
+    if (massToRate[ul]) return { ...massToRate[ul], kind: "mass" as const };
 
     // Power units: rate stays as-is, energy is the matching "hour" unit.
     const powerToEnergy: Record<string, { rateUnit: string; energyUnit: string }> = {
@@ -1440,17 +1454,27 @@ export function MeterDetailDialog({
       kvar: { rateUnit: "kvar", energyUnit: "kvarh" },
       mvar: { rateUnit: "Mvar", energyUnit: "Mvarh" },
     };
-    if (powerToEnergy[ul]) return powerToEnergy[ul];
+    if (powerToEnergy[ul]) return { ...powerToEnergy[ul], kind: "power" as const };
 
     if (!u || /wh$/i.test(u)) {
       // Fallback when unit is missing/generic: use energy_type to avoid kW on water/gas meters.
-      if (meterEnergyType === "wasser") return { rateUnit: "m³/h", energyUnit: "m³" };
-      if (meterEnergyType === "gas") return { rateUnit: "m³/h", energyUnit: "m³" };
-      return { rateUnit: "kW", energyUnit: "kWh" };
+      if (meterEnergyType === "wasser") return { rateUnit: "m³/h", energyUnit: "m³", kind: "volume" as const };
+      if (meterEnergyType === "gas") return { rateUnit: "m³/h", energyUnit: "m³", kind: "volume" as const };
+      return { rateUnit: "kW", energyUnit: "kWh", kind: "power" as const };
     }
     // Unbekannte Einheit: konservativ 1:1 übernehmen, statt "/h" zu erfinden.
-    return { rateUnit: u, energyUnit: u };
+    return { rateUnit: u, energyUnit: u, kind: "generic" as const };
   })();
+
+  const rateLabel = kind === "volume" ? "Durchfluss"
+    : kind === "mass" ? "Massenstrom"
+    : kind === "generic" ? "Rate"
+    : "Leistung";
+  const sumLabel = kind === "volume" ? "Volumen"
+    : kind === "mass" ? "Masse"
+    : kind === "generic" ? "Summe"
+    : "Energie";
+
 
 
   const { data: latestSensor } = useQuery({
@@ -1902,7 +1926,7 @@ export function MeterDetailDialog({
         {/* KPI-Kacheln */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
           <div className="rounded-md border p-3">
-            <div className="text-muted-foreground">{isSensor ? "Ø Wert" : "Ø Leistung"}</div>
+            <div className="text-muted-foreground">{isSensor ? "Ø Wert" : `Ø ${rateLabel}`}</div>
             <div className="text-base font-semibold tabular-nums">
               {displayStats ? `${fmtDeNum(displayStats.avg)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
@@ -1921,8 +1945,9 @@ export function MeterDetailDialog({
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">
-              {isSensor ? "Momentanwert" : `Energie${stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}`}
+              {isSensor ? "Momentanwert" : `${sumLabel}${stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}`}
             </div>
+
             <div className="text-base font-semibold tabular-nums">
               {isSensor
                 ? (effectiveSensorLatest?.value != null
@@ -1952,7 +1977,7 @@ export function MeterDetailDialog({
         <div>
           <div className="mb-1 flex items-center justify-between gap-2">
             <div className="text-sm font-medium">
-              Leistungsverlauf{showSocAxis ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
+              {rateLabel}verlauf{showSocAxis ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
             </div>
             {!hasSoc && showSocAxis && (
               <Badge variant="outline" className="text-[10px] text-muted-foreground">
@@ -1999,7 +2024,7 @@ export function MeterDetailDialog({
                     tickFormatter={(v) => v.toLocaleString("de-DE")}
                     width={70}
                   >
-                    <AxisLabel value={`Leistung (${rateUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
+                    <AxisLabel value={`${rateLabel} (${rateUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
                   {showSocAxis && (
                     <YAxis
@@ -2052,7 +2077,7 @@ export function MeterDetailDialog({
                           {kw != null && (
                             <div className="flex items-center gap-2">
                               <span className="inline-block h-2 w-2 rounded-sm" style={{ background: node.color }} />
-                              <span>Leistung: <span className="font-medium tabular-nums">{fmtDeNum(Number(kw))} {rateUnit}</span></span>
+                              <span>{rateLabel}: <span className="font-medium tabular-nums">{fmtDeNum(Number(kw))} {rateUnit}</span></span>
                             </div>
                           )}
                           {soc != null && (
@@ -2069,7 +2094,7 @@ export function MeterDetailDialog({
                     <Legend
                       verticalAlign="top"
                       wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
-                      formatter={(v) => (v === "soc" ? "Ladezustand (SOC %)" : `Leistung (${rateUnit})`)}
+                      formatter={(v) => (v === "soc" ? "Ladezustand (SOC %)" : `${rateLabel} (${rateUnit})`)}
                     />
                   )}
                   <Area
@@ -2110,7 +2135,7 @@ export function MeterDetailDialog({
 
           <div>
             <div className="text-sm font-medium mb-1">
-              Energie pro {range === "1h" ? "5 Min" : range === "24h" ? "Stunde" : range === "7d" ? "6 h" : "Tag"}
+              {sumLabel} pro {range === "1h" ? "5 Min" : range === "24h" ? "Stunde" : range === "7d" ? "6 h" : "Tag"}
             </div>
             <div className="h-[240px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -2142,7 +2167,7 @@ export function MeterDetailDialog({
                     ]}
                     width={70}
                   >
-                    <AxisLabel value={`Energie (${energyUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
+                    <AxisLabel value={`${sumLabel} (${energyUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
                   {stats?.bidirectional && <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />}
                   <RTooltip

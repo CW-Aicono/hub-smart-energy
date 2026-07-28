@@ -1,60 +1,91 @@
-## Ziel
+# Einheiten-Konsistenz für Zähler-, Sensor- und Aktor-Detailansichten
 
-Einheiten-Auswahl im Gerätedialog übersichtlicher machen und Gewichtseinheiten (für CO₂-Bilanzen etc.) ergänzen.
+## Problem
 
-## Vorschlag: Zwei gekoppelte Dropdowns
+Im `MeterDetailDialog` (Detail-Popup aus dem `EnergyFlowMonitor`, z. B. beim Klick auf eine Kachel wie „CO2 Ersparnis") stimmt die angezeigte Einheit nicht mit der konfigurierten Quell-Einheit des Zählers/Sensors überein:
 
-Statt einer langen gruppierten Liste zwei Dropdowns nebeneinander:
+- Für Gewicht/Masse (`mg`, `g`, `kg`, `t`, `kg/h`, `t/h`, `t/a`) gibt es keine Regel → es wird entweder generisch `kWh`/`kW` (Fallback) oder die Rohbezeichnung ohne Rate-Ableitung ausgegeben.
+- Die KPI-Kachel „Energie" heißt weiterhin „Energie" und zeigt `kWh`, auch wenn die Datenquelle Masse liefert.
+- Chart-Achsen und Tooltips zeigen „Leistung (kW)" / „Energie (kWh)" statt der medien­spezifischen Bezeichnung.
 
-1. **Kategorie** (Pflicht, klein) — Leistung/Energie, Temperatur, Feuchte/Anteil, Druck, Helligkeit, Strom/Spannung, Durchfluss/Volumen, **Gewicht/Masse (neu)**, Zeit, Zähler/Sonstiges
-2. **Einheit** (gefiltert nach Kategorie) — z. B. bei „Gewicht": `g`, `kg`, `t`, `mg`; bei „Gewicht pro Zeit" optional `kg/h`
+Zusätzlich fehlt bei nicht-elektrischen Medien (Wasser, Gas, Masse) eine einheitliche Umbenennung der Labels („Leistung" → „Durchfluss" bzw. „Massenstrom", „Energie" → „Volumen" bzw. „Masse").
 
-### Warum zwei Dropdowns statt Alternativen
+## Umfang
 
-- **Searchable Combobox** (Alternative): schneller für Power-User, aber für Laien-Admins schlechter — sie wissen oft nicht, ob die Einheit „Wh" oder „kWh" heißt. Kategorie-first führt sie hin.
-- **Zwei Dropdowns** matchen zudem gut zur bestehenden `SOURCE_UNIT_GROUPS`-Struktur → minimaler Refactor.
+Nur Frontend/Presentation. Keine DB-Migration, keine Änderung an Aggregations-Pipelines.
 
-Empfehlung: **zwei Dropdowns**. Bei nur einer Einheit pro Kategorie (z. B. Helligkeit → lx) wird das zweite Dropdown automatisch vorbelegt, bleibt aber sichtbar zur Klarheit.
+Betroffene Datei primär:
+- `src/components/dashboard/EnergyFlowMonitor.tsx` (Funktion `MeterDetailDialog`, ab Zeile ~1374).
 
-## Neue Kategorie „Gewicht / Masse"
+Kurzer Cross-Check (nur lesend, ggf. Angleichung):
+- `EnergyGaugeWidget.tsx`, `CustomWidget.tsx`, `ForecastWidget.tsx`, `PieChartWidget.tsx`, `EnergyChart.tsx` → alle nutzen bereits `powerUnitForMeter` / `energyUnitForMeter` bzw. `formatEnergyByType`. Wenn dort für Masse noch Lücken bestehen, werden diese durch die Erweiterung von `src/lib/meterUnits.ts` mitgezogen.
 
+## Neue Einheiten-Ableitung
 
-| value | label           |
-| ----- | --------------- |
-| `g`   | g (Gramm)       |
-| `kg`  | kg (Kilogramm)  |
-| `t`   | t (Tonne)       |
-| `mg`  | mg (Milligramm) |
+Zentrale Ableitung in `MeterDetailDialog` (und `src/lib/meterUnits.ts`) wird um Masse ergänzt und um ein Medium/Kind-Konzept erweitert:
 
+```text
+Quell-Einheit    →  rateUnit   energyUnit   kind
+kW / W / MW      →  kW / …     kWh / …      power
+kWh / Wh / MWh   →  kW / …     kWh / …      power
+m³ / m³/h        →  m³/h       m³           volume
+l  / l/min       →  l/h        l            volume
+kg / kg/h        →  kg/h       kg           mass
+g                →  g/h        g            mass
+t  / t/h / t/a   →  t/h        t            mass
+°C / %H / V / A  →  = unit     = unit       sensor
+bool             →  Ein/Aus    Ein/Aus      boolean
+sonst            →  = unit     = unit       generic
+```
 
-Für Raten (falls später gebraucht): `kg/h`, `t/a` — vorerst nicht, um Scope klein zu halten.
+Label-Mapping (nur DE, deutsche Zahlenformate bleiben):
 
-`deriveEnergyUnit()` erweitern: bei Gewichtseinheiten liefert der kumulative Zählerwert dieselbe Einheit zurück (analog zu °C/%).
+```text
+kind      Rate-Label     Sum-Label
+power     Leistung       Energie
+volume    Durchfluss     Volumen
+mass      Massenstrom    Masse
+sensor    Wert           Ø-Wert (Statistik)
+boolean   Zustand        Betriebszeit (falls sinnvoll, sonst „–")
+generic   Rate           Summe
+```
 
-CO₂-spezifische Etiketten (`kg CO₂`, `t CO₂/a`) werden **nicht** als eigene Einheiten geführt — CO₂ ist ein Kontext des Zählers/Sensors, nicht der physikalischen Einheit. Der Anzeigename des Geräts („CO2 Ersparnis") liefert den Kontext, die Einheit bleibt `kg`/`t`.
+## Änderungen in `MeterDetailDialog`
 
-## Umsetzung (Frontend-only)
+1. Neuen `kind`-Wert mit ableiten (im gleichen IIFE wie `rateUnit`/`energyUnit`).
+2. KPI-Kacheln (Zeilen ~1905–1935):
+   - „Ø Leistung" → dynamisch aus `kind`.
+   - „Energie" → dynamisch aus `kind`.
+3. Chart-Blöcke:
+   - „Leistungsverlauf" Titel → `${rateLabel}verlauf`.
+   - Y-Achsenbeschriftung `Leistung (${rateUnit})` → `${rateLabel} (${rateUnit})`.
+   - Tooltip `Leistung:` → `${rateLabel}:`.
+   - „Energie pro Stunde" Titel + Achse → `${sumLabel} pro Stunde`, `${sumLabel} (${energyUnit})`.
+4. Fallbacks:
+   - Wenn `meterEnergyType` = `wasser`/`gas` → kind=`volume`.
+   - Wenn `nodeMeter` fehlt → aktuelles Verhalten (`kW`/`kWh`) beibehalten.
 
-1. `**src/lib/sensorUnits.ts**`
-  - Kategorie „Gewicht / Masse" mit obigen Einträgen ergänzen.
-  - Helper `getUnitCategory(value)` und `getUnitsForCategory(categoryLabel)` exportieren.
-  - `deriveEnergyUnit`: Passthrough für Gewichts- und weitere Nicht-Energie-Einheiten (schon default vorhanden, nur verifizieren).
-2. **Neue Komponente `src/components/locations/SourceUnitPicker.tsx**`
-  - Props: `value: string`, `onChange(value: string)`.
-  - Innen: lokaler `category`-State (aus `value` abgeleitet), zwei `Select`-Komponenten nebeneinander (responsive: gestapelt auf schmalen Dialogen).
-  - Änderung der Kategorie → erste Einheit der Kategorie automatisch setzen.
-3. **Ersetzen der bestehenden Einheiten-Selects** in
-  - `EditMeterDialog.tsx`
-  - `AddMeterDialog.tsx`
-  - `BulkEditMetersDialog.tsx`
-   jeweils durch `<SourceUnitPicker />`. Helper-/Beschreibungstexte bleiben unverändert.
+## Zentralisierung (klein)
 
-## Nicht enthalten (Nachfrage bei Bedarf)
+In `src/lib/meterUnits.ts` neue Helper hinzufügen, damit auch andere Widgets konsistent bleiben:
 
-- Umrechnungen zwischen Einheiten derselben Kategorie (kg ↔ t)
-- CO₂-spezifische Widgets/Reports
-- Automatische Kategorie-Vorschläge aus dem Gerätenamen
+```ts
+export type MeterKind = "power" | "volume" | "mass" | "sensor" | "boolean" | "generic";
+export function meterKindFor(m?: MeterLike | null): MeterKind
+export function labelsFor(kind: MeterKind): { rate: string; sum: string }
+```
 
-Soll ich so umsetzen, oder Gewicht/Masse-Set anders schneiden (z. B. `kg/h`, `t/a` gleich mit rein)?  
-  
-Antwort: `kg/h`, `t/a` und weitere bitte gleich mit rein, dann ist das fertig
+`powerUnitForMeter` wird um die Masse-Einträge (`kg`, `t`, `kg/h`, `t/h`, `t/a`, `g`) ergänzt (bisher fallen sie in den „unbekannt → so belassen"-Zweig, was für Rate falsche Ausgaben liefert).
+
+## Was nicht geändert wird
+
+- Keine Anpassung der Datenpipelines, Aggregationen oder Speicherung.
+- Keine Umrechnung zwischen Massen-Einheiten (z. B. `g` → `kg`).
+- Keine Änderung an CO2-Faktoren oder ihrer Speicherung.
+- Keine neuen Übersetzungsschlüssel; DE-only Labels wie bisher.
+
+## Verifikation
+
+- Manuell für je einen Zähler pro `kind` prüfen: Strom (kW), Gas/Wasser (m³/h), Masse (kg/h und t/h), Sensor (°C, V), Aktor (bool).
+- Screenshot des CO2-Ersparnis-Dialogs vorher/nachher.
+- `tsgo` läuft automatisch nach dem Edit.
