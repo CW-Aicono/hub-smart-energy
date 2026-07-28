@@ -1428,9 +1428,14 @@ async function main() {
     }
   }, SESSION_HEARTBEAT_MS);
 
+  // Stuck-Slot-Reset (Phase 7.8): erkennt prozessintern hängende Slots
+  setInterval(stuckSlotTick, WATCHDOG_CHECK_MS);
+  log("info", `[StuckSlot] aktiv: prüft alle ${WATCHDOG_CHECK_MS / 1000}s, Schwelle ${NO_OPEN_TIMEOUT_MIN}min`);
+
   // Watchdog (Phase 3): forciert Reconnect bei "toten" Verbindungen
   setInterval(watchdogTick, WATCHDOG_CHECK_MS);
   log("info", `[Watchdog] aktiv: prüft alle ${WATCHDOG_CHECK_MS / 1000}s, Schwelle ${WATCHDOG_STALE_MS / 1000}s`);
+
 
   // Keep-Alive (Phase 4): hält NAT offen & validiert Socket/Token
   if (KEEPALIVE_INTERVAL_MS > 0) {
