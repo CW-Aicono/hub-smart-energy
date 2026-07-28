@@ -39,6 +39,8 @@
  *   WATCHDOG_CHECK_MS   (Phase 3) Prüfintervall des Watchdogs (Standard: 30000 = 30 s)
  *   KEEPALIVE_INTERVAL_MS (Phase 4) Loxone Keep-Alive Ping (Standard: 60000 = 60 s,
  *                       0 = aus). Hält NAT/Firewall offen & validiert Socket+Token.
+ *   NO_OPEN_TIMEOUT_MIN (Phase 7.8) Minuten ohne erfolgreichen ws-open, bevor ein
+ *                       hängender Slot komplett zurückgesetzt wird (Standard: 15).
  */
 
 import os from "os";
