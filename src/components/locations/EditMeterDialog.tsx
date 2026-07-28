@@ -561,19 +561,8 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               {selectedIntegration && (
                 <div className="space-y-3 pt-2 border-t">
                   <p className="text-xs font-medium text-muted-foreground">Einheit des Gateways</p>
-                  <Select value={sourceUnit} onValueChange={setSourceUnit}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {SOURCE_UNIT_GROUPS.map((group) => (
-                        <SelectGroup key={group.label}>
-                          <SelectLabel>{group.label}</SelectLabel>
-                          {group.options.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                          ))}
-                        </SelectGroup>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SourceUnitPicker value={sourceUnit} onChange={setSourceUnit} compact />
+
                   <p className="text-xs text-muted-foreground">Welche Einheit liefert Ihr Gateway für dieses Gerät? Bei Loxone in der Loxone Config unter den Ausgängen des Zählers sichtbar; bei Sensoren (z. B. Shelly H&T) z. B. °C für Temperatur oder % für Luftfeuchte.</p>
                 </div>
               )}
