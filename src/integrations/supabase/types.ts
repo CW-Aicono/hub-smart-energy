@@ -14443,6 +14443,16 @@ export type Database = {
         Returns: string
       }
       evaluate_monitoring_rules: { Args: never; Returns: number }
+      find_duplicate_meters: {
+        Args: never
+        Returns: {
+          duplicate_count: number
+          location_integration_id: string
+          meter_ids: string[]
+          sensor_uuid_key: string
+          tenant_id: string
+        }[]
+      }
       get_auth_user_email: { Args: never; Returns: string }
       get_charge_point_daily_uptime: {
         Args: { p_charge_point_id: string; p_days?: number }
@@ -14660,6 +14670,14 @@ export type Database = {
           meter_id: string
           reading_at: string
         }[]
+      }
+      merge_duplicate_meter: {
+        Args: {
+          _actor_user_id?: string
+          _duplicate_id: string
+          _master_id: string
+        }
+        Returns: Json
       }
       next_adhoc_invoice_number: {
         Args: { _tenant_id: string }

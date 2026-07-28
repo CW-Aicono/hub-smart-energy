@@ -89,6 +89,24 @@ export function useMeters(locationId?: string) {
       meter_function: meterFunction || "consumption",
     };
 
+    // Pre-check: prevent duplicate meter for the same sensor on the same integration.
+    // The database also enforces this with a unique partial index, but the pre-check
+    // gives a clean UX (toast instead of a raw 23505 error).
+    if (meter.sensor_uuid && meter.location_integration_id) {
+      const { data: existing } = await supabase
+        .from("meters")
+        .select("id, name")
+        .eq("tenant_id", tenantId)
+        .eq("location_integration_id", meter.location_integration_id)
+        .ilike("sensor_uuid", meter.sensor_uuid)
+        .eq("is_archived", false)
+        .limit(1);
+      if (existing && existing.length > 0) {
+        toast.error(`Zähler „${existing[0].name}" existiert bereits für diesen Sensor.`);
+        return;
+      }
+    }
+
     const { data: inserted, error } = await supabase
       .from("meters")
       .insert({ ...insertData, tenant_id: tenantId } satisfies MeterInsertDB)
@@ -96,7 +114,12 @@ export function useMeters(locationId?: string) {
       .single();
 
     if (error) {
-      toast.error(getT()("meter.errorCreate"));
+      // Postgres unique_violation → duplicate already exists (race with another tab/click)
+      if ((error as any).code === "23505") {
+        toast.error("Zähler für diesen Sensor existiert bereits.");
+      } else {
+        toast.error(getT()("meter.errorCreate"));
+      }
       console.error(error);
     } else {
       if (virtualSources && virtualSources.length > 0 && inserted?.id) {
