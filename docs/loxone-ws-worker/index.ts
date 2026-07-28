@@ -845,34 +845,31 @@ function stuckSlotTick(): void {
 
   for (const state of connections.values()) {
     if (state.authenticated) continue; // verbundene Slots sind OK
-    if (state.reconnecting) continue; // wird bereits neu verbunden
-    if (!state.lastOpenAttemptAt) continue; // noch nie versucht
     // Wenn es jemals einen erfolgreichen open gab und der nicht zu lange her ist: OK
     if (state.lastOpenSuccessAt > 0 && now - state.lastOpenSuccessAt < NO_OPEN_TIMEOUT_MS) continue;
 
-    const lastAttemptAge = now - state.lastOpenAttemptAt;
-    if (lastAttemptAge >= NO_OPEN_TIMEOUT_MS) {
-      log("warn", `[StuckSlot] ${state.serialNumber} kein ws-open seit ${NO_OPEN_TIMEOUT_MIN}min bei gesunden Peers → Slot-Reset`);
-      bridgeLog("warn", "stuck_slot_reset", `Kein ws-open seit ${NO_OPEN_TIMEOUT_MIN}min, Slot-Reset`, state.serialNumber, {
-        no_open_minutes: NO_OPEN_TIMEOUT_MIN,
-        last_attempt_age_ms: lastAttemptAge,
-      });
-      // Slot komplett zerstören: DNS-Cache, WS-Handle, Auth-State, Backoff
-      dnsCache.delete(state.serialNumber);
-      try { state.ws?.close(); } catch { /* ignore */ }
-      state.ws = null;
-      state.authenticated = false;
-      state.reconnecting = false;
-      state.reconnectDelay = 1000;
-      state.lastOpenAttemptAt = 0;
-      if (state.sessionId) {
-        sessionEnd(state, "stuck-slot-reset");
-      }
-      // 60s Cooldown, dann frischer Verbindungsaufbau
-      scheduleReconnect(state, "stuck-slot-reset");
+    const lastAttemptAge = state.lastOpenAttemptAt ? now - state.lastOpenAttemptAt : Number.MAX_SAFE_INTEGER;
+    log("warn", `[StuckSlot] ${state.serialNumber} kein ws-open seit ${NO_OPEN_TIMEOUT_MIN}min bei gesunden Peers (letzter Versuch vor ${Math.round(lastAttemptAge / 1000)}s) → Slot-Reset`);
+    bridgeLog("warn", "stuck_slot_reset", `Kein ws-open seit ${NO_OPEN_TIMEOUT_MIN}min, Slot-Reset`, state.serialNumber, {
+      no_open_minutes: NO_OPEN_TIMEOUT_MIN,
+      last_attempt_age_ms: lastAttemptAge,
+    });
+    // Slot komplett zerstören: DNS-Cache, WS-Handle, Auth-State, Backoff
+    dnsCache.delete(state.serialNumber);
+    try { state.ws?.close(); } catch { /* ignore */ }
+    state.ws = null;
+    state.authenticated = false;
+    state.reconnecting = false;
+    state.reconnectDelay = 1000;
+    state.lastOpenAttemptAt = 0;
+    if (state.sessionId) {
+      sessionEnd(state, "stuck-slot-reset");
     }
+    // 60s Cooldown, dann frischer Verbindungsaufbau
+    scheduleReconnect(state, "stuck-slot-reset");
   }
 }
+
 
 // ─── Watchdog (Phase 3) ──────────────────────────────────────────────────────
 // Erkennt "tote" WebSockets, bei denen lxcommunicator zwar noch verbunden ist,
