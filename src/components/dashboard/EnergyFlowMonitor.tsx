@@ -1649,6 +1649,35 @@ export function MeterDetailDialog({
         if (data.length < to - offset + 1) break;
       }
 
+      // Fallback: falls beide Power-Tabellen leer sind, aus sensor_readings_raw
+      // rekonstruieren (Gateway-Meter, deren Werte nur dort landen).
+      if (map.size === 0) {
+        const srcUnit = String((nodeMeter as any)?.source_unit_power || "").toLowerCase();
+        let scale: number | null = null;
+        if (srcUnit === "w") scale = 1 / 1000;
+        else if (srcUnit === "kw") scale = 1;
+        else if (srcUnit === "mw") scale = 1000;
+        if (scale != null) {
+          for (let offset = 0; offset < rawLimit; offset += pageSize) {
+            const to = Math.min(offset + pageSize, rawLimit) - 1;
+            const { data, error } = await supabase
+              .from("sensor_readings_raw")
+              .select("recorded_at, value")
+              .eq("meter_id", node.meter_id)
+              .gte("recorded_at", since)
+              .order("recorded_at", { ascending: true })
+              .range(offset, to);
+            if (error || !data || data.length === 0) break;
+            for (const row of data as any[]) {
+              const v = Number(row.value);
+              if (!Number.isFinite(v)) continue;
+              put(new Date(row.recorded_at).getTime(), v * scale!, 3);
+            }
+            if (data.length < to - offset + 1) break;
+          }
+        }
+      }
+
       return Array.from(map.entries())
         .sort((a, b) => a[0] - b[0])
         .map(([t, v]) => ({ t, kw: v.sum / v.count }));
