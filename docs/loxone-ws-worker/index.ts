@@ -73,7 +73,7 @@ const SESSION_HEARTBEAT_MS = Math.max(
 );
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.7-error-attribution";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.8-stuck-slot-reset";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -83,10 +83,15 @@ const KEEPALIVE_INTERVAL_MS = Math.max(
   300000,
   parseInt(process.env.KEEPALIVE_INTERVAL_MS || "300000", 10),
 );
+// Phase 7.8: Stuck-Slot-Reset — zerstört einen Slot, der über N Minuten keinen
+// erfolgreichen ws-open hatte, während andere Serials im selben Worker gesund laufen.
+const NO_OPEN_TIMEOUT_MIN = Math.max(1, parseInt(process.env.NO_OPEN_TIMEOUT_MIN || "15", 10));
+const NO_OPEN_TIMEOUT_MS = NO_OPEN_TIMEOUT_MIN * 60 * 1000;
 // Phase 6: Reconnects unter dieser Schwelle behalten die alte session_id (kein neuer Log-Eintrag)
 const SESSION_REUSE_WINDOW_MS = parseInt(process.env.SESSION_REUSE_WINDOW_MS || "60000", 10);
 // Phase 6: bridge_event_log nur ab dieser Severity in DB schreiben
 const BRIDGE_LOG_DB_MIN_SEVERITY = (process.env.BRIDGE_LOG_DB_MIN_SEVERITY || "warn") as "debug" | "info" | "warn" | "error";
+
 
 if (!SUPABASE_URL || !GATEWAY_API_KEY) {
   console.error("[FATAL] SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein");
