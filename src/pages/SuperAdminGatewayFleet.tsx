@@ -121,11 +121,13 @@ interface UnifiedRow {
   sessionsLast24h: number | null;
   worker: string | null;
   lastDisconnect: string | null;
+  lastOpenSuccessAt: string | null;
   serials: string[];
   device?: FleetDevice;
   loxone?: LoxoneDetails;
   isSeamlessRecycle?: boolean;
 }
+
 
 
 const LOOKBACK_MS = 24 * 60 * 60 * 1000;
@@ -277,6 +279,7 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
       sessionsLast24h,
       worker: current?.worker_host ?? null,
       lastDisconnect: current?.disconnect_reason ?? (current && !current.ended_at ? null : "unbekannt"),
+      lastOpenSuccessAt: current?.started_at ?? null,
       serials: info?.serials ?? [],
       loxone: current ? {
         integrationId: intId,
@@ -290,6 +293,7 @@ async function fetchLoxoneRows(): Promise<UnifiedRow[]> {
         serials: info?.serials ?? [],
       } : undefined,
     });
+
 
   }
   return result;
@@ -342,12 +346,14 @@ function aiconoToUnifiedRow(
     sessionsLast24h: stats?.sessions_24h ?? null,
     worker: null,
     lastDisconnect,
+    lastOpenSuccessAt: null,
     serials: [],
     device: d,
     // Derived flag used by the UI to show a seamless-recycle hint.
     isSeamlessRecycle: connectedAge !== null && hbAge !== null && connectedAge < hbAge,
   };
 }
+
 
 
 function UnifiedStatusBadge({ status, label }: { status: UnifiedRow["status"]; label: string }) {
@@ -572,7 +578,7 @@ const SuperAdminGatewayFleet = () => {
       })
     : filteredRowsPre;
 
-  const { sorted: filteredRows, sort: fleetSort, toggle: toggleFleetSort } = useSortableData<any, "tenant" | "location" | "type" | "status" | "connected" | "heartbeat" | "events" | "reconnects" | "uptime" | "sessions" | "worker">(
+  const { sorted: filteredRows, sort: fleetSort, toggle: toggleFleetSort } = useSortableData<any, "tenant" | "location" | "type" | "status" | "connected" | "heartbeat" | "lastOpen" | "events" | "reconnects" | "uptime" | "sessions" | "worker">(
     filteredRowsSearched,
     (r, k) => {
       switch (k) {
@@ -582,6 +588,7 @@ const SuperAdminGatewayFleet = () => {
         case "status": return r.statusLabel ?? r.status ?? "";
         case "connected": return r.connectedSince ? new Date(r.connectedSince) : null;
         case "heartbeat": return r.heartbeatAgeMs ?? Number.MAX_SAFE_INTEGER;
+        case "lastOpen": return r.lastOpenSuccessAt ? new Date(r.lastOpenSuccessAt) : null;
         case "events": return r.eventsLast24h ?? -1;
         case "reconnects": return r.reconnectsLast24h ?? -1;
         case "uptime": return r.uptimeRatio24h ?? -1;
@@ -592,6 +599,7 @@ const SuperAdminGatewayFleet = () => {
     },
     { key: "tenant", direction: "asc" },
   );
+
 
   const { data: channels = [], refetch: refetchChannels } = useQuery({
     queryKey: ["sa-gateway-channels"],
@@ -790,17 +798,19 @@ const SuperAdminGatewayFleet = () => {
                         <SortableHead sortKey="status" sort={fleetSort} onToggle={toggleFleetSort}>Status</SortableHead>
                         <SortableHead sortKey="connected" sort={fleetSort} onToggle={toggleFleetSort}>Verbunden seit</SortableHead>
                         <SortableHead sortKey="heartbeat" sort={fleetSort} onToggle={toggleFleetSort}>Letzter Heartbeat</SortableHead>
+                        <SortableHead sortKey="lastOpen" sort={fleetSort} onToggle={toggleFleetSort}>Letzter WS-Open</SortableHead>
                         <SortableHead sortKey="events" sort={fleetSort} onToggle={toggleFleetSort} align="right">Events 24 h</SortableHead>
                         <SortableHead sortKey="reconnects" sort={fleetSort} onToggle={toggleFleetSort} align="right">Reconnects 24 h</SortableHead>
                         <SortableHead sortKey="uptime" sort={fleetSort} onToggle={toggleFleetSort} align="right">Uptime 24 h</SortableHead>
                         <SortableHead sortKey="sessions" sort={fleetSort} onToggle={toggleFleetSort} align="right">Sitzungen 24 h</SortableHead>
                         <SortableHead sortKey="worker" sort={fleetSort} onToggle={toggleFleetSort}>Worker</SortableHead>
                         <TableHead>Letzter Disconnect</TableHead>
+
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredRows.length === 0 && (
-                        <TableRow><TableCell colSpan={13} className="text-center text-sm text-muted-foreground py-8">Keine Gateways registriert.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={14} className="text-center text-sm text-muted-foreground py-8">Keine Gateways registriert.</TableCell></TableRow>
                       )}
                       {filteredRows.map((r) => {
                         const d = r.device;
@@ -849,7 +859,11 @@ const SuperAdminGatewayFleet = () => {
                               <TableCell className="text-xs text-muted-foreground">
                                 {r.heartbeatAgeMs != null ? `vor ${Math.round(r.heartbeatAgeMs / 1000)} s` : "—"}
                               </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {r.lastOpenSuccessAt ? formatDistanceToNow(new Date(r.lastOpenSuccessAt), { addSuffix: true, locale: de }) : "—"}
+                              </TableCell>
                               <TableCell className="text-right tabular-nums">
+
                                 {r.eventsLast24h != null ? (
                                   <span className="inline-flex items-center gap-1">
                                     <Activity className="h-3 w-3 text-muted-foreground" />
@@ -879,7 +893,8 @@ const SuperAdminGatewayFleet = () => {
                             {isOpen && d && (
                               <TableRow className="bg-muted/30 hover:bg-muted/30">
                                 <TableCell></TableCell>
-                                <TableCell colSpan={12} className="py-4">
+                                <TableCell colSpan={13} className="py-4">
+
                                   <div className="space-y-4">
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
                                       <div><div className="text-muted-foreground">Gateway-Name</div><div className="font-medium">{d.device_name}</div></div>
@@ -936,7 +951,8 @@ const SuperAdminGatewayFleet = () => {
                             {isOpen && !d && lx && (
                               <TableRow className="bg-muted/30 hover:bg-muted/30">
                                 <TableCell></TableCell>
-                                <TableCell colSpan={12} className="py-4">
+                                <TableCell colSpan={13} className="py-4">
+
                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
                                     <div><div className="text-muted-foreground">Gateway-Typ</div><div className="font-medium">Loxone Miniserver</div></div>
                                     <div>

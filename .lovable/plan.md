@@ -1,54 +1,45 @@
-# Plan: WS-Default & Auto-Verknüpfung für neue Miniserver
+## Diagnose bestätigt — H3 (Prozess-interner DNS-/State-Cache)
 
-## Ziel
-Neue Loxone-Miniserver sollen ab sofort automatisch:
-1. WebSocket-Verbindung als Default-Modus nutzen (statt HTTP-Poll).
-2. Beim ersten erfolgreichen Kontakt einen Eintrag in `bridge_miniserver_links` erhalten (inkl. `tenant_id`, `location_id`, `serial_number`).
+**Beweise aus deinen Logs:**
+- H1 raus: Beide Container haben dieselbe Outbound-IP `91.99.170.143` → keine Loxone-seitige IP-Sperre.
+- H3 bestätigt: `docker restart loxone-ws-worker-live` → **sofort** WS aktiv, RAW-Events fließen für `504F94A2BAA2`.
+- Root Cause: Der Node-Prozess des Live-Workers hatte für Rathaus einen negativen DNS-/Cloud-Lookup-Zustand gecacht (vermutlich seit dem Ausfall bei der Firmware-Aktualisierung). Da Node den DNS-Resolver-State prozesslebenslang mitschleppt und der Worker keinen eigenen Recovery-Reset kennt, blieb Rathaus permanent auf der schlechten Route hängen, obwohl Loxone Cloud längst wieder korrekt antwortete.
 
-## Ausgangslage (verifiziert)
-- Spalte `location_integrations.loxone_remote_connect_ws_enabled` existiert, **Default = FALSE** (Migration 20260618). Neue Integrationen laufen daher standardmäßig im HTTP-Poll-Modus.
-- Im `EditIntegrationDialog` gibt es bereits einen Toggle (setzt manuell true/false).
-- `bridge_miniserver_links` wird aktuell weder vom `loxone-ws-worker` noch von `loxone-api` beim ersten Kontakt automatisch angelegt — die Einträge stammen aus Seeds/Migrationen bzw. wurden manuell nachgetragen (siehe letzte Migration für AICONO Zentrale, Jugendzentrum, Testkoffer).
+Der Restart war also nicht der Fix, sondern der Workaround. Ohne Härtung passiert das beim nächsten Loxone-Cloud-Aussetzer oder Firmware-Update erneut — und dann hängt genau ein Miniserver wieder unbegrenzt lange, ohne dass es jemandem auffällt.
 
-## Umsetzung
+## Vorgeschlagene Härtung im `loxone-ws-worker`
 
-### Teil 1 — WS als Default
-1. **Migration**
-   - `ALTER TABLE location_integrations ALTER COLUMN loxone_remote_connect_ws_enabled SET DEFAULT TRUE;`
-   - Optionaler Backfill: bestehende Loxone-Integrationen mit `NULL`/`FALSE` und aktivem Cloud-DNS auf `TRUE` setzen — **nur nach Rückfrage**, um niemanden ungewollt umzustellen. Standard: nur Default ändern, Bestand unverändert.
-2. **UI-Anpassung** (`EditIntegrationDialog.tsx`)
-   - Initial-State beim Anlegen neuer Loxone-Integrationen auf `true` setzen (Formular-Default), damit auch der explizit übergebene Wert konsistent ist.
-   - Kleiner Hinweistext: „Empfohlen: WebSocket (Realtime, geringere Last)".
+Alle Änderungen isoliert im Worker (`docs/loxone-ws-worker/`), keine Cloud-Migration nötig.
 
-### Teil 2 — Auto-Verknüpfung `bridge_miniserver_links`
-Zwei Trigger-Punkte, damit sowohl WS- als auch HTTP-Nutzer erfasst werden:
+### 1) „Stuck-Slot"-Selbstheilung pro Miniserver
+Wenn für einen bestimmten Serial in **N Minuten kein einziger `open`-Erfolg** zustande kommt, obwohl der Slot aktiv ist und andere Serials im selben Worker sauber laufen:
+- Slot komplett zerstören (Timer, WS-Handle, Auth-State, Redirect-Cache).
+- 60 s Cooldown.
+- Slot mit frischem Kontext neu aufsetzen (entspricht dem, was `docker restart` gerade manuell erledigt hat — nur pro Serial, nicht global).
 
-**A) im `loxone-ws-worker`** (Hetzner-Repo, außerhalb Lovable — Aufgabe wird nur dokumentiert, nicht hier committet):
-- Nach erfolgreichem WS-Handshake und Auslesen der `msInfo.serialNr`:
-  - `upsert` auf `bridge_miniserver_links` mit `on_conflict=miniserver_serial` — Felder: `miniserver_serial`, `tenant_id`, `location_id`, `location_integration_id`, `last_seen_at=now()`.
+Schwellwert-Vorschlag: `NO_OPEN_TIMEOUT_MIN=15` (konfigurierbar via ENV).
 
-**B) in `supabase/functions/loxone-api/index.ts`** (HTTP-Poll-Pfad, hier im Repo):
-- In der Structure-Fetch-Routine (~Zeile 1092) wird `LoxAPP3.json` geladen; darin steht `msInfo.serialNr`. Direkt danach:
-  - Prüfen ob Link existiert (`select miniserver_serial from bridge_miniserver_links where miniserver_serial=…`).
-  - Falls nicht: `insert` mit den bekannten IDs.
-  - Falls vorhanden aber `location_id`/`tenant_id` NULL: `update` mit Backfill.
-- Fehler dabei nur loggen, nicht die Response brechen.
+**Wichtig:** Das ist **kein periodischer Reconnect**. Ein absichtlich offline geschalteter Miniserver hat keinen aktiven Slot, daher läuft der Timer nicht. Der Reset passiert rein im Worker-Speicher und belastet die Datenbank nicht zusätzlich.
 
-**C) RLS/Grants**
-- `bridge_miniserver_links` hat bereits Policies. Sicherstellen, dass Service-Role write darf (ist der Fall, da Edge Functions mit Service-Role laufen). Kein Migrationsbedarf erwartet.
+### 2) Global „Same-serial only" Watchdog
+Zweiter, unabhängiger Health-Check: Wenn ein Serial >30 min ohne WS-Session ist, während ≥1 anderer Serial im selben Worker aktive Events schreibt → in `loxone_ws_session_log` einen Event `stuck-slot-reset` protokollieren und Schritt 1 auslösen. Der Vergleich mit den anderen Serials verhindert Fehlalarme bei generellen Cloud-Ausfällen.
 
-### Teil 3 — Sichtbarkeit
-- Kein UI-Umbau nötig: Neue Miniserver erscheinen ab dann automatisch mit Seriennummer in „Gateway-Flotte" und werden korrekt in `bridge_event_log` attribuiert.
+### 3) Sichtbarkeit im Super-Admin
+`SuperAdminGatewayFleet` bekommt eine kleine Spalte „Zuletzt WS-Open-Erfolg" (Delta aus `loxone_ws_session_log`), damit ein hängender Slot ohne Putty auffällt. Zusätzlich wird `stuck-slot-reset` als eigener Reconnect-Grund im UI ausgewiesen, statt in der `Reconnects`-Zahl unterzugehen.
 
-## Nicht im Scope
-- Nachträgliches Umschalten aller bestehenden HTTP-Poll-Integrationen auf WS (opt-in, nicht automatisch).
-- UI zum manuellen Editieren von `bridge_miniserver_links` (kann nachgezogen werden, falls gewünscht).
+### 4) Optional: `curl` in beide Container-Images
+Kleiner Ops-Komfort — beim nächsten Diagnose-Bedarf funktioniert der `docker exec curl`-Test direkt (aktuell fehlt `curl` im Node-Alpine-Image). Alternativ `wget --spider` in die Diagnose-Snippets aufnehmen.
 
-## Reihenfolge
-1. Migration (Default → TRUE).
-2. Edge Function `loxone-api`: Auto-Link beim Structure-Fetch.
-3. UI-Default im Dialog + Hinweistext.
-4. Worker-Anpassung (Hetzner-Repo, separates Deployment).
+## Was NICHT gemacht wird
+- Keine Änderung an der Loxone-Cloud-DNS-Nutzung — die läuft grundsätzlich stabil.
+- Kein Prozess-Restart als Watchdog (bricht alle 20 gesunden Slots mit).
+- Keine Änderung an `admin_lovable` / Credentials — bestätigt korrekt.
+- Kein Patch am Redirect-Parser — Loxones 307-Verhalten ist normal.
 
-## Offene Frage
-Sollen bestehende Loxone-Integrationen (HTTP-Poll) in einem einmaligen Backfill mit auf WS umgestellt werden, oder bleibt WS opt-in für Bestand?
+## Verifikation nach Deployment
+- 24 h Monitoring in `loxone_ws_session_log`: Auftreten von `stuck-slot-reset` Ereignissen zählen (Erwartung: 0–2/Woche).
+- Rathaus-Test: einmal Miniserver kurz vom Netz nehmen, wieder anschließen → Slot muss innerhalb 15 min ohne Container-Restart wieder Events liefern.
+
+## Nächster Schritt
+
+Nach Freigabe des Plans: Patch für `docs/loxone-ws-worker/index.ts` (Schritt 1+2), UI-Erweiterung in `SuperAdminGatewayFleet.tsx` (Schritt 3), plus Update-Anleitung in `docs/loxone-ws-worker/UPDATE-*.md`. Deployment via bestehendem Docker-Compose-Rebuild auf Hetzner — kein Neubau der Cloud-Umgebung nötig.

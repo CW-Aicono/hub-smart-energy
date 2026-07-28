@@ -39,6 +39,8 @@
  *   WATCHDOG_CHECK_MS   (Phase 3) Prüfintervall des Watchdogs (Standard: 30000 = 30 s)
  *   KEEPALIVE_INTERVAL_MS (Phase 4) Loxone Keep-Alive Ping (Standard: 60000 = 60 s,
  *                       0 = aus). Hält NAT/Firewall offen & validiert Socket+Token.
+ *   NO_OPEN_TIMEOUT_MIN (Phase 7.8) Minuten ohne erfolgreichen ws-open, bevor ein
+ *                       hängender Slot komplett zurückgesetzt wird (Standard: 15).
  */
 
 import os from "os";
@@ -73,7 +75,7 @@ const SESSION_HEARTBEAT_MS = Math.max(
 );
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.7-error-attribution";
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.8-stuck-slot-reset";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -83,10 +85,15 @@ const KEEPALIVE_INTERVAL_MS = Math.max(
   300000,
   parseInt(process.env.KEEPALIVE_INTERVAL_MS || "300000", 10),
 );
+// Phase 7.8: Stuck-Slot-Reset — zerstört einen Slot, der über N Minuten keinen
+// erfolgreichen ws-open hatte, während andere Serials im selben Worker gesund laufen.
+const NO_OPEN_TIMEOUT_MIN = Math.max(1, parseInt(process.env.NO_OPEN_TIMEOUT_MIN || "15", 10));
+const NO_OPEN_TIMEOUT_MS = NO_OPEN_TIMEOUT_MIN * 60 * 1000;
 // Phase 6: Reconnects unter dieser Schwelle behalten die alte session_id (kein neuer Log-Eintrag)
 const SESSION_REUSE_WINDOW_MS = parseInt(process.env.SESSION_REUSE_WINDOW_MS || "60000", 10);
 // Phase 6: bridge_event_log nur ab dieser Severity in DB schreiben
 const BRIDGE_LOG_DB_MIN_SEVERITY = (process.env.BRIDGE_LOG_DB_MIN_SEVERITY || "warn") as "debug" | "info" | "warn" | "error";
+
 
 if (!SUPABASE_URL || !GATEWAY_API_KEY) {
   console.error("[FATAL] SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein");
@@ -333,6 +340,9 @@ interface ConnState {
   // Bridge-Worker (Phase 2) Zeitstempel
   lastConnectedAt: number; // ms epoch, 0 = nie
   lastEventAt: number;     // ms epoch, 0 = nie
+  // Phase 7.8: Stuck-Slot-Erkennung
+  lastOpenAttemptAt: number; // ms epoch, letzter connect()-Versuch
+  lastOpenSuccessAt: number; // ms epoch, letzter erfolgreicher ws-open
   // Phase 6 (IO-Optimierung): deferred session-end für Reconnect-Dedup
   pendingEndTimer: NodeJS.Timeout | null;
   pendingEndReason: string | null;
@@ -340,6 +350,7 @@ interface ConnState {
   diagEventCount: number;
   diagCallbacksSeen: Set<string>;
 }
+
 
 const connections = new Map<string, ConnState>(); // key = serial
 
@@ -439,11 +450,13 @@ async function connect(state: ConnState): Promise<void> {
   }
   if (state.ws) { try { state.ws.close(); } catch { /* ignore */ } state.ws = null; }
   state.authenticated = false;
+  state.lastOpenAttemptAt = Date.now();
 
   // Phase 7.6 (Diagnose): stage-Marker durch den gesamten connect()-Try, damit ein
   // Fehler eindeutig einer Sub-Phase zugeordnet werden kann (statt „irgendwo im connect").
   // stage wird sowohl in bridgeLog(details.stage) als auch in der Konsole geloggt.
   let stage: string = "dns-resolve";
+
   const host = await resolveLoxoneHost(state.serialNumber);
   if (!host) {
     bridgeLog("warn", "dns_failed", `DNS-Auflösung fehlgeschlagen: ${state.serialNumber}`, state.serialNumber, {
@@ -598,9 +611,11 @@ async function connect(state: ConnState): Promise<void> {
     state.authenticated = true;
     state.reconnectDelay = 1000;
     state.lastConnectedAt = Date.now();
+    state.lastOpenSuccessAt = Date.now();
     state.diagEventCount = 0;
     state.diagCallbacksSeen = new Set<string>();
     stage = "session-start";
+
     await sessionStart(state);
     // Auth erfolgreich → falls die Integration vorher als "auth_failed" markiert war,
     // Status im Backend auf "success" zurücksetzen und offene Auth-Fehler auflösen.
@@ -812,10 +827,55 @@ function scheduleReconnect(state: ConnState, reason: string): void {
   }, delay);
 }
 
+// ─── Stuck-Slot-Reset (Phase 7.8) ─────────────────────────────────────────────
+// Erkennt Slots, die über NO_OPEN_TIMEOUT_MIN keine erfolgreiche ws-open hatten,
+// obwohl andere Serials im selben Worker gesund laufen. Das deutet auf einen
+// prozessinternen Cache-Fehler hin (z. B. DNS/Redirect-State). Der Slot wird
+// komplett verworfen und mit frischem Kontext neu aufgebaut.
+function stuckSlotTick(): void {
+  const now = Date.now();
+  // Nur aktiv werden, wenn mindestens ein anderer Serial im selben Worker
+  // aktuell gesund ist. Das verhindert Fehlalarme bei generellen Cloud-Ausfällen.
+  const hasHealthyPeer = Array.from(connections.values()).some((s) => {
+    if (!s.authenticated) return false;
+    const ref = Math.max(s.lastEventAt, s.lastConnectedAt);
+    return ref > 0 && now - ref < WATCHDOG_STALE_MS;
+  });
+  if (!hasHealthyPeer) return;
+
+  for (const state of connections.values()) {
+    if (state.authenticated) continue; // verbundene Slots sind OK
+    // Wenn es jemals einen erfolgreichen open gab und der nicht zu lange her ist: OK
+    if (state.lastOpenSuccessAt > 0 && now - state.lastOpenSuccessAt < NO_OPEN_TIMEOUT_MS) continue;
+
+    const lastAttemptAge = state.lastOpenAttemptAt ? now - state.lastOpenAttemptAt : Number.MAX_SAFE_INTEGER;
+    log("warn", `[StuckSlot] ${state.serialNumber} kein ws-open seit ${NO_OPEN_TIMEOUT_MIN}min bei gesunden Peers (letzter Versuch vor ${Math.round(lastAttemptAge / 1000)}s) → Slot-Reset`);
+    bridgeLog("warn", "stuck_slot_reset", `Kein ws-open seit ${NO_OPEN_TIMEOUT_MIN}min, Slot-Reset`, state.serialNumber, {
+      no_open_minutes: NO_OPEN_TIMEOUT_MIN,
+      last_attempt_age_ms: lastAttemptAge,
+    });
+    // Slot komplett zerstören: DNS-Cache, WS-Handle, Auth-State, Backoff
+    dnsCache.delete(state.serialNumber);
+    try { state.ws?.close(); } catch { /* ignore */ }
+    state.ws = null;
+    state.authenticated = false;
+    state.reconnecting = false;
+    state.reconnectDelay = 1000;
+    state.lastOpenAttemptAt = 0;
+    if (state.sessionId) {
+      sessionEnd(state, "stuck-slot-reset");
+    }
+    // 60s Cooldown, dann frischer Verbindungsaufbau
+    scheduleReconnect(state, "stuck-slot-reset");
+  }
+}
+
+
 // ─── Watchdog (Phase 3) ──────────────────────────────────────────────────────
 // Erkennt "tote" WebSockets, bei denen lxcommunicator zwar noch verbunden ist,
 // aber seit WATCHDOG_STALE_MS keine Events mehr eintreffen. Erzwingt Reconnect.
 function watchdogTick(): void {
+
   const now = Date.now();
   for (const state of connections.values()) {
     if (!state.authenticated || state.uuidMap.size === 0) continue;
@@ -1036,11 +1096,14 @@ async function reloadMeters(): Promise<void> {
         reconnectCount: 0,
         lastConnectedAt: 0,
         lastEventAt: 0,
+        lastOpenAttemptAt: 0,
+        lastOpenSuccessAt: 0,
         pendingEndTimer: null,
         pendingEndReason: null,
         diagEventCount: 0,
         diagCallbacksSeen: new Set<string>(),
       };
+
       connections.set(serial, state);
     } else {
       const usernameChanged = state.username !== group.config.username;
@@ -1140,7 +1203,10 @@ function startHealthServer(): void {
           reconnect_count: c.reconnectCount,
           last_connected_at: c.lastConnectedAt ? new Date(c.lastConnectedAt).toISOString() : null,
           last_event_at: c.lastEventAt ? new Date(c.lastEventAt).toISOString() : null,
+          last_open_attempt_at: c.lastOpenAttemptAt ? new Date(c.lastOpenAttemptAt).toISOString() : null,
+          last_open_success_at: c.lastOpenSuccessAt ? new Date(c.lastOpenSuccessAt).toISOString() : null,
         })),
+
       };
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(state, null, 2));
@@ -1307,7 +1373,7 @@ async function main() {
   log("info", `Loxone WS Worker startet — worker=${BRIDGE_WORKER_NAME} host=${WORKER_HOST} version=${WORKER_VERSION}`);
   log("info", `  SUPABASE_URL=${SUPABASE_URL}`);
   log("info", `  FLUSH_INTERVAL_MS=${FLUSH_INTERVAL_MS}  RELOAD_INTERVAL_MS=${RELOAD_INTERVAL_MS}  BRIDGE_HEARTBEAT_MS=${BRIDGE_HEARTBEAT_MS}`);
-  log("info", `  KILLSWITCH_POLL_MS=${KILLSWITCH_POLL_MS}  SESSION_HEARTBEAT_MS=${SESSION_HEARTBEAT_MS}  WATCHDOG_CHECK_MS=${WATCHDOG_CHECK_MS}  WATCHDOG_STALE_MS=${WATCHDOG_STALE_MS}  KEEPALIVE_INTERVAL_MS=${KEEPALIVE_INTERVAL_MS}`);
+  log("info", `  KILLSWITCH_POLL_MS=${KILLSWITCH_POLL_MS}  SESSION_HEARTBEAT_MS=${SESSION_HEARTBEAT_MS}  WATCHDOG_CHECK_MS=${WATCHDOG_CHECK_MS}  WATCHDOG_STALE_MS=${WATCHDOG_STALE_MS}  KEEPALIVE_INTERVAL_MS=${KEEPALIVE_INTERVAL_MS}  NO_OPEN_TIMEOUT_MIN=${NO_OPEN_TIMEOUT_MIN}`);
 
   startHealthServer();
 
@@ -1364,9 +1430,14 @@ async function main() {
     }
   }, SESSION_HEARTBEAT_MS);
 
+  // Stuck-Slot-Reset (Phase 7.8): erkennt prozessintern hängende Slots
+  setInterval(stuckSlotTick, WATCHDOG_CHECK_MS);
+  log("info", `[StuckSlot] aktiv: prüft alle ${WATCHDOG_CHECK_MS / 1000}s, Schwelle ${NO_OPEN_TIMEOUT_MIN}min`);
+
   // Watchdog (Phase 3): forciert Reconnect bei "toten" Verbindungen
   setInterval(watchdogTick, WATCHDOG_CHECK_MS);
   log("info", `[Watchdog] aktiv: prüft alle ${WATCHDOG_CHECK_MS / 1000}s, Schwelle ${WATCHDOG_STALE_MS / 1000}s`);
+
 
   // Keep-Alive (Phase 4): hält NAT offen & validiert Socket/Token
   if (KEEPALIVE_INTERVAL_MS > 0) {
