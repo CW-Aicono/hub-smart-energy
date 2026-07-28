@@ -893,7 +893,8 @@ const SuperAdminGatewayFleet = () => {
                             {isOpen && d && (
                               <TableRow className="bg-muted/30 hover:bg-muted/30">
                                 <TableCell></TableCell>
-                                <TableCell colSpan={12} className="py-4">
+                                <TableCell colSpan={13} className="py-4">
+
                                   <div className="space-y-4">
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-xs">
                                       <div><div className="text-muted-foreground">Gateway-Name</div><div className="font-medium">{d.device_name}</div></div>
