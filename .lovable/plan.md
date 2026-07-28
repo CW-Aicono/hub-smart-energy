@@ -1,41 +1,60 @@
-## Problem
+## Ziel
 
-Im Meter-Detail-Dialog (`EnergyFlowMonitor.tsx` → `MeterDetailDialog`) werden Sensor-Kennzahlen falsch beschriftet:
+Einheiten-Auswahl im Gerätedialog übersichtlicher machen und Gewichtseinheiten (für CO₂-Bilanzen etc.) ergänzen.
 
-- KPI-Kacheln zeigen **„Ø Leistung / Max / Min in kW"** — auch bei reinen Sensoren wie Spannung (V), Temperatur (°C), Feuchte (%), Strom (A), Frequenz (Hz), Luftdruck (hPa), Lux, CO₂ etc.
-- Grund 1: `rateUnit`-Ableitung (Zeile 1405) liest nur `meterUnitRaw`, ignoriert aber `source_unit_power`. Bei Sensoren ist `unit` oft leer → Fallback liefert `"kW"` (Zeile 1430).
-- Grund 2: Für Sensoren fehlt eine separate KPI-Beschriftung. Labels sind fest auf „Leistung" verdrahtet.
-- Grund 3: Generischer `${u}/h`-Fallback (Zeile 1432) würde z. B. für °C ein sinnloses „°C/h" erzeugen.
-- Chart 1 („Leistung") und dessen Tooltip/Legende/Y-Achse verwenden ebenfalls `rateUnit` + festen Text „Leistung" — bei Sensoren doppelt falsch, zumal darunter bereits ein passender `SensorHistoryChart` gerendert wird.
+## Vorschlag: Zwei gekoppelte Dropdowns
 
-Der Energie-Bucket-Chart ist bereits per `!isSensor` ausgeblendet — Chart 1 aber nicht.
+Statt einer langen gruppierten Liste zwei Dropdowns nebeneinander:
 
-## Verifizierter Umfang
+1. **Kategorie** (Pflicht, klein) — Leistung/Energie, Temperatur, Feuchte/Anteil, Druck, Helligkeit, Strom/Spannung, Durchfluss/Volumen, **Gewicht/Masse (neu)**, Zeit, Zähler/Sonstiges
+2. **Einheit** (gefiltert nach Kategorie) — z. B. bei „Gewicht": `g`, `kg`, `t`, `mg`; bei „Gewicht pro Zeit" optional `kg/h`
 
-Ripgrep bestätigt: `rateUnit` / `energyUnit` existieren nur in `src/components/dashboard/EnergyFlowMonitor.tsx`. Kein weiterer Chart betroffen. `SensorHistoryChart` nutzt bereits die per Prop übergebene Sensor-Einheit korrekt.
+### Warum zwei Dropdowns statt Alternativen
 
-## Änderungen (nur `src/components/dashboard/EnergyFlowMonitor.tsx`, `MeterDetailDialog`)
+- **Searchable Combobox** (Alternative): schneller für Power-User, aber für Laien-Admins schlechter — sie wissen oft nicht, ob die Einheit „Wh" oder „kWh" heißt. Kategorie-first führt sie hin.
+- **Zwei Dropdowns** matchen zudem gut zur bestehenden `SOURCE_UNIT_GROUPS`-Struktur → minimaler Refactor.
 
-1. **Einheiten-Ableitung härten**
-   - Für Sensoren (`isSensor === true`) `rateUnit` und `energyUnit` **nicht** aus Leistungslogik ableiten, sondern beide auf die tatsächliche Sensor-Einheit setzen (`displayUnit` = `unit || source_unit_power`, sonst leer). Keine `/h`-Anhänge, kein kW-Fallback.
-   - Für Zähler den bestehenden Power-/Volumen-Mapping-Zweig beibehalten. Den generischen `${u}/h`-Fallback (Zeile 1432) entfernen und stattdessen konservativ auf `{ rateUnit: displayUnit, energyUnit: displayUnit }` fallen, wenn keine bekannte Zuordnung greift (verhindert erfundene Einheiten wie `°C/h`).
-   - `isSensor`-Erkennung bleibt unverändert.
+Empfehlung: **zwei Dropdowns**. Bei nur einer Einheit pro Kategorie (z. B. Helligkeit → lx) wird das zweite Dropdown automatisch vorbelegt, bleibt aber sichtbar zur Klarheit.
 
-2. **KPI-Kacheln kontextabhängig beschriften**
-   - Bei Sensoren die Labels auf **„Ø Wert / Max / Min"** umstellen und statt `rateUnit` die Sensor-Einheit anzeigen.
-   - Bei Zählern unverändert „Ø Leistung / Max / Min" in `rateUnit`.
-   - „Momentanwert" bleibt für Sensoren; „Energie" bleibt für Zähler.
+## Neue Kategorie „Gewicht / Masse"
 
-3. **Chart 1 „Leistung"**
-   - Bei `isSensor` komplett ausblenden (analog zum bereits gehandhabten Energie-Chart). Der darunter gerenderte `SensorHistoryChart` (Zeile 2108) übernimmt die Sensor-Visualisierung mit korrekter Einheit.
-   - Damit entfällt für Sensoren auch die falsche Y-Achsen-/Tooltip-/Legenden-Beschriftung „Leistung (kW)".
 
-## Verifikation
+| value | label           |
+| ----- | --------------- |
+| `g`   | g (Gramm)       |
+| `kg`  | kg (Kilogramm)  |
+| `t`   | t (Tonne)       |
+| `mg`  | mg (Milligramm) |
 
-- `tsgo` (Typecheck).
-- Manuell im Preview: Detail-Dialog für einen Volt-Sensor (Screenshot-Fall), Temperatur-Sensor, Wirkleistungs-Zähler (kW), Wasser-Zähler (m³) und Gas-Zähler prüfen — Einheiten/Labels müssen jeweils passen.
 
-## Nicht enthalten
+Für Raten (falls später gebraucht): `kg/h`, `t/a` — vorerst nicht, um Scope klein zu halten.
 
-- Keine Änderungen an `SensorHistoryChart`, Widget-Designer, LiveValues-Kacheln oder Dashboard-Widgets — Analyse zeigt, dass diese die Einheit bereits korrekt aus dem Meter/Sensor übernehmen.
-- Keine DB-/Backend-Änderungen.
+`deriveEnergyUnit()` erweitern: bei Gewichtseinheiten liefert der kumulative Zählerwert dieselbe Einheit zurück (analog zu °C/%).
+
+CO₂-spezifische Etiketten (`kg CO₂`, `t CO₂/a`) werden **nicht** als eigene Einheiten geführt — CO₂ ist ein Kontext des Zählers/Sensors, nicht der physikalischen Einheit. Der Anzeigename des Geräts („CO2 Ersparnis") liefert den Kontext, die Einheit bleibt `kg`/`t`.
+
+## Umsetzung (Frontend-only)
+
+1. `**src/lib/sensorUnits.ts**`
+  - Kategorie „Gewicht / Masse" mit obigen Einträgen ergänzen.
+  - Helper `getUnitCategory(value)` und `getUnitsForCategory(categoryLabel)` exportieren.
+  - `deriveEnergyUnit`: Passthrough für Gewichts- und weitere Nicht-Energie-Einheiten (schon default vorhanden, nur verifizieren).
+2. **Neue Komponente `src/components/locations/SourceUnitPicker.tsx**`
+  - Props: `value: string`, `onChange(value: string)`.
+  - Innen: lokaler `category`-State (aus `value` abgeleitet), zwei `Select`-Komponenten nebeneinander (responsive: gestapelt auf schmalen Dialogen).
+  - Änderung der Kategorie → erste Einheit der Kategorie automatisch setzen.
+3. **Ersetzen der bestehenden Einheiten-Selects** in
+  - `EditMeterDialog.tsx`
+  - `AddMeterDialog.tsx`
+  - `BulkEditMetersDialog.tsx`
+   jeweils durch `<SourceUnitPicker />`. Helper-/Beschreibungstexte bleiben unverändert.
+
+## Nicht enthalten (Nachfrage bei Bedarf)
+
+- Umrechnungen zwischen Einheiten derselben Kategorie (kg ↔ t)
+- CO₂-spezifische Widgets/Reports
+- Automatische Kategorie-Vorschläge aus dem Gerätenamen
+
+Soll ich so umsetzen, oder Gewicht/Masse-Set anders schneiden (z. B. `kg/h`, `t/a` gleich mit rein)?  
+  
+Antwort: `kg/h`, `t/a` und weitere bitte gleich mit rein, dann ist das fertig
