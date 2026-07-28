@@ -121,11 +121,13 @@ interface UnifiedRow {
   sessionsLast24h: number | null;
   worker: string | null;
   lastDisconnect: string | null;
+  lastOpenSuccessAt: string | null;
   serials: string[];
   device?: FleetDevice;
   loxone?: LoxoneDetails;
   isSeamlessRecycle?: boolean;
 }
+
 
 
 const LOOKBACK_MS = 24 * 60 * 60 * 1000;
