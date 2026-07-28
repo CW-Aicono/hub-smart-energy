@@ -17,7 +17,7 @@ function useGatewayInventoryRealtime(integrationIds: string[]) {
     if (ids.length === 0) return;
 
     const channel = supabase
-      .channel(`gw-inventory-${key}`)
+      .channel(`gw-inventory-${key}-${Math.random().toString(36).slice(2, 10)}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "gateway_device_inventory" },
