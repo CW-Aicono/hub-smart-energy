@@ -122,6 +122,7 @@ const SuperAdminWallboxTemplates = lazy(() => import("./pages/SuperAdminWallboxT
 const SuperAdminLoxoneTemplates = lazy(() => import("./pages/SuperAdminLoxoneTemplates"));
 const SuperAdminSalesCatalog = lazy(() => import("./pages/SuperAdminSalesCatalog"));
 const SuperAdminSalesRules = lazy(() => import("./pages/SuperAdminSalesRules"));
+const SuperAdminMeterDuplicates = lazy(() => import("./pages/SuperAdminMeterDuplicates"));
 const SalesProjects = lazy(() => import("./pages/SalesProjects"));
 const SalesProjectNew = lazy(() => import("./pages/SalesProjectNew"));
 const SalesProjectEdit = lazy(() => import("./pages/SalesProjectEdit"));
