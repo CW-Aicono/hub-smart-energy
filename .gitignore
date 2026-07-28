@@ -1,6 +1,13 @@
 # Logs
 logs
 *.log
+
+# Ausnahme: supabase-docker/volumes/logs/ enthaelt keine Logs, sondern die
+# Vector-Pipeline-Config. Ohne diese Negation faellt sie unter `logs` und wird
+# nie deployt -- Aenderungen daran waeren still wirkungslos.
+# Erst das Verzeichnis wieder einschliessen, sonst greift die Datei-Negation nicht.
+!supabase-docker/volumes/logs/
+!supabase-docker/volumes/logs/vector.yml
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

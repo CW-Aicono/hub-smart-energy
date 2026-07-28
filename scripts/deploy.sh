@@ -57,6 +57,17 @@ log "5b/6 Caddy-Config reload (falls Caddyfile geaendert)"
 docker exec supabase-caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile \
   || log "WARN: caddy reload fehlgeschlagen (Container laeuft evtl. noch nicht) - ueberspringe"
 
+# Log-Infrastruktur nachziehen. Ohne diesen Schritt bleiben Aenderungen an
+# vector.yml oder an den analytics-/vector-Sektionen der Compose-Datei wirkungslos:
+# Schritt 5 fasst nur frontend und functions an, ein Deploy allein wuerde die
+# Container nie neu erstellen. `up -d` ist idempotent -- ohne Config-Aenderung ein No-Op.
+# db bleibt bewusst aussen vor: dessen Neuerstellung kostet DB-Downtime und hat in
+# einem Routine-Deploy nichts verloren. DB-Parameter mit context=sighup (z.B.
+# max_slot_wal_keep_size) stattdessen per ALTER SYSTEM + pg_reload_conf setzen.
+log "5c/6 Log-Infrastruktur nachziehen (analytics, vector)"
+docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d analytics vector \
+  || log "WARN: analytics/vector konnten nicht neu erstellt werden - ueberspringe"
+
 log "6/6 Healthcheck auf $HEALTH_URL"
 sleep 10
 for attempt in 1 2 3 4 5; do

@@ -493,6 +493,16 @@ services:
     container_name: supabase-analytics
     image: supabase/logflare:1.43.1
     restart: unless-stopped
+    # Logflare gibt bei jedem PgPublisher-Absturz die epgsql-Config als Stacktrace
+    # aus, inklusive POSTGRES_PASSWORD im Klartext. Das laesst sich von aussen nicht
+    # unterdruecken (Upstream-Verhalten in cainophile 0.1.0). Rotation begrenzt
+    # wenigstens, wie lange das Passwort in den Host-Logfiles ueberlebt.
+    # Docker-Default waere json-file ohne Groessenlimit.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     # ports:
     #   - 4000:4000
     # Uncomment to use Big Query backend for analytics
@@ -586,7 +596,15 @@ services:
         "-c",
         "config_file=/etc/postgresql/postgresql.conf",
         "-c",
-        "log_min_messages=fatal" # prevents Realtime polling queries from appearing in logs
+        "log_min_messages=fatal", # prevents Realtime polling queries from appearing in logs
+        # Deckel fuer WAL-Rueckstau durch haengende Replication Slots.
+        # Logflare (supabase-analytics) oeffnet einen logischen Slot, den es nie
+        # bestaetigt -> ohne Deckel waechst pg_wal unbegrenzt. Logische Slots halten
+        # WAL clusterweit, der Slot staut also auch den WAL fremder Datenbanken auf.
+        # Bei Ueberschreitung wird der Slot invalidiert (Consumer reconnected neu),
+        # statt die Platte volllaufen zu lassen. Image-Default waere 4096MB.
+        "-c",
+        "max_slot_wal_keep_size=1024MB"
       ]
 
   vector:
