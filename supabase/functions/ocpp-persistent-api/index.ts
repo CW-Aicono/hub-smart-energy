@@ -519,7 +519,7 @@ async function handle(action: string, body: Record<string, unknown>) {
 
       const { data: cp, error: cpErr } = await admin
         .from("charge_points")
-        .select("id, tenant_id, linked_meter_id")
+        .select("id, tenant_id, linked_meter_id, group_id, location_id")
         .eq("id", chargePointId)
         .maybeSingle();
       if (cpErr) return fail(500, cpErr.message);
@@ -548,31 +548,137 @@ async function handle(action: string, body: Record<string, unknown>) {
       const { error } = await admin.from("ocpp_meter_samples").insert(rows);
       if (error) return fail(500, error.message);
 
-      // cpMap kompatibel zum bestehenden Forwarding-Block unten halten
-      const cpMap = new Map([[cp.id as string, cp]]);
+      // ------------------------------------------------------------------
+      // Forward Power / Energy readings to meter tables
+      // ------------------------------------------------------------------
+      // Zielzähler-Kandidaten sammeln:
+      //  1) charge_points.linked_meter_id (direkte 1:1-Verknüpfung)
+      //  2) virtuelle Zähler mit virtual_meter_sources, die diesen CP referenzieren:
+      //     - source_charge_point_id = cp.id
+      //     - source_charge_point_group_id = cp.group_id
+      //     - source_all_charge_points = true (mit meters.location_id = cp.location_id)
+      // Pro Zielzähler-Kandidat merken wir uns das Vorzeichen (operator '+' oder '-').
+      const targets: Array<{ meterId: string; sign: 1 | -1 }> = [];
+      if (cp.linked_meter_id) targets.push({ meterId: cp.linked_meter_id as string, sign: 1 });
 
+      try {
+        const { data: vSources } = await admin
+          .from("virtual_meter_sources")
+          .select(
+            "virtual_meter_id, operator, source_charge_point_id, source_charge_point_group_id, source_all_charge_points",
+          )
+          .or(
+            [
+              `source_charge_point_id.eq.${cp.id}`,
+              cp.group_id ? `source_charge_point_group_id.eq.${cp.group_id}` : null,
+              `source_all_charge_points.eq.true`,
+            ]
+              .filter(Boolean)
+              .join(","),
+          );
 
-      // Power.Active.Import → meter_power_readings forwarden, wenn linked_meter_id gesetzt
-      const powerRows: Array<Record<string, unknown>> = [];
-      for (const row of rows) {
-        if (row.measurand !== "Power.Active.Import") continue;
-        const cp = cpMap.get(row.charge_point_id);
-        if (!cp?.linked_meter_id) continue;
-        // OCPP-Einheit: W oder kW. Wir speichern in kW.
-        const unit = (row.unit ?? "W").toUpperCase();
-        const powerKw = unit === "KW" ? row.value : row.value / 1000;
-        powerRows.push({
-          tenant_id: row.tenant_id,
-          meter_id: cp.linked_meter_id,
-          energy_type: "electricity",
-          power_value: powerKw,
-          recorded_at: row.sampled_at,
+        const allCpsVirtualIds = new Set<string>();
+        (vSources ?? []).forEach((s: any) => {
+          if (s.source_all_charge_points) allCpsVirtualIds.add(s.virtual_meter_id);
         });
+
+        // Für "all charge points" Quellen: nur virtuelle Zähler übernehmen, deren
+        // location_id dem CP-Standort entspricht.
+        let allowedAllCpsVmIds = new Set<string>();
+        if (allCpsVirtualIds.size > 0 && cp.location_id) {
+          const { data: vMeters } = await admin
+            .from("meters")
+            .select("id, location_id")
+            .in("id", Array.from(allCpsVirtualIds));
+          (vMeters ?? []).forEach((m: any) => {
+            if (m.location_id === cp.location_id) allowedAllCpsVmIds.add(m.id);
+          });
+        }
+
+        const seen = new Map<string, 1 | -1>();
+        if (cp.linked_meter_id) seen.set(cp.linked_meter_id as string, 1);
+        (vSources ?? []).forEach((s: any) => {
+          if (s.source_all_charge_points && !allowedAllCpsVmIds.has(s.virtual_meter_id)) return;
+          const sign: 1 | -1 = s.operator === "-" ? -1 : 1;
+          // Falls derselbe Zähler mehrfach referenziert wird, ist die letzte Definition maßgeblich.
+          seen.set(s.virtual_meter_id, sign);
+        });
+        // Reset targets to unified list
+        targets.length = 0;
+        seen.forEach((sign, meterId) => targets.push({ meterId, sign }));
+      } catch (e) {
+        console.warn("[insert-meter-samples] virtual source lookup failed", e);
       }
+
+      if (targets.length === 0) {
+        return ok({ inserted: rows.length, forwarded: 0 });
+      }
+
+      // Power.Active.Import → meter_power_readings (kW)
+      const powerRows: Array<Record<string, unknown>> = [];
+      // Energy.Active.Import.Register → meter_cumulative_readings (kWh, monoton).
+      // Für Aggregations-Quellen (Gruppe / all-cps) müsste man streng den Summen-
+      // zählerstand aller involvierten CPs bilden. Da wir hier nur einen CP pro
+      // Request sehen, würden konkurrierende CPs Ping-Pong-Werte schreiben. Wir
+      // beschränken den Energie-Forward daher konservativ auf direkte
+      // 1:1-Quellen (linked_meter_id oder source_charge_point_id).
+      const energyDirectMeterIds = new Set<string>();
+      if (cp.linked_meter_id) energyDirectMeterIds.add(cp.linked_meter_id as string);
+      try {
+        const { data: directOnly } = await admin
+          .from("virtual_meter_sources")
+          .select("virtual_meter_id, operator")
+          .eq("source_charge_point_id", cp.id);
+        (directOnly ?? []).forEach((s: any) => {
+          if (s.operator !== "-") energyDirectMeterIds.add(s.virtual_meter_id);
+        });
+      } catch (_) { /* noop */ }
+
+      const cumulativeRows: Array<Record<string, unknown>> = [];
+
+      for (const row of rows) {
+        const unit = (row.unit ?? "").toUpperCase();
+        if (row.measurand === "Power.Active.Import") {
+          const powerKw = unit === "KW" ? row.value : row.value / 1000;
+          for (const t of targets) {
+            powerRows.push({
+              tenant_id: row.tenant_id,
+              meter_id: t.meterId,
+              energy_type: "electricity",
+              power_value: powerKw * t.sign,
+              recorded_at: row.sampled_at,
+            });
+          }
+        } else if (row.measurand === "Energy.Active.Import.Register") {
+          const kwh = unit === "WH" ? row.value / 1000 : row.value; // default kWh
+          for (const meterId of energyDirectMeterIds) {
+            cumulativeRows.push({
+              tenant_id: row.tenant_id,
+              meter_id: meterId,
+              reading_at: row.sampled_at,
+              kwh_total: kwh,
+              source: "ocpp",
+            });
+          }
+        }
+      }
+
       if (powerRows.length > 0) {
-        await admin.from("meter_power_readings").insert(powerRows);
+        const { error: pErr } = await admin.from("meter_power_readings").insert(powerRows);
+        if (pErr) console.warn("[insert-meter-samples] power insert failed", pErr.message);
       }
-      return ok({ inserted: rows.length, forwarded: powerRows.length });
+      if (cumulativeRows.length > 0) {
+        const { error: cErr } = await admin
+          .from("meter_cumulative_readings")
+          .upsert(cumulativeRows, { onConflict: "meter_id,reading_at" });
+        if (cErr) console.warn("[insert-meter-samples] cumulative upsert failed", cErr.message);
+      }
+      return ok({
+        inserted: rows.length,
+        forwarded: powerRows.length,
+        cumulative: cumulativeRows.length,
+        targets: targets.length,
+      });
     }
 
     case "upsert-capabilities": {
