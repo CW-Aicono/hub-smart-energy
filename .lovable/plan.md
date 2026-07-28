@@ -1,59 +1,50 @@
+## Ausgangslage (verifiziert)
 
-## Neuer Befund (jetzt gerade aus der DB)
+- HTTP-Pull gegen Rathaus funktioniert → Zugangsdaten & Rechte sind korrekt.
+- WS-Handshake bricht wiederholt mit HTTP 408 in `stage: ws-open` ab (bestätigt in `loxone_ws_session_log`).
+- Sessions, die zustande kommen, enden mit `close-2008` (undokumentierter Loxone-Code, tritt nach Firmware-Update auf).
+- Andere Miniserver mit identischer Worker-Version laufen stabil → Problem ist Rathaus-spezifisch, nicht global.
+- Credential-Hypothese ist damit **verworfen**. Keine Änderungen an User/Passwort nötig.
 
-Du hast die WS-Integration vor ~15 Min pausiert und gerade wieder aktiviert. Das ist der Reality-Check für meine vorherige „Cloud-Rate-Limit"-Hypothese — und er ist **negativ ausgefallen**:
+## Neue Arbeitshypothese
 
-- **26 Verbindungsversuche in den letzten 30 Min für Rathaus**, alle mit `stage=ws-open: Request failed with status code 408`.
-- Die Fehler laufen **nach** deiner Pause + Re-Enable in exakt gleichem Muster weiter — kein einziger erfolgreicher Handshake.
-- Retry-Abstand liegt bei ~60–90 s (Backoff-Cap). Also aktuell **kein** Reconnect-Storm; der Worker verhält sich brav.
-- `loxone_ws_session_log` für diese Integration ist **leer** — der ws-open kommt gar nicht bis zum Punkt, an dem eine Session eröffnet würde.
-- **Keine** 423/503-Antworten. Nur reine 408 Request Timeout auf dem HTTP-Upgrade-Handshake.
+Der Loxone-Cloud-DNS-Resolver (`dns.loxonecloud.com`) liefert für Rathaus zeitweise eine Relay-Route, auf der der WS-Upgrade in 408 läuft, während der HTTP-Endpoint (evtl. andere Route/Cache) funktioniert. `close-2008` deutet auf serverseitigen Abbruch nach erfolgreichem Upgrade hin (z. B. Token-/Session-Limit im Miniserver nach FW-Update).
 
-### Was das ausschließt
+Vor jedem Code-Patch müssen wir das erst belegen — sonst bauen wir wieder blind.
 
-- **Cloud-Rate-Limit / 423-Lockout**: Wenn Loxone-Cloud uns sperren würde, käme jetzt 423/503. Kommt nicht. Die 15-Min-Pause hat auch nichts freigegeben — weil nichts gesperrt war.
-- **Aggressive Reconnect-Schleife im Worker**: 60 s Abstand ist bereits konform. Der geplante 423/503-Cool-down-Patch würde an diesem konkreten Fehler **nichts** ändern.
-- **Miniserver-Firmware / Cloud-DNS generell tot**: App/Web-UI/Loxone Config kommen durch → Cloud-DNS und Miniserver antworten.
+## Plan
 
-### Was übrig bleibt (jetzt die realistischen Kandidaten)
+### Schritt 0 — Diagnose (read-only, keine Code-Änderung)
 
-Alle drei brauchen gezielte Verifikation, keine Bau-Maßnahme im Blindflug:
+1. In `loxone_ws_session_log` für Rathaus (letzte 24 h) auswerten:
+   - Verteilung `stage` × `close_code` × `http_status`
+   - Zeitabstand zwischen erfolgreichem `ws-open` und folgendem `close-2008` (Session-Lebensdauer)
+   - Ob 408 & 2008 abwechselnd oder in Blöcken auftreten
+2. `location_integrations.config` für Rathaus vs. AICONO Zentrale diffen (Host, Port, `use_cloud_dns`, `remote_connect_ws_enabled`, evtl. hinterlegte direkte IP).
+3. Prüfen, ob Rathaus im Miniserver-Log parallele Sessions offen hält (Session-Limit-Verdacht).
 
-1. **Login-/Session-Slot-Kollision auf Loxone-Cloud-Ebene für diesen einen User.** Loxone-Cloud vergibt pro User/Miniserver begrenzte gleichzeitige Session-Slots. Wenn App + Web-UI + Loxone Config denselben User verwenden wie unser Worker, kann der Worker beim Handshake in ein 408 laufen, während die interaktiven Clients laufen. Verifikation: welcher User steht in `location_integrations.config` für Rathaus, und ist es derselbe wie in App/Web-UI?
-2. **Stale/falsche Credentials in genau dieser Integration** (Passwort vor Firmware-Update im Miniserver rotiert, aber nicht in Cloud-Config). 408 statt 401 wäre ungewöhnlich, aber lxcommunicator hat auffälliges Fehler-Mapping — muss geprüft werden.
-3. **Cloud-DNS-Route für Rathaus zeigt aus Sicht des Hetzner-Workers auf einen Endpoint, der bei ihm dauerhaft in 408 läuft** (Network-Path-Problem Hetzner ↔ Loxone-Cloud-Relay für diesen einen Serial). Verifikation: Container-Log mit `[WS] verbinde 504F94A2BAA2 → <host>` → welcher Host wird tatsächlich verwendet?
+**Ergebnis dieses Schritts entscheidet, welcher Patch unten gebaut wird.** Ohne Schritt 0 keinen Code anfassen.
 
-## Vorschlag für den nächsten Schritt (statt sofort Code zu bauen)
+### Schritt 1 — Worker-Härtung `loxone-ws-worker` (nur wenn Schritt 0 die Hypothese stützt)
 
-### Schritt A — Fakten aus der Integration ziehen (2 Min, nur DB-Lesen, kein Code)
+Kandidaten-Patches, je nach Diagnose einzeln freizugeben:
 
-Ich lese aus `location_integrations` für Rathaus:
-- Den konfigurierten Host (Cloud-DNS-Endpoint), den der Worker anspricht.
-- Den Benutzernamen (Passwort natürlich nicht).
-- Vergleich mit den anderen 3 gesunden Miniservern: gleiche Struktur? gleiche Art von Host? Gleicher User-Pattern?
+- **A) Direkt-IP-Fallback**: Bei 408 in `ws-open` einen Retry über die im HTTP-Pull erfolgreich genutzte IP/Route erzwingen (Cloud-DNS umgehen). Nur wenn Diagnose zeigt, dass HTTP eine andere Route nimmt.
+- **B) `close-2008`-Cooldown**: Nach 2× `close-2008` innerhalb von 5 Min → 10 Min Pause, statt sofort neu zu verbinden (verhindert Session-Storm im Miniserver).
+- **C) Session-Cleanup vor Reconnect**: Vor `ws-open` einen HTTP-Logout gegen den Miniserver senden, damit alte Tokens gedroppt werden (adressiert Session-Limit nach FW-Update).
+- **D) Attribution**: Alle drei Ereignisse (`408`, `2008`, Cooldown-Trigger) mit `miniserver_serial` + `close_code` in `loxone_ws_session_log` schreiben, um Wirkung messen zu können.
 
-### Schritt B — Ein sauberer Worker-Log-Ausschnitt vom Hetzner-Container
+### Schritt 2 — Verifikation
 
-Bitte per Putty:
+- 60 Min nach Deployment: 408-Rate & `close-2008`-Rate für Rathaus vs. Vorher, Session-Lebensdauer, Reconnects/h.
+- Kein weiterer Patch, bevor Metriken vorliegen.
 
-```bash
-docker logs --tail 200 loxone-ws-worker 2>&1 | grep -E "504F94A2BAA2|Rathaus" | tail -40
-```
+## Was **nicht** passiert
 
-Ich brauche:
-- Die Zeile `[WS] verbinde 504F94A2BAA2 → <host>` (zeigt den tatsächlich verwendeten Endpoint)
-- Optional die Zeile mit `describeError` vor dem 408 (zeigt, ob Loxone-Cloud selbst antwortet oder ob es ein TCP-/TLS-Timeout ist)
+- Keine Änderung an User `admin_lovable` oder Passwort.
+- Keine Änderungen an anderen Miniservern.
+- Kein „Alles gleichzeitig fixen"-Patch — jeder Teilpatch wird einzeln freigegeben.
 
-### Schritt C — Nur wenn A + B nichts eindeutiges zeigen: eine gezielte Diagnose-Änderung im Worker
+## Nächster Schritt
 
-Im `connect`-Catch (Zeile 763 in `docs/loxone-ws-worker/index.ts`) beim Fehlerpfad zusätzlich loggen: `host`, `err.response?.status`, `err.code`, `err.cause?.code`. Ein Log-Only-Patch, kein Backoff-Umbau — damit wir in der nächsten Fehlerwelle exakt sehen, wer den 408 sendet (axios vom Miniserver? vom Cloud-Relay? von Node selbst?).
-
-## Was ich **nicht mehr** vorschlage
-
-- **Kein** 423/503-Cool-down-Patch (falsche Ursachen-Hypothese, Beweislage widerlegt).
-- **Keine** Close-Storm-Backoff-Änderung — der aktuelle Backoff arbeitet bereits im Cap.
-- **Keine** Duplikat-Bereinigung (existiert nur eine aktive Integration für Rathaus, wie zuvor korrigiert).
-
-## Meine Empfehlung
-
-Schritt A ausführen, dann entscheiden. Ich rate nicht vor, was der Host in der Config ist — das prüfe ich mit einer DB-Query, sobald du grünes Licht gibst. Soll ich?
+Nach Freigabe des Plans starte ich mit **Schritt 0** (reine DB-Abfragen). Ergebnisse poste ich, dann entscheiden wir gemeinsam, welche der Patches A–D gebaut werden.
