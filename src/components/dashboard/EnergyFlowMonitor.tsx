@@ -1417,13 +1417,10 @@ export function MeterDetailDialog({
   })();
 
   const { rateUnit, energyUnit, kind } = (() => {
-    // Sensoren (V, °C, %, A, Hz, hPa, lx, ppm, …): keine Leistungs-/Energie-Logik, keine /h-Suffixe.
-    if (isSensor) {
-      const s = displayUnit || "";
-      return { rateUnit: s, energyUnit: s, kind: "sensor" as const };
-    }
-    const u = meterUnitRaw;
+    const u = (meterUnitRaw || displayUnit || "").toString();
     const ul = u.toLowerCase();
+
+    // Volume
     if (u === "m³" || u === "m3" || u === "m³/h") return { rateUnit: "m³/h", energyUnit: "m³", kind: "volume" as const };
     if (ul === "l" || ul === "liter" || u === "l/min" || u === "l/h") return { rateUnit: "l/h", energyUnit: "l", kind: "volume" as const };
 
@@ -1441,6 +1438,12 @@ export function MeterDetailDialog({
     };
     if (massToRate[ul]) return { ...massToRate[ul], kind: "mass" as const };
 
+    // Sensoren (V, °C, %, A, Hz, hPa, lx, ppm, …): keine Leistungs-/Energie-Logik, keine /h-Suffixe.
+    if (isSensor) {
+      const s = displayUnit || "";
+      return { rateUnit: s, energyUnit: s, kind: "sensor" as const };
+    }
+
     // Power units: rate stays as-is, energy is the matching "hour" unit.
     const powerToEnergy: Record<string, { rateUnit: string; energyUnit: string }> = {
       w: { rateUnit: "W", energyUnit: "Wh" },
@@ -1457,23 +1460,24 @@ export function MeterDetailDialog({
     if (powerToEnergy[ul]) return { ...powerToEnergy[ul], kind: "power" as const };
 
     if (!u || /wh$/i.test(u)) {
-      // Fallback when unit is missing/generic: use energy_type to avoid kW on water/gas meters.
       if (meterEnergyType === "wasser") return { rateUnit: "m³/h", energyUnit: "m³", kind: "volume" as const };
       if (meterEnergyType === "gas") return { rateUnit: "m³/h", energyUnit: "m³", kind: "volume" as const };
       return { rateUnit: "kW", energyUnit: "kWh", kind: "power" as const };
     }
-    // Unbekannte Einheit: konservativ 1:1 übernehmen, statt "/h" zu erfinden.
     return { rateUnit: u, energyUnit: u, kind: "generic" as const };
   })();
 
   const rateLabel = kind === "volume" ? "Durchfluss"
     : kind === "mass" ? "Massenstrom"
+    : kind === "sensor" ? "Wert"
     : kind === "generic" ? "Rate"
     : "Leistung";
   const sumLabel = kind === "volume" ? "Volumen"
     : kind === "mass" ? "Masse"
+    : kind === "sensor" ? "Wert"
     : kind === "generic" ? "Summe"
     : "Energie";
+
 
 
 
