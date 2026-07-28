@@ -1206,7 +1206,10 @@ function startHealthServer(): void {
           reconnect_count: c.reconnectCount,
           last_connected_at: c.lastConnectedAt ? new Date(c.lastConnectedAt).toISOString() : null,
           last_event_at: c.lastEventAt ? new Date(c.lastEventAt).toISOString() : null,
+          last_open_attempt_at: c.lastOpenAttemptAt ? new Date(c.lastOpenAttemptAt).toISOString() : null,
+          last_open_success_at: c.lastOpenSuccessAt ? new Date(c.lastOpenSuccessAt).toISOString() : null,
         })),
+
       };
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(state, null, 2));
