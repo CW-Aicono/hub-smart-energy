@@ -173,7 +173,8 @@ export function useLocationAutomations(locationId: string | undefined) {
       conditions: (automation.conditions ?? []) as unknown as Json,
       actions: (automation.actions ?? []) as unknown as Json,
       logic_operator: automation.logic_operator,
-      scope_type: "location",
+      scope_type: (automation as any).scope_type ?? "location",
+      execution_mode: (automation as any).execution_mode ?? "cloud",
       is_active: false,
     };
     const { data, error } = await supabase
