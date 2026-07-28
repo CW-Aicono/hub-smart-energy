@@ -338,6 +338,9 @@ interface ConnState {
   // Bridge-Worker (Phase 2) Zeitstempel
   lastConnectedAt: number; // ms epoch, 0 = nie
   lastEventAt: number;     // ms epoch, 0 = nie
+  // Phase 7.8: Stuck-Slot-Erkennung
+  lastOpenAttemptAt: number; // ms epoch, letzter connect()-Versuch
+  lastOpenSuccessAt: number; // ms epoch, letzter erfolgreicher ws-open
   // Phase 6 (IO-Optimierung): deferred session-end für Reconnect-Dedup
   pendingEndTimer: NodeJS.Timeout | null;
   pendingEndReason: string | null;
@@ -345,6 +348,7 @@ interface ConnState {
   diagEventCount: number;
   diagCallbacksSeen: Set<string>;
 }
+
 
 const connections = new Map<string, ConnState>(); // key = serial
 
