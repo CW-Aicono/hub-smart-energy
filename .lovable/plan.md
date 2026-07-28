@@ -1,45 +1,51 @@
-## Diagnose bestätigt — H3 (Prozess-interner DNS-/State-Cache)
+## Problem
 
-**Beweise aus deinen Logs:**
-- H1 raus: Beide Container haben dieselbe Outbound-IP `91.99.170.143` → keine Loxone-seitige IP-Sperre.
-- H3 bestätigt: `docker restart loxone-ws-worker-live` → **sofort** WS aktiv, RAW-Events fließen für `504F94A2BAA2`.
-- Root Cause: Der Node-Prozess des Live-Workers hatte für Rathaus einen negativen DNS-/Cloud-Lookup-Zustand gecacht (vermutlich seit dem Ausfall bei der Firmware-Aktualisierung). Da Node den DNS-Resolver-State prozesslebenslang mitschleppt und der Worker keinen eigenen Recovery-Reset kennt, blieb Rathaus permanent auf der schlechten Route hängen, obwohl Loxone Cloud längst wieder korrekt antwortete.
+Der virtuelle Zähler „Ladepunkt Ost 1" bezieht seine Quelle aus dem OCPP-Ladepunkt `Ost 1` (per `virtual_meter_sources.source_charge_point_id`). In der DB kommen die OCPP-Samples (Power ≈ 10,5 kW, Energie 1,12 kWh) sauber an, aber:
 
-Der Restart war also nicht der Fix, sondern der Workaround. Ohne Härtung passiert das beim nächsten Loxone-Cloud-Aussetzer oder Firmware-Update erneut — und dann hängt genau ein Miniserver wieder unbegrenzt lange, ohne dass es jemandem auffällt.
+- `meter_power_readings` für den virtuellen Zähler: **0 Zeilen** in den letzten 2 h.
+- `meter_cumulative_readings` für den virtuellen Zähler: **0 Zeilen**.
 
-## Vorgeschlagene Härtung im `loxone-ws-worker`
+Grund: In `supabase/functions/ocpp-persistent-api/index.ts` (`insert-meter-samples`, Zeile ~555–575) wird OCPP-Leistung **nur dann** in `meter_power_readings` gespiegelt, wenn am Ladepunkt `charge_points.linked_meter_id` gesetzt ist. Für Ost 1 ist das nicht der Fall — der Zähler ist stattdessen als **virtueller Zähler mit `virtual_meter_sources` → source_charge_point_id** verknüpft. Energie (Energy.Active.Import.Register) wird gar nicht in `meter_cumulative_readings` weitergereicht.
 
-Alle Änderungen isoliert im Worker (`docs/loxone-ws-worker/`), keine Cloud-Migration nötig.
+Ergebnis: Alle Dashboard-Widgets, die den virtuellen Zähler aus `meter_power_readings_5min` / `meter_cumulative_readings` lesen (KPIs, 24h-Chart, Energie-Kacheln), zeigen leere Werte. Nur der `VirtualBalanceBreakdown` funktioniert, weil er live aus `ocpp_meter_samples` rechnet.
 
-### 1) „Stuck-Slot"-Selbstheilung pro Miniserver
-Wenn für einen bestimmten Serial in **N Minuten kein einziger `open`-Erfolg** zustande kommt, obwohl der Slot aktiv ist und andere Serials im selben Worker sauber laufen:
-- Slot komplett zerstören (Timer, WS-Handle, Auth-State, Redirect-Cache).
-- 60 s Cooldown.
-- Slot mit frischem Kontext neu aufsetzen (entspricht dem, was `docker restart` gerade manuell erledigt hat — nur pro Serial, nicht global).
+## Lösung
 
-Schwellwert-Vorschlag: `NO_OPEN_TIMEOUT_MIN=15` (konfigurierbar via ENV).
+OCPP-Samples werden zusätzlich in **alle virtuellen Zähler** gespiegelt, die den jeweiligen Ladepunkt (direkt, per Gruppe oder per „alle CPs der Liegenschaft") als Quelle haben. Damit haben virtuelle CP-Zähler dieselben persistierten Daten wie physische Zähler und alle Widgets/Reports funktionieren automatisch.
 
-**Wichtig:** Das ist **kein periodischer Reconnect**. Ein absichtlich offline geschalteter Miniserver hat keinen aktiven Slot, daher läuft der Timer nicht. Der Reset passiert rein im Worker-Speicher und belastet die Datenbank nicht zusätzlich.
+### Änderungen
 
-### 2) Global „Same-serial only" Watchdog
-Zweiter, unabhängiger Health-Check: Wenn ein Serial >30 min ohne WS-Session ist, während ≥1 anderer Serial im selben Worker aktive Events schreibt → in `loxone_ws_session_log` einen Event `stuck-slot-reset` protokollieren und Schritt 1 auslösen. Der Vergleich mit den anderen Serials verhindert Fehlalarme bei generellen Cloud-Ausfällen.
+**1. `supabase/functions/ocpp-persistent-api/index.ts` – `insert-meter-samples`**
 
-### 3) Sichtbarkeit im Super-Admin
-`SuperAdminGatewayFleet` bekommt eine kleine Spalte „Zuletzt WS-Open-Erfolg" (Delta aus `loxone_ws_session_log`), damit ein hängender Slot ohne Putty auffällt. Zusätzlich wird `stuck-slot-reset` als eigener Reconnect-Grund im UI ausgewiesen, statt in der `Reconnects`-Zahl unterzugehen.
+Nach dem bestehenden `linked_meter_id`-Forward folgenden Block ergänzen:
 
-### 4) Optional: `curl` in beide Container-Images
-Kleiner Ops-Komfort — beim nächsten Diagnose-Bedarf funktioniert der `docker exec curl`-Test direkt (aktuell fehlt `curl` im Node-Alpine-Image). Alternativ `wget --spider` in die Diagnose-Snippets aufnehmen.
+- Alle betroffenen `virtual_meter_sources` laden, die diesen Ladepunkt referenzieren:
+  - `source_charge_point_id = cp.id`
+  - **oder** `source_charge_point_group_id = cp.group_id` (falls Gruppe gesetzt)
+  - **oder** `source_all_charge_points = true` (Zähler-`location_id` muss dem CP-Standort entsprechen)
+- Für jeden gefundenen virtuellen Zähler und jedes `Power.Active.Import`-Sample eine Zeile in `meter_power_readings` einfügen (kW, Vorzeichen aus `operator`).
+- Für jeden gefundenen virtuellen Zähler und jedes `Energy.Active.Import.Register`-Sample eine Upsert-Zeile in `meter_cumulative_readings` einfügen (`reading_value` in kWh, `reading_type='automatic'`, mit Vorzeichen — bei `operator='-'` als negative Delta-Absicht überspringen bzw. Zähler-Semantik beibehalten; siehe Detail unten).
 
-## Was NICHT gemacht wird
-- Keine Änderung an der Loxone-Cloud-DNS-Nutzung — die läuft grundsätzlich stabil.
-- Kein Prozess-Restart als Watchdog (bricht alle 20 gesunden Slots mit).
-- Keine Änderung an `admin_lovable` / Credentials — bestätigt korrekt.
-- Kein Patch am Redirect-Parser — Loxones 307-Verhalten ist normal.
+**2. Energie-Semantik für virtuelle Zähler**
 
-## Verifikation nach Deployment
-- 24 h Monitoring in `loxone_ws_session_log`: Auftreten von `stuck-slot-reset` Ereignissen zählen (Erwartung: 0–2/Woche).
-- Rathaus-Test: einmal Miniserver kurz vom Netz nehmen, wieder anschließen → Slot muss innerhalb 15 min ohne Container-Restart wieder Events liefern.
+`meter_cumulative_readings` speichert monotone Zählerstände. Für eine 1:1-Ladepunkt-Quelle ist das der CP-Zählerstand. Bei Aggregation mehrerer CPs (Gruppe / all-CPs) wird pro Sample ein **Summenzählerstand** aller involvierten CPs zum Zeitpunkt `sampled_at` berechnet und geschrieben (Ost 1: nur 1 Quelle → identisch mit CP-Stand). Bei `operator='-'` wird die Quelle nicht in den Zählerstand aufgenommen (dieser Fall ergibt für Energie ohnehin selten Sinn und würde monotonie brechen).
 
-## Nächster Schritt
+**3. Idempotenz / Duplikate**
 
-Nach Freigabe des Plans: Patch für `docs/loxone-ws-worker/index.ts` (Schritt 1+2), UI-Erweiterung in `SuperAdminGatewayFleet.tsx` (Schritt 3), plus Update-Anleitung in `docs/loxone-ws-worker/UPDATE-*.md`. Deployment via bestehendem Docker-Compose-Rebuild auf Hetzner — kein Neubau der Cloud-Umgebung nötig.
+- `meter_power_readings`: pro `(meter_id, recorded_at)` nur einmal einfügen (ON CONFLICT DO NOTHING falls Unique-Index vorhanden, sonst simple Deduplizierung im Code).
+- `meter_cumulative_readings`: pro `(meter_id, reading_date, reading_type='automatic')` upserten. Innerhalb desselben Tages den letzten Wert übernehmen.
+
+**4. Backfill (optional, kleiner Migration-Job)**
+
+Einmalig `ocpp_meter_samples` der letzten 24 h für alle CP-referenzierenden virtuellen Zähler in `meter_power_readings` und `meter_cumulative_readings` nachziehen, damit das 24h-Chart sofort Historie zeigt.
+
+### Nicht Teil dieses Plans
+
+- Keine UI-Änderungen. `VirtualBalanceBreakdown` und `useVirtualBalance` bleiben unverändert.
+- Keine Änderung an Simulations- oder Meter-Quellen des virtuellen Zählers.
+
+### Technische Details
+
+- Der Forward-Block wird nur einmal pro `insert-meter-samples`-Request gebaut (ein `select` auf `virtual_meter_sources` + ein `select` auf `charge_points` für Gruppe/Standort), unabhängig von der Sample-Anzahl.
+- `ocpp-persistent-api` läuft mit Service-Role → RLS-frei, aber neuen Insert-Pfad trotzdem gegen bestehende Policies auf `meter_power_readings` / `meter_cumulative_readings` prüfen.
+- Nach dem Deploy sollten innerhalb weniger Minuten Werte im Dashboard-Widget „Ladepunkt Ost 1" erscheinen (KPIs + 24h-Chart + Energie).
