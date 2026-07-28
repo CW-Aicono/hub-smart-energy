@@ -1417,34 +1417,41 @@ export function MeterDetailDialog({
   })();
 
   const { rateUnit, energyUnit, kind } = (() => {
-    const u = (meterUnitRaw || displayUnit || "").toString();
-    const ul = u.toLowerCase();
+    // Check both `unit` and `source_unit_power` for mass/volume — some meters have unit="kW" but source_unit_power="kg".
+    const candidates = [meterUnitRaw, meterSourceUnitRaw].filter(Boolean);
+    const massSet = new Set(["mg","g","kg","t","mg/h","g/h","kg/h","t/h","t/a"]);
+    const volSet = new Set(["m³","m3","m³/h","m3/h","l","liter","l/min","l/h"]);
+    const massHit = candidates.find((c) => massSet.has(c.toLowerCase()));
+    const volHit = candidates.find((c) => volSet.has(c.toLowerCase()));
 
-    // Volume
-    if (u === "m³" || u === "m3" || u === "m³/h") return { rateUnit: "m³/h", energyUnit: "m³", kind: "volume" as const };
-    if (ul === "l" || ul === "liter" || u === "l/min" || u === "l/h") return { rateUnit: "l/h", energyUnit: "l", kind: "volume" as const };
+    if (volHit) {
+      const v = volHit.toLowerCase();
+      if (v === "l" || v === "liter" || v === "l/min" || v === "l/h") return { rateUnit: "l/h", energyUnit: "l", kind: "volume" as const };
+      return { rateUnit: "m³/h", energyUnit: "m³", kind: "volume" as const };
+    }
+    if (massHit) {
+      const m: Record<string, { rateUnit: string; energyUnit: string }> = {
+        mg: { rateUnit: "mg/h", energyUnit: "mg" },
+        g:  { rateUnit: "g/h",  energyUnit: "g"  },
+        kg: { rateUnit: "kg/h", energyUnit: "kg" },
+        t:  { rateUnit: "t/h",  energyUnit: "t"  },
+        "mg/h": { rateUnit: "mg/h", energyUnit: "mg" },
+        "g/h":  { rateUnit: "g/h",  energyUnit: "g"  },
+        "kg/h": { rateUnit: "kg/h", energyUnit: "kg" },
+        "t/h":  { rateUnit: "t/h",  energyUnit: "t"  },
+        "t/a":  { rateUnit: "t/a",  energyUnit: "t"  },
+      };
+      return { ...m[massHit.toLowerCase()], kind: "mass" as const };
+    }
 
-    // Mass units: rate has "/h" suffix, energy is the base mass unit.
-    const massToRate: Record<string, { rateUnit: string; energyUnit: string }> = {
-      mg: { rateUnit: "mg/h", energyUnit: "mg" },
-      g:  { rateUnit: "g/h",  energyUnit: "g"  },
-      kg: { rateUnit: "kg/h", energyUnit: "kg" },
-      t:  { rateUnit: "t/h",  energyUnit: "t"  },
-      "mg/h": { rateUnit: "mg/h", energyUnit: "mg" },
-      "g/h":  { rateUnit: "g/h",  energyUnit: "g"  },
-      "kg/h": { rateUnit: "kg/h", energyUnit: "kg" },
-      "t/h":  { rateUnit: "t/h",  energyUnit: "t"  },
-      "t/a":  { rateUnit: "t/a",  energyUnit: "t"  },
-    };
-    if (massToRate[ul]) return { ...massToRate[ul], kind: "mass" as const };
-
-    // Sensoren (V, °C, %, A, Hz, hPa, lx, ppm, …): keine Leistungs-/Energie-Logik, keine /h-Suffixe.
     if (isSensor) {
       const s = displayUnit || "";
       return { rateUnit: s, energyUnit: s, kind: "sensor" as const };
     }
 
-    // Power units: rate stays as-is, energy is the matching "hour" unit.
+    const u = meterUnitRaw;
+    const ul = u.toLowerCase();
+
     const powerToEnergy: Record<string, { rateUnit: string; energyUnit: string }> = {
       w: { rateUnit: "W", energyUnit: "Wh" },
       kw: { rateUnit: "kW", energyUnit: "kWh" },
@@ -1466,6 +1473,7 @@ export function MeterDetailDialog({
     }
     return { rateUnit: u, energyUnit: u, kind: "generic" as const };
   })();
+
 
   const rateLabel = kind === "volume" ? "Durchfluss"
     : kind === "mass" ? "Massenstrom"
