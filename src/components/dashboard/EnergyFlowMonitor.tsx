@@ -2167,7 +2167,7 @@ export function MeterDetailDialog({
                     ]}
                     width={70}
                   >
-                    <AxisLabel value={`Energie (${energyUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
+                    <AxisLabel value={`${sumLabel} (${energyUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
                   {stats?.bidirectional && <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />}
                   <RTooltip
