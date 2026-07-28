@@ -2177,12 +2177,12 @@ export function MeterDetailDialog({
           </div>
           <div>
             <div className="text-muted-foreground">Datenpunkte</div>
-            <div className="font-medium tabular-nums">{series.length.toLocaleString("de-DE")}</div>
+            <div className="font-medium tabular-nums">{displayPointCount.toLocaleString("de-DE")}</div>
           </div>
           <div>
             <div className="text-muted-foreground">Letzter Wert</div>
             <div className="font-medium">
-              {series.length ? new Date(series[series.length - 1].t).toLocaleString("de-DE") : "–"}
+              {displayLastTs ? new Date(displayLastTs).toLocaleString("de-DE") : "–"}
             </div>
           </div>
           <div className="min-w-0">
