@@ -2575,6 +2575,66 @@ async function handleDeviceSnapshot(req: Request): Promise<Response> {
     console.warn("[device-snapshot] sensor history skipped:", (e as Error).message);
   }
 
+  // Zusätzlich: Leistungswerte in meter_power_readings spiegeln, damit die
+  // Detail-Charts für HA-Gateway-Zähler nicht leer bleiben. Nur Meter mit
+  // Leistungseinheit (W/kW/MW); Delta-Guard: nur schreiben, wenn kein Wert
+  // der letzten 55 s existiert.
+  try {
+    if (device.location_integration_id) {
+      const entityIds = incoming.map((r) => r.entity_id);
+      const { data: linkedMeters } = await supabase
+        .from("meters")
+        .select("id, tenant_id, sensor_uuid, energy_type, source_unit_power")
+        .eq("location_integration_id", device.location_integration_id)
+        .eq("capture_type", "automatic")
+        .eq("is_archived", false)
+        .in("sensor_uuid", entityIds);
+
+      const incomingByEntity = new Map<string, any>();
+      for (const row of incoming) incomingByEntity.set(row.entity_id, row);
+
+      const throttleCutoff = new Date(Date.now() - 55_000).toISOString();
+      const powerRows: Array<{ meter_id: string; tenant_id: string; energy_type: string; power_value: number; recorded_at: string }> = [];
+
+      for (const meter of linkedMeters || []) {
+        const src = String((meter as any).source_unit_power || "").toLowerCase();
+        let scale: number | null = null;
+        if (src === "w") scale = 1 / 1000;
+        else if (src === "kw") scale = 1;
+        else if (src === "mw") scale = 1000;
+        else continue;
+        const row = incomingByEntity.get(String(meter.sensor_uuid));
+        if (!row) continue;
+        const raw = row.state;
+        if (raw == null) continue;
+        const num = typeof raw === "number" ? raw : Number(String(raw).replace(",", "."));
+        if (!Number.isFinite(num)) continue;
+        const { data: recent } = await supabase
+          .from("meter_power_readings")
+          .select("recorded_at")
+          .eq("meter_id", meter.id)
+          .gte("recorded_at", throttleCutoff)
+          .limit(1)
+          .maybeSingle();
+        if (recent) continue;
+        powerRows.push({
+          meter_id: meter.id,
+          tenant_id: meter.tenant_id,
+          energy_type: meter.energy_type || "strom",
+          power_value: num * scale,
+          recorded_at: nowIso,
+        });
+      }
+
+      if (powerRows.length > 0) {
+        const { error: prErr } = await supabase.from("meter_power_readings").insert(powerRows);
+        if (prErr) console.warn("[device-snapshot] meter_power_readings insert error:", prErr.message);
+      }
+    }
+  } catch (e) {
+    console.warn("[device-snapshot] power mirror skipped:", (e as Error).message);
+  }
+
   return json({ success: true, upserted: changed.length, pruned, unchanged: incoming.length - changed.length });
 }
 
