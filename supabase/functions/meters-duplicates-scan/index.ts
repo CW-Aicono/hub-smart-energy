@@ -43,8 +43,19 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (!role) return json({ error: "Forbidden" }, 403);
 
-  const { data: groups, error: rpcErr } = await admin.rpc("find_duplicate_meters");
+  let tenantFilter: string | null = null;
+  if (req.method === "POST") {
+    try {
+      const body = await req.json();
+      if (body && typeof body.tenant_id === "string") tenantFilter = body.tenant_id;
+    } catch { /* ignore */ }
+  }
+
+  const { data: groupsRaw, error: rpcErr } = await admin.rpc("find_duplicate_meters");
   if (rpcErr) return json({ error: rpcErr.message }, 500);
+  const groups = tenantFilter
+    ? ((groupsRaw ?? []) as any[]).filter((g) => g.tenant_id === tenantFilter)
+    : (groupsRaw ?? []);
 
   // Enrich each group with meter details + tenant/location names for the UI.
   const allMeterIds = Array.from(
