@@ -856,6 +856,13 @@ const SuperAdminTenantDetail = () => {
               </Card>
 
               {tenant && (
+                <TenantMeterDuplicatesCard
+                  tenantId={(tenant as any).id}
+                  tenantName={(tenant as any).name}
+                />
+              )}
+
+              {tenant && (
                 <TenantPartnerTransferCard
                   tenantId={(tenant as any).id}
                   tenantName={(tenant as any).name}
