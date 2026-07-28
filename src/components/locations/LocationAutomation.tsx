@@ -608,6 +608,20 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                           {actionsCount > 1 && (
                             <Badge variant="secondary" className="text-[10px]">{actionsCount} {T("auto.actions")}</Badge>
                           )}
+                          {(() => {
+                            const mode = (auto.execution_mode || "cloud") as "cloud" | "loxone_local" | "hybrid";
+                            const map = {
+                              cloud: { label: "Cloud", cls: "bg-sky-500/10 text-sky-700 border-sky-500/30 dark:text-sky-300", title: "Ausführung über die Cloud" },
+                              loxone_local: { label: "Lokal", cls: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-300", title: "Ausführung lokal auf dem Gateway/Miniserver" },
+                              hybrid: { label: "Hybrid", cls: "bg-violet-500/10 text-violet-700 border-violet-500/30 dark:text-violet-300", title: "Hybrid: lokal mit Cloud-Fallback" },
+                            } as const;
+                            const m = map[mode] ?? map.cloud;
+                            return (
+                              <Badge variant="outline" className={`text-[10px] ${m.cls}`} title={m.title}>
+                                {m.label}
+                              </Badge>
+                            );
+                          })()}
                         </div>
                         {auto.description && (
                           <p className="text-xs text-muted-foreground mt-0.5">{auto.description}</p>
