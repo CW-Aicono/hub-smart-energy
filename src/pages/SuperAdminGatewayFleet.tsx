@@ -810,7 +810,7 @@ const SuperAdminGatewayFleet = () => {
                     </TableHeader>
                     <TableBody>
                       {filteredRows.length === 0 && (
-                        <TableRow><TableCell colSpan={13} className="text-center text-sm text-muted-foreground py-8">Keine Gateways registriert.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={14} className="text-center text-sm text-muted-foreground py-8">Keine Gateways registriert.</TableCell></TableRow>
                       )}
                       {filteredRows.map((r) => {
                         const d = r.device;
