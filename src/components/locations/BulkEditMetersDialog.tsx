@@ -21,7 +21,8 @@ import type { Meter } from "@/hooks/useMeters";
 import { useFloors } from "@/hooks/useFloors";
 import { useFloorRooms } from "@/hooks/useFloorRooms";
 import { ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
-import { SOURCE_UNIT_GROUPS } from "@/lib/sensorUnits";
+import { EXTRA_ENERGY_CUMULATIVE_GROUP } from "@/lib/sensorUnits";
+import { SourceUnitPicker } from "./SourceUnitPicker";
 
 interface Props {
   open: boolean;
