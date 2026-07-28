@@ -1,54 +1,91 @@
-# Plan: WS-Default & Auto-Verknüpfung für neue Miniserver
+## Was der Screenshot bestätigt
 
-## Ziel
-Neue Loxone-Miniserver sollen ab sofort automatisch:
-1. WebSocket-Verbindung als Default-Modus nutzen (statt HTTP-Poll).
-2. Beim ersten erfolgreichen Kontakt einen Eintrag in `bridge_miniserver_links` erhalten (inkl. `tenant_id`, `location_id`, `serial_number`).
+Der Miniserver Rathaus ist über den Loxone Cloud-DNS (`78-47-126-196.504f94a2baa2.dyndns.loxonecloud.com`) erreichbar, Loxone Web-UI und Loxone-App loggen sich problemlos ein. Beide nutzen ebenfalls WebSocket (`wss://…`) auf demselben Endpunkt, den auch unser Worker anspricht.
 
-## Ausgangslage (verifiziert)
-- Spalte `location_integrations.loxone_remote_connect_ws_enabled` existiert, **Default = FALSE** (Migration 20260618). Neue Integrationen laufen daher standardmäßig im HTTP-Poll-Modus.
-- Im `EditIntegrationDialog` gibt es bereits einen Toggle (setzt manuell true/false).
-- `bridge_miniserver_links` wird aktuell weder vom `loxone-ws-worker` noch von `loxone-api` beim ersten Kontakt automatisch angelegt — die Einträge stammen aus Seeds/Migrationen bzw. wurden manuell nachgetragen (siehe letzte Migration für AICONO Zentrale, Jugendzentrum, Testkoffer).
+Das heißt:
+- Der Miniserver ist WS-fähig.
+- Cloud-DNS/Remote-Connect ist gesund.
+- Freie Event-Slots sind vorhanden (sonst käme die App auch nicht rein).
+- TLS/Zertifikat ist gesund.
 
-## Umsetzung
+Der Fehler liegt also **spezifisch bei unserem `loxone-ws-worker` gegen genau diesen Miniserver**, nicht bei Loxone.
 
-### Teil 1 — WS als Default
-1. **Migration**
-   - `ALTER TABLE location_integrations ALTER COLUMN loxone_remote_connect_ws_enabled SET DEFAULT TRUE;`
-   - Optionaler Backfill: bestehende Loxone-Integrationen mit `NULL`/`FALSE` und aktivem Cloud-DNS auf `TRUE` setzen — **nur nach Rückfrage**, um niemanden ungewollt umzustellen. Standard: nur Default ändern, Bestand unverändert.
-2. **UI-Anpassung** (`EditIntegrationDialog.tsx`)
-   - Initial-State beim Anlegen neuer Loxone-Integrationen auf `true` setzen (Formular-Default), damit auch der explizit übergebene Wert konsistent ist.
-   - Kleiner Hinweistext: „Empfohlen: WebSocket (Realtime, geringere Last)".
+## Was die Datenbank für Rathaus zeigt
 
-### Teil 2 — Auto-Verknüpfung `bridge_miniserver_links`
-Zwei Trigger-Punkte, damit sowohl WS- als auch HTTP-Nutzer erfasst werden:
+Aus `bridge_event_log` (Serial `504F94A2BAA2`) seit dem Reboot:
 
-**A) im `loxone-ws-worker`** (Hetzner-Repo, außerhalb Lovable — Aufgabe wird nur dokumentiert, nicht hier committet):
-- Nach erfolgreichem WS-Handshake und Auslesen der `msInfo.serialNr`:
-  - `upsert` auf `bridge_miniserver_links` mit `on_conflict=miniserver_serial` — Felder: `miniserver_serial`, `tenant_id`, `location_id`, `location_integration_id`, `last_seen_at=now()`.
+- Serie von `ws-open`-Fehlern:
+  - `read ECONNRESET`
+  - `Request failed with status code 503`
+  - `Request failed with status code 423`
+  - vereinzelt leere Fehlergründe
+- Zuletzt erfolgreiche Session endete mit `close-2008` nach 15 Reconnects in 21 Minuten
+- Davor `close-2004` mit 83 Reconnects
+- Danach kommt es zu keinem stabilen neuen WS-Open mehr
 
-**B) in `supabase/functions/loxone-api/index.ts`** (HTTP-Poll-Pfad, hier im Repo):
-- In der Structure-Fetch-Routine (~Zeile 1092) wird `LoxAPP3.json` geladen; darin steht `msInfo.serialNr`. Direkt danach:
-  - Prüfen ob Link existiert (`select miniserver_serial from bridge_miniserver_links where miniserver_serial=…`).
-  - Falls nicht: `insert` mit den bekannten IDs.
-  - Falls vorhanden aber `location_id`/`tenant_id` NULL: `update` mit Backfill.
-- Fehler dabei nur loggen, nicht die Response brechen.
+`423 Locked` und `503` in Verbindung mit direkt darauffolgenden Retry-Wellen sind typisch für **Rate-Limiting/Locking auf Loxone-Cloud-Relay-Ebene**, wenn ein Client zu häufig hintereinander connectet. Das erklärt, warum App/Web-UI durchkommen (einzelner, sauberer Connect) und unser Worker nicht (aggressiver Reconnect-Storm → Sperre).
 
-**C) RLS/Grants**
-- `bridge_miniserver_links` hat bereits Policies. Sicherstellen, dass Service-Role write darf (ist der Fall, da Edge Functions mit Service-Role laufen). Kein Migrationsbedarf erwartet.
+## Hypothese
 
-### Teil 3 — Sichtbarkeit
-- Kein UI-Umbau nötig: Neue Miniserver erscheinen ab dann automatisch mit Seriennummer in „Gateway-Flotte" und werden korrekt in `bridge_event_log` attribuiert.
+Unser Worker rennt für Rathaus in eine **Reconnect-/Sperrschleife**:
 
-## Nicht im Scope
-- Nachträgliches Umschalten aller bestehenden HTTP-Poll-Integrationen auf WS (opt-in, nicht automatisch).
-- UI zum manuellen Editieren von `bridge_miniserver_links` (kann nachgezogen werden, falls gewünscht).
+1. Miniserver oder Cloud-Relay schließt eine WS-Verbindung (`2004`/`2008`).
+2. Worker versucht sofort wieder aufzubauen.
+3. Loxone-Cloud-Relay antwortet mit `423`/`503`, weil der Endpunkt/Client kurzfristig gesperrt/überlastet ist.
+4. Worker retryt weiter, Sperre bleibt aktiv, WS-Open kommt nie zustande.
+5. HTTP-Poll läuft separat weiter, deswegen sehen wir „irgendwelche" Werte, aber der WS-Kanal bleibt tot.
 
-## Reihenfolge
-1. Migration (Default → TRUE).
-2. Edge Function `loxone-api`: Auto-Link beim Structure-Fetch.
-3. UI-Default im Dialog + Hinweistext.
-4. Worker-Anpassung (Hetzner-Repo, separates Deployment).
+App/Web-UI sind davon nicht betroffen, weil sie
+- nicht permanent reconnecten,
+- vom Nutzer manuell gestartet werden,
+- vermutlich einen anderen Login-Kontext haben.
 
-## Offene Frage
-Sollen bestehende Loxone-Integrationen (HTTP-Poll) in einem einmaligen Backfill mit auf WS umgestellt werden, oder bleibt WS opt-in für Bestand?
+## Plan zur Diagnose und Behebung
+
+### 1. Sofort: Rathaus-WS für kurzen Zeitraum bewusst pausieren
+- `location_integrations.loxone_remote_connect_ws_enabled = false` für die betroffene Integration (`284a957b-…`).
+- 10 Minuten warten, damit eine eventuelle Loxone-Cloud-Sperre abläuft.
+- Danach WS wieder aktivieren und einen **einzigen** Connect zulassen.
+- Ziel: prüfen, ob der Worker nach „kalter" Pause sauber connecten kann.
+
+### 2. Worker-Reconnect-Verhalten härten (Patch für `loxone-ws-worker`)
+Aktuell reagiert der Worker auf `close-2004`/`close-2008`/`423`/`503` mit dem normalen Reconnect-Backoff. Notwendig:
+
+- Bei HTTP-Response `423 Locked` oder `503` im `ws-open`-Schritt: **Cool-down von 5–10 Minuten** für genau diese Integration, kein Retry-Storm.
+- Bei `close-2004`/`close-2008` in kurzer Folge (z. B. >3 in 10 min): Exponentielles Backoff auf mindestens 60 s, dann 5 min, dann 15 min.
+- Pro Integration einen eigenen Backoff-Zustand (nicht global, damit gesunde Miniserver nicht mitleiden).
+- Alle Cool-downs in `bridge_event_log` (`event_type=ws_cooldown`) sichtbar machen.
+
+### 3. Login-Kontext prüfen
+Loxone kann pro User nur begrenzt viele parallele WS-Sessions/Slots. Prüfen:
+
+- Welchen Loxone-User verwendet unser Worker für Rathaus? (aus `credentials_encrypted` / Integration-Config)
+- Wird derselbe User evtl. schon von einer anderen Integration/altem Container/Loxone Config genutzt?
+- Falls ja: **eigenen technischen User** „aicono-worker" im Miniserver anlegen, mit reduzierten Rechten und **nur** für den Worker.
+
+### 4. Duplikat-Integrationen aufräumen
+Für Serial `504F94A2BAA2` gibt es **vier** `location_integrations`. Vier parallele WS-Sessions auf denselben Miniserver ist Teil des Problems:
+- Slot-Verbrauch am Miniserver
+- Vervierfachte Reconnect-Storms
+- Loxone-Cloud sieht 4x denselben Client kurz hintereinander → schneller in `423`
+
+Nur eine Integration behalten, die anderen drei deaktivieren. (Ich liste dir vorher die vier auf, damit du entscheidest.)
+
+### 5. Direkte LAN/VPN-Verbindung als Diagnose-Gegenprobe
+- Falls möglich, testweise `host` in der Integration auf die LAN-IP setzen und Cloud-DNS umgehen.
+- Bleibt der WS dann stabil, ist die Diagnose eindeutig: Loxone-Cloud-Relay drosselt unseren Worker.
+
+### 6. UI-Klarstellung
+In der Flotten-Ansicht klar zwischen
+- „WS-Kanal offline"
+- „HTTP-Poll aktiv"
+- „letzter WS-Cool-down bis …"
+
+trennen, damit Situationen wie diese nicht mehr als „WS getrennt, aber Daten kommen" verwirren.
+
+## Empfehlung für den nächsten Schritt
+
+Nicht am Miniserver herumdrehen — er ist gesund. Ich würde als nächstes:
+
+1. Dir die 4 Duplikat-Integrationen für Rathaus auflisten, damit du drei davon abschaltest.
+2. Danach den Cool-down-Patch für den Worker vorbereiten, damit sich das Problem nach dem nächsten Reboot/Firmware-Update nicht wiederholt.
