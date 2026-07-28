@@ -1,53 +1,41 @@
 ## Problem
 
-Im `MeterDetailDialog` (Live-Values → Gerätedetail) werden die Einheiten falsch abgeleitet, wenn der Zähler eine **Leistungseinheit** (z. B. `kW`) statt einer Energieeinheit (z. B. `kWh`) hinterlegt hat.
+Im Meter-Detail-Dialog (`EnergyFlowMonitor.tsx` → `MeterDetailDialog`) werden Sensor-Kennzahlen falsch beschriftet:
 
-Aktuell wird aus `kW`:
-- `rateUnit = "kW/h"`  (falsch: Leistung ist bereits kW, nicht kW pro Stunde)
-- `energyUnit = "kW"`  (falsch: Energie muss kWh sein)
+- KPI-Kacheln zeigen **„Ø Leistung / Max / Min in kW"** — auch bei reinen Sensoren wie Spannung (V), Temperatur (°C), Feuchte (%), Strom (A), Frequenz (Hz), Luftdruck (hPa), Lux, CO₂ etc.
+- Grund 1: `rateUnit`-Ableitung (Zeile 1405) liest nur `meterUnitRaw`, ignoriert aber `source_unit_power`. Bei Sensoren ist `unit` oft leer → Fallback liefert `"kW"` (Zeile 1430).
+- Grund 2: Für Sensoren fehlt eine separate KPI-Beschriftung. Labels sind fest auf „Leistung" verdrahtet.
+- Grund 3: Generischer `${u}/h`-Fallback (Zeile 1432) würde z. B. für °C ein sinnloses „°C/h" erzeugen.
+- Chart 1 („Leistung") und dessen Tooltip/Legende/Y-Achse verwenden ebenfalls `rateUnit` + festen Text „Leistung" — bei Sensoren doppelt falsch, zumal darunter bereits ein passender `SensorHistoryChart` gerendert wird.
 
-Das führt zu den im Screenshot markierten Anzeigen:
-- Ø Leistung: `3,20 kW/h` → sollte `3,20 kW`
-- Max: `12,23 kW/h` → sollte `12,23 kW`
-- Min: `0,00 kW/h` → sollte `0,00 kW`
-- Energie: `71,27 kW` → sollte `71,27 kWh`
+Der Energie-Bucket-Chart ist bereits per `!isSensor` ausgeblendet — Chart 1 aber nicht.
 
-## Ursache
+## Verifizierter Umfang
 
-In `src/components/dashboard/EnergyFlowMonitor.tsx` (ca. Zeile 1405–1416) leitet `MeterDetailDialog` die Anzeigeeinheiten aus `meterUnitRaw` ab. Die Logik erkennt nur:
-- Volumeneinheiten (`m³`, `l`)
-- Energieeinheiten, die auf `wh` enden (`Wh`, `kWh`, `MWh`)
-- alles andere wird als generische Durchfluss-/Rate-Einheit behandelt: `rateUnit = "${u}/h"`, `energyUnit = u`
+Ripgrep bestätigt: `rateUnit` / `energyUnit` existieren nur in `src/components/dashboard/EnergyFlowMonitor.tsx`. Kein weiterer Chart betroffen. `SensorHistoryChart` nutzt bereits die per Prop übergebene Sensor-Einheit korrekt.
 
-Für `u = "kW"` landet man im generischen Zweig und bekommt `kW/h` + `kW`.
+## Änderungen (nur `src/components/dashboard/EnergyFlowMonitor.tsx`, `MeterDetailDialog`)
 
-## Lösung
+1. **Einheiten-Ableitung härten**
+   - Für Sensoren (`isSensor === true`) `rateUnit` und `energyUnit` **nicht** aus Leistungslogik ableiten, sondern beide auf die tatsächliche Sensor-Einheit setzen (`displayUnit` = `unit || source_unit_power`, sonst leer). Keine `/h`-Anhänge, kein kW-Fallback.
+   - Für Zähler den bestehenden Power-/Volumen-Mapping-Zweig beibehalten. Den generischen `${u}/h`-Fallback (Zeile 1432) entfernen und stattdessen konservativ auf `{ rateUnit: displayUnit, energyUnit: displayUnit }` fallen, wenn keine bekannte Zuordnung greift (verhindert erfundene Einheiten wie `°C/h`).
+   - `isSensor`-Erkennung bleibt unverändert.
 
-Die Einheitenableitung um eine explizite Erkennung von **Leistungseinheiten** erweitern:
+2. **KPI-Kacheln kontextabhängig beschriften**
+   - Bei Sensoren die Labels auf **„Ø Wert / Max / Min"** umstellen und statt `rateUnit` die Sensor-Einheit anzeigen.
+   - Bei Zählern unverändert „Ø Leistung / Max / Min" in `rateUnit`.
+   - „Momentanwert" bleibt für Sensoren; „Energie" bleibt für Zähler.
 
-- `W`  → rateUnit `W`,  energyUnit `Wh`
-- `kW` → rateUnit `kW`, energyUnit `kWh`
-- `MW` → rateUnit `MW`, energyUnit `MWh`
-- `GW` → rateUnit `GW`, energyUnit `GWh`
-- `VA`, `kVA`, `MVA` → entsprechende VAh-Einheiten
-- `var`, `kvar`, `Mvar` → entsprechende varh-Einheiten
-
-Diese Erkennung muss **vor** dem generischen Fallback `"${u}/h"` ausgeführt werden.
-
-## Dateien / Komponenten
-
-- `src/components/dashboard/EnergyFlowMonitor.tsx`
-  - Funktion/Block `MeterDetailDialog` → Unit-Derivation (`rateUnit`, `energyUnit`)
-  - Achsenbeschriftungen und Tooltips verwenden bereits `rateUnit` / `energyUnit`, daher reicht die zentrale Fix.
+3. **Chart 1 „Leistung"**
+   - Bei `isSensor` komplett ausblenden (analog zum bereits gehandhabten Energie-Chart). Der darunter gerenderte `SensorHistoryChart` (Zeile 2108) übernimmt die Sensor-Visualisierung mit korrekter Einheit.
+   - Damit entfällt für Sensoren auch die falsche Y-Achsen-/Tooltip-/Legenden-Beschriftung „Leistung (kW)".
 
 ## Verifikation
 
-- Unit-Test oder manueller Check mit einem Zähler, dessen `unit = "kW"` ist:
-  - KPI-Kacheln zeigen `kW` für Leistung und `kWh` für Energie.
-  - Y-Achse des Leistungsverlaufs zeigt `Leistung (kW)`.
-  - Y-Achse „Energie pro Stunde“ zeigt `Energie (kWh)`.
+- `tsgo` (Typecheck).
+- Manuell im Preview: Detail-Dialog für einen Volt-Sensor (Screenshot-Fall), Temperatur-Sensor, Wirkleistungs-Zähler (kW), Wasser-Zähler (m³) und Gas-Zähler prüfen — Einheiten/Labels müssen jeweils passen.
 
-## Nicht im Scope
+## Nicht enthalten
 
-- Keine Änderung an der Datenhaltung oder an der Berechnungslogik von `stats.avg/max/min/totalImport/totalExport`.
-- Keine Änderung an anderen Dialogen oder Widgets.
+- Keine Änderungen an `SensorHistoryChart`, Widget-Designer, LiveValues-Kacheln oder Dashboard-Widgets — Analyse zeigt, dass diese die Einheit bereits korrekt aus dem Meter/Sensor übernehmen.
+- Keine DB-/Backend-Änderungen.
