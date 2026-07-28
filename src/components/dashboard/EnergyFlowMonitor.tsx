@@ -1904,19 +1904,19 @@ export function MeterDetailDialog({
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">{isSensor ? "Ø Wert" : "Ø Leistung"}</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.avg)}${rateUnit ? " " + rateUnit : ""}` : "–"}
+              {displayStats ? `${fmtDeNum(displayStats.avg)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Max</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.max)}${rateUnit ? " " + rateUnit : ""}` : "–"}
+              {displayStats ? `${fmtDeNum(displayStats.max)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Min</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.min)}${rateUnit ? " " + rateUnit : ""}` : "–"}
+              {displayStats ? `${fmtDeNum(displayStats.min)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
