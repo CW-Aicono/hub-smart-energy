@@ -2135,7 +2135,7 @@ export function MeterDetailDialog({
 
           <div>
             <div className="text-sm font-medium mb-1">
-              Energie pro {range === "1h" ? "5 Min" : range === "24h" ? "Stunde" : range === "7d" ? "6 h" : "Tag"}
+              {sumLabel} pro {range === "1h" ? "5 Min" : range === "24h" ? "Stunde" : range === "7d" ? "6 h" : "Tag"}
             </div>
             <div className="h-[240px]">
               <ResponsiveContainer width="100%" height="100%">
