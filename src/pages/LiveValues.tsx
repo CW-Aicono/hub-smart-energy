@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LocationTreeFilter, type LocationScope } from "@/components/meters/LocationTreeFilter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer } from "lucide-react";
+import { getDeviceIconForMeter } from "@/lib/deviceIcons";
 import { supabase } from "@/integrations/supabase/client";
 import { formatEnergy, formatGasDual } from "@/lib/formatEnergy";
 import { cn } from "@/lib/utils";
