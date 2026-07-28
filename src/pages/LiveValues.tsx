@@ -802,7 +802,7 @@ const LiveValues = () => {
               {filteredMeters.map((meter) => {
                 const { value, unit: sensorUnit, totalDay, totalMonth, totalYear, meterReading, meterReadingUnit, source, date } = getValue(meter);
                 const config = ENERGY_TYPE_CONFIG[meter.energy_type] || ENERGY_TYPE_CONFIG.strom;
-                const Icon = config.icon;
+                const Icon = getDeviceIconForMeter(meter);
                 const location = locations.find((l) => l.id === meter.location_id);
                 const isFlowType = meter.energy_type === "wasser" || meter.energy_type === "gas";
                 const soc = socByMeterId.get(meter.id);
