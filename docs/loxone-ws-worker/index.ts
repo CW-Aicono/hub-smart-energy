@@ -609,9 +609,11 @@ async function connect(state: ConnState): Promise<void> {
     state.authenticated = true;
     state.reconnectDelay = 1000;
     state.lastConnectedAt = Date.now();
+    state.lastOpenSuccessAt = Date.now();
     state.diagEventCount = 0;
     state.diagCallbacksSeen = new Set<string>();
     stage = "session-start";
+
     await sessionStart(state);
     // Auth erfolgreich → falls die Integration vorher als "auth_failed" markiert war,
     // Status im Backend auf "success" zurücksetzen und offene Auth-Fehler auflösen.
