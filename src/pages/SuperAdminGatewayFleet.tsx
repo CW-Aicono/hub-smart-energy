@@ -346,12 +346,14 @@ function aiconoToUnifiedRow(
     sessionsLast24h: stats?.sessions_24h ?? null,
     worker: null,
     lastDisconnect,
+    lastOpenSuccessAt: null,
     serials: [],
     device: d,
     // Derived flag used by the UI to show a seamless-recycle hint.
     isSeamlessRecycle: connectedAge !== null && hbAge !== null && connectedAge < hbAge,
   };
 }
+
 
 
 function UnifiedStatusBadge({ status, label }: { status: UnifiedRow["status"]; label: string }) {
