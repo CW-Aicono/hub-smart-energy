@@ -157,8 +157,8 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
                   strokeWidth={1}
                 />
               ))}
-              <Line data={pastData} type="stepAfter" dataKey="price" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} name={T("spot.past")} connectNulls={false} />
-              <Line type="stepAfter" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name={T("spot.price")} data={futureData} connectNulls={false} />
+              <Line type="stepAfter" dataKey="pastPrice" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} name={T("spot.past")} connectNulls={false} isAnimationActive={false} />
+              <Line type="stepAfter" dataKey="futurePrice" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name={T("spot.price")} connectNulls={false} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         ) : (
