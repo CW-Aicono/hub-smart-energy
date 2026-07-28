@@ -1402,19 +1402,6 @@ export function MeterDetailDialog({
   // Fallback: leere unit → source_unit_power (Gateway-Sensoren haben oft nur letzteres gepflegt)
   const displayUnit = meterUnitRaw || meterSourceUnitRaw;
   const meterEnergyType = (nodeMeter?.energy_type ?? "").toString().trim();
-  const { rateUnit, energyUnit } = (() => {
-    const u = meterUnitRaw;
-    if (u === "m³" || u === "m3" || u === "m³/h") return { rateUnit: "m³/h", energyUnit: "m³" };
-    if (u.toLowerCase() === "l" || u.toLowerCase() === "liter" || u === "l/min") return { rateUnit: "l/h", energyUnit: "l" };
-    if (!u || /wh$/i.test(u)) {
-      // Fallback when unit is missing/generic: use energy_type to avoid kW on water/gas meters.
-      if (meterEnergyType === "wasser") return { rateUnit: "m³/h", energyUnit: "m³" };
-      if (meterEnergyType === "gas") return { rateUnit: "m³/h", energyUnit: "m³" };
-      return { rateUnit: "kW", energyUnit: "kWh" };
-    }
-    return { rateUnit: `${u}/h`, energyUnit: u };
-  })();
-
   // Sensor detection: primär device_type, fallback auf Einheit (unit ODER source_unit_power).
   const isSensor = (() => {
     if (meterDeviceType === "sensor" || meterDeviceType === "actuator") return true;
@@ -1428,6 +1415,78 @@ export function MeterDetailDialog({
     if (!u) return false; // ohne jegliche Einheit + device_type=meter/undef: altes Verhalten
     return !meteringUnits.has(u);
   })();
+
+  const { rateUnit, energyUnit, kind } = (() => {
+    // Check both `unit` and `source_unit_power` for mass/volume — some meters have unit="kW" but source_unit_power="kg".
+    const candidates = [meterUnitRaw, meterSourceUnitRaw].filter(Boolean);
+    const massSet = new Set(["mg","g","kg","t","mg/h","g/h","kg/h","t/h","t/a"]);
+    const volSet = new Set(["m³","m3","m³/h","m3/h","l","liter","l/min","l/h"]);
+    const massHit = candidates.find((c) => massSet.has(c.toLowerCase()));
+    const volHit = candidates.find((c) => volSet.has(c.toLowerCase()));
+
+    if (volHit) {
+      const v = volHit.toLowerCase();
+      if (v === "l" || v === "liter" || v === "l/min" || v === "l/h") return { rateUnit: "l/h", energyUnit: "l", kind: "volume" as const };
+      return { rateUnit: "m³/h", energyUnit: "m³", kind: "volume" as const };
+    }
+    if (massHit) {
+      const m: Record<string, { rateUnit: string; energyUnit: string }> = {
+        mg: { rateUnit: "mg/h", energyUnit: "mg" },
+        g:  { rateUnit: "g/h",  energyUnit: "g"  },
+        kg: { rateUnit: "kg/h", energyUnit: "kg" },
+        t:  { rateUnit: "t/h",  energyUnit: "t"  },
+        "mg/h": { rateUnit: "mg/h", energyUnit: "mg" },
+        "g/h":  { rateUnit: "g/h",  energyUnit: "g"  },
+        "kg/h": { rateUnit: "kg/h", energyUnit: "kg" },
+        "t/h":  { rateUnit: "t/h",  energyUnit: "t"  },
+        "t/a":  { rateUnit: "t/a",  energyUnit: "t"  },
+      };
+      return { ...m[massHit.toLowerCase()], kind: "mass" as const };
+    }
+
+    if (isSensor) {
+      const s = displayUnit || "";
+      return { rateUnit: s, energyUnit: s, kind: "sensor" as const };
+    }
+
+    const u = meterUnitRaw;
+    const ul = u.toLowerCase();
+
+    const powerToEnergy: Record<string, { rateUnit: string; energyUnit: string }> = {
+      w: { rateUnit: "W", energyUnit: "Wh" },
+      kw: { rateUnit: "kW", energyUnit: "kWh" },
+      mw: { rateUnit: "MW", energyUnit: "MWh" },
+      gw: { rateUnit: "GW", energyUnit: "GWh" },
+      va: { rateUnit: "VA", energyUnit: "VAh" },
+      kva: { rateUnit: "kVA", energyUnit: "kVAh" },
+      mva: { rateUnit: "MVA", energyUnit: "MVAh" },
+      var: { rateUnit: "var", energyUnit: "varh" },
+      kvar: { rateUnit: "kvar", energyUnit: "kvarh" },
+      mvar: { rateUnit: "Mvar", energyUnit: "Mvarh" },
+    };
+    if (powerToEnergy[ul]) return { ...powerToEnergy[ul], kind: "power" as const };
+
+    if (!u || /wh$/i.test(u)) {
+      if (meterEnergyType === "wasser") return { rateUnit: "m³/h", energyUnit: "m³", kind: "volume" as const };
+      if (meterEnergyType === "gas") return { rateUnit: "m³/h", energyUnit: "m³", kind: "volume" as const };
+      return { rateUnit: "kW", energyUnit: "kWh", kind: "power" as const };
+    }
+    return { rateUnit: u, energyUnit: u, kind: "generic" as const };
+  })();
+
+
+  const rateLabel = kind === "volume" ? "Durchfluss"
+    : kind === "mass" ? "Massenstrom"
+    : kind === "sensor" ? "Wert"
+    : kind === "generic" ? "Rate"
+    : "Leistung";
+  const sumLabel = kind === "volume" ? "Volumen"
+    : kind === "mass" ? "Masse"
+    : kind === "sensor" ? "Wert"
+    : kind === "generic" ? "Summe"
+    : "Energie";
+
+
 
 
   const { data: latestSensor } = useQuery({
@@ -1666,6 +1725,87 @@ export function MeterDetailDialog({
     return { min, max, avg, bidirectional };
   }, [series]);
 
+  // Sensor-Statistik (V, °C, %, …): eigene Datenquelle, da meter_power_readings leer.
+  const { data: sensorSeries = [] } = useQuery({
+    queryKey: ["meter-detail-sensor-series", node.meter_id, range, powerStartMs],
+    enabled: isSensor && !!node.meter_id,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const since = new Date(powerStartMs).toISOString();
+      const out: { t: number; v: number; vMin?: number; vMax?: number }[] = [];
+      if (range === "1h") {
+        const { data } = await supabase
+          .from("sensor_readings_raw")
+          .select("recorded_at, value")
+          .eq("meter_id", node.meter_id!)
+          .gte("recorded_at", since)
+          .order("recorded_at", { ascending: true })
+          .limit(2000);
+        for (const r of (data ?? []) as any[]) {
+          const v = Number(r.value);
+          if (Number.isFinite(v)) out.push({ t: new Date(r.recorded_at).getTime(), v });
+        }
+      } else if (range === "24h" || range === "7d") {
+        const { data } = await supabase
+          .from("sensor_readings_5min")
+          .select("bucket, value_avg, value_min, value_max")
+          .eq("meter_id", node.meter_id!)
+          .gte("bucket", since)
+          .order("bucket", { ascending: true })
+          .limit(5000);
+        for (const r of (data ?? []) as any[]) {
+          const v = Number(r.value_avg);
+          if (Number.isFinite(v)) out.push({
+            t: new Date(r.bucket).getTime(),
+            v,
+            vMin: Number(r.value_min),
+            vMax: Number(r.value_max),
+          });
+        }
+      } else {
+        const { data } = await supabase
+          .from("sensor_readings_hourly")
+          .select("bucket, value_twavg, value_min, value_max")
+          .eq("meter_id", node.meter_id!)
+          .gte("bucket", since)
+          .order("bucket", { ascending: true })
+          .limit(5000);
+        for (const r of (data ?? []) as any[]) {
+          const v = Number(r.value_twavg);
+          if (Number.isFinite(v)) out.push({
+            t: new Date(r.bucket).getTime(),
+            v,
+            vMin: Number(r.value_min),
+            vMax: Number(r.value_max),
+          });
+        }
+      }
+      return out;
+    },
+  });
+
+  const sensorStats = useMemo(() => {
+    if (!isSensor || !sensorSeries.length) return null;
+    let min = Infinity, max = -Infinity, sum = 0, n = 0;
+    for (const p of sensorSeries) {
+      const lo = Number.isFinite(p.vMin as number) ? (p.vMin as number) : p.v;
+      const hi = Number.isFinite(p.vMax as number) ? (p.vMax as number) : p.v;
+      if (lo < min) min = lo;
+      if (hi > max) max = hi;
+      sum += p.v;
+      n += 1;
+    }
+    if (!n) return null;
+    return { min, max, avg: sum / n, bidirectional: false };
+  }, [isSensor, sensorSeries]);
+
+  const displayStats = isSensor ? sensorStats : stats;
+  const displayPointCount = isSensor ? sensorSeries.length : series.length;
+  const displayLastTs = isSensor
+    ? (sensorSeries.length ? sensorSeries[sensorSeries.length - 1].t : null)
+    : (series.length ? series[series.length - 1].t : null);
+
+
   // Energie pro Bucket via Trapez-Integration – prefilled über den gesamten Zeitraum
   const energyBuckets = useMemo(() => {
     const bucketMs =
@@ -1798,27 +1938,28 @@ export function MeterDetailDialog({
         {/* KPI-Kacheln */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
           <div className="rounded-md border p-3">
-            <div className="text-muted-foreground">Ø Leistung</div>
+            <div className="text-muted-foreground">{isSensor ? "Ø Wert" : `Ø ${rateLabel}`}</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.avg)} ${rateUnit}` : "–"}
+              {displayStats ? `${fmtDeNum(displayStats.avg)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Max</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.max)} ${rateUnit}` : "–"}
+              {displayStats ? `${fmtDeNum(displayStats.max)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">Min</div>
             <div className="text-base font-semibold tabular-nums">
-              {stats ? `${fmtDeNum(stats.min)} ${rateUnit}` : "–"}
+              {displayStats ? `${fmtDeNum(displayStats.min)}${rateUnit ? " " + rateUnit : ""}` : "–"}
             </div>
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">
-              {isSensor ? "Momentanwert" : `Energie${stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}`}
+              {isSensor ? "Momentanwert" : `${sumLabel}${stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}`}
             </div>
+
             <div className="text-base font-semibold tabular-nums">
               {isSensor
                 ? (effectiveSensorLatest?.value != null
@@ -1848,7 +1989,7 @@ export function MeterDetailDialog({
         <div>
           <div className="mb-1 flex items-center justify-between gap-2">
             <div className="text-sm font-medium">
-              Leistungsverlauf{showSocAxis ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
+              {rateLabel}verlauf{showSocAxis ? " & Ladezustand" : ""} · {RANGE_LABEL[range]}
             </div>
             {!hasSoc && showSocAxis && (
               <Badge variant="outline" className="text-[10px] text-muted-foreground">
@@ -1895,7 +2036,7 @@ export function MeterDetailDialog({
                     tickFormatter={(v) => v.toLocaleString("de-DE")}
                     width={70}
                   >
-                    <AxisLabel value={`Leistung (${rateUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
+                    <AxisLabel value={`${rateLabel} (${rateUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
                   {showSocAxis && (
                     <YAxis
@@ -1948,7 +2089,7 @@ export function MeterDetailDialog({
                           {kw != null && (
                             <div className="flex items-center gap-2">
                               <span className="inline-block h-2 w-2 rounded-sm" style={{ background: node.color }} />
-                              <span>Leistung: <span className="font-medium tabular-nums">{fmtDeNum(Number(kw))} {rateUnit}</span></span>
+                              <span>{rateLabel}: <span className="font-medium tabular-nums">{fmtDeNum(Number(kw))} {rateUnit}</span></span>
                             </div>
                           )}
                           {soc != null && (
@@ -1965,7 +2106,7 @@ export function MeterDetailDialog({
                     <Legend
                       verticalAlign="top"
                       wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
-                      formatter={(v) => (v === "soc" ? "Ladezustand (SOC %)" : `Leistung (${rateUnit})`)}
+                      formatter={(v) => (v === "soc" ? "Ladezustand (SOC %)" : `${rateLabel} (${rateUnit})`)}
                     />
                   )}
                   <Area
@@ -2006,7 +2147,7 @@ export function MeterDetailDialog({
 
           <div>
             <div className="text-sm font-medium mb-1">
-              Energie pro {range === "1h" ? "5 Min" : range === "24h" ? "Stunde" : range === "7d" ? "6 h" : "Tag"}
+              {sumLabel} pro {range === "1h" ? "5 Min" : range === "24h" ? "Stunde" : range === "7d" ? "6 h" : "Tag"}
             </div>
             <div className="h-[240px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -2038,7 +2179,7 @@ export function MeterDetailDialog({
                     ]}
                     width={70}
                   >
-                    <AxisLabel value={`Energie (${energyUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
+                    <AxisLabel value={`${sumLabel} (${energyUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
                   {stats?.bidirectional && <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />}
                   <RTooltip
@@ -2073,12 +2214,12 @@ export function MeterDetailDialog({
           </div>
           <div>
             <div className="text-muted-foreground">Datenpunkte</div>
-            <div className="font-medium tabular-nums">{series.length.toLocaleString("de-DE")}</div>
+            <div className="font-medium tabular-nums">{displayPointCount.toLocaleString("de-DE")}</div>
           </div>
           <div>
             <div className="text-muted-foreground">Letzter Wert</div>
             <div className="font-medium">
-              {series.length ? new Date(series[series.length - 1].t).toLocaleString("de-DE") : "–"}
+              {displayLastTs ? new Date(displayLastTs).toLocaleString("de-DE") : "–"}
             </div>
           </div>
           <div className="min-w-0">

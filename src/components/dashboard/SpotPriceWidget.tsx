@@ -25,28 +25,30 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
   const startCutoff = new Date(now.getTime() - 3 * 60 * 60 * 1000);
   const locale = localeMap[language] || de;
 
-  const { chartData, pastData, futureData, dayChangeIndices, tickIndices } = useMemo(() => {
+  const { chartData, dayChangeIndices, tickIndices } = useMemo(() => {
     const filtered = prices.filter((p) => new Date(p.timestamp) >= startCutoff);
 
     const cd = filtered.map((p, i) => {
       const d = new Date(p.timestamp);
+      const price = Number(p.price_eur_mwh);
+      const isPast = d < now;
       return {
         idx: i,
         time: format(d, "HH:mm"),
         hour: d.getHours(),
         minute: d.getMinutes(),
         dateLabel: format(d, "EEEE dd.MM.", { locale }),
-        price: Number(p.price_eur_mwh),
+        price,
+        pastPrice: isPast ? price : null,
+        futurePrice: !isPast ? price : null,
         _date: d.toDateString(),
-        isPast: d < now,
+        isPast,
       };
     });
 
-    const past = cd.map((d) => ({ ...d, price: d.isPast ? d.price : undefined }));
-    const future = cd.map((d) => ({ ...d, price: !d.isPast ? d.price : undefined }));
     const transIdx = cd.findIndex((d) => !d.isPast);
     if (transIdx > 0) {
-      future[transIdx - 1] = { ...future[transIdx - 1], price: cd[transIdx - 1].price };
+      cd[transIdx - 1].futurePrice = cd[transIdx - 1].price;
     }
 
     const dayChanges: number[] = [];
@@ -60,7 +62,7 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
     }
     if (ticks.length === 0 || ticks[0] !== 0) ticks.unshift(0);
 
-    return { chartData: cd, pastData: past, futureData: future, dayChangeIndices: dayChanges, tickIndices: ticks };
+    return { chartData: cd, dayChangeIndices: dayChanges, tickIndices: ticks };
   }, [prices, locale]);
 
   const renderCustomTick = (props: any) => {
@@ -155,8 +157,8 @@ const SpotPriceWidget = ({ locationId }: SpotPriceWidgetProps) => {
                   strokeWidth={1}
                 />
               ))}
-              <Line data={pastData} type="stepAfter" dataKey="price" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} name={T("spot.past")} connectNulls={false} />
-              <Line type="stepAfter" dataKey="price" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name={T("spot.price")} data={futureData} connectNulls={false} />
+              <Line type="stepAfter" dataKey="pastPrice" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} name={T("spot.past")} connectNulls={false} isAnimationActive={false} />
+              <Line type="stepAfter" dataKey="futurePrice" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name={T("spot.price")} connectNulls={false} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         ) : (

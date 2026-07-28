@@ -1,45 +1,91 @@
-## Diagnose bestätigt — H3 (Prozess-interner DNS-/State-Cache)
+# Einheiten-Konsistenz für Zähler-, Sensor- und Aktor-Detailansichten
 
-**Beweise aus deinen Logs:**
-- H1 raus: Beide Container haben dieselbe Outbound-IP `91.99.170.143` → keine Loxone-seitige IP-Sperre.
-- H3 bestätigt: `docker restart loxone-ws-worker-live` → **sofort** WS aktiv, RAW-Events fließen für `504F94A2BAA2`.
-- Root Cause: Der Node-Prozess des Live-Workers hatte für Rathaus einen negativen DNS-/Cloud-Lookup-Zustand gecacht (vermutlich seit dem Ausfall bei der Firmware-Aktualisierung). Da Node den DNS-Resolver-State prozesslebenslang mitschleppt und der Worker keinen eigenen Recovery-Reset kennt, blieb Rathaus permanent auf der schlechten Route hängen, obwohl Loxone Cloud längst wieder korrekt antwortete.
+## Problem
 
-Der Restart war also nicht der Fix, sondern der Workaround. Ohne Härtung passiert das beim nächsten Loxone-Cloud-Aussetzer oder Firmware-Update erneut — und dann hängt genau ein Miniserver wieder unbegrenzt lange, ohne dass es jemandem auffällt.
+Im `MeterDetailDialog` (Detail-Popup aus dem `EnergyFlowMonitor`, z. B. beim Klick auf eine Kachel wie „CO2 Ersparnis") stimmt die angezeigte Einheit nicht mit der konfigurierten Quell-Einheit des Zählers/Sensors überein:
 
-## Vorgeschlagene Härtung im `loxone-ws-worker`
+- Für Gewicht/Masse (`mg`, `g`, `kg`, `t`, `kg/h`, `t/h`, `t/a`) gibt es keine Regel → es wird entweder generisch `kWh`/`kW` (Fallback) oder die Rohbezeichnung ohne Rate-Ableitung ausgegeben.
+- Die KPI-Kachel „Energie" heißt weiterhin „Energie" und zeigt `kWh`, auch wenn die Datenquelle Masse liefert.
+- Chart-Achsen und Tooltips zeigen „Leistung (kW)" / „Energie (kWh)" statt der medien­spezifischen Bezeichnung.
 
-Alle Änderungen isoliert im Worker (`docs/loxone-ws-worker/`), keine Cloud-Migration nötig.
+Zusätzlich fehlt bei nicht-elektrischen Medien (Wasser, Gas, Masse) eine einheitliche Umbenennung der Labels („Leistung" → „Durchfluss" bzw. „Massenstrom", „Energie" → „Volumen" bzw. „Masse").
 
-### 1) „Stuck-Slot"-Selbstheilung pro Miniserver
-Wenn für einen bestimmten Serial in **N Minuten kein einziger `open`-Erfolg** zustande kommt, obwohl der Slot aktiv ist und andere Serials im selben Worker sauber laufen:
-- Slot komplett zerstören (Timer, WS-Handle, Auth-State, Redirect-Cache).
-- 60 s Cooldown.
-- Slot mit frischem Kontext neu aufsetzen (entspricht dem, was `docker restart` gerade manuell erledigt hat — nur pro Serial, nicht global).
+## Umfang
 
-Schwellwert-Vorschlag: `NO_OPEN_TIMEOUT_MIN=15` (konfigurierbar via ENV).
+Nur Frontend/Presentation. Keine DB-Migration, keine Änderung an Aggregations-Pipelines.
 
-**Wichtig:** Das ist **kein periodischer Reconnect**. Ein absichtlich offline geschalteter Miniserver hat keinen aktiven Slot, daher läuft der Timer nicht. Der Reset passiert rein im Worker-Speicher und belastet die Datenbank nicht zusätzlich.
+Betroffene Datei primär:
+- `src/components/dashboard/EnergyFlowMonitor.tsx` (Funktion `MeterDetailDialog`, ab Zeile ~1374).
 
-### 2) Global „Same-serial only" Watchdog
-Zweiter, unabhängiger Health-Check: Wenn ein Serial >30 min ohne WS-Session ist, während ≥1 anderer Serial im selben Worker aktive Events schreibt → in `loxone_ws_session_log` einen Event `stuck-slot-reset` protokollieren und Schritt 1 auslösen. Der Vergleich mit den anderen Serials verhindert Fehlalarme bei generellen Cloud-Ausfällen.
+Kurzer Cross-Check (nur lesend, ggf. Angleichung):
+- `EnergyGaugeWidget.tsx`, `CustomWidget.tsx`, `ForecastWidget.tsx`, `PieChartWidget.tsx`, `EnergyChart.tsx` → alle nutzen bereits `powerUnitForMeter` / `energyUnitForMeter` bzw. `formatEnergyByType`. Wenn dort für Masse noch Lücken bestehen, werden diese durch die Erweiterung von `src/lib/meterUnits.ts` mitgezogen.
 
-### 3) Sichtbarkeit im Super-Admin
-`SuperAdminGatewayFleet` bekommt eine kleine Spalte „Zuletzt WS-Open-Erfolg" (Delta aus `loxone_ws_session_log`), damit ein hängender Slot ohne Putty auffällt. Zusätzlich wird `stuck-slot-reset` als eigener Reconnect-Grund im UI ausgewiesen, statt in der `Reconnects`-Zahl unterzugehen.
+## Neue Einheiten-Ableitung
 
-### 4) Optional: `curl` in beide Container-Images
-Kleiner Ops-Komfort — beim nächsten Diagnose-Bedarf funktioniert der `docker exec curl`-Test direkt (aktuell fehlt `curl` im Node-Alpine-Image). Alternativ `wget --spider` in die Diagnose-Snippets aufnehmen.
+Zentrale Ableitung in `MeterDetailDialog` (und `src/lib/meterUnits.ts`) wird um Masse ergänzt und um ein Medium/Kind-Konzept erweitert:
 
-## Was NICHT gemacht wird
-- Keine Änderung an der Loxone-Cloud-DNS-Nutzung — die läuft grundsätzlich stabil.
-- Kein Prozess-Restart als Watchdog (bricht alle 20 gesunden Slots mit).
-- Keine Änderung an `admin_lovable` / Credentials — bestätigt korrekt.
-- Kein Patch am Redirect-Parser — Loxones 307-Verhalten ist normal.
+```text
+Quell-Einheit    →  rateUnit   energyUnit   kind
+kW / W / MW      →  kW / …     kWh / …      power
+kWh / Wh / MWh   →  kW / …     kWh / …      power
+m³ / m³/h        →  m³/h       m³           volume
+l  / l/min       →  l/h        l            volume
+kg / kg/h        →  kg/h       kg           mass
+g                →  g/h        g            mass
+t  / t/h / t/a   →  t/h        t            mass
+°C / %H / V / A  →  = unit     = unit       sensor
+bool             →  Ein/Aus    Ein/Aus      boolean
+sonst            →  = unit     = unit       generic
+```
 
-## Verifikation nach Deployment
-- 24 h Monitoring in `loxone_ws_session_log`: Auftreten von `stuck-slot-reset` Ereignissen zählen (Erwartung: 0–2/Woche).
-- Rathaus-Test: einmal Miniserver kurz vom Netz nehmen, wieder anschließen → Slot muss innerhalb 15 min ohne Container-Restart wieder Events liefern.
+Label-Mapping (nur DE, deutsche Zahlenformate bleiben):
 
-## Nächster Schritt
+```text
+kind      Rate-Label     Sum-Label
+power     Leistung       Energie
+volume    Durchfluss     Volumen
+mass      Massenstrom    Masse
+sensor    Wert           Ø-Wert (Statistik)
+boolean   Zustand        Betriebszeit (falls sinnvoll, sonst „–")
+generic   Rate           Summe
+```
 
-Nach Freigabe des Plans: Patch für `docs/loxone-ws-worker/index.ts` (Schritt 1+2), UI-Erweiterung in `SuperAdminGatewayFleet.tsx` (Schritt 3), plus Update-Anleitung in `docs/loxone-ws-worker/UPDATE-*.md`. Deployment via bestehendem Docker-Compose-Rebuild auf Hetzner — kein Neubau der Cloud-Umgebung nötig.
+## Änderungen in `MeterDetailDialog`
+
+1. Neuen `kind`-Wert mit ableiten (im gleichen IIFE wie `rateUnit`/`energyUnit`).
+2. KPI-Kacheln (Zeilen ~1905–1935):
+   - „Ø Leistung" → dynamisch aus `kind`.
+   - „Energie" → dynamisch aus `kind`.
+3. Chart-Blöcke:
+   - „Leistungsverlauf" Titel → `${rateLabel}verlauf`.
+   - Y-Achsenbeschriftung `Leistung (${rateUnit})` → `${rateLabel} (${rateUnit})`.
+   - Tooltip `Leistung:` → `${rateLabel}:`.
+   - „Energie pro Stunde" Titel + Achse → `${sumLabel} pro Stunde`, `${sumLabel} (${energyUnit})`.
+4. Fallbacks:
+   - Wenn `meterEnergyType` = `wasser`/`gas` → kind=`volume`.
+   - Wenn `nodeMeter` fehlt → aktuelles Verhalten (`kW`/`kWh`) beibehalten.
+
+## Zentralisierung (klein)
+
+In `src/lib/meterUnits.ts` neue Helper hinzufügen, damit auch andere Widgets konsistent bleiben:
+
+```ts
+export type MeterKind = "power" | "volume" | "mass" | "sensor" | "boolean" | "generic";
+export function meterKindFor(m?: MeterLike | null): MeterKind
+export function labelsFor(kind: MeterKind): { rate: string; sum: string }
+```
+
+`powerUnitForMeter` wird um die Masse-Einträge (`kg`, `t`, `kg/h`, `t/h`, `t/a`, `g`) ergänzt (bisher fallen sie in den „unbekannt → so belassen"-Zweig, was für Rate falsche Ausgaben liefert).
+
+## Was nicht geändert wird
+
+- Keine Anpassung der Datenpipelines, Aggregationen oder Speicherung.
+- Keine Umrechnung zwischen Massen-Einheiten (z. B. `g` → `kg`).
+- Keine Änderung an CO2-Faktoren oder ihrer Speicherung.
+- Keine neuen Übersetzungsschlüssel; DE-only Labels wie bisher.
+
+## Verifikation
+
+- Manuell für je einen Zähler pro `kind` prüfen: Strom (kW), Gas/Wasser (m³/h), Masse (kg/h und t/h), Sensor (°C, V), Aktor (bool).
+- Screenshot des CO2-Ersparnis-Dialogs vorher/nachher.
+- `tsgo` läuft automatisch nach dem Edit.
