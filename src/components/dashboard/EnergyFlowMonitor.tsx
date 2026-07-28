@@ -2024,7 +2024,7 @@ export function MeterDetailDialog({
                     tickFormatter={(v) => v.toLocaleString("de-DE")}
                     width={70}
                   >
-                    <AxisLabel value={`Leistung (${rateUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
+                    <AxisLabel value={`${rateLabel} (${rateUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
                   {showSocAxis && (
                     <YAxis
