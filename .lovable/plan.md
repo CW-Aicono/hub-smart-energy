@@ -1,51 +1,51 @@
-## Problem
+## Ziel
+Das Backend soll nicht nur kurzfristig wieder erreichbar sein, sondern die wiederkehrende Ursache für Timeouts/„Backend down“-Eindrücke gezielt entschärfen.
 
-Der virtuelle Zähler „Ladepunkt Ost 1" bezieht seine Quelle aus dem OCPP-Ladepunkt `Ost 1` (per `virtual_meter_sources.source_charge_point_id`). In der DB kommen die OCPP-Samples (Power ≈ 10,5 kW, Energie 1,12 kWh) sauber an, aber:
+## Bestätigter aktueller Befund
+- Lovable Cloud selbst meldet den Backend-Dienst aktuell als erreichbar.
+- Die Health-Metriken sind trotzdem nicht abrufbar, weil die Metrik-Anfrage in einen Timeout läuft.
+- In den letzten 2 Stunden sind in den Backend/Auth/Function-Logs keine neuen Fehlerzeilen zurückgekommen.
+- Die langsamsten Datenbankabfragen kommen klar aus der Sensor-Historie:
+  - `sensor_readings_raw` ohne `meter_id`-Filter, nur nach `recorded_at >= ...` sortiert/limitiert: bis ca. 7,9 s, im Mittel ca. 3,7 s, sehr hoher Gesamteinfluss.
+  - `sensor_readings_5min` analog nach `bucket >= ...`: bis ca. 3,4 s.
+- Die konkrete Quelle im Code ist sichtbar: `SensorHistorySettingsCard` fragt alle 30 Sekunden globale Sensor-Zählwerte ab und lädt dafür bis zu 1.000 IDs je Zeitraum mit Sortierung. Diese Abfragen passen exakt zu den Slow-Query-Signaturen.
+- Die Tabellen haben zwar Indexe für `(meter_id, Zeit)`, aber die problematischen globalen Abfragen nutzen keinen `meter_id`-Filter. Dadurch greifen die vorhandenen Indexe nur unzureichend.
 
-- `meter_power_readings` für den virtuellen Zähler: **0 Zeilen** in den letzten 2 h.
-- `meter_cumulative_readings` für den virtuellen Zähler: **0 Zeilen**.
+## Umsetzungsplan
 
-Grund: In `supabase/functions/ocpp-persistent-api/index.ts` (`insert-meter-samples`, Zeile ~555–575) wird OCPP-Leistung **nur dann** in `meter_power_readings` gespiegelt, wenn am Ladepunkt `charge_points.linked_meter_id` gesetzt ist. Für Ost 1 ist das nicht der Fall — der Zähler ist stattdessen als **virtueller Zähler mit `virtual_meter_sources` → source_charge_point_id** verknüpft. Energie (Energy.Active.Import.Register) wird gar nicht in `meter_cumulative_readings` weitergereicht.
+### 1. Sofortige Lastquelle in der UI entschärfen
+- `SensorHistorySettingsCard` so umbauen, dass sie keine großen ID-Listen mehr alle 30 Sekunden lädt.
+- Stattdessen:
+  - entweder echte Counts mit `head: true, count: "estimated"` verwenden,
+  - oder für die Super-Admin-Karte bewusst nur kompakte Statuswerte anzeigen.
+- Refetch-Intervall auf mindestens 2–5 Minuten erhöhen oder nur bei sichtbarer Karte aktivieren.
 
-Ergebnis: Alle Dashboard-Widgets, die den virtuellen Zähler aus `meter_power_readings_5min` / `meter_cumulative_readings` lesen (KPIs, 24h-Chart, Energie-Kacheln), zeigen leere Werte. Nur der `VirtualBalanceBreakdown` funktioniert, weil er live aus `ocpp_meter_samples` rechnet.
+### 2. Passende Datenbankindexe für globale Zeitfenster ergänzen
+- Index für `sensor_readings_raw(recorded_at desc)` ergänzen.
+- Index für `sensor_readings_5min(bucket desc)` ergänzen.
+- Optional zusätzlich Tenant/Zeit-Indexe, falls tenantweite Auswertungen ohne `meter_id` vorkommen:
+  - `sensor_readings_raw(tenant_id, recorded_at desc)`
+  - `sensor_readings_5min(tenant_id, bucket desc)`
+- Danach die Slow-Query-Liste erneut prüfen.
 
-## Lösung
+### 3. Sensor-Aggregator härten
+- `sensor-history-aggregator` liest aktuell alle Rohwerte der letzten 15 Minuten global und sortiert sie. Das ist bei vielen Sensoren wachsend teuer.
+- Plan:
+  - Abfrage durch neuen Zeitindex absichern.
+  - Limit/Window so behalten, aber Ergebnisgröße protokollieren.
+  - Falls weiter hoch: Aggregation künftig tenantweise oder inkrementell über `last_processed_at` fahren.
 
-OCPP-Samples werden zusätzlich in **alle virtuellen Zähler** gespiegelt, die den jeweiligen Ladepunkt (direkt, per Gruppe oder per „alle CPs der Liegenschaft") als Quelle haben. Damit haben virtuelle CP-Zähler dieselben persistierten Daten wie physische Zähler und alle Widgets/Reports funktionieren automatisch.
+### 4. Notfall-/Betriebsmodus sauber machen
+- Den vorhandenen Kill-Switch `sensor_history_enabled` beibehalten, aber in der Super-Admin-UI klar als Lastschutz nutzen.
+- Wenn erneut Timeouts auftreten, kann Sensor-Historisierung temporär deaktiviert werden, ohne Login/Auth oder Kern-Dashboard zu blockieren.
 
-### Änderungen
+### 5. Validierung nach Umsetzung
+- Slow Queries erneut abrufen und prüfen, ob die Sensor-Abfragen deutlich sinken.
+- Health-Check erneut ausführen.
+- Auth-/Backend-Logs auf erneute 500/504 prüfen.
+- Falls danach noch Metrik-Timeouts oder hohe Connection/Memory-Werte sichtbar sind, erst dann Lovable-Cloud-Compute-Resize prüfen; aktuell ist die belastbare erste Ursache aber die Sensor-Historie/Indexierung, nicht pauschal die Instanzgröße.
 
-**1. `supabase/functions/ocpp-persistent-api/index.ts` – `insert-meter-samples`**
-
-Nach dem bestehenden `linked_meter_id`-Forward folgenden Block ergänzen:
-
-- Alle betroffenen `virtual_meter_sources` laden, die diesen Ladepunkt referenzieren:
-  - `source_charge_point_id = cp.id`
-  - **oder** `source_charge_point_group_id = cp.group_id` (falls Gruppe gesetzt)
-  - **oder** `source_all_charge_points = true` (Zähler-`location_id` muss dem CP-Standort entsprechen)
-- Für jeden gefundenen virtuellen Zähler und jedes `Power.Active.Import`-Sample eine Zeile in `meter_power_readings` einfügen (kW, Vorzeichen aus `operator`).
-- Für jeden gefundenen virtuellen Zähler und jedes `Energy.Active.Import.Register`-Sample eine Upsert-Zeile in `meter_cumulative_readings` einfügen (`reading_value` in kWh, `reading_type='automatic'`, mit Vorzeichen — bei `operator='-'` als negative Delta-Absicht überspringen bzw. Zähler-Semantik beibehalten; siehe Detail unten).
-
-**2. Energie-Semantik für virtuelle Zähler**
-
-`meter_cumulative_readings` speichert monotone Zählerstände. Für eine 1:1-Ladepunkt-Quelle ist das der CP-Zählerstand. Bei Aggregation mehrerer CPs (Gruppe / all-CPs) wird pro Sample ein **Summenzählerstand** aller involvierten CPs zum Zeitpunkt `sampled_at` berechnet und geschrieben (Ost 1: nur 1 Quelle → identisch mit CP-Stand). Bei `operator='-'` wird die Quelle nicht in den Zählerstand aufgenommen (dieser Fall ergibt für Energie ohnehin selten Sinn und würde monotonie brechen).
-
-**3. Idempotenz / Duplikate**
-
-- `meter_power_readings`: pro `(meter_id, recorded_at)` nur einmal einfügen (ON CONFLICT DO NOTHING falls Unique-Index vorhanden, sonst simple Deduplizierung im Code).
-- `meter_cumulative_readings`: pro `(meter_id, reading_date, reading_type='automatic')` upserten. Innerhalb desselben Tages den letzten Wert übernehmen.
-
-**4. Backfill (optional, kleiner Migration-Job)**
-
-Einmalig `ocpp_meter_samples` der letzten 24 h für alle CP-referenzierenden virtuellen Zähler in `meter_power_readings` und `meter_cumulative_readings` nachziehen, damit das 24h-Chart sofort Historie zeigt.
-
-### Nicht Teil dieses Plans
-
-- Keine UI-Änderungen. `VirtualBalanceBreakdown` und `useVirtualBalance` bleiben unverändert.
-- Keine Änderung an Simulations- oder Meter-Quellen des virtuellen Zählers.
-
-### Technische Details
-
-- Der Forward-Block wird nur einmal pro `insert-meter-samples`-Request gebaut (ein `select` auf `virtual_meter_sources` + ein `select` auf `charge_points` für Gruppe/Standort), unabhängig von der Sample-Anzahl.
-- `ocpp-persistent-api` läuft mit Service-Role → RLS-frei, aber neuen Insert-Pfad trotzdem gegen bestehende Policies auf `meter_power_readings` / `meter_cumulative_readings` prüfen.
-- Nach dem Deploy sollten innerhalb weniger Minuten Werte im Dashboard-Widget „Ladepunkt Ost 1" erscheinen (KPIs + 24h-Chart + Energie).
+## Erwartetes Ergebnis
+- Weniger langlaufende globale Sensor-Abfragen.
+- Weniger Risiko, dass Auth/API-Anfragen durch Datenbanklast in Timeouts laufen.
+- Wiederholbare Diagnosekette: Sensor-Last sichtbar, abschaltbar und gezielt indexiert statt jedes Mal Backend-Neustart.

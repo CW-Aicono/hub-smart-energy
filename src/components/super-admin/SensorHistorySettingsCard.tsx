@@ -8,6 +8,20 @@ import { supabase } from "@/integrations/supabase/client";
 
 export function SensorHistorySettingsCard() {
   const queryClient = useQueryClient();
+  const countRecentRows = async (
+    table: "sensor_readings_raw" | "sensor_readings_5min",
+    column: "recorded_at" | "bucket",
+    since: string,
+  ) => {
+    const { count, error } = await supabase
+      .from(table)
+      .select("id", { count: "estimated", head: true })
+      .gte(column, since);
+
+    if (error) throw error;
+    return count ?? 0;
+  };
+
   const formatCapped = (value?: number, capped?: boolean) => {
     const formatted = (value ?? 0).toLocaleString("de-DE");
     return capped ? `≥ ${formatted}` : formatted;
@@ -26,26 +40,27 @@ export function SensorHistorySettingsCard() {
     },
   });
 
-  const since24h = new Date(Date.now() - 24 * 3600_000).toISOString();
-  const since1h = new Date(Date.now() - 3600_000).toISOString();
-
   const { data: counts } = useQuery({
     queryKey: ["sensor-history-counts"],
-    refetchInterval: 30_000,
+    refetchInterval: 5 * 60_000,
+    staleTime: 2 * 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
-      const limit = 1000;
+      const since24h = new Date(Date.now() - 24 * 3600_000).toISOString();
+      const since1h = new Date(Date.now() - 3600_000).toISOString();
+
       const [raw24, raw1, agg24] = await Promise.all([
-        supabase.from("sensor_readings_raw").select("id").gte("recorded_at", since24h).order("recorded_at", { ascending: false }).limit(limit),
-        supabase.from("sensor_readings_raw").select("id").gte("recorded_at", since1h).order("recorded_at", { ascending: false }).limit(limit),
-        supabase.from("sensor_readings_5min").select("id").gte("bucket", since24h).order("bucket", { ascending: false }).limit(limit),
+        countRecentRows("sensor_readings_raw", "recorded_at", since24h),
+        countRecentRows("sensor_readings_raw", "recorded_at", since1h),
+        countRecentRows("sensor_readings_5min", "bucket", since24h),
       ]);
       return {
-        raw24: raw24.data?.length ?? 0,
-        raw1: raw1.data?.length ?? 0,
-        agg24: agg24.data?.length ?? 0,
-        raw24Capped: (raw24.data?.length ?? 0) >= limit,
-        raw1Capped: (raw1.data?.length ?? 0) >= limit,
-        agg24Capped: (agg24.data?.length ?? 0) >= limit,
+        raw24,
+        raw1,
+        agg24,
+        raw24Capped: false,
+        raw1Capped: false,
+        agg24Capped: false,
       };
     },
   });
