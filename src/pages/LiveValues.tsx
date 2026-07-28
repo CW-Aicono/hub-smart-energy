@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LocationTreeFilter, type LocationScope } from "@/components/meters/LocationTreeFilter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer } from "lucide-react";
+import { getDeviceIconForMeter } from "@/lib/deviceIcons";
 import { supabase } from "@/integrations/supabase/client";
 import { formatEnergy, formatGasDual } from "@/lib/formatEnergy";
 import { cn } from "@/lib/utils";
@@ -802,7 +803,7 @@ const LiveValues = () => {
               {filteredMeters.map((meter) => {
                 const { value, unit: sensorUnit, totalDay, totalMonth, totalYear, meterReading, meterReadingUnit, source, date } = getValue(meter);
                 const config = ENERGY_TYPE_CONFIG[meter.energy_type] || ENERGY_TYPE_CONFIG.strom;
-                const Icon = config.icon;
+                const Icon = getDeviceIconForMeter(meter);
                 const location = locations.find((l) => l.id === meter.location_id);
                 const isFlowType = meter.energy_type === "wasser" || meter.energy_type === "gas";
                 const soc = socByMeterId.get(meter.id);
