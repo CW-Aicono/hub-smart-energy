@@ -1404,8 +1404,25 @@ export function MeterDetailDialog({
   const meterEnergyType = (nodeMeter?.energy_type ?? "").toString().trim();
   const { rateUnit, energyUnit } = (() => {
     const u = meterUnitRaw;
+    const ul = u.toLowerCase();
     if (u === "m³" || u === "m3" || u === "m³/h") return { rateUnit: "m³/h", energyUnit: "m³" };
-    if (u.toLowerCase() === "l" || u.toLowerCase() === "liter" || u === "l/min") return { rateUnit: "l/h", energyUnit: "l" };
+    if (ul === "l" || ul === "liter" || u === "l/min") return { rateUnit: "l/h", energyUnit: "l" };
+
+    // Power units: rate stays as-is, energy is the matching "hour" unit.
+    const powerToEnergy: Record<string, { rateUnit: string; energyUnit: string }> = {
+      w: { rateUnit: "W", energyUnit: "Wh" },
+      kw: { rateUnit: "kW", energyUnit: "kWh" },
+      mw: { rateUnit: "MW", energyUnit: "MWh" },
+      gw: { rateUnit: "GW", energyUnit: "GWh" },
+      va: { rateUnit: "VA", energyUnit: "VAh" },
+      kva: { rateUnit: "kVA", energyUnit: "kVAh" },
+      mva: { rateUnit: "MVA", energyUnit: "MVAh" },
+      var: { rateUnit: "var", energyUnit: "varh" },
+      kvar: { rateUnit: "kvar", energyUnit: "kvarh" },
+      mvar: { rateUnit: "Mvar", energyUnit: "Mvarh" },
+    };
+    if (powerToEnergy[ul]) return powerToEnergy[ul];
+
     if (!u || /wh$/i.test(u)) {
       // Fallback when unit is missing/generic: use energy_type to avoid kW on water/gas meters.
       if (meterEnergyType === "wasser") return { rateUnit: "m³/h", energyUnit: "m³" };
