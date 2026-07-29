@@ -57,6 +57,7 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/ppa/offsite": "ppa_offsite",
   "/documents": "documentation",
   "/charging/transactions": "adhoc_payment",
+  "/analytics-studio": "analytics_studio",
 };
 
 export function useModuleGuard() {
