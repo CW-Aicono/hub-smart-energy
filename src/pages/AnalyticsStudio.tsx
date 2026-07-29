@@ -253,7 +253,7 @@ export default function AnalyticsStudio() {
                 if (!templateName.trim()) return;
                 await saveAsTemplate({
                   name: templateName.trim(),
-                  description: templateDesc.trim() || null,
+                  description: templateDesc.trim() || undefined,
                   layout,
                   blocks,
                 });
