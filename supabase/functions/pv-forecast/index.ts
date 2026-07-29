@@ -582,7 +582,8 @@ serve(async (req) => {
               ],
               tool_choice: { type: "function", function: { name: "pv_calibration" } },
             }),
-          });
+          }).finally(() => clearTimeout(aiTimer));
+
 
           if (aiRes.ok) {
             const aiData = await aiRes.json();
