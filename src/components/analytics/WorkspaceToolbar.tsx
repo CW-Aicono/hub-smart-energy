@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AnalysisWorkspace, WorkspaceInput } from "@/hooks/useAnalysisWorkspaces";
-import { Save, FolderOpen, MoreHorizontal, Plus, Trash2, Copy } from "lucide-react";
+import { Save, FolderOpen, MoreHorizontal, Trash2, Copy, LayoutTemplate, Share2, Bookmark } from "lucide-react";
 
 interface WorkspaceToolbarProps {
   workspaces: AnalysisWorkspace[];
@@ -25,6 +25,9 @@ interface WorkspaceToolbarProps {
   onSave: (input: WorkspaceInput) => void;
   onSaveExisting: (id: string, input: WorkspaceInput) => void;
   onDelete: (id: string) => void;
+  onOpenTemplates: () => void;
+  onSaveAsTemplate: () => void;
+  onOpenShare: () => void;
   currentState: WorkspaceInput;
 }
 
