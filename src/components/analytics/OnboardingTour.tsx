@@ -19,17 +19,17 @@ const STEPS = [
   {
     icon: Clock,
     title: "Zeitraum & Vergleich",
-    body: "Oben stellst du den globalen Zeitraum ein (Tag/Woche/Monat/Jahr). Blöcke wie „Vergleich" nutzen zusätzlich einen Zeitversatz (heute vs. gestern, Woche vs. Vorwoche).",
+    body: 'Oben stellst du den globalen Zeitraum ein (Tag/Woche/Monat/Jahr). Blöcke wie »Vergleich« nutzen zusätzlich einen Zeitversatz (heute vs. gestern, Woche vs. Vorwoche).',
   },
   {
     icon: Sparkles,
     title: "KI & Story-Modus",
-    body: "Der Block „KI-Erklärung" analysiert deine Daten automatisch und beantwortet „Was ist hier passiert?". Mit dem Story-Modus baust du eine Präsentation aus mehreren Ansichten.",
+    body: 'Der Block »KI-Erklärung« analysiert deine Daten automatisch und beantwortet »Was ist hier passiert?«. Mit dem Story-Modus baust du eine Präsentation aus mehreren Ansichten.',
   },
   {
     icon: Users,
     title: "Vorlagen & Teilen",
-    body: "Nutze die Vorlagen-Galerie („Neu aus Vorlage") für einen schnellen Start. Fertige Workspaces kannst du tenantweit freigeben oder gezielt mit einzelnen Kolleg:innen teilen.",
+    body: 'Nutze die Vorlagen-Galerie (»Neu aus Vorlage«) für einen schnellen Start. Fertige Workspaces kannst du tenantweit freigeben oder gezielt mit einzelnen Kolleg:innen teilen.',
   },
 ];
 
