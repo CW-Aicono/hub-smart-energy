@@ -14,7 +14,8 @@ import {
   ReferenceLine,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import { Settings2, MapPin, Trash2, Plus } from "lucide-react";
+import { Settings2, MapPin, Trash2, Plus, Zap } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
