@@ -182,6 +182,7 @@ export function AnalyticsCanvas({
           {blocks.map((block) => (
             <div
               key={block.id}
+              data-block-id={block.id}
               onDrop={(e) => {
                 e.stopPropagation();
                 handleDrop(e, block);
@@ -189,9 +190,9 @@ export function AnalyticsCanvas({
               onDragOver={handleDragOver}
               onClick={() => editMode && setSelectedBlockId(block.id)}
               className={cn(
-                "col-span-full",
+                "col-span-full transition-shadow rounded-xl",
                 block.w <= 3 ? "md:col-span-3" : block.w <= 6 ? "md:col-span-6" : "md:col-span-12",
-                selectedBlockId === block.id && editMode ? "ring-2 ring-primary/60 rounded-xl" : ""
+                selectedBlockId === block.id && editMode ? "ring-2 ring-primary/60" : ""
               )}
               style={{ gridRow: `span ${block.h}` }}
             >
@@ -202,6 +203,7 @@ export function AnalyticsCanvas({
                 isEditMode={editMode}
                 onRemove={removeBlock}
                 onConfigChange={(id, config) => updateBlock(id, { config })}
+                allBlocks={blocks}
               />
             </div>
           ))}
