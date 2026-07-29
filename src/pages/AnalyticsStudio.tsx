@@ -7,27 +7,29 @@ import { WorkspaceToolbar } from "@/components/analytics/WorkspaceToolbar";
 import { StoryManagerDialog } from "@/components/analytics/story/StoryManagerDialog";
 import { StoryPresenter } from "@/components/analytics/story/StoryPresenter";
 import { extractStory, withStory, StoryStep } from "@/components/analytics/story/storyTypes";
+import { TemplateGalleryDialog } from "@/components/analytics/TemplateGalleryDialog";
+import { ShareWorkspaceDialog } from "@/components/analytics/ShareWorkspaceDialog";
+import { OnboardingTour } from "@/components/analytics/OnboardingTour";
 import { useAnalysisWorkspaces, AnalysisWorkspace, AnalysisBlock, WorkspaceInput } from "@/hooks/useAnalysisWorkspaces";
+import { useAnalysisTemplates } from "@/hooks/useAnalysisTemplates";
 import { AnalyticsPeriod } from "@/hooks/useAnalyticsData";
 import { DeviceTreeNode } from "@/hooks/useDeviceTree";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Clapperboard, Play } from "lucide-react";
+import { Clapperboard, Play, HelpCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-
-const DEFAULT_BLOCKS: AnalysisBlock[] = [
-  {
-    id: "welcome",
-    type: "kpi",
-    title: "Willkommen im Analytics Studio",
-    x: 0,
-    y: 0,
-    w: 12,
-    h: 1,
-    config: {},
-  },
-];
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 export default function AnalyticsStudio() {
   const { user } = useAuth();
