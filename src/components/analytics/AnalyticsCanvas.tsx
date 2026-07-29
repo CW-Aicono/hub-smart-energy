@@ -3,7 +3,7 @@ import { AnalysisBlock as AnalysisBlockType } from "@/hooks/useAnalysisWorkspace
 import { AnalyticsPeriod } from "@/hooks/useAnalyticsData";
 import { AnalysisBlockCard } from "./AnalysisBlock";
 import { Button } from "@/components/ui/button";
-import { Plus, LayoutGrid, Pencil, LineChart, BarChart3, Table2, Flame } from "lucide-react";
+import { Plus, LayoutGrid, Pencil, LineChart, BarChart3, Table2, Flame, ScatterChart, Sigma } from "lucide-react";
 import { DeviceTreeNode } from "@/hooks/useDeviceTree";
 import { cn } from "@/lib/utils";
 
@@ -49,19 +49,28 @@ export function AnalyticsCanvas({
     onNodeAssigned?.();
   }, [pendingNode]);
 
-  const addBlock = (type: AnalysisBlockType["type"]) => {
+  const addBlock = (type: AnalysisBlockType["type"], initialMeterId?: string) => {
+    const titleMap: Record<string, string> = {
+      timeseries: "Zeitreihe",
+      kpi: "KPI",
+      comparison: "Vergleich",
+      heatmap: "Heatmap",
+      correlation: "Korrelation",
+      formula: "Formel",
+    };
     const block: AnalysisBlockType = {
       id: makeId(),
       type,
-      title: type === "timeseries" ? "Zeitreihe" : type === "kpi" ? "KPI" : type === "comparison" ? "Vergleich" : type === "heatmap" ? "Heatmap" : "Formel",
+      title: titleMap[type] ?? "Analyse",
       x: 0,
       y: Math.max(0, ...blocks.map((b) => b.y + b.h)),
       w: type === "kpi" ? 3 : type === "heatmap" ? 6 : 6,
       h: type === "kpi" ? 1 : 2,
-      config: {},
+      config: initialMeterId ? { meterIds: [initialMeterId] } : {},
     };
     onBlocksChange([...blocks, block]);
     setSelectedBlockId(block.id);
+    return block;
   };
 
   const updateBlock = (id: string, patch: Partial<AnalysisBlockType>) => {
@@ -112,6 +121,25 @@ export function AnalyticsCanvas({
             <Pencil className="h-4 w-4" />
             {editMode ? "Fertig" : "Bearbeiten"}
           </Button>
+  const handleCanvasDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/plain") || draggedNode?.id;
+    if (!id) return;
+    const node = draggedNode ?? ({ id, type: "meter", label: id } as DeviceTreeNode);
+    if (node.type === "location") return;
+    // Auto-create a timeseries block seeded with this device
+    addBlock("timeseries", node.id);
+    setDraggedNode(null);
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between px-4 py-2 border-b bg-card/30">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant={editMode ? "default" : "outline"} size="sm" className="gap-2" onClick={() => onEditModeChange(!editMode)}>
+            <Pencil className="h-4 w-4" />
+            {editMode ? "Fertig" : "Bearbeiten"}
+          </Button>
           {editMode && (
             <>
               <Button variant="outline" size="sm" className="gap-2" onClick={() => addBlock("timeseries")}>
@@ -126,6 +154,12 @@ export function AnalyticsCanvas({
               <Button variant="outline" size="sm" className="gap-2" onClick={() => addBlock("heatmap")}>
                 <Flame className="h-4 w-4" /> Heatmap
               </Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => addBlock("correlation")}>
+                <ScatterChart className="h-4 w-4" /> Korrelation
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => addBlock("formula")}>
+                <Sigma className="h-4 w-4" /> Formel
+              </Button>
             </>
           )}
         </div>
@@ -134,7 +168,11 @@ export function AnalyticsCanvas({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-4">
+      <div
+        className="flex-1 overflow-auto p-4"
+        onDrop={handleCanvasDrop}
+        onDragOver={handleDragOver}
+      >
         <div
           className="grid gap-4"
           style={{ gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`, gridAutoRows: `${ROW_HEIGHT}px` }}
@@ -142,7 +180,10 @@ export function AnalyticsCanvas({
           {blocks.map((block) => (
             <div
               key={block.id}
-              onDrop={(e) => handleDrop(e, block)}
+              onDrop={(e) => {
+                e.stopPropagation();
+                handleDrop(e, block);
+              }}
               onDragOver={handleDragOver}
               onClick={() => editMode && setSelectedBlockId(block.id)}
               className={cn(
@@ -166,7 +207,7 @@ export function AnalyticsCanvas({
             <div className="col-span-full flex flex-col items-center justify-center h-96 text-muted-foreground border-2 border-dashed rounded-xl">
               <LayoutGrid className="h-10 w-10 mb-3 opacity-50" />
               <p className="text-sm">Noch keine Analyse-Blöcke</p>
-              <p className="text-xs mt-1">Schalte „Bearbeiten" ein und füge Blöcke hinzu, oder ziehe Geräte aus der Bibliothek.</p>
+              <p className="text-xs mt-1">Ziehe ein Gerät aus der Bibliothek hierher, oder schalte „Bearbeiten" ein und wähle einen Blocktyp.</p>
             </div>
           )}
         </div>
