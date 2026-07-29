@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, ChevronDown, ChevronRight, ArrowDownUp, Pause, Play, Wifi, WifiOff } from "lucide-react";
+import { RefreshCw, ChevronDown, ChevronRight, ArrowDownUp, Pause, Play, Wifi, WifiOff, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 
 interface OcppLogViewerProps {
@@ -38,6 +38,17 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
   }, [chargePointId, chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId)?.id, chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId)?.ocpp_id]);
 
   const { logs, loading, paused, setPaused, refetch } = useOcppLogs(logIds, messageTypeFilter);
+
+  // Warnhinweis, wenn zwar Logs existieren, aber seit >15 Minuten nichts Neues ankommt.
+  const staleMinutes = React.useMemo(() => {
+    if (loading || logs.length === 0) return null;
+    const newest = logs.reduce(
+      (max, l) => Math.max(max, new Date(l.created_at).getTime()),
+      0,
+    );
+    if (!newest) return null;
+    return Math.floor((Date.now() - newest) / 60000);
+  }, [logs, loading]);
 
   // Standard OCPP 1.6 message types + types found in current logs
   const STANDARD_OCPP_TYPES = [
