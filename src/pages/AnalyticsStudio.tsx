@@ -137,6 +137,15 @@ export default function AnalyticsStudio() {
                 <Play className="h-4 w-4" /> Präsentieren
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setShowOnboarding(true)}
+              title="Kurzeinführung erneut anzeigen"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </Button>
             <WorkspaceToolbar
               workspaces={workspaces}
               activeWorkspace={activeWorkspace}
@@ -144,6 +153,13 @@ export default function AnalyticsStudio() {
               onSave={handleCreate}
               onSaveExisting={handleUpdate}
               onDelete={handleDelete}
+              onOpenTemplates={() => setTemplatesOpen(true)}
+              onOpenShare={() => setShareOpen(true)}
+              onSaveAsTemplate={() => {
+                setTemplateName(activeWorkspace?.name ?? "");
+                setTemplateDesc(activeWorkspace?.description ?? "");
+                setSaveAsTemplateOpen(true);
+              }}
               currentState={currentState}
             />
           </div>
