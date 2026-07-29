@@ -165,19 +165,31 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
     if (meterIds.length === 0) return;
     const fetchPeaks = async () => {
       const today = new Date();
-      const { data } = await supabase
-        .from("meter_power_readings")
-        .select("meter_id, power_value")
-        .in("meter_id", meterIds)
-        .gte("recorded_at", startOfDay(today).toISOString())
-        .lte("recorded_at", endOfDay(today).toISOString())
-        .order("power_value", { ascending: false });
       const peaks: Record<string, number> = {};
-      for (const row of data ?? []) {
-        if ((peaks[row.meter_id] ?? 0) < row.power_value) {
-          peaks[row.meter_id] = row.power_value;
+      // Einzel-Meter-Calls (parallel) mit LIMIT 1: Postgres liefert das Maximum
+      // je Zähler direkt aus dem Index. Ein gemeinsames `IN (...)` mit
+      // ORDER BY power_value DESC ohne Limit sortiert dagegen den kompletten
+      // Tagesbestand aller Zähler (~3,5 s).
+      const peakResults = await Promise.all(
+        meterIds.map((mid) =>
+          supabase
+            .from("meter_power_readings")
+            .select("meter_id, power_value")
+            .eq("meter_id", mid)
+            .gte("recorded_at", startOfDay(today).toISOString())
+            .lte("recorded_at", endOfDay(today).toISOString())
+            .order("power_value", { ascending: false })
+            .limit(1),
+        ),
+      );
+      for (const res of peakResults) {
+        for (const row of res.data ?? []) {
+          if ((peaks[row.meter_id] ?? 0) < row.power_value) {
+            peaks[row.meter_id] = row.power_value;
+          }
         }
       }
+
       // Fallback: worker-only meters (no raw rows) → use max power_max from 5-min buckets.
       const missing = meterIds.filter((id) => peaks[id] === undefined);
       if (missing.length > 0) {

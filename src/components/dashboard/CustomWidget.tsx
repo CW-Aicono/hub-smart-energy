@@ -242,17 +242,27 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       };
       if (sensorMeterIds.length > 0) {
         if (selectedPeriod === "day") {
-          const { data: agg } = await supabase
-            .from("sensor_readings_5min")
-            .select("meter_id, bucket, value_avg")
-            .in("meter_id", sensorMeterIds)
-            .gte("bucket", from.toISOString())
-            .lte("bucket", to.toISOString())
-            .order("bucket", { ascending: true })
-            .limit(10000);
-          for (const r of agg ?? []) {
+          // Einzel-Meter-Calls (parallel): nutzt den Covering-Index
+          // (meter_id, bucket) INCLUDE (value_avg) als Index-Only-Scan.
+          // Ein gemeinsames `IN (...)` mit globalem ORDER BY erzwingt dagegen
+          // eine große In-Memory-Sortierung (~3 s).
+          const perMeter = await Promise.all(
+            sensorMeterIds.map((mid) =>
+              supabase
+                .from("sensor_readings_5min")
+                .select("meter_id, bucket, value_avg")
+                .eq("meter_id", mid)
+                .gte("bucket", from.toISOString())
+                .lte("bucket", to.toISOString())
+                .order("bucket", { ascending: true })
+                .limit(2000),
+            ),
+          );
+          const agg = perMeter.flatMap((r) => r.data ?? []);
+          for (const r of agg) {
             addSensor(getDayBucketLabel(new Date(r.bucket)), r.meter_id, Number(r.value_avg));
           }
+
           // Recent raw to cover the last few minutes
           const recentCutoff = new Date(Math.max(Date.now() - 15 * 60_000, from.getTime()));
           const { data: raw } = await supabase
