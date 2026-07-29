@@ -1290,7 +1290,7 @@ async function pushExecutionLogs(): Promise<boolean> {
     created_at: string;
   }>;
 
-  if (unsyncedLogs.length === 0) return;
+  if (unsyncedLogs.length === 0) return true;
 
   try {
     const logs = unsyncedLogs.map((log) => ({
@@ -1318,11 +1318,15 @@ async function pushExecutionLogs(): Promise<boolean> {
       const maxId = unsyncedLogs[unsyncedLogs.length - 1].id;
       db.prepare(`UPDATE automation_exec_log SET synced = 1 WHERE id <= ?`).run(maxId);
       console.log(`[sync] Pushed ${logs.length} execution logs to cloud`);
+      return true;
     }
+    return false;
   } catch (err) {
     console.warn("[sync] Failed to push execution logs:", err);
+    return false;
   }
 }
+
 
 /* ── Flush Buffer to Cloud ───────────────────────────────────────────────────── */
 
