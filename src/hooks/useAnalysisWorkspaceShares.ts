@@ -29,8 +29,8 @@ export function useWorkspaceShares(workspaceId: string | null) {
       const userIds = rows.map((r) => r.user_id);
       const { data: profs } = await supabase
         .from("profiles")
-        .select("id, email, contact_person")
-        .in("id", userIds);
+        .select("user_id, email, contact_person")
+        .in("user_id", userIds);
       const map = new Map((profs ?? []).map((p: any) => [p.id, p]));
       return rows.map((r) => ({
         ...r,
@@ -82,7 +82,7 @@ export function useTenantUsers() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, email, contact_person")
+        .select("user_id, email, contact_person")
         .eq("tenant_id", tenantId!);
       if (error) throw error;
       return (data ?? []) as { id: string; email: string | null; contact_person: string | null }[];
