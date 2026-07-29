@@ -9,7 +9,7 @@ export interface WorkspaceShare {
   can_edit: boolean;
   created_at: string;
   email?: string;
-  full_name?: string;
+  contact_person?: string;
 }
 
 export function useWorkspaceShares(workspaceId: string | null) {
@@ -29,13 +29,13 @@ export function useWorkspaceShares(workspaceId: string | null) {
       const userIds = rows.map((r) => r.user_id);
       const { data: profs } = await supabase
         .from("profiles")
-        .select("id, email, full_name")
+        .select("id, email, contact_person")
         .in("id", userIds);
       const map = new Map((profs ?? []).map((p: any) => [p.id, p]));
       return rows.map((r) => ({
         ...r,
         email: map.get(r.user_id)?.email,
-        full_name: map.get(r.user_id)?.full_name,
+        contact_person: map.get(r.user_id)?.contact_person,
       }));
     },
   });
@@ -82,10 +82,10 @@ export function useTenantUsers() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, email, full_name")
+        .select("id, email, contact_person")
         .eq("tenant_id", tenantId!);
       if (error) throw error;
-      return (data ?? []) as { id: string; email: string | null; full_name: string | null }[];
+      return (data ?? []) as { id: string; email: string | null; contact_person: string | null }[];
     },
   });
 }

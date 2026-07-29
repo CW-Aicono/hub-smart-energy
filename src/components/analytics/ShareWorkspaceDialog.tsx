@@ -30,7 +30,7 @@ export function ShareWorkspaceDialog({ open, onOpenChange, workspace, onToggleTe
     return users.filter(
       (u) =>
         !excluded.has(u.id) &&
-        ((u.full_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
+        ((u.contact_person ?? "").toLowerCase().includes(search.toLowerCase()) ||
           (u.email ?? "").toLowerCase().includes(search.toLowerCase()))
     );
   }, [users, shares, workspace?.created_by, search]);
@@ -74,8 +74,8 @@ export function ShareWorkspaceDialog({ open, onOpenChange, workspace, onToggleTe
               {shares.map((s) => (
                 <div key={s.user_id} className="flex items-center justify-between rounded border px-2 py-1.5 text-xs">
                   <div className="min-w-0">
-                    <div className="font-medium truncate">{s.full_name ?? s.email ?? s.user_id.slice(0, 8)}</div>
-                    {s.full_name && s.email && <div className="text-muted-foreground truncate">{s.email}</div>}
+                    <div className="font-medium truncate">{s.contact_person ?? s.email ?? s.user_id.slice(0, 8)}</div>
+                    {s.contact_person && s.email && <div className="text-muted-foreground truncate">{s.email}</div>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge variant={s.can_edit ? "default" : "outline"} className="text-[10px]">
@@ -125,8 +125,8 @@ export function ShareWorkspaceDialog({ open, onOpenChange, workspace, onToggleTe
                     }}
                     className="w-full text-left rounded border px-2 py-1.5 text-xs hover:bg-muted transition-colors"
                   >
-                    <div className="font-medium truncate">{u.full_name ?? u.email ?? u.id.slice(0, 8)}</div>
-                    {u.full_name && u.email && <div className="text-muted-foreground truncate">{u.email}</div>}
+                    <div className="font-medium truncate">{u.contact_person ?? u.email ?? u.id.slice(0, 8)}</div>
+                    {u.contact_person && u.email && <div className="text-muted-foreground truncate">{u.email}</div>}
                   </button>
                 ))}
             </div>
