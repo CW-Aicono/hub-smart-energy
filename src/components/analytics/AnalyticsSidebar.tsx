@@ -39,7 +39,7 @@ export function AnalyticsSidebar({ onDragStart }: AnalyticsSidebarProps) {
   const locations = filtered.filter((n) => n.type === "location");
 
   return (
-    <aside className="w-72 border-r bg-sidebar flex flex-col h-full">
+    <aside className="w-72 border-r bg-sidebar text-sidebar-foreground flex flex-col h-full">
       <div className="p-4 border-b">
         <h2 className="text-sm font-semibold mb-3">Daten-Bibliothek</h2>
         <div className="relative">
@@ -81,12 +81,12 @@ export function AnalyticsSidebar({ onDragStart }: AnalyticsSidebarProps) {
                           onClick={() => onDragStart(child)}
                           className={cn(
                             "flex items-center gap-2 px-2 py-1.5 rounded-md text-xs cursor-grab select-none",
-                            "hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors"
+                            "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
                           )}
                         >
-                          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground/60" />
                           <span className="flex-1 truncate">{child.label}</span>
-                          {child.unit && <span className="text-[10px] text-muted-foreground">{child.unit}</span>}
+                          {child.unit && <span className="text-[10px] text-sidebar-foreground/60">{child.unit}</span>}
                         </div>
                       );
                     })}
