@@ -927,7 +927,13 @@ function insertExecLog(entry: {
     );
 
   pruneExecutionLogs();
+
+  // Push automation logs to the cloud immediately (coalesced) so the
+  // owner-lease on hybrid rules is extended before the cloud scheduler's
+  // next 30-s evaluation cycle. Prevents double-execution local + cloud.
+  schedulePushExecutionLogsSoon();
 }
+
 
 function getLocalTimeParts(timezone: string): { hours: number; minutes: number; seconds: number; weekday: number; timeStr: string; totalSeconds: number } {
   const now = new Date();
