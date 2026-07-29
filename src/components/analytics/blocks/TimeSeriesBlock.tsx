@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAnalyticsData, AnalyticsPeriod } from "@/hooks/useAnalyticsData";
+import { useAutomationEventAnnotations } from "@/hooks/useAutomationEventAnnotations";
 import { AnalysisBlock } from "@/hooks/useAnalysisWorkspaces";
 import {
   ResponsiveContainer,
@@ -13,7 +14,8 @@ import {
   ReferenceLine,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import { Settings2, MapPin, Trash2, Plus } from "lucide-react";
+import { Settings2, MapPin, Trash2, Plus, Zap } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +54,7 @@ interface Annotation {
 export function TimeSeriesBlock({ block, period, offset, onConfigChange }: TimeSeriesBlockProps) {
   const meterIds = (block.config.meterIds as string[]) ?? [];
   const annotations = (block.config.annotations as Annotation[]) ?? [];
+  const showAutomationEvents = (block.config.showAutomationEvents as boolean) ?? false;
   const { data: series, isLoading } = useAnalyticsData(meterIds, period, undefined, meterIds.length > 0, offset);
   const [configOpen, setConfigOpen] = useState(false);
   const [annotationMode, setAnnotationMode] = useState(false);
@@ -71,6 +74,14 @@ export function TimeSeriesBlock({ block, period, offset, onConfigChange }: TimeS
     });
     return Object.values(timeMap).sort((a: any, b: any) => a.t - b.t);
   }, [series]);
+
+  const chartMinT = chartData.length > 0 ? (chartData[0] as any).t as number : null;
+  const chartMaxT = chartData.length > 0 ? (chartData[chartData.length - 1] as any).t as number : null;
+  const { data: eventAnnotations = [] } = useAutomationEventAnnotations({
+    fromMs: showAutomationEvents ? chartMinT : null,
+    toMs: showAutomationEvents ? chartMaxT : null,
+    enabled: showAutomationEvents && chartMinT !== null && chartMaxT !== null,
+  });
 
   const updateAnnotations = (next: Annotation[]) => {
     onConfigChange(block.id, { ...block.config, annotations: next });
@@ -116,9 +127,12 @@ export function TimeSeriesBlock({ block, period, offset, onConfigChange }: TimeS
   }
 
   // Only show annotations that fall within current chart range
-  const minT = (chartData[0] as any).t as number;
-  const maxT = (chartData[chartData.length - 1] as any).t as number;
-  const visibleAnnotations = annotations.filter((a) => a.t >= minT && a.t <= maxT);
+  const minT = chartMinT!;
+  const maxT = chartMaxT!;
+  const visibleAnnotations = [
+    ...annotations.filter((a) => a.t >= minT && a.t <= maxT),
+    ...(showAutomationEvents ? eventAnnotations.filter((a) => a.t >= minT && a.t <= maxT) : []),
+  ];
 
   return (
     <div className="h-full flex flex-col">
@@ -254,6 +268,19 @@ export function TimeSeriesBlock({ block, period, offset, onConfigChange }: TimeS
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="text-xs text-muted-foreground">{meterIds.length} Gerät(e) zugeordnet</div>
+            <div className="flex items-center justify-between p-2 rounded border bg-card">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-primary" />
+                <div>
+                  <div className="text-xs font-medium">Automations-Ereignisse anzeigen</div>
+                  <div className="text-[10px] text-muted-foreground">Erfolgreiche und fehlerhafte Ausführungen als Marker</div>
+                </div>
+              </div>
+              <Switch
+                checked={showAutomationEvents}
+                onCheckedChange={(v) => onConfigChange(block.id, { ...block.config, showAutomationEvents: v })}
+              />
+            </div>
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-xs">Annotationen ({annotations.length})</Label>

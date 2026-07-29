@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AnalysisWorkspace, WorkspaceInput } from "@/hooks/useAnalysisWorkspaces";
-import { Save, FolderOpen, MoreHorizontal, Plus, Trash2, Copy } from "lucide-react";
+import { Save, FolderOpen, MoreHorizontal, Trash2, Copy, LayoutTemplate, Share2, Bookmark } from "lucide-react";
 
 interface WorkspaceToolbarProps {
   workspaces: AnalysisWorkspace[];
@@ -25,6 +25,9 @@ interface WorkspaceToolbarProps {
   onSave: (input: WorkspaceInput) => void;
   onSaveExisting: (id: string, input: WorkspaceInput) => void;
   onDelete: (id: string) => void;
+  onOpenTemplates: () => void;
+  onSaveAsTemplate: () => void;
+  onOpenShare: () => void;
   currentState: WorkspaceInput;
 }
 
@@ -35,6 +38,9 @@ export function WorkspaceToolbar({
   onSave,
   onSaveExisting,
   onDelete,
+  onOpenTemplates,
+  onSaveAsTemplate,
+  onOpenShare,
   currentState,
 }: WorkspaceToolbarProps) {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -74,34 +80,49 @@ export function WorkspaceToolbar({
         </DropdownMenuContent>
       </DropdownMenu>
 
+      <Button variant="outline" size="sm" className="gap-2" onClick={onOpenTemplates}>
+        <LayoutTemplate className="h-4 w-4" />
+        Neu aus Vorlage
+      </Button>
+
       <Button variant="outline" size="sm" className="gap-2" onClick={() => setSaveDialogOpen(true)}>
         <Save className="h-4 w-4" />
         Speichern
       </Button>
 
       {activeWorkspace && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() =>
-                onSave({
-                  ...currentState,
-                  name: `${activeWorkspace.name} (Kopie)`,
-                })
-              }
-            >
-              <Copy className="h-4 w-4 mr-2" /> Duplizieren
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setConfirmDelete(activeWorkspace.id)} className="text-destructive focus:text-destructive">
-              <Trash2 className="h-4 w-4 mr-2" /> Löschen
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <>
+          <Button variant="outline" size="sm" className="gap-2" onClick={onOpenShare}>
+            <Share2 className="h-4 w-4" />
+            Teilen
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() =>
+                  onSave({
+                    ...currentState,
+                    name: `${activeWorkspace.name} (Kopie)`,
+                  })
+                }
+              >
+                <Copy className="h-4 w-4 mr-2" /> Duplizieren
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onSaveAsTemplate}>
+                <Bookmark className="h-4 w-4 mr-2" /> Als Vorlage speichern
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setConfirmDelete(activeWorkspace.id)} className="text-destructive focus:text-destructive">
+                <Trash2 className="h-4 w-4 mr-2" /> Löschen
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
       )}
 
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
