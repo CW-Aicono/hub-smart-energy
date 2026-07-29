@@ -1,49 +1,32 @@
-## Kurzantwort
+## Befund (verifiziert)
 
-Nein — die Tabellengröße ist nicht der Engpass. 1,85 Mio Zeilen / 432 MB sind für Postgres unkritisch. Was uns bisher umgeworfen hat, waren drei andere Dinge:
+- Letzter Eintrag in `ocpp_message_log`: **29.07.2026, 10:09:56 UTC = 12:09 Uhr lokal**. Danach 0 Zeilen.
+- Die Wallboxen sind **nicht** das Problem: `charge_points` zeigt aktuelle Heartbeats (Ost 1 / MEN138720200074a um 22:04 Uhr, 0311303102122250589 um 22:03 Uhr). Der OCPP-Server läuft und schreibt weiter in andere Tabellen.
+- Der Aufräum-Cronjob (`cleanup-old-ocpp-logs`, 03:00 Uhr) kann einen Stopp um 12:09 nicht erklären.
 
-1. **Schreiblast + Bloat**: sehr viele kleine Writes/Updates pro Minute, dazu Autovacuum, das nicht hinterherkam → aufgeblähte Tabellen, Random-IO, ausgeschöpftes Disk-IO-Budget der Instanz.
-2. **Lesemuster**: Charts haben teils breite Zeitfenster über viele Zähler auf einmal geladen (`ANY(...)`-Queries, große Ergebnismengen), zusätzlich RLS-Overhead pro Zeile.
-3. **Wartungsjobs**, die parallel zur Last liefen.
+Es gibt **zwei Schalter**, die das Frame-Logging abschalten:
 
-5-Minuten-Graphen sind damit weiterhin möglich — sie müssen nur anders gelesen und gespeichert werden.
+1. **Server-seitig (Hetzner):** `OCPP_FRAME_LOGGING_ENABLED` in der `.env` des OCPP-Containers. Default im Code ist `false`; ist er aus, sendet der Server gar keine Log-Batches (`backendApi.ts:152` bricht vorher ab).
+2. **Backend-seitig:** Edge Function `ocpp-persistent-api` prüft `system_settings.ocpp_message_logging_enabled` und `backend_emergency_mode`. Aktueller DB-Stand: Logging = `true`, Notfallmodus = `false` (beide zuletzt 13:48 UTC gesetzt).
 
-## Wie Big-Data-Systeme das lösen
+Da der Backend-Schalter seit 13:48 UTC wieder offen ist, aber trotzdem keine Zeile ankommt, liegt die Sperre **mit hoher Wahrscheinlichkeit vor dem Backend** — also am Server-Flag bzw. an einem Container-Neustart um ~12:07 mit alter/ohne `.env`-Zeile. Das ist die naheliegendste, aber noch **nicht bewiesene** Ursache; Schritt 1 des Plans beweist oder widerlegt sie.
 
-Die Muster, die dort Standard sind und hier 1:1 anwendbar:
+## Plan
 
-- **Zeit-Partitionierung**: eine Tabelle pro Monat/Woche statt einer großen. Alte Partitionen werden gelesen, aber nie mehr geschrieben oder gevacuumt → Wartungslast fällt weg, Löschen/Archivieren ist ein `DROP` in Millisekunden.
-- **Rollups / Multi-Resolution**: 5 Min für den nahen Zeitraum, 15 Min / 1 h / 1 Tag für ältere — und die Abfrage wählt automatisch die Auflösung passend zum Zoom-Level. Genau das machen Grafana/Prometheus/TimescaleDB.
-- **Query nur nach Bedarf**: nie „alles laden und im Browser filtern", sondern serverseitig aggregieren, immer mit Zeitfenster-Grenze, und Downsampling auf ca. 300–800 Punkte pro Chart (mehr kann ein Bildschirm nicht darstellen).
-- **Append-only statt Update**: Rohdaten nur einfügen, nie aktualisieren → drastisch weniger IO.
-- **Spaltenorientierte Kompression** für Historie (Timescale/ClickHouse: Faktor 10–20 kleiner).
+**Schritt 1 — Ursache beweisen (kein Rätselraten)**
+- Testaufruf der Edge Function `ocpp-persistent-api` mit `action=log-messages-batch` und einem Dummy-Frame. Kommt `{inserted: 1}` zurück und erscheint die Zeile in der DB, ist das Backend sauber → Ursache liegt auf dem Hetzner-Container.
+- Antwortet die Funktion `skipped: "ocpp_message_logging_disabled"`, ist die Ursache das Settings-/Notfall-Gate (dann Cache-TTL bzw. Wertformat prüfen).
+- Zusätzlich die Edge-Logs der Funktion rund um 10:00–10:15 UTC prüfen (Fehler „settings lookup failed" setzt den Cache auf Notfallmodus).
 
-## Vorgeschlagener Weg (stufenweise, jede Stufe eigenständig nützlich)
+**Schritt 2 — Fix je nach Ergebnis**
+- Fall A (Server-Flag aus): in `docs/ocpp-persistent-server/.env` auf dem Hetzner-Host `OCPP_FRAME_LOGGING_ENABLED=true` setzen und den Container neu starten. Dazu liefere ich eine laienverständliche Schritt-für-Schritt-Anleitung als Markdown-Datei im Ordner des OCPP-Servers.
+- Fall B (Backend-Gate): Settings-Wert korrigieren bzw. das Fail-Closed-Verhalten des Settings-Lookups entschärfen (kurzer Retry statt sofortigem „Logging aus"), damit ein einzelner DB-Timeout nicht stundenlang alles Logging abschaltet.
 
-**Stufe A — Lesepfad zoom-abhängig machen (größter Effekt, kein Datenverlust)**
-- Zentrale Server-Funktion, die zu einem angefragten Zeitfenster automatisch die passende Auflösung wählt: bis 2 Tage → 5 Min, bis 14 Tage → 15 Min, bis 90 Tage → 1 h, darüber → 1 Tag.
-- Charts fragen nur noch das sichtbare Fenster ab (kein Vorab-Laden ganzer Zeiträume), je Zähler einzeln und parallel.
-- Harte Obergrenze an zurückgegebenen Punkten pro Serie.
-
-**Stufe B — Speicherung: 5 Min behalten statt verdichten**
-- Die laufende Verdichtung auf 15 Min stoppen, sobald A greift; stattdessen zusätzliche Rollup-Ebenen (1 h, 1 Tag) neben den 5-Min-Daten pflegen.
-- 5-Min-Daten bleiben vollständig erhalten und sind über Stufe A nur bei engem Zeitfenster im Spiel.
-
-**Stufe C — Monatliche Partitionierung der 5-Min-Tabelle**
-- Umbau auf partitionierte Tabelle mit automatischem Anlegen neuer Monate.
-- Effekt: Autovacuum-Last nur auf dem aktuellen Monat, alte Monate „eingefroren", Archivieren später trivial.
-
-**Stufe D — optional, wenn Datenvolumen später stark wächst**
-- Historie zusätzlich in einen spaltenorientierten Speicher (ClickHouse-Connector ist verfügbar) auslagern und Langzeit-Analysen dorthin routen. Erst sinnvoll ab deutlich größeren Datenmengen als heute.
+**Schritt 3 — Damit das nicht mehr unbemerkt passiert**
+- `/health` des OCPP-Servers um `frameLogging: true|false` erweitern.
+- In der UI (OCPP-Log-Ansicht der Ladepunkt-Detailseite) ein deutliches Banner anzeigen, wenn seit > 15 Minuten keine Zeile eingegangen ist, mit Hinweis „Frame-Logging ist deaktiviert" statt einer nur leeren Liste.
 
 ## Technische Details
 
-- Auflösungswahl serverseitig in einer SQL-Funktion (`SECURITY DEFINER`, Tenant-Filter explizit), damit RLS nicht zeilenweise auf Millionen Rohzeilen ausgewertet wird.
-- Rollup-Tabellen inkrementell per Cron befüllen (Wasserstandsmarke statt Vollberechnung).
-- Partitionierung als Online-Umbau: neue partitionierte Tabelle, Daten in Etappen kopieren, dann umschalten — kein Downtime-Fenster nötig, aber ein ruhiges Zeitfenster empfohlen.
-- Indizes je Partition auf `(tenant_id, meter_id, bucket)`; Covering-Index für die häufigsten Chart-Abfragen.
-- Alle Zahlen weiterhin im deutschen Format in der UI.
-
-## Wichtige Vorbedingung
-
-Der aktuell laufende Verdichtungs-Job (`ems-compact-5min-drain`) reduziert gerade Altdaten auf 15 Min. Wenn 5-Min-Historie langfristig erhalten bleiben soll, sollte er gestoppt werden, bevor er weiter fortschreitet — das wäre der erste Schritt der Umsetzung.
+- Betroffene Dateien: `docs/ocpp-persistent-server/src/config.ts`, `src/index.ts` (Health), `supabase/functions/ocpp-persistent-api/index.ts` (Settings-Fallback), OCPP-Log-Komponente im Frontend, neue Update-Anleitung unter `docs/ocpp-persistent-server/`.
+- Keine Schema-Änderung nötig; die Partitionierung/Rollups von gestern sind nicht beteiligt (`ocpp_message_log` ist davon unberührt).
