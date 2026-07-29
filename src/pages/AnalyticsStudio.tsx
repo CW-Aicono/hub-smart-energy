@@ -108,15 +108,36 @@ export default function AnalyticsStudio() {
             <h1 className="text-sm font-semibold">Analytics Studio</h1>
             <TimeRangeToolbar period={period} offset={offset} onPeriodChange={setPeriod} onOffsetChange={setOffset} />
           </div>
-          <WorkspaceToolbar
-            workspaces={workspaces}
-            activeWorkspace={activeWorkspace}
-            onLoad={setActiveWorkspace}
-            onSave={handleCreate}
-            onSaveExisting={handleUpdate}
-            onDelete={handleDelete}
-            currentState={currentState}
-          />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setStoryOpen(true)}
+            >
+              <Clapperboard className="h-4 w-4" />
+              Story {story.steps.length > 0 && <span className="text-[10px] text-muted-foreground">({story.steps.length})</span>}
+            </Button>
+            {story.steps.length > 0 && (
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-2"
+                onClick={() => setPresenting({ startIndex: 0 })}
+              >
+                <Play className="h-4 w-4" /> Präsentieren
+              </Button>
+            )}
+            <WorkspaceToolbar
+              workspaces={workspaces}
+              activeWorkspace={activeWorkspace}
+              onLoad={setActiveWorkspace}
+              onSave={handleCreate}
+              onSaveExisting={handleUpdate}
+              onDelete={handleDelete}
+              currentState={currentState}
+            />
+          </div>
         </header>
         {isLoading ? (
           <div className="flex-1 p-6 space-y-4">
@@ -136,6 +157,30 @@ export default function AnalyticsStudio() {
           />
         )}
       </main>
+
+      <StoryManagerDialog
+        open={storyOpen}
+        onOpenChange={setStoryOpen}
+        steps={story.steps}
+        onStepsChange={setSteps}
+        currentPeriod={period}
+        currentOffset={offset}
+        blocks={blocks}
+        onPresent={(startIndex) => {
+          setStoryOpen(false);
+          setPresenting({ startIndex });
+        }}
+      />
+
+      {presenting && (
+        <StoryPresenter
+          open
+          onClose={() => setPresenting(null)}
+          steps={story.steps}
+          startIndex={presenting.startIndex}
+          blocks={blocks}
+        />
+      )}
     </div>
   );
 }
