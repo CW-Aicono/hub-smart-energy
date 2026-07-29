@@ -21,7 +21,7 @@ import { useChargingUsers } from "@/hooks/useChargingUsers";
 import { useChargingBillingGroups, useGenerateGroupInvoices } from "@/hooks/useChargingBillingGroups";
 import { useQuery } from "@tanstack/react-query";
 
-import BillingGroupsTab from "@/components/charging/BillingGroupsTab";
+import { AdHocTransactionsContent } from "@/pages/ChargingAdHocTransactions";
 
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -620,10 +620,15 @@ const ChargingBilling = () => {
           <Tabs defaultValue="sessions">
             <TabsList>
               <TabsTrigger value="sessions">{t("charging.tabSessions" as any)}</TabsTrigger>
-              <TabsTrigger value="tariffs">{t("charging.tabTariffs" as any)}</TabsTrigger>
+              <TabsTrigger value="adhoc">Ad-Hoc TXs</TabsTrigger>
               <TabsTrigger value="invoices">{t("charging.tabInvoices" as any)}</TabsTrigger>
-              <TabsTrigger value="billing-groups">Rechnungsgruppen</TabsTrigger>
+              <TabsTrigger value="tariffs">{t("charging.tabTariffs" as any)}</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="adhoc">
+              <AdHocTransactionsContent embedded />
+            </TabsContent>
+
 
 
             {/* Sessions Tab */}
@@ -1267,10 +1272,6 @@ const ChargingBilling = () => {
 
 
 
-            {/* Billing Groups Tab */}
-            <TabsContent value="billing-groups">
-              <BillingGroupsTab isAdmin={isAdmin} />
-            </TabsContent>
 
 
           </Tabs>
