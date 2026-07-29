@@ -129,8 +129,12 @@ export function AnalyticsCanvas({
               key={block.id}
               onDrop={(e) => handleDrop(e, block)}
               onDragOver={handleDragOver}
-              onClick={() => handleBlockClick(block)}
-              className={cn("col-span-full", block.w <= 3 ? "md:col-span-3" : block.w <= 6 ? "md:col-span-6" : "md:col-span-12")}
+              onClick={() => editMode && setSelectedBlockId(block.id)}
+              className={cn(
+                "col-span-full",
+                block.w <= 3 ? "md:col-span-3" : block.w <= 6 ? "md:col-span-6" : "md:col-span-12",
+                selectedBlockId === block.id && editMode ? "ring-2 ring-primary/60 rounded-xl" : ""
+              )}
               style={{ gridRow: `span ${block.h}` }}
             >
               <AnalysisBlockCard
