@@ -362,6 +362,51 @@ export type Database = {
           },
         ]
       }
+      analysis_workspace_templates: {
+        Row: {
+          blocks: Json
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          is_system: boolean
+          layout: Json
+          name: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          blocks?: Json
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_system?: boolean
+          layout?: Json
+          name: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          blocks?: Json
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_system?: boolean
+          layout?: Json
+          name?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       analysis_workspaces: {
         Row: {
           blocks: Json
