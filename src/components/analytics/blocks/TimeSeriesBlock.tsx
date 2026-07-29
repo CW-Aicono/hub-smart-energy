@@ -121,7 +121,15 @@ export function TimeSeriesBlock({ block, period, offset, onConfigChange }: TimeS
   // Only show annotations that fall within current chart range
   const minT = (chartData[0] as any).t as number;
   const maxT = (chartData[chartData.length - 1] as any).t as number;
-  const visibleAnnotations = annotations.filter((a) => a.t >= minT && a.t <= maxT);
+  const { data: eventAnnotations = [] } = useAutomationEventAnnotations({
+    fromMs: showAutomationEvents ? minT : null,
+    toMs: showAutomationEvents ? maxT : null,
+    enabled: showAutomationEvents,
+  });
+  const visibleAnnotations = [
+    ...annotations.filter((a) => a.t >= minT && a.t <= maxT),
+    ...(showAutomationEvents ? eventAnnotations.filter((a) => a.t >= minT && a.t <= maxT) : []),
+  ];
 
   return (
     <div className="h-full flex flex-col">
