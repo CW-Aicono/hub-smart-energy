@@ -1,55 +1,134 @@
-## Ziel
+## Befund aus der aktuellen Prüfung
 
-Vom Gateway ausgeführte Automationen werden **sofort** (nicht erst beim nächsten 60-s-Flush) via HTTP-Push an die Cloud gemeldet. Damit greift die 90-s-Owner-Lease zuverlässig, bevor der Cloud-Scheduler die nächste Evaluierungsrunde (30 s) startet — Doppelausführungen bei `hybrid` sind ausgeschlossen.
+**Das Backend ist nicht komplett offline**, aber es ist unter Last so stark blockiert, dass Datenbank-/API-Zugriffe zeitweise auslaufen.
 
-## Ausgangslage (verifiziert)
+Verifizierte Signale:
 
-- `docs/ha-addon/index.ts`: sammelt Automation-Logs zusammen mit Readings im SQLite-Puffer und pusht sie am regulären `flush_interval_seconds`-Takt (jetzt 60 s) via `sync-automation-logs` an `gateway-ingest`.
-- `supabase/functions/gateway-ingest/index.ts` `handlePushExecutionLogs`: bumpt `last_executed_at` und verlängert `owner_lease_until` um 90 s für `hybrid`-Regeln.
-- `supabase/functions/automation-scheduler/index.ts`: läuft alle 30 s, skippt `hybrid` nur solange `owner_lease_until > now()`.
+- Lovable Cloud selbst meldet den Backend-Dienst als erreichbar.
+- Die DB-Metriken konnten trotzdem nicht geladen werden: Timeout beim Metrik-Endpunkt.
+- PostgreSQL-Logs zeigen wiederholt `canceling statement due to statement timeout`, Verbindungsabbrüche und Cron-Startup-Timeouts.
+- Edge-Function-Logs zeigen eine Welle von `ocpp-persistent-api`-Aufrufen mit **90s/150s Laufzeit** und `500/504`.
+- Die langsamsten DB-Statements werden aktuell von Zeitreihen-/Historienpfaden dominiert:
+  - `sensor_readings_raw` globale Zeitabfragen: 391 Aufrufe, Ø ca. 3,7s, max ca. 7,9s, total ca. 24 Minuten DB-Zeit.
+  - `sensor_readings_5min` globale Zeitabfragen: Ø ca. 1,3s.
+  - Sehr viele Inserts in `sensor_readings_raw`, `meter_power_readings`, `ocpp_meter_samples`, `gateway_sensor_snapshots`, `ocpp_message_log`.
+- `sensor_readings_raw` hat aktuell ca. 298.000 Zeilen, `sensor_readings_5min` ca. 41.000 Zeilen. Das ist nicht riesig, aber die Kombination aus globalen Reads, häufigen Cron-/Edge-Aufrufen und synchroner Verarbeitung erzeugt offenbar täglichen Druck.
 
-Kritisches Zeitfenster: Gateway führt lokal aus → bis zu 60 s Wartezeit bis Log-Push → währenddessen 1–2 Cloud-Scheduler-Zyklen ohne gültige Lease → **Cloud feuert dieselbe Regel nochmal**.
+## Wahrscheinliche Hauptursache
 
-## Lösung: sofortiger Log-Push, entkoppelt vom Reading-Flush
+Kein einzelner „Backend kaputt“-Fehler, sondern **Lastspitzen durch mehrere neu hinzugekommene Datenpfade**:
 
-### 1. Add-on: separater Push-Pfad für Automation-Logs
+1. **Sensor-Historisierung** schreibt häufig Rohwerte und aggregiert regelmäßig global über `sensor_readings_raw`.
+2. **Super-Admin-/Monitoring-Karten** fragen globale Historien-/Count-Daten ab, teils ohne Tenant-/Meter-Grenze.
+3. **OCPP-Persistent-API** verarbeitet Meter-Samples, virtuelle Zähler, kumulative Werte und Logeinträge synchron in einem Request. Wenn DB-Zugriffe warten, stauen diese Requests bis 90–150s und blockieren weitere Kapazität.
+4. **Cron-Jobs laufen parallel** zu Live-Ingest und UI-Abfragen. In den Logs ist genau dieses Muster sichtbar: Cron-Starts, Statement-Timeouts, Edge-Function-Timeouts.
 
-In `docs/ha-addon/index.ts`:
+Wichtig: Ich würde **nicht zuerst ein größeres Backend empfehlen**. Erst müssen wir die Lastquellen entschärfen. Wenn danach DB-Health weiterhin Speicher-/Connection-Sättigung zeigt, können wir Compute-Größe bewerten.
 
-- Neue Funktion `pushAutomationLogImmediately(entry)`, die direkt nach jedem erfolgreichen (und fehlgeschlagenen) `executeAutomation`-Aufruf feuert.
-- Der Log-Eintrag geht in einer eigenen kleinen In-Memory-Queue (`pendingAutoLogs`), die sofort an `gateway-ingest` (`action=sync-automation-logs`) mit **nur diesem einen Eintrag** gepusht wird.
-- SQLite-Persistenz bleibt als **Fallback** erhalten: der Eintrag wird erst nach HTTP-200 aus dem lokalen Puffer gelöscht; bei Netzwerkfehler bleibt er drin und wird beim nächsten regulären 60-s-Flush erneut mitgesendet.
-- Debounce/Coalescing: wenn innerhalb von ≤2 s mehrere Logs anfallen, werden sie zu einem Batch zusammengefasst (schützt vor Bursts, ohne die Lease-Wirkung zu verzögern).
+## Plan zur dauerhaften Stabilisierung
 
-### 2. Offline-Verhalten
+### 1. Sofort-Stabilisierung einbauen
 
-- Bei fehlender Cloud-Verbindung fällt der Push still aus, Eintrag verbleibt im SQLite-Puffer, wird beim nächsten 60-s-Flush nachgereicht — kein Datenverlust, keine Verhaltensänderung gegenüber heute.
-- Bei Backlog nach Wiederverbindung: der bestehende Batch-Push (1000er-Größe) übernimmt.
+- Einen klaren **Notfallmodus** für Super-Admin schaffen:
+  - Sensor-Historisierung temporär deaktivieren.
+  - OCPP-Message-Debug-Logging temporär reduzieren/deaktivieren.
+  - Nicht-kritische Monitoring-/Metrik-Crons pausierbar machen.
+- Bestehende Kill-Switches nutzen/ergänzen, aber nicht nur manuell verstecken: der Status muss sichtbar sein.
+- Ziel: Bei Lastspitzen innerhalb weniger Sekunden Last wegnehmen können, ohne Backend-Neustart als tägliches Ritual.
 
-### 3. Cloud-Seite
+### 2. Globale Sensor-Historienabfragen entfernen
 
-- `gateway-ingest` bleibt unverändert — der bestehende `handlePushExecutionLogs` verlängert schon jetzt die Lease pro Eintrag.
-- **Kein** neuer Endpoint, **keine** Migration, **kein** Config-Change nötig.
+Betroffene Muster:
 
-### 4. Config
+- `SensorHistorySettingsCard` zählt globale Rows nach Zeitfenster.
+- Zeitreihen-Komponenten dürfen nur meter-/tenant-begrenzt lesen.
+- Aggregator liest alle Rohwerte der letzten 15 Minuten global.
 
-- `flush_interval_seconds` (60 s) bleibt für Readings unverändert (IO-Budget-Schonung).
-- Neuer interner Timer-Konstantenwert `AUTO_LOG_COALESCE_MS = 2000` — nicht als Add-on-Option, damit User nichts falsch stellen können.
+Änderung:
 
-## Betroffene Dateien
+- Super-Admin-Anzeigen auf **vorgehaltene Status-/Statistikwerte** umstellen statt Live-Counts auf großen Tabellen.
+- Keine UI-Abfrage mehr wie „alle `sensor_readings_raw` seit X“ ohne Tenant/Meter.
+- Sensor-Charts bleiben erlaubt, aber ausschließlich:
+  - `.eq("tenant_id", tenant.id)` sofern Tenant-Kontext vorhanden,
+  - `.eq("meter_id", meterId)` für Detailansichten,
+  - harte Limits und sinnvolle Aggregationsebene.
 
-- `docs/ha-addon/index.ts` — sofortiger Push-Pfad + Coalescing.
-- `docs/ha-addon/config.yaml` — Version-Bump auf `3.4.1`.
-- Neues Kurz-Update-Doc: `docs/ha-addon/UPDATE-v3.4.1-INSTANT-AUTOMATION-PUSH.md` mit laienverständlicher Erklärung (Warum, Was ändert sich, Was muss der Anwender tun).
+### 3. Sensor-Aggregator umbauen
 
-## Randfälle
+Aktuell lädt `sensor-history-aggregator` bis zu 20.000 Raw-Zeilen der letzten 15 Minuten in die Edge Function und aggregiert dort.
 
-- **Push schlägt fehl, Regel wurde lokal ausgeführt**: Lease läuft nicht → Cloud könnte in Ausnahmefällen doppelt feuern. Mitigierung: der Add-on retryt den Push nach 5 s einmalig, bevor er den Eintrag ausschließlich dem 60-s-Flush überlässt. Bei bewusstem Cloud-Ausfall ist ein Cloud-Fallback ohnehin nicht möglich → kein Doppelfeuer.
-- **Uhr-Skew**: Lease-Zeitstempel wird weiterhin serverseitig gesetzt (`now()`), Gateway-Zeit irrelevant.
-- **Reading-Latenz**: unverändert — nur Automations-Logs werden vorgezogen.
+Umbau:
 
-## Nicht Teil dieses Plans
+- Aggregation datenbanknah machen oder strikt in kleinen Batches:
+  - nach `tenant_id`/Zeitfenster begrenzen,
+  - mit Wasserzeichen/`last_processed_at` arbeiten,
+  - keine globale Vollfenster-Verarbeitung bei jedem Lauf.
+- 5-Minuten-Buckets inkrementell aktualisieren.
+- Aggregator-Lauf darf bei Last nicht 90s+ hängen, sondern sauber abbrechen und beim nächsten Lauf fortsetzen.
 
-- Änderung des `flush_interval_seconds` für Readings.
-- Zweiter WSS-Kanal für Live-Werte (separater Vorschlag).
-- Änderungen am Cloud-Scheduler oder der Lease-Länge.
+### 4. OCPP-Persistent-API entkoppeln
+
+Betroffener Hotspot: `ocpp-persistent-api`, besonders Meter-Samples und Message-Logs.
+
+Änderung:
+
+- Kritische OCPP-Antworten schnell halten.
+- Nicht-kritische Folgearbeiten entkoppeln:
+  - Message-Logs nur gebündelt oder bei Debug aktiv.
+  - Virtuelle-Zähler-Spiegelung und kumulative Updates in eine schlanke DB-Funktion oder Queue-ähnlichen Batch-Pfad verschieben.
+  - Harte Payload- und Laufzeitgrenzen.
+- Ziel: Wallbox-/OCPP-Server bekommt nicht erst nach 90–150s eine Antwort.
+
+### 5. Schreiblast drosseln und deduplizieren
+
+- Sensor-Historie: Delta-Guard zusätzlich datenbankseitig absichern, nicht nur im warmen Edge-Function-Speicher.
+- OCPP-/Gateway-Samples: doppelte oder zu häufige identische Werte nicht erneut schreiben.
+- `ocpp_message_log` konsequent mit Retention und optionalem Debug-Level betreiben.
+- Für Live-Ansichten primär Snapshot-/Latest-Tabellen nutzen, nicht Rohhistorie.
+
+### 6. Indexe und Retention final prüfen
+
+Bereits verifiziert:
+
+- Es gibt Zeit-/Meter-Indexe auf `sensor_readings_raw`, `sensor_readings_5min`, `meter_power_readings`, OCPP-Tabellen.
+
+Weitere Prüfung/Anpassung:
+
+- EXPLAIN für die echten Top-Queries ausführen.
+- Nur gezielte Indexe ergänzen, falls der Plan zeigt, dass vorhandene Indexe nicht genutzt werden.
+- Rohdaten-Retention prüfen: Wenn 5-Minuten-/Stunden-/Tages-Aggregate vorhanden sind, sollten Rohwerte nur so lange bleiben, wie fachlich nötig.
+
+### 7. Monitoring gegen Wiederholung
+
+- Super-Admin Health-Panel erweitern um:
+  - letzte Edge-Function-Timeouts,
+  - langsamste DB-Query-Klassen,
+  - Cron-Fehler/Startup-Timeouts,
+  - Sensor-/OCPP-Schreibvolumen pro Stunde,
+  - aktive Kill-Switches.
+- Warnschwellen definieren:
+  - OCPP-API > 5s,
+  - DB-Statement-Timeouts > 0,
+  - Sensor-Aggregator-Laufzeit > 20s,
+  - Metrik-Endpunkt nicht erreichbar.
+
+### 8. Verifikation nach Umsetzung
+
+Nach der Umsetzung prüfen wir getrennt:
+
+- Backend-Metriken laden wieder zuverlässig.
+- `slow_queries` zeigt keine globalen `sensor_readings_raw`-Zeitabfragen mehr in den Top 5.
+- `ocpp-persistent-api` hat keine 90s/150s Timeouts mehr.
+- Login und datenintensive Seiten laden wieder.
+- Sensor-/Zähler-/OCPP-Graphen funktionieren weiterhin.
+- Automationen und Live-Werte bleiben erhalten.
+
+## Umsetzungsvorschlag in Reihenfolge
+
+1. Notfall-Kill-Switches und nicht-kritische Cron-/Logging-Last reduzieren.
+2. Globale Sensor-Historien-Counts aus der UI entfernen/ersetzen.
+3. Sensor-Aggregator inkrementell umbauen.
+4. OCPP-Persistent-API entkoppeln und Logging drosseln.
+5. EXPLAIN/Index-Runde nur für verbleibende Top-Queries.
+6. Health-/Alerting-Anzeige einbauen.
+7. Final verifizieren mit Logs, DB-Health und echten Seitenaufrufen.
