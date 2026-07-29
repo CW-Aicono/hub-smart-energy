@@ -184,6 +184,7 @@ export function TimeSeriesBlock({ block, period, offset, onConfigChange }: TimeS
                 stroke={COLORS[idx % COLORS.length]}
                 strokeWidth={2}
                 dot={false}
+                connectNulls
                 isAnimationActive={false}
               />
             ))}
