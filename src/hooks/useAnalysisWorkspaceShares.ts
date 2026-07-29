@@ -85,7 +85,7 @@ export function useTenantUsers() {
         .select("user_id, email, contact_person")
         .eq("tenant_id", tenantId!);
       if (error) throw error;
-      return (data ?? []) as { id: string; email: string | null; contact_person: string | null }[];
+      return ((data ?? []) as any[]).map((p) => ({ id: p.user_id as string, email: p.email as string | null, contact_person: p.contact_person as string | null }));
     },
   });
 }
