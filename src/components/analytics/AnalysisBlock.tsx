@@ -7,6 +7,8 @@ import { TimeSeriesBlock } from "./blocks/TimeSeriesBlock";
 import { KpiBlock } from "./blocks/KpiBlock";
 import { ComparisonBlock } from "./blocks/ComparisonBlock";
 import { HeatmapBlock } from "./blocks/HeatmapBlock";
+import { CorrelationBlock } from "./blocks/CorrelationBlock";
+import { FormulaBlock } from "./blocks/FormulaBlock";
 import { cn } from "@/lib/utils";
 
 interface AnalysisBlockProps {
@@ -31,6 +33,10 @@ export function AnalysisBlockCard({ block, period, offset, isEditMode, onRemove,
         return <ComparisonBlock block={block} period={period} offset={offset} onConfigChange={onConfigChange} />;
       case "heatmap":
         return <HeatmapBlock block={block} period={period} offset={offset} onConfigChange={onConfigChange} />;
+      case "correlation":
+        return <CorrelationBlock block={block} period={period} offset={offset} onConfigChange={onConfigChange} />;
+      case "formula":
+        return <FormulaBlock block={block} period={period} offset={offset} onConfigChange={onConfigChange} />;
       default:
         return <div className="text-sm text-muted-foreground p-4">Nicht implementierter Blocktyp</div>;
     }
