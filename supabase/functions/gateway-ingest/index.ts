@@ -2343,7 +2343,9 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
         .select("*, locations!location_automations_location_id_fkey(timezone)")
         .eq("tenant_id", tenantId)
         .eq("location_id", locationId)
+        .in("execution_mode", ["loxone_local", "hybrid"])
         .neq("location_integration_id", locationIntegrationId);
+
       const haEntityRe = /^[a-z_]+\.[a-z0-9_]+$/i;
       const extraHa = (extras || []).filter((a: any) => {
         if (a.actuator_uuid && haEntityRe.test(a.actuator_uuid)) return true;
