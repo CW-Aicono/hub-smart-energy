@@ -135,6 +135,7 @@ const PublicSalesQuote = lazy(() => import("./pages/PublicSalesQuote"));
 const PublicChargeStatus = lazy(() => import("./pages/PublicChargeStatus"));
 const BoardHome = lazy(() => import("./pages/board/BoardHome"));
 const BoardTileDetail = lazy(() => import("./pages/board/BoardTileDetail"));
+const AnalyticsStudio = lazy(() => import("./pages/AnalyticsStudio"));
 
 
 const queryClient = new QueryClient({
@@ -202,7 +203,8 @@ const App = () => (
                       <Route path="/demo/charging/ocpp-integration" element={<OcppIntegration />} />
                       <Route path="/demo/charging/settings" element={<ChargingSettings />} />
                       
-                      <Route path="/demo/automation" element={<Automation />} />
+                       <Route path="/demo/automation" element={<Automation />} />
+                       <Route path="/demo/analytics-studio" element={<AnalyticsStudio />} />
                       <Route path="/demo/arbitrage" element={<ArbitrageTrading />} />
                       <Route path="/demo/copilot" element={<Copilot />} />
                       <Route path="/demo/tenant-electricity" element={<TenantElectricity />} />
@@ -231,6 +233,7 @@ const App = () => (
                       <Route path="/locations" element={<M><Locations /></M>} />
                       <Route path="/locations/:id" element={<M><LocationDetail /></M>} />
                       <Route path="/energy-data" element={<M><EnergyData /></M>} />
+                      <Route path="/analytics-studio" element={<M><AnalyticsStudio /></M>} />
                       <Route path="/meters" element={<M><MetersOverview /></M>} />
                       <Route path="/live-values" element={<M><LiveValues /></M>} />
                       <Route path="/integrations" element={<M><Integrations /></M>} />

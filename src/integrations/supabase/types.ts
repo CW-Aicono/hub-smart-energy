@@ -333,6 +333,82 @@ export type Database = {
           },
         ]
       }
+      analysis_workspace_shares: {
+        Row: {
+          can_edit: boolean
+          created_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          can_edit?: boolean
+          created_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          can_edit?: boolean
+          created_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_workspace_shares_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analysis_workspaces: {
+        Row: {
+          blocks: Json
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          is_shared: boolean
+          layout: Json
+          name: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          blocks?: Json
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          is_shared?: boolean
+          layout?: Json
+          name: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          blocks?: Json
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          is_shared?: boolean
+          layout?: Json
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_workspaces_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       arbitrage_strategies: {
         Row: {
           buy_below_eur_mwh: number
