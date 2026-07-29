@@ -16,15 +16,19 @@ const admin = createClient(supabaseUrl, serviceKey, {
 
 let settingsCache: { checkedAt: number; ocppLogging: boolean; emergencyMode: boolean } | null = null;
 const SETTINGS_TTL_MS = 60_000;
+const SETTINGS_TIMEOUT_MS = 1_500;
 
 async function getRuntimeSettings() {
   const now = Date.now();
   if (settingsCache && now - settingsCache.checkedAt < SETTINGS_TTL_MS) return settingsCache;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SETTINGS_TIMEOUT_MS);
   try {
     const { data } = await admin
       .from("system_settings")
       .select("key, value")
-      .in("key", ["ocpp_message_logging_enabled", "backend_emergency_mode"]);
+      .in("key", ["ocpp_message_logging_enabled", "backend_emergency_mode"])
+      .abortSignal(controller.signal);
     const map = new Map((data ?? []).map((row: any) => [String(row.key), String(row.value ?? "").toLowerCase()]));
     const emergencyRaw = map.get("backend_emergency_mode") ?? "false";
     const loggingRaw = map.get("ocpp_message_logging_enabled") ?? "false";
@@ -33,8 +37,11 @@ async function getRuntimeSettings() {
       emergencyMode: emergencyRaw === "true" || emergencyRaw === "1" || emergencyRaw === "on",
       ocppLogging: loggingRaw === "true" || loggingRaw === "1" || loggingRaw === "on",
     };
-  } catch {
-    settingsCache = { checkedAt: now, emergencyMode: false, ocppLogging: false };
+  } catch (error) {
+    console.warn("[ocpp-persistent-api] settings lookup failed; disabling raw log writes", error instanceof Error ? error.message : String(error));
+    settingsCache = { checkedAt: now, emergencyMode: true, ocppLogging: false };
+  } finally {
+    clearTimeout(timeout);
   }
   return settingsCache;
 }
