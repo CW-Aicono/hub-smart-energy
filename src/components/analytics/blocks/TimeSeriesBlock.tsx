@@ -268,6 +268,19 @@ export function TimeSeriesBlock({ block, period, offset, onConfigChange }: TimeS
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="text-xs text-muted-foreground">{meterIds.length} Gerät(e) zugeordnet</div>
+            <div className="flex items-center justify-between p-2 rounded border bg-card">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-primary" />
+                <div>
+                  <div className="text-xs font-medium">Automations-Ereignisse anzeigen</div>
+                  <div className="text-[10px] text-muted-foreground">Erfolgreiche und fehlerhafte Ausführungen als Marker</div>
+                </div>
+              </div>
+              <Switch
+                checked={showAutomationEvents}
+                onCheckedChange={(v) => onConfigChange(block.id, { ...block.config, showAutomationEvents: v })}
+              />
+            </div>
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-xs">Annotationen ({annotations.length})</Label>
