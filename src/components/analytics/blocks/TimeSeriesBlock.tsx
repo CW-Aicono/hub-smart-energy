@@ -54,6 +54,7 @@ interface Annotation {
 export function TimeSeriesBlock({ block, period, offset, onConfigChange }: TimeSeriesBlockProps) {
   const meterIds = (block.config.meterIds as string[]) ?? [];
   const annotations = (block.config.annotations as Annotation[]) ?? [];
+  const showAutomationEvents = (block.config.showAutomationEvents as boolean) ?? false;
   const { data: series, isLoading } = useAnalyticsData(meterIds, period, undefined, meterIds.length > 0, offset);
   const [configOpen, setConfigOpen] = useState(false);
   const [annotationMode, setAnnotationMode] = useState(false);
