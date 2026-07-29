@@ -147,9 +147,10 @@ export function AdHocTransactionsContent({ embedded = false }: { embedded?: bool
     XLSX.writeFile(wb, `adhoc-transaktionen-${format(new Date(), "yyyyMMdd")}.xlsx`);
   };
 
-  return (
-    <AppLayout>
+  const body = (
+    <>
       <div className="p-4 md:p-8 space-y-6 max-w-full overflow-x-hidden">
+
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
             <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
