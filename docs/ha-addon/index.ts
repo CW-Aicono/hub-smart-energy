@@ -927,7 +927,13 @@ function insertExecLog(entry: {
     );
 
   pruneExecutionLogs();
+
+  // Push automation logs to the cloud immediately (coalesced) so the
+  // owner-lease on hybrid rules is extended before the cloud scheduler's
+  // next 30-s evaluation cycle. Prevents double-execution local + cloud.
+  schedulePushExecutionLogsSoon();
 }
+
 
 function getLocalTimeParts(timezone: string): { hours: number; minutes: number; seconds: number; weekday: number; timeStr: string; totalSeconds: number } {
   const now = new Date();
@@ -1238,7 +1244,36 @@ async function syncAutomationsFromCloud(): Promise<void> {
   }
 }
 
-async function pushExecutionLogs(): Promise<void> {
+// Coalesce bursts of automation executions into one immediate push (≤2 s).
+// Keeps the regular 60-s flush as safety net for retries after network errors.
+const AUTO_LOG_COALESCE_MS = 2000;
+const AUTO_LOG_RETRY_MS = 5000;
+let autoLogPushTimer: ReturnType<typeof setTimeout> | null = null;
+let autoLogPushInFlight = false;
+
+function schedulePushExecutionLogsSoon(): void {
+  if (autoLogPushTimer || autoLogPushInFlight) return;
+  autoLogPushTimer = setTimeout(async () => {
+    autoLogPushTimer = null;
+    autoLogPushInFlight = true;
+    try {
+      const ok = await pushExecutionLogs();
+      if (!ok) {
+        // One quick retry; after that the regular 60-s flush handles it.
+        setTimeout(() => {
+          autoLogPushInFlight = false;
+          schedulePushExecutionLogsSoon();
+        }, AUTO_LOG_RETRY_MS);
+        return;
+      }
+    } finally {
+      autoLogPushInFlight = false;
+    }
+  }, AUTO_LOG_COALESCE_MS);
+}
+
+async function pushExecutionLogs(): Promise<boolean> {
+
   // Always attempt – connectivity is tracked by heartbeat/sync results
 
   const unsyncedLogs = db.prepare(
@@ -1255,7 +1290,7 @@ async function pushExecutionLogs(): Promise<void> {
     created_at: string;
   }>;
 
-  if (unsyncedLogs.length === 0) return;
+  if (unsyncedLogs.length === 0) return true;
 
   try {
     const logs = unsyncedLogs.map((log) => ({
@@ -1283,11 +1318,15 @@ async function pushExecutionLogs(): Promise<void> {
       const maxId = unsyncedLogs[unsyncedLogs.length - 1].id;
       db.prepare(`UPDATE automation_exec_log SET synced = 1 WHERE id <= ?`).run(maxId);
       console.log(`[sync] Pushed ${logs.length} execution logs to cloud`);
+      return true;
     }
+    return false;
   } catch (err) {
     console.warn("[sync] Failed to push execution logs:", err);
+    return false;
   }
 }
+
 
 /* ── Flush Buffer to Cloud ───────────────────────────────────────────────────── */
 
