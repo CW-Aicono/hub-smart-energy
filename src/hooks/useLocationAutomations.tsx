@@ -77,6 +77,7 @@ export function useLocationAutomations(locationId: string | undefined) {
   const queryClient = useQueryClient();
   const [automations, setAutomations] = useState<LocationAutomationRecord[]>([]);
   const [lastErrors, setLastErrors] = useState<Record<string, AutomationLastError>>({});
+  const [lastSuccess, setLastSuccess] = useState<Record<string, AutomationLastSuccess>>({});
   const [loading, setLoading] = useState(true);
   const [executing, setExecuting] = useState<string | null>(null);
 
