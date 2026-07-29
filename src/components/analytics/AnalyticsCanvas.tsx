@@ -121,6 +121,7 @@ export function AnalyticsCanvas({
               key={block.id}
               onDrop={(e) => handleDrop(e, block)}
               onDragOver={handleDragOver}
+              onClick={() => handleBlockClick(block)}
               className={cn("col-span-full", block.w <= 3 ? "md:col-span-3" : block.w <= 6 ? "md:col-span-6" : "md:col-span-12")}
               style={{ gridRow: `span ${block.h}` }}
             >
