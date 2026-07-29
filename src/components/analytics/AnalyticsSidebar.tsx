@@ -99,8 +99,8 @@ export function AnalyticsSidebar({ onDragStart }: AnalyticsSidebarProps) {
                   >
                     <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")} />
                     <MapPin className="h-3.5 w-3.5" />
-                    <span className="flex-1 text-left truncate">{loc.label}</span>
-                    <span className="text-[10px] text-sidebar-foreground/60">{kids.length}</span>
+                    <span className="flex-1 min-w-0 text-left truncate" title={loc.label}>{loc.label}</span>
+                    <span className="shrink-0 text-[10px] text-sidebar-foreground/60 tabular-nums">{kids.length}</span>
                   </button>
                   {open && (
                     <div className="space-y-0.5 pl-6 py-1">
@@ -125,9 +125,9 @@ export function AnalyticsSidebar({ onDragStart }: AnalyticsSidebarProps) {
                               )}
                             >
                               <Icon className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground/60" />
-                              <span className="flex-1 truncate">{child.label}</span>
+                              <span className="flex-1 min-w-0 truncate" title={child.label}>{child.label}</span>
                               {child.unit && (
-                                <span className="text-[10px] text-sidebar-foreground/60">{child.unit}</span>
+                                <span className="shrink-0 text-[10px] text-sidebar-foreground/60 whitespace-nowrap">{child.unit}</span>
                               )}
                             </div>
                           );
