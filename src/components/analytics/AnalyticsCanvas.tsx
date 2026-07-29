@@ -17,6 +17,8 @@ interface AnalyticsCanvasProps {
   editMode: boolean;
   onBlocksChange: (blocks: AnalysisBlockType[]) => void;
   onEditModeChange: (v: boolean) => void;
+  pendingNode?: DeviceTreeNode | null;
+  onNodeAssigned?: () => void;
 }
 
 function makeId() {
@@ -30,9 +32,22 @@ export function AnalyticsCanvas({
   editMode,
   onBlocksChange,
   onEditModeChange,
+  pendingNode,
+  onNodeAssigned,
 }: AnalyticsCanvasProps) {
   const [draggedNode, setDraggedNode] = useState<DeviceTreeNode | null>(null);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pendingNode || !editMode) return;
+    const target = selectedBlockId ? blocks.find((b) => b.id === selectedBlockId) : blocks[blocks.length - 1];
+    if (!target) {
+      setDraggedNode(pendingNode);
+      return;
+    }
+    assignNodeToBlock(pendingNode, target);
+    onNodeAssigned?.();
+  }, [pendingNode]);
 
   const addBlock = (type: AnalysisBlockType["type"]) => {
     const block: AnalysisBlockType = {
