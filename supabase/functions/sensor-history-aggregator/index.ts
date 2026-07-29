@@ -16,12 +16,10 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const since = typeof body.since === "string"
-      ? body.since
-      : new Date(Date.now() - 15 * 60_000).toISOString();
-    const until = typeof body.until === "string"
-      ? body.until
-      : new Date().toISOString();
+    // By default let the RPC use its internal watermark (sensor_aggregator_last_run_at).
+    // Callers may still force an explicit window for manual backfills.
+    const since = typeof body.since === "string" ? body.since : null;
+    const until = typeof body.until === "string" ? body.until : null;
     const maxRows = Number.isFinite(Number(body.maxRows)) ? Number(body.maxRows) : 20000;
 
     const { data, error } = await supabase.rpc("aggregate_sensor_readings_5min", {
