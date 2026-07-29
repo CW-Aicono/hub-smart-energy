@@ -162,7 +162,7 @@ export function TimeSeriesBlock({ block, period, offset, onConfigChange }: TimeS
       )}
       <div className={cn("flex-1 min-h-0", annotationMode && "cursor-crosshair")}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }} onClick={handleChartClick}>
+          <LineChart data={chartData} margin={{ top: 22, right: 10, left: 0, bottom: 5 }} onClick={handleChartClick}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
             <YAxis tick={{ fontSize: 10 }} width={40} />
@@ -203,6 +203,7 @@ export function TimeSeriesBlock({ block, period, offset, onConfigChange }: TimeS
                   label={{
                     value: a.label,
                     position: "top",
+                    offset: 8,
                     fill: a.color,
                     fontSize: 10,
                     fontWeight: 600,
