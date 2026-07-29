@@ -55,20 +55,31 @@ export function AnalyticsCanvas({
     onBlocksChange(blocks.filter((b) => b.id !== id));
   };
 
-  const handleDrop = (e: React.DragEvent, targetBlock: AnalysisBlockType) => {
-    e.preventDefault();
-    if (!draggedNode) return;
-
+  const assignNodeToBlock = (node: DeviceTreeNode, targetBlock: AnalysisBlockType) => {
+    if (node.type === "location") return;
     const existing = targetBlock.config.meterIds as string[] | undefined;
-    const nextIds = [...new Set([...(existing ?? []), draggedNode.id])];
+    const nextIds = [...new Set([...(existing ?? []), node.id])];
     updateBlock(targetBlock.id, {
       config: { ...targetBlock.config, meterIds: nextIds },
-      title: targetBlock.title || `${draggedNode.label}`,
+      title: targetBlock.title || `${node.label}`,
     });
+  };
+
+  const handleDrop = (e: React.DragEvent, targetBlock: AnalysisBlockType) => {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/plain") || draggedNode?.id;
+    if (!id) return;
+    const node = draggedNode ?? { id, type: "meter", label: id } as DeviceTreeNode;
+    assignNodeToBlock(node, targetBlock);
     setDraggedNode(null);
   };
 
   const handleDragOver = (e: React.DragEvent) => e.preventDefault();
+  const handleBlockClick = (block: AnalysisBlockType) => {
+    if (!draggedNode || !editMode) return;
+    assignNodeToBlock(draggedNode, block);
+    setDraggedNode(null);
+  };
 
   return (
     <div className="flex flex-col h-full">

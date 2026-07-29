@@ -73,9 +73,14 @@ export function AnalyticsSidebar({ onDragStart }: AnalyticsSidebarProps) {
                         <div
                           key={child.id}
                           draggable
-                          onDragStart={() => onDragStart(child)}
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("text/plain", child.id);
+                            e.dataTransfer.effectAllowed = "copy";
+                            onDragStart(child);
+                          }}
+                          onClick={() => onDragStart(child)}
                           className={cn(
-                            "flex items-center gap-2 px-2 py-1.5 rounded-md text-xs cursor-grab",
+                            "flex items-center gap-2 px-2 py-1.5 rounded-md text-xs cursor-grab select-none",
                             "hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors"
                           )}
                         >
