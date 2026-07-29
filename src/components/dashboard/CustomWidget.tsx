@@ -328,16 +328,12 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
 
         const aggregatedRows: Array<{ meter_id: string; power_avg: number; bucket: string }> = [];
         if (powerMeterIds.length > 0) {
-          const { data: aggData, error: aggError } = await supabase
-            .rpc("get_power_readings_5min", {
-              p_meter_ids: powerMeterIds,
-              p_start: from.toISOString(),
-              p_end: to.toISOString(),
-            })
-            .range(0, 9999);
-          if (aggError) throw aggError;
-          if (aggData) aggregatedRows.push(...(aggData as Array<{ meter_id: string; power_avg: number; bucket: string }>));
+          const series = await fetchPowerSeriesAuto(powerMeterIds, from, to, 900);
+          aggregatedRows.push(
+            ...series.map((r) => ({ meter_id: r.meter_id, power_avg: r.power_avg, bucket: r.bucket })),
+          );
         }
+
 
 
         let mergedRows = aggregatedRows.map((row) => ({
