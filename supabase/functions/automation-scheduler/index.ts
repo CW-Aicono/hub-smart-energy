@@ -506,8 +506,17 @@ Deno.serve(async (req) => {
 
         await supabase
           .from("location_automations")
-          .update({ last_executed_at: new Date().toISOString() })
+          .update({
+            last_executed_at: new Date().toISOString(),
+            ...(execMode === "hybrid"
+              ? {
+                  owner_gateway_device_id: null,
+                  owner_lease_until: new Date(Date.now() + LEASE_SECONDS * 1000).toISOString(),
+                }
+              : {}),
+          })
           .eq("id", automationId);
+
 
         executedCount++;
         console.log(`Automation "${auto.name}" executed successfully in ${durationMs}ms`);
