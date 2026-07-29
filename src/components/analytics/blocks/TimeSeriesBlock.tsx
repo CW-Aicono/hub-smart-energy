@@ -203,6 +203,7 @@ export function TimeSeriesBlock({ block, period, offset, onConfigChange }: TimeS
                   label={{
                     value: a.label,
                     position: "top",
+                    offset: 8,
                     fill: a.color,
                     fontSize: 10,
                     fontWeight: 600,
