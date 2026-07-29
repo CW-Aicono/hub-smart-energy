@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefinitions";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
+
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { Button } from "@/components/ui/button";

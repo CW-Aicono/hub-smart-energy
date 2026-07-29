@@ -1,4 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTranslation } from "@/hooks/useTranslation";
 import {
