@@ -108,7 +108,7 @@ export function SensorHistorySettingsCard() {
 
         <div className="text-xs text-muted-foreground space-y-1">
           <div><b>Lastschutz:</b> Keine Live-Counts auf großen Historientabellen; Aggregation läuft datenbanknah und kann per Notfallmodus gestoppt werden.</div>
-          <div><b>Retention:</b> Rohdaten 7 Tage · 5-Min 400 Tage · Stunden 2 Jahre · Tage 5 Jahre · Monate unbegrenzt.</div>
+          <div><b>Retention:</b> Rohdaten 48 h · 5-Min 400 Tage · Stunden 2 Jahre · Tage 5 Jahre · Monate unbegrenzt.</div>
           <div><b>Aggregation:</b> Mittelwert + Min + Max + Letzter Wert.</div>
           <div><b>Ingest-Pfade:</b> AICONO Gateway (device-snapshot), Shelly Cloud, Loxone.</div>
           {settings?.lastChangedAt ? <div><b>Zuletzt geändert:</b> {new Date(settings.lastChangedAt).toLocaleString("de-DE")}</div> : null}
