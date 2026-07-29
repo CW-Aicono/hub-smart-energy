@@ -303,7 +303,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const defaultIntegration = gatewayIntegrations[0] || null;
 
   const {
-    automations, lastErrors, loading: autoLoading, executing,
+    automations, lastErrors, lastSuccess, loading: autoLoading, executing,
     createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation, refetch,
   } = useLocationAutomations(locationId);
 
@@ -608,18 +608,58 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                           {actionsCount > 1 && (
                             <Badge variant="secondary" className="text-[10px]">{actionsCount} {T("auto.actions")}</Badge>
                           )}
+                          {(() => {
+                            const mode = (auto.execution_mode || "cloud") as "cloud" | "loxone_local" | "hybrid";
+                            const leaseUntilRaw = (auto as any).owner_lease_until as string | null | undefined;
+                            const leaseUntilMs = leaseUntilRaw ? new Date(leaseUntilRaw).getTime() : 0;
+                            const leaseActive = leaseUntilMs > Date.now();
+                            let hybridTitle = "Hybrid: lokal mit Cloud-Fallback";
+                            if (mode === "hybrid") {
+                              if (leaseActive) {
+                                const t = new Date(leaseUntilMs).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+                                hybridTitle = `Aktiv: Lokal (Lease bis ${t}) – Cloud-Fallback pausiert`;
+                              } else {
+                                hybridTitle = "Fallback: Cloud aktiv (kein aktueller lokaler Ausführungs-Nachweis)";
+                              }
+                            }
+                            const map = {
+                              cloud: { label: "Cloud", cls: "bg-sky-500/10 text-sky-700 border-sky-500/30 dark:text-sky-300", title: "Ausführung über die Cloud" },
+                              loxone_local: { label: "Lokal", cls: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-300", title: "Ausführung lokal auf dem Gateway/Miniserver" },
+                              hybrid: { label: "Hybrid", cls: "bg-violet-500/10 text-violet-700 border-violet-500/30 dark:text-violet-300", title: hybridTitle },
+                            } as const;
+                            const m = map[mode] ?? map.cloud;
+                            return (
+                              <Badge variant="outline" className={`text-[10px] ${m.cls}`} title={m.title}>
+                                {m.label}
+                              </Badge>
+                            );
+                          })()}
+
                         </div>
                         {auto.description && (
                           <p className="text-xs text-muted-foreground mt-0.5">{auto.description}</p>
                         )}
                         <AutomationFlowDiagram auto={auto} actuatorStates={actuatorStates} />
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
-                          {auto.last_executed_at && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {formatDistanceToNow(new Date(auto.last_executed_at), { addSuffix: true, locale: de })}
-                            </span>
-                          )}
+                          {(() => {
+                            const succ = lastSuccess[auto.id];
+                            const succTime = succ ? new Date(succ.executed_at).getTime() : 0;
+                            const autoTime = auto.last_executed_at ? new Date(auto.last_executed_at).getTime() : 0;
+                            const chosen = succTime >= autoTime ? succ?.executed_at : auto.last_executed_at;
+                            if (!chosen) return null;
+                            const source = succTime >= autoTime ? succ?.execution_source : null;
+                            const sourceLabel =
+                              source === "local" ? "Lokal" : source === "cloud" ? "Cloud" : null;
+                            return (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatDistanceToNow(new Date(chosen), { addSuffix: true, locale: de })}
+                                {sourceLabel && (
+                                  <span className="text-[10px] text-muted-foreground/80">· {sourceLabel}</span>
+                                )}
+                              </span>
+                            );
+                          })()}
                           {(() => {
                             const err = lastErrors[auto.id];
                             const isScheduledError = err?.status === "error" && err?.trigger_type === "scheduled";

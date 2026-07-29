@@ -2298,11 +2298,15 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
 
   console.log(`[sync-automations] tenant=${tenantId} li=${locationIntegrationId} loc=${locationId}`);
 
-  // Sync ALL automations (active + inactive) so the local engine can manage state
+  // Sync automations the local engine may execute: loxone_local + hybrid.
+  // execution_mode = 'cloud' is intentionally excluded so the gateway
+  // cannot double-fire cloud-owned rules.
   let query = supabase
     .from("location_automations")
     .select("*, locations!location_automations_location_id_fkey(timezone), location_integrations!location_automations_location_integration_id_fkey(integration:integrations(type))")
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    .in("execution_mode", ["loxone_local", "hybrid"]);
+
 
   // Filter by location_integration_id (preferred – only automations this gateway can execute)
   if (locationIntegrationId) {
@@ -2339,7 +2343,9 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
         .select("*, locations!location_automations_location_id_fkey(timezone)")
         .eq("tenant_id", tenantId)
         .eq("location_id", locationId)
+        .in("execution_mode", ["loxone_local", "hybrid"])
         .neq("location_integration_id", locationIntegrationId);
+
       const haEntityRe = /^[a-z_]+\.[a-z0-9_]+$/i;
       const extraHa = (extras || []).filter((a: any) => {
         if (a.actuator_uuid && haEntityRe.test(a.actuator_uuid)) return true;
@@ -2371,11 +2377,13 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
     action_type: auto.action_type,
     last_executed_at: auto.last_executed_at,
     updated_at: auto.updated_at,
+    execution_mode: auto.execution_mode || "cloud",
     location_timezone: auto.locations?.timezone || "Europe/Berlin",
   }));
 
   return json({ success: true, automations, count: automations.length, location_id: locationId });
 }
+
 
 /* ── Push Execution Logs handler (Hub → Cloud) ────────────────────────────────── */
 
@@ -2427,8 +2435,49 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
     return json({ error: "Database error" }, 500);
   }
 
+  // Mirror the most recent successful execution timestamp per automation
+  // to location_automations.last_executed_at so the tenant UI reflects
+  // local (gateway) executions the same as cloud executions.
+  const latestSuccessByAuto = new Map<string, string>();
+  for (const r of rows) {
+    if (r.status !== "success") continue;
+    const prev = latestSuccessByAuto.get(r.automation_id);
+    if (!prev || new Date(r.executed_at).getTime() > new Date(prev).getTime()) {
+      latestSuccessByAuto.set(r.automation_id, r.executed_at);
+    }
+  }
+  const LEASE_SECONDS = 90;
+  const leaseUntil = new Date(Date.now() + LEASE_SECONDS * 1000).toISOString();
+  for (const [automationId, executedAt] of latestSuccessByAuto.entries()) {
+    // Bump last_executed_at (only forward) and — for hybrid rules — extend the
+    // ownership lease so the cloud scheduler skips this rule for LEASE_SECONDS.
+    const { error: updateErr } = await supabase
+      .from("location_automations")
+      .update({ last_executed_at: executedAt })
+      .eq("id", automationId)
+      .or(`last_executed_at.is.null,last_executed_at.lt.${executedAt}`);
+    if (updateErr) {
+      console.warn(
+        `[gateway-ingest] failed to bump last_executed_at for ${automationId}:`,
+        updateErr.message,
+      );
+    }
+    const { error: leaseErr } = await supabase
+      .from("location_automations")
+      .update({ owner_lease_until: leaseUntil })
+      .eq("id", automationId)
+      .eq("execution_mode", "hybrid");
+    if (leaseErr) {
+      console.warn(
+        `[gateway-ingest] failed to extend lease for ${automationId}:`,
+        leaseErr.message,
+      );
+    }
+  }
+
   return json({ success: true, inserted: rows.length });
 }
+
 
 /* ── Device Inventory Snapshot (HA Add-on -> Cloud) ──────────────────────────── */
 /**
@@ -2573,6 +2622,66 @@ async function handleDeviceSnapshot(req: Request): Promise<Response> {
     });
   } catch (e) {
     console.warn("[device-snapshot] sensor history skipped:", (e as Error).message);
+  }
+
+  // Zusätzlich: Leistungswerte in meter_power_readings spiegeln, damit die
+  // Detail-Charts für HA-Gateway-Zähler nicht leer bleiben. Nur Meter mit
+  // Leistungseinheit (W/kW/MW); Delta-Guard: nur schreiben, wenn kein Wert
+  // der letzten 55 s existiert.
+  try {
+    if (device.location_integration_id) {
+      const entityIds = incoming.map((r) => r.entity_id);
+      const { data: linkedMeters } = await supabase
+        .from("meters")
+        .select("id, tenant_id, sensor_uuid, energy_type, source_unit_power")
+        .eq("location_integration_id", device.location_integration_id)
+        .eq("capture_type", "automatic")
+        .eq("is_archived", false)
+        .in("sensor_uuid", entityIds);
+
+      const incomingByEntity = new Map<string, any>();
+      for (const row of incoming) incomingByEntity.set(row.entity_id, row);
+
+      const throttleCutoff = new Date(Date.now() - 55_000).toISOString();
+      const powerRows: Array<{ meter_id: string; tenant_id: string; energy_type: string; power_value: number; recorded_at: string }> = [];
+
+      for (const meter of linkedMeters || []) {
+        const src = String((meter as any).source_unit_power || "").toLowerCase();
+        let scale: number | null = null;
+        if (src === "w") scale = 1 / 1000;
+        else if (src === "kw") scale = 1;
+        else if (src === "mw") scale = 1000;
+        else continue;
+        const row = incomingByEntity.get(String(meter.sensor_uuid));
+        if (!row) continue;
+        const raw = row.state;
+        if (raw == null) continue;
+        const num = typeof raw === "number" ? raw : Number(String(raw).replace(",", "."));
+        if (!Number.isFinite(num)) continue;
+        const { data: recent } = await supabase
+          .from("meter_power_readings")
+          .select("recorded_at")
+          .eq("meter_id", meter.id)
+          .gte("recorded_at", throttleCutoff)
+          .limit(1)
+          .maybeSingle();
+        if (recent) continue;
+        powerRows.push({
+          meter_id: meter.id,
+          tenant_id: meter.tenant_id,
+          energy_type: meter.energy_type || "strom",
+          power_value: num * scale,
+          recorded_at: nowIso,
+        });
+      }
+
+      if (powerRows.length > 0) {
+        const { error: prErr } = await supabase.from("meter_power_readings").insert(powerRows);
+        if (prErr) console.warn("[device-snapshot] meter_power_readings insert error:", prErr.message);
+      }
+    }
+  } catch (e) {
+    console.warn("[device-snapshot] power mirror skipped:", (e as Error).message);
   }
 
   return json({ success: true, upserted: changed.length, pruned, unchanged: incoming.length - changed.length });

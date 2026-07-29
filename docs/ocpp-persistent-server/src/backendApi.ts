@@ -35,15 +35,29 @@ interface BackendResponse<T> {
 const endpoint = `${config.supabaseUrl.replace(/\/+$/, "")}/functions/v1/ocpp-persistent-api`;
 
 async function callBackend<T>(action: string, payload: Record<string, unknown>): Promise<T> {
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "apikey": config.supabaseAnonKey,
-      "Authorization": `Bearer ${config.supabaseAnonKey}`,
-    },
-    body: JSON.stringify({ action, ...payload }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.backendTimeoutMs);
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": config.supabaseAnonKey,
+        "Authorization": `Bearer ${config.supabaseAnonKey}`,
+      },
+      body: JSON.stringify({ action, ...payload }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const message = error instanceof Error && error.name === "AbortError"
+      ? `Backend request timed out after ${config.backendTimeoutMs}ms`
+      : (error as Error).message;
+    log.error("OCPP backend API failed", { action, error: message });
+    throw new Error(message);
+  } finally {
+    clearTimeout(timeout);
+  }
 
   let body: BackendResponse<T> | null = null;
   try {
@@ -135,6 +149,7 @@ export interface OcppLogBatchEntry {
 
 export async function logOcppFramesBatch(entries: OcppLogBatchEntry[]): Promise<void> {
   if (entries.length === 0) return;
+  if (!config.ocppFrameLoggingEnabled) return;
   await callBackend("log-messages-batch", { entries });
 }
 

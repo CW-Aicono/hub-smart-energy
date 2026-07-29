@@ -6542,6 +6542,8 @@ export type Database = {
           name: string
           notify_email: string | null
           notify_on_error: boolean
+          owner_gateway_device_id: string | null
+          owner_lease_until: string | null
           scene_id: string | null
           schedule: Json | null
           scope_floor_id: string | null
@@ -6578,6 +6580,8 @@ export type Database = {
           name: string
           notify_email?: string | null
           notify_on_error?: boolean
+          owner_gateway_device_id?: string | null
+          owner_lease_until?: string | null
           scene_id?: string | null
           schedule?: Json | null
           scope_floor_id?: string | null
@@ -6614,6 +6618,8 @@ export type Database = {
           name?: string
           notify_email?: string | null
           notify_on_error?: boolean
+          owner_gateway_device_id?: string | null
+          owner_lease_until?: string | null
           scene_id?: string | null
           schedule?: Json | null
           scope_floor_id?: string | null
@@ -14295,6 +14301,10 @@ export type Database = {
       aggregate_pv_actual_hourly: {
         Args: { p_from?: string; p_to?: string }
         Returns: number
+      }
+      aggregate_sensor_readings_5min: {
+        Args: { _max_rows?: number; _since?: string; _until?: string }
+        Returns: Json
       }
       aicono_fleet_stats_24h: {
         Args: never

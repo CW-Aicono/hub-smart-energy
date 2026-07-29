@@ -28,6 +28,8 @@ export const config = {
   pingIntervalSec: num("PING_INTERVAL_SECONDS", 25),
   idleTimeoutSec: num("IDLE_TIMEOUT_SECONDS", 90000),
   commandPollIntervalMs: num("COMMAND_POLL_INTERVAL_MS", 10000),
+  backendTimeoutMs: num("BACKEND_TIMEOUT_MS", 8000),
+  ocppFrameLoggingEnabled: bool("OCPP_FRAME_LOGGING_ENABLED", false),
   enableRealtime: bool("ENABLE_REALTIME", false),
   startupCheckOcppId: process.env.OCPP_STARTUP_CHECK_ID ?? "",
   ocppSubprotocol: "ocpp1.6",

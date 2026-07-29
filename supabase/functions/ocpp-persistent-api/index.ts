@@ -14,6 +14,38 @@ const admin = createClient(supabaseUrl, serviceKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+let settingsCache: { checkedAt: number; ocppLogging: boolean; emergencyMode: boolean } | null = null;
+const SETTINGS_TTL_MS = 60_000;
+const SETTINGS_TIMEOUT_MS = 1_500;
+
+async function getRuntimeSettings() {
+  const now = Date.now();
+  if (settingsCache && now - settingsCache.checkedAt < SETTINGS_TTL_MS) return settingsCache;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SETTINGS_TIMEOUT_MS);
+  try {
+    const { data } = await admin
+      .from("system_settings")
+      .select("key, value")
+      .in("key", ["ocpp_message_logging_enabled", "backend_emergency_mode"])
+      .abortSignal(controller.signal);
+    const map = new Map((data ?? []).map((row: any) => [String(row.key), String(row.value ?? "").toLowerCase()]));
+    const emergencyRaw = map.get("backend_emergency_mode") ?? "false";
+    const loggingRaw = map.get("ocpp_message_logging_enabled") ?? "false";
+    settingsCache = {
+      checkedAt: now,
+      emergencyMode: emergencyRaw === "true" || emergencyRaw === "1" || emergencyRaw === "on",
+      ocppLogging: loggingRaw === "true" || loggingRaw === "1" || loggingRaw === "on",
+    };
+  } catch (error) {
+    console.warn("[ocpp-persistent-api] settings lookup failed; disabling raw log writes", error instanceof Error ? error.message : String(error));
+    settingsCache = { checkedAt: now, emergencyMode: true, ocppLogging: false };
+  } finally {
+    clearTimeout(timeout);
+  }
+  return settingsCache;
+}
+
 function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
     status,
@@ -431,6 +463,8 @@ async function handle(action: string, body: Record<string, unknown>) {
     }
 
     case "log-message": {
+      const settings = await getRuntimeSettings();
+      if (!settings.ocppLogging || settings.emergencyMode) return ok({ skipped: "ocpp_message_logging_disabled" });
       // Legacy: einzelne Zeile (Request ODER Response). Rückwärtskompatibel.
       const chargePointId = String(body.chargePointId ?? "");
       const direction = body.direction === "outgoing" ? "outgoing" : "incoming";
@@ -448,11 +482,13 @@ async function handle(action: string, body: Record<string, unknown>) {
     }
 
     case "log-messages-batch": {
+      const settings = await getRuntimeSettings();
+      if (!settings.ocppLogging || settings.emergencyMode) return ok({ inserted: 0, skipped: "ocpp_message_logging_disabled" });
       // Bulk-Insert mehrerer Einträge in EINEM DB-Roundtrip.
       // Jeder Eintrag kann eine gepaarte Response enthalten -> 1 Zeile statt 2.
       const entries = Array.isArray(body.entries) ? body.entries : [];
       if (entries.length === 0) return ok({ inserted: 0 });
-      if (entries.length > 500) return fail(400, "Batch zu groß (max 500)");
+      if (entries.length > 200) return fail(400, "Batch zu groß (max 200)");
 
       const rows: Record<string, unknown>[] = [];
       for (const raw of entries) {
@@ -516,6 +552,7 @@ async function handle(action: string, body: Record<string, unknown>) {
       const samples = Array.isArray(body.samples) ? body.samples as Record<string, unknown>[] : [];
       if (!chargePointId) return fail(400, "Missing charge_point_id");
       if (samples.length === 0) return ok({ inserted: 0 });
+      if (samples.length > 200) return fail(400, "Sample-Batch zu groß (max 200)");
 
       const { data: cp, error: cpErr } = await admin
         .from("charge_points")

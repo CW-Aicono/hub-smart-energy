@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity } from "lucide-react";
+import { Activity, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,73 +8,42 @@ import { supabase } from "@/integrations/supabase/client";
 
 export function SensorHistorySettingsCard() {
   const queryClient = useQueryClient();
-  const countRecentRows = async (
-    table: "sensor_readings_raw" | "sensor_readings_5min",
-    column: "recorded_at" | "bucket",
-    since: string,
-  ) => {
-    const { count, error } = await supabase
-      .from(table)
-      .select("id", { count: "estimated", head: true })
-      .gte(column, since);
-
-    if (error) throw error;
-    return count ?? 0;
+  const parseEnabled = (value: unknown, fallback: boolean) => {
+    const raw = String(value ?? (fallback ? "true" : "false")).toLowerCase();
+    return raw === "true" || raw === "1" || raw === "on" || raw === "yes";
   };
 
-  const formatCapped = (value?: number, capped?: boolean) => {
-    const formatted = (value ?? 0).toLocaleString("de-DE");
-    return capped ? `≥ ${formatted}` : formatted;
-  };
-
-  const { data: setting, isLoading } = useQuery({
-    queryKey: ["system_settings", "sensor_history_enabled"],
+  const { data: settings, isLoading } = useQuery({
+    queryKey: ["system_settings", "backend-stability-switches"],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("system_settings")
-        .select("value")
-        .eq("key", "sensor_history_enabled")
-        .maybeSingle();
-      const raw = String((data as any)?.value ?? "true").toLowerCase();
-      return raw !== "false" && raw !== "0" && raw !== "off";
-    },
-  });
-
-  const { data: counts } = useQuery({
-    queryKey: ["sensor-history-counts"],
-    refetchInterval: 5 * 60_000,
-    staleTime: 2 * 60_000,
-    refetchOnWindowFocus: false,
-    queryFn: async () => {
-      const since24h = new Date(Date.now() - 24 * 3600_000).toISOString();
-      const since1h = new Date(Date.now() - 3600_000).toISOString();
-
-      const [raw24, raw1, agg24] = await Promise.all([
-        countRecentRows("sensor_readings_raw", "recorded_at", since24h),
-        countRecentRows("sensor_readings_raw", "recorded_at", since1h),
-        countRecentRows("sensor_readings_5min", "bucket", since24h),
-      ]);
+        .select("key, value, updated_at")
+        .in("key", ["sensor_history_enabled", "backend_emergency_mode", "ocpp_message_logging_enabled"]);
+      if (error) throw error;
+      const byKey = new Map((data ?? []).map((row: any) => [String(row.key), row]));
+      const changedAtValues = (data ?? [])
+        .map((row: any) => row.updated_at as string | null)
+        .filter(Boolean)
+        .sort();
       return {
-        raw24,
-        raw1,
-        agg24,
-        raw24Capped: false,
-        raw1Capped: false,
-        agg24Capped: false,
+        sensorHistoryEnabled: parseEnabled(byKey.get("sensor_history_enabled")?.value, true),
+        backendEmergencyMode: parseEnabled(byKey.get("backend_emergency_mode")?.value, false),
+        ocppMessageLoggingEnabled: parseEnabled(byKey.get("ocpp_message_logging_enabled")?.value, false),
+        lastChangedAt: changedAtValues.length > 0 ? changedAtValues[changedAtValues.length - 1] : null,
       };
     },
   });
 
   const toggle = useMutation({
-    mutationFn: async (enabled: boolean) => {
+    mutationFn: async ({ key, enabled }: { key: string; enabled: boolean }) => {
       const { error } = await supabase
         .from("system_settings")
-        .upsert({ key: "sensor_history_enabled", value: enabled ? "true" : "false" }, { onConflict: "key" });
+        .upsert({ key, value: enabled ? "true" : "false" }, { onConflict: "key" });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["system_settings", "sensor_history_enabled"] });
-      queryClient.invalidateQueries({ queryKey: ["sensor-history-counts"] });
+      queryClient.invalidateQueries({ queryKey: ["system_settings", "backend-stability-switches"] });
       toast.success("Einstellung gespeichert");
     },
     onError: (e: any) => toast.error(`Fehler: ${e.message}`),
@@ -88,7 +57,7 @@ export function SensorHistorySettingsCard() {
         </CardTitle>
         <CardDescription>
           Historisierung von Momentanwerten (Temperatur, Feuchte, Spannung, Batterien …).
-          Notfall-Kill-Switch bei IO-Druck.
+          Schutzschalter bei Backend- und IO-Druck.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -100,31 +69,49 @@ export function SensorHistorySettingsCard() {
             </div>
           </div>
           <Switch
-            checked={!!setting}
+            checked={!!settings?.sensorHistoryEnabled}
             disabled={isLoading || toggle.isPending}
-            onCheckedChange={(v) => toggle.mutate(v)}
+            onCheckedChange={(v) => toggle.mutate({ key: "sensor_history_enabled", enabled: v })}
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-3 border rounded-lg">
-            <div className="text-xs text-muted-foreground">Rohwerte (letzte Stunde)</div>
-            <div className="text-2xl font-bold tabular-nums">{formatCapped(counts?.raw1, counts?.raw1Capped)}</div>
+        <div className="flex items-center justify-between gap-4 p-3 border rounded-lg">
+          <div>
+            <div className="font-medium">OCPP-Rohtelegramme protokollieren</div>
+            <div className="text-xs text-muted-foreground">
+              Standardmäßig aus. Bei Aktivierung werden Wallbox-Request/Response-Logs zusätzlich gespeichert.
+            </div>
           </div>
-          <div className="p-3 border rounded-lg">
-            <div className="text-xs text-muted-foreground">Rohwerte (24 h)</div>
-            <div className="text-2xl font-bold tabular-nums">{formatCapped(counts?.raw24, counts?.raw24Capped)}</div>
+          <Switch
+            checked={!!settings?.ocppMessageLoggingEnabled}
+            disabled={isLoading || toggle.isPending || !!settings?.backendEmergencyMode}
+            onCheckedChange={(v) => toggle.mutate({ key: "ocpp_message_logging_enabled", enabled: v })}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4 p-3 border rounded-lg">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="mt-0.5 h-5 w-5 text-destructive" />
+            <div>
+              <div className="font-medium">Backend-Notfallmodus</div>
+              <div className="text-xs text-muted-foreground">
+                Stoppt Sensor-Historie-Aggregation und OCPP-Rohtelegramm-Logging sofort. Live-Werte und Kernfunktionen bleiben aktiv.
+              </div>
+            </div>
           </div>
-          <div className="p-3 border rounded-lg">
-            <div className="text-xs text-muted-foreground">5-Min-Buckets (24 h)</div>
-            <div className="text-2xl font-bold tabular-nums">{formatCapped(counts?.agg24, counts?.agg24Capped)}</div>
-          </div>
+          <Switch
+            checked={!!settings?.backendEmergencyMode}
+            disabled={isLoading || toggle.isPending}
+            onCheckedChange={(v) => toggle.mutate({ key: "backend_emergency_mode", enabled: v })}
+          />
         </div>
 
         <div className="text-xs text-muted-foreground space-y-1">
-          <div><b>Retention:</b> Rohdaten 7 Tage · 5-Min 400 Tage · Stunden 2 Jahre · Tage 5 Jahre · Monate unbegrenzt.</div>
-          <div><b>Aggregation:</b> zeit-gewichteter Mittelwert + Min + Max + Letzter Wert.</div>
+          <div><b>Lastschutz:</b> Keine Live-Counts auf großen Historientabellen; Aggregation läuft datenbanknah und kann per Notfallmodus gestoppt werden.</div>
+          <div><b>Retention:</b> Rohdaten 48 h · 5-Min 400 Tage · Stunden 2 Jahre · Tage 5 Jahre · Monate unbegrenzt.</div>
+          <div><b>Aggregation:</b> Mittelwert + Min + Max + Letzter Wert.</div>
           <div><b>Ingest-Pfade:</b> AICONO Gateway (device-snapshot), Shelly Cloud, Loxone.</div>
+          {settings?.lastChangedAt ? <div><b>Zuletzt geändert:</b> {new Date(settings.lastChangedAt).toLocaleString("de-DE")}</div> : null}
         </div>
       </CardContent>
     </Card>
