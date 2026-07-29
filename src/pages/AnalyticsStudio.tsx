@@ -1,13 +1,18 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { AnalyticsSidebar } from "@/components/analytics/AnalyticsSidebar";
 import { AnalyticsCanvas } from "@/components/analytics/AnalyticsCanvas";
 import { TimeRangeToolbar } from "@/components/analytics/TimeRangeToolbar";
 import { WorkspaceToolbar } from "@/components/analytics/WorkspaceToolbar";
+import { StoryManagerDialog } from "@/components/analytics/story/StoryManagerDialog";
+import { StoryPresenter } from "@/components/analytics/story/StoryPresenter";
+import { extractStory, withStory, StoryStep } from "@/components/analytics/story/storyTypes";
 import { useAnalysisWorkspaces, AnalysisWorkspace, AnalysisBlock, WorkspaceInput } from "@/hooks/useAnalysisWorkspaces";
 import { AnalyticsPeriod } from "@/hooks/useAnalyticsData";
 import { DeviceTreeNode } from "@/hooks/useDeviceTree";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Clapperboard, Play } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
@@ -29,24 +34,35 @@ export default function AnalyticsStudio() {
   const { workspaces, isLoading, create, update, remove } = useAnalysisWorkspaces();
   const [activeWorkspace, setActiveWorkspace] = useState<AnalysisWorkspace | null>(null);
   const [blocks, setBlocks] = useState<AnalysisBlock[]>([]);
+  const [layout, setLayout] = useState<Record<string, unknown>>({});
   const [period, setPeriod] = useState<AnalyticsPeriod>("day");
   const [offset, setOffset] = useState(0);
   const [editMode, setEditMode] = useState(false);
   const [draggedNode, setDraggedNode] = useState<DeviceTreeNode | null>(null);
+  const [storyOpen, setStoryOpen] = useState(false);
+  const [presenting, setPresenting] = useState<{ startIndex: number } | null>(null);
 
   // Load active workspace blocks when selected
   useEffect(() => {
     if (activeWorkspace) {
       setBlocks((activeWorkspace.blocks as AnalysisBlock[]) ?? []);
+      setLayout((activeWorkspace.layout as Record<string, unknown>) ?? {});
     } else {
       setBlocks([]);
+      setLayout({});
     }
   }, [activeWorkspace]);
+
+  const story = useMemo(() => extractStory(layout), [layout]);
+
+  const setSteps = (steps: StoryStep[]) => {
+    setLayout((prev) => withStory(prev, { steps }));
+  };
 
   const currentState: WorkspaceInput = {
     name: activeWorkspace?.name ?? "Neue Analyse",
     description: activeWorkspace?.description ?? undefined,
-    layout: activeWorkspace?.layout ?? {},
+    layout,
     blocks,
     is_shared: activeWorkspace?.is_shared ?? false,
   };
@@ -92,15 +108,36 @@ export default function AnalyticsStudio() {
             <h1 className="text-sm font-semibold">Analytics Studio</h1>
             <TimeRangeToolbar period={period} offset={offset} onPeriodChange={setPeriod} onOffsetChange={setOffset} />
           </div>
-          <WorkspaceToolbar
-            workspaces={workspaces}
-            activeWorkspace={activeWorkspace}
-            onLoad={setActiveWorkspace}
-            onSave={handleCreate}
-            onSaveExisting={handleUpdate}
-            onDelete={handleDelete}
-            currentState={currentState}
-          />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setStoryOpen(true)}
+            >
+              <Clapperboard className="h-4 w-4" />
+              Story {story.steps.length > 0 && <span className="text-[10px] text-muted-foreground">({story.steps.length})</span>}
+            </Button>
+            {story.steps.length > 0 && (
+              <Button
+                variant="default"
+                size="sm"
+                className="gap-2"
+                onClick={() => setPresenting({ startIndex: 0 })}
+              >
+                <Play className="h-4 w-4" /> Präsentieren
+              </Button>
+            )}
+            <WorkspaceToolbar
+              workspaces={workspaces}
+              activeWorkspace={activeWorkspace}
+              onLoad={setActiveWorkspace}
+              onSave={handleCreate}
+              onSaveExisting={handleUpdate}
+              onDelete={handleDelete}
+              currentState={currentState}
+            />
+          </div>
         </header>
         {isLoading ? (
           <div className="flex-1 p-6 space-y-4">
@@ -120,6 +157,30 @@ export default function AnalyticsStudio() {
           />
         )}
       </main>
+
+      <StoryManagerDialog
+        open={storyOpen}
+        onOpenChange={setStoryOpen}
+        steps={story.steps}
+        onStepsChange={setSteps}
+        currentPeriod={period}
+        currentOffset={offset}
+        blocks={blocks}
+        onPresent={(startIndex) => {
+          setStoryOpen(false);
+          setPresenting({ startIndex });
+        }}
+      />
+
+      {presenting && (
+        <StoryPresenter
+          open
+          onClose={() => setPresenting(null)}
+          steps={story.steps}
+          startIndex={presenting.startIndex}
+          blocks={blocks}
+        />
+      )}
     </div>
   );
 }
