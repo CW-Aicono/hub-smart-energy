@@ -1,87 +1,55 @@
 ## Ziel
 
-Bei `execution_mode = "hybrid"` darf eine Automation pro Trigger-Zyklus **genau einmal** ausgeführt werden — bevorzugt lokal auf dem Gateway (offline-fähig), Cloud nur als Fallback, wenn das Gateway nachweislich nicht ausgeführt hat.
+Vom Gateway ausgeführte Automationen werden **sofort** (nicht erst beim nächsten 60-s-Flush) via HTTP-Push an die Cloud gemeldet. Damit greift die 90-s-Owner-Lease zuverlässig, bevor der Cloud-Scheduler die nächste Evaluierungsrunde (30 s) startet — Doppelausführungen bei `hybrid` sind ausgeschlossen.
 
-## Ausgangslage (verifiziert im Code)
+## Ausgangslage (verifiziert)
 
-- `supabase/functions/automation-scheduler/index.ts` (Cloud): skippt Regeln, sobald irgendein `gateway_device` mit `status = 'online'` und Heartbeat < 5 Min am selben `location_integration_id` / `location_id` hängt — **unabhängig vom `execution_mode`**.
-- `supabase/functions/gateway-ingest/index.ts` `sync-automations`: liefert an Gateway **alle** Regeln der Integration/Location zurück — **ohne** `execution_mode`-Filter.
-- `docs/ha-addon/index.ts`: speichert alle synchronisierten Regeln in `automations_local` und evaluiert sie im 30 s-Loop, ohne `execution_mode` auszuwerten.
+- `docs/ha-addon/index.ts`: sammelt Automation-Logs zusammen mit Readings im SQLite-Puffer und pusht sie am regulären `flush_interval_seconds`-Takt (jetzt 60 s) via `sync-automation-logs` an `gateway-ingest`.
+- `supabase/functions/gateway-ingest/index.ts` `handlePushExecutionLogs`: bumpt `last_executed_at` und verlängert `owner_lease_until` um 90 s für `hybrid`-Regeln.
+- `supabase/functions/automation-scheduler/index.ts`: läuft alle 30 s, skippt `hybrid` nur solange `owner_lease_until > now()`.
 
-Daraus folgen zwei reale Doppelausführungs-Fenster:
+Kritisches Zeitfenster: Gateway führt lokal aus → bis zu 60 s Wartezeit bis Log-Push → währenddessen 1–2 Cloud-Scheduler-Zyklen ohne gültige Lease → **Cloud feuert dieselbe Regel nochmal**.
 
-1. **Heartbeat-Graubereich** (Gateway läuft, letzter Heartbeat 5–15 min alt): Cloud sieht „offline" und feuert — Gateway feuert parallel weiter.
-2. **Mode-Mismatch**: Regeln mit `execution_mode = "cloud"` werden vom Gateway trotzdem lokal ausgeführt; Regeln mit `execution_mode = "loxone_local"` werden von der Cloud gefeuert, sobald Gateway kurz als offline gilt.
+## Lösung: sofortiger Log-Push, entkoppelt vom Reading-Flush
 
-## Lösung: Owner-Lease + strikte Modus-Semantik
+### 1. Add-on: separater Push-Pfad für Automation-Logs
 
-### 1. Modus-Semantik verbindlich machen
+In `docs/ha-addon/index.ts`:
 
-| execution_mode | Lokales Gateway | Cloud-Scheduler |
-|---|---|---|
-| `cloud` | **nicht** synchronisieren / **nicht** ausführen | immer ausführen |
-| `loxone_local` | ausführen | **nie** ausführen (auch wenn Gateway offline) |
-| `hybrid` | ausführen, wenn Lease gehalten | nur ausführen, wenn Lease abgelaufen (Fallback) |
+- Neue Funktion `pushAutomationLogImmediately(entry)`, die direkt nach jedem erfolgreichen (und fehlgeschlagenen) `executeAutomation`-Aufruf feuert.
+- Der Log-Eintrag geht in einer eigenen kleinen In-Memory-Queue (`pendingAutoLogs`), die sofort an `gateway-ingest` (`action=sync-automation-logs`) mit **nur diesem einen Eintrag** gepusht wird.
+- SQLite-Persistenz bleibt als **Fallback** erhalten: der Eintrag wird erst nach HTTP-200 aus dem lokalen Puffer gelöscht; bei Netzwerkfehler bleibt er drin und wird beim nächsten regulären 60-s-Flush erneut mitgesendet.
+- Debounce/Coalescing: wenn innerhalb von ≤2 s mehrere Logs anfallen, werden sie zu einem Batch zusammengefasst (schützt vor Bursts, ohne die Lease-Wirkung zu verzögern).
 
-### 2. Lease-Feld auf `location_automations`
+### 2. Offline-Verhalten
 
-Neue Spalten (Migration):
-- `owner_gateway_device_id uuid` – aktueller Ausführungs-Owner
-- `owner_lease_until timestamptz` – Ablauf der Lease (Cloud übernimmt erst danach)
+- Bei fehlender Cloud-Verbindung fällt der Push still aus, Eintrag verbleibt im SQLite-Puffer, wird beim nächsten 60-s-Flush nachgereicht — kein Datenverlust, keine Verhaltensänderung gegenüber heute.
+- Bei Backlog nach Wiederverbindung: der bestehende Batch-Push (1000er-Größe) übernimmt.
 
-Ein Owner-Wechsel geschieht atomar per `UPDATE ... WHERE owner_lease_until IS NULL OR owner_lease_until < now()`. Kein neues Cron nötig — die Lease wird beim `automation_execution_log`-Insert des Gateways verlängert.
+### 3. Cloud-Seite
 
-### 3. Gateway-Ingest verschärfen
+- `gateway-ingest` bleibt unverändert — der bestehende `handlePushExecutionLogs` verlängert schon jetzt die Lease pro Eintrag.
+- **Kein** neuer Endpoint, **keine** Migration, **kein** Config-Change nötig.
 
-`sync-automations` liefert für ein Gateway nur Regeln mit `execution_mode IN ('loxone_local','hybrid')`. Regeln mit `execution_mode = 'cloud'` werden auch aktiv aus `automations_local` gepruned (Prune-Logik existiert bereits für „no longer in cloud").
+### 4. Config
 
-Beim `automation-log`-Push (bereits vorhanden) verlängert der Ingest zusätzlich die Lease:
-```sql
-UPDATE location_automations
-   SET owner_gateway_device_id = :gateway,
-       owner_lease_until = now() + interval '90 seconds'
- WHERE id = :automation_id
-   AND execution_mode = 'hybrid'
-   AND (owner_gateway_device_id = :gateway OR owner_lease_until IS NULL OR owner_lease_until < now());
-```
-
-Damit „gewinnt" das Gateway, das zuletzt erfolgreich lokal ausgeführt hat, für 90 s die Führung. Das ist unabhängig vom `gateway_devices.status`-Feld und damit robust gegen Heartbeat-Aussetzer.
-
-### 4. Cloud-Scheduler-Filter ersetzen
-
-In `automation-scheduler` wird der bestehende „online-gateway"-Filter ersetzt durch pro Regel:
-
-- `execution_mode = 'loxone_local'` → immer skippen.
-- `execution_mode = 'hybrid'` → skippen, solange `owner_lease_until > now()`. Läuft die Lease ab (Gateway hat > 90 s nichts mehr gemeldet), feuert die Cloud einmalig, verlängert die Lease selbst auf sich (`owner_gateway_device_id = NULL`, `owner_lease_until = now() + 90s`) und loggt mit `execution_source = 'cloud'`.
-- `execution_mode = 'cloud'` → wie heute (mit `isDebounceExpired`).
-
-Die bestehende `last_executed_at`-Debounce bleibt zusätzlich global aktiv und verhindert Doppelfeuer innerhalb desselben Auswertungszyklus.
-
-### 5. Gateway-Seite (ha-addon)
-
-- Sync-Endpoint liefert bereits gefiltert (siehe 3), lokaler Ordner muss nur bereits vorhandene `cloud`-Regeln beim nächsten Full-Sync verwerfen (bestehende Prune-Logik greift automatisch).
-- Kein zweiter Codepfad im Add-on nötig; Lease-Handling passiert serverseitig beim Log-Push.
-
-### 6. UI-Feedback
-
-`LocationAutomation.tsx`: Hybrid-Badge bekommt Tooltip „Aktiver Ausführungsort: Lokal (Lease bis HH:MM)" bzw. „Fallback Cloud aktiv" — abgeleitet aus `owner_gateway_device_id` und `owner_lease_until`. Keine neue API, Werte liegen in derselben Row.
+- `flush_interval_seconds` (60 s) bleibt für Readings unverändert (IO-Budget-Schonung).
+- Neuer interner Timer-Konstantenwert `AUTO_LOG_COALESCE_MS = 2000` — nicht als Add-on-Option, damit User nichts falsch stellen können.
 
 ## Betroffene Dateien
 
-- SQL-Migration: `location_automations` + zwei Spalten, Index auf `(execution_mode, owner_lease_until)`.
-- `supabase/functions/automation-scheduler/index.ts` – Filter-Logik gemäß §4.
-- `supabase/functions/gateway-ingest/index.ts` – Filter in `sync-automations`, Lease-Update im Log-Handler.
-- `src/hooks/useLocationAutomations.tsx` + `src/components/locations/LocationAutomation.tsx` – Tooltip/Anzeige.
-- Keine Änderungen am Add-on-Sourcecode (`docs/ha-addon/index.ts`) nötig.
+- `docs/ha-addon/index.ts` — sofortiger Push-Pfad + Coalescing.
+- `docs/ha-addon/config.yaml` — Version-Bump auf `3.4.1`.
+- Neues Kurz-Update-Doc: `docs/ha-addon/UPDATE-v3.4.1-INSTANT-AUTOMATION-PUSH.md` mit laienverständlicher Erklärung (Warum, Was ändert sich, Was muss der Anwender tun).
 
 ## Randfälle
 
-- **Mehrere Gateways an einer Location**: Lease ist device-scoped → letztes erfolgreich ausführendes Gateway hält Lease; kein Duell.
-- **Gateway wird deaktiviert**: Lease läuft nach 90 s ab → Cloud übernimmt.
-- **Uhr-Skew Gateway ↔ Cloud**: Lease wird serverseitig gesetzt (`now()`), Gateway-Zeit egal.
-- **`last_executed_at`-Debounce bleibt**: schützt zusätzlich vor Rennen innerhalb eines 30-s-Zyklus.
+- **Push schlägt fehl, Regel wurde lokal ausgeführt**: Lease läuft nicht → Cloud könnte in Ausnahmefällen doppelt feuern. Mitigierung: der Add-on retryt den Push nach 5 s einmalig, bevor er den Eintrag ausschließlich dem 60-s-Flush überlässt. Bei bewusstem Cloud-Ausfall ist ein Cloud-Fallback ohnehin nicht möglich → kein Doppelfeuer.
+- **Uhr-Skew**: Lease-Zeitstempel wird weiterhin serverseitig gesetzt (`now()`), Gateway-Zeit irrelevant.
+- **Reading-Latenz**: unverändert — nur Automations-Logs werden vorgezogen.
 
 ## Nicht Teil dieses Plans
 
-- Änderung des Default-`execution_mode` beim Anlegen neuer Regeln (bleibt `cloud`).
-- Verlagerung der Lease-Logik ins Add-on (bewusst serverseitig gehalten, um Add-on-Rollout zu vermeiden).
+- Änderung des `flush_interval_seconds` für Readings.
+- Zweiter WSS-Kanal für Live-Werte (separater Vorschlag).
+- Änderungen am Cloud-Scheduler oder der Lease-Länge.
