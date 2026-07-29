@@ -75,6 +75,14 @@ export function TimeSeriesBlock({ block, period, offset, onConfigChange }: TimeS
     return Object.values(timeMap).sort((a: any, b: any) => a.t - b.t);
   }, [series]);
 
+  const chartMinT = chartData.length > 0 ? (chartData[0] as any).t as number : null;
+  const chartMaxT = chartData.length > 0 ? (chartData[chartData.length - 1] as any).t as number : null;
+  const { data: eventAnnotations = [] } = useAutomationEventAnnotations({
+    fromMs: showAutomationEvents ? chartMinT : null,
+    toMs: showAutomationEvents ? chartMaxT : null,
+    enabled: showAutomationEvents && chartMinT !== null && chartMaxT !== null,
+  });
+
   const updateAnnotations = (next: Annotation[]) => {
     onConfigChange(block.id, { ...block.config, annotations: next });
   };
