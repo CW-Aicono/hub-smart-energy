@@ -57,15 +57,22 @@ export function AnalyticsCanvas({
       heatmap: "Heatmap",
       correlation: "Korrelation",
       formula: "Formel",
+      ai_insight: "KI-Erklärung",
     };
+    const sizeMap: Record<string, { w: number; h: number }> = {
+      kpi: { w: 3, h: 1 },
+      heatmap: { w: 6, h: 2 },
+      ai_insight: { w: 6, h: 3 },
+    };
+    const size = sizeMap[type] ?? { w: 6, h: 2 };
     const block: AnalysisBlockType = {
       id: makeId(),
       type,
       title: titleMap[type] ?? "Analyse",
       x: 0,
       y: Math.max(0, ...blocks.map((b) => b.y + b.h)),
-      w: type === "kpi" ? 3 : type === "heatmap" ? 6 : 6,
-      h: type === "kpi" ? 1 : 2,
+      w: size.w,
+      h: size.h,
       config: initialMeterId ? { meterIds: [initialMeterId] } : {},
     };
     onBlocksChange([...blocks, block]);
