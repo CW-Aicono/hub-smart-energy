@@ -113,14 +113,6 @@ export function AnalyticsCanvas({
     assignNodeToBlock(node, target);
   };
 
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 py-2 border-b bg-card/30">
-        <div className="flex items-center gap-2">
-          <Button variant={editMode ? "default" : "outline"} size="sm" className="gap-2" onClick={() => onEditModeChange(!editMode)}>
-            <Pencil className="h-4 w-4" />
-            {editMode ? "Fertig" : "Bearbeiten"}
-          </Button>
   const handleCanvasDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const id = e.dataTransfer.getData("text/plain") || draggedNode?.id;
