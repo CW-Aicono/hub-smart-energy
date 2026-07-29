@@ -2298,11 +2298,15 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
 
   console.log(`[sync-automations] tenant=${tenantId} li=${locationIntegrationId} loc=${locationId}`);
 
-  // Sync ALL automations (active + inactive) so the local engine can manage state
+  // Sync automations the local engine may execute: loxone_local + hybrid.
+  // execution_mode = 'cloud' is intentionally excluded so the gateway
+  // cannot double-fire cloud-owned rules.
   let query = supabase
     .from("location_automations")
     .select("*, locations!location_automations_location_id_fkey(timezone), location_integrations!location_automations_location_integration_id_fkey(integration:integrations(type))")
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    .in("execution_mode", ["loxone_local", "hybrid"]);
+
 
   // Filter by location_integration_id (preferred – only automations this gateway can execute)
   if (locationIntegrationId) {
@@ -2339,7 +2343,9 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
         .select("*, locations!location_automations_location_id_fkey(timezone)")
         .eq("tenant_id", tenantId)
         .eq("location_id", locationId)
+        .in("execution_mode", ["loxone_local", "hybrid"])
         .neq("location_integration_id", locationIntegrationId);
+
       const haEntityRe = /^[a-z_]+\.[a-z0-9_]+$/i;
       const extraHa = (extras || []).filter((a: any) => {
         if (a.actuator_uuid && haEntityRe.test(a.actuator_uuid)) return true;
@@ -2371,11 +2377,13 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
     action_type: auto.action_type,
     last_executed_at: auto.last_executed_at,
     updated_at: auto.updated_at,
+    execution_mode: auto.execution_mode || "cloud",
     location_timezone: auto.locations?.timezone || "Europe/Berlin",
   }));
 
   return json({ success: true, automations, count: automations.length, location_id: locationId });
 }
+
 
 /* ── Push Execution Logs handler (Hub → Cloud) ────────────────────────────────── */
 
@@ -2438,7 +2446,11 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
       latestSuccessByAuto.set(r.automation_id, r.executed_at);
     }
   }
+  const LEASE_SECONDS = 90;
+  const leaseUntil = new Date(Date.now() + LEASE_SECONDS * 1000).toISOString();
   for (const [automationId, executedAt] of latestSuccessByAuto.entries()) {
+    // Bump last_executed_at (only forward) and — for hybrid rules — extend the
+    // ownership lease so the cloud scheduler skips this rule for LEASE_SECONDS.
     const { error: updateErr } = await supabase
       .from("location_automations")
       .update({ last_executed_at: executedAt })
@@ -2450,10 +2462,22 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
         updateErr.message,
       );
     }
+    const { error: leaseErr } = await supabase
+      .from("location_automations")
+      .update({ owner_lease_until: leaseUntil })
+      .eq("id", automationId)
+      .eq("execution_mode", "hybrid");
+    if (leaseErr) {
+      console.warn(
+        `[gateway-ingest] failed to extend lease for ${automationId}:`,
+        leaseErr.message,
+      );
+    }
   }
 
   return json({ success: true, inserted: rows.length });
 }
+
 
 /* ── Device Inventory Snapshot (HA Add-on -> Cloud) ──────────────────────────── */
 /**

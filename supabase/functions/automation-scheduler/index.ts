@@ -366,28 +366,6 @@ Deno.serve(async (req) => {
   console.log("automation-scheduler: Starting evaluation...");
 
   try {
-    // 0. Load online gateway devices (heartbeat < 5 min) to skip locally-managed automations
-    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const { data: onlineGateways } = await supabase
-      .from("gateway_devices")
-      .select("location_integration_id, location_id")
-      .eq("status", "online")
-      .gte("last_heartbeat_at", fiveMinAgo);
-
-    const localGatewayIntegrationIds = new Set<string>(
-      (onlineGateways || [])
-        .map((g: any) => g.location_integration_id)
-        .filter(Boolean)
-    );
-    const localGatewayLocationIds = new Set<string>(
-      (onlineGateways || [])
-        .map((g: any) => g.location_id)
-        .filter(Boolean)
-    );
-    if (localGatewayIntegrationIds.size > 0) {
-      console.log(`Found ${localGatewayIntegrationIds.size} online local gateways – their automations will be skipped.`);
-    }
-
     // 1. Load all active automations with location timezone
     const { data: automations, error } = await supabase
       .from("location_automations")
@@ -417,23 +395,37 @@ Deno.serve(async (req) => {
     let skippedLocalCount = 0;
     let errorCount = 0;
 
+    const LEASE_SECONDS = 90;
+    const nowMs = Date.now();
+
     for (const auto of automations) {
       const automationId = auto.id;
       const tenantId = auto.tenant_id;
       const timezone = (auto as any).locations?.timezone || "Europe/Berlin";
       const conditions: AutomationCondition[] = Array.isArray(auto.conditions) ? auto.conditions : [];
       const logicOperator: string = auto.logic_operator || "AND";
+      const execMode: string = (auto as any).execution_mode || "cloud";
 
       if (conditions.length === 0) continue;
 
-      // Skip if a local gateway is online for this automation's integration
-      if (
-        (auto.location_integration_id && localGatewayIntegrationIds.has(auto.location_integration_id)) ||
-        (auto.location_id && localGatewayLocationIds.has(auto.location_id))
-      ) {
+      // Enforce execution_mode semantics:
+      //  - loxone_local: cloud MUST NEVER fire (gateway is source of truth).
+      //  - hybrid: cloud fires ONLY when local lease has expired (fallback).
+      //  - cloud: cloud always evaluates (subject to debounce).
+      if (execMode === "loxone_local") {
         skippedLocalCount++;
         continue;
       }
+      if (execMode === "hybrid") {
+        const leaseUntil = (auto as any).owner_lease_until
+          ? new Date((auto as any).owner_lease_until).getTime()
+          : 0;
+        if (leaseUntil > nowMs) {
+          skippedLocalCount++;
+          continue;
+        }
+      }
+
 
       // Debounce check using shared logic
       if (!isDebounceExpired(auto.last_executed_at)) {
@@ -514,8 +506,17 @@ Deno.serve(async (req) => {
 
         await supabase
           .from("location_automations")
-          .update({ last_executed_at: new Date().toISOString() })
+          .update({
+            last_executed_at: new Date().toISOString(),
+            ...(execMode === "hybrid"
+              ? {
+                  owner_gateway_device_id: null,
+                  owner_lease_until: new Date(Date.now() + LEASE_SECONDS * 1000).toISOString(),
+                }
+              : {}),
+          })
           .eq("id", automationId);
+
 
         executedCount++;
         console.log(`Automation "${auto.name}" executed successfully in ${durationMs}ms`);

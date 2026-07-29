@@ -610,10 +610,22 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                           )}
                           {(() => {
                             const mode = (auto.execution_mode || "cloud") as "cloud" | "loxone_local" | "hybrid";
+                            const leaseUntilRaw = (auto as any).owner_lease_until as string | null | undefined;
+                            const leaseUntilMs = leaseUntilRaw ? new Date(leaseUntilRaw).getTime() : 0;
+                            const leaseActive = leaseUntilMs > Date.now();
+                            let hybridTitle = "Hybrid: lokal mit Cloud-Fallback";
+                            if (mode === "hybrid") {
+                              if (leaseActive) {
+                                const t = new Date(leaseUntilMs).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+                                hybridTitle = `Aktiv: Lokal (Lease bis ${t}) – Cloud-Fallback pausiert`;
+                              } else {
+                                hybridTitle = "Fallback: Cloud aktiv (kein aktueller lokaler Ausführungs-Nachweis)";
+                              }
+                            }
                             const map = {
                               cloud: { label: "Cloud", cls: "bg-sky-500/10 text-sky-700 border-sky-500/30 dark:text-sky-300", title: "Ausführung über die Cloud" },
                               loxone_local: { label: "Lokal", cls: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-300", title: "Ausführung lokal auf dem Gateway/Miniserver" },
-                              hybrid: { label: "Hybrid", cls: "bg-violet-500/10 text-violet-700 border-violet-500/30 dark:text-violet-300", title: "Hybrid: lokal mit Cloud-Fallback" },
+                              hybrid: { label: "Hybrid", cls: "bg-violet-500/10 text-violet-700 border-violet-500/30 dark:text-violet-300", title: hybridTitle },
                             } as const;
                             const m = map[mode] ?? map.cloud;
                             return (
@@ -622,6 +634,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                               </Badge>
                             );
                           })()}
+
                         </div>
                         {auto.description && (
                           <p className="text-xs text-muted-foreground mt-0.5">{auto.description}</p>
