@@ -31,7 +31,7 @@ export function useWorkspaceShares(workspaceId: string | null) {
         .from("profiles")
         .select("user_id, email, contact_person")
         .in("user_id", userIds);
-      const map = new Map((profs ?? []).map((p: any) => [p.id, p]));
+      const map = new Map((profs ?? []).map((p: any) => [p.user_id, p]));
       return rows.map((r) => ({
         ...r,
         email: map.get(r.user_id)?.email,
