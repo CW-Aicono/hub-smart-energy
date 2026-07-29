@@ -14538,6 +14538,17 @@ export type Database = {
           total_capacity_kw: number
         }[]
       }
+      compact_meter_power_readings_15min: {
+        Args: {
+          p_max_batches?: number
+          p_max_groups?: number
+          p_retention_days?: number
+        }
+        Returns: {
+          groups_written: number
+          rows_removed: number
+        }[]
+      }
       compact_power_readings_day: {
         Args: { p_day?: string }
         Returns: {
