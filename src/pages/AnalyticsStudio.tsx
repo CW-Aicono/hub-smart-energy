@@ -43,6 +43,13 @@ export default function AnalyticsStudio() {
   const [draggedNode, setDraggedNode] = useState<DeviceTreeNode | null>(null);
   const [storyOpen, setStoryOpen] = useState(false);
   const [presenting, setPresenting] = useState<{ startIndex: number } | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateDesc, setTemplateDesc] = useState("");
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const { saveAsTemplate } = useAnalysisTemplates();
 
   // Load active workspace blocks when selected
   useEffect(() => {
