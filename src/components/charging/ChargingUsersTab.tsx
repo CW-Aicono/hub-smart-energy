@@ -235,7 +235,9 @@ const ChargingUsersTab = () => {
         <TabsList>
           <TabsTrigger value="user-list"><Users className="h-4 w-4 mr-1.5" />{t("cu.tabUsers" as any)}</TabsTrigger>
           <TabsTrigger value="user-groups"><FolderOpen className="h-4 w-4 mr-1.5" />{t("cu.tabGroups" as any)}</TabsTrigger>
+          <TabsTrigger value="billing-groups"><Receipt className="h-4 w-4 mr-1.5" />Rechnungsgruppen</TabsTrigger>
         </TabsList>
+
 
         <TabsContent value="user-list">
           <Card>
