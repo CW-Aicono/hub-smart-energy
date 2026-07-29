@@ -32,6 +32,7 @@ export function AnalyticsCanvas({
   onEditModeChange,
 }: AnalyticsCanvasProps) {
   const [draggedNode, setDraggedNode] = useState<DeviceTreeNode | null>(null);
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
 
   const addBlock = (type: AnalysisBlockType["type"]) => {
     const block: AnalysisBlockType = {
@@ -45,6 +46,7 @@ export function AnalyticsCanvas({
       config: {},
     };
     onBlocksChange([...blocks, block]);
+    setSelectedBlockId(block.id);
   };
 
   const updateBlock = (id: string, patch: Partial<AnalysisBlockType>) => {
@@ -53,6 +55,7 @@ export function AnalyticsCanvas({
 
   const removeBlock = (id: string) => {
     onBlocksChange(blocks.filter((b) => b.id !== id));
+    if (selectedBlockId === id) setSelectedBlockId(null);
   };
 
   const assignNodeToBlock = (node: DeviceTreeNode, targetBlock: AnalysisBlockType) => {
@@ -75,10 +78,15 @@ export function AnalyticsCanvas({
   };
 
   const handleDragOver = (e: React.DragEvent) => e.preventDefault();
-  const handleBlockClick = (block: AnalysisBlockType) => {
-    if (!draggedNode || !editMode) return;
-    assignNodeToBlock(draggedNode, block);
-    setDraggedNode(null);
+
+  const handleDeviceClick = (node: DeviceTreeNode) => {
+    if (!editMode) return;
+    const target = selectedBlockId ? blocks.find((b) => b.id === selectedBlockId) : blocks[blocks.length - 1];
+    if (!target) {
+      setDraggedNode(node);
+      return;
+    }
+    assignNodeToBlock(node, target);
   };
 
   return (
