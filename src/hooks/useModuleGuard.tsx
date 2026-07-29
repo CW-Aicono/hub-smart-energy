@@ -30,6 +30,7 @@ const ROUTE_MODULE_MAP: Record<string, string> = {
   "/super-admin/savings-share": "gain_sharing",
   "/documents": "documentation",
   "/charging/transactions": "adhoc_payment",
+  "/analytics-studio": "analytics_studio",
 };
 
 /**
