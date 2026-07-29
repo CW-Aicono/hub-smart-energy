@@ -17,9 +17,10 @@ import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, MoreHorizontal, Edit, Trash2, Ban, Archive, Users, FolderOpen, Check, Smartphone, FileSpreadsheet, X } from "lucide-react";
+import { Plus, MoreHorizontal, Edit, Trash2, Ban, Archive, Users, FolderOpen, Check, Smartphone, FileSpreadsheet, X, Receipt } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
+import BillingGroupsTab from "@/components/charging/BillingGroupsTab";
 import { ChargingImportExportDialog } from "@/components/charging/ChargingImportExportDialog";
 import type { ExportType } from "@/lib/chargingImportExport";
 
@@ -435,6 +436,10 @@ const ChargingUsersTab = () => {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="billing-groups">
+          <BillingGroupsTab isAdmin={isAdmin} />
         </TabsContent>
       </Tabs>
 
