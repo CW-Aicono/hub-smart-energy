@@ -206,6 +206,66 @@ export default function AnalyticsStudio() {
           blocks={blocks}
         />
       )}
+
+      <TemplateGalleryDialog
+        open={templatesOpen}
+        onOpenChange={setTemplatesOpen}
+        onSelect={(tpl) => {
+          setActiveWorkspace(null);
+          setBlocks((tpl.blocks as AnalysisBlock[]) ?? []);
+          setLayout((tpl.layout as Record<string, unknown>) ?? {});
+          setTemplatesOpen(false);
+          toast.success(`Vorlage "${tpl.name}" geladen`);
+        }}
+      />
+
+      {activeWorkspace && (
+        <ShareWorkspaceDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          workspace={activeWorkspace}
+          onWorkspaceUpdated={(w) => setActiveWorkspace(w)}
+        />
+      )}
+
+      <Dialog open={saveAsTemplateOpen} onOpenChange={setSaveAsTemplateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Als Vorlage speichern</DialogTitle>
+            <DialogDescription>Die Vorlage wird für alle Nutzer deines Mandanten verfügbar.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Name</Label>
+              <Input value={templateName} onChange={(e) => setTemplateName(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Beschreibung (optional)</Label>
+              <Textarea value={templateDesc} onChange={(e) => setTemplateDesc(e.target.value)} rows={3} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveAsTemplateOpen(false)}>Abbrechen</Button>
+            <Button
+              onClick={async () => {
+                if (!templateName.trim()) return;
+                await saveAsTemplate({
+                  name: templateName.trim(),
+                  description: templateDesc.trim() || null,
+                  layout,
+                  blocks,
+                });
+                setSaveAsTemplateOpen(false);
+                toast.success("Vorlage gespeichert");
+              }}
+            >
+              Speichern
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <OnboardingTour open={showOnboarding} onOpenChange={setShowOnboarding} />
     </div>
   );
 }
