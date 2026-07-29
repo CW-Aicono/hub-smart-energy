@@ -2446,7 +2446,11 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
       latestSuccessByAuto.set(r.automation_id, r.executed_at);
     }
   }
+  const LEASE_SECONDS = 90;
+  const leaseUntil = new Date(Date.now() + LEASE_SECONDS * 1000).toISOString();
   for (const [automationId, executedAt] of latestSuccessByAuto.entries()) {
+    // Bump last_executed_at (only forward) and — for hybrid rules — extend the
+    // ownership lease so the cloud scheduler skips this rule for LEASE_SECONDS.
     const { error: updateErr } = await supabase
       .from("location_automations")
       .update({ last_executed_at: executedAt })
@@ -2458,10 +2462,22 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
         updateErr.message,
       );
     }
+    const { error: leaseErr } = await supabase
+      .from("location_automations")
+      .update({ owner_lease_until: leaseUntil })
+      .eq("id", automationId)
+      .eq("execution_mode", "hybrid");
+    if (leaseErr) {
+      console.warn(
+        `[gateway-ingest] failed to extend lease for ${automationId}:`,
+        leaseErr.message,
+      );
+    }
   }
 
   return json({ success: true, inserted: rows.length });
 }
+
 
 /* ── Device Inventory Snapshot (HA Add-on -> Cloud) ──────────────────────────── */
 /**
