@@ -7975,22 +7975,7 @@ export type Database = {
           source?: string | null
           tenant_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "meter_power_readings_5min_meter_id_fkey"
-            columns: ["meter_id"]
-            isOneToOne: false
-            referencedRelation: "meters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "meter_power_readings_5min_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       meter_power_readings_5min_bridge: {
         Row: {
@@ -8042,6 +8027,63 @@ export type Database = {
           },
           {
             foreignKeyName: "meter_power_readings_5min_bridge_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_power_readings_5min_legacy: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_power_readings_5min_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_power_readings_5min_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -8554,48 +8596,6 @@ export type Database = {
         Relationships: []
       }
       meter_power_readings_5min_p_default: {
-        Row: {
-          bucket: string
-          created_at: string
-          energy_type: string
-          id: string
-          meter_id: string | null
-          power_avg: number
-          power_max: number
-          resolution_minutes: number
-          sample_count: number
-          source: string | null
-          tenant_id: string
-        }
-        Insert: {
-          bucket: string
-          created_at?: string
-          energy_type: string
-          id?: string
-          meter_id?: string | null
-          power_avg: number
-          power_max: number
-          resolution_minutes?: number
-          sample_count?: number
-          source?: string | null
-          tenant_id: string
-        }
-        Update: {
-          bucket?: string
-          created_at?: string
-          energy_type?: string
-          id?: string
-          meter_id?: string | null
-          power_avg?: number
-          power_max?: number
-          resolution_minutes?: number
-          sample_count?: number
-          source?: string | null
-          tenant_id?: string
-        }
-        Relationships: []
-      }
-      meter_power_readings_5min_part: {
         Row: {
           bucket: string
           created_at: string
