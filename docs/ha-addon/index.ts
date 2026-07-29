@@ -1244,7 +1244,36 @@ async function syncAutomationsFromCloud(): Promise<void> {
   }
 }
 
-async function pushExecutionLogs(): Promise<void> {
+// Coalesce bursts of automation executions into one immediate push (≤2 s).
+// Keeps the regular 60-s flush as safety net for retries after network errors.
+const AUTO_LOG_COALESCE_MS = 2000;
+const AUTO_LOG_RETRY_MS = 5000;
+let autoLogPushTimer: ReturnType<typeof setTimeout> | null = null;
+let autoLogPushInFlight = false;
+
+function schedulePushExecutionLogsSoon(): void {
+  if (autoLogPushTimer || autoLogPushInFlight) return;
+  autoLogPushTimer = setTimeout(async () => {
+    autoLogPushTimer = null;
+    autoLogPushInFlight = true;
+    try {
+      const ok = await pushExecutionLogs();
+      if (!ok) {
+        // One quick retry; after that the regular 60-s flush handles it.
+        setTimeout(() => {
+          autoLogPushInFlight = false;
+          schedulePushExecutionLogsSoon();
+        }, AUTO_LOG_RETRY_MS);
+        return;
+      }
+    } finally {
+      autoLogPushInFlight = false;
+    }
+  }, AUTO_LOG_COALESCE_MS);
+}
+
+async function pushExecutionLogs(): Promise<boolean> {
+
   // Always attempt – connectivity is tracked by heartbeat/sync results
 
   const unsyncedLogs = db.prepare(
