@@ -153,13 +153,16 @@ export function AdHocTransactionsContent({ embedded = false }: { embedded?: bool
 
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-              <CreditCard className="h-5 w-5" /> Ad-Hoc Transaktionen
-            </h1>
+            {!embedded && (
+              <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+                <CreditCard className="h-5 w-5" /> Ad-Hoc Transaktionen
+              </h1>
+            )}
             <p className="text-muted-foreground text-sm mt-0.5">
               Kartenzahlungen an Ladepunkten inkl. Preauth, Capture, Refund und Belege.
             </p>
           </div>
+
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={startMockSession}>
               <PlayCircle className="h-4 w-4 mr-1" /> Mock-Session
