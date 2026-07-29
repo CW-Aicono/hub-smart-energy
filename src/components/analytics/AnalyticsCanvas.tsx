@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { AnalysisBlock as AnalysisBlockType } from "@/hooks/useAnalysisWorkspaces";
 import { AnalyticsPeriod } from "@/hooks/useAnalyticsData";
 import { AnalysisBlockCard } from "./AnalysisBlock";
