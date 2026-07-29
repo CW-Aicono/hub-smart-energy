@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 export interface AnalysisBlock {
   id: string;
-  type: "timeseries" | "kpi" | "heatmap" | "correlation" | "comparison" | "formula" | "ai_insight";
+  type: "timeseries" | "kpi" | "heatmap" | "correlation" | "comparison" | "formula" | "ai_insight" | "simulation";
   title: string;
   x: number;
   y: number;
