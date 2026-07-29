@@ -22,15 +22,15 @@ export function SensorHistorySettingsCard() {
         .in("key", ["sensor_history_enabled", "backend_emergency_mode", "ocpp_message_logging_enabled"]);
       if (error) throw error;
       const byKey = new Map((data ?? []).map((row: any) => [String(row.key), row]));
+      const changedAtValues = (data ?? [])
+        .map((row: any) => row.updated_at as string | null)
+        .filter(Boolean)
+        .sort();
       return {
         sensorHistoryEnabled: parseEnabled(byKey.get("sensor_history_enabled")?.value, true),
         backendEmergencyMode: parseEnabled(byKey.get("backend_emergency_mode")?.value, false),
         ocppMessageLoggingEnabled: parseEnabled(byKey.get("ocpp_message_logging_enabled")?.value, false),
-        lastChangedAt: (data ?? [])
-          .map((row: any) => row.updated_at as string | null)
-          .filter(Boolean)
-          .sort()
-          .at(-1) ?? null,
+        lastChangedAt: changedAtValues.length > 0 ? changedAtValues[changedAtValues.length - 1] : null,
       };
     },
   });

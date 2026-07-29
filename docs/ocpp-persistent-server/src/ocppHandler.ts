@@ -59,7 +59,7 @@ export async function handleCall(
       case "BootNotification": {
         // Self-healing: stellt ws_connected=true sicher, falls der initiale
         // Connect-Update fehlgeschlagen ist.
-        await updateChargePoint(chargePointPk, {
+        updateChargePoint(chargePointPk, {
           vendor: payload.chargePointVendor as string ?? null,
           model: payload.chargePointModel as string ?? null,
           firmware_version: payload.firmwareVersion as string ?? null,
@@ -69,7 +69,7 @@ export async function handleCall(
           // Reset stale "offline"-Status nach (Re-)Boot. Der reale Status
           // wird gleich darauf per StatusNotification gesetzt.
           status: "available",
-        });
+        }).catch((e) => log.warn("boot touch failed", { chargePointId, error: (e as Error).message }));
         // Identität für Kompatibilitäts-Checks im Dispatcher cachen.
         session.vendor = (payload.chargePointVendor as string) ?? null;
         session.model = (payload.chargePointModel as string) ?? null;
@@ -116,10 +116,10 @@ export async function handleCall(
         // Self-healing: jeder Heartbeat bestätigt ws_connected=true.
         // So korrigiert sich der Status spätestens nach 30 s, falls der
         // initiale Connect-Update einen Backend-Fehler hatte.
-        await updateChargePoint(chargePointPk, {
+        updateChargePoint(chargePointPk, {
           last_heartbeat: new Date().toISOString(),
           ws_connected: true,
-        });
+        }).catch((e) => log.warn("heartbeat touch failed", { chargePointId, error: (e as Error).message }));
         return callResult(messageId, { currentTime: new Date().toISOString() });
       }
 
@@ -127,10 +127,12 @@ export async function handleCall(
         const connectorId = (payload.connectorId as number) ?? 0;
         const status = (payload.status as string) ?? "Unknown";
         if (connectorId > 0) {
-          await updateConnectorStatus(chargePointPk, connectorId, status);
+          updateConnectorStatus(chargePointPk, connectorId, status)
+            .catch((e) => log.warn("connector status update failed", { chargePointId, connectorId, status, error: (e as Error).message }));
         }
         if (connectorId === 0) {
-          await updateChargePoint(chargePointPk, { status });
+          updateChargePoint(chargePointPk, { status })
+            .catch((e) => log.warn("charge point status update failed", { chargePointId, status, error: (e as Error).message }));
         }
         return callResult(messageId, {});
       }

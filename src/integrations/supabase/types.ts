@@ -14302,6 +14302,10 @@ export type Database = {
         Args: { p_from?: string; p_to?: string }
         Returns: number
       }
+      aggregate_sensor_readings_5min: {
+        Args: { _max_rows?: number; _since?: string; _until?: string }
+        Returns: Json
+      }
       aicono_fleet_stats_24h: {
         Args: never
         Returns: {
