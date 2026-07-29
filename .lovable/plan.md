@@ -1,49 +1,49 @@
-**Wichtige Korrektur zum vorherigen Plan (verifiziert):** Der bisher geplante 90-Tage-Cleanup hätte den Tagesverlauf vom 16.02.–ca. 30.04.2026 gelöscht. Es gibt keine andere Tabelle, die ihn hält:
+## Kurzantwort
 
-| Datenquelle | Auflösung | Zeitraum |
-|---|---|---|
-| `meter_power_readings` (roh) | Sekunden/Minuten | nur letzte 2 Tage |
-| `meter_power_readings_5min` | 5 Minuten | ab 16.02.2026 (1,88 Mio Zeilen, 431 MB) |
-| `meter_daily_totals_mv` | Tag | ab 16.02.2026 |
-| `meter_period_totals` | Tag/Woche/Monat | ab 2021 |
+Nein — die Tabellengröße ist nicht der Engpass. 1,85 Mio Zeilen / 432 MB sind für Postgres unkritisch. Was uns bisher umgeworfen hat, waren drei andere Dinge:
 
-Der aktuell aktive stündliche Job `ems-cleanup-5min-hourly` würde genau das tun. **Deshalb wird er als Erstes gestoppt.**
+1. **Schreiblast + Bloat**: sehr viele kleine Writes/Updates pro Minute, dazu Autovacuum, das nicht hinterherkam → aufgeblähte Tabellen, Random-IO, ausgeschöpftes Disk-IO-Budget der Instanz.
+2. **Lesemuster**: Charts haben teils breite Zeitfenster über viele Zähler auf einmal geladen (`ANY(...)`-Queries, große Ergebnismengen), zusätzlich RLS-Overhead pro Zeile.
+3. **Wartungsjobs**, die parallel zur Last liefen.
 
-## Neues Vorgehen: Verdichten statt Löschen — strikt nacheinander
+5-Minuten-Graphen sind damit weiterhin möglich — sie müssen nur anders gelesen und gespeichert werden.
 
-**Garantie nach Umsetzung:** Für jeden Zähler bleibt der Tagesverlauf über die gesamte Aufzeichnung erhalten — für die letzten 90 Tage in 5-Minuten-Auflösung, für ältere Zeiträume in 15-Minuten-Auflösung. Tages-, Wochen- und Monatssummen bleiben unverändert (bis 2021 zurück). Es geht kein Tag verloren.
+## Wie Big-Data-Systeme das lösen
 
-### Etappe 0 — Sofort: löschenden Cleanup stoppen
-- `ems-cleanup-5min-hourly` deaktivieren, bevor der nächste Lauf (Minute 7) Daten entfernt.
-- Kein weiterer Eingriff in dieser Etappe.
+Die Muster, die dort Standard sind und hier 1:1 anwendbar:
 
-### Etappe 1 — Verdichtungsfunktion bauen und einmal testen
-- Neue Funktion `compact_meter_power_readings_15min(...)`: fasst 5-Minuten-Zeilen älter als 90 Tage je Zähler zu 15-Minuten-Zeilen zusammen (`power_avg` gewichtet gemittelt, `power_max` als Maximum, `sample_count` summiert, `resolution_minutes = 15`), schreibt sie in dieselbe Tabelle und löscht anschließend nur exakt die drei Quellzeilen desselben Fensters.
-- Alles in einer Transaktion pro Batch: entweder Verdichtung geschrieben **und** Quellzeilen weg, oder gar nichts.
-- Sicherheitsnetz: bereits verdichtete Zeilen (`resolution_minutes = 15`) werden nie erneut angefasst; ohne erfolgreich geschriebene 15-Min-Zeile wird nichts gelöscht.
-- Erster Lauf bewusst klein (ein einziger Tag), danach Stichprobe: Tagesverlauf dieses Tages im UI prüfen und Tagessumme vor/nach vergleichen.
+- **Zeit-Partitionierung**: eine Tabelle pro Monat/Woche statt einer großen. Alte Partitionen werden gelesen, aber nie mehr geschrieben oder gevacuumt → Wartungslast fällt weg, Löschen/Archivieren ist ein `DROP` in Millisekunden.
+- **Rollups / Multi-Resolution**: 5 Min für den nahen Zeitraum, 15 Min / 1 h / 1 Tag für ältere — und die Abfrage wählt automatisch die Auflösung passend zum Zoom-Level. Genau das machen Grafana/Prometheus/TimescaleDB.
+- **Query nur nach Bedarf**: nie „alles laden und im Browser filtern", sondern serverseitig aggregieren, immer mit Zeitfenster-Grenze, und Downsampling auf ca. 300–800 Punkte pro Chart (mehr kann ein Bildschirm nicht darstellen).
+- **Append-only statt Update**: Rohdaten nur einfügen, nie aktualisieren → drastisch weniger IO.
+- **Spaltenorientierte Kompression** für Historie (Timescale/ClickHouse: Faktor 10–20 kleiner).
 
-### Etappe 2 — Rückstand schrittweise verdichten
-- Ein temporärer Job `ems-compact-5min-drain`, **alle 15 Minuten**, kleine Batches (max. ~50.000 Quellzeilen pro Lauf).
-- Betroffen sind ca. 898.000 Zeilen älter als 90 Tage → daraus werden ca. 300.000 Zeilen; Laufzeit über mehrere Stunden verteilt.
-- Nach ca. 1 Stunde Zwischenkontrolle: Backend-Gesundheit, langsame Abfragen, Login. Bei Auffälligkeiten wird der Job sofort deaktiviert.
-- Am Ende: Job entfernen.
+## Vorgeschlagener Weg (stufenweise, jede Stufe eigenständig nützlich)
 
-### Etappe 3 — VACUUM auf `meter_power_readings_5min`
-- Erst wenn Etappe 2 vollständig durch ist. Einmaliger `VACUUM (ANALYZE)` nachts (ca. 03:20 Uhr), kein `VACUUM FULL` (würde sperren).
-- Danach Größe und tote Zeilen prüfen.
+**Stufe A — Lesepfad zoom-abhängig machen (größter Effekt, kein Datenverlust)**
+- Zentrale Server-Funktion, die zu einem angefragten Zeitfenster automatisch die passende Auflösung wählt: bis 2 Tage → 5 Min, bis 14 Tage → 15 Min, bis 90 Tage → 1 h, darüber → 1 Tag.
+- Charts fragen nur noch das sichtbare Fenster ab (kein Vorab-Laden ganzer Zeiträume), je Zähler einzeln und parallel.
+- Harte Obergrenze an zurückgegebenen Punkten pro Serie.
 
-### Etappe 4 — VACUUM der kumulativen Tabellen
-- Wieder erst nach grünem Ergebnis aus Etappe 3, eigener Zeitslot in der Folgenacht.
+**Stufe B — Speicherung: 5 Min behalten statt verdichten**
+- Die laufende Verdichtung auf 15 Min stoppen, sobald A greift; stattdessen zusätzliche Rollup-Ebenen (1 h, 1 Tag) neben den 5-Min-Daten pflegen.
+- 5-Min-Daten bleiben vollständig erhalten und sind über Stufe A nur bei engem Zeitfenster im Spiel.
 
-### Danach: Dauerbetrieb
-- Statt des löschenden Jobs läuft künftig ein täglicher Verdichtungsjob (nachts), der neu über 90 Tage hinausgewachsene Daten auf 15 Minuten verdichtet. Es wird nie ersatzlos gelöscht.
+**Stufe C — Monatliche Partitionierung der 5-Min-Tabelle**
+- Umbau auf partitionierte Tabelle mit automatischem Anlegen neuer Monate.
+- Effekt: Autovacuum-Last nur auf dem aktuellen Monat, alte Monate „eingefroren", Archivieren später trivial.
 
-## Kontrollpunkte
-Zwischen jeder Etappe: Backend-Gesundheit, Slow-Query-Check, Login-Test. Keine zwei Etappen gleichzeitig, keine zwei Etappen im selben Nachtfenster.
+**Stufe D — optional, wenn Datenvolumen später stark wächst**
+- Historie zusätzlich in einen spaltenorientierten Speicher (ClickHouse-Connector ist verfügbar) auslagern und Langzeit-Analysen dorthin routen. Erst sinnvoll ab deutlich größeren Datenmengen als heute.
 
 ## Technische Details
-- Migrationen mit `cron.schedule` / `cron.unschedule`; Einmal-Jobs melden sich am Ende des eigenen SQL selbst ab.
-- Der vorhandene eindeutige Index `(meter_id, bucket, resolution_minutes)` erlaubt 5- und 15-Minuten-Zeilen nebeneinander — kein Schemaumbau nötig.
-- Leseseite: Abfragen, die den Tagesverlauf holen, müssen für ältere Zeiträume `resolution_minutes = 15` mitlesen statt fest auf 5 zu filtern. Betroffene Stellen (u.a. `get_power_readings_5min`, Chart-Widgets, Analytics Studio) werden in Etappe 1 mit angepasst, damit die Anzeige nahtlos umschaltet.
-- Retention der Tages-/Wochen-/Monatssummen bleibt unangetastet.
+
+- Auflösungswahl serverseitig in einer SQL-Funktion (`SECURITY DEFINER`, Tenant-Filter explizit), damit RLS nicht zeilenweise auf Millionen Rohzeilen ausgewertet wird.
+- Rollup-Tabellen inkrementell per Cron befüllen (Wasserstandsmarke statt Vollberechnung).
+- Partitionierung als Online-Umbau: neue partitionierte Tabelle, Daten in Etappen kopieren, dann umschalten — kein Downtime-Fenster nötig, aber ein ruhiges Zeitfenster empfohlen.
+- Indizes je Partition auf `(tenant_id, meter_id, bucket)`; Covering-Index für die häufigsten Chart-Abfragen.
+- Alle Zahlen weiterhin im deutschen Format in der UI.
+
+## Wichtige Vorbedingung
+
+Der aktuell laufende Verdichtungs-Job (`ems-compact-5min-drain`) reduziert gerade Altdaten auf 15 Min. Wenn 5-Min-Historie langfristig erhalten bleiben soll, sollte er gestoppt werden, bevor er weiter fortschreitet — das wäre der erste Schritt der Umsetzung.
