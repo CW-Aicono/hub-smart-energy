@@ -2427,6 +2427,31 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
     return json({ error: "Database error" }, 500);
   }
 
+  // Mirror the most recent successful execution timestamp per automation
+  // to location_automations.last_executed_at so the tenant UI reflects
+  // local (gateway) executions the same as cloud executions.
+  const latestSuccessByAuto = new Map<string, string>();
+  for (const r of rows) {
+    if (r.status !== "success") continue;
+    const prev = latestSuccessByAuto.get(r.automation_id);
+    if (!prev || new Date(r.executed_at).getTime() > new Date(prev).getTime()) {
+      latestSuccessByAuto.set(r.automation_id, r.executed_at);
+    }
+  }
+  for (const [automationId, executedAt] of latestSuccessByAuto.entries()) {
+    const { error: updateErr } = await supabase
+      .from("location_automations")
+      .update({ last_executed_at: executedAt })
+      .eq("id", automationId)
+      .or(`last_executed_at.is.null,last_executed_at.lt.${executedAt}`);
+    if (updateErr) {
+      console.warn(
+        `[gateway-ingest] failed to bump last_executed_at for ${automationId}:`,
+        updateErr.message,
+      );
+    }
+  }
+
   return json({ success: true, inserted: rows.length });
 }
 

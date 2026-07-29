@@ -57,6 +57,14 @@ export interface AutomationLastError {
   executed_at: string;
   status: string;
   trigger_type: string;
+  execution_source?: string | null;
+}
+
+export interface AutomationLastSuccess {
+  automation_id: string;
+  executed_at: string;
+  execution_source: string | null;
+  trigger_type: string;
 }
 
 const isLocationScopedAutomation = (automation: {
@@ -69,6 +77,7 @@ export function useLocationAutomations(locationId: string | undefined) {
   const queryClient = useQueryClient();
   const [automations, setAutomations] = useState<LocationAutomationRecord[]>([]);
   const [lastErrors, setLastErrors] = useState<Record<string, AutomationLastError>>({});
+  const [lastSuccess, setLastSuccess] = useState<Record<string, AutomationLastSuccess>>({});
   const [loading, setLoading] = useState(true);
   const [executing, setExecuting] = useState<string | null>(null);
 
@@ -95,18 +104,27 @@ export function useLocationAutomations(locationId: string | undefined) {
       if (autoIds.length > 0) {
         const { data: logs } = await supabase
           .from("automation_execution_log")
-          .select("automation_id, error_message, executed_at, status, trigger_type")
+          .select("automation_id, error_message, executed_at, status, trigger_type, execution_source")
           .in("automation_id", autoIds)
           .order("executed_at", { ascending: false });
         if (logs) {
           const errorMap: Record<string, AutomationLastError> = {};
+          const successMap: Record<string, AutomationLastSuccess> = {};
           for (const log of logs) {
-            // Keep only the most recent entry per automation
             if (!errorMap[log.automation_id]) {
-              errorMap[log.automation_id] = log;
+              errorMap[log.automation_id] = log as AutomationLastError;
+            }
+            if (log.status === "success" && !successMap[log.automation_id]) {
+              successMap[log.automation_id] = {
+                automation_id: log.automation_id,
+                executed_at: log.executed_at,
+                execution_source: (log as any).execution_source ?? null,
+                trigger_type: log.trigger_type,
+              };
             }
           }
           setLastErrors(errorMap);
+          setLastSuccess(successMap);
         }
       }
     }
@@ -282,6 +300,7 @@ export function useLocationAutomations(locationId: string | undefined) {
   return {
     automations,
     lastErrors,
+    lastSuccess,
     loading,
     executing,
     refetch: fetchAutomations,

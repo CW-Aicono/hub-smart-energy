@@ -303,7 +303,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
   const defaultIntegration = gatewayIntegrations[0] || null;
 
   const {
-    automations, lastErrors, loading: autoLoading, executing,
+    automations, lastErrors, lastSuccess, loading: autoLoading, executing,
     createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation, refetch,
   } = useLocationAutomations(locationId);
 
@@ -628,12 +628,25 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                         )}
                         <AutomationFlowDiagram auto={auto} actuatorStates={actuatorStates} />
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
-                          {auto.last_executed_at && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {formatDistanceToNow(new Date(auto.last_executed_at), { addSuffix: true, locale: de })}
-                            </span>
-                          )}
+                          {(() => {
+                            const succ = lastSuccess[auto.id];
+                            const succTime = succ ? new Date(succ.executed_at).getTime() : 0;
+                            const autoTime = auto.last_executed_at ? new Date(auto.last_executed_at).getTime() : 0;
+                            const chosen = succTime >= autoTime ? succ?.executed_at : auto.last_executed_at;
+                            if (!chosen) return null;
+                            const source = succTime >= autoTime ? succ?.execution_source : null;
+                            const sourceLabel =
+                              source === "local" ? "Lokal" : source === "cloud" ? "Cloud" : null;
+                            return (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatDistanceToNow(new Date(chosen), { addSuffix: true, locale: de })}
+                                {sourceLabel && (
+                                  <span className="text-[10px] text-muted-foreground/80">· {sourceLabel}</span>
+                                )}
+                              </span>
+                            );
+                          })()}
                           {(() => {
                             const err = lastErrors[auto.id];
                             const isScheduledError = err?.status === "error" && err?.trigger_type === "scheduled";
