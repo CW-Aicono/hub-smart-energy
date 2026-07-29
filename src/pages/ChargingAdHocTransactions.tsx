@@ -48,7 +48,7 @@ const fmtEur = (cents: number, currency = "EUR") =>
 const fmtDe = (n?: number | null, digits = 2) =>
   n == null ? "—" : n.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
-export default function ChargingAdHocTransactions() {
+export function AdHocTransactionsContent({ embedded = false }: { embedded?: boolean } = {}) {
   const { tenant } = useTenant();
   const [state, setState] = useState<string>("all");
   const [search, setSearch] = useState("");
