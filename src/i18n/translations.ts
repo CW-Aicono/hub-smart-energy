@@ -32,6 +32,12 @@ export const translations = {
     es: "Contadores",
     nl: "Meters",
   },
+  "nav.analyticsStudio": {
+    de: "Analyse-Studio",
+    en: "Analytics Studio",
+    es: "Estudio de análisis",
+    nl: "Analytics Studio",
+  },
   "nav.exports": {
     de: "Datenexport / -import",
     en: "Data Export / Import",

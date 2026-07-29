@@ -146,6 +146,7 @@ const DashboardSidebar = () => {
       children: [
         { to: "/live-values", icon: Activity, labelKey: "nav.liveValues" as TranslationKey },
         { to: "/meters", icon: Gauge, labelKey: "nav.meters" as TranslationKey },
+        { to: "/analytics-studio", icon: BarChart3, labelKey: "nav.analyticsStudio" as TranslationKey },
         { to: "/energy-data", icon: Download, labelKey: "nav.exports" as TranslationKey },
         { to: "/energy-report", icon: FileText, labelKey: "nav.energyReport" as TranslationKey },
       ]
