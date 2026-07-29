@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAnalyticsData, AnalyticsPeriod } from "@/hooks/useAnalyticsData";
+import { useAutomationEventAnnotations } from "@/hooks/useAutomationEventAnnotations";
 import { AnalysisBlock } from "@/hooks/useAnalysisWorkspaces";
 import {
   ResponsiveContainer,
