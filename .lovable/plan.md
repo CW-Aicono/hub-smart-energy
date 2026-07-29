@@ -1,134 +1,65 @@
-## Befund aus der aktuellen Prüfung
+## Ziel
 
-**Das Backend ist nicht komplett offline**, aber es ist unter Last so stark blockiert, dass Datenbank-/API-Zugriffe zeitweise auslaufen.
+`sensor_readings_raw` dauerhaft entlasten, damit der Backend-Notfallmodus wieder ausgeschaltet werden kann, ohne dass die tägliche Überlastung zurückkommt.
 
-Verifizierte Signale:
+## Aktueller Stand (verifiziert)
 
-- Lovable Cloud selbst meldet den Backend-Dienst als erreichbar.
-- Die DB-Metriken konnten trotzdem nicht geladen werden: Timeout beim Metrik-Endpunkt.
-- PostgreSQL-Logs zeigen wiederholt `canceling statement due to statement timeout`, Verbindungsabbrüche und Cron-Startup-Timeouts.
-- Edge-Function-Logs zeigen eine Welle von `ocpp-persistent-api`-Aufrufen mit **90s/150s Laufzeit** und `500/504`.
-- Die langsamsten DB-Statements werden aktuell von Zeitreihen-/Historienpfaden dominiert:
-  - `sensor_readings_raw` globale Zeitabfragen: 391 Aufrufe, Ø ca. 3,7s, max ca. 7,9s, total ca. 24 Minuten DB-Zeit.
-  - `sensor_readings_5min` globale Zeitabfragen: Ø ca. 1,3s.
-  - Sehr viele Inserts in `sensor_readings_raw`, `meter_power_readings`, `ocpp_meter_samples`, `gateway_sensor_snapshots`, `ocpp_message_log`.
-- `sensor_readings_raw` hat aktuell ca. 298.000 Zeilen, `sensor_readings_5min` ca. 41.000 Zeilen. Das ist nicht riesig, aber die Kombination aus globalen Reads, häufigen Cron-/Edge-Aufrufen und synchroner Verarbeitung erzeugt offenbar täglichen Druck.
+- `sensor_readings_raw` hat ca. 300k Zeilen, Retention laut UI 7 Tage.
+- Notfallmodus aktiv: `backend_emergency_mode = true`, `sensor_history_enabled = false`.
+- Aggregator (`sensor-history-aggregator`) läuft datenbanknah via RPC `aggregate_sensor_readings_5min`, wird aktuell durch Notfallmodus geblockt.
+- Hauptlastquellen laut `slow_queries`: globale Zeitfensterscans auf `sensor_readings_raw` und häufige Inserts.
 
-## Wahrscheinliche Hauptursache
+## Maßnahmen
 
-Kein einzelner „Backend kaputt“-Fehler, sondern **Lastspitzen durch mehrere neu hinzugekommene Datenpfade**:
+### 1. Schreiblast an der Quelle senken
+- Delta-Guard als **DB-Trigger** auf `sensor_readings_raw`: identische Werte innerhalb X Sekunden je `meter_id` verwerfen (nicht nur im Edge-Speicher).
+- Minimaler Sample-Abstand pro Sensor (z.B. 30s) serverseitig erzwingen.
+- Sensor-Rohwerte werden nur noch geschrieben, wenn ein 5-Min-Bucket noch nicht „geschlossen“ ist — sonst direkt in `sensor_readings_5min`.
 
-1. **Sensor-Historisierung** schreibt häufig Rohwerte und aggregiert regelmäßig global über `sensor_readings_raw`.
-2. **Super-Admin-/Monitoring-Karten** fragen globale Historien-/Count-Daten ab, teils ohne Tenant-/Meter-Grenze.
-3. **OCPP-Persistent-API** verarbeitet Meter-Samples, virtuelle Zähler, kumulative Werte und Logeinträge synchron in einem Request. Wenn DB-Zugriffe warten, stauen diese Requests bis 90–150s und blockieren weitere Kapazität.
-4. **Cron-Jobs laufen parallel** zu Live-Ingest und UI-Abfragen. In den Logs ist genau dieses Muster sichtbar: Cron-Starts, Statement-Timeouts, Edge-Function-Timeouts.
+### 2. Retention drastisch verkürzen
+- Rohdaten von 7 Tagen auf **48 Stunden** reduzieren. Alles ältere wird durch 5-Min-Buckets abgedeckt.
+- `cleanup_sensor_readings_raw` stündlich statt täglich laufen lassen, in kleinen Batches (`DELETE ... LIMIT`) damit kein Long-Lock entsteht.
+- Nach Bereinigung `VACUUM (ANALYZE)` einmalig, danach Autovacuum-Schwellen für die Tabelle enger stellen.
 
-Wichtig: Ich würde **nicht zuerst ein größeres Backend empfehlen**. Erst müssen wir die Lastquellen entschärfen. Wenn danach DB-Health weiterhin Speicher-/Connection-Sättigung zeigt, können wir Compute-Größe bewerten.
+### 3. Aggregator inkrementell und selbstheilend
+- Wasserzeichen `sensor_aggregator_last_run_at` in `system_settings`, Aggregator verarbeitet nur `(last_run, now())`.
+- Harte Laufzeitgrenze (z.B. 15s) in der RPC — bei Überschreitung sauber abbrechen und Wasserzeichen nicht vorrücken.
+- Kein globales 15-Min-Fenster mehr bei jedem Lauf.
 
-## Plan zur dauerhaften Stabilisierung
+### 4. UI-/Super-Admin-Abfragen entschärfen
+- Alle verbleibenden Live-Counts auf `sensor_readings_raw` auf `pg_class.reltuples` (estimated) umstellen.
+- Sensor-Charts strikt: immer `meter_id` + Zeitfenster + `LIMIT`. Keine tenant-weiten Reads mehr.
+- Bei Zeiträumen > 24h automatisch auf `sensor_readings_5min` umschalten statt Rohdaten zu lesen.
 
-### 1. Sofort-Stabilisierung einbauen
+### 5. Indexe gezielt prüfen (nicht blind hinzufügen)
+- `EXPLAIN (ANALYZE, BUFFERS)` für die Top-3-Queries aus `slow_queries`.
+- Nur wenn der Plan zeigt, dass ein Index fehlt oder nicht genutzt wird, einen ergänzen. Ziel: kein Seq Scan auf `sensor_readings_raw` mehr.
 
-- Einen klaren **Notfallmodus** für Super-Admin schaffen:
-  - Sensor-Historisierung temporär deaktivieren.
-  - OCPP-Message-Debug-Logging temporär reduzieren/deaktivieren.
-  - Nicht-kritische Monitoring-/Metrik-Crons pausierbar machen.
-- Bestehende Kill-Switches nutzen/ergänzen, aber nicht nur manuell verstecken: der Status muss sichtbar sein.
-- Ziel: Bei Lastspitzen innerhalb weniger Sekunden Last wegnehmen können, ohne Backend-Neustart als tägliches Ritual.
+### 6. Sicherer Wiederanlauf
+Reihenfolge zum Verlassen des Notfallmodus:
+1. Retention verkürzen + Cleanup laufen lassen, Tabellengröße prüfen.
+2. Delta-Guard-Trigger aktiv, Aggregator inkrementell.
+3. `sensor_history_enabled = true` (Schreiben wieder an), Aggregator läuft, 30 Min beobachten (`db_health`, `slow_queries`, Edge-Logs).
+4. Wenn stabil: `backend_emergency_mode = false`.
+5. OCPP-Rohtelegramm-Logging bleibt vorerst aus, wird separat entschieden.
 
-### 2. Globale Sensor-Historienabfragen entfernen
+### 7. Frühwarnung gegen Rückfall
+- Super-Admin Health-Karte ergänzen: Zeilenanzahl (estimated), Aggregator-Laufzeit, letzte Cleanup-Ausführung, aktive Kill-Switches.
+- Alerts: Aggregator > 20s, DB-Statement-Timeouts > 0, Tabellengröße > Schwellwert.
 
-Betroffene Muster:
+## Nicht enthalten
 
-- `SensorHistorySettingsCard` zählt globale Rows nach Zeitfenster.
-- Zeitreihen-Komponenten dürfen nur meter-/tenant-begrenzt lesen.
-- Aggregator liest alle Rohwerte der letzten 15 Minuten global.
+- Compute-Upgrade — erst prüfen, nachdem obige Schritte umgesetzt und `db_health` neu gemessen wurde.
+- OCPP-Persistent-Server: separat, ist bereits gehärtet (8s Timeout, Fire-and-forget).
 
-Änderung:
+## Hetzner-Hinweis
 
-- Super-Admin-Anzeigen auf **vorgehaltene Status-/Statistikwerte** umstellen statt Live-Counts auf großen Tabellen.
-- Keine UI-Abfrage mehr wie „alle `sensor_readings_raw` seit X“ ohne Tenant/Meter.
-- Sensor-Charts bleiben erlaubt, aber ausschließlich:
-  - `.eq("tenant_id", tenant.id)` sofern Tenant-Kontext vorhanden,
-  - `.eq("meter_id", meterId)` für Detailansichten,
-  - harte Limits und sinnvolle Aggregationsebene.
+⚠️ **Hetzner-Supabase**: Änderungen an `cleanup_sensor_readings_raw` (pg_cron) und ggf. neue Postgres-Trigger müssen vom Hetzner-Programmierer auf der self-hosted Supabase einmalig eingespielt werden. Edge Functions (`sensor-history-aggregator`) ebenfalls redeployen.
 
-### 3. Sensor-Aggregator umbauen
+## Verifikation nach Umsetzung
 
-Aktuell lädt `sensor-history-aggregator` bis zu 20.000 Raw-Zeilen der letzten 15 Minuten in die Edge Function und aggregiert dort.
-
-Umbau:
-
-- Aggregation datenbanknah machen oder strikt in kleinen Batches:
-  - nach `tenant_id`/Zeitfenster begrenzen,
-  - mit Wasserzeichen/`last_processed_at` arbeiten,
-  - keine globale Vollfenster-Verarbeitung bei jedem Lauf.
-- 5-Minuten-Buckets inkrementell aktualisieren.
-- Aggregator-Lauf darf bei Last nicht 90s+ hängen, sondern sauber abbrechen und beim nächsten Lauf fortsetzen.
-
-### 4. OCPP-Persistent-API entkoppeln
-
-Betroffener Hotspot: `ocpp-persistent-api`, besonders Meter-Samples und Message-Logs.
-
-Änderung:
-
-- Kritische OCPP-Antworten schnell halten.
-- Nicht-kritische Folgearbeiten entkoppeln:
-  - Message-Logs nur gebündelt oder bei Debug aktiv.
-  - Virtuelle-Zähler-Spiegelung und kumulative Updates in eine schlanke DB-Funktion oder Queue-ähnlichen Batch-Pfad verschieben.
-  - Harte Payload- und Laufzeitgrenzen.
-- Ziel: Wallbox-/OCPP-Server bekommt nicht erst nach 90–150s eine Antwort.
-
-### 5. Schreiblast drosseln und deduplizieren
-
-- Sensor-Historie: Delta-Guard zusätzlich datenbankseitig absichern, nicht nur im warmen Edge-Function-Speicher.
-- OCPP-/Gateway-Samples: doppelte oder zu häufige identische Werte nicht erneut schreiben.
-- `ocpp_message_log` konsequent mit Retention und optionalem Debug-Level betreiben.
-- Für Live-Ansichten primär Snapshot-/Latest-Tabellen nutzen, nicht Rohhistorie.
-
-### 6. Indexe und Retention final prüfen
-
-Bereits verifiziert:
-
-- Es gibt Zeit-/Meter-Indexe auf `sensor_readings_raw`, `sensor_readings_5min`, `meter_power_readings`, OCPP-Tabellen.
-
-Weitere Prüfung/Anpassung:
-
-- EXPLAIN für die echten Top-Queries ausführen.
-- Nur gezielte Indexe ergänzen, falls der Plan zeigt, dass vorhandene Indexe nicht genutzt werden.
-- Rohdaten-Retention prüfen: Wenn 5-Minuten-/Stunden-/Tages-Aggregate vorhanden sind, sollten Rohwerte nur so lange bleiben, wie fachlich nötig.
-
-### 7. Monitoring gegen Wiederholung
-
-- Super-Admin Health-Panel erweitern um:
-  - letzte Edge-Function-Timeouts,
-  - langsamste DB-Query-Klassen,
-  - Cron-Fehler/Startup-Timeouts,
-  - Sensor-/OCPP-Schreibvolumen pro Stunde,
-  - aktive Kill-Switches.
-- Warnschwellen definieren:
-  - OCPP-API > 5s,
-  - DB-Statement-Timeouts > 0,
-  - Sensor-Aggregator-Laufzeit > 20s,
-  - Metrik-Endpunkt nicht erreichbar.
-
-### 8. Verifikation nach Umsetzung
-
-Nach der Umsetzung prüfen wir getrennt:
-
-- Backend-Metriken laden wieder zuverlässig.
-- `slow_queries` zeigt keine globalen `sensor_readings_raw`-Zeitabfragen mehr in den Top 5.
-- `ocpp-persistent-api` hat keine 90s/150s Timeouts mehr.
-- Login und datenintensive Seiten laden wieder.
-- Sensor-/Zähler-/OCPP-Graphen funktionieren weiterhin.
-- Automationen und Live-Werte bleiben erhalten.
-
-## Umsetzungsvorschlag in Reihenfolge
-
-1. Notfall-Kill-Switches und nicht-kritische Cron-/Logging-Last reduzieren.
-2. Globale Sensor-Historien-Counts aus der UI entfernen/ersetzen.
-3. Sensor-Aggregator inkrementell umbauen.
-4. OCPP-Persistent-API entkoppeln und Logging drosseln.
-5. EXPLAIN/Index-Runde nur für verbleibende Top-Queries.
-6. Health-/Alerting-Anzeige einbauen.
-7. Final verifizieren mit Logs, DB-Health und echten Seitenaufrufen.
+- `sensor_readings_raw` Zeilenzahl deutlich kleiner und stabil.
+- `slow_queries`: keine globalen Rohdaten-Zeitscans mehr in den Top 10.
+- `db_health`: keine Statement-Timeouts, Connection-Sättigung < 50 %.
+- Sensor-Charts (24h, 7d, 30d) laden weiterhin korrekt.
+- Notfallmodus ist aus und bleibt es über 24h.
