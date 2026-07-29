@@ -1,52 +1,52 @@
-# Status Analytics Studio — was fehlt noch?
+## Analyse-Studio als eigenständiges Modul
 
-Ich habe den Plan (`.lovable/plan.md`) mit dem Code (`src/components/analytics/**`, `src/pages/AnalyticsStudio.tsx`, `src/hooks/useAnalysisWorkspaces.ts`, `useAnalyticsData.ts`, `useDeviceTree.ts`) abgeglichen.
+Das Analytics Studio wird zu einem vollwertigen, kostenpflichtigen Modul – analog zu Ladeinfrastruktur, Aufgabenverwaltung etc. – mit Freischaltung pro Tenant im Super-Admin.
 
-## ✅ Vollständig umgesetzt
+### 1. Modul-Registrierung
 
-**Phase 1 (MVP)** — komplett
+`**src/hooks/useTenantModules.tsx**` – neuen Eintrag in `ALL_MODULES` ergänzen:
 
-- Datenmodell `analysis_workspaces` + Hook `useAnalysisWorkspaces`
-- Seite `/analytics-studio`, Sidebar-Menüeintrag
-- Geräte-Bibliothek (`AnalyticsSidebar` + `useDeviceTree`)
-- Canvas-Grid mit Drag & Drop (`AnalyticsCanvas`)
-- Zeitreihen-Block, KPI-Block
-- Workspace speichern/laden/löschen (`WorkspaceToolbar`)
-- Globaler Zeitraum-Selector (`TimeRangeToolbar`)
+```
+{ code: "analytics_studio", label: "Analyse-Studio" }
+```
 
-**Phase 2 (Erweiterungen)** — komplett
+`**src/hooks/useModuleGuard.tsx**` – Route + Nav-Eintrag registrieren:
 
-- Heatmap-Block, Korrelations-Scatterplot, Vergleichs-Block, Formel-Block
-- Annotationen auf Zeitachse (im `TimeSeriesBlock`)
+```
+"/analytics-studio": "analytics_studio"
+```
 
-**Phase 3 (KI & Vertrieb)** — teilweise
+in `ROUTE_MODULE_MAP` und `NAV_MODULE_MAP`.
 
-- KI-„Was ist hier passiert?" (`AiInsightBlock` + Edge Function `analytics-insight`) ✅
-- Was-wäre-wenn-Simulation (`SimulationBlock`) ✅
-- Story-Modus (`StoryManagerDialog`, `StoryPresenter`, `storyTypes`) ✅
+### 2. Route absichern
 
-## ❌ Noch offen
+In `src/App.tsx` (oder wo die Route definiert ist) den `<AnalyticsStudio />` in `<ModuleGuard>` wickeln – identisch zum Muster der anderen Modul-Routen. Der Sidebar-Link wird durch `isNavItemVisible` automatisch ausgeblendet, sobald das Modul deaktiviert ist.
 
-1. **Vorlagenmarktplatz** (Phase 3.4): Es gibt keine `analysis_workspace_templates`-Tabelle und keine Template-Auswahl-UI. Nutzer starten immer mit leerem Canvas.
-2. **Event-Annotationen aus `monitoring_alert_events**` (Phase 2, Punkt „Annotationen & Events"): Aktuell nur manuelle Annotationen; automatische Übernahme von Alert-Events fehlt.
-3. **Workspace-Sharing UI** (`analysis_workspace_shares`): Tabelle war geplant, aktueller Code nutzt nur `is_shared`-Flag, kein per-User-Sharing mit `can_edit`.
-4. **Onboarding-Tour** beim ersten Öffnen (im Plan als Abfangmaßnahme genannt).
+### 3. Preis-Konfiguration
 
-## Kleinere Lücken (nice-to-have laut Plan)
+Migration für `module_prices`: einen Datensatz für `analytics_studio` mit Default-Preisen einfügen (Standard, Industrie, Partner, Partner-Industrie – analog zu bestehenden Modulen). Vorschlag: **29 €/Monat Standard**, **49 €/Monat Industrie**, Partner-Preise als Nullwerte (vom Super-Admin einstellbar). Preise sind später in `SuperAdminModulePricing` frei anpassbar.
 
-- **Rechtsklick-Menü auf Datenpunkten** („Von hier zoomen", „In Dashboard-Widget verwandeln") — nicht implementiert.
-- **Automatischer Aggregationswechsel** bei >5.000 Punkten pro Serie — Datenfetcher aggregiert fix je Periode, kein Auto-Downsampling bei Überschreitung.
-- **Eigener Zeitraum/Zeitversatz pro Block** — im Plan optional, aktuell übernehmen alle Blöcke den globalen Zeitraum (Story-Modus setzt ihn global, nicht pro Block).
+### 4. Default-Freischaltung
 
-## Empfehlung
+Keine automatische Aktivierung. Bestehende Nutzer, die das Studio derzeit sehen, verlieren den Zugriff, bis der Super-Admin es freischaltet (konsistent mit "strict mode" – sobald `tenant_modules`-Einträge existieren, ist alles Nicht-Aufgeführte gesperrt).
 
-Wenn du das Modul „feature-complete" haben willst, würde ich in dieser Reihenfolge nachziehen:
+**Optional** (bitte bestätigen): Für alle bestehenden Tenants, die schon `analytics_workspaces` angelegt haben, per Migration `tenant_modules(analytics_studio, is_enabled=true)` einfügen, damit aktive Nutzer nicht plötzlich ausgesperrt werden.
 
-1. **Vorlagenmarktplatz** (größter Marketing-/Onboarding-Hebel) — Templates-Tabelle + „Aus Vorlage starten"-Dialog + 4–5 Seed-Templates (PV-Eigenverbrauch, Heizung, Wallbox, Standort-Benchmark, Wochenreport).
-2. **Event-Annotationen** aus `monitoring_alert_events` automatisch in `TimeSeriesBlock` einblenden (Toggle im Block-Setting).
-3. **Per-User-Sharing** (`analysis_workspace_shares`) inkl. „Teilen"-Dialog.
-4. Optional: Auto-Downsampling, Onboarding-Tour, per-Block-Zeitraum.
+### 5. Super-Admin UI
 
-Soll ich mit Punkt 1 (Vorlagenmarktplatz) starten, oder alle vier offenen Punkte in einem Rutsch umsetzen?  
+Keine Änderungen nötig – `SuperAdminLicenses` und `SuperAdminModulePricing` iterieren über `ALL_MODULES` und `module_prices` und rendern den neuen Eintrag automatisch.
+
+### Technische Details
+
+- Kein DB-Schema-Change an `analytics_workspaces` etc. – nur zwei neue Datensätze (`module_prices` + optional `tenant_modules` Backfill).
+- I18n-Label für `analytics_studio` in DE/EN/ES/NL ergänzen.
+
+### Offene Frage
+
+Sollen bestehende Tenants mit vorhandenen Analytics-Workspaces automatisch freigeschaltet werden (Punkt 4 „Optional"), oder soll jeder Tenant aktiv vom Super-Admin freigegeben werden?  
   
-Antwort: Bitte alle vier offenen Punkte in einem Rutsch umsetzen
+Antwort: Ja, bestehende Tenants sollen für das Analyse-Studio freigeschaltet werden  
+  
+  
+  
+  
