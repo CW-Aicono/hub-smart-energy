@@ -8049,6 +8049,39 @@ export type Database = {
           },
         ]
       }
+      meter_power_readings_hourly: {
+        Row: {
+          bucket: string
+          energy_type: string | null
+          meter_id: string
+          power_avg: number | null
+          power_max: number | null
+          sample_count: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          bucket: string
+          energy_type?: string | null
+          meter_id: string
+          power_avg?: number | null
+          power_max?: number | null
+          sample_count?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          bucket?: string
+          energy_type?: string | null
+          meter_id?: string
+          power_avg?: number | null
+          power_max?: number | null
+          sample_count?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       meter_readings: {
         Row: {
           capture_method: string
@@ -14440,6 +14473,10 @@ export type Database = {
           sessions_24h: number
         }[]
       }
+      backfill_meter_power_hourly: {
+        Args: { p_days?: number }
+        Returns: number
+      }
       bootstrap_cron_settings: {
         Args: { p_key: string; p_url: string }
         Returns: undefined
@@ -14707,6 +14744,21 @@ export type Database = {
           power_avg: number
         }[]
       }
+      get_power_series_auto: {
+        Args: {
+          p_end: string
+          p_max_points?: number
+          p_meter_ids: string[]
+          p_start: string
+        }
+        Returns: {
+          bucket: string
+          meter_id: string
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+        }[]
+      }
       get_pv_actual_daily_sums: {
         Args: { p_from_date: string; p_location_id: string; p_to_date: string }
         Returns: {
@@ -14907,6 +14959,10 @@ export type Database = {
       resolve_partner_branding_by_host: {
         Args: { _host: string }
         Returns: Json
+      }
+      rollup_meter_power_hourly: {
+        Args: { p_lookback_hours?: number }
+        Returns: number
       }
       rollup_sensor_daily: { Args: { lookback_days?: number }; Returns: number }
       rollup_sensor_hourly: {
