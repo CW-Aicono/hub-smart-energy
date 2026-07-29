@@ -2298,11 +2298,15 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
 
   console.log(`[sync-automations] tenant=${tenantId} li=${locationIntegrationId} loc=${locationId}`);
 
-  // Sync ALL automations (active + inactive) so the local engine can manage state
+  // Sync automations the local engine may execute: loxone_local + hybrid.
+  // execution_mode = 'cloud' is intentionally excluded so the gateway
+  // cannot double-fire cloud-owned rules.
   let query = supabase
     .from("location_automations")
     .select("*, locations!location_automations_location_id_fkey(timezone), location_integrations!location_automations_location_integration_id_fkey(integration:integrations(type))")
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    .in("execution_mode", ["loxone_local", "hybrid"]);
+
 
   // Filter by location_integration_id (preferred – only automations this gateway can execute)
   if (locationIntegrationId) {
