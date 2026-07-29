@@ -49,13 +49,24 @@ Deno.serve(async (req) => {
   // Service client for state transitions + counters
   const svc = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-  const { data: profile, error: profErr } = await svc
+  const { data: profile } = await svc
     .from("profiles").select("tenant_id").eq("id", user.id).maybeSingle();
-  if (profErr || !profile?.tenant_id) return jsonResp({ error: "No tenant" }, 403);
-  const tenant_id = profile.tenant_id;
 
   let body: any;
   try { body = await req.json(); } catch { return jsonResp({ error: "Invalid JSON" }, 400); }
+
+  // Super-admin fallback: derive tenant from body or referenced session
+  const { data: isSuper } = await svc.rpc("has_role", { _user_id: user.id, _role: "super_admin" });
+  let tenant_id: string | null = profile?.tenant_id ?? null;
+  if (!tenant_id && isSuper) {
+    if (body?.tenant_id) {
+      tenant_id = body.tenant_id;
+    } else if (body?.session_id) {
+      const { data: s } = await svc.from("adhoc_payment_sessions").select("tenant_id").eq("id", body.session_id).maybeSingle();
+      tenant_id = s?.tenant_id ?? null;
+    }
+  }
+  if (!tenant_id) return jsonResp({ error: "No tenant (super-admin: bitte tenant_id im Body angeben)" }, 403);
   const action = body.action as string;
 
   async function loadSession(session_id: string) {
