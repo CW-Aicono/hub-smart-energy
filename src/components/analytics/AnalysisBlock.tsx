@@ -9,6 +9,7 @@ import { ComparisonBlock } from "./blocks/ComparisonBlock";
 import { HeatmapBlock } from "./blocks/HeatmapBlock";
 import { CorrelationBlock } from "./blocks/CorrelationBlock";
 import { FormulaBlock } from "./blocks/FormulaBlock";
+import { AiInsightBlock } from "./blocks/AiInsightBlock";
 import { cn } from "@/lib/utils";
 
 interface AnalysisBlockProps {
@@ -18,9 +19,10 @@ interface AnalysisBlockProps {
   isEditMode: boolean;
   onRemove: (id: string) => void;
   onConfigChange: (id: string, config: Record<string, unknown>) => void;
+  allBlocks?: AnalysisBlockType[];
 }
 
-export function AnalysisBlockCard({ block, period, offset, isEditMode, onRemove, onConfigChange }: AnalysisBlockProps) {
+export function AnalysisBlockCard({ block, period, offset, isEditMode, onRemove, onConfigChange, allBlocks }: AnalysisBlockProps) {
   const title = block.title || "Analyse";
 
   const content = useMemo(() => {
@@ -37,10 +39,20 @@ export function AnalysisBlockCard({ block, period, offset, isEditMode, onRemove,
         return <CorrelationBlock block={block} period={period} offset={offset} onConfigChange={onConfigChange} />;
       case "formula":
         return <FormulaBlock block={block} period={period} offset={offset} onConfigChange={onConfigChange} />;
+      case "ai_insight":
+        return (
+          <AiInsightBlock
+            block={block}
+            period={period}
+            offset={offset}
+            onConfigChange={onConfigChange}
+            allBlocks={allBlocks ?? []}
+          />
+        );
       default:
         return <div className="text-sm text-muted-foreground p-4">Nicht implementierter Blocktyp</div>;
     }
-  }, [block, period, offset, onConfigChange]);
+  }, [block, period, offset, onConfigChange, allBlocks]);
 
   return (
     <Card

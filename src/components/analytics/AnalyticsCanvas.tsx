@@ -3,7 +3,7 @@ import { AnalysisBlock as AnalysisBlockType } from "@/hooks/useAnalysisWorkspace
 import { AnalyticsPeriod } from "@/hooks/useAnalyticsData";
 import { AnalysisBlockCard } from "./AnalysisBlock";
 import { Button } from "@/components/ui/button";
-import { Plus, LayoutGrid, Pencil, LineChart, BarChart3, Table2, Flame, ScatterChart, Sigma } from "lucide-react";
+import { Plus, LayoutGrid, Pencil, LineChart, BarChart3, Table2, Flame, ScatterChart, Sigma, Sparkles } from "lucide-react";
 import { DeviceTreeNode } from "@/hooks/useDeviceTree";
 import { cn } from "@/lib/utils";
 
@@ -57,15 +57,22 @@ export function AnalyticsCanvas({
       heatmap: "Heatmap",
       correlation: "Korrelation",
       formula: "Formel",
+      ai_insight: "KI-Erklärung",
     };
+    const sizeMap: Record<string, { w: number; h: number }> = {
+      kpi: { w: 3, h: 1 },
+      heatmap: { w: 6, h: 2 },
+      ai_insight: { w: 6, h: 3 },
+    };
+    const size = sizeMap[type] ?? { w: 6, h: 2 };
     const block: AnalysisBlockType = {
       id: makeId(),
       type,
       title: titleMap[type] ?? "Analyse",
       x: 0,
       y: Math.max(0, ...blocks.map((b) => b.y + b.h)),
-      w: type === "kpi" ? 3 : type === "heatmap" ? 6 : 6,
-      h: type === "kpi" ? 1 : 2,
+      w: size.w,
+      h: size.h,
       config: initialMeterId ? { meterIds: [initialMeterId] } : {},
     };
     onBlocksChange([...blocks, block]);
@@ -152,6 +159,9 @@ export function AnalyticsCanvas({
               <Button variant="outline" size="sm" className="gap-2" onClick={() => addBlock("formula")}>
                 <Sigma className="h-4 w-4" /> Formel
               </Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => addBlock("ai_insight")}>
+                <Sparkles className="h-4 w-4" /> KI-Erklärung
+              </Button>
             </>
           )}
         </div>
@@ -172,6 +182,7 @@ export function AnalyticsCanvas({
           {blocks.map((block) => (
             <div
               key={block.id}
+              data-block-id={block.id}
               onDrop={(e) => {
                 e.stopPropagation();
                 handleDrop(e, block);
@@ -179,9 +190,9 @@ export function AnalyticsCanvas({
               onDragOver={handleDragOver}
               onClick={() => editMode && setSelectedBlockId(block.id)}
               className={cn(
-                "col-span-full",
+                "col-span-full transition-shadow rounded-xl",
                 block.w <= 3 ? "md:col-span-3" : block.w <= 6 ? "md:col-span-6" : "md:col-span-12",
-                selectedBlockId === block.id && editMode ? "ring-2 ring-primary/60 rounded-xl" : ""
+                selectedBlockId === block.id && editMode ? "ring-2 ring-primary/60" : ""
               )}
               style={{ gridRow: `span ${block.h}` }}
             >
@@ -192,6 +203,7 @@ export function AnalyticsCanvas({
                 isEditMode={editMode}
                 onRemove={removeBlock}
                 onConfigChange={(id, config) => updateBlock(id, { config })}
+                allBlocks={blocks}
               />
             </div>
           ))}
