@@ -2377,11 +2377,13 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
     action_type: auto.action_type,
     last_executed_at: auto.last_executed_at,
     updated_at: auto.updated_at,
+    execution_mode: auto.execution_mode || "cloud",
     location_timezone: auto.locations?.timezone || "Europe/Berlin",
   }));
 
   return json({ success: true, automations, count: automations.length, location_id: locationId });
 }
+
 
 /* ── Push Execution Logs handler (Hub → Cloud) ────────────────────────────────── */
 
