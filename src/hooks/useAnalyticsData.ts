@@ -89,11 +89,12 @@ export function useAnalyticsData(
   period: AnalyticsPeriod,
   customRange?: { from: Date; to: Date },
   enabled = true,
+  offset = 0,
 ) {
-  const range = customRange ?? getRangeForPeriod(period);
+  const range = customRange ?? getRangeForPeriod(period, offset);
 
   return useQuery({
-    queryKey: ["analytics-data", meterIds, period, range.from.toISOString(), range.to.toISOString()],
+    queryKey: ["analytics-data", meterIds, period, offset, range.from.toISOString(), range.to.toISOString()],
     enabled: enabled && meterIds.length > 0,
     staleTime: 60_000,
     placeholderData: keepPreviousData,
