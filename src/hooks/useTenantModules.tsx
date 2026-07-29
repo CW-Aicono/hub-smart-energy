@@ -33,6 +33,7 @@ export const ALL_MODULES = [
   { code: "gain_sharing", label: "Gain-Sharing (Einsparbeteiligung)" },
   { code: "documentation", label: "Dokumentation" },
   { code: "adhoc_payment", label: "Ad-Hoc Payment (Kartenzahlung Ladepunkt)" },
+  { code: "analytics_studio", label: "Analyse-Studio" },
 ] as const;
 
 export function useTenantModules(tenantId: string | null) {
