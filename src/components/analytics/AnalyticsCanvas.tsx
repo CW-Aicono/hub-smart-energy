@@ -3,7 +3,7 @@ import { AnalysisBlock as AnalysisBlockType } from "@/hooks/useAnalysisWorkspace
 import { AnalyticsPeriod } from "@/hooks/useAnalyticsData";
 import { AnalysisBlockCard } from "./AnalysisBlock";
 import { Button } from "@/components/ui/button";
-import { Plus, LayoutGrid, Pencil, LineChart, BarChart3, Table2, Flame, ScatterChart, Sigma } from "lucide-react";
+import { Plus, LayoutGrid, Pencil, LineChart, BarChart3, Table2, Flame, ScatterChart, Sigma, Sparkles } from "lucide-react";
 import { DeviceTreeNode } from "@/hooks/useDeviceTree";
 import { cn } from "@/lib/utils";
 
