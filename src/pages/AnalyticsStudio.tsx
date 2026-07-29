@@ -267,7 +267,7 @@ export default function AnalyticsStudio() {
         </DialogContent>
       </Dialog>
 
-      <OnboardingTour open={showOnboarding} onOpenChange={setShowOnboarding} />
+      <OnboardingTour forceOpen={showOnboarding} onClose={() => setShowOnboarding(false)} />
     </div>
   );
 }
