@@ -34,10 +34,11 @@ async function isEnabled(supabase: any): Promise<boolean> {
     const { data } = await supabase
       .from("system_settings")
       .select("value")
-      .eq("key", "sensor_history_enabled")
-      .maybeSingle();
-    const raw = String((data as any)?.value ?? "true").toLowerCase();
-    const enabled = raw !== "false" && raw !== "0" && raw !== "off";
+      .in("key", ["sensor_history_enabled", "backend_emergency_mode"]);
+    const settings = new Map((data ?? []).map((row: any) => [String(row.key), String(row.value ?? "").toLowerCase()]));
+    const raw = settings.get("sensor_history_enabled") ?? "true";
+    const emergency = settings.get("backend_emergency_mode") ?? "false";
+    const enabled = raw !== "false" && raw !== "0" && raw !== "off" && emergency !== "true" && emergency !== "1" && emergency !== "on";
     killSwitchCache = { enabled, checkedAt: now };
     return enabled;
   } catch {
