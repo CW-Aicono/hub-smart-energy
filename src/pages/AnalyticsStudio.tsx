@@ -210,23 +210,25 @@ export default function AnalyticsStudio() {
       <TemplateGalleryDialog
         open={templatesOpen}
         onOpenChange={setTemplatesOpen}
-        onSelect={(tpl) => {
+        onSelectTemplate={(newBlocks, newLayout, name) => {
           setActiveWorkspace(null);
-          setBlocks((tpl.blocks as AnalysisBlock[]) ?? []);
-          setLayout((tpl.layout as Record<string, unknown>) ?? {});
+          setBlocks(newBlocks);
+          setLayout(newLayout);
           setTemplatesOpen(false);
-          toast.success(`Vorlage "${tpl.name}" geladen`);
+          toast.success(`Vorlage "${name}" geladen`);
         }}
       />
 
-      {activeWorkspace && (
-        <ShareWorkspaceDialog
-          open={shareOpen}
-          onOpenChange={setShareOpen}
-          workspace={activeWorkspace}
-          onWorkspaceUpdated={(w) => setActiveWorkspace(w)}
-        />
-      )}
+      <ShareWorkspaceDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        workspace={activeWorkspace}
+        onToggleTenantWide={async (isShared) => {
+          if (!activeWorkspace) return;
+          await handleUpdate(activeWorkspace.id, { ...currentState, is_shared: isShared });
+        }}
+      />
+
 
       <Dialog open={saveAsTemplateOpen} onOpenChange={setSaveAsTemplateOpen}>
         <DialogContent className="sm:max-w-md">
