@@ -38,6 +38,9 @@ export function WorkspaceToolbar({
   onSave,
   onSaveExisting,
   onDelete,
+  onOpenTemplates,
+  onSaveAsTemplate,
+  onOpenShare,
   currentState,
 }: WorkspaceToolbarProps) {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
