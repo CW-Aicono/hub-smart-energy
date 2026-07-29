@@ -203,6 +203,21 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
         </div>
       </CardHeader>
       <CardContent>
+        {staleMinutes !== null && staleMinutes >= 15 && (
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-medium">
+                Seit {staleMinutes.toLocaleString("de-DE")} Minuten keine neue OCPP-Nachricht.
+              </p>
+              <p className="mt-1">
+                Die Wallbox ist verbunden, es kommen aber keine Log-Einträge an. Vermutlich ist das
+                Frame-Logging deaktiviert (Schalter <code>OCPP_FRAME_LOGGING_ENABLED</code> auf dem OCPP-Server
+                oder der Notfallmodus im Backend).
+              </p>
+            </div>
+          </div>
+        )}
         {loading && logs.length === 0 ? (
           <p className="text-sm text-muted-foreground">Lade Logs...</p>
 
