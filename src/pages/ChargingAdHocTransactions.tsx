@@ -11,6 +11,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { CreditCard, Download, RotateCcw, PlayCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useTenant } from "@/hooks/useTenant";
+import { getActiveSupportTenantId } from "@/lib/supportView";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import * as XLSX from "@e965/xlsx";
@@ -47,6 +49,7 @@ const fmtDe = (n?: number | null, digits = 2) =>
   n == null ? "—" : n.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
 export default function ChargingAdHocTransactions() {
+  const { tenant } = useTenant();
   const [state, setState] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -85,8 +88,9 @@ export default function ChargingAdHocTransactions() {
   const { data: events = [] } = useAdhocSessionEvents(selectedId);
 
   const callOrchestrator = async (action: string, payload: Record<string, any>) => {
+    const tenantId = tenant?.id ?? getActiveSupportTenantId();
     const { data, error } = await supabase.functions.invoke("adhoc-charge-orchestrator", {
-      body: { action, ...payload },
+      body: { action, ...payload, ...(tenantId ? { tenant_id: tenantId } : {}) },
     });
     if (error) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });

@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
   const svc = createClient(SUPABASE_URL, SERVICE_ROLE);
 
   const { data: profile } = await svc
-    .from("profiles").select("tenant_id").eq("id", user.id).maybeSingle();
+    .from("profiles").select("tenant_id").eq("user_id", user.id).maybeSingle();
 
   let body: any;
   try { body = await req.json(); } catch { return jsonResp({ error: "Invalid JSON" }, 400); }
