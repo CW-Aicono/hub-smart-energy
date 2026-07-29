@@ -11,6 +11,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { CreditCard, Download, RotateCcw, PlayCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useTenant } from "@/hooks/useTenant";
+import { getActiveSupportTenantId } from "@/lib/supportView";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import * as XLSX from "@e965/xlsx";
@@ -46,7 +48,8 @@ const fmtEur = (cents: number, currency = "EUR") =>
 const fmtDe = (n?: number | null, digits = 2) =>
   n == null ? "—" : n.toLocaleString("de-DE", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
-export default function ChargingAdHocTransactions() {
+export function AdHocTransactionsContent({ embedded = false }: { embedded?: boolean } = {}) {
+  const { tenant } = useTenant();
   const [state, setState] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -85,8 +88,9 @@ export default function ChargingAdHocTransactions() {
   const { data: events = [] } = useAdhocSessionEvents(selectedId);
 
   const callOrchestrator = async (action: string, payload: Record<string, any>) => {
+    const tenantId = tenant?.id ?? getActiveSupportTenantId();
     const { data, error } = await supabase.functions.invoke("adhoc-charge-orchestrator", {
-      body: { action, ...payload },
+      body: { action, ...payload, ...(tenantId ? { tenant_id: tenantId } : {}) },
     });
     if (error) {
       toast({ title: "Fehler", description: error.message, variant: "destructive" });
@@ -143,18 +147,22 @@ export default function ChargingAdHocTransactions() {
     XLSX.writeFile(wb, `adhoc-transaktionen-${format(new Date(), "yyyyMMdd")}.xlsx`);
   };
 
-  return (
-    <AppLayout>
+  const body = (
+    <>
       <div className="p-4 md:p-8 space-y-6 max-w-full overflow-x-hidden">
+
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-              <CreditCard className="h-5 w-5" /> Ad-Hoc Transaktionen
-            </h1>
+            {!embedded && (
+              <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+                <CreditCard className="h-5 w-5" /> Ad-Hoc Transaktionen
+              </h1>
+            )}
             <p className="text-muted-foreground text-sm mt-0.5">
               Kartenzahlungen an Ladepunkten inkl. Preauth, Capture, Refund und Belege.
             </p>
           </div>
+
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={startMockSession}>
               <PlayCircle className="h-4 w-4 mr-1" /> Mock-Session
@@ -297,6 +305,14 @@ export default function ChargingAdHocTransactions() {
           </SheetContent>
         </Sheet>
       </div>
-    </AppLayout>
+    </>
   );
+
+  if (embedded) return body;
+  return <AppLayout>{body}</AppLayout>;
 }
+
+export default function ChargingAdHocTransactions() {
+  return <AdHocTransactionsContent />;
+}
+

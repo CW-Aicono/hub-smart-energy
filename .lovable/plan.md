@@ -1,65 +1,52 @@
-## Ziel
+## Analyse-Studio als eigenständiges Modul
 
-`sensor_readings_raw` dauerhaft entlasten, damit der Backend-Notfallmodus wieder ausgeschaltet werden kann, ohne dass die tägliche Überlastung zurückkommt.
+Das Analytics Studio wird zu einem vollwertigen, kostenpflichtigen Modul – analog zu Ladeinfrastruktur, Aufgabenverwaltung etc. – mit Freischaltung pro Tenant im Super-Admin.
 
-## Aktueller Stand (verifiziert)
+### 1. Modul-Registrierung
 
-- `sensor_readings_raw` hat ca. 300k Zeilen, Retention laut UI 7 Tage.
-- Notfallmodus aktiv: `backend_emergency_mode = true`, `sensor_history_enabled = false`.
-- Aggregator (`sensor-history-aggregator`) läuft datenbanknah via RPC `aggregate_sensor_readings_5min`, wird aktuell durch Notfallmodus geblockt.
-- Hauptlastquellen laut `slow_queries`: globale Zeitfensterscans auf `sensor_readings_raw` und häufige Inserts.
+`**src/hooks/useTenantModules.tsx**` – neuen Eintrag in `ALL_MODULES` ergänzen:
 
-## Maßnahmen
+```
+{ code: "analytics_studio", label: "Analyse-Studio" }
+```
 
-### 1. Schreiblast an der Quelle senken
-- Delta-Guard als **DB-Trigger** auf `sensor_readings_raw`: identische Werte innerhalb X Sekunden je `meter_id` verwerfen (nicht nur im Edge-Speicher).
-- Minimaler Sample-Abstand pro Sensor (z.B. 30s) serverseitig erzwingen.
-- Sensor-Rohwerte werden nur noch geschrieben, wenn ein 5-Min-Bucket noch nicht „geschlossen“ ist — sonst direkt in `sensor_readings_5min`.
+`**src/hooks/useModuleGuard.tsx**` – Route + Nav-Eintrag registrieren:
 
-### 2. Retention drastisch verkürzen
-- Rohdaten von 7 Tagen auf **48 Stunden** reduzieren. Alles ältere wird durch 5-Min-Buckets abgedeckt.
-- `cleanup_sensor_readings_raw` stündlich statt täglich laufen lassen, in kleinen Batches (`DELETE ... LIMIT`) damit kein Long-Lock entsteht.
-- Nach Bereinigung `VACUUM (ANALYZE)` einmalig, danach Autovacuum-Schwellen für die Tabelle enger stellen.
+```
+"/analytics-studio": "analytics_studio"
+```
 
-### 3. Aggregator inkrementell und selbstheilend
-- Wasserzeichen `sensor_aggregator_last_run_at` in `system_settings`, Aggregator verarbeitet nur `(last_run, now())`.
-- Harte Laufzeitgrenze (z.B. 15s) in der RPC — bei Überschreitung sauber abbrechen und Wasserzeichen nicht vorrücken.
-- Kein globales 15-Min-Fenster mehr bei jedem Lauf.
+in `ROUTE_MODULE_MAP` und `NAV_MODULE_MAP`.
 
-### 4. UI-/Super-Admin-Abfragen entschärfen
-- Alle verbleibenden Live-Counts auf `sensor_readings_raw` auf `pg_class.reltuples` (estimated) umstellen.
-- Sensor-Charts strikt: immer `meter_id` + Zeitfenster + `LIMIT`. Keine tenant-weiten Reads mehr.
-- Bei Zeiträumen > 24h automatisch auf `sensor_readings_5min` umschalten statt Rohdaten zu lesen.
+### 2. Route absichern
 
-### 5. Indexe gezielt prüfen (nicht blind hinzufügen)
-- `EXPLAIN (ANALYZE, BUFFERS)` für die Top-3-Queries aus `slow_queries`.
-- Nur wenn der Plan zeigt, dass ein Index fehlt oder nicht genutzt wird, einen ergänzen. Ziel: kein Seq Scan auf `sensor_readings_raw` mehr.
+In `src/App.tsx` (oder wo die Route definiert ist) den `<AnalyticsStudio />` in `<ModuleGuard>` wickeln – identisch zum Muster der anderen Modul-Routen. Der Sidebar-Link wird durch `isNavItemVisible` automatisch ausgeblendet, sobald das Modul deaktiviert ist.
 
-### 6. Sicherer Wiederanlauf
-Reihenfolge zum Verlassen des Notfallmodus:
-1. Retention verkürzen + Cleanup laufen lassen, Tabellengröße prüfen.
-2. Delta-Guard-Trigger aktiv, Aggregator inkrementell.
-3. `sensor_history_enabled = true` (Schreiben wieder an), Aggregator läuft, 30 Min beobachten (`db_health`, `slow_queries`, Edge-Logs).
-4. Wenn stabil: `backend_emergency_mode = false`.
-5. OCPP-Rohtelegramm-Logging bleibt vorerst aus, wird separat entschieden.
+### 3. Preis-Konfiguration
 
-### 7. Frühwarnung gegen Rückfall
-- Super-Admin Health-Karte ergänzen: Zeilenanzahl (estimated), Aggregator-Laufzeit, letzte Cleanup-Ausführung, aktive Kill-Switches.
-- Alerts: Aggregator > 20s, DB-Statement-Timeouts > 0, Tabellengröße > Schwellwert.
+Migration für `module_prices`: einen Datensatz für `analytics_studio` mit Default-Preisen einfügen (Standard, Industrie, Partner, Partner-Industrie – analog zu bestehenden Modulen). Vorschlag: **29 €/Monat Standard**, **49 €/Monat Industrie**, Partner-Preise als Nullwerte (vom Super-Admin einstellbar). Preise sind später in `SuperAdminModulePricing` frei anpassbar.
 
-## Nicht enthalten
+### 4. Default-Freischaltung
 
-- Compute-Upgrade — erst prüfen, nachdem obige Schritte umgesetzt und `db_health` neu gemessen wurde.
-- OCPP-Persistent-Server: separat, ist bereits gehärtet (8s Timeout, Fire-and-forget).
+Keine automatische Aktivierung. Bestehende Nutzer, die das Studio derzeit sehen, verlieren den Zugriff, bis der Super-Admin es freischaltet (konsistent mit "strict mode" – sobald `tenant_modules`-Einträge existieren, ist alles Nicht-Aufgeführte gesperrt).
 
-## Hetzner-Hinweis
+**Optional** (bitte bestätigen): Für alle bestehenden Tenants, die schon `analytics_workspaces` angelegt haben, per Migration `tenant_modules(analytics_studio, is_enabled=true)` einfügen, damit aktive Nutzer nicht plötzlich ausgesperrt werden.
 
-⚠️ **Hetzner-Supabase**: Änderungen an `cleanup_sensor_readings_raw` (pg_cron) und ggf. neue Postgres-Trigger müssen vom Hetzner-Programmierer auf der self-hosted Supabase einmalig eingespielt werden. Edge Functions (`sensor-history-aggregator`) ebenfalls redeployen.
+### 5. Super-Admin UI
 
-## Verifikation nach Umsetzung
+Keine Änderungen nötig – `SuperAdminLicenses` und `SuperAdminModulePricing` iterieren über `ALL_MODULES` und `module_prices` und rendern den neuen Eintrag automatisch.
 
-- `sensor_readings_raw` Zeilenzahl deutlich kleiner und stabil.
-- `slow_queries`: keine globalen Rohdaten-Zeitscans mehr in den Top 10.
-- `db_health`: keine Statement-Timeouts, Connection-Sättigung < 50 %.
-- Sensor-Charts (24h, 7d, 30d) laden weiterhin korrekt.
-- Notfallmodus ist aus und bleibt es über 24h.
+### Technische Details
+
+- Kein DB-Schema-Change an `analytics_workspaces` etc. – nur zwei neue Datensätze (`module_prices` + optional `tenant_modules` Backfill).
+- I18n-Label für `analytics_studio` in DE/EN/ES/NL ergänzen.
+
+### Offene Frage
+
+Sollen bestehende Tenants mit vorhandenen Analytics-Workspaces automatisch freigeschaltet werden (Punkt 4 „Optional"), oder soll jeder Tenant aktiv vom Super-Admin freigegeben werden?  
+  
+Antwort: Ja, bestehende Tenants sollen für das Analyse-Studio freigeschaltet werden  
+  
+  
+  
+  

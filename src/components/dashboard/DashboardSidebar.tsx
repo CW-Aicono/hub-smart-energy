@@ -146,6 +146,7 @@ const DashboardSidebar = () => {
       children: [
         { to: "/live-values", icon: Activity, labelKey: "nav.liveValues" as TranslationKey },
         { to: "/meters", icon: Gauge, labelKey: "nav.meters" as TranslationKey },
+        { to: "/analytics-studio", icon: BarChart3, labelKey: "nav.analyticsStudio" as TranslationKey },
         { to: "/energy-data", icon: Download, labelKey: "nav.exports" as TranslationKey },
         { to: "/energy-report", icon: FileText, labelKey: "nav.energyReport" as TranslationKey },
       ]
@@ -158,7 +159,6 @@ const DashboardSidebar = () => {
         { to: "/charging/points", icon: PlugZap, labelKey: "nav.chargingPoints" as TranslationKey },
         { to: "/charging/users", icon: Users, labelKey: "nav.chargingUsers" as TranslationKey },
         { to: "/charging/billing", icon: Receipt, labelKey: "nav.chargingBilling" as TranslationKey },
-        { to: "/charging/transactions", icon: CreditCard, labelKey: "nav.chargingTransactions" as TranslationKey },
         { to: "/charging/reporting", icon: BarChart3, labelKey: "nav.chargingReporting" as TranslationKey },
         { to: "/charging/settings", icon: Settings, labelKey: "nav.chargingSettings" as TranslationKey },
       ]
