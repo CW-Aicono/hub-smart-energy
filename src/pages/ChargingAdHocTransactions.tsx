@@ -302,6 +302,14 @@ export function AdHocTransactionsContent({ embedded = false }: { embedded?: bool
           </SheetContent>
         </Sheet>
       </div>
-    </AppLayout>
+    </>
   );
+
+  if (embedded) return body;
+  return <AppLayout>{body}</AppLayout>;
 }
+
+export default function ChargingAdHocTransactions() {
+  return <AdHocTransactionsContent />;
+}
+
