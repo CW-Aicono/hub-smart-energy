@@ -125,9 +125,9 @@ export function AnalyticsSidebar({ onDragStart }: AnalyticsSidebarProps) {
                               )}
                             >
                               <Icon className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground/60" />
-                              <span className="flex-1 truncate">{child.label}</span>
+                              <span className="flex-1 min-w-0 truncate" title={child.label}>{child.label}</span>
                               {child.unit && (
-                                <span className="text-[10px] text-sidebar-foreground/60">{child.unit}</span>
+                                <span className="shrink-0 text-[10px] text-sidebar-foreground/60 whitespace-nowrap">{child.unit}</span>
                               )}
                             </div>
                           );
