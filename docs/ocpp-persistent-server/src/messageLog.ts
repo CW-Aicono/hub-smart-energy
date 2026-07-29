@@ -1,5 +1,6 @@
 import { log } from "./logger";
 import { logOcppFramesBatch, type OcppLogBatchEntry } from "./backendApi";
+import { config } from "./config";
 
 // ---------------------------------------------------------------------------
 // Schreiblast-Optimierung für ocpp_message_log:
@@ -85,6 +86,7 @@ export function recordOcppFrame(
   direction: "incoming" | "outgoing",
   raw: string,
 ): void {
+  if (!config.ocppFrameLoggingEnabled) return;
   const { messageId, kind } = tryParseMessageId(raw);
   const now = new Date().toISOString();
 

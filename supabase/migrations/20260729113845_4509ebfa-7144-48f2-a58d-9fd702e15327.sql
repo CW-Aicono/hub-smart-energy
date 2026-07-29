@@ -1,0 +1,2 @@
+GRANT EXECUTE ON FUNCTION public.collect_db_metrics() TO service_role;
+GRANT EXECUTE ON FUNCTION public.aggregate_sensor_readings_5min(timestamp with time zone, timestamp with time zone, integer) TO service_role;
