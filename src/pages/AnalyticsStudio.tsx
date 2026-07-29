@@ -1,13 +1,18 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { AnalyticsSidebar } from "@/components/analytics/AnalyticsSidebar";
 import { AnalyticsCanvas } from "@/components/analytics/AnalyticsCanvas";
 import { TimeRangeToolbar } from "@/components/analytics/TimeRangeToolbar";
 import { WorkspaceToolbar } from "@/components/analytics/WorkspaceToolbar";
+import { StoryManagerDialog } from "@/components/analytics/story/StoryManagerDialog";
+import { StoryPresenter } from "@/components/analytics/story/StoryPresenter";
+import { extractStory, withStory, StoryStep } from "@/components/analytics/story/storyTypes";
 import { useAnalysisWorkspaces, AnalysisWorkspace, AnalysisBlock, WorkspaceInput } from "@/hooks/useAnalysisWorkspaces";
 import { AnalyticsPeriod } from "@/hooks/useAnalyticsData";
 import { DeviceTreeNode } from "@/hooks/useDeviceTree";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Clapperboard, Play } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 
@@ -29,24 +34,35 @@ export default function AnalyticsStudio() {
   const { workspaces, isLoading, create, update, remove } = useAnalysisWorkspaces();
   const [activeWorkspace, setActiveWorkspace] = useState<AnalysisWorkspace | null>(null);
   const [blocks, setBlocks] = useState<AnalysisBlock[]>([]);
+  const [layout, setLayout] = useState<Record<string, unknown>>({});
   const [period, setPeriod] = useState<AnalyticsPeriod>("day");
   const [offset, setOffset] = useState(0);
   const [editMode, setEditMode] = useState(false);
   const [draggedNode, setDraggedNode] = useState<DeviceTreeNode | null>(null);
+  const [storyOpen, setStoryOpen] = useState(false);
+  const [presenting, setPresenting] = useState<{ startIndex: number } | null>(null);
 
   // Load active workspace blocks when selected
   useEffect(() => {
     if (activeWorkspace) {
       setBlocks((activeWorkspace.blocks as AnalysisBlock[]) ?? []);
+      setLayout((activeWorkspace.layout as Record<string, unknown>) ?? {});
     } else {
       setBlocks([]);
+      setLayout({});
     }
   }, [activeWorkspace]);
+
+  const story = useMemo(() => extractStory(layout), [layout]);
+
+  const setSteps = (steps: StoryStep[]) => {
+    setLayout((prev) => withStory(prev, { steps }));
+  };
 
   const currentState: WorkspaceInput = {
     name: activeWorkspace?.name ?? "Neue Analyse",
     description: activeWorkspace?.description ?? undefined,
-    layout: activeWorkspace?.layout ?? {},
+    layout,
     blocks,
     is_shared: activeWorkspace?.is_shared ?? false,
   };
