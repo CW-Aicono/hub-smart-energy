@@ -57,6 +57,14 @@ export interface AutomationLastError {
   executed_at: string;
   status: string;
   trigger_type: string;
+  execution_source?: string | null;
+}
+
+export interface AutomationLastSuccess {
+  automation_id: string;
+  executed_at: string;
+  execution_source: string | null;
+  trigger_type: string;
 }
 
 const isLocationScopedAutomation = (automation: {
