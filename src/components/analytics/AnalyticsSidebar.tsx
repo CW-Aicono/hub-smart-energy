@@ -72,7 +72,7 @@ export function AnalyticsSidebar({ onDragStart }: AnalyticsSidebarProps) {
           />
         </div>
       </div>
-      <ScrollArea className="flex-1 p-3">
+      <ScrollArea className="flex-1 min-h-0 pl-3 pr-4 py-3 [&>[data-radix-scroll-area-viewport]>div]:!block">
         {loading ? (
           <div className="text-xs text-muted-foreground p-2">Lade Standorte...</div>
         ) : visibleLocations.length === 0 ? (
