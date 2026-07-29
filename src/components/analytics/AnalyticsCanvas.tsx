@@ -159,6 +159,9 @@ export function AnalyticsCanvas({
               <Button variant="outline" size="sm" className="gap-2" onClick={() => addBlock("formula")}>
                 <Sigma className="h-4 w-4" /> Formel
               </Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => addBlock("ai_insight")}>
+                <Sparkles className="h-4 w-4" /> KI-Erklärung
+              </Button>
             </>
           )}
         </div>
