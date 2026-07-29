@@ -10,6 +10,7 @@ import { HeatmapBlock } from "./blocks/HeatmapBlock";
 import { CorrelationBlock } from "./blocks/CorrelationBlock";
 import { FormulaBlock } from "./blocks/FormulaBlock";
 import { AiInsightBlock } from "./blocks/AiInsightBlock";
+import { SimulationBlock } from "./blocks/SimulationBlock";
 import { cn } from "@/lib/utils";
 
 interface AnalysisBlockProps {
@@ -39,6 +40,8 @@ export function AnalysisBlockCard({ block, period, offset, isEditMode, onRemove,
         return <CorrelationBlock block={block} period={period} offset={offset} onConfigChange={onConfigChange} />;
       case "formula":
         return <FormulaBlock block={block} period={period} offset={offset} onConfigChange={onConfigChange} />;
+      case "simulation":
+        return <SimulationBlock block={block} period={period} offset={offset} onConfigChange={onConfigChange} />;
       case "ai_insight":
         return (
           <AiInsightBlock

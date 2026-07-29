@@ -3,7 +3,7 @@ import { AnalysisBlock as AnalysisBlockType } from "@/hooks/useAnalysisWorkspace
 import { AnalyticsPeriod } from "@/hooks/useAnalyticsData";
 import { AnalysisBlockCard } from "./AnalysisBlock";
 import { Button } from "@/components/ui/button";
-import { Plus, LayoutGrid, Pencil, LineChart, BarChart3, Table2, Flame, ScatterChart, Sigma, Sparkles } from "lucide-react";
+import { Plus, LayoutGrid, Pencil, LineChart, BarChart3, Table2, Flame, ScatterChart, Sigma, Sparkles, FlaskConical } from "lucide-react";
 import { DeviceTreeNode } from "@/hooks/useDeviceTree";
 import { cn } from "@/lib/utils";
 
@@ -58,11 +58,13 @@ export function AnalyticsCanvas({
       correlation: "Korrelation",
       formula: "Formel",
       ai_insight: "KI-Erklärung",
+      simulation: "Was-wäre-wenn",
     };
     const sizeMap: Record<string, { w: number; h: number }> = {
       kpi: { w: 3, h: 1 },
       heatmap: { w: 6, h: 2 },
       ai_insight: { w: 6, h: 3 },
+      simulation: { w: 6, h: 3 },
     };
     const size = sizeMap[type] ?? { w: 6, h: 2 };
     const block: AnalysisBlockType = {
@@ -158,6 +160,9 @@ export function AnalyticsCanvas({
               </Button>
               <Button variant="outline" size="sm" className="gap-2" onClick={() => addBlock("formula")}>
                 <Sigma className="h-4 w-4" /> Formel
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => addBlock("simulation")}>
+                <FlaskConical className="h-4 w-4" /> Was-wäre-wenn
               </Button>
               <Button variant="outline" size="sm" className="gap-2" onClick={() => addBlock("ai_insight")}>
                 <Sparkles className="h-4 w-4" /> KI-Erklärung
