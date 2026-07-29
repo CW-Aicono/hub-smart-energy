@@ -108,11 +108,11 @@ export default function AnalyticsStudio() {
   }, []);
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-background">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-background">
       <DashboardSidebar />
         <AnalyticsSidebar onDragStart={handleDragStart} />
-      <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <header className="h-14 border-b flex items-center justify-between px-4 bg-card/30 shrink-0">
+      <main className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+        <header className="h-14 border-b flex items-center justify-between px-4 bg-card/30 shrink-0 sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <h1 className="text-sm font-semibold">Analytics Studio</h1>
             <TimeRangeToolbar period={period} offset={offset} onPeriodChange={setPeriod} onOffsetChange={setOffset} />
