@@ -68,7 +68,7 @@ export function AnalyticsSidebar({ onDragStart }: AnalyticsSidebarProps) {
             placeholder="Standort oder Gerät suchen..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-9 text-sm"
+            className="pl-9 h-9 text-sm bg-sidebar-accent border-sidebar-border text-sidebar-foreground placeholder:text-sidebar-foreground/50"
           />
         </div>
       </div>
