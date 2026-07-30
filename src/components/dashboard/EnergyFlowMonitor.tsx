@@ -1986,15 +1986,24 @@ export function MeterDetailDialog({
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">
-              {isSensor ? "Momentanwert" : `${sumLabel}${stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}`}
+              {isSensor
+                ? "Momentanwert"
+                : `${sumLabel}${
+                    totalImport > 0 && totalExport > 0
+                      ? " (Bezug/Einspeisung)"
+                      : totalExport > 0
+                        ? " (Einspeisung)"
+                        : ""
+                  }`}
             </div>
+
 
             <div className="text-base font-semibold tabular-nums">
               {isSensor
                 ? (effectiveSensorLatest?.value != null
                     ? `${fmtDeNum(Number(effectiveSensorLatest.value))}${displayUnit ? " " + displayUnit : ""}`
                     : "–")
-                : (stats?.bidirectional
+                : (totalImport > 0 && totalExport > 0
                     ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
                     : `${fmtDeNum(totalImport - totalExport)} ${energyUnit}`)}
             </div>
@@ -2210,7 +2219,7 @@ export function MeterDetailDialog({
                   >
                     <AxisLabel value={`${sumLabel} (${energyUnit})`} angle={-90} position="insideLeft" style={{ fontSize: 11, textAnchor: "middle" }} />
                   </YAxis>
-                  {stats?.bidirectional && <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />}
+                  {totalImport > 0 && totalExport > 0 && <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />}
                   <RTooltip
                     contentStyle={{ fontSize: 11 }}
                     labelFormatter={(v) => new Date(v as number).toLocaleString("de-DE")}
@@ -2225,8 +2234,8 @@ export function MeterDetailDialog({
                     wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
                     formatter={(v) => (v === "import" ? "Bezug" : "Einspeisung")}
                   />
-                  <Bar dataKey="import" fill={node.color} />
-                  {stats?.bidirectional && (
+                  {(totalImport > 0 || totalExport <= 0) && <Bar dataKey="import" fill={node.color} />}
+                  {totalExport > 0 && (
                     <Bar dataKey="exportNeg" fill="hsl(152 55% 42%)" />
                   )}
                 </BarChart>
