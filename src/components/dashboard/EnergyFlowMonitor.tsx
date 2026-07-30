@@ -2225,8 +2225,8 @@ export function MeterDetailDialog({
                     wrapperStyle={{ fontSize: 11, paddingBottom: 8 }}
                     formatter={(v) => (v === "import" ? "Bezug" : "Einspeisung")}
                   />
-                  <Bar dataKey="import" fill={node.color} />
-                  {stats?.bidirectional && (
+                  {(totalImport > 0 || totalExport <= 0) && <Bar dataKey="import" fill={node.color} />}
+                  {totalExport > 0 && (
                     <Bar dataKey="exportNeg" fill="hsl(152 55% 42%)" />
                   )}
                 </BarChart>
