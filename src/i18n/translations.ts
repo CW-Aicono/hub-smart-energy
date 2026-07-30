@@ -6030,6 +6030,28 @@ export const translations = {
   "automation.category.hvac": { de: "Lüftung/Klima", en: "HVAC", es: "Ventilación/Clima", nl: "Ventilatie/Klimaat" },
   "automation.category.peak_shaving": { de: "Lastmanagement", en: "Peak shaving", es: "Gestión de carga", nl: "Lastbeheer" },
   "automation.category.custom": { de: "Sonstige", en: "Other", es: "Otros", nl: "Overige" },
+
+  // Fehlermeldungen (verständlich, mehrsprachig)
+  "error.network.title": { de: "Keine Verbindung zum Server", en: "No connection to the server", es: "Sin conexión con el servidor", nl: "Geen verbinding met de server" },
+  "error.network.desc": { de: "Die Daten konnten nicht geladen werden. Bitte prüfe deine Internetverbindung und versuche es erneut.", en: "The data could not be loaded. Please check your internet connection and try again.", es: "No se pudieron cargar los datos. Comprueba tu conexión a internet e inténtalo de nuevo.", nl: "De gegevens konden niet worden geladen. Controleer je internetverbinding en probeer het opnieuw." },
+  "error.timeout.title": { de: "Die Anfrage hat zu lange gedauert", en: "The request took too long", es: "La solicitud tardó demasiado", nl: "De aanvraag duurde te lang" },
+  "error.timeout.desc": { de: "Der Server hat nicht rechtzeitig geantwortet. Ein erneuter Versuch klappt meist sofort.", en: "The server did not respond in time. A retry usually works right away.", es: "El servidor no respondió a tiempo. Reintentar suele funcionar de inmediato.", nl: "De server reageerde niet op tijd. Opnieuw proberen werkt meestal direct." },
+  "error.unavailable.title": { de: "Dienst kurzzeitig nicht erreichbar", en: "Service temporarily unavailable", es: "Servicio no disponible temporalmente", nl: "Dienst tijdelijk niet bereikbaar" },
+  "error.unavailable.desc": { de: "Der Dienst ist gerade überlastet oder startet neu. Bitte in wenigen Augenblicken erneut versuchen.", en: "The service is currently busy or restarting. Please try again in a few moments.", es: "El servicio está ocupado o reiniciándose. Inténtalo de nuevo en unos momentos.", nl: "De dienst is bezig of start opnieuw op. Probeer het over enkele ogenblikken opnieuw." },
+  "error.session.title": { de: "Sitzung abgelaufen", en: "Session expired", es: "Sesión caducada", nl: "Sessie verlopen" },
+  "error.session.desc": { de: "Bitte melde dich erneut an, um fortzufahren.", en: "Please sign in again to continue.", es: "Vuelve a iniciar sesión para continuar.", nl: "Log opnieuw in om verder te gaan." },
+  "error.permission.title": { de: "Keine Berechtigung", en: "No permission", es: "Sin permiso", nl: "Geen rechten" },
+  "error.permission.desc": { de: "Für diese Daten fehlen dir die nötigen Rechte. Wende dich an deinen Administrator.", en: "You do not have the required rights for this data. Please contact your administrator.", es: "No tienes los permisos necesarios para estos datos. Contacta con tu administrador.", nl: "Je hebt niet de benodigde rechten voor deze gegevens. Neem contact op met je beheerder." },
+  "error.notFound.title": { de: "Nicht gefunden", en: "Not found", es: "No encontrado", nl: "Niet gevonden" },
+  "error.notFound.desc": { de: "Der angeforderte Eintrag existiert nicht (mehr).", en: "The requested entry does not (or no longer) exist.", es: "La entrada solicitada ya no existe.", nl: "Het opgevraagde item bestaat niet (meer)." },
+  "error.unknown.title": { de: "Ein unerwarteter Fehler ist aufgetreten", en: "An unexpected error occurred", es: "Se produjo un error inesperado", nl: "Er is een onverwachte fout opgetreden" },
+  "error.unknown.desc": { de: "Bitte versuche es erneut. Bleibt das Problem bestehen, wende dich mit dem Fehlercode an den Support.", en: "Please try again. If the problem persists, contact support with the error code.", es: "Inténtalo de nuevo. Si el problema persiste, contacta con soporte indicando el código de error.", nl: "Probeer het opnieuw. Blijft het probleem bestaan, neem dan contact op met support met de foutcode." },
+  "error.action.retry": { de: "Erneut versuchen", en: "Try again", es: "Reintentar", nl: "Opnieuw proberen" },
+  "error.action.reload": { de: "Seite neu laden", en: "Reload page", es: "Recargar página", nl: "Pagina herladen" },
+  "error.code.label": { de: "Fehlercode", en: "Error code", es: "Código de error", nl: "Foutcode" },
+  "error.offline.hint": { de: "Dein Gerät ist offline.", en: "Your device is offline.", es: "Tu dispositivo está sin conexión.", nl: "Je apparaat is offline." },
+  "error.offline.banner": { de: "Keine Internetverbindung – Daten werden nicht aktualisiert.", en: "No internet connection – data is not being updated.", es: "Sin conexión a internet: los datos no se actualizan.", nl: "Geen internetverbinding – gegevens worden niet bijgewerkt." },
 } as const;
+
 
 export type TranslationKey = keyof typeof translations;
