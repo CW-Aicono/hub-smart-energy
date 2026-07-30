@@ -2003,7 +2003,7 @@ export function MeterDetailDialog({
                 ? (effectiveSensorLatest?.value != null
                     ? `${fmtDeNum(Number(effectiveSensorLatest.value))}${displayUnit ? " " + displayUnit : ""}`
                     : "–")
-                : (stats?.bidirectional
+                : (totalImport > 0 && totalExport > 0
                     ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
                     : `${fmtDeNum(totalImport - totalExport)} ${energyUnit}`)}
             </div>
