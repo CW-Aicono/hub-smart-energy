@@ -1,32 +1,48 @@
-## Befund (verifiziert)
+## Frage 1 — Läuft der temporäre Cron-Job noch?
 
-- Letzter Eintrag in `ocpp_message_log`: **29.07.2026, 10:09:56 UTC = 12:09 Uhr lokal**. Danach 0 Zeilen.
-- Die Wallboxen sind **nicht** das Problem: `charge_points` zeigt aktuelle Heartbeats (Ost 1 / MEN138720200074a um 22:04 Uhr, 0311303102122250589 um 22:03 Uhr). Der OCPP-Server läuft und schreibt weiter in andere Tabellen.
-- Der Aufräum-Cronjob (`cleanup-old-ocpp-logs`, 03:00 Uhr) kann einen Stopp um 12:09 nicht erklären.
+Ja, genau einer: **`ems-backfill-power-hourly`** (alle 10 Min, `3-59/10 * * * *`, ruft `backfill_meter_power_hourly(3)`). Er füllt die Stunden-Rollup-Tabelle rückwärts mit Altdaten.
 
-Es gibt **zwei Schalter**, die das Frame-Logging abschalten:
+Stand jetzt (verifiziert):
+- Stunden-Tabelle reicht zurück bis **06.06.2026**, die 5-Minuten-Daten bis **16.02.2026**.
+- Die letzten 8 Läufe waren alle erfolgreich („1 row").
 
-1. **Server-seitig (Hetzner):** `OCPP_FRAME_LOGGING_ENABLED` in der `.env` des OCPP-Containers. Default im Code ist `false`; ist er aus, sendet der Server gar keine Log-Batches (`backendApi.ts:152` bricht vorher ab).
-2. **Backend-seitig:** Edge Function `ocpp-persistent-api` prüft `system_settings.ocpp_message_logging_enabled` und `backend_emergency_mode`. Aktueller DB-Stand: Logging = `true`, Notfallmodus = `false` (beide zuletzt 13:48 UTC gesetzt).
+Er ist also **noch nicht fertig** — es fehlen rund 110 Tage, bei 3 Tagen pro Lauf alle 10 Minuten ca. **6 Stunden Restlaufzeit**. Bitte noch laufen lassen; ich lösche ihn, sobald die Stunden-Tabelle bis 16.02.2026 zurückreicht. Der Dauerbetriebs-Job `ems-rollup-power-hourly` bleibt danach bestehen (der ist kein Temp-Job).
 
-Da der Backend-Schalter seit 13:48 UTC wieder offen ist, aber trotzdem keine Zeile ankommt, liegt die Sperre **mit hoher Wahrscheinlichkeit vor dem Backend** — also am Server-Flag bzw. an einem Container-Neustart um ~12:07 mit alter/ohne `.env`-Zeile. Das ist die naheliegendste, aber noch **nicht bewiesene** Ursache; Schritt 1 des Plans beweist oder widerlegt sie.
+## Frage 2 — Kommt der große Umbau beim Hetzner-Deploy automatisch mit?
 
-## Plan
+Grundsätzlich ja: der komplette Umbau liegt als Migrationsdateien im Repo (Stunden-Rollup-Tabelle, `rollup_meter_power_hourly`, `get_power_series_auto`, partitionierte Tabelle + 12 Monats-Partitionen, RLS, atomarer Swap). Diese Dateien werden von `scripts/apply-migrations.sh` auf Hetzner ausgeführt.
 
-**Schritt 1 — Ursache beweisen (kein Rätselraten)**
-- Testaufruf der Edge Function `ocpp-persistent-api` mit `action=log-messages-batch` und einem Dummy-Frame. Kommt `{inserted: 1}` zurück und erscheint die Zeile in der DB, ist das Backend sauber → Ursache liegt auf dem Hetzner-Container.
-- Antwortet die Funktion `skipped: "ocpp_message_logging_disabled"`, ist die Ursache das Settings-/Notfall-Gate (dann Cache-TTL bzw. Wertformat prüfen).
-- Zusätzlich die Edge-Logs der Funktion rund um 10:00–10:15 UTC prüfen (Fehler „settings lookup failed" setzt den Cache auf Notfallmodus).
+**Aber: so wie es jetzt ist, würde ich noch nicht deployen.** Drei konkrete Stolpersteine:
 
-**Schritt 2 — Fix je nach Ergebnis**
-- Fall A (Server-Flag aus): in `docs/ocpp-persistent-server/.env` auf dem Hetzner-Host `OCPP_FRAME_LOGGING_ENABLED=true` setzen und den Container neu starten. Dazu liefere ich eine laienverständliche Schritt-für-Schritt-Anleitung als Markdown-Datei im Ordner des OCPP-Servers.
-- Fall B (Backend-Gate): Settings-Wert korrigieren bzw. das Fail-Closed-Verhalten des Settings-Lookups entschärfen (kurzer Retry statt sofortigem „Logging aus"), damit ein einzelner DB-Timeout nicht stundenlang alles Logging abschaltet.
+1. **Die alte kaputte Migration blockiert weiterhin.** Das Löschen des Workflow-Runs ändert nichts — `20260730052657_…sql` (Cron-Staffelung mit festen Job-Nummern) liegt weiter im Repo und wird beim nächsten Deploy erneut versucht und scheitert. Sie muss einmalig auf dem Server als „erledigt" eingetragen werden (Befehl unten).
+2. **Der Swap kopiert auf Hetzner die ganze Tabelle in einer Transaktion.** In Lovable haben wir die ~1,9 Mio Zeilen vorher in Ruhe in Batches kopiert; auf Hetzner ist die Partitionstabelle leer, deshalb kopiert die Swap-Migration alles auf einen Schlag — mit exklusiver Sperre auf der Tabelle. Das ist der eigentliche Risiko-Punkt: je nach Datenmenge mehrere Minuten Schreibsperre, und wenn das Statement-Timeout zuschlägt, rollt der Deploy zurück.
+3. **Partitionen decken nur 01.02.2026 – 31.01.2027 ab.** Gibt es auf Hetzner auch nur eine Zeile mit älterem Zeitstempel, bricht der Kopiervorgang mit „no partition of relation found" ab.
 
-**Schritt 3 — Damit das nicht mehr unbemerkt passiert**
-- `/health` des OCPP-Servers um `frameLogging: true|false` erweitern.
-- In der UI (OCPP-Log-Ansicht der Ladepunkt-Detailseite) ein deutliches Banner anzeigen, wenn seit > 15 Minuten keine Zeile eingegangen ist, mit Hinweis „Frame-Logging ist deaktiviert" statt einer nur leeren Liste.
+## Plan für den sicheren Hetzner-Deploy
+
+**Schritt 0 — Vorprüfung auf dem Server (nur lesen, ändert nichts)**
+Ältesten Zeitstempel und Zeilenzahl der Tabelle `meter_power_readings_5min` auf Hetzner auslesen. Damit weiß ich, ob eine Partition für ältere Daten fehlt und wie lange der Kopiervorgang dauert. Ich liefere den fertigen Kopier-Befehl.
+
+**Schritt 1 — Blockade lösen**
+Die gescheiterte Migration einmalig als erledigt eintragen:
+```bash
+ssh root@91.99.170.143
+docker exec -i supabase-db psql -U supabase_admin -d postgres -c "INSERT INTO public._deploy_migrations (filename) VALUES ('20260730052657_88a6adac-b016-4b61-9c91-221bb2a664f9.sql') ON CONFLICT DO NOTHING;"
+exit
+```
+
+**Schritt 2 — Migrationen für Hetzner robust machen**
+- Ergänzende Migration, die Partitionen automatisch für den gesamten vorhandenen Datenbereich anlegt (kein fester Feb-2026-Start mehr) und künftige Monate rollierend erzeugt.
+- Die Swap-Migration so absichern, dass sie auf einer leeren Partitionstabelle in Blöcken kopiert statt in einem einzigen Riesen-Statement, mit ausreichend gesetztem Statement-Timeout — und dass sie nichts tut, wenn der Swap bereits erfolgt ist (idempotent, wichtig für Lovable, wo er schon gelaufen ist).
+
+**Schritt 3 — Deploy im Nachtfenster**
+Go-Live-Workflow starten, `LIVE` eintippen. Das Deploy-Skript zieht vorher automatisch ein Datenbank-Backup und rollt bei Fehlern selbstständig zurück.
+
+**Schritt 4 — Nachkontrolle**
+Auf Hetzner prüfen: Zeilenzahl vor/nach identisch, Tagesverlauf in 5-Minuten-Auflösung im Frontend sichtbar, `get_power_series_auto` liefert Daten, danach `VACUUM (ANALYZE)`.
 
 ## Technische Details
 
-- Betroffene Dateien: `docs/ocpp-persistent-server/src/config.ts`, `src/index.ts` (Health), `supabase/functions/ocpp-persistent-api/index.ts` (Settings-Fallback), OCPP-Log-Komponente im Frontend, neue Update-Anleitung unter `docs/ocpp-persistent-server/`.
-- Keine Schema-Änderung nötig; die Partitionierung/Rollups von gestern sind nicht beteiligt (`ocpp_message_log` ist davon unberührt).
+- Betroffene Dateien: neue Migration für dynamische Partitionserzeugung; überarbeitete Fassung von `20260729214612_…sql` (batchweiser Kopiervorgang + Idempotenz-Guard).
+- Kein Frontend-Code betroffen; `src/lib/powerSeries.ts` und die Widgets laufen unverändert weiter.
+- Temp-Job `ems-backfill-power-hourly` wird erst nach Abschluss (ca. 6 h) entfernt — separat, unabhängig vom Deploy.
