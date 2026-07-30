@@ -1986,8 +1986,17 @@ export function MeterDetailDialog({
           </div>
           <div className="rounded-md border p-3">
             <div className="text-muted-foreground">
-              {isSensor ? "Momentanwert" : `${sumLabel}${stats?.bidirectional ? " (Bezug/Einspeisung)" : ""}`}
+              {isSensor
+                ? "Momentanwert"
+                : `${sumLabel}${
+                    totalImport > 0 && totalExport > 0
+                      ? " (Bezug/Einspeisung)"
+                      : totalExport > 0
+                        ? " (Einspeisung)"
+                        : ""
+                  }`}
             </div>
+
 
             <div className="text-base font-semibold tabular-nums">
               {isSensor
