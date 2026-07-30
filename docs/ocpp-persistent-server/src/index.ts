@@ -17,6 +17,7 @@ const server = http.createServer((req, res) => {
       status: "ok",
       uptimeSeconds: Math.round(process.uptime()),
       sessions: listSessions().length,
+      frameLogging: config.ocppFrameLoggingEnabled,
     });
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(body);

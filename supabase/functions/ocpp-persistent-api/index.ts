@@ -18,32 +18,49 @@ let settingsCache: { checkedAt: number; ocppLogging: boolean; emergencyMode: boo
 const SETTINGS_TTL_MS = 60_000;
 const SETTINGS_TIMEOUT_MS = 1_500;
 
-async function getRuntimeSettings() {
-  const now = Date.now();
-  if (settingsCache && now - settingsCache.checkedAt < SETTINGS_TTL_MS) return settingsCache;
+async function readSettingsOnce() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), SETTINGS_TIMEOUT_MS);
   try {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("system_settings")
       .select("key, value")
       .in("key", ["ocpp_message_logging_enabled", "backend_emergency_mode"])
       .abortSignal(controller.signal);
+    if (error) throw new Error(error.message);
     const map = new Map((data ?? []).map((row: any) => [String(row.key), String(row.value ?? "").toLowerCase()]));
     const emergencyRaw = map.get("backend_emergency_mode") ?? "false";
     const loggingRaw = map.get("ocpp_message_logging_enabled") ?? "false";
-    settingsCache = {
-      checkedAt: now,
+    return {
       emergencyMode: emergencyRaw === "true" || emergencyRaw === "1" || emergencyRaw === "on",
       ocppLogging: loggingRaw === "true" || loggingRaw === "1" || loggingRaw === "on",
     };
-  } catch (error) {
-    console.warn("[ocpp-persistent-api] settings lookup failed; disabling raw log writes", error instanceof Error ? error.message : String(error));
-    settingsCache = { checkedAt: now, emergencyMode: true, ocppLogging: false };
   } finally {
     clearTimeout(timeout);
   }
-  return settingsCache;
+}
+
+async function getRuntimeSettings() {
+  const now = Date.now();
+  if (settingsCache && now - settingsCache.checkedAt < SETTINGS_TTL_MS) return settingsCache;
+  // Ein einzelner DB-Timeout darf das Logging nicht stundenlang abwürgen:
+  // ein kurzer Retry, und im Fehlerfall wird das Ergebnis nur kurz gecacht.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const result = await readSettingsOnce();
+      settingsCache = { checkedAt: now, ...result };
+      return settingsCache;
+    } catch (error) {
+      if (attempt === 0) continue;
+      console.warn(
+        "[ocpp-persistent-api] settings lookup failed; disabling raw log writes temporarily",
+        error instanceof Error ? error.message : String(error),
+      );
+      // nur 5 s cachen, damit sich der Zustand nach kurzer DB-Last selbst heilt
+      settingsCache = { checkedAt: now - (SETTINGS_TTL_MS - 5_000), emergencyMode: true, ocppLogging: false };
+    }
+  }
+  return settingsCache!;
 }
 
 function json(status: number, body: Record<string, unknown>) {

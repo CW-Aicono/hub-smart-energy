@@ -1,4 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTranslation } from "@/hooks/useTranslation";
 import {
@@ -190,43 +192,20 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
       const isToday = offset === 0 && new Date().toDateString() === getRefDate("day", 0).toDateString();
 
-      let allData: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
+      // Zoom-aware server-side aggregation: resolution is chosen by the
+      // requested window (5 min for day views) and the point count is capped
+      // server-side, so no client-side pagination is needed.
+      const series = await fetchPowerSeriesAuto(mainMeterIds, rangeStart, rangeEnd, 900);
 
-      // Paginate to avoid PostgREST row limits when many main meters × 288 buckets/day
-      // exceed a single page (e.g. "Alle Liegenschaften" view truncates Strom after noon).
-      const PAGE_SIZE = 1000;
-      let pageIdx = 0;
-      while (true) {
-        const from = pageIdx * PAGE_SIZE;
-        const to = from + PAGE_SIZE - 1;
-        const { data: pageData, error: aggError } = await supabase
-          .rpc("get_power_readings_5min", {
-            p_meter_ids: mainMeterIds,
-            p_start: rangeStart.toISOString(),
-            p_end: rangeEnd.toISOString(),
-          })
-          .range(from, to);
+      if (stale) return;
 
-        if (stale) return;
+      const allData: Array<{ meter_id: string; power_value: number; recorded_at: string }> =
+        series.map((r) => ({
+          meter_id: r.meter_id,
+          power_value: r.power_avg,
+          recorded_at: r.bucket,
+        }));
 
-        if (aggError) {
-          console.warn("get_power_readings_5min error:", aggError);
-          break;
-        }
-        if (!pageData || pageData.length === 0) break;
-
-        allData = allData.concat(
-          (pageData as Array<{ meter_id: string; power_avg: number; bucket: string }>).map((r) => ({
-            meter_id: r.meter_id,
-            power_value: r.power_avg,
-            recorded_at: r.bucket,
-          }))
-        );
-
-        if (pageData.length < PAGE_SIZE) break;
-        pageIdx++;
-        if (pageIdx > 50) break; // safety
-      }
 
       if (!stale) {
         setPowerReadings(allData);

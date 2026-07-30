@@ -7975,22 +7975,7 @@ export type Database = {
           source?: string | null
           tenant_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "meter_power_readings_5min_meter_id_fkey"
-            columns: ["meter_id"]
-            isOneToOne: false
-            referencedRelation: "meters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "meter_power_readings_5min_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       meter_power_readings_5min_bridge: {
         Row: {
@@ -8048,6 +8033,642 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      meter_power_readings_5min_legacy: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_power_readings_5min_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_power_readings_5min_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_power_readings_5min_p_202602: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202603: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202604: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202605: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202606: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202607: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202608: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202609: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202610: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202611: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202612: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202701: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_default: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_hourly: {
+        Row: {
+          bucket: string
+          energy_type: string | null
+          meter_id: string
+          power_avg: number | null
+          power_max: number | null
+          sample_count: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          bucket: string
+          energy_type?: string | null
+          meter_id: string
+          power_avg?: number | null
+          power_max?: number | null
+          sample_count?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          bucket?: string
+          energy_type?: string | null
+          meter_id?: string
+          power_avg?: number | null
+          power_max?: number | null
+          sample_count?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       meter_readings: {
         Row: {
@@ -14440,6 +15061,10 @@ export type Database = {
           sessions_24h: number
         }[]
       }
+      backfill_meter_power_hourly: {
+        Args: { p_days?: number }
+        Returns: number
+      }
       bootstrap_cron_settings: {
         Args: { p_key: string; p_url: string }
         Returns: undefined
@@ -14462,6 +15087,14 @@ export type Database = {
       cleanup_cron_job_history: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
       cleanup_loxone_pending_writes: { Args: never; Returns: number }
+      cleanup_meter_power_readings_5min: {
+        Args: {
+          p_batch_size?: number
+          p_max_batches?: number
+          p_retention_days?: number
+        }
+        Returns: number
+      }
       cleanup_old_audit_logs: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
       cleanup_old_node_metrics: { Args: never; Returns: number }
@@ -14528,6 +15161,17 @@ export type Database = {
           slug: string
           title: string
           total_capacity_kw: number
+        }[]
+      }
+      compact_meter_power_readings_15min: {
+        Args: {
+          p_max_batches?: number
+          p_max_groups?: number
+          p_retention_days?: number
+        }
+        Returns: {
+          groups_written: number
+          rows_removed: number
         }[]
       }
       compact_power_readings_day: {
@@ -14686,6 +15330,21 @@ export type Database = {
           bucket: string
           meter_id: string
           power_avg: number
+        }[]
+      }
+      get_power_series_auto: {
+        Args: {
+          p_end: string
+          p_max_points?: number
+          p_meter_ids: string[]
+          p_start: string
+        }
+        Returns: {
+          bucket: string
+          meter_id: string
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
         }[]
       }
       get_pv_actual_daily_sums: {
@@ -14888,6 +15547,10 @@ export type Database = {
       resolve_partner_branding_by_host: {
         Args: { _host: string }
         Returns: Json
+      }
+      rollup_meter_power_hourly: {
+        Args: { p_lookback_hours?: number }
+        Returns: number
       }
       rollup_sensor_daily: { Args: { lookback_days?: number }; Returns: number }
       rollup_sensor_hourly: {

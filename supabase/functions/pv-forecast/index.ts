@@ -540,7 +540,10 @@ serve(async (req) => {
             .map((e) => `${e.timestamp}: ${e.estimated_kwh} kWh (GTI/POA ${e.poa_w_m2} W/m², DHI ${e.dhi_w_m2} W/m², Tmod ${e.cell_temp_c}°C, Tamb ${e.temperature_2m}°C)`)
             .join("\n");
 
+          const aiController = new AbortController();
+          const aiTimer = setTimeout(() => aiController.abort(), 20000);
           const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            signal: aiController.signal,
             method: "POST",
             headers: {
               Authorization: `Bearer ${LOVABLE_API_KEY}`,
@@ -579,7 +582,8 @@ serve(async (req) => {
               ],
               tool_choice: { type: "function", function: { name: "pv_calibration" } },
             }),
-          });
+          }).finally(() => clearTimeout(aiTimer));
+
 
           if (aiRes.ok) {
             const aiData = await aiRes.json();

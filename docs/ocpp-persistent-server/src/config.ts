@@ -29,7 +29,10 @@ export const config = {
   idleTimeoutSec: num("IDLE_TIMEOUT_SECONDS", 90000),
   commandPollIntervalMs: num("COMMAND_POLL_INTERVAL_MS", 10000),
   backendTimeoutMs: num("BACKEND_TIMEOUT_MS", 8000),
-  ocppFrameLoggingEnabled: bool("OCPP_FRAME_LOGGING_ENABLED", false),
+  // Standard: AN. Fehlt die Variable in der .env (z. B. nach einem Container-Neuaufbau),
+  // soll das OCPP-Log weiterlaufen. Zum Abschalten explizit OCPP_FRAME_LOGGING_ENABLED=false setzen.
+  // Zusätzlich greift serverseitig der Schalter system_settings.ocpp_message_logging_enabled.
+  ocppFrameLoggingEnabled: bool("OCPP_FRAME_LOGGING_ENABLED", true),
   enableRealtime: bool("ENABLE_REALTIME", false),
   startupCheckOcppId: process.env.OCPP_STARTUP_CHECK_ID ?? "",
   ocppSubprotocol: "ocpp1.6",

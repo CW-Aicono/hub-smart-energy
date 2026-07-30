@@ -1,0 +1,1 @@
+SELECT cron.schedule('ems-oneoff-vacuum-5min', '*/2 * * * *', 'VACUUM (ANALYZE) public.meter_power_readings_5min');

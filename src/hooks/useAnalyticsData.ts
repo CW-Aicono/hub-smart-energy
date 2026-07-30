@@ -1,5 +1,7 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
+
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
 import { de } from "date-fns/locale";
 
@@ -188,17 +190,15 @@ export function useAnalyticsData(
           }
         } else {
           // Power/energy meters
-          if (period === "day") {
-            const { data: agg } = await supabase
-              .rpc("get_power_readings_5min", {
-                p_meter_ids: [meterId],
-                p_start: fromIso,
-                p_end: toIso,
-              })
-              .limit(3000);
-            points = (agg ?? []).map((r: any) => ({
+          const spanDays = (range.to.getTime() - range.from.getTime()) / 86_400_000;
+          const usePowerCurve = period === "day" || (period === "custom" && spanDays <= 14);
+
+          if (usePowerCurve) {
+            // Zoom-aware: 5-min detail for short windows, 15-min for up to 14 days
+            const rows = await fetchPowerSeriesAuto([meterId], range.from, range.to, 900);
+            points = rows.map((r) => ({
               t: new Date(r.bucket).getTime(),
-              v: Number(r.power_avg),
+              v: r.power_avg,
               label: formatLabel(new Date(r.bucket), period),
             }));
           } else {
@@ -216,6 +216,7 @@ export function useAnalyticsData(
             }));
           }
         }
+
 
         series.push({ meterId, label, unit, data: points });
       }
