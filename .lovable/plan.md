@@ -1,48 +1,56 @@
-## Frage 1 — Läuft der temporäre Cron-Job noch?
+## Hintergrund: Was bedeutet "Failed to fetch"?
 
-Ja, genau einer: **`ems-backfill-power-hourly`** (alle 10 Min, `3-59/10 * * * *`, ruft `backfill_meter_power_hourly(3)`). Er füllt die Stunden-Rollup-Tabelle rückwärts mit Altdaten.
+Das ist die Standard-Browsermeldung, wenn ein `fetch()`-Aufruf die Gegenstelle gar nicht erreicht — die Antwort kommt also nie an. Typische Ursachen in diesem Projekt:
 
-Stand jetzt (verifiziert):
-- Stunden-Tabelle reicht zurück bis **06.06.2026**, die 5-Minuten-Daten bis **16.02.2026**.
-- Die letzten 8 Läufe waren alle erfolgreich („1 row").
+1. **Kurzer Netzwerkabriss / WLAN-Wechsel / Laptop aus dem Standby** (häufigste Ursache, harmlos)
+2. **Backend kurzzeitig überlastet oder im Neustart** (Verbindungslimit erreicht → Anfrage wird abgewiesen, bevor eine HTTP-Antwort entsteht)
+3. **Edge Function schlägt beim Start fehl** (Boot-Error → kein CORS-Header → Browser meldet nur "Failed to fetch")
+4. **Neues Deployment während der Sitzung**: alte Chunk-Dateien existieren nicht mehr (dafür gibt es bereits die `ChunkErrorBoundary` mit Auto-Reload)
+5. **Browser-Tab lange im Hintergrund**: abgelaufenes Auth-Token, Refresh-Request läuft ins Leere
 
-Er ist also **noch nicht fertig** — es fehlen rund 110 Tage, bei 3 Tagen pro Lauf alle 10 Minuten ca. **6 Stunden Restlaufzeit**. Bitte noch laufen lassen; ich lösche ihn, sobald die Stunden-Tabelle bis 16.02.2026 zurückreicht. Der Dauerbetriebs-Job `ems-rollup-power-hourly` bleibt danach bestehen (der ist kein Temp-Job).
+Wichtig: Es ist **kein** Programmfehler in einer bestimmten Seite — es ist ein Transportproblem. Deshalb ist ein Retry sinnvoll: derselbe Aufruf funktioniert meist beim zweiten Versuch.
 
-## Frage 2 — Kommt der große Umbau beim Hetzner-Deploy automatisch mit?
+## Macht ein Reload-Button Sinn?
 
-Grundsätzlich ja: der komplette Umbau liegt als Migrationsdateien im Repo (Stunden-Rollup-Tabelle, `rollup_meter_power_hourly`, `get_power_series_auto`, partitionierte Tabelle + 12 Monats-Partitionen, RLS, atomarer Swap). Diese Dateien werden von `scripts/apply-migrations.sh` auf Hetzner ausgeführt.
+Ja, aber gestuft — ein voller Seiten-Reload ist die Holzhammer-Methode und wirft ungespeicherte Eingaben weg:
 
-**Aber: so wie es jetzt ist, würde ich noch nicht deployen.** Drei konkrete Stolpersteine:
+- **Primär: „Erneut versuchen"** — lädt nur die fehlgeschlagene Abfrage neu (kein Seitenwechsel, kein Datenverlust).
+- **Sekundär: „Seite neu laden"** — nur anbieten, wenn der Retry ebenfalls scheitert.
 
-1. **Die alte kaputte Migration blockiert weiterhin.** Das Löschen des Workflow-Runs ändert nichts — `20260730052657_…sql` (Cron-Staffelung mit festen Job-Nummern) liegt weiter im Repo und wird beim nächsten Deploy erneut versucht und scheitert. Sie muss einmalig auf dem Server als „erledigt" eingetragen werden (Befehl unten).
-2. **Der Swap kopiert auf Hetzner die ganze Tabelle in einer Transaktion.** In Lovable haben wir die ~1,9 Mio Zeilen vorher in Ruhe in Batches kopiert; auf Hetzner ist die Partitionstabelle leer, deshalb kopiert die Swap-Migration alles auf einen Schlag — mit exklusiver Sperre auf der Tabelle. Das ist der eigentliche Risiko-Punkt: je nach Datenmenge mehrere Minuten Schreibsperre, und wenn das Statement-Timeout zuschlägt, rollt der Deploy zurück.
-3. **Partitionen decken nur 01.02.2026 – 31.01.2027 ab.** Gibt es auf Hetzner auch nur eine Zeile mit älterem Zeitstempel, bricht der Kopiervorgang mit „no partition of relation found" ab.
+## Umsetzung
 
-## Plan für den sicheren Hetzner-Deploy
+### 1. Fehler-Übersetzer (neu: `src/lib/errorMessages.ts`)
+Eine Funktion `describeError(error)`, die technische Fehler auf verständliche Kategorien mappt:
 
-**Schritt 0 — Vorprüfung auf dem Server (nur lesen, ändert nichts)**
-Ältesten Zeitstempel und Zeilenzahl der Tabelle `meter_power_readings_5min` auf Hetzner auslesen. Damit weiß ich, ob eine Partition für ältere Daten fehlt und wie lange der Kopiervorgang dauert. Ich liefere den fertigen Kopier-Befehl.
+| Erkennungsmuster | Anzeige (DE) |
+|---|---|
+| `Failed to fetch`, `NetworkError`, `Load failed` | „Keine Verbindung zum Server. Bitte Internetverbindung prüfen." |
+| `408`, `timeout`, `IDLE_TIMEOUT` | „Die Anfrage hat zu lange gedauert." |
+| `503`, `BOOT_ERROR`, `temporarily unavailable` | „Der Dienst ist gerade kurzzeitig nicht erreichbar." |
+| `401`, `JWT expired` | „Die Sitzung ist abgelaufen. Bitte neu anmelden." |
+| `permission denied`, `RLS` | „Keine Berechtigung für diese Daten." |
+| Sonst | „Ein unerwarteter Fehler ist aufgetreten." |
 
-**Schritt 1 — Blockade lösen**
-Die gescheiterte Migration einmalig als erledigt eintragen:
-```bash
-ssh root@91.99.170.143
-docker exec -i supabase-db psql -U supabase_admin -d postgres -c "INSERT INTO public._deploy_migrations (filename) VALUES ('20260730052657_88a6adac-b016-4b61-9c91-221bb2a664f9.sql') ON CONFLICT DO NOTHING;"
-exit
-```
+Zurückgegeben werden Titel, Beschreibung, ein Fehler-Kürzel (z. B. `NET-01`) für den Support und ein Flag `retryable`.
 
-**Schritt 2 — Migrationen für Hetzner robust machen**
-- Ergänzende Migration, die Partitionen automatisch für den gesamten vorhandenen Datenbereich anlegt (kein fester Feb-2026-Start mehr) und künftige Monate rollierend erzeugt.
-- Die Swap-Migration so absichern, dass sie auf einer leeren Partitionstabelle in Blöcken kopiert statt in einem einzigen Riesen-Statement, mit ausreichend gesetztem Statement-Timeout — und dass sie nichts tut, wenn der Swap bereits erfolgt ist (idempotent, wichtig für Lovable, wo er schon gelaufen ist).
+### 2. Übersetzungen
+Neue Schlüssel `error.network.*`, `error.timeout.*`, `error.unavailable.*`, `error.session.*`, `error.permission.*`, `error.unknown.*` in `src/i18n/translations.ts` für DE, EN, ES, NL. `describeError` nutzt `getT()`, funktioniert also auch außerhalb von React-Komponenten und respektiert die eingestellte Sprache.
 
-**Schritt 3 — Deploy im Nachtfenster**
-Go-Live-Workflow starten, `LIVE` eintippen. Das Deploy-Skript zieht vorher automatisch ein Datenbank-Backup und rollt bei Fehlern selbstständig zurück.
+### 3. `QueryErrorState` erweitern
+Die bestehende Komponente (`src/components/common/QueryErrorState.tsx`) bekommt:
+- optionales `error`-Prop → Titel/Text kommen automatisch aus `describeError`
+- Button „Erneut versuchen" (bestehend) plus, nach dem zweiten Fehlschlag, „Seite neu laden"
+- kleines Fehler-Kürzel in grauer Schrift unten (für Support-Anfragen)
+- Offline-Hinweis, wenn `navigator.onLine === false`
 
-**Schritt 4 — Nachkontrolle**
-Auf Hetzner prüfen: Zeilenzahl vor/nach identisch, Tagesverlauf in 5-Minuten-Auflösung im Frontend sichtbar, `get_power_series_auto` liefert Daten, danach `VACUUM (ANALYZE)`.
+### 4. Globaler Netzwerk-Hinweis
+Ein schlanker Listener auf `online`/`offline` zeigt einen dezenten Banner „Keine Internetverbindung" und blendet ihn bei Rückkehr automatisch aus; bei Rückkehr werden aktive Abfragen automatisch erneut geladen.
 
-## Technische Details
+### 5. Toasts vereinheitlichen
+`toast({ variant: "destructive", ... })`-Aufrufe, die heute rohe Fehlertexte zeigen, werden auf `describeError` umgestellt — beginnend mit den häufigsten Stellen (Dashboard-Hooks, Edge-Function-Aufrufe über `invokeWithRetry`).
 
-- Betroffene Dateien: neue Migration für dynamische Partitionserzeugung; überarbeitete Fassung von `20260729214612_…sql` (batchweiser Kopiervorgang + Idempotenz-Guard).
-- Kein Frontend-Code betroffen; `src/lib/powerSeries.ts` und die Widgets laufen unverändert weiter.
-- Temp-Job `ems-backfill-power-hourly` wird erst nach Abschluss (ca. 6 h) entfernt — separat, unabhängig vom Deploy.
+### Technische Details
+- `src/lib/errorMessages.ts` — Mapping + `getT()`-Anbindung, keine React-Abhängigkeit
+- `src/components/common/QueryErrorState.tsx` — Props `error`, `attemptCount`, Reload-Fallback
+- `src/i18n/translations.ts` — ~18 neue Schlüssel in 4 Sprachen
+- Optional: `invokeWithRetry` gibt bereits bei transienten Fehlern automatisch drei Versuche ab — das bleibt unverändert und greift vor der Anzeige
