@@ -15217,6 +15217,10 @@ export type Database = {
         }
         Returns: string
       }
+      ensure_meter_power_5min_partitions: {
+        Args: { p_months_ahead?: number }
+        Returns: number
+      }
       evaluate_monitoring_rules: { Args: never; Returns: number }
       find_duplicate_meters: {
         Args: never
