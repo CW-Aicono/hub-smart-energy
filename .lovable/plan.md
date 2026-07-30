@@ -1,56 +1,24 @@
-## Hintergrund: Was bedeutet "Failed to fetch"?
+## Problem (verifiziert)
 
-Das ist die Standard-Browsermeldung, wenn ein `fetch()`-Aufruf die Gegenstelle gar nicht erreicht — die Antwort kommt also nie an. Typische Ursachen in diesem Projekt:
+Im Geräte-Detail-Dialog (`EnergyFlowMonitor.tsx`, Chart „Energie pro Stunde") wird der Einspeise-Balken nur gerendert, wenn `stats.bidirectional` wahr ist. `bidirectional` ist nur dann `true`, wenn die Leistungsreihe **sowohl** Werte < 0 **als auch** Werte > 0 enthält (Zeile 1753).
 
-1. **Kurzer Netzwerkabriss / WLAN-Wechsel / Laptop aus dem Standby** (häufigste Ursache, harmlos)
-2. **Backend kurzzeitig überlastet oder im Neustart** (Verbindungslimit erreicht → Anfrage wird abgewiesen, bevor eine HTTP-Antwort entsteht)
-3. **Edge Function schlägt beim Start fehl** (Boot-Error → kein CORS-Header → Browser meldet nur "Failed to fetch")
-4. **Neues Deployment während der Sitzung**: alte Chunk-Dateien existieren nicht mehr (dafür gibt es bereits die `ChunkErrorBoundary` mit Auto-Reload)
-5. **Browser-Tab lange im Hintergrund**: abgelaufenes Auth-Token, Refresh-Request läuft ins Leere
+Beim gezeigten Zähler ist die Leistung durchgehend negativ (Ø −51,64 kW) → `bidirectional = false` → nur der „Bezug"-Balken (`import`, überall 0) wird gezeichnet. Ergebnis: leeres Diagramm, obwohl die KPI korrekt −1.223,27 kWh ausweist.
 
-Wichtig: Es ist **kein** Programmfehler in einer bestimmten Seite — es ist ein Transportproblem. Deshalb ist ein Retry sinnvoll: derselbe Aufruf funktioniert meist beim zweiten Versuch.
+## Lösung
 
-## Macht ein Reload-Button Sinn?
+In `src/components/dashboard/EnergyFlowMonitor.tsx`:
 
-Ja, aber gestuft — ein voller Seiten-Reload ist die Holzhammer-Methode und wirft ungespeicherte Eingaben weg:
+1. **Neues Kriterium statt `bidirectional` für die Chart-Darstellung**: aus `energyBuckets` ableiten, ob es Import-Anteile (`totalImport > 0`) und/oder Export-Anteile (`totalExport > 0`) gibt.
+2. **Bar-Rendering**:
+   - Import-Balken nur rendern, wenn `totalImport > 0`.
+   - Export-Balken (`exportNeg`, grün HSL 152 55% 42%) rendern, wenn `totalExport > 0` — unabhängig von `bidirectional`.
+   - Nulllinie (`ReferenceLine y={0}`) anzeigen, sobald beide Anteile vorhanden sind.
+3. **Legende/Tooltip**: unverändert („Bezug" / „Einspeisung"), aber Legende zeigt dann nur die tatsächlich vorhandene Serie.
+4. **Y-Achse**: bleibt bei `Math.min(0, dataMin)` / `Math.max(0, dataMax)`, sodass rein negative Werte nach unten aufgetragen werden; Tick-Beschriftung weiter als Absolutwert im deutschen Format.
+5. **KPI-Kachel „Energie"**: zusätzlich bei rein einspeisenden Zählern das Label um „(Einspeisung)" ergänzen, damit das Minuszeichen erklärt ist — konsistent zum bestehenden „(Bezug/Einspeisung)".
 
-- **Primär: „Erneut versuchen"** — lädt nur die fehlgeschlagene Abfrage neu (kein Seitenwechsel, kein Datenverlust).
-- **Sekundär: „Seite neu laden"** — nur anbieten, wenn der Retry ebenfalls scheitert.
+## Technische Details
 
-## Umsetzung
-
-### 1. Fehler-Übersetzer (neu: `src/lib/errorMessages.ts`)
-Eine Funktion `describeError(error)`, die technische Fehler auf verständliche Kategorien mappt:
-
-| Erkennungsmuster | Anzeige (DE) |
-|---|---|
-| `Failed to fetch`, `NetworkError`, `Load failed` | „Keine Verbindung zum Server. Bitte Internetverbindung prüfen." |
-| `408`, `timeout`, `IDLE_TIMEOUT` | „Die Anfrage hat zu lange gedauert." |
-| `503`, `BOOT_ERROR`, `temporarily unavailable` | „Der Dienst ist gerade kurzzeitig nicht erreichbar." |
-| `401`, `JWT expired` | „Die Sitzung ist abgelaufen. Bitte neu anmelden." |
-| `permission denied`, `RLS` | „Keine Berechtigung für diese Daten." |
-| Sonst | „Ein unerwarteter Fehler ist aufgetreten." |
-
-Zurückgegeben werden Titel, Beschreibung, ein Fehler-Kürzel (z. B. `NET-01`) für den Support und ein Flag `retryable`.
-
-### 2. Übersetzungen
-Neue Schlüssel `error.network.*`, `error.timeout.*`, `error.unavailable.*`, `error.session.*`, `error.permission.*`, `error.unknown.*` in `src/i18n/translations.ts` für DE, EN, ES, NL. `describeError` nutzt `getT()`, funktioniert also auch außerhalb von React-Komponenten und respektiert die eingestellte Sprache.
-
-### 3. `QueryErrorState` erweitern
-Die bestehende Komponente (`src/components/common/QueryErrorState.tsx`) bekommt:
-- optionales `error`-Prop → Titel/Text kommen automatisch aus `describeError`
-- Button „Erneut versuchen" (bestehend) plus, nach dem zweiten Fehlschlag, „Seite neu laden"
-- kleines Fehler-Kürzel in grauer Schrift unten (für Support-Anfragen)
-- Offline-Hinweis, wenn `navigator.onLine === false`
-
-### 4. Globaler Netzwerk-Hinweis
-Ein schlanker Listener auf `online`/`offline` zeigt einen dezenten Banner „Keine Internetverbindung" und blendet ihn bei Rückkehr automatisch aus; bei Rückkehr werden aktive Abfragen automatisch erneut geladen.
-
-### 5. Toasts vereinheitlichen
-`toast({ variant: "destructive", ... })`-Aufrufe, die heute rohe Fehlertexte zeigen, werden auf `describeError` umgestellt — beginnend mit den häufigsten Stellen (Dashboard-Hooks, Edge-Function-Aufrufe über `invokeWithRetry`).
-
-### Technische Details
-- `src/lib/errorMessages.ts` — Mapping + `getT()`-Anbindung, keine React-Abhängigkeit
-- `src/components/common/QueryErrorState.tsx` — Props `error`, `attemptCount`, Reload-Fallback
-- `src/i18n/translations.ts` — ~18 neue Schlüssel in 4 Sprachen
-- Optional: `invokeWithRetry` gibt bereits bei transienten Fehlern automatisch drei Versuche ab — das bleibt unverändert und greift vor der Anzeige
+- Betroffene Stellen: Zeilen ~1989 (KPI-Label), ~2213 (ReferenceLine), ~2228–2231 (Bars).
+- Keine Änderung an der Datenbeschaffung oder der Trapez-Integration (`energyBuckets`) — die Werte sind bereits korrekt getrennt in `import` / `export`.
+- Keine Backend-/DB-Änderungen nötig.
