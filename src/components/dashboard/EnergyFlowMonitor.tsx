@@ -1803,11 +1803,12 @@ export function MeterDetailDialog({
 
   // Sensor-Statistik (V, °C, %, …): eigene Datenquelle, da meter_power_readings leer.
   const { data: sensorSeries = [] } = useQuery({
-    queryKey: ["meter-detail-sensor-series", node.meter_id, range, powerStartMs],
+    queryKey: ["meter-detail-sensor-series", node.meter_id, range, powerStartMs, powerEndMs],
     enabled: isSensor && !!node.meter_id,
     staleTime: 60_000,
     queryFn: async () => {
       const since = new Date(powerStartMs).toISOString();
+      const until = new Date(powerEndMs).toISOString();
       const out: { t: number; v: number; vMin?: number; vMax?: number }[] = [];
       if (range === "1h") {
         const { data } = await supabase
@@ -1815,6 +1816,7 @@ export function MeterDetailDialog({
           .select("recorded_at, value")
           .eq("meter_id", node.meter_id!)
           .gte("recorded_at", since)
+          .lt("recorded_at", until)
           .order("recorded_at", { ascending: true })
           .limit(2000);
         for (const r of (data ?? []) as any[]) {
@@ -1827,6 +1829,7 @@ export function MeterDetailDialog({
           .select("bucket, value_avg, value_min, value_max")
           .eq("meter_id", node.meter_id!)
           .gte("bucket", since)
+          .lt("bucket", until)
           .order("bucket", { ascending: true })
           .limit(5000);
         for (const r of (data ?? []) as any[]) {
@@ -1844,8 +1847,10 @@ export function MeterDetailDialog({
           .select("bucket, value_twavg, value_min, value_max")
           .eq("meter_id", node.meter_id!)
           .gte("bucket", since)
+          .lt("bucket", until)
           .order("bucket", { ascending: true })
           .limit(5000);
+
         for (const r of (data ?? []) as any[]) {
           const v = Number(r.value_twavg);
           if (Number.isFinite(v)) out.push({
