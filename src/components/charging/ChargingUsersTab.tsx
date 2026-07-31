@@ -296,7 +296,13 @@ const ChargingUsersTab = () => {
                         : (u.rfid_tag ? [{ tag: u.rfid_tag, label: u.rfid_label }] as any[] : []);
                       return (
                       <TableRow key={u.id}>
-                        <TableCell className="font-medium">{u.name}</TableCell>
+                        <TableCell className="font-medium">
+                          {isAdmin ? (
+                            <button type="button" onClick={() => openEditUser(u)} className="text-left hover:underline focus:outline-none focus-visible:underline">
+                              {u.name}
+                            </button>
+                          ) : u.name}
+                        </TableCell>
                         <TableCell>{u.email || "—"}</TableCell>
                         <TableCell>
                           {tagList.length === 0 ? (
@@ -403,7 +409,13 @@ const ChargingUsersTab = () => {
                       const status = (g.status ?? "active") as string;
                       return (
                         <TableRow key={g.id}>
-                          <TableCell className="font-medium">{g.name}</TableCell>
+                          <TableCell className="font-medium">
+                            {isAdmin ? (
+                              <button type="button" onClick={() => openEditGroup(g)} className="text-left hover:underline focus:outline-none focus-visible:underline">
+                                {g.name}
+                              </button>
+                            ) : g.name}
+                          </TableCell>
                           <TableCell>{g.description || "—"}</TableCell>
                           <TableCell className="text-sm">{getTariffName(g.tariff_id) || <span className="text-muted-foreground">—</span>}</TableCell>
                           <TableCell>

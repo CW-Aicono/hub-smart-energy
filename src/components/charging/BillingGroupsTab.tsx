@@ -12,7 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Edit, Trash2, Users, Building2, Mail, Lock } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus, Edit, Trash2, Users, Building2, Mail, Lock, MoreHorizontal } from "lucide-react";
 import {
   useChargingBillingGroups,
   useChargingBillingGroupMembers,
@@ -112,13 +113,25 @@ export default function BillingGroupsTab({ isAdmin }: Props) {
                 <SortableHead label="Rechnungsempfänger" sortKey="company" sort={sort} onToggle={toggle} />
                 <SortableHead label="E-Mail" sortKey="email" sort={sort} onToggle={toggle} />
                 <SortableHead label="Mitglieder" sortKey="members" sort={sort} onToggle={toggle} />
-                {isAdmin && <TableHead className="w-40 text-right">Aktionen</TableHead>}
+                {isAdmin && <TableHead className="w-16" />}
               </TableRow>
             </TableHeader>
             <TableBody>
               {sortedGroups.map((g) => (
                 <TableRow key={g.id}>
-                  <TableCell className="font-medium">{g.name}</TableCell>
+                  <TableCell className="font-medium">
+                    {isAdmin ? (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(g)}
+                        className="text-left hover:underline focus:outline-none focus-visible:underline"
+                      >
+                        {g.name}
+                      </button>
+                    ) : (
+                      g.name
+                    )}
+                  </TableCell>
                   <TableCell>
                     {g.company_name ? (
                       <span className="flex items-center gap-1.5">
@@ -144,29 +157,29 @@ export default function BillingGroupsTab({ isAdmin }: Props) {
                   </TableCell>
                   {isAdmin && (
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1 flex-nowrap">
-                        <Button variant="ghost" size="sm" onClick={() => setMembersGroup(g)}>
-                          <Users className="h-4 w-4 mr-1" />
-                          <span className="hidden sm:inline">Mitglieder</span>
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => openEdit(g)}>
-                          <Edit className="h-4 w-4 mr-1" />
-                          <span className="hidden sm:inline">Bearbeiten</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm(`Rechnungsgruppe „${g.name}" wirklich löschen?`)) {
-                              deleteGroup.mutate(g.id);
-                            }
-                          }}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          <span className="hidden sm:inline">Löschen</span>
-                        </Button>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEdit(g)}>
+                            <Edit className="h-4 w-4 mr-2" />Bearbeiten
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setMembersGroup(g)}>
+                            <Users className="h-4 w-4 mr-2" />Mitglieder
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => {
+                              if (confirm(`Rechnungsgruppe „${g.name}" wirklich löschen?`)) {
+                                deleteGroup.mutate(g.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />Löschen
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   )}
                 </TableRow>
