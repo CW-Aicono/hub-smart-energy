@@ -1457,12 +1457,19 @@ async function reloadMeters(): Promise<void> {
       for (const m of group.meters) {
         if (!m.sensor_uuid) continue;
         const blockUuid = m.sensor_uuid.toLowerCase();
+        // v1.16: Momentanwert-Rolle rein aus der Messstellen-Konfiguration.
+        const gasFactor = gasKwhPerM3(m);
+        let momRole = deriveMomentaryRole(m);
+        // Gas: Durchfluss (m³/h) wird intern sofort in kW umgerechnet.
+        if (momRole === "flow" && gasFactor) momRole = "pwr";
         state.uuidMap.set(blockUuid, {
           meter_id: m.id,
           tenant_id: m.tenant_id,
           energy_type: m.energy_type,
           block_uuid: blockUuid,
-          role: "pwr",                    // wird in connect() durch LoxAPP3-Expansion ersetzt
+          role: momRole ?? "aux",         // wird in connect() durch LoxAPP3-Expansion ersetzt
+          momentary_role: momRole,
+          gas_kwh_per_m3: momRole === "pwr" ? gasFactor : null,
           explicit_pwr_uuid: m.power_state_uuid ? m.power_state_uuid.toLowerCase() : null,
           explicit_pwr_key: m.power_state_key ?? null,
           latest_value: null,
