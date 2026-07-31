@@ -646,7 +646,7 @@ const LiveValues = () => {
         meterReading: bcTotals?.total ?? live?.meterReading ?? null,
         meterReadingUnit: live?.meterReadingUnit ?? "kWh",
         source: "live",
-        liveAt: bcAt,
+        liveAt: bcAt ?? live?.at ?? undefined,
       };
     }
 
