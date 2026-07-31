@@ -1654,6 +1654,8 @@ export function MeterDetailDialog({
             .select("bucket, power_avg")
             .eq("meter_id", node.meter_id)
             .gte("bucket", since)
+            .lt("bucket", until)
+
             .order("bucket", { ascending: true })
             .range(offset, to);
           if (error || !data || data.length === 0) break;
