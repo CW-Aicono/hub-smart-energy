@@ -15185,6 +15185,14 @@ export type Database = {
         Args: { p_day?: string }
         Returns: number
       }
+      cron_schedule_collisions: {
+        Args: never
+        Returns: {
+          job_count: number
+          jobs: string
+          schedule: string
+        }[]
+      }
       diagnose_meter_daily_values: {
         Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
         Returns: {
@@ -15427,6 +15435,10 @@ export type Database = {
       get_user_email: { Args: never; Returns: string }
       get_user_partner_id: { Args: never; Returns: string }
       get_user_tenant_id: { Args: never; Returns: string }
+      guarded_cleanup_bridge_raw_samples: { Args: never; Returns: undefined }
+      guarded_cleanup_sensor_readings_raw: { Args: never; Returns: undefined }
+      guarded_rollup_meter_power_hourly: { Args: never; Returns: undefined }
+      guarded_rollup_sensor_hourly: { Args: never; Returns: undefined }
       has_location_access: {
         Args: { _location_id: string; _user_id: string }
         Returns: boolean
