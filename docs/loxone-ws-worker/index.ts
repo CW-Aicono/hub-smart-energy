@@ -48,16 +48,24 @@ import http from "http";
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY!;
-// IO-Optimierung v1.2 (17.07.2026): Default 5s → 60s, Untergrenze 15s.
-// WebSocket zum Miniserver bleibt permanent verbunden (Push in Echtzeit),
-// Live-UI wird per Broadcast bedient — der Flush schreibt nur historische
-// Rohwerte in bridge_raw_samples. 60s reduziert die Cloud-IOPS um ~92%.
-const FLUSH_INTERVAL_MS = Math.max(
-  15000,
-  parseInt(process.env.FLUSH_INTERVAL_MS || "60000", 10),
+// v1.10 (31.07.2026): FLUSH ist wieder aktiv — aber als REINER Live-Broadcast
+// (`live_only: true`). gateway-ingest verteilt die Werte nur über Realtime und
+// schreibt NICHTS in die Datenbank. Persistenz läuft weiterhin ausschließlich
+// über flushBuckets() → bridge-power-5min. Damit kostet der Live-Pfad 0 Disk-IO.
+const LIVE_PUSH_INTERVAL_MS = Math.max(
+  2000,
+  parseInt(process.env.LIVE_PUSH_INTERVAL_MS || process.env.FLUSH_INTERVAL_MS || "5000", 10),
 );
+const FLUSH_INTERVAL_MS = LIVE_PUSH_INTERVAL_MS;
+// Keepalive: spätestens alle 60 s wird ein Wert je Zähler gesendet, auch wenn
+// er sich kaum ändert — damit die UI nach einem Reload sofort Werte hat.
 const MIN_PUSH_INTERVAL_MS = parseInt(process.env.MIN_PUSH_INTERVAL_MS || "60000", 10);
-const MIN_DELTA = parseFloat(process.env.MIN_DELTA || "0.01");
+const MIN_DELTA = parseFloat(process.env.MIN_DELTA || "0.05");
+// Obergrenze je Push-Zyklus, damit ein großer Miniserver den Kanal nicht flutet.
+const MAX_LIVE_EVENTS_PER_PUSH = Math.max(
+  50,
+  parseInt(process.env.MAX_LIVE_EVENTS_PER_PUSH || "500", 10),
+);
 const RELOAD_INTERVAL_MS = parseInt(process.env.RELOAD_INTERVAL_MS || "300000", 10);
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
 const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
