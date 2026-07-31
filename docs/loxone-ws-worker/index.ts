@@ -83,7 +83,7 @@ const SESSION_HEARTBEAT_MS = Math.max(
 );
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "v1.12-block-diagnose";
+const WORKER_VERSION = process.env.WORKER_VERSION || "v1.13-bucket-buffer";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -330,6 +330,10 @@ interface UuidEntry {
   bucket_sum: number;          // Summe aller Werte im Bucket (für avg)
   bucket_max: number;          // Max im Bucket
   bucket_count: number;        // Anzahl Samples im Bucket
+  // v1.13: abgeschlossene Buckets zwischenpuffern, damit der nächste
+  // eintreffende Wert den fertigen Bucket nicht überschreibt.
+  pending_buckets?: Array<{ bucket: number; sum: number; max: number; count: number }>;
+
   // v1.11: Auto-Klassifikation unbekannter States
   state_key?: string;          // Loxone-State-Name (z.B. "actual", "total", "Leistung")
   obs_count?: number;          // Anzahl beobachteter Samples
@@ -539,12 +543,25 @@ async function connect(state: ConnState): Promise<void> {
           if (entry.role === "pwr") {
             const bucket = Math.floor(Date.now() / 300000) * 300000;
             if (entry.bucket_start !== bucket) {
-              // Bucket-Wechsel: alten Bucket wird per periodischem Flush geliefert.
+              // v1.13: Bucket-Wechsel — den fertigen Bucket zwischenpuffern,
+              // damit der neue Wert ihn nicht überschreibt (bisher gingen bei
+              // häufig aktualisierenden Zählern fast alle Buckets verloren).
+              if (entry.bucket_start !== 0 && entry.bucket_count > 0) {
+                if (!entry.pending_buckets) entry.pending_buckets = [];
+                entry.pending_buckets.push({
+                  bucket: entry.bucket_start,
+                  sum: entry.bucket_sum,
+                  max: entry.bucket_max,
+                  count: entry.bucket_count,
+                });
+                if (entry.pending_buckets.length > 24) entry.pending_buckets.shift();
+              }
               entry.bucket_start = bucket;
               entry.bucket_sum = 0;
               entry.bucket_max = 0;
               entry.bucket_count = 0;
             }
+
             const absV = Math.abs(ev.value);
             entry.bucket_sum += ev.value;
             entry.bucket_count += 1;
@@ -1516,44 +1533,50 @@ async function flushBuckets(): Promise<void> {
     // Pro Meter nur EIN Bucket-Datensatz pro Flush (verschiedene State-UUIDs
     // desselben Meters mit role="pwr" existieren praktisch nicht, aber wir
     // koalieren defensiv über meter_id.)
+    // v1.13: Key = meter_id + Bucket, damit auch nachgelieferte (gepufferte)
+    // Buckets vollständig übertragen werden.
     const perMeter = new Map<string, { sum: number; max: number; count: number; bucket: number; entry: UuidEntry }>();
-    for (const entry of state.uuidMap.values()) {
-      if (entry.role !== "pwr") continue;
-      if (entry.bucket_count === 0 || entry.bucket_start === 0) continue;
-      // Bucket noch aktiv → nicht flushen
-      if (entry.bucket_start === currentBucket) continue;
-      const key = entry.meter_id;
+    const addBucket = (entry: UuidEntry, bucket: number, sum: number, max: number, count: number) => {
+      if (count === 0 || bucket === 0) return;
+      const key = `${entry.meter_id}|${bucket}`;
       const existing = perMeter.get(key);
       if (existing) {
-        existing.sum += entry.bucket_sum;
-        existing.count += entry.bucket_count;
-        if (Math.abs(entry.bucket_max) > Math.abs(existing.max)) existing.max = entry.bucket_max;
+        existing.sum += sum;
+        existing.count += count;
+        if (Math.abs(max) > Math.abs(existing.max)) existing.max = max;
       } else {
-        perMeter.set(key, {
-          sum: entry.bucket_sum,
-          max: entry.bucket_max,
-          count: entry.bucket_count,
-          bucket: entry.bucket_start,
-          entry,
-        });
+        perMeter.set(key, { sum, max, count, bucket, entry });
       }
-      // Bucket-Zähler zurücksetzen — wird bei nächstem Sample neu befüllt.
-      entry.bucket_start = 0;
-      entry.bucket_sum = 0;
-      entry.bucket_max = 0;
-      entry.bucket_count = 0;
+    };
+
+    for (const entry of state.uuidMap.values()) {
+      if (entry.role !== "pwr") continue;
+      // Zwischengepufferte, bereits abgeschlossene Buckets
+      if (entry.pending_buckets && entry.pending_buckets.length > 0) {
+        for (const pb of entry.pending_buckets) addBucket(entry, pb.bucket, pb.sum, pb.max, pb.count);
+        entry.pending_buckets = [];
+      }
+      // Aktueller Bucket nur, wenn er abgeschlossen ist
+      if (entry.bucket_count > 0 && entry.bucket_start !== 0 && entry.bucket_start !== currentBucket) {
+        addBucket(entry, entry.bucket_start, entry.bucket_sum, entry.bucket_max, entry.bucket_count);
+        entry.bucket_start = 0;
+        entry.bucket_sum = 0;
+        entry.bucket_max = 0;
+        entry.bucket_count = 0;
+      }
     }
 
-    for (const [meterId, agg] of perMeter.entries()) {
+    for (const agg of perMeter.values()) {
       const avg = agg.count > 0 ? agg.sum / agg.count : 0;
       const arr = readyByTenant.get(agg.entry.tenant_id) ?? [];
       arr.push({
-        meter_id: meterId,
+        meter_id: agg.entry.meter_id,
         tenant_id: agg.entry.tenant_id,
         energy_type: agg.entry.energy_type,
         bucket: new Date(agg.bucket).toISOString(),
         power_avg: avg,
         power_max: agg.max,
+
         sample_count: agg.count,
       });
       readyByTenant.set(agg.entry.tenant_id, arr);
