@@ -1935,37 +1935,30 @@ export function MeterDetailDialog({
   const totalExport = energyBuckets.reduce((s, b) => s + b.export, 0);
 
   // Autoritative Energiemenge: exakt dieselbe Quelle wie die Kachel
-  // (get_meter_period_sums_with_fallback → meter_period_totals / Tages-Aggregate).
-  // Die Trapez-Integration über die Leistungsreihe bleibt nur Fallback für 1 h
-  // und für Zähler ohne Tagesaggregate.
-  const periodDays = range === "30d" ? 29 : range === "7d" ? 6 : 0;
-  const periodStart = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - periodDays);
-    return d;
-  }, [periodDays]);
-  const periodEnd = useMemo(() => new Date(), [range]);
-  const { data: periodSums } = usePeriodSumsWithFallback(
-    "meter-detail-period-sum",
+  // (Tageszeilen aus `meter_period_totals`). Die Trapez-Integration über die
+  // Leistungsreihe bleibt nur Fallback für den 1-h-Live-Bereich und für
+  // Zähler ohne Tagesaggregate.
+  const periodStart = useMemo(() => new Date(powerStartMs), [powerStartMs]);
+  const periodLastDay = useMemo(() => new Date(powerEndMs - 1), [powerEndMs]);
+  const { data: periodSums } = useMeterPeriodTotals(
     node.meter_id ? [node.meter_id] : [],
     periodStart,
-    periodEnd,
+    periodLastDay,
     !!node.meter_id && !isSensor && range !== "1h",
   );
   const authoritativeEnergy =
     node.meter_id && periodSums && Number.isFinite(Number(periodSums[node.meter_id]))
       ? Number(periodSums[node.meter_id])
       : null;
-  const energyPeriodLabel =
-    range === "24h" ? "heute" : range === "7d" ? "7 Tage" : range === "30d" ? "30 Tage" : "";
+  const energyPeriodLabel = range === "1h" ? "" : period.label;
 
 
   // Gemeinsame Zeitachse für beide Charts
-  const xDomain = useMemo<[number, number]>(() => {
-    const now = Date.now();
-    return [now - RANGE_MS[range], now];
-  }, [range]);
+  const xDomain = useMemo<[number, number]>(
+    () => [powerStartMs, visibleEndMs],
+    [powerStartMs, visibleEndMs],
+  );
+
   const xTicks = useMemo(() => {
     const step =
       range === "1h" ? 10 * 60_000
