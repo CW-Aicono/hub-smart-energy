@@ -1334,7 +1334,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
       sensor_uuid?: string;
       value?: number;
       recorded_at?: string;
-      role?: "pwr" | "today" | "total" | "month" | "year" | "soc";
+      role?: "pwr" | "flow" | "today" | "total" | "month" | "year" | "soc";
     }>;
   };
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
