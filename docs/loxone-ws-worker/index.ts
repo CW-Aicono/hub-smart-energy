@@ -152,10 +152,16 @@ function describeError(err: unknown): string {
 const SPIKE_THRESHOLDS: Record<string, number> = {
   strom: 10000, gas: 5000, wasser: 1000, wärme: 5000, kälte: 2000, default: 50000,
 };
+// v1.16: Durchfluss (role="flow") hat eigene, viel niedrigere Plausibilitäts-
+// grenzen — ein kumulativer Zählerstand fällt damit sicher raus.
+const FLOW_THRESHOLDS: Record<string, number> = {
+  wasser: 20, water: 20, gas: 200, default: 200,
+};
 // Zählerstände (today/month/year/total) können viele 100.000 kWh groß sein → keinen kW-Spike-Filter darauf anwenden.
 function isSpike(v: number, energyType: string, role: StateRole = "pwr"): boolean {
   if (!isFinite(v) || isNaN(v)) return true;
   if (role === "soc") return v < 0 || v > 100;
+  if (role === "flow") return Math.abs(v) > (FLOW_THRESHOLDS[energyType] ?? FLOW_THRESHOLDS.default);
   if (role !== "pwr") return false; // Energiewerte/aux nicht filtern
   return Math.abs(v) > (SPIKE_THRESHOLDS[energyType] ?? SPIKE_THRESHOLDS.default);
 }
