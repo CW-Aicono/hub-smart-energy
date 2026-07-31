@@ -2124,7 +2124,7 @@ export function MeterDetailDialog({
             allNodes={allNodes}
             metersById={metersById}
             visibleStartMs={powerStartMs}
-            rangeLabel={RANGE_LABEL[range]}
+            rangeLabel={range === "1h" ? RANGE_LABEL[range] : `${RANGE_LABEL[range]} ${period.label}`}
           />
         )}
 
