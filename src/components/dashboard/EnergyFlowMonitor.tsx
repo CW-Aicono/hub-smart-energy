@@ -1616,10 +1616,12 @@ export function MeterDetailDialog({
     : socPct;
 
   const { data: series = [], isLoading } = useQuery({
-    queryKey: ["meter-detail-series", node.meter_id, range, powerStartMs],
+    queryKey: ["meter-detail-series", node.meter_id, range, powerStartMs, powerEndMs],
     queryFn: async () => {
       if (!node.meter_id) return [];
       const since = new Date(powerStartMs).toISOString();
+      const until = new Date(powerEndMs).toISOString();
+
       const bucketMs =
         range === "1h" ? 60_000
         : range === "24h" ? 5 * 60_000
