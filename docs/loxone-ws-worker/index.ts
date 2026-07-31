@@ -763,20 +763,34 @@ async function connect(state: ConnState): Promise<void> {
           // v1.9: Fallback deaktiviert für Wasser/Gas — sonst würde der kumulative
           // Zählerstand als Momentanleistung interpretiert (660-kW-Spikes im Chart).
           log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): kein verwertbarer State — Block wird ignoriert (Fallback deaktiviert für Fluss-Medien)`);
+          blockDiag.push({
+            block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
+            control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
+            states: allStateKeys.map((k) => ({ key: k, role: "ignored" })),
+          });
           continue;
         }
         // Fallback: Block-UUID direkt als pwr behandeln (alte Logik) — nur für Strom/Wärme.
         state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: "pwr" });
         blocksFallback++;
         totalSubs++;
+        blockDiag.push({
+          block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
+          control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
+          states: [{ key: "(block-fallback)", role: "pwr" }],
+        });
         continue;
       }
 
       // Dedup auf Rolle: falls mehrere Keys auf gleiche Rolle mappen, ersten nehmen
       const seenRoles = new Set<StateRole>();
+      const diagStates: Array<{ key: string; role: string }> = [];
       for (const se of stateEntries) {
         // aux-Kandidaten dürfen mehrfach vorkommen (genau einer wird später "pwr")
-        if (se.role !== "aux" && seenRoles.has(se.role)) continue;
+        if (se.role !== "aux" && seenRoles.has(se.role)) {
+          diagStates.push({ key: se.key, role: `${se.role} (dup, verworfen)` });
+          continue;
+        }
         seenRoles.add(se.role);
         state.uuidMap.set(se.stateUuid, {
           ...baseEntry,
@@ -794,8 +808,18 @@ async function connect(state: ConnState): Promise<void> {
           bucket_max: 0,
           bucket_count: 0,
         });
+        diagStates.push({ key: se.key, role: se.role });
         totalSubs++;
       }
+      // v1.12: auch die vom Klassifizierer ignorierten States protokollieren —
+      // dort steckt bei „stummen" Blöcken oft der echte Leistungs-State.
+      const usedKeys = new Set(diagStates.map((d) => d.key));
+      for (const k of allStateKeys) if (!usedKeys.has(k)) diagStates.push({ key: k, role: "ignoriert" });
+      blockDiag.push({
+        block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
+        control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
+        states: diagStates,
+      });
       blocksMapped++;
       log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} → ${[...seenRoles].join(",")} (type=${ctrl?.type ?? "?"}, energy_type=${baseEntry.energy_type})`);
     }
