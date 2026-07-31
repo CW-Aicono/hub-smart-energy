@@ -1421,11 +1421,10 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     }
   }
 
-  // Ingest-Guard v1.9: Für Wasser/Gas dürfen Momentanleistungs-Readings nicht
-  // wie ein kumulativer Zählerstand aussehen. Wenn der Worker (ältere Version)
-  // fälschlich den Zählerstand als „pwr" sendet, verwerfen wir hier zur
-  // Sicherheit. Schwelle 20 (m³/h) — reale Hausanschlüsse liegen deutlich
-  // darunter, ein kumulativer Zählerstand von >100 m³ wird sicher gefiltert.
+  // Ingest-Guard v1.16: Für Wasser darf ein Momentanwert (m³/h) nicht wie ein
+  // kumulativer Zählerstand aussehen. Schwelle 20 m³/h — reale Hausanschlüsse
+  // liegen deutlich darunter. Gas wird vom Worker bereits in kW umgerechnet
+  // und deshalb hier nicht mehr gefiltert.
   const pwrUuids = [...lastByUuid.keys()].map(k => k.split("|")[1]);
   let flowGuardDropped = 0;
   if (!liveOnly && pwrUuids.length > 0) {
@@ -1433,7 +1432,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
       .from("meters")
       .select("sensor_uuid, energy_type")
       .in("sensor_uuid", [...new Set(pwrUuids)])
-      .in("energy_type", ["wasser", "gas", "water"]);
+      .in("energy_type", ["wasser", "water"]);
     const flowUuidSet = new Set(
       (metersForGuard ?? [])
         .map((m: any) => String(m.sensor_uuid ?? "").toLowerCase())
