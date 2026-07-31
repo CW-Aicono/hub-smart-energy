@@ -1,35 +1,44 @@
-# Durchfluss als Leistungswert für Gas- und Wasserzähler
+# Rollen aus den Messstellen-Einstellungen ableiten — kein zweites Regelwerk
 
-Du hast recht — meine vorherige Aussage war zu pauschal. Ein Loxone-Zählerbaustein an einem Reedkontakt rechnet aus Impulsrate × Impulswertigkeit sehr wohl einen Momentanwert: den **Durchfluss** (m³/h bzw. l/min). Der State `actual` ist genau dieser Wert, `total` ist der aufsummierte Zählerstand.
+Kein Denkfehler, du hast recht. Die Information, die der Worker zum Zuordnen braucht, steht bereits am Zähler. Das Mapping-Panel soll nicht parallel dazu ein eigenes Wissen aufbauen, sondern das vorhandene benutzen.
 
-## Was heute im Code steht (verifiziert)
+## Was heute schon in der Datenbank steht (verifiziert)
 
-In `docs/loxone-ws-worker/index.ts` gibt es `isFlowLikeType()` (Zeile 706): für `gas`, `wasser`, `water` wird ein mehrdeutiger State-Key (`actual`, `value`, `p`) **grundsätzlich verworfen** und der Block läuft „Total-only" (Zeilen 798–803). Fehlt sonst jeder verwertbare State, wird der Block für Fluss-Medien komplett ignoriert (Zeile 815). Das stammt aus der v1.9-Lehre (Zählerstand landete als 660-kW-Spike in der Leistungsreihe) — es wirft aber den echten Durchfluss mit weg.
+`meters` hat neben `energy_type` bereits `device_type`, `source_unit_power` und `source_unit_energy` — genau die Felder aus dem Dialog „Gerät bearbeiten" („Einheit des Gateways"). Aktueller Bestand der Loxone-verknüpften Geräte:
 
-Die Detailansicht kann Durchfluss bereits darstellen (dein Screenshot: „Ø Durchfluss 0,06 m³/h", „Volumen 0,90 m³"), die Datenlieferung ist also der Engpass, nicht die Anzeige.
+- 35 × `meter` / `strom` mit kW + kWh
+- 5 × `meter` / `gas` mit kW + kWh
+- 1 × `meter` / `wasser` mit **m³/h + m³**
+- 16 × `actuator` und 9 × `sensor` mit `bool` + `bool` (Taster, Schaltausgänge — z. B. „Reset Max Gesamt")
+
+Damit ist pro Gerät bereits eindeutig hinterlegt, ob und in welcher Einheit ein Momentanwert erwartet wird.
 
 ## Umsetzung
 
-### 1. Eigene Rolle „flow" statt Pauschal-Verbot (Worker v1.16)
-- Für `gas`/`wasser` wird `actual` nicht mehr blind verworfen, sondern als **Durchfluss-Kandidat** behandelt — allerdings nur, wenn die Loxone-Struktur die Einheit bestätigt (`m³/h`, `l/min`, `l/h`, `m3/h` im `format`/`unit`-Feld des Controls). Einheit fehlt oder passt nicht → weiterhin kein Wert, Block erscheint als Lücke in der Zuordnungs-UI.
-- Neue Rolle `flow` neben `pwr`: gleiche 5-Min-Bucket-Aggregation, aber getrennte Plausibilitätsgrenzen (z. B. Wasser 20 m³/h, Gas 100 m³/h statt der kW-Deckel).
-- Der bestehende Schutz bleibt vollständig: ein monoton steigender Zählerstand kann nie zu `flow` werden, weil die Rolle aus Name **und** Einheit kommt und nicht aus dem Werteverlauf.
+### 1. Der Worker liest die erwartete Rolle aus dem Zähler (v1.16)
+Statt der Sonderregel `isFlowLikeType()` (aktuell in `docs/loxone-ws-worker/index.ts`, Zeile 706, sperrt Gas/Wasser pauschal aus) entscheidet die Konfiguration des Zählers:
 
-### 2. Manuelle Zuordnung auch für Gas/Wasser freischalten
-- Die explizite Zuordnung (`meters.power_state_uuid`) gilt künftig auch für Fluss-Medien — sie ist die höchste Priorität und schlägt jede Heuristik.
-- Im Panel „Loxone State-Zuordnung" heißt die Spalte bei Gas/Wasser **„Durchfluss-State"** statt „Leistungs-State", mit Einheit-Hinweis (m³/h). Kein Verstecken des Dropdowns mehr — meine vorherige Idee dazu entfällt.
+- `device_type = actuator/sensor` mit `source_unit_power = bool` → **kein** Momentanwert erwartet. Der Block wird als reiner Schalt-/Statusbaustein geführt und taucht gar nicht mehr als offene Zuordnung auf.
+- `source_unit_power` = kW/W → Momentanleistung (Rolle `pwr`), wie bisher.
+- `source_unit_power` = m³/h, l/min, l/h → **Durchfluss** (neue Rolle `flow`) — für Gas und Wasser aus dem Reedkontakt-Impuls, den der Miniserver bereits in eine Menge/Zeit umrechnet.
+- Der passende State wird über Name **und** die Einheit aus der Loxone-Struktur gewählt; stimmt die Einheit nicht mit der am Zähler hinterlegten überein, wird nichts geschrieben und die Abweichung gemeldet — statt zu raten.
 
-### 3. Impulswertigkeit sichtbar machen
-Die Impuls-zu-Menge-Umrechnung passiert im Miniserver; die Cloud bekommt bereits die fertige Größe. Deshalb keine eigene Impulskonfiguration im EMS — stattdessen zeigt die Zuordnungs-UI die aus Loxone gelesene Einheit je State, damit sofort erkennbar ist, ob der Baustein korrekt parametriert ist (`actual` ohne Einheit = Loxone-Konfiguration prüfen).
+### 2. Das Mapping-Panel wird zur Ausnahmeliste
+Es bleibt nur für den Rest: Blöcke, bei denen Zählerkonfiguration und Loxone-Struktur nicht zusammenpassen. Konkret:
+- Aktoren/Taster und alles mit `bool` verschwinden aus der Liste.
+- Bei Gas/Wasser heißt die Spalte „Durchfluss-State" (m³/h) statt „Leistungs-State".
+- Zeile mit Konflikt zeigt an, was erwartet wurde und was der Miniserver liefert, plus Direktlink „Messstelle bearbeiten" — der Fix passiert dort, nicht in einem Zweit-UI.
 
-### 4. Anzeige und Aggregation
-- Gas/Wasser-Kacheln und Detaildialog nutzen die `flow`-Reihe für Ø/Max/Min mit korrekter Einheit; die Mengen-KPI bleibt wie bisher aus `meter_period_totals`.
-- Keine Umrechnung von Durchfluss in kW — Gas wird weiterhin nur für die Energiebilanz über den Brennwert umgerechnet, nicht in der Leistungsreihe.
+### 3. Konsequenz für die 5 Gaszähler
+Die stehen aktuell auf kW/kWh. Wenn die Loxone-Bausteine dort Durchfluss in m³/h liefern, ist die richtige Korrektur eine Änderung der Einheit am Zähler (Dialog „Gerät bearbeiten"), nicht eine Sonderregel im Worker. Ich lege dir die betroffenen Zähler mit dem tatsächlich vom Miniserver gemeldeten Einheitenformat vor, bevor etwas geändert wird.
+
+### 4. Anzeige
+Gas-/Wasserkacheln und Detaildialog nutzen die `flow`-Reihe mit korrekter Einheit für Ø/Max/Min; die Mengen-KPI bleibt aus `meter_period_totals`. Keine Umrechnung von Durchfluss in kW — Gas wird nur für die Energiebilanz über den Brennwert (bereits am Zähler hinterlegt: 11,5 kWh/m³) umgerechnet.
 
 ## Verifikation
-- „Wasserzähler Hausanschluss": `actual` bekommt Rolle `flow`, Live-Wert in m³/h erscheint, `total` bleibt Zählerstand.
-- Gegenprobe: ein Gaszähler ohne Einheiten-Angabe liefert weiterhin **keinen** Leistungswert und taucht als offene Zuordnung auf — statt still zu raten.
-- Keine neue Zeile in `meter_power_readings_5min` mit Zählerstandsgrößen (Stichprobe über 24 h nach dem Deploy).
+- „Wasserzähler Hausanschluss" (m³/h konfiguriert): Live-Durchfluss erscheint, `total` bleibt Zählerstand.
+- „Reset Max Gesamt" und alle weiteren 24 bool-Geräte tauchen nicht mehr im Mapping-Panel auf.
+- Keine Zeile in `meter_power_readings_5min`, deren Größenordnung einem Zählerstand entspricht (Stichprobe 24 h nach Deploy).
 
 ## Technische Details
-Geändert: `docs/loxone-ws-worker/index.ts` (Rolle `flow`, Einheiten-Auswertung aus LoxAPP3-Control, `isFlowLikeType` als Rollen-Weiche statt Sperre) + `docs/loxone-ws-worker/UPDATE-v1.16-flow-role.md`; `supabase/functions/gateway-ingest` und `bridge-aggregator` für das Routing der Rolle `flow`; `src/components/super-admin/LoxoneStateMappingPanel.tsx` (Beschriftung, Einheiten, Dropdown auch für Gas/Wasser). Der Worker auf Hetzner muss nach dem Merge neu gebaut und neu gestartet werden.
+Geändert: `docs/loxone-ws-worker/index.ts` (Rollenableitung aus `device_type`/`source_unit_power`, neue Rolle `flow`, Entfall `isFlowLikeType` als Pauschalsperre) + `docs/loxone-ws-worker/UPDATE-v1.16-unit-driven-roles.md`; `supabase/functions/gateway-ingest` liefert die Einheitenfelder im Link-Payload mit; `bridge-aggregator` routet `flow`; `src/components/super-admin/LoxoneStateMappingPanel.tsx` wird zur Konfliktliste. Worker auf Hetzner nach dem Merge neu bauen und starten.
