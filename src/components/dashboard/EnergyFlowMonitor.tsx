@@ -1894,9 +1894,9 @@ export function MeterDetailDialog({
       : range === "24h" ? 60 * 60_000
       : range === "7d" ? 6 * 60 * 60_000
       : 24 * 60 * 60_000;
-    const now = Date.now();
     const startAligned = Math.floor(powerStartMs / bucketMs) * bucketMs;
-    const endAligned = Math.floor(now / bucketMs) * bucketMs;
+    const endAligned = Math.floor(visibleEndMs / bucketMs) * bucketMs;
+
     const map = new Map<number, { import: number; export: number }>();
     // Alle Buckets vorab mit 0 initialisieren, damit keine Lücken entstehen
     for (let k = startAligned; k <= endAligned; k += bucketMs) {
