@@ -779,7 +779,9 @@ const LiveValues = () => {
                 const Icon = getDeviceIconForMeter(meter);
                 const location = locations.find((l) => l.id === meter.location_id);
                 const isFlowType = meter.energy_type === "wasser" || meter.energy_type === "gas";
-                const soc = socByMeterId.get(meter.id);
+                const socLive = liveBroadcast.socByMeter[meter.id];
+                const socDb = socByMeterId.get(meter.id);
+                const soc = socLive !== undefined ? { pct: socLive, updatedAt: new Date(liveBroadcast.updatedAtByMeter[meter.id] ?? Date.now()).toISOString() } : socDb;
                 // Non-Energie-Sensoren (Zustand, Zähler, Zeit, Temperatur …) sollen
                 // keine kWh-Summen anzeigen und "bool" wird als An/Aus dargestellt.
                 const displayUnit = ((meter as any).source_unit_power || meter.unit || "").toString();
