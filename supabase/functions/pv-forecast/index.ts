@@ -123,50 +123,51 @@ const fetchRawMeterDailyHistory = async (
   const fromIso = new Date(Date.now() - (days + 1) * 24 * 60 * 60 * 1000).toISOString();
   const toIso = new Date().toISOString();
   const rows: Array<{ power_value: number; recorded_at: string }> = [];
-  let offset = 0;
-
+  // Primärquelle: 5-Min-Aggregat. Die Rohtabelle `meter_power_readings` wird
+  // für Worker-Zähler nur noch sporadisch befüllt; einzelne Restzeilen würden
+  // die Tagesintegration massiv verfälschen.
+  let aggOffset = 0;
   while (true) {
     const { data, error } = await supabase
-      .from("meter_power_readings")
-      .select("power_value, recorded_at")
+      .from("meter_power_readings_5min")
+      .select("power_avg, bucket")
       .eq("meter_id", meterId)
-      .gte("recorded_at", fromIso)
-      .lt("recorded_at", toIso)
-      .order("recorded_at", { ascending: true })
-      .range(offset, offset + RAW_READING_PAGE_SIZE - 1);
-
+      .gte("bucket", fromIso)
+      .lt("bucket", toIso)
+      .order("bucket", { ascending: true })
+      .range(aggOffset, aggOffset + RAW_READING_PAGE_SIZE - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
-
-    rows.push(...data);
+    for (const r of data as any[]) {
+      if (r.power_avg == null) continue;
+      rows.push({ power_value: Number(r.power_avg), recorded_at: r.bucket });
+    }
     if (data.length < RAW_READING_PAGE_SIZE) break;
-    offset += RAW_READING_PAGE_SIZE;
+    aggOffset += RAW_READING_PAGE_SIZE;
   }
 
-  // Fallback: worker-only meters have no rows in meter_power_readings.
-  // Map 5-min buckets to the same shape so integrateDailyEnergyFromRawRows
-  // computes real Ist-Werte instead of returning an empty history.
+  // Fallback: Zähler ohne Aggregat-Buckets (reiner Polling-Ingest).
   if (rows.length === 0) {
-    let aggOffset = 0;
+    let offset = 0;
     while (true) {
       const { data, error } = await supabase
-        .from("meter_power_readings_5min")
-        .select("power_avg, bucket")
+        .from("meter_power_readings")
+        .select("power_value, recorded_at")
         .eq("meter_id", meterId)
-        .gte("bucket", fromIso)
-        .lt("bucket", toIso)
-        .order("bucket", { ascending: true })
-        .range(aggOffset, aggOffset + RAW_READING_PAGE_SIZE - 1);
+        .gte("recorded_at", fromIso)
+        .lt("recorded_at", toIso)
+        .order("recorded_at", { ascending: true })
+        .range(offset, offset + RAW_READING_PAGE_SIZE - 1);
+
       if (error) throw error;
       if (!data || data.length === 0) break;
-      for (const r of data as any[]) {
-        if (r.power_avg == null) continue;
-        rows.push({ power_value: Number(r.power_avg), recorded_at: r.bucket });
-      }
+
+      rows.push(...data);
       if (data.length < RAW_READING_PAGE_SIZE) break;
-      aggOffset += RAW_READING_PAGE_SIZE;
+      offset += RAW_READING_PAGE_SIZE;
     }
   }
+
 
   const todayKey = toLocalDateKey(new Date().toISOString());
   return integrateDailyEnergyFromRawRows(rows).filter((entry) => entry.day < todayKey);

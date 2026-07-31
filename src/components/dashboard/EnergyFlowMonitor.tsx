@@ -17,6 +17,8 @@ import { computeRadialDefault } from "@/lib/energyFlowLayout";
 
 const CENTER_NODE_ID = "__center__";
 import { buildLoxoneResolver } from "@/lib/loxoneUuidResolver";
+import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
+
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
@@ -1171,36 +1173,19 @@ function NodeDetailOverlay({
     queryKey: ["energyflow-sparkline", node.meter_id],
     queryFn: async () => {
       if (!node.meter_id) return [];
-      const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-      const { data } = await supabase
-        .from("meter_power_readings")
-        .select("recorded_at, power_value")
-        .eq("meter_id", node.meter_id)
-        .gte("recorded_at", since)
-        .order("recorded_at", { ascending: true })
-        .limit(500);
-      let rows = (data ?? []).map((r: any) => ({
-        t: new Date(r.recorded_at).getTime(),
-        v: Number(r.power_value) * 1000, // kW → W
-      }));
-      // Fallback: worker-only meters (no raw rows) → 5-min buckets.
-      if (rows.length === 0) {
-        const { data: agg } = await supabase
-          .from("meter_power_readings_5min")
-          .select("bucket, power_avg")
-          .eq("meter_id", node.meter_id)
-          .gte("bucket", since)
-          .order("bucket", { ascending: true })
-          .limit(500);
-        rows = (agg ?? [])
-          .filter((r: any) => r.power_avg != null)
-          .map((r: any) => ({
-            t: new Date(r.bucket).getTime(),
-            v: Number(r.power_avg) * 1000,
-          }));
-      }
-      return rows;
+      const since = new Date(Date.now() - 24 * 3600_000);
+      // Aggregat-Serie ist die Primärquelle; die Rohtabelle wird für
+      // Worker-Zähler nicht mehr befüllt und würde die Kurve auf einen
+      // einzelnen Punkt reduzieren.
+      const series = await fetchPowerSeriesAuto([node.meter_id], since, new Date(), 500);
+      return series
+        .filter((r) => r.power_avg != null)
+        .map((r) => ({
+          t: new Date(r.bucket).getTime(),
+          v: Number(r.power_avg) * 1000, // kW → W
+        }));
     },
+
 
     enabled: !!node.meter_id,
     staleTime: 60_000,
@@ -1615,7 +1600,7 @@ export function MeterDetailDialog({
         }
       };
 
-      if (range !== "1h") {
+      {
         for (let offset = 0; offset < aggregateLimit; offset += pageSize) {
           const to = Math.min(offset + pageSize, aggregateLimit) - 1;
           const { data, error } = await supabase
@@ -1633,21 +1618,28 @@ export function MeterDetailDialog({
         }
       }
 
-      for (let offset = 0; offset < rawLimit; offset += pageSize) {
-        const to = Math.min(offset + pageSize, rawLimit) - 1;
-        const { data, error } = await supabase
-          .from("meter_power_readings")
-          .select("recorded_at, power_value")
-          .eq("meter_id", node.meter_id)
-          .gte("recorded_at", since)
-          .order("recorded_at", { ascending: true })
-          .range(offset, to);
-        if (error || !data || data.length === 0) break;
-        for (const row of data as any[]) {
-          put(new Date(row.recorded_at).getTime(), Number(row.power_value), 2);
+
+      // Rohwerte nur im 1h-Fenster als Detail-Top-up: für Worker-Zähler
+      // enthält die Rohtabelle nur noch vereinzelte Zeilen, die längere
+      // Zeiträume sonst verfälschen würden.
+      if (range === "1h") {
+        for (let offset = 0; offset < rawLimit; offset += pageSize) {
+          const to = Math.min(offset + pageSize, rawLimit) - 1;
+          const { data, error } = await supabase
+            .from("meter_power_readings")
+            .select("recorded_at, power_value")
+            .eq("meter_id", node.meter_id)
+            .gte("recorded_at", since)
+            .order("recorded_at", { ascending: true })
+            .range(offset, to);
+          if (error || !data || data.length === 0) break;
+          for (const row of data as any[]) {
+            put(new Date(row.recorded_at).getTime(), Number(row.power_value), 2);
+          }
+          if (data.length < to - offset + 1) break;
         }
-        if (data.length < to - offset + 1) break;
       }
+
 
       // Fallback: falls beide Power-Tabellen leer sind, aus sensor_readings_raw
       // rekonstruieren (Gateway-Meter, deren Werte nur dort landen).
@@ -2305,40 +2297,22 @@ function HouseSelfSufficiencyPanel({
     enabled: involvedMeterIds.length > 0 && (pvNodes.length > 0 || gridNodes.length > 0),
     staleTime: 30_000,
     queryFn: async () => {
-      const since = new Date(visibleStartMs).toISOString();
+      const since = new Date(visibleStartMs);
       const result: Record<string, { t: number; kw: number }[]> = {};
-      await Promise.all(
-        involvedMeterIds.map(async (mid) => {
-          const { data } = await supabase
-            .from("meter_power_readings")
-            .select("recorded_at, power_value")
-            .eq("meter_id", mid)
-            .gte("recorded_at", since)
-            .order("recorded_at", { ascending: true })
-            .limit(3000);
-          let rows = (data ?? []).map((r: any) => ({
-            t: new Date(r.recorded_at).getTime(),
-            kw: Number(r.power_value),
-          }));
-          // Fallback: worker-only meters (no raw rows) → 5-min buckets.
-          if (rows.length === 0) {
-            const { data: agg } = await supabase
-              .from("meter_power_readings_5min")
-              .select("bucket, power_avg")
-              .eq("meter_id", mid)
-              .gte("bucket", since)
-              .order("bucket", { ascending: true })
-              .limit(3000);
-            rows = (agg ?? [])
-              .filter((r: any) => r.power_avg != null)
-              .map((r: any) => ({
-                t: new Date(r.bucket).getTime(),
-                kw: Number(r.power_avg),
-              }));
-          }
-          result[mid] = rows;
-        }),
-      );
+      // Aggregat-Serie als Primärquelle (siehe Sparkline oben).
+      const series = await fetchPowerSeriesAuto(involvedMeterIds, since, new Date(), 3000);
+      for (const mid of involvedMeterIds) result[mid] = [];
+      for (const row of series) {
+        if (row.power_avg == null) continue;
+        (result[row.meter_id] ??= []).push({
+          t: new Date(row.bucket).getTime(),
+          kw: Number(row.power_avg),
+        });
+      }
+      for (const mid of Object.keys(result)) {
+        result[mid].sort((a, b) => a.t - b.t);
+      }
+
 
       return result;
     },

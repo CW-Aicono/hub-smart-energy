@@ -392,9 +392,17 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
           }
 
           if (recentRows.length) {
-            mergedRows = mergedRows.filter((row) => new Date(row.recorded_at) < recentCutoff);
+            // Nur für Zähler, die tatsächlich frische Punkte liefern, das
+            // Aggregat im Top-up-Fenster ersetzen — sonst würden Zähler ohne
+            // Rohdaten ihre Aggregatwerte der letzten Minuten verlieren.
+            const topUpMeters = new Set(recentRows.map((r) => r.meter_id));
+            mergedRows = mergedRows.filter(
+              (row) =>
+                !topUpMeters.has(row.meter_id) || new Date(row.recorded_at) < recentCutoff,
+            );
             mergedRows.push(...recentRows);
           }
+
         }
 
 
