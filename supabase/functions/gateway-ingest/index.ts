@@ -37,6 +37,21 @@ const LOXONE_WS_IO_PAUSED_ACTIONS = new Set<string>([]);
 // Wird für den Delta-Guard in handleBridgeReadings verwendet.
 const bridgeRawLastCache = new Map<string, { value: number; atMs: number }>();
 
+// v1.10: Lookup-Cache für den Live-Broadcast-Pfad (live_only). Der Worker pusht
+// alle paar Sekunden — ohne Cache würde jeder Push zwei DB-Reads auslösen.
+// TTL 5 Min, pro warmer Function-Instanz.
+const bridgeLookupCache = new Map<string, { value: unknown; expiresAt: number }>();
+const BRIDGE_LOOKUP_TTL_MS = 5 * 60_000;
+function bridgeLookupGet<T>(key: string): T | undefined {
+  const hit = bridgeLookupCache.get(key);
+  if (!hit) return undefined;
+  if (hit.expiresAt < Date.now()) { bridgeLookupCache.delete(key); return undefined; }
+  return hit.value as T;
+}
+function bridgeLookupSet(key: string, value: unknown): void {
+  bridgeLookupCache.set(key, { value, expiresAt: Date.now() + BRIDGE_LOOKUP_TTL_MS });
+}
+
 async function handleLoxoneWsEmergencyPause(req: Request, action: string | null): Promise<Response> {
   const _auth = await validateApiKey(req);
   if (isAuthError(_auth)) return _auth;
