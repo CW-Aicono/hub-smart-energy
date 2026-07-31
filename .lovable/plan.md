@@ -1,87 +1,63 @@
-# Plan: Gestoppte Cron-Jobs analysieren und sicher wieder starten
+# Kachel vs. Detailansicht: Ursache und Bereinigung
 
-## Ausgangslage
+## Befund (in der Datenbank verifiziert)
 
-Beim letzten Backend-Ausfall wurden zwei problematische Cron-Jobs gestoppt:
+Beispiel „Zähler Kühlschrank" (Einheit kW, Typ Strom):
 
-- **Job 109** `run_ems_cron_bundle()` — minütlicher Sammeljob
-- **Job 70** `guarded_cleanup_bridge_raw_samples()` — Cleanup-Job für Bridge-Rohdaten
+- Kachel: 0,00 kW live, 445 Wh heute, 100,6 kWh Zählerstand — das ist plausibel.
+- Detailansicht: Ø 12,33 kW, Max 99,76 kW, Energie 192,90 kWh.
 
-Derzeit sind beide **inaktiv**. Das Backend ist stabil (13/60 Verbindungen, 57 % Speicher, 29 % Festplatte). Sie laufen **nicht automatisch wieder an**, solange sie nicht neu eingeplant werden.
+In `meter_power_readings_5min` stehen für diesen Zähler zwei völlig verschiedene Größenordnungen nebeneinander:
 
-## Was machten die gestoppten Jobs?
+```text
+19:05  power_avg 0,0494   power_max 0,0599   (echte Leistung)
+13:35  power_avg 99,76    power_max 100,49   (= der Zählerstand 100,6 kWh)
+```
 
-### Job 109 — `run_ems_cron_bundle()` (jede Minute)
+Die Ausreißer stammen alle aus `source = 'bridge_ws'` und liegen exakt auf dem Wert des kumulativen Zählerstands. Der Loxone-WS-Worker schreibt also zeitweise den **Zählerstand (kWh) in die Leistungsreihe (kW)**.
 
-Dieser Job war ein Sammel-Scheduler, der jede Minute mehrere Edge Functions und Datenbankfunktionen aufruft:
+Ursache im Worker (`docs/loxone-ws-worker/index.ts`, `classifyAux`, Zeile 1122 ff.): unbekannte States werden nach Werteverlauf klassifiziert. Sinkt ein monoton steigender Zählerstand auch nur einmal (Reset, Rundung, Neustart, Nullwert), wird `obs_decreased` gesetzt und der State dauerhaft als `pwr` eingestuft. Der Spike-Filter greift nicht, weil 100 kW für Strom (Limit 10.000) plausibel aussieht.
 
-- **Immer (jede Minute):**
-  - `automation-scheduler` — Cloud-Automatisierungen ausführen
-- **Gerade Minuten:**
-  - `gateway-periodic-sync` — Gateway-Synchronisation
-  - `cheap-charging-scheduler` — günstiges Laden planen
-- **Ungerade Minuten:**
-  - `dlm-scheduler` — dynamisches Lastmanagement
-  - `solar-charging-scheduler` — PV-Überschussladen
-- **Modulo 5 Minuten:**
-  - `bridge-aggregator` (0)
-  - `brighthub-periodic-sync` (1)
-  - `power-limit-scheduler` + `peak-shaving-scheduler` (2)
-  - `collect_db_metrics` + `sensor-history-aggregator` (3)
-  - `evaluate_monitoring_rules` + `snapshot_charge_point_uptime` (4)
+Die Detailansicht ist damit korrekt gerechnet, aber auf verunreinigten Daten:
+- Ø/Max/Min kommen direkt aus der 5-Min-Reihe.
+- „Energie" wird per Trapez-Integration aus derselben Reihe gebildet — ein 100-kW-Plateau über wenige Minuten erzeugt die 192,90 kWh.
 
-Der Job hat bereits ein `pg_try_advisory_xact_lock`, um Mehrfachläufe zu verhindern, aber die vielen synchronen `net.http_post`-Aufrufe in schneller Folge konnten die Verbindungen/Timeouts blockieren, wenn Edge Functions lange brauchten.
+Die Kachel nutzt dagegen den Live-Broadcast bzw. die Rollenwerte (`pwr`, `today`, `total`) und ist deshalb richtig.
 
-### Job 70 — `guarded_cleanup_bridge_raw_samples()`
+Betroffen sind nicht nur diese Kachel. Auffällige `bridge_ws`-Buckets der letzten 48 h (|power_avg| > 20):
 
-Löscht/verdichtet alte Rohsamples der Bridge-Worker. Lief beim letzten Mal in einen "job startup timeout", weil die Datenbank zu dem Zeitpunkt bereits gesättigt war.
+```text
+ESB Leistung Sinec Energiespeicher 188 | Voltage L1-L2 52 | ESB Leistung Messschrank Wago 45
+Erzeugung 22 | PAC 3220 NSHV Süd 20 | Zähler Gesamtverbrauch 16 | Zähler Kühlschrank 16
+Eigenverbrauch 15 | Ostflügel OG Süd 12 | PAC 3220 NSHV Nord 11 | Einspeisung 6
+```
 
-## Können wir sie wieder starten?
+Besonders deutlich: „Voltage L1-L2" mit 408 (Volt) und „Ostflügel OG Süd" mit 2939 in der Leistungsreihe.
 
-**Ja, aber nicht beide auf einmal und nicht ohne Absicherungen.**
+## Umsetzung
 
-Vorschlag für einen schrittweise Wiederanlauf:
+### 1. Worker härten (v1.15)
+- `classifyAux`: ein einzelner Rückgang reicht nicht mehr. `pwr` nur bei mehrfachen, echten Rückgängen (mind. 3 Abnahmen) **und** wenn der Wertebereich nicht monoton-kumulativ aussieht; Rückgang auf 0 oder ein Sprung auf einen kleineren Startwert (Reset) zählt nicht.
+- Zusätzlicher Plausibilitätsvergleich: liegt der Kandidatenwert nahe am bereits bekannten `total`/`today` desselben Blocks, wird er nie zu `pwr`.
+- Einmal als `total` erkannte States werden nicht mehr zu `pwr` umklassifiziert.
+- Zähler-States mit Einheit V/A/Hz/°C dürfen nie in die Leistungsreihe schreiben.
+- Neue Datei `docs/loxone-ws-worker/UPDATE-v1.15-role-hardening.md` mit laienverständlicher Update-Anleitung.
 
-1. **Keine vollständige Wiederherstellung des alten Bundles.** Stattdessen: Bundle aufsplitten oder Laufzeitbegrenzungen einbauen.
-2. **Zuerst nur den Cleanup-Job (Job 70) wieder aktivieren**, weil er keine externen HTTP-Aufrufe macht und das Datenaufkommen reduziert.
-3. **Danach die Edge-Function-Aufrufe aus dem Bundle in separate, zeitlich versetzte Cron-Jobs verteilen**, statt sie alle in einer einzigen Minute zu starten.
-4. **Für jeden neuen Job ein Statement-Timeout und ein Advisory-Lock setzen**, damit ein hängender Aufruf nicht alle Verbindungen blockiert.
-5. **Monitoring einrichten**: Mindestens ein simpler Check, der innerhalb von 10 Minuten nach Wiederanlauf prüft, ob `pg_stat_activity` wieder ansteigt.
+### 2. Serverseitiger Schutzwall
+Trigger/Guard auf dem Ingest-Pfad für `meter_power_readings_5min`: Werte, die den zuletzt bekannten Zählerstand desselben Zählers treffen (±1 %) oder das Vielfache (>50×) des rollenden Medians der letzten 24 h überschreiten, werden verworfen und einmalig als Integrationsfehler protokolliert — statt still falsche Statistiken zu erzeugen.
 
-## Konkrete Maßnahmen
+### 3. Historie bereinigen
+Migration, die die verunreinigten Buckets entfernt: `source = 'bridge_ws'` und `power_avg` innerhalb ±2 % des Zählerstands des jeweiligen Zählers bzw. > 50× des Medians der übrigen Buckets. Betroffen sind nach aktueller Zählung wenige hundert Zeilen; echte Lastspitzen bleiben erhalten. Vor dem Löschen wird die Trefferliste je Zähler ausgegeben.
 
-### Kurzfristig (sofort umsetzbar)
+### 4. Anzeige-Absicherung
+In `MeterDetailDialog` (`EnergyFlowMonitor.tsx`) ein Robustheits-Filter für die Statistik: Punkte, die > 50× des Medians der Reihe liegen und zugleich dem Zählerstand entsprechen, fließen nicht in Ø/Max/Energie ein; stattdessen erscheint ein dezenter Hinweis „n Ausreißer ausgeblendet". Damit stimmen Kachel und Detail auch dann überein, wenn später erneut Fehlwerte durchrutschen.
 
-- Cleanup-Job `guarded_cleanup_bridge_raw_samples()` wieder einschalten, aber nur alle 10 Minuten statt jede Minute (falls er vorher häufiger lief).
-- Den Bundle-Job **nicht** 1:1 wieder aktivieren.
+## Verifikation
 
-### Mittelfristig (empfohlen)
+- Nach Bereinigung für „Zähler Kühlschrank" im 24-h-Fenster: Ø und Max im Bereich 0,05–0,07 kW, Energie im Bereich der 445 Wh der Kachel.
+- Stichprobe „Voltage L1-L2" und „Ostflügel OG Süd": keine Leistungswerte mehr aus Spannungs-/Zählerstands-States.
+- Worker-Log nach Update: keine neuen `ws_automap_pwr`-Meldungen für Zählerstands-States.
 
-- `run_ems_cron_bundle()` ersetzen durch einzelne Cron-Jobs mit gestaffeltem Intervall, z. B.:
-  - `automation-scheduler` alle 2 Minuten
-  - `gateway-periodic-sync` alle 5 Minuten
-  - `cheap-charging-scheduler` alle 5 Minuten
-  - `dlm-scheduler` alle 5 Minuten
-  - `solar-charging-scheduler` alle 5 Minuten
-  - `bridge-aggregator` alle 5 Minuten
-  - `brighthub-periodic-sync` alle 5 Minuten
-  - `power-limit-scheduler` alle 5 Minuten
-  - `peak-shaving-scheduler` alle 5 Minuten
-  - `sensor-history-aggregator` alle 5 Minuten
-  - `evaluate_monitoring_rules` alle 5 Minuten
-  - `snapshot_charge_point_uptime` alle 5 Minuten
-  - `collect_db_metrics` alle 5 Minuten
-- Jedem einzelnen Job ein `SET statement_timeout` geben (z. B. 30 s).
-- Alle Edge-Function-Aufrufe über `pg_net`/`net.http_post` mit einem kurzen Timeout absichern.
+## Technische Details
 
-### Monitoring
-
-- Nach dem Wiederanlauf 10 Minuten lang `pg_stat_activity` beobachten.
-- Falls `active_connections` > 45 oder wiederholt Timeouts auftreten, sofort stoppen.
-
-## Entscheidungsfrage an dich
-
-Soll ich:
-
-1. **Nur den Cleanup-Job wieder aktivieren** (geringes Risiko), oder
-2. **Den Bundle-Job in separate, zeitlich verteilte Jobs aufteilen** und dann schrittweise wieder aktivieren (mehr Aufwand, aber stabiler langfristig)?
+Geänderte Dateien: `docs/loxone-ws-worker/index.ts` (+ Update-Doku), eine SQL-Migration (Guard-Funktion und Bereinigung), `src/components/dashboard/EnergyFlowMonitor.tsx`. Der Worker auf Hetzner muss nach dem Merge neu gebaut/gestartet werden; die Anleitung liegt der Änderung bei.
