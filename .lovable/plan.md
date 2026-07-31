@@ -29,11 +29,16 @@ Es bleibt nur für den Rest: Blöcke, bei denen Zählerkonfiguration und Loxone-
 - Bei Gas/Wasser heißt die Spalte „Durchfluss-State" (m³/h) statt „Leistungs-State".
 - Zeile mit Konflikt zeigt an, was erwartet wurde und was der Miniserver liefert, plus Direktlink „Messstelle bearbeiten" — der Fix passiert dort, nicht in einem Zweit-UI.
 
-### 3. Konsequenz für die 5 Gaszähler
-Die stehen aktuell auf kW/kWh. Wenn die Loxone-Bausteine dort Durchfluss in m³/h liefern, ist die richtige Korrektur eine Änderung der Einheit am Zähler (Dialog „Gerät bearbeiten"), nicht eine Sonderregel im Worker. Ich lege dir die betroffenen Zähler mit dem tatsächlich vom Miniserver gemeldeten Einheitenformat vor, bevor etwas geändert wird.
+### 3. Gas: m³ ist die Quelle, kWh das Ergebnis
+Korrektur zum vorherigen Entwurf: Die Einheit am Gaszähler ist bereits richtig auf **m³** gesetzt. Der Miniserver liefert m³ (Menge) bzw. m³/h (Durchfluss); die Umrechnung in kWh bzw. kW passiert bei uns über Gasart, Zustandszahl und Brennwert (Beispiel: 0,9636 × 11,5 kWh/m³). Es wird also nichts an den 5 Gaszählern umkonfiguriert.
+
+Konsequenz für den Worker: Er speichert für Gas den Rohwert in m³/h als `flow` **und** den daraus errechneten kW-Wert in der Leistungsreihe — die Umrechnung erfolgt einmal zentral mit den am Zähler hinterlegten Gas-Parametern, nicht im UI.
+
+Wasser bleibt unverändert bei m³ und m³/h — keine Umrechnung, keine kWh, keine kW.
 
 ### 4. Anzeige
-Gas-/Wasserkacheln und Detaildialog nutzen die `flow`-Reihe mit korrekter Einheit für Ø/Max/Min; die Mengen-KPI bleibt aus `meter_period_totals`. Keine Umrechnung von Durchfluss in kW — Gas wird nur für die Energiebilanz über den Brennwert (bereits am Zähler hinterlegt: 11,5 kWh/m³) umgerechnet.
+Wasser: Kacheln und Detaildialog zeigen m³/h (Ø/Max/Min) und m³ als Menge. Gas: kW und kWh wie bei Strom, zusätzlich der m³-Rohwert im Tooltip zur Nachvollziehbarkeit. Die Mengen-KPI bleibt in beiden Fällen aus `meter_period_totals`.
+
 
 ## Verifikation
 - „Wasserzähler Hausanschluss" (m³/h konfiguriert): Live-Durchfluss erscheint, `total` bleibt Zählerstand.
