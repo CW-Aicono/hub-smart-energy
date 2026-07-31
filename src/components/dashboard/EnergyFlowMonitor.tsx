@@ -17,6 +17,8 @@ import { computeRadialDefault } from "@/lib/energyFlowLayout";
 
 const CENTER_NODE_ID = "__center__";
 import { buildLoxoneResolver } from "@/lib/loxoneUuidResolver";
+import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
+
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
