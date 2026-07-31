@@ -24,7 +24,29 @@ type MeterRow = {
   sensor_uuid: string | null;
   power_state_uuid: string | null;
   power_state_key: string | null;
+  device_type: string | null;
+  source_unit_power: string | null;
 };
+
+/**
+ * v1.16: Was ein Block liefern soll, entscheidet die Messstellen-Konfiguration.
+ * Aktoren/Sensoren mit bool-Einheit brauchen keine Zuordnung.
+ */
+function momentaryKind(m: MeterRow | null): "pwr" | "flow" | null {
+  if (!m) return null;
+  const dt = (m.device_type ?? "").toLowerCase();
+  const up = (m.source_unit_power ?? "").toLowerCase().replace(/\s/g, "");
+  const boolish = !up || up === "bool" || up === "an/aus" || up === "on/off";
+  if ((dt === "actuator" || dt === "sensor") && boolish) return null;
+  if (boolish) {
+    const et = (m.energy_type ?? "").toLowerCase();
+    if (et === "wasser" || et === "water" || et === "gas") return "flow";
+    return up ? null : "pwr";
+  }
+  if (/^(kw|w|mw|kva|va)$/.test(up)) return "pwr";
+  if (/(m3|m³)\/h|l\/(min|h|s)|lpm/.test(up)) return "flow";
+  return "pwr";
+}
 
 /**
  * Deterministische Rollen-Zuordnung (v1.15).
