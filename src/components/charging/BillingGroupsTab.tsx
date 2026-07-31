@@ -119,8 +119,21 @@ export default function BillingGroupsTab({ isAdmin }: Props) {
             <TableBody>
               {sortedGroups.map((g) => (
                 <TableRow key={g.id}>
-                  <TableCell className="font-medium">{g.name}</TableCell>
-                  <TableCell>
+                <TableRow key={g.id}>
+                  <TableCell className="font-medium">
+                    {isAdmin ? (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(g)}
+                        className="text-left hover:underline focus:outline-none focus-visible:underline"
+                      >
+                        {g.name}
+                      </button>
+                    ) : (
+                      g.name
+                    )}
+                  </TableCell>
+
                     {g.company_name ? (
                       <span className="flex items-center gap-1.5">
                         <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
