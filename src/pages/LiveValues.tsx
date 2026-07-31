@@ -324,26 +324,25 @@ const LiveValues = () => {
       new Set(autoMeters.map((m) => m.location_integration_id).filter(Boolean) as string[])
     );
 
-    // Parallel: DB-Polling-Wert, 5-Min-Aggregat (Worker-only Fallback), Bridge-Raw-Wert (Live), Perioden-Totals, Zählerstand (kumulativ), Sensor-Snapshots, Sensor-Rohwerte
-    const [powerRes, power5minRes, bridgeRes, periodRes, cumulativeRes, snapshotRes, sensorRawRes] = await Promise.all([
+    // Parallel: DB-Polling-Wert, 5-Min-Aggregat (Worker-only Fallback), Perioden-Totals,
+    // Zählerstand (kumulativ), Sensor-Snapshots, Sensor-Rohwerte.
+    // bridge_raw_samples wird seit v1.10 im Live-Pfad bewusst nicht mehr befüllt → nicht mehr lesen.
+    const sinceIso = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const [powerRes, power5minRes, periodRes, cumulativeRes, snapshotRes, sensorRawRes] = await Promise.all([
       supabase
         .from("meter_power_readings")
         .select("meter_id, power_value, recorded_at")
         .in("meter_id", meterIds)
-        .gte("recorded_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
-        .order("recorded_at", { ascending: false }),
+        .gte("recorded_at", sinceIso)
+        .order("recorded_at", { ascending: false })
+        .limit(2000),
       supabase
         .from("meter_power_readings_5min")
         .select("meter_id, power_avg, bucket")
         .in("meter_id", meterIds)
-        .gte("bucket", new Date(Date.now() - 60 * 60 * 1000).toISOString())
-        .order("bucket", { ascending: false }),
-      supabase
-        .from("bridge_raw_samples")
-        .select("uuid, value, received_at")
-        .in("uuid", uuids)
-        .gte("received_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
-        .order("received_at", { ascending: false }),
+        .gte("bucket", sinceIso)
+        .order("bucket", { ascending: false })
+        .limit(2000),
       supabase
         .from("meter_period_totals")
         .select("meter_id, period_type, period_start, total_value, energy_type")
@@ -358,14 +357,17 @@ const LiveValues = () => {
             .in("location_integration_id", liIds)
             .gte("fetched_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
             .order("fetched_at", { ascending: false })
+            .limit(liIds.length * 3)
         : Promise.resolve({ data: [] as any[] } as any),
       supabase
         .from("sensor_readings_raw")
         .select("meter_id, value, recorded_at")
         .in("meter_id", meterIds)
-        .gte("recorded_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
-        .order("recorded_at", { ascending: false }),
+        .gte("recorded_at", sinceIso)
+        .order("recorded_at", { ascending: false })
+        .limit(2000),
     ]);
+
 
 
     // Neuester Sensor-Rohwert pro Meter (Momentanwerte: °C, %, bool, …).
@@ -397,13 +399,9 @@ const LiveValues = () => {
     }
 
 
-    // Letzten Bridge-Wert pro UUID extrahieren
+    // bridge_raw_samples entfällt im Reconcile (Live-Pfad schreibt dort seit v1.10 nicht mehr)
     const bridgeLatest = new Map<string, { value: number; at: number }>();
-    for (const row of bridgeRes.data ?? []) {
-      const u = row.uuid.toLowerCase();
-      if (bridgeLatest.has(u)) continue;
-      bridgeLatest.set(u, { value: Number(row.value), at: new Date(row.received_at).getTime() });
-    }
+
 
     // Letzten Polling-Wert pro Meter extrahieren (Raw bevorzugt, 5-Min-Aggregat als Fallback)
     const pollingLatest = new Map<string, { value: number; at: number }>();
@@ -479,8 +477,9 @@ const LiveValues = () => {
     loadInitialPowerValues();
 
     // Periodischer DB-Reconcile (heilt verpasste Broadcast-Events nach WS-Drop / Tab-Sleep)
+    // Nur wenn der Tab sichtbar ist – im Hintergrund kein DB-Traffic.
     const reconcileInterval = setInterval(() => {
-      loadInitialPowerValues();
+      if (document.visibilityState === "visible") loadInitialPowerValues();
     }, 60_000);
     const onVisibility = () => {
       if (document.visibilityState === "visible") loadInitialPowerValues();
@@ -498,67 +497,83 @@ const LiveValues = () => {
     const tenantIds = [...new Set(meters.map((m) => m.tenant_id).filter(Boolean))] as string[];
     if (tenantIds.length === 0) return;
 
+    // Coalescing: Broadcast-Events werden gepuffert und höchstens alle COALESCE_MS
+    // in den React-State übernommen (statt Re-Render pro Event).
+    const COALESCE_MS = 1500;
+    type LiveEv = { uuid: string; value: number; at: string; role?: "pwr" | "today" | "total" | "month" | "year" | "soc" };
+    let buffer: LiveEv[] = [];
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flushBuffer = () => {
+      flushTimer = null;
+      const events = buffer;
+      buffer = [];
+      if (events.length === 0) return;
+
+      const socEvents = events.filter((e) => e.role === "soc");
+      if (socEvents.length > 0) {
+        setSocByMeterId((prev) => {
+          const next = new Map(prev);
+          let changed = false;
+          for (const ev of socEvents) {
+            const meterId = socUuidToMeterId.get(ev.uuid.toLowerCase());
+            if (!meterId) continue;
+            if (!Number.isFinite(ev.value) || ev.value < 0 || ev.value > 100) continue;
+            next.set(meterId, { pct: ev.value, updatedAt: ev.at });
+            changed = true;
+          }
+          return changed ? next : prev;
+        });
+      }
+
+      setLiveValues((prev) => {
+        let changed = false;
+        const next = new Map(prev);
+        let unmatched = 0;
+        for (const ev of events) {
+          const role = ev.role ?? "pwr";
+          const limit = role === "pwr" ? 10_000 /* kW */ : 10_000_000 /* kWh */;
+          if (!Number.isFinite(ev.value) || Math.abs(ev.value) > limit) continue;
+          const meterId = uuidToMeterId.get(ev.uuid.toLowerCase());
+          if (!meterId) { unmatched++; continue; }
+
+          const existing = next.get(meterId) ?? {
+            value: 0, unit: "", totalDay: null, totalWeek: null,
+            totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "kWh",
+          };
+          let updated = existing;
+          if (role === "pwr") {
+            if (existing.value === ev.value) continue;
+            updated = { ...existing, value: ev.value };
+          }
+          else if (role === "today") { if (existing.totalDay === ev.value) continue; updated = { ...existing, totalDay: ev.value }; }
+          else if (role === "month") { if (existing.totalMonth === ev.value) continue; updated = { ...existing, totalMonth: ev.value }; }
+          else if (role === "year") { if (existing.totalYear === ev.value) continue; updated = { ...existing, totalYear: ev.value }; }
+          else if (role === "total") { if (existing.meterReading === ev.value) continue; updated = { ...existing, meterReading: ev.value }; }
+          else continue;
+          next.set(meterId, updated);
+          changed = true;
+        }
+        if (unmatched > 0) {
+          console.log(`[live-values] ${unmatched}/${events.length} broadcast events ohne passenden Zähler (UUID nicht gemappt).`);
+        }
+        return changed ? next : prev;
+      });
+      setLastRefresh(new Date());
+    };
+
     // Pro Tenant einen Broadcast-Channel abonnieren
     const channels = tenantIds.map((tenantId) => {
       const channelName = `loxone-live-${tenantId}`;
       const ch = supabase
         .channel(channelName, { config: { broadcast: { self: false } } })
-        .on("broadcast", { event: "readings" }, (msg: { payload: { events?: Array<{ uuid: string; value: number; at: string; role?: "pwr" | "today" | "total" | "month" | "year" | "soc" }> } }) => {
+        .on("broadcast", { event: "readings" }, (msg: { payload: { events?: LiveEv[] } }) => {
           const events = msg.payload?.events ?? [];
           if (events.length === 0) return;
-          // Handle SOC events separately (update energy_storages-derived map)
-          const socEvents = events.filter((e) => e.role === "soc");
-          if (socEvents.length > 0) {
-            setSocByMeterId((prev) => {
-              const next = new Map(prev);
-              let changed = false;
-              for (const ev of socEvents) {
-                const meterId = socUuidToMeterId.get(ev.uuid.toLowerCase());
-                if (!meterId) continue;
-                if (!Number.isFinite(ev.value) || ev.value < 0 || ev.value > 100) continue;
-                next.set(meterId, { pct: ev.value, updatedAt: ev.at });
-                changed = true;
-              }
-              return changed ? next : prev;
-            });
-          }
-          setLiveValues((prev) => {
-            let changed = false;
-            const next = new Map(prev);
-            let unmatched = 0;
-            for (const ev of events) {
-              const role = ev.role ?? "pwr";
-              // Plausibilitätsfilter: implausible Werte verwerfen (statt anzuzeigen)
-              const limit = role === "pwr" ? 10_000 /* kW */ : 10_000_000 /* kWh */;
-              if (!Number.isFinite(ev.value) || Math.abs(ev.value) > limit) {
-                console.warn("[live-values] dropped implausible event", {
-                  uuid: ev.uuid, role, value: ev.value, at: ev.at,
-                });
-                continue;
-              }
-              const meterId = uuidToMeterId.get(ev.uuid.toLowerCase());
-              if (!meterId) { unmatched++; continue; }
-
-              const existing = next.get(meterId) ?? {
-
-                value: 0, unit: "", totalDay: null, totalWeek: null,
-                totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "kWh",
-              };
-              let updated = existing;
-              if (role === "pwr") updated = { ...existing, value: ev.value };
-              else if (role === "today") updated = { ...existing, totalDay: ev.value };
-              else if (role === "month") updated = { ...existing, totalMonth: ev.value };
-              else if (role === "year") updated = { ...existing, totalYear: ev.value };
-              else if (role === "total") updated = { ...existing, meterReading: ev.value };
-              next.set(meterId, updated);
-              changed = true;
-            }
-            if (unmatched > 0) {
-              console.log(`[live-values] ${unmatched}/${events.length} broadcast events ohne passenden Zähler (UUID nicht gemappt).`);
-            }
-            return changed ? next : prev;
-          });
-          setLastRefresh(new Date());
+          // Im Hintergrund-Tab nichts rendern
+          if (document.visibilityState !== "visible") return;
+          buffer.push(...events);
+          if (!flushTimer) flushTimer = setTimeout(flushBuffer, COALESCE_MS);
         })
         .subscribe((status) => {
           console.log(`[live-values] channel ${channelName} status: ${status}`);
@@ -568,9 +583,11 @@ const LiveValues = () => {
 
     return () => {
       clearInterval(reconcileInterval);
+      if (flushTimer) clearTimeout(flushTimer);
       document.removeEventListener("visibilitychange", onVisibility);
       for (const ch of channels) supabase.removeChannel(ch);
     };
+
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meters.length]);

@@ -15321,6 +15321,20 @@ export type Database = {
           total_value: number
         }[]
       }
+      get_meter_power_gauge_seed: {
+        Args: {
+          _day_end: string
+          _day_start: string
+          _fresh_cutoff: string
+          _meter_ids: string[]
+        }
+        Returns: {
+          latest_at: string
+          latest_value: number
+          meter_id: string
+          peak_abs: number
+        }[]
+      }
       get_meter_totals_auto: {
         Args: { p_from: string; p_meter_ids: string[]; p_to: string }
         Returns: {
@@ -15429,6 +15443,21 @@ export type Database = {
           ai_adjusted_kwh: number
           day: string
           estimated_kwh: number
+        }[]
+      }
+      get_sensor_readings_5min_multi: {
+        Args: {
+          _from: string
+          _limit_per_meter?: number
+          _meter_ids: string[]
+          _to: string
+        }
+        Returns: {
+          bucket: string
+          meter_id: string
+          value_avg: number
+          value_max: number
+          value_min: number
         }[]
       }
       get_tenant_status: { Args: { _tenant_id: string }; Returns: string }
