@@ -1607,7 +1607,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     console.error("[bridge-readings] broadcast prep error:", (e as Error).message);
   }
 
-  return json({ success: true, inserted: rawRows.length, broadcast: broadcastRows.length, soc_updated: socUpdated, skipped, coalesced, delta_skipped: deltaSkipped });
+  return json({ success: true, live_only: liveOnly, inserted: rawRows.length, broadcast: broadcastRows.length, soc_updated: socUpdated, skipped, coalesced, delta_skipped: deltaSkipped });
 }
 
 /**
