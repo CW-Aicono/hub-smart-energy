@@ -118,14 +118,19 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
     // recent raw reading (IO-throttled sources, worker-only 5-min buckets), fall
     // back to meter_power_readings_5min so the gauges don't stay empty.
     const fetchLatest = async () => {
+      // Rohwert nur, wenn er wirklich frisch ist (≤ 15 Min) — sonst würde ein
+      // Stunden alter Rest-Datensatz als "Jetzt" angezeigt.
+      const freshCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
       const rawPromises = meterIds.map((id) =>
         supabase
           .from("meter_power_readings")
           .select("meter_id, power_value")
           .eq("meter_id", id)
+          .gte("recorded_at", freshCutoff)
           .order("recorded_at", { ascending: false })
           .limit(1)
       );
+
       const rawResults = await Promise.all(rawPromises);
       const current: Record<string, number> = {};
       for (const { data } of rawResults) {
