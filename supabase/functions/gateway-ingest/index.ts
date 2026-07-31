@@ -1454,7 +1454,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
   // wenn |Δ| < 5 W (abs) UND < 1% (rel) UND letzter Insert < 60s her.
   // Cold-Start setzt den Cache zurück → nach Boot wird jeder Sensor 1x geschrieben.
   const now = Date.now();
-  for (const [key, s] of lastByUuid.entries()) {
+  for (const [key, s] of (liveOnly ? [] : [...lastByUuid.entries()])) {
     const link = linkCache.get(s.miniserver_serial);
     const prev = bridgeRawLastCache.get(key);
     const atMs = new Date(s.at).getTime();
