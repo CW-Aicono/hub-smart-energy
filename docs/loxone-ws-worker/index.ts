@@ -635,10 +635,10 @@ async function connect(state: ConnState): Promise<void> {
               entry.bucket_count = 0;
             }
 
-            const absV = Math.abs(ev.value);
-            entry.bucket_sum += ev.value;
+            const absV = Math.abs(rawValue);
+            entry.bucket_sum += rawValue;
             entry.bucket_count += 1;
-            if (absV > Math.abs(entry.bucket_max)) entry.bucket_max = ev.value;
+            if (absV > Math.abs(entry.bucket_max)) entry.bucket_max = rawValue;
           }
         }
       }
