@@ -943,7 +943,7 @@ async function connect(state: ConnState): Promise<void> {
     const blocksWithPwr = new Set<string>();
     const blocksWithAux = new Map<string, string[]>();
     for (const e of state.uuidMap.values()) {
-      if (e.role === "pwr") blocksWithPwr.add(e.block_uuid);
+      if (e.role === "pwr" || e.role === "flow") blocksWithPwr.add(e.block_uuid);
       if (e.role === "aux") blocksWithAux.set(e.block_uuid, [...(blocksWithAux.get(e.block_uuid) ?? []), e.state_key ?? "?"]);
     }
     const gaps = blockEntries
