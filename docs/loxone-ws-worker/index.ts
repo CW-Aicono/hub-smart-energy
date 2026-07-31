@@ -834,48 +834,38 @@ async function connect(state: ConnState): Promise<void> {
           stateEntries.push({ stateUuid, role: cls === "pwr" ? momRole! : cls, key: k });
         }
       }
-          if (cls === "pwr") hasStrongPwr = true;
-          // Bei expliziter Zuordnung darf kein zweiter State als Leistung gelten.
-          if (cls === "pwr" && explicitPwrUuid) continue;
-          stateEntries.push({ stateUuid, role: cls, key: k });
-        }
-      }
       if (explicitPwrUuid && explicitPwrFound) {
         hasStrongPwr = true;
         ambiguousPwr = null;
-        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid}: pwr = explizite Zuordnung "${explicitPwrKey ?? "?"}"`);
+        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid}: ${momRole ?? "kein Momentanwert"} = explizite Zuordnung "${explicitPwrKey ?? "?"}"`);
       } else if (explicitPwrUuid && !explicitPwrFound) {
-        log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid}: konfigurierte Leistungs-State-UUID ${explicitPwrUuid} nicht im Miniserver gefunden`);
-        bridgeLog("warn", "ws_explicit_pwr_missing", "Konfigurierte Leistungs-State-UUID existiert nicht mehr", state.serialNumber, {
+        log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid}: konfigurierte Momentanwert-State-UUID ${explicitPwrUuid} nicht im Miniserver gefunden`);
+        bridgeLog("warn", "ws_explicit_pwr_missing", "Konfigurierte Momentanwert-State-UUID existiert nicht mehr", state.serialNumber, {
           block_uuid: blockUuid, meter_id: baseEntry.meter_id, power_state_uuid: explicitPwrUuid,
         });
       }
 
-      // Ambiguous-pwr NUR akzeptieren, wenn:
-      //  – kein strong-pwr vorhanden, UND
-      //  – der Meter kein reines Fluss-/Impuls-Medium (Wasser/Gas) ist.
-      // Für Wasser/Gas ohne echten Pwr-State → Block läuft als Total-only.
-      const flowLike = isFlowLikeType(baseEntry.energy_type);
-      if (!hasStrongPwr && ambiguousPwr && !flowLike) {
-        stateEntries.push({ stateUuid: ambiguousPwr.stateUuid, role: "pwr", key: ambiguousPwr.key });
-      } else if (!hasStrongPwr && ambiguousPwr && flowLike) {
-        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): ambiguous pwr-key "${ambiguousPwr.key}" ignoriert (kein echter Momentanwert für ${baseEntry.energy_type})`);
+      // v1.16: Mehrdeutige Keys (Actual/Value/P) werden akzeptiert, sobald die
+      // Messstelle einen Momentanwert erwartet — die Rolle (pwr oder flow)
+      // kommt aus der Konfiguration, nicht aus der Loxone-Einheit.
+      if (!hasStrongPwr && ambiguousPwr && momRole) {
+        stateEntries.push({ stateUuid: ambiguousPwr.stateUuid, role: momRole, key: ambiguousPwr.key });
+      } else if (!hasStrongPwr && ambiguousPwr && !momRole) {
+        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): "${ambiguousPwr.key}" ignoriert — Messstelle erwartet keinen Momentanwert`);
       }
 
       // v1.15: Unbekannte States werden weiterhin registriert, aber nur um sie
       // in der Cloud sichtbar zu machen (Zuordnungs-UI). Sie liefern keine Werte.
-      const hasPwrEntry = stateEntries.some((se) => se.role === "pwr");
-      if (!hasPwrEntry && unknownEntries.length > 0) {
+      const hasMomEntry = stateEntries.some((se) => se.role === "pwr" || se.role === "flow");
+      if (!hasMomEntry && unknownEntries.length > 0) {
         for (const ue of unknownEntries) {
           stateEntries.push({ stateUuid: ue.stateUuid, role: "aux", key: ue.key });
         }
       }
 
       if (stateEntries.length === 0) {
-        if (flowLike) {
-          // v1.9: Fallback deaktiviert für Wasser/Gas — sonst würde der kumulative
-          // Zählerstand als Momentanleistung interpretiert (660-kW-Spikes im Chart).
-          log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): kein verwertbarer State — Block wird ignoriert (Fallback deaktiviert für Fluss-Medien)`);
+        if (!momRole) {
+          log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): kein verwertbarer State — Messstelle erwartet keinen Momentanwert`);
           blockDiag.push({
             block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
             control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
@@ -883,14 +873,14 @@ async function connect(state: ConnState): Promise<void> {
           });
           continue;
         }
-        // Fallback: Block-UUID direkt als pwr behandeln (alte Logik) — nur für Strom/Wärme.
-        state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: "pwr" });
+        // Fallback: Block-UUID direkt als Momentanwert behandeln (alte Logik).
+        state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: momRole });
         blocksFallback++;
         totalSubs++;
         blockDiag.push({
           block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
           control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
-          states: [{ key: "(block-fallback)", role: "pwr" }],
+          states: [{ key: "(block-fallback)", role: momRole }],
         });
         continue;
       }
