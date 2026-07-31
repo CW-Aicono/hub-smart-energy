@@ -1733,11 +1733,12 @@ export function MeterDetailDialog({
   // Echte SOC-Historie: wird ab jetzt separat persistiert, damit Power/kW-Werte
   // nicht mehr fälschlich als Ladezustand (%) interpretiert werden.
   const { data: socSeries = [] } = useQuery({
-    queryKey: ["meter-detail-soc-readings", storageInfo?.id, range, socStartMs],
+    queryKey: ["meter-detail-soc-readings", storageInfo?.id, range, socStartMs, powerEndMs],
     enabled: isBattery && !!storageInfo?.id && (!isStorageLoading),
     staleTime: 30_000,
     queryFn: async () => {
       const since = new Date(socStartMs).toISOString();
+      const until = new Date(powerEndMs).toISOString();
       const limit = range === "30d" ? 8000 : range === "7d" ? 5000 : 2000;
       const pageSize = 1000;
       const rows: any[] = [];
@@ -1748,7 +1749,9 @@ export function MeterDetailDialog({
           .select("recorded_at, soc_pct")
           .eq("storage_id", storageInfo!.id)
           .gte("recorded_at", since)
+          .lt("recorded_at", until)
           .order("recorded_at", { ascending: true })
+
           .range(offset, to));
         if (error || !data || data.length === 0) break;
         rows.push(...data);
