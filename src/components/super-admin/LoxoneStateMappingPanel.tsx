@@ -170,7 +170,7 @@ export default function LoxoneStateMappingPanel() {
         ) : rows.length === 0 ? (
           <div className="text-sm text-muted-foreground">
             {onlyGaps
-              ? "Keine offenen Zuordnungen — alle Blöcke haben einen eindeutigen Leistungs-State."
+              ? "Keine offenen Zuordnungen — alle Blöcke haben einen eindeutigen Momentanwert-State."
               : "Keine Diagnosedaten der letzten 48 Stunden."}
           </div>
         ) : (
