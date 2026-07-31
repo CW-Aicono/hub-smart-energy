@@ -63,6 +63,9 @@ import {
   SunMedium,
   Router,
   Maximize2,
+  ChevronLeft,
+  ChevronRight,
+
   type LucideIcon,
 } from "lucide-react";
 
