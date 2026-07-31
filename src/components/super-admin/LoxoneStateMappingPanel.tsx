@@ -88,7 +88,7 @@ export default function LoxoneStateMappingPanel() {
 
       const { data: meters, error: mErr } = await supabase
         .from("meters")
-        .select("id, name, energy_type, sensor_uuid, power_state_uuid, power_state_key")
+        .select("id, name, energy_type, sensor_uuid, power_state_uuid, power_state_key, device_type, source_unit_power")
         .in("id", meterIds);
       if (mErr) throw mErr;
       const byId: Record<string, MeterRow> = {};
