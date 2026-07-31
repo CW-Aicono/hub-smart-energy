@@ -20,6 +20,9 @@ import { buildLoxoneResolver } from "@/lib/loxoneUuidResolver";
 import { useLoxoneLiveBroadcast } from "@/hooks/useLoxoneLiveBroadcast";
 import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
 import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
+import { useMeterPeriodTotals } from "@/hooks/useMeterPeriodTotals";
+import { useWeekStartDay } from "@/hooks/useWeekStartDay";
+
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
