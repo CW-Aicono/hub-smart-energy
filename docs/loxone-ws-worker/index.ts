@@ -1247,7 +1247,7 @@ async function flush(): Promise<void> {
       const prev = entry.last_pushed_value;
       const ageMs = nowMs - entry.last_pushed_at;
       const delta = prev === null ? Infinity : Math.abs(entry.latest_value - prev);
-      const minDelta = entry.role === "pwr" ? MIN_DELTA : entry.role === "soc" ? 0.1 : 0.001;
+      const minDelta = entry.role === "pwr" ? MIN_DELTA : entry.role === "flow" ? 0.001 : entry.role === "soc" ? 0.1 : 0.001;
       const changed = delta >= minDelta;
       const stale = ageMs >= MIN_PUSH_INTERVAL_MS;
       if (!changed && !stale) continue;
