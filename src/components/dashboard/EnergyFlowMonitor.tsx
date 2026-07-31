@@ -1618,21 +1618,27 @@ export function MeterDetailDialog({
         }
       }
 
-      for (let offset = 0; offset < rawLimit; offset += pageSize) {
-        const to = Math.min(offset + pageSize, rawLimit) - 1;
-        const { data, error } = await supabase
-          .from("meter_power_readings")
-          .select("recorded_at, power_value")
-          .eq("meter_id", node.meter_id)
-          .gte("recorded_at", since)
-          .order("recorded_at", { ascending: true })
-          .range(offset, to);
-        if (error || !data || data.length === 0) break;
-        for (const row of data as any[]) {
-          put(new Date(row.recorded_at).getTime(), Number(row.power_value), 2);
+      // Rohwerte nur im 1h-Fenster als Detail-Top-up: für Worker-Zähler
+      // enthält die Rohtabelle nur noch vereinzelte Zeilen, die längere
+      // Zeiträume sonst verfälschen würden.
+      if (range === "1h") {
+        for (let offset = 0; offset < rawLimit; offset += pageSize) {
+          const to = Math.min(offset + pageSize, rawLimit) - 1;
+          const { data, error } = await supabase
+            .from("meter_power_readings")
+            .select("recorded_at, power_value")
+            .eq("meter_id", node.meter_id)
+            .gte("recorded_at", since)
+            .order("recorded_at", { ascending: true })
+            .range(offset, to);
+          if (error || !data || data.length === 0) break;
+          for (const row of data as any[]) {
+            put(new Date(row.recorded_at).getTime(), Number(row.power_value), 2);
+          }
+          if (data.length < to - offset + 1) break;
         }
-        if (data.length < to - offset + 1) break;
       }
+
 
       // Fallback: falls beide Power-Tabellen leer sind, aus sensor_readings_raw
       // rekonstruieren (Gateway-Meter, deren Werte nur dort landen).
