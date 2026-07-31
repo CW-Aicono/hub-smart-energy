@@ -15565,6 +15565,8 @@ export type Database = {
         Args: { lookback_months?: number }
         Returns: number
       }
+      run_ems_cron_bundle: { Args: never; Returns: undefined }
+      run_meter_power_hourly_backfill_guarded: { Args: never; Returns: number }
       snapshot_charge_point_uptime: { Args: never; Returns: number }
       touch_location_integration_sync: {
         Args: { _id: string; _min_interval_seconds?: number; _status: string }
