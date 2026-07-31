@@ -2022,8 +2022,8 @@ export function MeterDetailDialog({
           </div>
         </DialogHeader>
 
-        {/* Zeitraum-Umschalter */}
-        <div className="flex flex-wrap gap-2">
+        {/* Zeitraum-Umschalter + Blättern (Kalender-Zeiträume) */}
+        <div className="flex flex-wrap items-center gap-2">
           {(Object.keys(RANGE_LABEL) as DetailRange[]).map((r) => (
             <Button
               key={r}
@@ -2034,7 +2034,34 @@ export function MeterDetailDialog({
               {RANGE_LABEL[r]}
             </Button>
           ))}
+          {range !== "1h" && (
+            <div className="flex items-center gap-1 ml-auto">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                aria-label="Vorheriger Zeitraum"
+                onClick={() => setRangeOffset((o) => o - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs font-medium tabular-nums min-w-[9rem] text-center">
+                {period.label}
+              </span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                aria-label="Nächster Zeitraum"
+                disabled={rangeOffset >= 0}
+                onClick={() => setRangeOffset((o) => Math.min(0, o + 1))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
+
 
         {/* KPI-Kacheln */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
