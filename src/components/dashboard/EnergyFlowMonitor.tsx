@@ -1918,7 +1918,7 @@ export function MeterDetailDialog({
     return Array.from(map.entries())
       .sort((a, b) => a[0] - b[0])
       .map(([t, v]) => ({ t, import: v.import, export: v.export }));
-  }, [series, range, powerStartMs]);
+  }, [series, range, powerStartMs, visibleEndMs]);
 
   const fmtTime = (t: number) => {
     const d = new Date(t);
