@@ -931,18 +931,14 @@ async function keepaliveTick(): Promise<void> {
   }
 }
 
-// ─── Flush (Phase 5: Smart-Split → bridge_raw_samples) ───────────────────────
-// Schickt Roh-Werte an gateway-ingest?action=bridge-readings.
-// gateway-ingest schreibt sie in `bridge_raw_samples` (Ringpuffer 24 h);
-// die Edge-Function `bridge-aggregator` aggregiert sie alle 5 Min in die
-// Schatten-Tabelle `meter_power_readings_5min_bridge` — parallel zum
-// bestehenden Polling-Pfad, der unberührt weiterläuft.
+// ─── Live-Push (v1.10: Realtime-Broadcast OHNE Datenbank-Schreiblast) ────────
+// Schickt die aktuellen WS-Werte an gateway-ingest?action=bridge-readings mit
+// `live_only: true`. Die Edge-Function verteilt sie ausschließlich über den
+// Realtime-Kanal `loxone-live-<tenant_id>` (Energiefluss-Monitor, Aktuelle
+// Werte, Gerätekacheln/Steuerungen) und schreibt NICHTS in die Datenbank.
+// Historisierung läuft unverändert über flushBuckets() → bridge-power-5min.
 
 async function flush(): Promise<void> {
-  // v1.6: Legacy-Pfad hart deaktiviert – Rohdaten dürfen NICHT mehr in
-  // bridge_raw_samples geschrieben werden. Aggregation läuft ausschließlich
-  // über flushBuckets() → bridge-power-5min.
-  return;
   if (workerPaused) return;
   const readings: any[] = [];
   const nowMs = Date.now();
@@ -952,8 +948,8 @@ async function flush(): Promise<void> {
     for (const [, entry] of state.uuidMap) {
       if (entry.latest_value === null) continue;
 
-      // IO-Optimierung: nur pushen, wenn sich der Wert spürbar geändert hat
-      // ODER der letzte Push älter als MIN_PUSH_INTERVAL_MS ist (Keepalive).
+      // Nur senden, wenn sich der Wert spürbar geändert hat ODER der letzte
+      // Push älter als MIN_PUSH_INTERVAL_MS ist (Keepalive).
       // Energiezähler (today/total/month/year) ändern sich in kleinen Schritten →
       // niedrigere Mindest-Änderung, damit kWh-Inkremente nicht verschluckt werden.
       // SOC (%) soll ebenfalls zuverlässig als eigener Rollenwert gesendet werden.
@@ -968,7 +964,7 @@ async function flush(): Promise<void> {
       readings.push({
         miniserver_serial: state.serialNumber,
         sensor_uuid: entry.block_uuid,   // immer Block-UUID, damit DB-Mapping konsistent bleibt
-        role: entry.role,                 // Phase 7: rollenbasiertes Routing in gateway-ingest
+        role: entry.role,                 // rollenbasiertes Routing in gateway-ingest
         value: entry.latest_value,
         recorded_at: nowIso,
       });
@@ -977,11 +973,26 @@ async function flush(): Promise<void> {
     }
   }
   if (readings.length === 0) return;
+
+  // Deckelung: bei sehr vielen Änderungen in einem Zyklus nur die ersten N
+  // Events senden — der Rest folgt im nächsten Zyklus (Werte sind ohnehin
+  // auf den jeweils letzten Stand gecoalesct).
+  const batch = readings.length > MAX_LIVE_EVENTS_PER_PUSH
+    ? readings.slice(0, MAX_LIVE_EVENTS_PER_PUSH)
+    : readings;
+  if (batch.length < readings.length) {
+    log("warn", `[Live] ${readings.length} Events > Limit ${MAX_LIVE_EVENTS_PER_PUSH} — sende ${batch.length}, Rest im nächsten Zyklus`);
+  }
+
   try {
-    await ingestPost("bridge-readings", { worker_name: BRIDGE_WORKER_NAME, readings });
-    log("debug", `[Flush] ${readings.length} Roh-Samples an bridge-readings gepusht`);
+    await ingestPost("bridge-readings", {
+      worker_name: BRIDGE_WORKER_NAME,
+      live_only: true,   // v1.10: reiner Broadcast, keine DB-Schreiblast
+      readings: batch,
+    });
+    log("debug", `[Live] ${batch.length} Werte per Broadcast gepusht (live_only)`);
   } catch (err) {
-    log("warn", `[Flush] fehlgeschlagen: ${(err as Error).message}`);
+    log("warn", `[Live] Push fehlgeschlagen: ${(err as Error).message}`);
   }
 }
 
