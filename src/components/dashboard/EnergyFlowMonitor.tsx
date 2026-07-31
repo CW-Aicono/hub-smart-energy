@@ -17,6 +17,7 @@ import { computeRadialDefault } from "@/lib/energyFlowLayout";
 
 const CENTER_NODE_ID = "__center__";
 import { buildLoxoneResolver } from "@/lib/loxoneUuidResolver";
+import { useLoxoneLiveBroadcast } from "@/hooks/useLoxoneLiveBroadcast";
 import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -549,74 +550,23 @@ export default function EnergyFlowMonitor({
           ? "hsl(45 95% 50%)"
           : "hsl(var(--muted-foreground))";
 
-  // Realtime: Loxone broadcast (loxone-live-{tenantId}) – sub-sekündliche Updates
-  const [broadcastByMeter, setBroadcastByMeter] = useState<Record<string, number>>({});
-  const [broadcastSocByMeter, setBroadcastSocByMeter] = useState<Record<string, number>>({});
-  useEffect(() => {
-    if (tenantIds.length === 0 || resolver.exactByUuid.size === 0) return;
+  // Realtime: Loxone broadcast (loxone-live-{tenantId}) über gemeinsamen Hook
+  // (Coalescing + Auto-Reconnect + Resolver identisch zur Seite "Aktuelle Werte").
+  const liveBroadcast = useLoxoneLiveBroadcast(
+    useMemo(
+      () =>
+        (relevantMeters as any[]).map((m) => ({
+          id: m.id,
+          tenant_id: m.tenant_id ?? null,
+          energy_type: m.energy_type ?? null,
+          sensor_uuid: m.sensor_uuid ?? null,
+        })),
+      [relevantMeters],
+    ),
+  );
+  const broadcastByMeter = liveBroadcast.pwrByMeter;
+  const broadcastSocByMeter = liveBroadcast.socByMeter;
 
-    // Coalescing: Events puffern, höchstens alle 1,5 s in den State übernehmen.
-    const COALESCE_MS = 1500;
-    let buffer: Array<{ ev: any; tenantId: string }> = [];
-    let flushTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const flushBuffer = () => {
-      flushTimer = null;
-      const items = buffer;
-      buffer = [];
-      if (items.length === 0) return;
-
-      setBroadcastByMeter((prev) => {
-        let changed = false;
-        const next = { ...prev };
-        for (const { ev, tenantId } of items) {
-          const role = ev.role ?? "pwr";
-          if (role !== "pwr") continue;
-          const value = Number(ev.value);
-          if (!Number.isFinite(value) || Math.abs(value) > 10_000) continue;
-          const meterId = resolver.resolve(String(ev.uuid), tenantId, value);
-          if (!meterId || next[meterId] === value) continue;
-          next[meterId] = value;
-          changed = true;
-        }
-        return changed ? next : prev;
-      });
-
-      setBroadcastSocByMeter((prev) => {
-        let changed = false;
-        const next = { ...prev };
-        for (const { ev } of items) {
-          const role = ev.role ?? "pwr";
-          if (role !== "soc") continue;
-          const value = Number(ev.value);
-          if (!Number.isFinite(value) || value < 0 || value > 100) continue;
-          const meter = resolver.exactByUuid.get(String(ev.uuid).toLowerCase());
-          if (!meter || next[meter.id] === value) continue;
-          next[meter.id] = value;
-          changed = true;
-        }
-        return changed ? next : prev;
-      });
-    };
-
-    const channels = tenantIds.map((tenantId) =>
-      supabase
-        .channel(`loxone-live-${tenantId}`, { config: { broadcast: { self: false } } })
-        .on("broadcast", { event: "readings" }, (msg: any) => {
-          const events = msg?.payload?.events ?? [];
-          if (!events.length) return;
-          if (document.visibilityState !== "visible") return;
-          for (const ev of events) buffer.push({ ev, tenantId });
-          if (!flushTimer) flushTimer = setTimeout(flushBuffer, COALESCE_MS);
-        })
-        .subscribe(),
-    );
-    return () => {
-      if (flushTimer) clearTimeout(flushTimer);
-      channels.forEach((c) => supabase.removeChannel(c));
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantKey, resolver]);
 
 
   const getLiveWatts = useCallback(

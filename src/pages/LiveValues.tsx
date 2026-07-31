@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer } from "lucide-react";
 import { getDeviceIconForMeter } from "@/lib/deviceIcons";
 import { supabase } from "@/integrations/supabase/client";
+import { useLoxoneLiveBroadcast } from "@/hooks/useLoxoneLiveBroadcast";
 import { formatEnergy, formatGasDual } from "@/lib/formatEnergy";
 import { cn } from "@/lib/utils";
 import { probeMark } from "@/lib/perfProbe"; // PERF-PROBE
@@ -75,6 +76,32 @@ const LiveValues = () => {
   const [socByMeterId, setSocByMeterId] = useState<Map<string, { pct: number; updatedAt: string | null }>>(new Map());
   const [socUuidToMeterId, setSocUuidToMeterId] = useState<Map<string, string>>(new Map());
   const [detailNode, setDetailNode] = useState<EnergyFlowNode | null>(null);
+
+  // Echte Live-Werte über den Loxone-Broadcast (State-UUID → Meter via Resolver)
+  const resolverMeters = useMemo(
+    () =>
+      meters
+        .filter((m) => !m.is_archived && m.capture_type === "automatic" && !!m.sensor_uuid)
+        .map((m: any) => ({
+          id: m.id,
+          tenant_id: m.tenant_id ?? null,
+          energy_type: m.energy_type ?? null,
+          sensor_uuid: m.sensor_uuid ?? null,
+        })),
+    [meters],
+  );
+  const liveBroadcast = useLoxoneLiveBroadcast(resolverMeters);
+
+  // Sekundentakt für die Frische-Anzeige des Live-Badges
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") setNowTick(Date.now());
+    }, 5_000);
+    return () => clearInterval(id);
+  }, []);
+
+
 
 
   // Fetch SOC values from energy_storages (linked via power_meter_id)
@@ -486,111 +513,14 @@ const LiveValues = () => {
     };
     document.addEventListener("visibilitychange", onVisibility);
 
-
-    // uuid → meter_id Map (für schnelles Lookup im Broadcast-Handler)
-    const uuidToMeterId = new Map<string, string>();
-    for (const m of meters) {
-      if (m.sensor_uuid) uuidToMeterId.set(m.sensor_uuid.toLowerCase(), m.id);
-    }
-
-    // Eindeutige tenant_ids der angezeigten Meter
-    const tenantIds = [...new Set(meters.map((m) => m.tenant_id).filter(Boolean))] as string[];
-    if (tenantIds.length === 0) return;
-
-    // Coalescing: Broadcast-Events werden gepuffert und höchstens alle COALESCE_MS
-    // in den React-State übernommen (statt Re-Render pro Event).
-    const COALESCE_MS = 1500;
-    type LiveEv = { uuid: string; value: number; at: string; role?: "pwr" | "today" | "total" | "month" | "year" | "soc" };
-    let buffer: LiveEv[] = [];
-    let flushTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const flushBuffer = () => {
-      flushTimer = null;
-      const events = buffer;
-      buffer = [];
-      if (events.length === 0) return;
-
-      const socEvents = events.filter((e) => e.role === "soc");
-      if (socEvents.length > 0) {
-        setSocByMeterId((prev) => {
-          const next = new Map(prev);
-          let changed = false;
-          for (const ev of socEvents) {
-            const meterId = socUuidToMeterId.get(ev.uuid.toLowerCase());
-            if (!meterId) continue;
-            if (!Number.isFinite(ev.value) || ev.value < 0 || ev.value > 100) continue;
-            next.set(meterId, { pct: ev.value, updatedAt: ev.at });
-            changed = true;
-          }
-          return changed ? next : prev;
-        });
-      }
-
-      setLiveValues((prev) => {
-        let changed = false;
-        const next = new Map(prev);
-        let unmatched = 0;
-        for (const ev of events) {
-          const role = ev.role ?? "pwr";
-          const limit = role === "pwr" ? 10_000 /* kW */ : 10_000_000 /* kWh */;
-          if (!Number.isFinite(ev.value) || Math.abs(ev.value) > limit) continue;
-          const meterId = uuidToMeterId.get(ev.uuid.toLowerCase());
-          if (!meterId) { unmatched++; continue; }
-
-          const existing = next.get(meterId) ?? {
-            value: 0, unit: "", totalDay: null, totalWeek: null,
-            totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "kWh",
-          };
-          let updated = existing;
-          if (role === "pwr") {
-            if (existing.value === ev.value) continue;
-            updated = { ...existing, value: ev.value };
-          }
-          else if (role === "today") { if (existing.totalDay === ev.value) continue; updated = { ...existing, totalDay: ev.value }; }
-          else if (role === "month") { if (existing.totalMonth === ev.value) continue; updated = { ...existing, totalMonth: ev.value }; }
-          else if (role === "year") { if (existing.totalYear === ev.value) continue; updated = { ...existing, totalYear: ev.value }; }
-          else if (role === "total") { if (existing.meterReading === ev.value) continue; updated = { ...existing, meterReading: ev.value }; }
-          else continue;
-          next.set(meterId, updated);
-          changed = true;
-        }
-        if (unmatched > 0) {
-          console.log(`[live-values] ${unmatched}/${events.length} broadcast events ohne passenden Zähler (UUID nicht gemappt).`);
-        }
-        return changed ? next : prev;
-      });
-      setLastRefresh(new Date());
-    };
-
-    // Pro Tenant einen Broadcast-Channel abonnieren
-    const channels = tenantIds.map((tenantId) => {
-      const channelName = `loxone-live-${tenantId}`;
-      const ch = supabase
-        .channel(channelName, { config: { broadcast: { self: false } } })
-        .on("broadcast", { event: "readings" }, (msg: { payload: { events?: LiveEv[] } }) => {
-          const events = msg.payload?.events ?? [];
-          if (events.length === 0) return;
-          // Im Hintergrund-Tab nichts rendern
-          if (document.visibilityState !== "visible") return;
-          buffer.push(...events);
-          if (!flushTimer) flushTimer = setTimeout(flushBuffer, COALESCE_MS);
-        })
-        .subscribe((status) => {
-          console.log(`[live-values] channel ${channelName} status: ${status}`);
-        });
-      return ch;
-    });
-
     return () => {
       clearInterval(reconcileInterval);
-      if (flushTimer) clearTimeout(flushTimer);
       document.removeEventListener("visibilitychange", onVisibility);
-      for (const ch of channels) supabase.removeChannel(ch);
     };
-
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meters.length]);
+
 
   // Manuell-Refresh-Button: temporär nur DB lesen, kein loxone-api/getSensors HTTP-Polling.
   const handleManualRefresh = useCallback(async () => {
@@ -692,16 +622,32 @@ const LiveValues = () => {
     return map;
   }, [virtualSources, getSourceValue, getSourceTotalDay, cpVirtualValues]);
 
-  const getValue = (meter: typeof meters[0]): { value: number | null; unit: string; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string; source: "live" | "manual" | "virtual" | "none"; date?: string } => {
+  const getValue = (meter: typeof meters[0]): { value: number | null; unit: string; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string; source: "live" | "manual" | "virtual" | "none"; date?: string; liveAt?: number } => {
     if (meter.capture_type === "virtual" && virtualValues.has(meter.id)) {
       const vv = virtualValues.get(meter.id)!;
       return { value: vv.value, unit: "", totalDay: vv.totalDay, totalMonth: vv.totalMonth, totalYear: vv.totalYear, meterReading: vv.meterReading, meterReadingUnit: "kWh", source: "virtual" };
     }
 
-    if (meter.capture_type === "automatic" && liveValues.has(meter.id)) {
-      const live = liveValues.get(meter.id)!;
-      return { value: live.value, unit: live.unit, totalDay: live.totalDay, totalMonth: live.totalMonth, totalYear: live.totalYear, meterReading: live.meterReading, meterReadingUnit: live.meterReadingUnit, source: "live" };
+    const bcPwr = liveBroadcast.pwrByMeter[meter.id];
+    const bcTotals = liveBroadcast.totalsByMeter[meter.id];
+    const bcAt = liveBroadcast.updatedAtByMeter[meter.id];
+
+    if (meter.capture_type === "automatic" && (liveValues.has(meter.id) || bcPwr !== undefined || bcTotals)) {
+      const live = liveValues.get(meter.id);
+      return {
+        // Broadcast schlägt den DB-Reconcile-Wert (echter Momentanwert)
+        value: bcPwr ?? live?.value ?? null,
+        unit: live?.unit ?? powerUnitForMeter(meter as any),
+        totalDay: bcTotals?.today ?? live?.totalDay ?? null,
+        totalMonth: bcTotals?.month ?? live?.totalMonth ?? null,
+        totalYear: bcTotals?.year ?? live?.totalYear ?? null,
+        meterReading: bcTotals?.total ?? live?.meterReading ?? null,
+        meterReadingUnit: live?.meterReadingUnit ?? "kWh",
+        source: "live",
+        liveAt: bcAt,
+      };
     }
+
     const manual = manualValues.get(meter.id);
     if (manual) {
       const dailyTotal = manualDailyTotals.get(meter.id) ?? null;
@@ -818,12 +764,24 @@ const LiveValues = () => {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredMeters.map((meter) => {
-                const { value, unit: sensorUnit, totalDay, totalMonth, totalYear, meterReading, meterReadingUnit, source, date } = getValue(meter);
+                const { value, unit: sensorUnit, totalDay, totalMonth, totalYear, meterReading, meterReadingUnit, source, date, liveAt } = getValue(meter);
+                const ageSec = liveAt ? Math.max(0, Math.round((nowTick - liveAt) / 1000)) : null;
+                const isFresh = ageSec !== null && ageSec < 60;
+                const ageLabel =
+                  ageSec === null
+                    ? null
+                    : ageSec < 60
+                      ? `${ageSec} s`
+                      : ageSec < 3600
+                        ? `vor ${Math.floor(ageSec / 60)} Min`
+                        : `vor ${Math.floor(ageSec / 3600)} Std`;
                 const config = ENERGY_TYPE_CONFIG[meter.energy_type] || ENERGY_TYPE_CONFIG.strom;
                 const Icon = getDeviceIconForMeter(meter);
                 const location = locations.find((l) => l.id === meter.location_id);
                 const isFlowType = meter.energy_type === "wasser" || meter.energy_type === "gas";
-                const soc = socByMeterId.get(meter.id);
+                const socLive = liveBroadcast.socByMeter[meter.id];
+                const socDb = socByMeterId.get(meter.id);
+                const soc = socLive !== undefined ? { pct: socLive, updatedAt: new Date(liveBroadcast.updatedAtByMeter[meter.id] ?? Date.now()).toISOString() } : socDb;
                 // Non-Energie-Sensoren (Zustand, Zähler, Zeit, Temperatur …) sollen
                 // keine kWh-Summen anzeigen und "bool" wird als An/Aus dargestellt.
                 const displayUnit = ((meter as any).source_unit_power || meter.unit || "").toString();
@@ -875,8 +833,17 @@ const LiveValues = () => {
                           <Icon className={cn("h-4 w-4 shrink-0", config.colorClass)} />
                           <CardTitle className="text-sm font-medium truncate">{meter.name}</CardTitle>
                         </div>
-                        <Badge variant={source === "live" ? "default" : source === "virtual" ? "outline" : "secondary"} className="shrink-0 text-[10px] px-1.5 py-0">
-                          {source === "live" ? "Live" : source === "virtual" ? t("common.virtual" as any) : source === "manual" ? t("common.manual" as any) : "–"}
+                        <Badge
+                          variant={source === "live" ? (isFresh ? "default" : "secondary") : source === "virtual" ? "outline" : "secondary"}
+                          className="shrink-0 text-[10px] px-1.5 py-0"
+                        >
+                          {source === "live"
+                            ? (isFresh ? "Live" : ageLabel ?? "–")
+                            : source === "virtual"
+                              ? t("common.virtual" as any)
+                              : source === "manual"
+                                ? t("common.manual" as any)
+                                : "–"}
                         </Badge>
                       </div>
                     </CardHeader>
