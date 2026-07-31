@@ -1421,13 +1421,13 @@ async function main() {
 
   await reloadMeters();
   setInterval(reloadMeters, RELOAD_INTERVAL_MS);
-  // v1.6: Legacy-Rohdaten-Flush (bridge-readings → bridge_raw_samples) deaktiviert.
-  // Es werden ausschließlich noch aggregierte 5-Minuten-Buckets an
-  // gateway-ingest?action=bridge-power-5min gesendet. Live-Werte laufen weiterhin
-  // via Realtime-Broadcast, ohne die Cloud-DB zu beschreiben.
-  // setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
+  // v1.10: Live-Push wieder aktiv — reiner Realtime-Broadcast (live_only),
+  // KEINE Datenbank-Schreiblast. Persistenz weiterhin ausschließlich über
+  // aggregierte 5-Minuten-Buckets (bridge-power-5min).
+  setInterval(() => { flush().catch((e) => log("error", "live-push:", e)); }, LIVE_PUSH_INTERVAL_MS);
+  log("info", `[Live-Push] aktiv: alle ${LIVE_PUSH_INTERVAL_MS / 1000}s Broadcast (live_only, MIN_DELTA=${MIN_DELTA} kW, Keepalive ${MIN_PUSH_INTERVAL_MS / 1000}s)`);
   setInterval(() => { flushBuckets().catch((e) => log("error", "flushBuckets:", e)); }, 60_000);
-  log("info", "[Bucket-Flush] aktiv: prüft alle 60s auf abgeschlossene 5-Min-Buckets (Legacy bridge-readings deaktiviert)");
+  log("info", "[Bucket-Flush] aktiv: prüft alle 60s auf abgeschlossene 5-Min-Buckets");
 
   // Bridge-Heartbeat: hält bridge_workers.last_heartbeat_at frisch (Phase 2)
   setInterval(() => { bridgeHeartbeat("online").catch(() => { /* siehe bridgeHeartbeat */ }); }, BRIDGE_HEARTBEAT_MS);
