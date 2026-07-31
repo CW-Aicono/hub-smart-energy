@@ -76,6 +76,32 @@ const LiveValues = () => {
   const [socUuidToMeterId, setSocUuidToMeterId] = useState<Map<string, string>>(new Map());
   const [detailNode, setDetailNode] = useState<EnergyFlowNode | null>(null);
 
+  // Echte Live-Werte über den Loxone-Broadcast (State-UUID → Meter via Resolver)
+  const resolverMeters = useMemo(
+    () =>
+      meters
+        .filter((m) => !m.is_archived && m.capture_type === "automatic" && !!m.sensor_uuid)
+        .map((m: any) => ({
+          id: m.id,
+          tenant_id: m.tenant_id ?? null,
+          energy_type: m.energy_type ?? null,
+          sensor_uuid: m.sensor_uuid ?? null,
+        })),
+    [meters],
+  );
+  const liveBroadcast = useLoxoneLiveBroadcast(resolverMeters);
+
+  // Sekundentakt für die Frische-Anzeige des Live-Badges
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") setNowTick(Date.now());
+    }, 5_000);
+    return () => clearInterval(id);
+  }, []);
+
+
+
 
   // Fetch SOC values from energy_storages (linked via power_meter_id)
   useEffect(() => {
