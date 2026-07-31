@@ -709,6 +709,8 @@ async function connect(state: ConnState): Promise<void> {
     for (const [blockUuid, baseEntry] of blockEntries) {
       const ctrl = findControl(blockUuid);
       const states = ctrl?.states as Record<string, string> | undefined;
+      // v1.12: vollständige State-Liste des Blocks (für Diagnose-Events)
+      const allStateKeys: string[] = states && typeof states === "object" ? Object.keys(states) : [];
       const stateEntries: Array<{ stateUuid: string; role: StateRole; key: string }> = [];
       let ambiguousPwr: { stateUuid: string; key: string } | null = null;
       let hasStrongPwr = false;
