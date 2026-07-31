@@ -138,7 +138,9 @@ Erwartet: `Updating …` oder `Already up to date.`
 
 ### Variante B – wenn `git pull` mit `fatal: not a git repository` antwortet
 
-Dann müssen die Dateien manuell ersetzt werden:
+Dann müssen die Dateien manuell ersetzt werden. **Nicht einzelne Zeilen mit `sed`
+reparieren und den Dateiinhalt nicht abschnittsweise einfügen** — dadurch können
+Variablen oder Objektfelder in den falschen Block geraten.
 
 1. In Lovable die Datei `docs/loxone-ws-worker/index.ts` öffnen, **kompletten Inhalt kopieren**.
 2. Auf dem Server:
@@ -151,6 +153,30 @@ Dann müssen die Dateien manuell ersetzt werden:
    ```bash
    nano Dockerfile
    ```
+
+6. Vor dem Build immer zuerst die TypeScript-Prüfung ausführen:
+   ```bash
+   npm install
+   npm run build
+   ```
+   Erst wenn dieser Befehl ohne `error TS...` endet, mit Schritt 7 fortfahren.
+
+> Falls Fehler wie `Cannot find name 'cfg'`, `Cannot find name 'meterId'` oder
+> `meter_id is missing` erscheinen, ist die `index.ts` nicht vollständig oder
+> beim Einfügen verrutscht. Dann die Datei **nicht weiter punktuell ändern**,
+> sondern die gesicherte Datei wiederherstellen und die aktuelle `index.ts`
+> nochmals vollständig ersetzen:
+>
+> ```bash
+> cp /root/aicono-worker-backup/index.ts.bak index.ts
+> nano index.ts
+> ```
+>
+> In `nano`: `Alt + \\` (Dateianfang), danach `Alt + T` (gesamten Inhalt bis
+> Dateiende markieren/löschen; je nach PuTTY/Nano-Version alternativ mehrfach
+> `Strg + K`). Anschließend den **kompletten** aktuellen Dateiinhalt einfügen,
+> mit `Strg + O`, `Enter`, `Strg + X` speichern und erneut `npm run build`
+> ausführen.
 
 Kurz prüfen, dass die Version stimmt:
 
