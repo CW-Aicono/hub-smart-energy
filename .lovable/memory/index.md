@@ -66,6 +66,7 @@ Bei Hetzner/Live/Server/DB/Worker-Themen immer laiengerecht: Alltagssprache, kla
 - [Shelly Cloud Integration](mem://features/gateways/shelly-cloud-integration-and-command-logic) — Gen 1/2+ support, rate limits, label cleaning
 - [Shelly Gen1 Logic](mem://features/gateways/shelly-gen1-meter-logic) — Standalone meters from relay arrays
 - [Loxone Live-Broadcast](mem://features/gateways/loxone-live-broadcast-path) — live_only-Broadcast ohne DB-Last, Persistenz nur über 5-Min-Buckets
+- [Loxone State-Auto-Mapping](mem://features/gateways/loxone-state-auto-mapping) — v1.11: unbekannte States zur Laufzeit als pwr/total klassifizieren, ws_mapping_gap-Diagnose
 - [HA Addon Requirements](mem://technical/infrastructure/ha-addon-compilation-requirements) — better-sqlite3 compilation, config.yaml strictness
 - [Gateway Local Time](mem://features/building-automation/gateway-local-time) — Explicit conversion from UTC to Europe/Berlin in UI
 - [Device Representation](mem://features/building-automation/device-ui-representation) — Hardware categorized into meters, sensors, actuators

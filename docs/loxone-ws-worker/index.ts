@@ -83,7 +83,7 @@ const SESSION_HEARTBEAT_MS = Math.max(
 );
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "v1.10-live-broadcast";
+const WORKER_VERSION = process.env.WORKER_VERSION || "v1.11-auto-mapping";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -151,7 +151,7 @@ const SPIKE_THRESHOLDS: Record<string, number> = {
 function isSpike(v: number, energyType: string, role: StateRole = "pwr"): boolean {
   if (!isFinite(v) || isNaN(v)) return true;
   if (role === "soc") return v < 0 || v > 100;
-  if (role !== "pwr") return false; // Energiewerte nicht filtern
+  if (role !== "pwr") return false; // Energiewerte/aux nicht filtern
   return Math.abs(v) > (SPIKE_THRESHOLDS[energyType] ?? SPIKE_THRESHOLDS.default);
 }
 
@@ -311,7 +311,9 @@ interface WsIntegration {
 //   month   → Monatsverbrauch (kWh, optional)
 //   year    → Jahresverbrauch (kWh, optional)
 //   soc     → Speicher-Ladezustand / Storage level (%, Slvl)
-type StateRole = "pwr" | "today" | "total" | "month" | "year" | "soc";
+//   aux     → noch nicht klassifizierter State (v1.11): wird zur Laufzeit
+//             anhand des Werteverlaufs zu "pwr" oder "total" befördert
+type StateRole = "pwr" | "today" | "total" | "month" | "year" | "soc" | "aux";
 
 interface UuidEntry {
   meter_id: string;
@@ -328,6 +330,11 @@ interface UuidEntry {
   bucket_sum: number;          // Summe aller Werte im Bucket (für avg)
   bucket_max: number;          // Max im Bucket
   bucket_count: number;        // Anzahl Samples im Bucket
+  // v1.11: Auto-Klassifikation unbekannter States
+  state_key?: string;          // Loxone-State-Name (z.B. "actual", "total", "Leistung")
+  obs_count?: number;          // Anzahl beobachteter Samples
+  obs_prev?: number | null;    // vorheriger Wert
+  obs_decreased?: boolean;     // Wert ist mindestens einmal gefallen / war negativ
 }
 
 interface ConnState {
@@ -523,6 +530,7 @@ async function connect(state: ConnState): Promise<void> {
         const uuid = (ev?.uuid || "").toLowerCase();
         const entry = state.uuidMap.get(uuid);
         if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type, entry.role)) {
+          if (entry.role === "aux") classifyAux(state, entry, ev.value);
           entry.latest_value = ev.value;
           state.eventsReceived++;
           state.lastEventAt = Date.now();
@@ -641,6 +649,8 @@ async function connect(state: ConnState): Promise<void> {
     // v1.9: Split pwr in „strong" (eindeutige Momentanleistungs-States) und
     // „ambiguous" (Actual/Value/P — bei Wasser-/Gaszähler oft der kumulative
     // Zählerstand). Für Medien ohne echte Leistung akzeptieren wir nur strong-pwr.
+    // States, die nie Messwerte sind (Sperren, Texte, Fehler, Icons)
+    const IGNORED_STATE_RX = /(locked|jlock|error|textandicon|text|icon|status|mode|entries|link|image|format|sort|serial|name)/i;
     const PWR_STRONG_RX = /^(pwr|power|currentpower|actualpower|cp|chargingpower|currentchargingpower)$/i;
     const PWR_AMBIGUOUS_RX = /^(actual|value|p)$/i;
     const ROLE_PATTERNS: Array<{ role: StateRole; rx: RegExp }> = [
@@ -693,11 +703,20 @@ async function connect(state: ConnState): Promise<void> {
       let ambiguousPwr: { stateUuid: string; key: string } | null = null;
       let hasStrongPwr = false;
 
+      // v1.11: ALLE States eines Blocks einsammeln. Unbekannte Keys werden als
+      // role="aux" registriert und zur Laufzeit anhand des Werteverlaufs
+      // klassifiziert (fallend/negativ → Leistung, monoton steigend → Zählerstand).
+      // Vorher wurden sie verworfen — dadurch blieben ganze Blöcke stumm.
+      const unknownEntries: Array<{ stateUuid: string; key: string }> = [];
       if (states && typeof states === "object") {
         for (const [k, v] of Object.entries(states)) {
           if (typeof v !== "string") continue;
           const cls = classifyState(k);
-          if (!cls) continue;
+          if (!cls) {
+            if (IGNORED_STATE_RX.test(k)) continue;
+            unknownEntries.push({ stateUuid: v.toLowerCase(), key: k });
+            continue;
+          }
           if (cls === "pwr_ambiguous") {
             if (!ambiguousPwr) ambiguousPwr = { stateUuid: v.toLowerCase(), key: k };
             continue;
@@ -718,6 +737,17 @@ async function connect(state: ConnState): Promise<void> {
         log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): ambiguous pwr-key "${ambiguousPwr.key}" ignoriert (kein echter Momentanwert für ${baseEntry.energy_type})`);
       }
 
+      // v1.11: Wenn der Block keine erkennbare Leistung hat, die unbekannten
+      // States als Kandidaten (aux) aufnehmen. Für Wasser/Gas werden sie nie zu
+      // "pwr" befördert (v1.9-Lehre: Zählerstand ≠ Momentanleistung), können aber
+      // als Zählerstand (total) enden.
+      const hasPwrEntry = stateEntries.some((se) => se.role === "pwr");
+      if (!hasPwrEntry && unknownEntries.length > 0) {
+        for (const ue of unknownEntries) {
+          stateEntries.push({ stateUuid: ue.stateUuid, role: "aux", key: ue.key });
+        }
+      }
+
       if (stateEntries.length === 0) {
         if (flowLike) {
           // v1.9: Fallback deaktiviert für Wasser/Gas — sonst würde der kumulative
@@ -735,12 +765,17 @@ async function connect(state: ConnState): Promise<void> {
       // Dedup auf Rolle: falls mehrere Keys auf gleiche Rolle mappen, ersten nehmen
       const seenRoles = new Set<StateRole>();
       for (const se of stateEntries) {
-        if (seenRoles.has(se.role)) continue;
+        // aux-Kandidaten dürfen mehrfach vorkommen (genau einer wird später "pwr")
+        if (se.role !== "aux" && seenRoles.has(se.role)) continue;
         seenRoles.add(se.role);
         state.uuidMap.set(se.stateUuid, {
           ...baseEntry,
           block_uuid: blockUuid,
           role: se.role,
+          state_key: se.key,
+          obs_count: 0,
+          obs_prev: null,
+          obs_decreased: false,
           latest_value: null,
           last_pushed_value: null,
           last_pushed_at: 0,
@@ -753,6 +788,22 @@ async function connect(state: ConnState): Promise<void> {
       }
       blocksMapped++;
       log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} → ${[...seenRoles].join(",")} (type=${ctrl?.type ?? "?"}, energy_type=${baseEntry.energy_type})`);
+    }
+
+    // v1.11: Blöcke ohne erkannte Momentanleistung melden — so ist die
+    // Mapping-Lücke in der Cloud sichtbar (bridge_event_log), statt nur im Container-Log.
+    const blocksWithPwr = new Set<string>();
+    const blocksWithAux = new Map<string, string[]>();
+    for (const e of state.uuidMap.values()) {
+      if (e.role === "pwr") blocksWithPwr.add(e.block_uuid);
+      if (e.role === "aux") blocksWithAux.set(e.block_uuid, [...(blocksWithAux.get(e.block_uuid) ?? []), e.state_key ?? "?"]);
+    }
+    const gaps = blockEntries
+      .map(([b, be]) => ({ block_uuid: b, meter_id: be.meter_id, energy_type: be.energy_type, aux_keys: blocksWithAux.get(b) ?? [] }))
+      .filter((g) => !blocksWithPwr.has(g.block_uuid));
+    if (gaps.length > 0) {
+      log("warn", `[WS] ${state.serialNumber} ${gaps.length} Block(s) ohne Momentanleistung — Auto-Klassifikation läuft`);
+      bridgeLog("warn", "ws_mapping_gap", `${gaps.length} Block(s) ohne erkannte Momentanleistung`, state.serialNumber, { gaps: gaps.slice(0, 50) });
     }
 
     log("info", `[WS] ${state.serialNumber} LoxAPP3-Mapping: blocks=${blockEntries.length}, mapped=${blocksMapped}, fallback=${blocksFallback}, totalStateUuids=${totalSubs}`);
@@ -938,6 +989,52 @@ async function keepaliveTick(): Promise<void> {
 // Werte, Gerätekacheln/Steuerungen) und schreibt NICHTS in die Datenbank.
 // Historisierung läuft unverändert über flushBuckets() → bridge-power-5min.
 
+
+// ─── v1.11: Laufzeit-Klassifikation unbekannter States ───────────────────────
+// Loxone-Blöcke benennen ihre States uneinheitlich (z.B. "Leistung", "AI1",
+// kundeneigene Bausteine). Statt solche States zu verwerfen, beobachten wir den
+// Werteverlauf:
+//   • Wert fällt irgendwann oder ist negativ  → Momentanleistung  (role="pwr")
+//   • Wert steigt monoton über mehrere Samples → Zählerstand      (role="total")
+// Für Wasser/Gas wird NIE zu "pwr" befördert (Zählerstand ≠ Leistung).
+const AUX_MIN_SAMPLES = 3;
+
+function blockHasRole(state: ConnState, blockUuid: string, role: StateRole): boolean {
+  for (const e of state.uuidMap.values()) {
+    if (e.block_uuid === blockUuid && e.role === role) return true;
+  }
+  return false;
+}
+
+function classifyAux(state: ConnState, entry: UuidEntry, value: number): void {
+  const prev = entry.obs_prev ?? null;
+  entry.obs_count = (entry.obs_count ?? 0) + 1;
+  if (value < 0 || (prev !== null && value < prev - 1e-6)) entry.obs_decreased = true;
+  entry.obs_prev = value;
+  if ((entry.obs_count ?? 0) < AUX_MIN_SAMPLES) return;
+
+  const et = (entry.energy_type ?? "").toLowerCase();
+  const flowLike = et === "wasser" || et === "gas" || et === "water";
+
+  if (entry.obs_decreased && !flowLike) {
+    if (blockHasRole(state, entry.block_uuid, "pwr")) return; // anderer State war schneller
+    if (isSpike(value, entry.energy_type, "pwr")) return;     // implausibel → kein pwr
+    entry.role = "pwr";
+    entry.bucket_start = 0; entry.bucket_sum = 0; entry.bucket_max = 0; entry.bucket_count = 0;
+    log("info", `[AutoMap] ${state.serialNumber} block ${entry.block_uuid} state "${entry.state_key}" → pwr (Werteverlauf schwankend)`);
+    bridgeLog("warn", "ws_automap_pwr", `State "${entry.state_key}" als Momentanleistung erkannt`, state.serialNumber, {
+      block_uuid: entry.block_uuid, meter_id: entry.meter_id, state_key: entry.state_key, sample: value,
+    });
+    return;
+  }
+
+  if (!entry.obs_decreased && (entry.obs_count ?? 0) >= AUX_MIN_SAMPLES && value > 0) {
+    if (blockHasRole(state, entry.block_uuid, "total")) return;
+    entry.role = "total";
+    log("info", `[AutoMap] ${state.serialNumber} block ${entry.block_uuid} state "${entry.state_key}" → total (monoton steigend)`);
+  }
+}
+
 async function flush(): Promise<void> {
   if (workerPaused) return;
   const readings: any[] = [];
@@ -947,6 +1044,7 @@ async function flush(): Promise<void> {
     if (!state.authenticated) continue;
     for (const [, entry] of state.uuidMap) {
       if (entry.latest_value === null) continue;
+      if (entry.role === "aux") continue; // v1.11: noch nicht klassifiziert → nicht senden
 
       // Nur senden, wenn sich der Wert spürbar geändert hat ODER der letzte
       // Push älter als MIN_PUSH_INTERVAL_MS ist (Keepalive).
