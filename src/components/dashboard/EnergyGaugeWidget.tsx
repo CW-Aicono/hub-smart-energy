@@ -166,44 +166,43 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
     const fetchPeaks = async () => {
       const today = new Date();
       const peaks: Record<string, number> = {};
-      // Einzel-Meter-Calls (parallel) mit LIMIT 1: Postgres liefert das Maximum
-      // je Zähler direkt aus dem Index. Ein gemeinsames `IN (...)` mit
-      // ORDER BY power_value DESC ohne Limit sortiert dagegen den kompletten
-      // Tagesbestand aller Zähler (~3,5 s).
+      const dayStart = startOfDay(today).toISOString();
+      const dayEnd = endOfDay(today).toISOString();
+
+      // Primärquelle: 5-Min-Aggregat (power_max). Die Rohtabelle wird für
+      // Worker-Zähler nicht mehr durchgängig befüllt und liefert allein
+      // einen viel zu niedrigen Tages-Peak.
+      const { data: agg } = await supabase
+        .from("meter_power_readings_5min")
+        .select("meter_id, power_max, power_avg")
+        .in("meter_id", meterIds)
+        .gte("bucket", dayStart)
+        .lte("bucket", dayEnd);
+      for (const row of agg ?? []) {
+        const v = Math.abs(Number(row.power_max ?? row.power_avg ?? 0));
+        if (v > (peaks[row.meter_id] ?? 0)) peaks[row.meter_id] = v;
+      }
+
+      // Top-up aus Rohwerten (Polling-Ingest-Zähler, jüngste Minuten).
       const peakResults = await Promise.all(
         meterIds.map((mid) =>
           supabase
             .from("meter_power_readings")
             .select("meter_id, power_value")
             .eq("meter_id", mid)
-            .gte("recorded_at", startOfDay(today).toISOString())
-            .lte("recorded_at", endOfDay(today).toISOString())
+            .gte("recorded_at", dayStart)
+            .lte("recorded_at", dayEnd)
             .order("power_value", { ascending: false })
             .limit(1),
         ),
       );
       for (const res of peakResults) {
         for (const row of res.data ?? []) {
-          if ((peaks[row.meter_id] ?? 0) < row.power_value) {
-            peaks[row.meter_id] = row.power_value;
-          }
-        }
-      }
-
-      // Fallback: worker-only meters (no raw rows) → use max power_max from 5-min buckets.
-      const missing = meterIds.filter((id) => peaks[id] === undefined);
-      if (missing.length > 0) {
-        const { data: agg } = await supabase
-          .from("meter_power_readings_5min")
-          .select("meter_id, power_max, power_avg")
-          .in("meter_id", missing)
-          .gte("bucket", startOfDay(today).toISOString())
-          .lte("bucket", endOfDay(today).toISOString());
-        for (const row of agg ?? []) {
-          const v = Math.abs(Number(row.power_max ?? row.power_avg ?? 0));
+          const v = Math.abs(Number(row.power_value ?? 0));
           if (v > (peaks[row.meter_id] ?? 0)) peaks[row.meter_id] = v;
         }
       }
+
       setInitialPeaks(peaks);
       setInitialPeaksLoaded(true);
     };
