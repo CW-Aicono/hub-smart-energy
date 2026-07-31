@@ -27,13 +27,13 @@ Nein — 100 % bestätigen kann ich es nicht, und zwar aus einem konkreten, gepr
 - Wo die States nicht eindeutig sind: manuelle Zuordnung pro Zähler (State-Key am Zähler hinterlegt), die der Worker beim Mapping bevorzugt.
 
 
-### 4. Verifikation
+### 3. Verifikation
 - Prüfen, dass `meter_power_readings_5min` für „Erzeugung" auf `source = bridge_ws` mit `sample_count > 1` umschaltet.
 - Live-Wert in der UI gegen die Loxone-Anzeige gegenprüfen (Toleranz < 1 kW, Alter < 10 s).
 - Zähler-Zählung `bridge_ws` vs. `loxone_pull` als Fortschrittsmaß dokumentieren.
 
 ## Technische Details
 
-- Betroffene Dateien: `docs/loxone-ws-worker/index.ts` (Mapping/Diagnose), `supabase/functions/gateway-ingest/index.ts` (nur falls neues Event-Handling nötig), `src/pages/LiveValues.tsx`, `src/components/dashboard/EnergyFlowMonitor.tsx`.
-- Keine zusätzliche Schreiblast: Live bleibt reiner Broadcast (`live_only`), Persistenz weiter über 5-Minuten-Bündel.
-- Schritt 1 ist reines Frontend und sofort wirksam; Schritte 2–3 erfordern je ein Worker-Update auf Hetzner.
+- Jetzt geändert werden nur `docs/loxone-ws-worker/index.ts` und die neue Update-Anleitung — keine Frontend- oder Backend-Änderungen in diesem Schritt.
+- Live bleibt reiner Broadcast (`live_only`), Persistenz weiter über 5-Minuten-Bündel; die Diagnose-Events laufen über den bestehenden `bridgeLog`-Pfad.
+
