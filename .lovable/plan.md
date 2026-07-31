@@ -1,71 +1,49 @@
-# Kachel vs. Detailansicht: eine Quelle statt eigener Rechenlogik
+# Ursache statt Symptom: die Rollenzuordnung der Loxone-States
 
-## Befund (in der Datenbank verifiziert)
+Du hast recht. Die bisherigen Punkte 3 und 4 waren Symptombekämpfung: erst falsche Werte erzeugen, dann per Heuristik erkennen und wegputzen. Jede solche Heuristik hat genau das Problem, das du benannt hast — sie kann echte Anlaufspitzen nicht sicher von Zählerständen unterscheiden. Der Plan wird deshalb umgebaut.
 
-Beispiel „Zähler Kühlschrank" (Einheit kW, Typ Strom):
+## Die eigentliche Ursache
 
-| Anzeige | Wert | Quelle |
-|---|---|---|
-| Kachel „Gesamt heute" | 445 Wh | `meter_period_totals` (period_type=day) — heute **0,465 kWh**, Vortage 0,436–0,613 kWh, `source = loxone/loxone_live` |
-| Kachel Zählerstand | 100,6 kWh | Rollenwert `total` aus dem Loxone-Zählerbaustein |
-| Detail „Energie 24 h" | 192,90 kWh | **selbst gerechnet**: Trapez-Integration über die Leistungsreihe |
-| Detail Ø/Max | 12,33 / 99,76 kW | Min/Max/Ø über dieselbe Leistungsreihe |
+Der Loxone-WS-Worker **rät zur Laufzeit**, welcher State eines Bausteins die Momentanleistung ist. `classifyAux()` (`docs/loxone-ws-worker/index.ts`) stuft einen State als Leistung ein, sobald sein Wert einmal fällt oder negativ ist. Ein kumulativer Zählerstand fällt aber ebenfalls — bei Reset, Miniserver-Neustart oder Überlauf. Ab diesem Moment schreibt der Worker den Zählerstand dauerhaft in die Leistungsreihe. Genau das ist beim „Zähler Kühlschrank" passiert (100,49 in der Leistungsreihe = Zählerstand 100,6 kWh).
 
-Der Detaildialog rechnet also alles selbst, statt die bereits vorhandenen, geprüften Tagessummen zu verwenden. Damit hast du recht: die Energie kann direkt aus der Quelle kommen, die die Kachel schon nutzt.
+Verifiziert:
+- In den letzten 48 h: 16 × `ws_mapping_gap` (Blöcke, in denen der Worker keine Leistung sicher erkennt und deshalb raten muss), 1 × `ws_automap_pwr`.
+- `bridge_raw_samples` ist aktuell **leer** — die Rohdaten werden seit der IO-Optimierung nicht mehr dauerhaft gehalten. Eine Neuberechnung falscher Buckets aus den Rohdaten ist damit nicht möglich; umso wichtiger ist, dass gar nichts Falsches mehr entsteht.
 
-Aber: der Leistungsverlauf und Ø/Max/Min stammen bereits aus den 5-Minuten-Buckets (`meter_power_readings_5min`) — dieselbe Tabelle, die auch das Dashboard nutzt. Diese Tabelle ist an einzelnen Stellen verunreinigt:
-
-```text
-19:05  power_avg 0,0494   power_max 0,0599    (echte Leistung)
-13:35  power_avg 99,76    power_max 100,49    (= der Zählerstand 100,6 kWh)
-```
-
-Alle Ausreißer haben `source = 'bridge_ws'` und liegen exakt auf dem Zählerstand. Der Loxone-WS-Worker stuft in `classifyAux` (`docs/loxone-ws-worker/index.ts`, Zeile 1122 ff.) einen kumulativen Zählerstand nach einem einzigen Rückgang (Reset/Nullwert) dauerhaft als Momentanleistung ein; der Spike-Filter greift nicht, weil 100 kW für Strom (Limit 10.000) plausibel wirkt.
-
-Betroffene Zähler der letzten 48 h (|power_avg| > 20, `bridge_ws`):
-
-```text
-ESB Leistung Sinec Energiespeicher 188 | Voltage L1-L2 52 | ESB Leistung Messschrank Wago 45
-Erzeugung 22 | PAC 3220 NSHV Süd 20 | Zähler Gesamtverbrauch 16 | Zähler Kühlschrank 16
-Eigenverbrauch 15 | Ostflügel OG Süd 12 | PAC 3220 NSHV Nord 11 | Einspeisung 6
-```
-
-Ein Umbau der Anzeige allein reicht deshalb nicht: die Energie wird durch die Umstellung sofort richtig, Ø/Max/Min und der Graph bleiben aber falsch, solange die Fehlzeilen in der Tabelle stehen.
+Solange geraten wird, entsteht der Fehler immer wieder — an anderen Bausteinen, in anderer Form. Alles Weitere ist Nachsorge.
 
 ## Umsetzung
 
-### 1. Energie aus der vorhandenen, korrekten Quelle
-Im Detaildialog (`MeterDetailDialog` in `EnergyFlowMonitor.tsx`) wird die KPI „Energie" nicht mehr integriert, sondern über `get_meter_totals_auto` bzw. `get_meter_daily_totals_split_with_fallback` geladen — exakt die Quelle hinter „Gesamt heute" der Kachel. 24 h = heutiger Tageswert, 7 d/30 d = Summe der Tageswerte. Nur im 1-Stunden-Fenster bleibt die Integration, weil es dafür keinen gespeicherten Wert gibt; dort wird sie als „aus Leistungsverlauf berechnet" gekennzeichnet.
+### 1. Raten abschaffen: deterministische Rollenzuordnung (Worker v1.15)
+Die Rolle eines States wird nicht mehr aus dem Werteverlauf abgeleitet, sondern aus dem, was der Miniserver selbst liefert:
+- Rolle kommt aus **State-Name + Einheit** der Loxone-Struktur (`LoxAPP3.json`): `actual/momentan/leistung` mit Einheit W/kW → Leistung; `total/gesamt/zaehler` mit kWh/m³ → Zählerstand; alles andere bleibt `aux` und wird **nicht** in die Leistungsreihe geschrieben.
+- `classifyAux()` als Umstufungsmechanismus entfällt ersatzlos. Ein State, der nicht sicher als Leistung erkannt ist, liefert lieber gar keine Leistung als eine falsche.
+- Wo die Struktur keine eindeutige Zuordnung hergibt, wird das als `ws_mapping_gap` gemeldet — sichtbar, statt still geraten.
 
-### 2. Leistungsverlauf über den gemeinsamen Standardpfad
-Die handgeschriebene Abfragekette im Dialog (5-Min-Tabelle + Roh-Top-up + Sensor-Fallback) wird durch `fetchPowerSeriesAuto` (`src/lib/powerSeries.ts`, RPC `get_power_series_auto`) ersetzt — derselbe Pfad, den Dashboard und Analytics Studio nutzen, inkl. zoomabhängiger Auflösung (5 Min / 15 Min / 1 h / 1 Tag). Ø/Max/Min werden aus dieser Reihe gebildet (Max aus `power_max`). Kein zweiter Datenpfad mehr.
+### 2. Die Lücke sichtbar und manuell auflösbar machen
+Damit „lieber nichts als falsch" nicht zu fehlenden Live-Werten führt, bekommt jeder Zähler eine explizite, gespeicherte State-Zuordnung:
+- Neue Spalte für die Leistungs-State-UUID am Zähler (getrennt von `sensor_uuid` für den Zählerstand).
+- Im Super-Admin / in der Zählerverwaltung eine Ansicht „Nicht zugeordnete Loxone-States": pro Baustein die vorhandenen States mit Name, Einheit und aktuellem Wert; der Admin wählt einmalig den richtigen aus.
+- Der Worker nutzt ausschließlich diese Zuordnung. Einmal gesetzt, kann sie sich nie mehr selbsttätig ändern.
 
-### 3. Fehlzeilen entfernen — nur mit eindeutigem Nachweis, nicht nach Größe
-Berechtigter Einwand: Ein Kühlaggregat oder eine Wallbox kann beim Anlauf real riesige Sprünge erzeugen. Ein Kriterium wie „> 50× Median" oder „> 20 kW" würde echte Anlaufspitzen mitlöschen. Das wird deshalb **gestrichen**.
+### 3. Eine Invariante am Schreibpunkt — keine Wertfilterung
+Im `bridge-aggregator` (einziger Schreibpfad in `meter_power_readings_5min`) wird geprüft, ob der eingehende State **die Leistungsrolle des Zählers laut Zuordnung** hat. Ist er es nicht, wird nichts geschrieben. Es wird weiterhin **kein Wert wegen seiner Höhe verworfen** — der bestehende Deckel von 500 kW für Strom bleibt unverändert, echte Anlaufspitzen darunter passieren wie bisher.
 
-Gelöscht wird nur, was nachweislich ein Zählerstand und keine Leistung ist. Alle drei Bedingungen müssen gleichzeitig zutreffen:
-1. `source = 'bridge_ws'`,
-2. der Wert liegt innerhalb ±1 % des zum selben Zeitpunkt gültigen kumulativen Zählerstands desselben Zählers (aus `meter_cumulative_readings` / `meter_readings`),
-3. die Werte sind über mindestens 3 aufeinanderfolgende Buckets **monoton steigend** und die Zuwächse entsprechen dem Zählerfortschritt.
+### 4. Anzeige auf die vorhandenen, geprüften Werte umstellen
+Unabhängig von der Ursache bleibt richtig, was du vorher gesagt hast: der Detaildialog soll nicht selbst rechnen.
+- KPI „Energie" kommt aus `meter_period_totals` (dieselbe Quelle wie „Gesamt heute" der Kachel), nicht mehr aus der Trapez-Integration.
+- Leistungsverlauf und Ø/Max/Min über `fetchPowerSeriesAuto` (`src/lib/powerSeries.ts`) — derselbe Pfad wie Dashboard und Analytics Studio.
 
-Punkt 3 ist der eigentliche Unterscheider: eine echte Anlaufspitze geht nach kurzer Zeit wieder herunter, ein Zählerstand steigt nur. Eine einzelne hohe Zeile ohne monotone Nachbarn bleibt in jedem Fall stehen.
-
-Ablauf: Erst wird die Trefferliste je Zähler mit Zeitstempeln und Werten ausgegeben und dir zur Freigabe gezeigt. Gelöscht wird erst nach deinem OK. Die Rohdaten in `bridge_raw_samples` bleiben unangetastet, eine Neuberechnung ist damit jederzeit möglich.
-
-### 4. Worker härten — Klassifizierung, keine Wertfilterung (v1.15)
-Auch hier wird kein Wert wegen seiner Höhe verworfen. Korrigiert wird ausschließlich, **welcher State als Leistung gilt**:
-- `classifyAux`: Ein State wird erst dann von `total` zu `pwr` umgestuft, wenn er mehrfach echte Rückgänge zeigt; ein einzelner Reset auf 0 oder ein Neustart-Sprung zählt nicht mehr als Rückgang.
-- Liegt ein Kandidatenwert dauerhaft nahe am bekannten `total`/`today` desselben Loxone-Bausteins, wird er nie als Leistung geschrieben.
-- Einmal sicher als `total` erkannte States werden nicht mehr umklassifiziert; States mit Einheit V/A/Hz/°C schreiben grundsätzlich nicht in die Leistungsreihe.
-- Der bestehende Plausibilitätsdeckel (500 kW für Strom im `bridge-aggregator`) bleibt unverändert — echte Anlaufspitzen darunter passieren wie bisher ungefiltert.
-- Update-Anleitung `docs/loxone-ws-worker/UPDATE-v1.15-role-hardening.md`.
+### 5. Altlast: einmalige, belegte Korrektur — kein Dauerfilter
+Die bereits geschriebenen Fehlzeilen bleiben ohne Eingriff stehen und verfälschen Ø/Max weiter. Sie werden **einmalig** entfernt, und zwar nur dort, wo der State nach der neuen Zuordnung nachweislich der Zählerstand-State ist — also über die Rollenzuordnung, nicht über Wertgrößen oder Medianabstände. Kein Trigger, kein dauerhafter Filter, keine Löschung nach Höhe. Die Trefferliste je Zähler wird dir vor dem Löschen zur Freigabe vorgelegt.
 
 ## Verifikation
 
-- „Zähler Kühlschrank", 24 h: Energie zeigt denselben Wert wie die Kachel (heute 0,465 kWh); Ø/Max liegen bei 0,05–0,07 kW.
-- Vergleich Detailgraph ↔ Dashboard-Energieverbrauch für denselben Zähler und Zeitraum: identischer Verlauf.
-- „Voltage L1-L2" und „Ostflügel OG Süd": keine Zählerstands-/Spannungswerte mehr in der Leistungsreihe.
+- Für jeden Loxone-Zähler ist die Leistungs-State-UUID gesetzt oder er erscheint in der Lücken-Liste. Kein Zähler läuft mehr über eine geratene Zuordnung.
+- „Zähler Kühlschrank", 24 h: Energie identisch zur Kachel; Ø/Max im Bereich 0,05–0,07 kW.
+- Gegenprobe echte Spitze: ein Zähler mit realem Anlaufstrom behält seinen Ausschlag in Graph und Max — nachgewiesen an einem konkreten Zeitpunkt vor/nach der Umstellung.
+- `ws_mapping_gap`-Zähler im `bridge_event_log` geht nach der manuellen Zuordnung gegen 0.
 
 ## Technische Details
 
-Geänderte Dateien: `src/components/dashboard/EnergyFlowMonitor.tsx` (Energie-KPI und Serienabfrage), eine SQL-Bereinigungsmigration, `docs/loxone-ws-worker/index.ts` + Update-Doku. Der Worker auf Hetzner muss nach dem Merge neu gebaut/gestartet werden.
+Geändert: `docs/loxone-ws-worker/index.ts` (Rollenzuordnung, Entfall `classifyAux`) + `docs/loxone-ws-worker/UPDATE-v1.15-role-mapping.md`; Migration für die Leistungs-State-Spalte an `meters`; `supabase/functions/bridge-aggregator/index.ts` (Rollenprüfung am Schreibpunkt); UI für die Zuordnung; `src/components/dashboard/EnergyFlowMonitor.tsx` (Energie-KPI + Serienabfrage); eine einmalige Bereinigungsmigration. Der Worker auf Hetzner muss nach dem Merge neu gebaut und gestartet werden.
