@@ -1600,7 +1600,7 @@ export function MeterDetailDialog({
         }
       };
 
-      if (range !== "1h") {
+      {
         for (let offset = 0; offset < aggregateLimit; offset += pageSize) {
           const to = Math.min(offset + pageSize, aggregateLimit) - 1;
           const { data, error } = await supabase
@@ -1617,6 +1617,7 @@ export function MeterDetailDialog({
           if (data.length < to - offset + 1) break;
         }
       }
+
 
       // Rohwerte nur im 1h-Fenster als Detail-Top-up: für Worker-Zähler
       // enthält die Rohtabelle nur noch vereinzelte Zeilen, die längere
