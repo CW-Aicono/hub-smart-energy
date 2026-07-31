@@ -179,15 +179,18 @@ export default function LoxoneStateMappingPanel() {
                 <TableHead>Zähler</TableHead>
                 <TableHead>Block</TableHead>
                 <TableHead>Erkannte States</TableHead>
-                <TableHead className="w-72">Leistungs-State</TableHead>
+                <TableHead className="w-72">Momentanwert-State</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map(({ block, meter, hasPwr, explicit, isGap }) => (
+              {rows.map(({ block, meter, kind, hasPwr, explicit, isGap }) => (
                 <TableRow key={block.block_uuid}>
                   <TableCell className="font-medium">
                     {meter?.name ?? "—"}
-                    <div className="text-xs text-muted-foreground">{block.energy_type ?? "—"}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {block.energy_type ?? "—"}
+                      {kind === "flow" ? " · Durchfluss" : kind === "pwr" ? " · Leistung" : " · kein Momentanwert"}
+                    </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">{block.block_uuid}</TableCell>
                   <TableCell>
@@ -195,7 +198,7 @@ export default function LoxoneStateMappingPanel() {
                       {block.states.map((s) => (
                         <Badge
                           key={`${block.block_uuid}-${s.key}`}
-                          variant={s.role === "pwr" ? "default" : "secondary"}
+                          variant={s.role === "pwr" || s.role === "flow" ? "default" : "secondary"}
                           className="text-[11px]"
                         >
                           {s.key}: {s.role}
@@ -206,6 +209,10 @@ export default function LoxoneStateMappingPanel() {
                   <TableCell>
                     {!meter ? (
                       <span className="text-xs text-muted-foreground">kein Zähler verknüpft</span>
+                    ) : !kind ? (
+                      <span className="text-xs text-muted-foreground">
+                        keine Zuordnung nötig (Einheit in der Messstelle: An/Aus)
+                      </span>
                     ) : (
                       <Select
                         value={explicit ?? (hasPwr ? "__auto__" : "")}
