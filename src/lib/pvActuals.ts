@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
+
 
 export type MeterPowerReading = {
   power_value: number;
