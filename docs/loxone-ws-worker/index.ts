@@ -842,6 +842,61 @@ async function connect(state: ConnState): Promise<void> {
       bridgeLog("warn", "ws_mapping_gap", `${gaps.length} Block(s) ohne erkannte Momentanleistung`, state.serialNumber, { gaps: gaps.slice(0, 50) });
     }
 
+    // ── v1.12: Block-State-Diagnose ────────────────────────────────────────
+    // Pro Block ALLE Loxone-State-Namen samt zugewiesener Rolle in die Cloud
+    // melden (severity=warn → landet in bridge_event_log). Damit lässt sich die
+    // Mapping-Lücke ohne Raten schließen. In Chunks, damit die Payload klein bleibt.
+    {
+      const CHUNK = 12;
+      for (let i = 0; i < blockDiag.length; i += CHUNK) {
+        const chunk = blockDiag.slice(i, i + CHUNK);
+        void bridgeLog(
+          "warn",
+          "ws_block_states",
+          `Block-States ${i + 1}-${i + chunk.length} von ${blockDiag.length}`,
+          state.serialNumber,
+          { part: Math.floor(i / CHUNK) + 1, total_blocks: blockDiag.length, blocks: chunk },
+        );
+      }
+    }
+
+    // v1.12: 60 s nach Verbindungsaufbau die ersten Echtwerte je State melden —
+    // schwankend/negativ ⇒ Leistung, monoton steigend ⇒ Zählerstand.
+    const diagSerial = state.serialNumber;
+    setTimeout(() => {
+      const cur = connections.get(diagSerial);
+      if (!cur || !cur.authenticated) return;
+      const byBlock = new Map<string, Array<Record<string, unknown>>>();
+      for (const e of cur.uuidMap.values()) {
+        const arr = byBlock.get(e.block_uuid) ?? [];
+        arr.push({
+          key: e.state_key ?? "(block)",
+          role: e.role,
+          value: e.latest_value,
+          obs_count: e.obs_count ?? 0,
+          decreased: e.obs_decreased ?? false,
+        });
+        byBlock.set(e.block_uuid, arr);
+      }
+      const rows = Array.from(byBlock.entries()).map(([block_uuid, sts]) => {
+        const any = Array.from(cur.uuidMap.values()).find((e) => e.block_uuid === block_uuid);
+        return { block_uuid, meter_id: any?.meter_id, energy_type: any?.energy_type, states: sts };
+      });
+      const CHUNK = 12;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK);
+        void bridgeLog(
+          "warn",
+          "ws_block_state_values",
+          `Werte-Snapshot ${i + 1}-${i + chunk.length} von ${rows.length} (60 s nach Verbindung)`,
+          diagSerial,
+          { part: Math.floor(i / CHUNK) + 1, total_blocks: rows.length, blocks: chunk },
+        );
+      }
+    }, 60000);
+
+
+
     log("info", `[WS] ${state.serialNumber} LoxAPP3-Mapping: blocks=${blockEntries.length}, mapped=${blocksMapped}, fallback=${blocksFallback}, totalStateUuids=${totalSubs}`);
     bridgeLog("info", "ws_connected", `Verbunden, ${totalSubs} State-UUIDs aus ${blockEntries.length} Blöcken (mapped=${blocksMapped}, fallback=${blocksFallback})`, state.serialNumber, { blocks: blockEntries.length, mapped: blocksMapped, fallback: blocksFallback, totalStateUuids: totalSubs });
 
