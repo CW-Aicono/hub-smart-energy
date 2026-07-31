@@ -543,12 +543,25 @@ async function connect(state: ConnState): Promise<void> {
           if (entry.role === "pwr") {
             const bucket = Math.floor(Date.now() / 300000) * 300000;
             if (entry.bucket_start !== bucket) {
-              // Bucket-Wechsel: alten Bucket wird per periodischem Flush geliefert.
+              // v1.13: Bucket-Wechsel — den fertigen Bucket zwischenpuffern,
+              // damit der neue Wert ihn nicht überschreibt (bisher gingen bei
+              // häufig aktualisierenden Zählern fast alle Buckets verloren).
+              if (entry.bucket_start !== 0 && entry.bucket_count > 0) {
+                if (!entry.pending_buckets) entry.pending_buckets = [];
+                entry.pending_buckets.push({
+                  bucket: entry.bucket_start,
+                  sum: entry.bucket_sum,
+                  max: entry.bucket_max,
+                  count: entry.bucket_count,
+                });
+                if (entry.pending_buckets.length > 24) entry.pending_buckets.shift();
+              }
               entry.bucket_start = bucket;
               entry.bucket_sum = 0;
               entry.bucket_max = 0;
               entry.bucket_count = 0;
             }
+
             const absV = Math.abs(ev.value);
             entry.bucket_sum += ev.value;
             entry.bucket_count += 1;
