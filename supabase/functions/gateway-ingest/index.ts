@@ -1334,7 +1334,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
       sensor_uuid?: string;
       value?: number;
       recorded_at?: string;
-      role?: "pwr" | "today" | "total" | "month" | "year" | "soc";
+      role?: "pwr" | "flow" | "today" | "total" | "month" | "year" | "soc";
     }>;
   };
   try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
@@ -1384,9 +1384,10 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
 
   // Phase 7: rollenbasiertes Routing
   //  - role="pwr" (Default)  → bridge_raw_samples (für 5-Min-Aggregator) + Broadcast
+  //  - role="flow" (v1.16)   → wie pwr, aber Momentanwert in m³/h (Wasser)
   //  - role="soc"            → energy_storages.current_soc_pct + Broadcast
   //  - andere Rollen          → nur Broadcast (kein DB-Write); UI nutzt den Wert live in KPI-Kacheln
-  type Role = "pwr" | "today" | "total" | "month" | "year" | "soc";
+  type Role = "pwr" | "flow" | "today" | "total" | "month" | "year" | "soc";
   const rawRows: any[] = [];
   const broadcastRows: Array<{ tenant_id: string | null; uuid: string; value: number; at: string; role: Role }> = [];
   const socRows: Array<{ tenant_id: string; uuid: string; value: number; at: string }> = [];
@@ -1409,7 +1410,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     const uuid = r.sensor_uuid.toLowerCase();
     const at = r.recorded_at ?? new Date().toISOString();
     broadcastRows.push({ tenant_id: link?.tenant_id ?? null, uuid, value: r.value, at, role });
-    if (role === "pwr") {
+    if (role === "pwr" || role === "flow") {
       const key = `${r.miniserver_serial}|${uuid}`;
       if (lastByUuid.has(key)) coalesced++;
       lastByUuid.set(key, { value: r.value, at, role, miniserver_serial: r.miniserver_serial });
@@ -1420,11 +1421,10 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     }
   }
 
-  // Ingest-Guard v1.9: Für Wasser/Gas dürfen Momentanleistungs-Readings nicht
-  // wie ein kumulativer Zählerstand aussehen. Wenn der Worker (ältere Version)
-  // fälschlich den Zählerstand als „pwr" sendet, verwerfen wir hier zur
-  // Sicherheit. Schwelle 20 (m³/h) — reale Hausanschlüsse liegen deutlich
-  // darunter, ein kumulativer Zählerstand von >100 m³ wird sicher gefiltert.
+  // Ingest-Guard v1.16: Für Wasser darf ein Momentanwert (m³/h) nicht wie ein
+  // kumulativer Zählerstand aussehen. Schwelle 20 m³/h — reale Hausanschlüsse
+  // liegen deutlich darunter. Gas wird vom Worker bereits in kW umgerechnet
+  // und deshalb hier nicht mehr gefiltert.
   const pwrUuids = [...lastByUuid.keys()].map(k => k.split("|")[1]);
   let flowGuardDropped = 0;
   if (!liveOnly && pwrUuids.length > 0) {
@@ -1432,7 +1432,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
       .from("meters")
       .select("sensor_uuid, energy_type")
       .in("sensor_uuid", [...new Set(pwrUuids)])
-      .in("energy_type", ["wasser", "gas", "water"]);
+      .in("energy_type", ["wasser", "water"]);
     const flowUuidSet = new Set(
       (metersForGuard ?? [])
         .map((m: any) => String(m.sensor_uuid ?? "").toLowerCase())
@@ -1713,6 +1713,7 @@ async function handleListLoxoneWsMeters(): Promise<Response> {
     .select(`
       id, name, energy_type, sensor_uuid, tenant_id, location_integration_id,
       power_state_uuid, power_state_key,
+      device_type, source_unit_power, source_unit_energy, brennwert, zustandszahl,
       location_integration:location_integrations!meters_location_integration_id_fkey (
         id, config, loxone_remote_connect_ws_enabled,
         integration:integrations!location_integrations_integration_id_fkey ( type )

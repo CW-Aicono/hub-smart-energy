@@ -24,7 +24,29 @@ type MeterRow = {
   sensor_uuid: string | null;
   power_state_uuid: string | null;
   power_state_key: string | null;
+  device_type: string | null;
+  source_unit_power: string | null;
 };
+
+/**
+ * v1.16: Was ein Block liefern soll, entscheidet die Messstellen-Konfiguration.
+ * Aktoren/Sensoren mit bool-Einheit brauchen keine Zuordnung.
+ */
+function momentaryKind(m: MeterRow | null): "pwr" | "flow" | null {
+  if (!m) return null;
+  const dt = (m.device_type ?? "").toLowerCase();
+  const up = (m.source_unit_power ?? "").toLowerCase().replace(/\s/g, "");
+  const boolish = !up || up === "bool" || up === "an/aus" || up === "on/off";
+  if ((dt === "actuator" || dt === "sensor") && boolish) return null;
+  if (boolish) {
+    const et = (m.energy_type ?? "").toLowerCase();
+    if (et === "wasser" || et === "water" || et === "gas") return "flow";
+    return up ? null : "pwr";
+  }
+  if (/^(kw|w|mw|kva|va)$/.test(up)) return "pwr";
+  if (/(m3|m³)\/h|l\/(min|h|s)|lpm/.test(up)) return "flow";
+  return "pwr";
+}
 
 /**
  * Deterministische Rollen-Zuordnung (v1.15).
@@ -66,7 +88,7 @@ export default function LoxoneStateMappingPanel() {
 
       const { data: meters, error: mErr } = await supabase
         .from("meters")
-        .select("id, name, energy_type, sensor_uuid, power_state_uuid, power_state_key")
+        .select("id, name, energy_type, sensor_uuid, power_state_uuid, power_state_key, device_type, source_unit_power")
         .in("id", meterIds);
       if (mErr) throw mErr;
       const byId: Record<string, MeterRow> = {};
@@ -81,9 +103,11 @@ export default function LoxoneStateMappingPanel() {
     return blocks
       .map((b) => {
         const meter = b.meter_id ? meters[b.meter_id] : null;
-        const hasPwr = b.states.some((s) => s.role === "pwr");
+        const kind = momentaryKind(meter);
+        const hasPwr = b.states.some((s) => s.role === "pwr" || s.role === "flow");
         const explicit = meter?.power_state_uuid ?? null;
-        return { block: b, meter, hasPwr, explicit, isGap: !hasPwr && !explicit };
+        // Ohne erwarteten Momentanwert (z. B. Taster/Aktor) ist keine Zuordnung nötig.
+        return { block: b, meter, kind, hasPwr, explicit, isGap: !!kind && !hasPwr && !explicit };
       })
       .filter((r) => (onlyGaps ? r.isGap : true))
       .sort((a, b) => Number(b.isGap) - Number(a.isGap));
@@ -125,9 +149,10 @@ export default function LoxoneStateMappingPanel() {
             )}
           </CardTitle>
           <CardDescription>
-            Der Worker rät keine Rollen mehr. Blöcke ohne eindeutigen Leistungs-State werden hier
-            gelistet und einmalig fest zugeordnet — damit landen nie wieder Zählerstände in der
-            Leistungsreihe.
+            Der Worker rät keine Rollen mehr. Ob ein Block einen Momentanwert liefert und ob dieser
+            Leistung (kW) oder Durchfluss (m³/h) ist, entscheidet die Einheit in der Messstelle.
+            Nur wenn der passende State im Loxone-Block nicht eindeutig ist, wird er hier gelistet
+            und einmalig fest zugeordnet.
           </CardDescription>
         </div>
         <div className="flex items-center gap-2">
@@ -145,7 +170,7 @@ export default function LoxoneStateMappingPanel() {
         ) : rows.length === 0 ? (
           <div className="text-sm text-muted-foreground">
             {onlyGaps
-              ? "Keine offenen Zuordnungen — alle Blöcke haben einen eindeutigen Leistungs-State."
+              ? "Keine offenen Zuordnungen — alle Blöcke haben einen eindeutigen Momentanwert-State."
               : "Keine Diagnosedaten der letzten 48 Stunden."}
           </div>
         ) : (
@@ -155,15 +180,18 @@ export default function LoxoneStateMappingPanel() {
                 <TableHead>Zähler</TableHead>
                 <TableHead>Block</TableHead>
                 <TableHead>Erkannte States</TableHead>
-                <TableHead className="w-72">Leistungs-State</TableHead>
+                <TableHead className="w-72">Momentanwert-State</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map(({ block, meter, hasPwr, explicit, isGap }) => (
+              {rows.map(({ block, meter, kind, hasPwr, explicit, isGap }) => (
                 <TableRow key={block.block_uuid}>
                   <TableCell className="font-medium">
                     {meter?.name ?? "—"}
-                    <div className="text-xs text-muted-foreground">{block.energy_type ?? "—"}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {block.energy_type ?? "—"}
+                      {kind === "flow" ? " · Durchfluss" : kind === "pwr" ? " · Leistung" : " · kein Momentanwert"}
+                    </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">{block.block_uuid}</TableCell>
                   <TableCell>
@@ -171,7 +199,7 @@ export default function LoxoneStateMappingPanel() {
                       {block.states.map((s) => (
                         <Badge
                           key={`${block.block_uuid}-${s.key}`}
-                          variant={s.role === "pwr" ? "default" : "secondary"}
+                          variant={s.role === "pwr" || s.role === "flow" ? "default" : "secondary"}
                           className="text-[11px]"
                         >
                           {s.key}: {s.role}
@@ -182,6 +210,10 @@ export default function LoxoneStateMappingPanel() {
                   <TableCell>
                     {!meter ? (
                       <span className="text-xs text-muted-foreground">kein Zähler verknüpft</span>
+                    ) : !kind ? (
+                      <span className="text-xs text-muted-foreground">
+                        keine Zuordnung nötig (Einheit in der Messstelle: An/Aus)
+                      </span>
                     ) : (
                       <Select
                         value={explicit ?? (hasPwr ? "__auto__" : "")}

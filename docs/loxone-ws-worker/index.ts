@@ -88,7 +88,7 @@ const SESSION_HEARTBEAT_MS = Math.max(
 );
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "v1.15-role-mapping";
+const WORKER_VERSION = process.env.WORKER_VERSION || "v1.16-unit-driven-roles";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -152,10 +152,16 @@ function describeError(err: unknown): string {
 const SPIKE_THRESHOLDS: Record<string, number> = {
   strom: 10000, gas: 5000, wasser: 1000, wärme: 5000, kälte: 2000, default: 50000,
 };
+// v1.16: Durchfluss (role="flow") hat eigene, viel niedrigere Plausibilitäts-
+// grenzen — ein kumulativer Zählerstand fällt damit sicher raus.
+const FLOW_THRESHOLDS: Record<string, number> = {
+  wasser: 20, water: 20, gas: 200, default: 200,
+};
 // Zählerstände (today/month/year/total) können viele 100.000 kWh groß sein → keinen kW-Spike-Filter darauf anwenden.
 function isSpike(v: number, energyType: string, role: StateRole = "pwr"): boolean {
   if (!isFinite(v) || isNaN(v)) return true;
   if (role === "soc") return v < 0 || v > 100;
+  if (role === "flow") return Math.abs(v) > (FLOW_THRESHOLDS[energyType] ?? FLOW_THRESHOLDS.default);
   if (role !== "pwr") return false; // Energiewerte/aux nicht filtern
   return Math.abs(v) > (SPIKE_THRESHOLDS[energyType] ?? SPIKE_THRESHOLDS.default);
 }
@@ -297,6 +303,12 @@ interface WsMeter {
   /** v1.15: explizit im Backend gesetzte State-UUID der Momentanleistung. */
   power_state_uuid?: string | null;
   power_state_key?: string | null;
+  /** v1.16: Konfiguration der Messstelle bestimmt die Rolle (nicht Loxone). */
+  device_type?: string | null;
+  source_unit_power?: string | null;
+  source_unit_energy?: string | null;
+  brennwert?: number | null;
+  zustandszahl?: number | null;
   tenant_id: string;
   location_integration_id: string;
   location_integration: {
@@ -314,6 +326,7 @@ interface WsIntegration {
 
 // Rolle einer State-UUID innerhalb eines Loxone-Blocks
 //   pwr     → momentane Leistung (kW)
+//   flow    → momentaner Durchfluss (m³/h, l/min …) — z. B. Wasser (Impulszähler)
 //   today   → Tagesverbrauch (kWh)
 //   total   → Zählerstand gesamt (kWh)
 //   month   → Monatsverbrauch (kWh, optional)
@@ -321,7 +334,46 @@ interface WsIntegration {
 //   soc     → Speicher-Ladezustand / Storage level (%, Slvl)
 //   aux     → noch nicht klassifizierter State (v1.11): wird zur Laufzeit
 //             anhand des Werteverlaufs zu "pwr" oder "total" befördert
-type StateRole = "pwr" | "today" | "total" | "month" | "year" | "soc" | "aux";
+type StateRole = "pwr" | "flow" | "today" | "total" | "month" | "year" | "soc" | "aux";
+
+/**
+ * v1.16: Die von Loxone gelieferte Einheit ist irrelevant. Maßgeblich ist
+ * ausschließlich die Konfiguration der Messstelle in unserer DB.
+ *   - Aktoren/Sensoren mit bool-Einheit  → kein Momentanwert
+ *   - source_unit_power kW/W/MW          → "pwr"
+ *   - source_unit_power m³/h, l/min, …   → "flow"
+ *   - Fallback über energy_type
+ */
+function deriveMomentaryRole(m: {
+  device_type?: string | null;
+  energy_type?: string | null;
+  source_unit_power?: string | null;
+}): StateRole | null {
+  const dt = (m.device_type ?? "").toLowerCase();
+  const up = (m.source_unit_power ?? "").toLowerCase().replace(/\s/g, "");
+  if (dt === "actuator" || dt === "sensor") {
+    if (!up || up === "bool" || up === "an/aus" || up === "on/off") return null;
+  }
+  if (!up || up === "bool" || up === "an/aus" || up === "on/off") {
+    const et = (m.energy_type ?? "").toLowerCase();
+    if (et === "wasser" || et === "water" || et === "gas") return "flow";
+    if (!up) return "pwr";
+    return null;
+  }
+  if (/^(kw|w|mw|kva|va)$/.test(up)) return "pwr";
+  if (/(m3|m³)\/h|l\/(min|h|s)|lpm/.test(up)) return "flow";
+  return "pwr";
+}
+
+/** kWh je m³ Gas aus Brennwert × Zustandszahl (DVGW-Formel). */
+function gasKwhPerM3(m: { energy_type?: string | null; brennwert?: number | null; zustandszahl?: number | null }): number | null {
+  const et = (m.energy_type ?? "").toLowerCase();
+  if (et !== "gas") return null;
+  const bw = Number(m.brennwert);
+  const zz = Number(m.zustandszahl);
+  if (!isFinite(bw) || bw <= 0) return null;
+  return bw * (isFinite(zz) && zz > 0 ? zz : 1);
+}
 
 interface UuidEntry {
   meter_id: string;
@@ -351,6 +403,9 @@ interface UuidEntry {
   // v1.15: explizit im Backend gesetzte Leistungs-State-UUID des Zählers
   explicit_pwr_uuid?: string | null;
   explicit_pwr_key?: string | null;
+  // v1.16: aus der Messstellen-Konfiguration abgeleitet
+  momentary_role?: StateRole | null;   // "pwr" | "flow" | null (kein Momentanwert)
+  gas_kwh_per_m3?: number | null;      // Gas: m³/h → kW Umrechnungsfaktor
 }
 
 interface ConnState {
@@ -545,14 +600,20 @@ async function connect(state: ConnState): Promise<void> {
       for (const ev of (events || [])) {
         const uuid = (ev?.uuid || "").toLowerCase();
         const entry = state.uuidMap.get(uuid);
-        if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type, entry.role)) {
-          if (entry.role === "aux") classifyAux(state, entry, ev.value);
-          entry.latest_value = ev.value;
+        if (!entry || typeof ev.value !== "number") continue;
+        // v1.16: Gas — Loxone liefert m³/h, wir rechnen mit Brennwert ×
+        // Zustandszahl in kW um (Einheit von Loxone ist irrelevant).
+        const rawValue = (entry.role === "pwr" && entry.gas_kwh_per_m3)
+          ? ev.value * entry.gas_kwh_per_m3
+          : ev.value;
+        if (!isSpike(rawValue, entry.energy_type, entry.role)) {
+          if (entry.role === "aux") classifyAux(state, entry, rawValue);
+          entry.latest_value = rawValue;
           state.eventsReceived++;
           state.lastEventAt = Date.now();
-          // v1.5: Bucket-Aggregation für Power. Zählerstände (kWh) werden
-          // separat behandelt und laufen nicht in meter_power_readings_5min.
-          if (entry.role === "pwr") {
+          // v1.5: Bucket-Aggregation für Momentanwerte (Leistung/Durchfluss).
+          // Zählerstände (kWh) laufen nicht in meter_power_readings_5min.
+          if (entry.role === "pwr" || entry.role === "flow") {
             const bucket = Math.floor(Date.now() / 300000) * 300000;
             if (entry.bucket_start !== bucket) {
               // v1.13: Bucket-Wechsel — den fertigen Bucket zwischenpuffern,
@@ -574,10 +635,10 @@ async function connect(state: ConnState): Promise<void> {
               entry.bucket_count = 0;
             }
 
-            const absV = Math.abs(ev.value);
-            entry.bucket_sum += ev.value;
+            const absV = Math.abs(rawValue);
+            entry.bucket_sum += rawValue;
             entry.bucket_count += 1;
-            if (absV > Math.abs(entry.bucket_max)) entry.bucket_max = ev.value;
+            if (absV > Math.abs(entry.bucket_max)) entry.bucket_max = rawValue;
           }
         }
       }
@@ -697,16 +758,10 @@ async function connect(state: ConnState): Promise<void> {
       return null;
     }
 
-    /**
-     * Zählertypen, deren Loxone-Block **keinen** echten Momentanleistungs-State
-     * bereitstellen muss (Impulszähler o. ä.). Für diese Typen dürfen wir
-     * mehrdeutige Keys (Actual/Value/P) NICHT als Leistung interpretieren —
-     * sonst landet der kumulative Zählerstand als „pwr" in der DB (Spikes).
-     */
-    function isFlowLikeType(et: string | undefined | null): boolean {
-      const t = (et ?? "").toLowerCase();
-      return t === "wasser" || t === "gas" || t === "water";
-    }
+    // v1.16: Keine Medien-Heuristik mehr. Ob und welche Momentanwert-Rolle ein
+    // Block bekommt, entscheidet ausschließlich die Messstellen-Konfiguration
+    // (device_type + source_unit_power) — siehe deriveMomentaryRole().
+
     let blocksMapped = 0;
     let blocksFallback = 0;
     let totalSubs = 0;
@@ -753,15 +808,17 @@ async function connect(state: ConnState): Promise<void> {
       const explicitPwrUuid = (baseEntry.explicit_pwr_uuid ?? null)?.toLowerCase() ?? null;
       let explicitPwrKey: string | null = baseEntry.explicit_pwr_key ?? null;
       let explicitPwrFound = false;
+      // v1.16: Momentanwert-Rolle kommt aus der Messstellen-Konfiguration.
+      const momRole: StateRole | null = baseEntry.momentary_role ?? null;
       if (states && typeof states === "object") {
         for (const [k, v] of Object.entries(states)) {
           if (typeof v !== "string") continue;
           const stateUuid = v.toLowerCase();
-          // Höchste Priorität: manuell im Backend gesetzte Leistungs-State-UUID.
+          // Höchste Priorität: manuell im Backend gesetzte Momentanwert-State-UUID.
           if (explicitPwrUuid && stateUuid === explicitPwrUuid) {
             explicitPwrFound = true;
             explicitPwrKey = explicitPwrKey ?? k;
-            stateEntries.push({ stateUuid, role: "pwr", key: k });
+            if (momRole) stateEntries.push({ stateUuid, role: momRole, key: k });
             continue;
           }
           const cls = classifyState(k);
@@ -775,47 +832,46 @@ async function connect(state: ConnState): Promise<void> {
             continue;
           }
           if (cls === "pwr") hasStrongPwr = true;
-          // Bei expliziter Zuordnung darf kein zweiter State als Leistung gelten.
+          // Bei expliziter Zuordnung darf kein zweiter State als Momentanwert gelten.
           if (cls === "pwr" && explicitPwrUuid) continue;
-          stateEntries.push({ stateUuid, role: cls, key: k });
+          // Konfiguriert der Zähler keinen Momentanwert (z. B. Aktor/Taster),
+          // wird ein „pwr"-benannter State nicht als Messwert übernommen.
+          if (cls === "pwr" && !momRole) continue;
+          stateEntries.push({ stateUuid, role: cls === "pwr" ? momRole! : cls, key: k });
         }
       }
       if (explicitPwrUuid && explicitPwrFound) {
         hasStrongPwr = true;
         ambiguousPwr = null;
-        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid}: pwr = explizite Zuordnung "${explicitPwrKey ?? "?"}"`);
+        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid}: ${momRole ?? "kein Momentanwert"} = explizite Zuordnung "${explicitPwrKey ?? "?"}"`);
       } else if (explicitPwrUuid && !explicitPwrFound) {
-        log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid}: konfigurierte Leistungs-State-UUID ${explicitPwrUuid} nicht im Miniserver gefunden`);
-        bridgeLog("warn", "ws_explicit_pwr_missing", "Konfigurierte Leistungs-State-UUID existiert nicht mehr", state.serialNumber, {
+        log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid}: konfigurierte Momentanwert-State-UUID ${explicitPwrUuid} nicht im Miniserver gefunden`);
+        bridgeLog("warn", "ws_explicit_pwr_missing", "Konfigurierte Momentanwert-State-UUID existiert nicht mehr", state.serialNumber, {
           block_uuid: blockUuid, meter_id: baseEntry.meter_id, power_state_uuid: explicitPwrUuid,
         });
       }
 
-      // Ambiguous-pwr NUR akzeptieren, wenn:
-      //  – kein strong-pwr vorhanden, UND
-      //  – der Meter kein reines Fluss-/Impuls-Medium (Wasser/Gas) ist.
-      // Für Wasser/Gas ohne echten Pwr-State → Block läuft als Total-only.
-      const flowLike = isFlowLikeType(baseEntry.energy_type);
-      if (!hasStrongPwr && ambiguousPwr && !flowLike) {
-        stateEntries.push({ stateUuid: ambiguousPwr.stateUuid, role: "pwr", key: ambiguousPwr.key });
-      } else if (!hasStrongPwr && ambiguousPwr && flowLike) {
-        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): ambiguous pwr-key "${ambiguousPwr.key}" ignoriert (kein echter Momentanwert für ${baseEntry.energy_type})`);
+      // v1.16: Mehrdeutige Keys (Actual/Value/P) werden akzeptiert, sobald die
+      // Messstelle einen Momentanwert erwartet — die Rolle (pwr oder flow)
+      // kommt aus der Konfiguration, nicht aus der Loxone-Einheit.
+      if (!hasStrongPwr && ambiguousPwr && momRole) {
+        stateEntries.push({ stateUuid: ambiguousPwr.stateUuid, role: momRole, key: ambiguousPwr.key });
+      } else if (!hasStrongPwr && ambiguousPwr && !momRole) {
+        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): "${ambiguousPwr.key}" ignoriert — Messstelle erwartet keinen Momentanwert`);
       }
 
       // v1.15: Unbekannte States werden weiterhin registriert, aber nur um sie
       // in der Cloud sichtbar zu machen (Zuordnungs-UI). Sie liefern keine Werte.
-      const hasPwrEntry = stateEntries.some((se) => se.role === "pwr");
-      if (!hasPwrEntry && unknownEntries.length > 0) {
+      const hasMomEntry = stateEntries.some((se) => se.role === "pwr" || se.role === "flow");
+      if (!hasMomEntry && unknownEntries.length > 0) {
         for (const ue of unknownEntries) {
           stateEntries.push({ stateUuid: ue.stateUuid, role: "aux", key: ue.key });
         }
       }
 
       if (stateEntries.length === 0) {
-        if (flowLike) {
-          // v1.9: Fallback deaktiviert für Wasser/Gas — sonst würde der kumulative
-          // Zählerstand als Momentanleistung interpretiert (660-kW-Spikes im Chart).
-          log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): kein verwertbarer State — Block wird ignoriert (Fallback deaktiviert für Fluss-Medien)`);
+        if (!momRole) {
+          log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): kein verwertbarer State — Messstelle erwartet keinen Momentanwert`);
           blockDiag.push({
             block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
             control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
@@ -823,14 +879,14 @@ async function connect(state: ConnState): Promise<void> {
           });
           continue;
         }
-        // Fallback: Block-UUID direkt als pwr behandeln (alte Logik) — nur für Strom/Wärme.
-        state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: "pwr" });
+        // Fallback: Block-UUID direkt als Momentanwert behandeln (alte Logik).
+        state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: momRole });
         blocksFallback++;
         totalSubs++;
         blockDiag.push({
           block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
           control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
-          states: [{ key: "(block-fallback)", role: "pwr" }],
+          states: [{ key: "(block-fallback)", role: momRole }],
         });
         continue;
       }
@@ -887,7 +943,7 @@ async function connect(state: ConnState): Promise<void> {
     const blocksWithPwr = new Set<string>();
     const blocksWithAux = new Map<string, string[]>();
     for (const e of state.uuidMap.values()) {
-      if (e.role === "pwr") blocksWithPwr.add(e.block_uuid);
+      if (e.role === "pwr" || e.role === "flow") blocksWithPwr.add(e.block_uuid);
       if (e.role === "aux") blocksWithAux.set(e.block_uuid, [...(blocksWithAux.get(e.block_uuid) ?? []), e.state_key ?? "?"]);
     }
     const gaps = blockEntries
@@ -1191,7 +1247,7 @@ async function flush(): Promise<void> {
       const prev = entry.last_pushed_value;
       const ageMs = nowMs - entry.last_pushed_at;
       const delta = prev === null ? Infinity : Math.abs(entry.latest_value - prev);
-      const minDelta = entry.role === "pwr" ? MIN_DELTA : entry.role === "soc" ? 0.1 : 0.001;
+      const minDelta = entry.role === "pwr" ? MIN_DELTA : entry.role === "flow" ? 0.001 : entry.role === "soc" ? 0.1 : 0.001;
       const changed = delta >= minDelta;
       const stale = ageMs >= MIN_PUSH_INTERVAL_MS;
       if (!changed && !stale) continue;
@@ -1401,12 +1457,19 @@ async function reloadMeters(): Promise<void> {
       for (const m of group.meters) {
         if (!m.sensor_uuid) continue;
         const blockUuid = m.sensor_uuid.toLowerCase();
+        // v1.16: Momentanwert-Rolle rein aus der Messstellen-Konfiguration.
+        const gasFactor = gasKwhPerM3(m);
+        let momRole = deriveMomentaryRole(m);
+        // Gas: Durchfluss (m³/h) wird intern sofort in kW umgerechnet.
+        if (momRole === "flow" && gasFactor) momRole = "pwr";
         state.uuidMap.set(blockUuid, {
           meter_id: m.id,
           tenant_id: m.tenant_id,
           energy_type: m.energy_type,
           block_uuid: blockUuid,
-          role: "pwr",                    // wird in connect() durch LoxAPP3-Expansion ersetzt
+          role: momRole ?? "aux",         // wird in connect() durch LoxAPP3-Expansion ersetzt
+          momentary_role: momRole,
+          gas_kwh_per_m3: momRole === "pwr" ? gasFactor : null,
           explicit_pwr_uuid: m.power_state_uuid ? m.power_state_uuid.toLowerCase() : null,
           explicit_pwr_key: m.power_state_key ?? null,
           latest_value: null,
@@ -1581,7 +1644,7 @@ async function flushBuckets(): Promise<void> {
     };
 
     for (const entry of state.uuidMap.values()) {
-      if (entry.role !== "pwr") continue;
+      if (entry.role !== "pwr" && entry.role !== "flow") continue;
       // Zwischengepufferte, bereits abgeschlossene Buckets
       if (entry.pending_buckets && entry.pending_buckets.length > 0) {
         for (const pb of entry.pending_buckets) addBucket(entry, pb.bucket, pb.sum, pb.max, pb.count);
