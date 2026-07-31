@@ -52,11 +52,16 @@ const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY!;
 // (`live_only: true`). gateway-ingest verteilt die Werte nur über Realtime und
 // schreibt NICHTS in die Datenbank. Persistenz läuft weiterhin ausschließlich
 // über flushBuckets() → bridge-power-5min. Damit kostet der Live-Pfad 0 Disk-IO.
-const LIVE_PUSH_INTERVAL_MS = Math.max(
-  2000,
-  parseInt(process.env.LIVE_PUSH_INTERVAL_MS || process.env.FLUSH_INTERVAL_MS || "5000", 10),
+// v1.14: Der Live-Push liest NICHT mehr das alte FLUSH_INTERVAL_MS aus der
+// Server-.env (dort steht aus der IO-Sparphase häufig 60000 → Werte änderten
+// sich nur einmal pro Minute). Nur noch LIVE_PUSH_INTERVAL_MS zählt, und der
+// Wert wird hart auf 2–15 s begrenzt.
+const LIVE_PUSH_INTERVAL_MS = Math.min(
+  15000,
+  Math.max(2000, parseInt(process.env.LIVE_PUSH_INTERVAL_MS || "5000", 10)),
 );
 const FLUSH_INTERVAL_MS = LIVE_PUSH_INTERVAL_MS;
+
 // Keepalive: spätestens alle 60 s wird ein Wert je Zähler gesendet, auch wenn
 // er sich kaum ändert — damit die UI nach einem Reload sofort Werte hat.
 const MIN_PUSH_INTERVAL_MS = parseInt(process.env.MIN_PUSH_INTERVAL_MS || "60000", 10);
