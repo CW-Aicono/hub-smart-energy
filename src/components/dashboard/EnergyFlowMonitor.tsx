@@ -1594,7 +1594,15 @@ export function MeterDetailDialog({
     },
   });
 
-  const powerStartMs = useMemo(() => Date.now() - RANGE_MS[range], [range]);
+  const period = useMemo(
+    () => calendarRange(range, rangeOffset, weekStartsOn),
+    [range, rangeOffset, weekStartsOn],
+  );
+  const powerStartMs = period.startMs;
+  const powerEndMs = period.endMs;
+  /** Rechte Grenze für Achsen/Buckets: laufender Zeitraum endet "jetzt". */
+  const visibleEndMs = Math.min(powerEndMs, Date.now());
+
 
   const socStartMs = useMemo(() => {
     const rangeStart = powerStartMs;
