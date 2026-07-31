@@ -41,7 +41,13 @@ interface Bucket {
   count: number;
 }
 
-type MeterMapping = { id: string; tenant_id: string; energy_type: string; sensor_uuid: string | null };
+type MeterMapping = {
+  id: string;
+  tenant_id: string;
+  energy_type: string;
+  sensor_uuid: string | null;
+  power_state_uuid: string | null;
+};
 
 function floor5min(iso: string): string {
   const d = new Date(iso);
@@ -50,61 +56,24 @@ function floor5min(iso: string): string {
   return d.toISOString();
 }
 
-function loxoneFamilyKey(uuid: string | null | undefined): string | null {
-  if (!uuid) return null;
-  const parts = uuid.toLowerCase().split('-');
-  return parts.length >= 3 ? `${parts[0]}-${parts[1]}` : null;
-}
-
-function loxoneThirdSegment(uuid: string | null | undefined): number | null {
-  if (!uuid) return null;
-  const part = uuid.toLowerCase().split('-')[2];
-  if (!part || !/^[0-9a-f]{4}$/i.test(part.slice(0, 4))) return null;
-  return parseInt(part.slice(0, 4), 16);
-}
-
-function isPlausibleElectricalPowerKw(value: number): boolean {
-  return Number.isFinite(value) && Math.abs(value) <= 500;
-}
-
+/**
+ * v1.15 — Ursachenfix statt Wertfilter.
+ *
+ * Frueher wurde eine benachbarte Loxone-State-UUID per Naehe-Heuristik dem
+ * "wahrscheinlich gemeinten" Zaehler zugeordnet. Damit landeten kumulative
+ * Zaehlerstaende als Momentanleistung in `meter_power_readings_5min`.
+ *
+ * Jetzt gilt: geschrieben wird ausschliesslich, was exakt der Leistungs-State
+ * des Zaehlers ist — entweder die explizit gesetzte `power_state_uuid` oder,
+ * wenn keine gesetzt ist, die `sensor_uuid` (Block-UUID) selbst. Alles andere
+ * wird verworfen. Es wird KEIN Wert wegen seiner Hoehe gefiltert; echte
+ * Anlaufspitzen passieren unveraendert (Deckel im Worker bleibt bestehen).
+ */
 function resolveMeterForRawSample(
   raw: RawSample,
   exactByUuid: Map<string, MeterMapping>,
-  byTenantFamily: Map<string, MeterMapping[]>,
 ): MeterMapping | null {
-  const uuid = raw.uuid.toLowerCase();
-  const exact = exactByUuid.get(uuid);
-  if (exact) return exact;
-
-  // Loxone WS sends neighbouring State-UUIDs for one object: live power,
-  // max/reset/counter values etc. Meter mappings may still point at the base
-  // object UUID. For electrical power, map a neighbouring plausible State-UUID
-  // to the nearest stored meter UUID in the same Loxone family.
-  if (!isPlausibleElectricalPowerKw(Number(raw.value))) return null;
-  const family = loxoneFamilyKey(uuid);
-  const rawThird = loxoneThirdSegment(uuid);
-  if (!family || rawThird === null || !raw.tenant_id) return null;
-
-  const candidates = (byTenantFamily.get(`${raw.tenant_id}|${family}`) ?? [])
-    .filter((m) => m.energy_type === 'strom' && m.sensor_uuid);
-  if (candidates.length === 0) return null;
-
-  let best: { meter: MeterMapping; delta: number } | null = null;
-  let tie = false;
-  for (const meter of candidates) {
-    const meterThird = loxoneThirdSegment(meter.sensor_uuid);
-    if (meterThird === null) continue;
-    const delta = Math.abs(rawThird - meterThird);
-    if (!best || delta < best.delta) {
-      best = { meter, delta };
-      tie = false;
-    } else if (delta === best.delta) {
-      tie = true;
-    }
-  }
-
-  if (!best || tie || best.delta > 32) return null;
-  return best.meter;
+  return exactByUuid.get(raw.uuid.toLowerCase()) ?? null;
 }
 
 async function run(): Promise<{
@@ -131,24 +100,20 @@ async function run(): Promise<{
   const tenantIds = [...new Set(raw.map((r: RawSample) => r.tenant_id).filter(Boolean) as string[])];
   const { data: meters, error: meterErr } = await supabase
     .from('meters')
-    .select('id, tenant_id, energy_type, sensor_uuid')
+    .select('id, tenant_id, energy_type, sensor_uuid, power_state_uuid')
     .in('tenant_id', tenantIds)
     .not('sensor_uuid', 'is', null)
     .eq('is_archived', false);
 
   if (meterErr) return { raw_read: raw.length, buckets_written: 0, samples_processed: 0, unmapped_uuids: 0, error: meterErr.message };
 
+  // Nur die Leistungs-State-UUID des Zaehlers ist schreibberechtigt:
+  // explizite Zuordnung, sonst die Block-UUID.
   const meterByUuid = new Map<string, MeterMapping>();
-  const metersByTenantFamily = new Map<string, MeterMapping[]>();
-  for (const m of meters ?? []) {
-    if (!m.sensor_uuid) continue;
-    meterByUuid.set(m.sensor_uuid.toLowerCase(), m as MeterMapping);
-    const family = loxoneFamilyKey(m.sensor_uuid);
-    if (!family) continue;
-    const key = `${m.tenant_id}|${family}`;
-    const list = metersByTenantFamily.get(key) ?? [];
-    list.push(m as MeterMapping);
-    metersByTenantFamily.set(key, list);
+  for (const m of (meters ?? []) as MeterMapping[]) {
+    const powerUuid = (m.power_state_uuid ?? m.sensor_uuid ?? '').toLowerCase();
+    if (!powerUuid) continue;
+    meterByUuid.set(powerUuid, m);
   }
 
   // 3) Pro (meter_id × 5-Min-Bucket) aggregieren
@@ -157,7 +122,7 @@ async function run(): Promise<{
   let unmapped = 0;
 
   for (const r of raw as RawSample[]) {
-    const meter = resolveMeterForRawSample(r, meterByUuid, metersByTenantFamily);
+    const meter = resolveMeterForRawSample(r, meterByUuid);
     processedIds.push(r.id); // auch unmapped Roh-Samples als "verarbeitet" markieren
     if (!meter) { unmapped++; continue; }
     const bucket = floor5min(r.received_at);

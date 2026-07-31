@@ -19,6 +19,7 @@ const CENTER_NODE_ID = "__center__";
 import { buildLoxoneResolver } from "@/lib/loxoneUuidResolver";
 import { useLoxoneLiveBroadcast } from "@/hooks/useLoxoneLiveBroadcast";
 import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
+import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -1845,6 +1846,33 @@ export function MeterDetailDialog({
   const totalImport = energyBuckets.reduce((s, b) => s + b.import, 0);
   const totalExport = energyBuckets.reduce((s, b) => s + b.export, 0);
 
+  // Autoritative Energiemenge: exakt dieselbe Quelle wie die Kachel
+  // (get_meter_period_sums_with_fallback → meter_period_totals / Tages-Aggregate).
+  // Die Trapez-Integration über die Leistungsreihe bleibt nur Fallback für 1 h
+  // und für Zähler ohne Tagesaggregate.
+  const periodDays = range === "30d" ? 29 : range === "7d" ? 6 : 0;
+  const periodStart = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - periodDays);
+    return d;
+  }, [periodDays]);
+  const periodEnd = useMemo(() => new Date(), [range]);
+  const { data: periodSums } = usePeriodSumsWithFallback(
+    "meter-detail-period-sum",
+    node.meter_id ? [node.meter_id] : [],
+    periodStart,
+    periodEnd,
+    !!node.meter_id && !isSensor && range !== "1h",
+  );
+  const authoritativeEnergy =
+    node.meter_id && periodSums && Number.isFinite(Number(periodSums[node.meter_id]))
+      ? Number(periodSums[node.meter_id])
+      : null;
+  const energyPeriodLabel =
+    range === "24h" ? "heute" : range === "7d" ? "7 Tage" : range === "30d" ? "30 Tage" : "";
+
+
   // Gemeinsame Zeitachse für beide Charts
   const xDomain = useMemo<[number, number]>(() => {
     const now = Date.now();
@@ -1951,13 +1979,15 @@ export function MeterDetailDialog({
             <div className="text-muted-foreground">
               {isSensor
                 ? "Momentanwert"
-                : `${sumLabel}${
-                    totalImport > 0 && totalExport > 0
-                      ? " (Bezug/Einspeisung)"
-                      : totalExport > 0
-                        ? " (Einspeisung)"
-                        : ""
-                  }`}
+                : authoritativeEnergy != null
+                  ? `${sumLabel}${energyPeriodLabel ? ` (${energyPeriodLabel})` : ""}`
+                  : `${sumLabel}${
+                      totalImport > 0 && totalExport > 0
+                        ? " (Bezug/Einspeisung)"
+                        : totalExport > 0
+                          ? " (Einspeisung)"
+                          : ""
+                    }`}
             </div>
 
 
@@ -1966,10 +1996,13 @@ export function MeterDetailDialog({
                 ? (effectiveSensorLatest?.value != null
                     ? `${fmtDeNum(Number(effectiveSensorLatest.value))}${displayUnit ? " " + displayUnit : ""}`
                     : "–")
-                : (totalImport > 0 && totalExport > 0
-                    ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
-                    : `${fmtDeNum(totalImport - totalExport)} ${energyUnit}`)}
+                : authoritativeEnergy != null
+                  ? `${fmtDeNum(authoritativeEnergy)} ${energyUnit}`
+                  : (totalImport > 0 && totalExport > 0
+                      ? `${fmtDeNum(totalImport)} / ${fmtDeNum(totalExport)} ${energyUnit}`
+                      : `${fmtDeNum(totalImport - totalExport)} ${energyUnit}`)}
             </div>
+
           </div>
         </div>
 

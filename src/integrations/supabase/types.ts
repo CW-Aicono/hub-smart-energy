@@ -8863,6 +8863,10 @@ export type Database = {
           position_3d_x: number | null
           position_3d_y: number | null
           position_3d_z: number | null
+          power_state_key: string | null
+          power_state_set_at: string | null
+          power_state_set_by: string | null
+          power_state_uuid: string | null
           replaces_meter_id: string | null
           room_id: string | null
           sensor_uuid: string | null
@@ -8920,6 +8924,10 @@ export type Database = {
           position_3d_x?: number | null
           position_3d_y?: number | null
           position_3d_z?: number | null
+          power_state_key?: string | null
+          power_state_set_at?: string | null
+          power_state_set_by?: string | null
+          power_state_uuid?: string | null
           replaces_meter_id?: string | null
           room_id?: string | null
           sensor_uuid?: string | null
@@ -8977,6 +8985,10 @@ export type Database = {
           position_3d_x?: number | null
           position_3d_y?: number | null
           position_3d_z?: number | null
+          power_state_key?: string | null
+          power_state_set_at?: string | null
+          power_state_set_by?: string | null
+          power_state_uuid?: string | null
           replaces_meter_id?: string | null
           room_id?: string | null
           sensor_uuid?: string | null
