@@ -296,7 +296,13 @@ const ChargingUsersTab = () => {
                         : (u.rfid_tag ? [{ tag: u.rfid_tag, label: u.rfid_label }] as any[] : []);
                       return (
                       <TableRow key={u.id}>
-                        <TableCell className="font-medium">{u.name}</TableCell>
+                        <TableCell className="font-medium">
+                          {isAdmin ? (
+                            <button type="button" onClick={() => openEditUser(u)} className="text-left hover:underline focus:outline-none focus-visible:underline">
+                              {u.name}
+                            </button>
+                          ) : u.name}
+                        </TableCell>
                         <TableCell>{u.email || "—"}</TableCell>
                         <TableCell>
                           {tagList.length === 0 ? (
