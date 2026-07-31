@@ -399,13 +399,9 @@ const LiveValues = () => {
     }
 
 
-    // Letzten Bridge-Wert pro UUID extrahieren
+    // bridge_raw_samples entfällt im Reconcile (Live-Pfad schreibt dort seit v1.10 nicht mehr)
     const bridgeLatest = new Map<string, { value: number; at: number }>();
-    for (const row of bridgeRes.data ?? []) {
-      const u = row.uuid.toLowerCase();
-      if (bridgeLatest.has(u)) continue;
-      bridgeLatest.set(u, { value: Number(row.value), at: new Date(row.received_at).getTime() });
-    }
+
 
     // Letzten Polling-Wert pro Meter extrahieren (Raw bevorzugt, 5-Min-Aggregat als Fallback)
     const pollingLatest = new Map<string, { value: number; at: number }>();
