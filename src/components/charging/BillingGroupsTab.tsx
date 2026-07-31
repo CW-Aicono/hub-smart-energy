@@ -119,7 +119,6 @@ export default function BillingGroupsTab({ isAdmin }: Props) {
             <TableBody>
               {sortedGroups.map((g) => (
                 <TableRow key={g.id}>
-                <TableRow key={g.id}>
                   <TableCell className="font-medium">
                     {isAdmin ? (
                       <button
@@ -133,7 +132,7 @@ export default function BillingGroupsTab({ isAdmin }: Props) {
                       g.name
                     )}
                   </TableCell>
-
+                  <TableCell>
                     {g.company_name ? (
                       <span className="flex items-center gap-1.5">
                         <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
