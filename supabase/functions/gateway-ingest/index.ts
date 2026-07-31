@@ -37,6 +37,21 @@ const LOXONE_WS_IO_PAUSED_ACTIONS = new Set<string>([]);
 // Wird für den Delta-Guard in handleBridgeReadings verwendet.
 const bridgeRawLastCache = new Map<string, { value: number; atMs: number }>();
 
+// v1.10: Lookup-Cache für den Live-Broadcast-Pfad (live_only). Der Worker pusht
+// alle paar Sekunden — ohne Cache würde jeder Push zwei DB-Reads auslösen.
+// TTL 5 Min, pro warmer Function-Instanz.
+const bridgeLookupCache = new Map<string, { value: unknown; expiresAt: number }>();
+const BRIDGE_LOOKUP_TTL_MS = 5 * 60_000;
+function bridgeLookupGet<T>(key: string): T | undefined {
+  const hit = bridgeLookupCache.get(key);
+  if (!hit) return undefined;
+  if (hit.expiresAt < Date.now()) { bridgeLookupCache.delete(key); return undefined; }
+  return hit.value as T;
+}
+function bridgeLookupSet(key: string, value: unknown): void {
+  bridgeLookupCache.set(key, { value, expiresAt: Date.now() + BRIDGE_LOOKUP_TTL_MS });
+}
+
 async function handleLoxoneWsEmergencyPause(req: Request, action: string | null): Promise<Response> {
   const _auth = await validateApiKey(req);
   if (isAuthError(_auth)) return _auth;
@@ -1308,6 +1323,12 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
 
   let body: {
     worker_name?: string;
+    /**
+     * v1.10: Reiner Live-Kanal. true = Werte werden NUR per Realtime-Broadcast
+     * verteilt (keine Inserts in bridge_raw_samples, kein SOC-Update, keine
+     * Aggregation). Damit kostet der Live-Pfad keine Datenbank-Schreiblast.
+     */
+    live_only?: boolean;
     readings?: Array<{
       miniserver_serial?: string;
       sensor_uuid?: string;
@@ -1322,26 +1343,42 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     return json({ error: "worker_name and non-empty readings[] required" }, 400);
   }
 
+  const liveOnly = body.live_only === true;
   const supabase = getSupabase();
 
-  const { data: worker } = await supabase
-    .from("bridge_workers")
-    .select("id")
-    .eq("name", body.worker_name)
-    .maybeSingle();
+  const workerCacheKey = `worker:${body.worker_name}`;
+  let worker = liveOnly ? bridgeLookupGet<{ id: string }>(workerCacheKey) : undefined;
+  if (!worker) {
+    const { data } = await supabase
+      .from("bridge_workers")
+      .select("id")
+      .eq("name", body.worker_name)
+      .maybeSingle();
+    worker = (data as { id: string } | null) ?? undefined;
+    if (worker && liveOnly) bridgeLookupSet(workerCacheKey, worker);
+  }
   if (!worker) return json({ error: "unknown worker_name" }, 404);
 
-  // Link-Cache pro Aufruf (1 DB-Query je Miniserver, nicht je Reading)
+  // Link-Cache pro Aufruf (1 DB-Query je Miniserver, nicht je Reading).
+  // Im Live-Modus zusätzlich über Requests hinweg gecacht (TTL 5 Min).
   const linkCache = new Map<string, { id: string; tenant_id: string | null }>();
   const serials = [...new Set(body.readings.map(r => r.miniserver_serial).filter(Boolean) as string[])];
-  if (serials.length > 0) {
+  const missingSerials: string[] = [];
+  for (const s of serials) {
+    const cached = liveOnly ? bridgeLookupGet<{ id: string; tenant_id: string | null }>(`link:${worker.id}:${s}`) : undefined;
+    if (cached) linkCache.set(s, cached);
+    else missingSerials.push(s);
+  }
+  if (missingSerials.length > 0) {
     const { data: links } = await supabase
       .from("bridge_miniserver_links")
       .select("id, tenant_id, miniserver_serial")
       .eq("worker_id", worker.id)
-      .in("miniserver_serial", serials);
+      .in("miniserver_serial", missingSerials);
     for (const l of links ?? []) {
-      linkCache.set(l.miniserver_serial, { id: l.id, tenant_id: l.tenant_id ?? null });
+      const entry = { id: l.id, tenant_id: l.tenant_id ?? null };
+      linkCache.set(l.miniserver_serial, entry);
+      if (liveOnly) bridgeLookupSet(`link:${worker.id}:${l.miniserver_serial}`, entry);
     }
   }
 
@@ -1390,7 +1427,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
   // darunter, ein kumulativer Zählerstand von >100 m³ wird sicher gefiltert.
   const pwrUuids = [...lastByUuid.keys()].map(k => k.split("|")[1]);
   let flowGuardDropped = 0;
-  if (pwrUuids.length > 0) {
+  if (!liveOnly && pwrUuids.length > 0) {
     const { data: metersForGuard } = await supabase
       .from("meters")
       .select("sensor_uuid, energy_type")
@@ -1417,7 +1454,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
   // wenn |Δ| < 5 W (abs) UND < 1% (rel) UND letzter Insert < 60s her.
   // Cold-Start setzt den Cache zurück → nach Boot wird jeder Sensor 1x geschrieben.
   const now = Date.now();
-  for (const [key, s] of lastByUuid.entries()) {
+  for (const [key, s] of (liveOnly ? [] : [...lastByUuid.entries()])) {
     const link = linkCache.get(s.miniserver_serial);
     const prev = bridgeRawLastCache.get(key);
     const atMs = new Date(s.at).getTime();
@@ -1458,7 +1495,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
   // SOC-Werte persistieren: Loxone liefert Slvl am Speicher-Zählerblock. Der Worker
   // sendet deshalb die Speicher-Block-UUID; hier wird sie auf meter → storage gemappt.
   let socUpdated = 0;
-  if (socRows.length > 0) {
+  if (!liveOnly && socRows.length > 0) {
     const tenants = [...new Set(socRows.map((r) => r.tenant_id))];
     const uuids = [...new Set(socRows.map((r) => r.uuid))];
     const { data: meters } = await supabase
@@ -1570,7 +1607,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     console.error("[bridge-readings] broadcast prep error:", (e as Error).message);
   }
 
-  return json({ success: true, inserted: rawRows.length, broadcast: broadcastRows.length, soc_updated: socUpdated, skipped, coalesced, delta_skipped: deltaSkipped });
+  return json({ success: true, live_only: liveOnly, inserted: rawRows.length, broadcast: broadcastRows.length, soc_updated: socUpdated, skipped, coalesced, delta_skipped: deltaSkipped });
 }
 
 /**

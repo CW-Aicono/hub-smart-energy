@@ -48,16 +48,24 @@ import http from "http";
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY!;
-// IO-Optimierung v1.2 (17.07.2026): Default 5s → 60s, Untergrenze 15s.
-// WebSocket zum Miniserver bleibt permanent verbunden (Push in Echtzeit),
-// Live-UI wird per Broadcast bedient — der Flush schreibt nur historische
-// Rohwerte in bridge_raw_samples. 60s reduziert die Cloud-IOPS um ~92%.
-const FLUSH_INTERVAL_MS = Math.max(
-  15000,
-  parseInt(process.env.FLUSH_INTERVAL_MS || "60000", 10),
+// v1.10 (31.07.2026): FLUSH ist wieder aktiv — aber als REINER Live-Broadcast
+// (`live_only: true`). gateway-ingest verteilt die Werte nur über Realtime und
+// schreibt NICHTS in die Datenbank. Persistenz läuft weiterhin ausschließlich
+// über flushBuckets() → bridge-power-5min. Damit kostet der Live-Pfad 0 Disk-IO.
+const LIVE_PUSH_INTERVAL_MS = Math.max(
+  2000,
+  parseInt(process.env.LIVE_PUSH_INTERVAL_MS || process.env.FLUSH_INTERVAL_MS || "5000", 10),
 );
+const FLUSH_INTERVAL_MS = LIVE_PUSH_INTERVAL_MS;
+// Keepalive: spätestens alle 60 s wird ein Wert je Zähler gesendet, auch wenn
+// er sich kaum ändert — damit die UI nach einem Reload sofort Werte hat.
 const MIN_PUSH_INTERVAL_MS = parseInt(process.env.MIN_PUSH_INTERVAL_MS || "60000", 10);
-const MIN_DELTA = parseFloat(process.env.MIN_DELTA || "0.01");
+const MIN_DELTA = parseFloat(process.env.MIN_DELTA || "0.05");
+// Obergrenze je Push-Zyklus, damit ein großer Miniserver den Kanal nicht flutet.
+const MAX_LIVE_EVENTS_PER_PUSH = Math.max(
+  50,
+  parseInt(process.env.MAX_LIVE_EVENTS_PER_PUSH || "500", 10),
+);
 const RELOAD_INTERVAL_MS = parseInt(process.env.RELOAD_INTERVAL_MS || "300000", 10);
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
 const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
@@ -923,18 +931,14 @@ async function keepaliveTick(): Promise<void> {
   }
 }
 
-// ─── Flush (Phase 5: Smart-Split → bridge_raw_samples) ───────────────────────
-// Schickt Roh-Werte an gateway-ingest?action=bridge-readings.
-// gateway-ingest schreibt sie in `bridge_raw_samples` (Ringpuffer 24 h);
-// die Edge-Function `bridge-aggregator` aggregiert sie alle 5 Min in die
-// Schatten-Tabelle `meter_power_readings_5min_bridge` — parallel zum
-// bestehenden Polling-Pfad, der unberührt weiterläuft.
+// ─── Live-Push (v1.10: Realtime-Broadcast OHNE Datenbank-Schreiblast) ────────
+// Schickt die aktuellen WS-Werte an gateway-ingest?action=bridge-readings mit
+// `live_only: true`. Die Edge-Function verteilt sie ausschließlich über den
+// Realtime-Kanal `loxone-live-<tenant_id>` (Energiefluss-Monitor, Aktuelle
+// Werte, Gerätekacheln/Steuerungen) und schreibt NICHTS in die Datenbank.
+// Historisierung läuft unverändert über flushBuckets() → bridge-power-5min.
 
 async function flush(): Promise<void> {
-  // v1.6: Legacy-Pfad hart deaktiviert – Rohdaten dürfen NICHT mehr in
-  // bridge_raw_samples geschrieben werden. Aggregation läuft ausschließlich
-  // über flushBuckets() → bridge-power-5min.
-  return;
   if (workerPaused) return;
   const readings: any[] = [];
   const nowMs = Date.now();
@@ -944,8 +948,8 @@ async function flush(): Promise<void> {
     for (const [, entry] of state.uuidMap) {
       if (entry.latest_value === null) continue;
 
-      // IO-Optimierung: nur pushen, wenn sich der Wert spürbar geändert hat
-      // ODER der letzte Push älter als MIN_PUSH_INTERVAL_MS ist (Keepalive).
+      // Nur senden, wenn sich der Wert spürbar geändert hat ODER der letzte
+      // Push älter als MIN_PUSH_INTERVAL_MS ist (Keepalive).
       // Energiezähler (today/total/month/year) ändern sich in kleinen Schritten →
       // niedrigere Mindest-Änderung, damit kWh-Inkremente nicht verschluckt werden.
       // SOC (%) soll ebenfalls zuverlässig als eigener Rollenwert gesendet werden.
@@ -960,7 +964,7 @@ async function flush(): Promise<void> {
       readings.push({
         miniserver_serial: state.serialNumber,
         sensor_uuid: entry.block_uuid,   // immer Block-UUID, damit DB-Mapping konsistent bleibt
-        role: entry.role,                 // Phase 7: rollenbasiertes Routing in gateway-ingest
+        role: entry.role,                 // rollenbasiertes Routing in gateway-ingest
         value: entry.latest_value,
         recorded_at: nowIso,
       });
@@ -969,11 +973,26 @@ async function flush(): Promise<void> {
     }
   }
   if (readings.length === 0) return;
+
+  // Deckelung: bei sehr vielen Änderungen in einem Zyklus nur die ersten N
+  // Events senden — der Rest folgt im nächsten Zyklus (Werte sind ohnehin
+  // auf den jeweils letzten Stand gecoalesct).
+  const batch = readings.length > MAX_LIVE_EVENTS_PER_PUSH
+    ? readings.slice(0, MAX_LIVE_EVENTS_PER_PUSH)
+    : readings;
+  if (batch.length < readings.length) {
+    log("warn", `[Live] ${readings.length} Events > Limit ${MAX_LIVE_EVENTS_PER_PUSH} — sende ${batch.length}, Rest im nächsten Zyklus`);
+  }
+
   try {
-    await ingestPost("bridge-readings", { worker_name: BRIDGE_WORKER_NAME, readings });
-    log("debug", `[Flush] ${readings.length} Roh-Samples an bridge-readings gepusht`);
+    await ingestPost("bridge-readings", {
+      worker_name: BRIDGE_WORKER_NAME,
+      live_only: true,   // v1.10: reiner Broadcast, keine DB-Schreiblast
+      readings: batch,
+    });
+    log("debug", `[Live] ${batch.length} Werte per Broadcast gepusht (live_only)`);
   } catch (err) {
-    log("warn", `[Flush] fehlgeschlagen: ${(err as Error).message}`);
+    log("warn", `[Live] Push fehlgeschlagen: ${(err as Error).message}`);
   }
 }
 
@@ -1402,13 +1421,13 @@ async function main() {
 
   await reloadMeters();
   setInterval(reloadMeters, RELOAD_INTERVAL_MS);
-  // v1.6: Legacy-Rohdaten-Flush (bridge-readings → bridge_raw_samples) deaktiviert.
-  // Es werden ausschließlich noch aggregierte 5-Minuten-Buckets an
-  // gateway-ingest?action=bridge-power-5min gesendet. Live-Werte laufen weiterhin
-  // via Realtime-Broadcast, ohne die Cloud-DB zu beschreiben.
-  // setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
+  // v1.10: Live-Push wieder aktiv — reiner Realtime-Broadcast (live_only),
+  // KEINE Datenbank-Schreiblast. Persistenz weiterhin ausschließlich über
+  // aggregierte 5-Minuten-Buckets (bridge-power-5min).
+  setInterval(() => { flush().catch((e) => log("error", "live-push:", e)); }, LIVE_PUSH_INTERVAL_MS);
+  log("info", `[Live-Push] aktiv: alle ${LIVE_PUSH_INTERVAL_MS / 1000}s Broadcast (live_only, MIN_DELTA=${MIN_DELTA} kW, Keepalive ${MIN_PUSH_INTERVAL_MS / 1000}s)`);
   setInterval(() => { flushBuckets().catch((e) => log("error", "flushBuckets:", e)); }, 60_000);
-  log("info", "[Bucket-Flush] aktiv: prüft alle 60s auf abgeschlossene 5-Min-Buckets (Legacy bridge-readings deaktiviert)");
+  log("info", "[Bucket-Flush] aktiv: prüft alle 60s auf abgeschlossene 5-Min-Buckets");
 
   // Bridge-Heartbeat: hält bridge_workers.last_heartbeat_at frisch (Phase 2)
   setInterval(() => { bridgeHeartbeat("online").catch(() => { /* siehe bridgeHeartbeat */ }); }, BRIDGE_HEARTBEAT_MS);
