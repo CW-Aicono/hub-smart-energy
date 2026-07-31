@@ -20,6 +20,9 @@ import { buildLoxoneResolver } from "@/lib/loxoneUuidResolver";
 import { useLoxoneLiveBroadcast } from "@/hooks/useLoxoneLiveBroadcast";
 import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
 import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
+import { useMeterPeriodTotals } from "@/hooks/useMeterPeriodTotals";
+import { useWeekStartDay } from "@/hooks/useWeekStartDay";
+
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -60,6 +63,9 @@ import {
   SunMedium,
   Router,
   Maximize2,
+  ChevronLeft,
+  ChevronRight,
+
   type LucideIcon,
 } from "lucide-react";
 
@@ -1315,10 +1321,10 @@ type StorageDetailInfo = {
 };
 
 const RANGE_LABEL: Record<DetailRange, string> = {
-  "1h": "1 Stunde",
-  "24h": "24 Stunden",
-  "7d": "7 Tage",
-  "30d": "30 Tage",
+  "1h": "Live (1 Std.)",
+  "24h": "Tag",
+  "7d": "Woche",
+  "30d": "Monat",
 };
 
 const RANGE_MS: Record<DetailRange, number> = {
@@ -1327,6 +1333,60 @@ const RANGE_MS: Record<DetailRange, number> = {
   "7d": 7 * 24 * 3600_000,
   "30d": 30 * 24 * 3600_000,
 };
+
+/**
+ * Kalender-Zeitraum (Tag / Woche / Monat) statt rollendem Fenster, damit die
+ * Energie-KPI exakt zu den Tagesaggregaten der Kacheln passt.
+ * `offset` = 0 → laufender Zeitraum, -1 → vorheriger usw.
+ */
+function calendarRange(
+  range: DetailRange,
+  offset: number,
+  weekStartsOn: number,
+): { startMs: number; endMs: number; label: string } {
+  const now = new Date();
+  if (range === "1h") {
+    return {
+      startMs: now.getTime() - RANGE_MS["1h"],
+      endMs: now.getTime(),
+      label: "letzte Stunde",
+    };
+  }
+  if (range === "24h") {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() + offset);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return {
+      startMs: start.getTime(),
+      endMs: end.getTime(),
+      label: start.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
+    };
+  }
+  if (range === "7d") {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const diff = (start.getDay() - weekStartsOn + 7) % 7;
+    start.setDate(start.getDate() - diff + offset * 7);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    const last = new Date(end.getTime() - 1);
+    return {
+      startMs: start.getTime(),
+      endMs: end.getTime(),
+      label: `${start.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} – ${last.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}`,
+    };
+  }
+  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1, 0, 0, 0, 0);
+  const end = new Date(start.getFullYear(), start.getMonth() + 1, 1, 0, 0, 0, 0);
+  return {
+    startMs: start.getTime(),
+    endMs: end.getTime(),
+    label: start.toLocaleDateString("de-DE", { month: "long", year: "numeric" }),
+  };
+}
+
 
 export function MeterDetailDialog({
   node,
@@ -1343,7 +1403,14 @@ export function MeterDetailDialog({
 }) {
 
   const Icon = ROLE_ICON[node.role];
-  const [range, setRange] = useState<DetailRange>("24h");
+  const [range, setRangeRaw] = useState<DetailRange>("24h");
+  const [rangeOffset, setRangeOffset] = useState(0);
+  const weekStartsOn = useWeekStartDay();
+  const setRange = (r: DetailRange) => {
+    setRangeRaw(r);
+    setRangeOffset(0);
+  };
+
 
   const isBattery = node.role === "battery";
   const isHouse = node.role === "house";
@@ -1530,7 +1597,15 @@ export function MeterDetailDialog({
     },
   });
 
-  const powerStartMs = useMemo(() => Date.now() - RANGE_MS[range], [range]);
+  const period = useMemo(
+    () => calendarRange(range, rangeOffset, weekStartsOn),
+    [range, rangeOffset, weekStartsOn],
+  );
+  const powerStartMs = period.startMs;
+  const powerEndMs = period.endMs;
+  /** Rechte Grenze für Achsen/Buckets: laufender Zeitraum endet "jetzt". */
+  const visibleEndMs = Math.min(powerEndMs, Date.now());
+
 
   const socStartMs = useMemo(() => {
     const rangeStart = powerStartMs;
@@ -1544,10 +1619,12 @@ export function MeterDetailDialog({
     : socPct;
 
   const { data: series = [], isLoading } = useQuery({
-    queryKey: ["meter-detail-series", node.meter_id, range, powerStartMs],
+    queryKey: ["meter-detail-series", node.meter_id, range, powerStartMs, powerEndMs],
     queryFn: async () => {
       if (!node.meter_id) return [];
       const since = new Date(powerStartMs).toISOString();
+      const until = new Date(powerEndMs).toISOString();
+
       const bucketMs =
         range === "1h" ? 60_000
         : range === "24h" ? 5 * 60_000
@@ -1580,6 +1657,8 @@ export function MeterDetailDialog({
             .select("bucket, power_avg")
             .eq("meter_id", node.meter_id)
             .gte("bucket", since)
+            .lt("bucket", until)
+
             .order("bucket", { ascending: true })
             .range(offset, to);
           if (error || !data || data.length === 0) break;
@@ -1602,6 +1681,8 @@ export function MeterDetailDialog({
             .select("recorded_at, power_value")
             .eq("meter_id", node.meter_id)
             .gte("recorded_at", since)
+            .lt("recorded_at", until)
+
             .order("recorded_at", { ascending: true })
             .range(offset, to);
           if (error || !data || data.length === 0) break;
@@ -1629,6 +1710,8 @@ export function MeterDetailDialog({
               .select("recorded_at, value")
               .eq("meter_id", node.meter_id)
               .gte("recorded_at", since)
+              .lt("recorded_at", until)
+
               .order("recorded_at", { ascending: true })
               .range(offset, to);
             if (error || !data || data.length === 0) break;
@@ -1653,11 +1736,12 @@ export function MeterDetailDialog({
   // Echte SOC-Historie: wird ab jetzt separat persistiert, damit Power/kW-Werte
   // nicht mehr fälschlich als Ladezustand (%) interpretiert werden.
   const { data: socSeries = [] } = useQuery({
-    queryKey: ["meter-detail-soc-readings", storageInfo?.id, range, socStartMs],
+    queryKey: ["meter-detail-soc-readings", storageInfo?.id, range, socStartMs, powerEndMs],
     enabled: isBattery && !!storageInfo?.id && (!isStorageLoading),
     staleTime: 30_000,
     queryFn: async () => {
       const since = new Date(socStartMs).toISOString();
+      const until = new Date(powerEndMs).toISOString();
       const limit = range === "30d" ? 8000 : range === "7d" ? 5000 : 2000;
       const pageSize = 1000;
       const rows: any[] = [];
@@ -1668,7 +1752,9 @@ export function MeterDetailDialog({
           .select("recorded_at, soc_pct")
           .eq("storage_id", storageInfo!.id)
           .gte("recorded_at", since)
+          .lt("recorded_at", until)
           .order("recorded_at", { ascending: true })
+
           .range(offset, to));
         if (error || !data || data.length === 0) break;
         rows.push(...data);
@@ -1720,11 +1806,12 @@ export function MeterDetailDialog({
 
   // Sensor-Statistik (V, °C, %, …): eigene Datenquelle, da meter_power_readings leer.
   const { data: sensorSeries = [] } = useQuery({
-    queryKey: ["meter-detail-sensor-series", node.meter_id, range, powerStartMs],
+    queryKey: ["meter-detail-sensor-series", node.meter_id, range, powerStartMs, powerEndMs],
     enabled: isSensor && !!node.meter_id,
     staleTime: 60_000,
     queryFn: async () => {
       const since = new Date(powerStartMs).toISOString();
+      const until = new Date(powerEndMs).toISOString();
       const out: { t: number; v: number; vMin?: number; vMax?: number }[] = [];
       if (range === "1h") {
         const { data } = await supabase
@@ -1732,6 +1819,7 @@ export function MeterDetailDialog({
           .select("recorded_at, value")
           .eq("meter_id", node.meter_id!)
           .gte("recorded_at", since)
+          .lt("recorded_at", until)
           .order("recorded_at", { ascending: true })
           .limit(2000);
         for (const r of (data ?? []) as any[]) {
@@ -1744,6 +1832,7 @@ export function MeterDetailDialog({
           .select("bucket, value_avg, value_min, value_max")
           .eq("meter_id", node.meter_id!)
           .gte("bucket", since)
+          .lt("bucket", until)
           .order("bucket", { ascending: true })
           .limit(5000);
         for (const r of (data ?? []) as any[]) {
@@ -1761,8 +1850,10 @@ export function MeterDetailDialog({
           .select("bucket, value_twavg, value_min, value_max")
           .eq("meter_id", node.meter_id!)
           .gte("bucket", since)
+          .lt("bucket", until)
           .order("bucket", { ascending: true })
           .limit(5000);
+
         for (const r of (data ?? []) as any[]) {
           const v = Number(r.value_twavg);
           if (Number.isFinite(v)) out.push({
@@ -1806,9 +1897,9 @@ export function MeterDetailDialog({
       : range === "24h" ? 60 * 60_000
       : range === "7d" ? 6 * 60 * 60_000
       : 24 * 60 * 60_000;
-    const now = Date.now();
     const startAligned = Math.floor(powerStartMs / bucketMs) * bucketMs;
-    const endAligned = Math.floor(now / bucketMs) * bucketMs;
+    const endAligned = Math.floor(visibleEndMs / bucketMs) * bucketMs;
+
     const map = new Map<number, { import: number; export: number }>();
     // Alle Buckets vorab mit 0 initialisieren, damit keine Lücken entstehen
     for (let k = startAligned; k <= endAligned; k += bucketMs) {
@@ -1830,7 +1921,7 @@ export function MeterDetailDialog({
     return Array.from(map.entries())
       .sort((a, b) => a[0] - b[0])
       .map(([t, v]) => ({ t, import: v.import, export: v.export }));
-  }, [series, range, powerStartMs]);
+  }, [series, range, powerStartMs, visibleEndMs]);
 
   const fmtTime = (t: number) => {
     const d = new Date(t);
@@ -1847,37 +1938,30 @@ export function MeterDetailDialog({
   const totalExport = energyBuckets.reduce((s, b) => s + b.export, 0);
 
   // Autoritative Energiemenge: exakt dieselbe Quelle wie die Kachel
-  // (get_meter_period_sums_with_fallback → meter_period_totals / Tages-Aggregate).
-  // Die Trapez-Integration über die Leistungsreihe bleibt nur Fallback für 1 h
-  // und für Zähler ohne Tagesaggregate.
-  const periodDays = range === "30d" ? 29 : range === "7d" ? 6 : 0;
-  const periodStart = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - periodDays);
-    return d;
-  }, [periodDays]);
-  const periodEnd = useMemo(() => new Date(), [range]);
-  const { data: periodSums } = usePeriodSumsWithFallback(
-    "meter-detail-period-sum",
+  // (Tageszeilen aus `meter_period_totals`). Die Trapez-Integration über die
+  // Leistungsreihe bleibt nur Fallback für den 1-h-Live-Bereich und für
+  // Zähler ohne Tagesaggregate.
+  const periodStart = useMemo(() => new Date(powerStartMs), [powerStartMs]);
+  const periodLastDay = useMemo(() => new Date(powerEndMs - 1), [powerEndMs]);
+  const { data: periodSums } = useMeterPeriodTotals(
     node.meter_id ? [node.meter_id] : [],
     periodStart,
-    periodEnd,
+    periodLastDay,
     !!node.meter_id && !isSensor && range !== "1h",
   );
   const authoritativeEnergy =
     node.meter_id && periodSums && Number.isFinite(Number(periodSums[node.meter_id]))
       ? Number(periodSums[node.meter_id])
       : null;
-  const energyPeriodLabel =
-    range === "24h" ? "heute" : range === "7d" ? "7 Tage" : range === "30d" ? "30 Tage" : "";
+  const energyPeriodLabel = range === "1h" ? "" : period.label;
 
 
   // Gemeinsame Zeitachse für beide Charts
-  const xDomain = useMemo<[number, number]>(() => {
-    const now = Date.now();
-    return [now - RANGE_MS[range], now];
-  }, [range]);
+  const xDomain = useMemo<[number, number]>(
+    () => [powerStartMs, visibleEndMs],
+    [powerStartMs, visibleEndMs],
+  );
+
   const xTicks = useMemo(() => {
     const step =
       range === "1h" ? 10 * 60_000
@@ -1941,8 +2025,8 @@ export function MeterDetailDialog({
           </div>
         </DialogHeader>
 
-        {/* Zeitraum-Umschalter */}
-        <div className="flex flex-wrap gap-2">
+        {/* Zeitraum-Umschalter + Blättern (Kalender-Zeiträume) */}
+        <div className="flex flex-wrap items-center gap-2">
           {(Object.keys(RANGE_LABEL) as DetailRange[]).map((r) => (
             <Button
               key={r}
@@ -1953,7 +2037,34 @@ export function MeterDetailDialog({
               {RANGE_LABEL[r]}
             </Button>
           ))}
+          {range !== "1h" && (
+            <div className="flex items-center gap-1 ml-auto">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                aria-label="Vorheriger Zeitraum"
+                onClick={() => setRangeOffset((o) => o - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs font-medium tabular-nums min-w-[9rem] text-center">
+                {period.label}
+              </span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                aria-label="Nächster Zeitraum"
+                disabled={rangeOffset >= 0}
+                onClick={() => setRangeOffset((o) => Math.min(0, o + 1))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
+
 
         {/* KPI-Kacheln */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
@@ -2013,7 +2124,7 @@ export function MeterDetailDialog({
             allNodes={allNodes}
             metersById={metersById}
             visibleStartMs={powerStartMs}
-            rangeLabel={RANGE_LABEL[range]}
+            rangeLabel={range === "1h" ? RANGE_LABEL[range] : `${RANGE_LABEL[range]} ${period.label}`}
           />
         )}
 

@@ -65,7 +65,7 @@ const LiveValues = () => {
   const [locationScope, setLocationScope] = useState<LocationScope>({ kind: "all" });
   const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
-  const [liveValues, setLiveValues] = useState<Map<string, { value: number; unit: string; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string }>>(new Map());
+  const [liveValues, setLiveValues] = useState<Map<string, { value: number; unit: string; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string; at: number | null }>>(new Map());
   useEffect(() => { if (liveValues.size > 0) probeMark("LiveValues:first-value", { once: true }); }, [liveValues.size]); // PERF-PROBE
   const [manualValues, setManualValues] = useState<Map<string, { value: number; date: string }>>(new Map());
   const [manualDailyTotals, setManualDailyTotals] = useState<Map<string, number>>(new Map());
@@ -485,6 +485,8 @@ const LiveValues = () => {
           totalYear: periods.totalYear ?? existing?.totalYear ?? null,
           meterReading: dbReading ?? existing?.meterReading ?? null,
           meterReadingUnit: existing?.meterReadingUnit ?? "kWh",
+          at: chosen?.at ?? existing?.at ?? null,
+
         });
       }
       return next;
@@ -644,7 +646,7 @@ const LiveValues = () => {
         meterReading: bcTotals?.total ?? live?.meterReading ?? null,
         meterReadingUnit: live?.meterReadingUnit ?? "kWh",
         source: "live",
-        liveAt: bcAt,
+        liveAt: bcAt ?? live?.at ?? undefined,
       };
     }
 
