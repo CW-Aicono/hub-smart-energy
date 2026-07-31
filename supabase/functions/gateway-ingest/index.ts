@@ -1323,6 +1323,12 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
 
   let body: {
     worker_name?: string;
+    /**
+     * v1.10: Reiner Live-Kanal. true = Werte werden NUR per Realtime-Broadcast
+     * verteilt (keine Inserts in bridge_raw_samples, kein SOC-Update, keine
+     * Aggregation). Damit kostet der Live-Pfad keine Datenbank-Schreiblast.
+     */
+    live_only?: boolean;
     readings?: Array<{
       miniserver_serial?: string;
       sensor_uuid?: string;
@@ -1337,26 +1343,42 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     return json({ error: "worker_name and non-empty readings[] required" }, 400);
   }
 
+  const liveOnly = body.live_only === true;
   const supabase = getSupabase();
 
-  const { data: worker } = await supabase
-    .from("bridge_workers")
-    .select("id")
-    .eq("name", body.worker_name)
-    .maybeSingle();
+  const workerCacheKey = `worker:${body.worker_name}`;
+  let worker = liveOnly ? bridgeLookupGet<{ id: string }>(workerCacheKey) : undefined;
+  if (!worker) {
+    const { data } = await supabase
+      .from("bridge_workers")
+      .select("id")
+      .eq("name", body.worker_name)
+      .maybeSingle();
+    worker = (data as { id: string } | null) ?? undefined;
+    if (worker && liveOnly) bridgeLookupSet(workerCacheKey, worker);
+  }
   if (!worker) return json({ error: "unknown worker_name" }, 404);
 
-  // Link-Cache pro Aufruf (1 DB-Query je Miniserver, nicht je Reading)
+  // Link-Cache pro Aufruf (1 DB-Query je Miniserver, nicht je Reading).
+  // Im Live-Modus zusätzlich über Requests hinweg gecacht (TTL 5 Min).
   const linkCache = new Map<string, { id: string; tenant_id: string | null }>();
   const serials = [...new Set(body.readings.map(r => r.miniserver_serial).filter(Boolean) as string[])];
-  if (serials.length > 0) {
+  const missingSerials: string[] = [];
+  for (const s of serials) {
+    const cached = liveOnly ? bridgeLookupGet<{ id: string; tenant_id: string | null }>(`link:${worker.id}:${s}`) : undefined;
+    if (cached) linkCache.set(s, cached);
+    else missingSerials.push(s);
+  }
+  if (missingSerials.length > 0) {
     const { data: links } = await supabase
       .from("bridge_miniserver_links")
       .select("id, tenant_id, miniserver_serial")
       .eq("worker_id", worker.id)
-      .in("miniserver_serial", serials);
+      .in("miniserver_serial", missingSerials);
     for (const l of links ?? []) {
-      linkCache.set(l.miniserver_serial, { id: l.id, tenant_id: l.tenant_id ?? null });
+      const entry = { id: l.id, tenant_id: l.tenant_id ?? null };
+      linkCache.set(l.miniserver_serial, entry);
+      if (liveOnly) bridgeLookupSet(`link:${worker.id}:${l.miniserver_serial}`, entry);
     }
   }
 
