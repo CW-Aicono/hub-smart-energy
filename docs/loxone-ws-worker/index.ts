@@ -752,16 +752,10 @@ async function connect(state: ConnState): Promise<void> {
       return null;
     }
 
-    /**
-     * Zählertypen, deren Loxone-Block **keinen** echten Momentanleistungs-State
-     * bereitstellen muss (Impulszähler o. ä.). Für diese Typen dürfen wir
-     * mehrdeutige Keys (Actual/Value/P) NICHT als Leistung interpretieren —
-     * sonst landet der kumulative Zählerstand als „pwr" in der DB (Spikes).
-     */
-    function isFlowLikeType(et: string | undefined | null): boolean {
-      const t = (et ?? "").toLowerCase();
-      return t === "wasser" || t === "gas" || t === "water";
-    }
+    // v1.16: Keine Medien-Heuristik mehr. Ob und welche Momentanwert-Rolle ein
+    // Block bekommt, entscheidet ausschließlich die Messstellen-Konfiguration
+    // (device_type + source_unit_power) — siehe deriveMomentaryRole().
+
     let blocksMapped = 0;
     let blocksFallback = 0;
     let totalSubs = 0;
