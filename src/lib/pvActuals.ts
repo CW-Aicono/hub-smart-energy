@@ -93,6 +93,35 @@ export async function fetchMeterPower5min(meterIds: string[], rangeStart: Date, 
   return allData.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
 }
 
+/**
+ * Primary hourly source: aggregate power series (`get_power_series_auto`).
+ * Each bucket carries its own resolution, so energy = |power_avg| × res/60.
+ * Values are returned as positive absolutes (PV yield convention).
+ */
+export async function fetchHourlyActualsFromSeries(
+  meterIds: string[],
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<Record<string, number>> {
+  if (meterIds.length === 0 || rangeEnd <= rangeStart) return {};
+
+  const rows = await fetchPowerSeriesAuto(meterIds, rangeStart, rangeEnd, 2000);
+  if (rows.length === 0) return {};
+
+  const hourBuckets: Record<string, number> = {};
+  for (const row of rows) {
+    if (row.power_avg == null || !Number.isFinite(row.power_avg)) continue;
+    const resolution = Number(row.resolution_minutes) > 0 ? Number(row.resolution_minutes) : 5;
+    const hour = toLocalHourKey(row.bucket);
+    const energyKwh = Math.abs(row.power_avg) * (resolution / 60);
+    hourBuckets[hour] = (hourBuckets[hour] ?? 0) + energyKwh;
+  }
+
+  return Object.fromEntries(
+    Object.entries(hourBuckets).map(([hour, kwh]) => [hour, round2(kwh)])
+  );
+}
+
 
 export function buildHourlyActuals(readings: MeterPowerReading[]) {
   const hourBuckets: Record<string, number> = {};
