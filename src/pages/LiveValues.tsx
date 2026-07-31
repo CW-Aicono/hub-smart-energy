@@ -831,8 +831,17 @@ const LiveValues = () => {
                           <Icon className={cn("h-4 w-4 shrink-0", config.colorClass)} />
                           <CardTitle className="text-sm font-medium truncate">{meter.name}</CardTitle>
                         </div>
-                        <Badge variant={source === "live" ? "default" : source === "virtual" ? "outline" : "secondary"} className="shrink-0 text-[10px] px-1.5 py-0">
-                          {source === "live" ? "Live" : source === "virtual" ? t("common.virtual" as any) : source === "manual" ? t("common.manual" as any) : "–"}
+                        <Badge
+                          variant={source === "live" ? (isFresh ? "default" : "secondary") : source === "virtual" ? "outline" : "secondary"}
+                          className="shrink-0 text-[10px] px-1.5 py-0"
+                        >
+                          {source === "live"
+                            ? (isFresh ? "Live" : ageLabel ?? t("common.cached" as any) ?? "–")
+                            : source === "virtual"
+                              ? t("common.virtual" as any)
+                              : source === "manual"
+                                ? t("common.manual" as any)
+                                : "–"}
                         </Badge>
                       </div>
                     </CardHeader>
