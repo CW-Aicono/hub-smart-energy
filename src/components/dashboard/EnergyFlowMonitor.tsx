@@ -1173,36 +1173,19 @@ function NodeDetailOverlay({
     queryKey: ["energyflow-sparkline", node.meter_id],
     queryFn: async () => {
       if (!node.meter_id) return [];
-      const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-      const { data } = await supabase
-        .from("meter_power_readings")
-        .select("recorded_at, power_value")
-        .eq("meter_id", node.meter_id)
-        .gte("recorded_at", since)
-        .order("recorded_at", { ascending: true })
-        .limit(500);
-      let rows = (data ?? []).map((r: any) => ({
-        t: new Date(r.recorded_at).getTime(),
-        v: Number(r.power_value) * 1000, // kW → W
-      }));
-      // Fallback: worker-only meters (no raw rows) → 5-min buckets.
-      if (rows.length === 0) {
-        const { data: agg } = await supabase
-          .from("meter_power_readings_5min")
-          .select("bucket, power_avg")
-          .eq("meter_id", node.meter_id)
-          .gte("bucket", since)
-          .order("bucket", { ascending: true })
-          .limit(500);
-        rows = (agg ?? [])
-          .filter((r: any) => r.power_avg != null)
-          .map((r: any) => ({
-            t: new Date(r.bucket).getTime(),
-            v: Number(r.power_avg) * 1000,
-          }));
-      }
-      return rows;
+      const since = new Date(Date.now() - 24 * 3600_000);
+      // Aggregat-Serie ist die Primärquelle; die Rohtabelle wird für
+      // Worker-Zähler nicht mehr befüllt und würde die Kurve auf einen
+      // einzelnen Punkt reduzieren.
+      const series = await fetchPowerSeriesAuto([node.meter_id], since, new Date(), 500);
+      return series
+        .filter((r) => r.power_avg != null)
+        .map((r) => ({
+          t: new Date(r.bucket).getTime(),
+          v: Number(r.power_avg) * 1000, // kW → W
+        }));
     },
+
 
     enabled: !!node.meter_id,
     staleTime: 60_000,
