@@ -1397,7 +1397,14 @@ export function MeterDetailDialog({
 }) {
 
   const Icon = ROLE_ICON[node.role];
-  const [range, setRange] = useState<DetailRange>("24h");
+  const [range, setRangeRaw] = useState<DetailRange>("24h");
+  const [rangeOffset, setRangeOffset] = useState(0);
+  const weekStartsOn = useWeekStartDay();
+  const setRange = (r: DetailRange) => {
+    setRangeRaw(r);
+    setRangeOffset(0);
+  };
+
 
   const isBattery = node.role === "battery";
   const isHouse = node.role === "house";
