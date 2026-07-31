@@ -486,111 +486,14 @@ const LiveValues = () => {
     };
     document.addEventListener("visibilitychange", onVisibility);
 
-
-    // uuid → meter_id Map (für schnelles Lookup im Broadcast-Handler)
-    const uuidToMeterId = new Map<string, string>();
-    for (const m of meters) {
-      if (m.sensor_uuid) uuidToMeterId.set(m.sensor_uuid.toLowerCase(), m.id);
-    }
-
-    // Eindeutige tenant_ids der angezeigten Meter
-    const tenantIds = [...new Set(meters.map((m) => m.tenant_id).filter(Boolean))] as string[];
-    if (tenantIds.length === 0) return;
-
-    // Coalescing: Broadcast-Events werden gepuffert und höchstens alle COALESCE_MS
-    // in den React-State übernommen (statt Re-Render pro Event).
-    const COALESCE_MS = 1500;
-    type LiveEv = { uuid: string; value: number; at: string; role?: "pwr" | "today" | "total" | "month" | "year" | "soc" };
-    let buffer: LiveEv[] = [];
-    let flushTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const flushBuffer = () => {
-      flushTimer = null;
-      const events = buffer;
-      buffer = [];
-      if (events.length === 0) return;
-
-      const socEvents = events.filter((e) => e.role === "soc");
-      if (socEvents.length > 0) {
-        setSocByMeterId((prev) => {
-          const next = new Map(prev);
-          let changed = false;
-          for (const ev of socEvents) {
-            const meterId = socUuidToMeterId.get(ev.uuid.toLowerCase());
-            if (!meterId) continue;
-            if (!Number.isFinite(ev.value) || ev.value < 0 || ev.value > 100) continue;
-            next.set(meterId, { pct: ev.value, updatedAt: ev.at });
-            changed = true;
-          }
-          return changed ? next : prev;
-        });
-      }
-
-      setLiveValues((prev) => {
-        let changed = false;
-        const next = new Map(prev);
-        let unmatched = 0;
-        for (const ev of events) {
-          const role = ev.role ?? "pwr";
-          const limit = role === "pwr" ? 10_000 /* kW */ : 10_000_000 /* kWh */;
-          if (!Number.isFinite(ev.value) || Math.abs(ev.value) > limit) continue;
-          const meterId = uuidToMeterId.get(ev.uuid.toLowerCase());
-          if (!meterId) { unmatched++; continue; }
-
-          const existing = next.get(meterId) ?? {
-            value: 0, unit: "", totalDay: null, totalWeek: null,
-            totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "kWh",
-          };
-          let updated = existing;
-          if (role === "pwr") {
-            if (existing.value === ev.value) continue;
-            updated = { ...existing, value: ev.value };
-          }
-          else if (role === "today") { if (existing.totalDay === ev.value) continue; updated = { ...existing, totalDay: ev.value }; }
-          else if (role === "month") { if (existing.totalMonth === ev.value) continue; updated = { ...existing, totalMonth: ev.value }; }
-          else if (role === "year") { if (existing.totalYear === ev.value) continue; updated = { ...existing, totalYear: ev.value }; }
-          else if (role === "total") { if (existing.meterReading === ev.value) continue; updated = { ...existing, meterReading: ev.value }; }
-          else continue;
-          next.set(meterId, updated);
-          changed = true;
-        }
-        if (unmatched > 0) {
-          console.log(`[live-values] ${unmatched}/${events.length} broadcast events ohne passenden Zähler (UUID nicht gemappt).`);
-        }
-        return changed ? next : prev;
-      });
-      setLastRefresh(new Date());
-    };
-
-    // Pro Tenant einen Broadcast-Channel abonnieren
-    const channels = tenantIds.map((tenantId) => {
-      const channelName = `loxone-live-${tenantId}`;
-      const ch = supabase
-        .channel(channelName, { config: { broadcast: { self: false } } })
-        .on("broadcast", { event: "readings" }, (msg: { payload: { events?: LiveEv[] } }) => {
-          const events = msg.payload?.events ?? [];
-          if (events.length === 0) return;
-          // Im Hintergrund-Tab nichts rendern
-          if (document.visibilityState !== "visible") return;
-          buffer.push(...events);
-          if (!flushTimer) flushTimer = setTimeout(flushBuffer, COALESCE_MS);
-        })
-        .subscribe((status) => {
-          console.log(`[live-values] channel ${channelName} status: ${status}`);
-        });
-      return ch;
-    });
-
     return () => {
       clearInterval(reconcileInterval);
-      if (flushTimer) clearTimeout(flushTimer);
       document.removeEventListener("visibilitychange", onVisibility);
-      for (const ch of channels) supabase.removeChannel(ch);
     };
-
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meters.length]);
+
 
   // Manuell-Refresh-Button: temporär nur DB lesen, kein loxone-api/getSensors HTTP-Polling.
   const handleManualRefresh = useCallback(async () => {
