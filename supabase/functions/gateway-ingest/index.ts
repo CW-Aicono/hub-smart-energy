@@ -1427,7 +1427,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
   // darunter, ein kumulativer Zählerstand von >100 m³ wird sicher gefiltert.
   const pwrUuids = [...lastByUuid.keys()].map(k => k.split("|")[1]);
   let flowGuardDropped = 0;
-  if (pwrUuids.length > 0) {
+  if (!liveOnly && pwrUuids.length > 0) {
     const { data: metersForGuard } = await supabase
       .from("meters")
       .select("sensor_uuid, energy_type")
