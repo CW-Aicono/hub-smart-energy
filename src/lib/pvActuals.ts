@@ -327,23 +327,38 @@ export async function fetchPvActualHourly({
     ? forecastHours.filter((h) => toLocalHourKey(h.timestamp) <= currentHourKey)
     : forecastHours;
 
-  const rawReadings = await fetchMeterPowerReadings(meterIds, rangeStart, effectiveEnd);
-  const readingsSource = rawReadings.length > 0
-    ? rawReadings
-    : await fetchMeterPower5min(meterIds, rangeStart, effectiveEnd);
-  if (readingsSource.length > 0) {
-    let hourly = buildHourlyActuals(readingsSource);
+  // Primary source: zoom-aware aggregate series (5/15/60-min buckets).
+  // The legacy raw table `meter_power_readings` is no longer written for
+  // worker-aggregated meters, so it must never be the primary series source —
+  // a single leftover raw row would collapse the whole day into one hour.
+  const seriesHourly = await fetchHourlyActualsFromSeries(meterIds, rangeStart, effectiveEnd);
+  let hourly = seriesHourly;
+
+  if (Object.keys(hourly).length === 0) {
+    const rawReadings = await fetchMeterPowerReadings(meterIds, rangeStart, effectiveEnd);
+    if (rawReadings.length > 1) {
+      hourly = buildHourlyActuals(rawReadings);
+    }
+  }
+
+  if (Object.keys(hourly).length > 0) {
     if (isToday) {
       const authoritative = await fetchTodayCumulativeKwh(meterIds);
       if (authoritative != null) {
         const sum = Object.values(hourly).reduce((s, v) => s + Math.abs(v), 0);
-        hourly = sum > 0
+        const coveredHours = Object.values(hourly).filter((v) => Math.abs(v) > 0).length;
+        // Only rescale when the hourly distribution is plausible; otherwise a
+        // single covered hour would absorb the entire daily total.
+        hourly = sum > 0 && coveredHours >= 2
           ? scaleHourlyToTotal(hourly, authoritative)
-          : estimateHourlyActualsFromDailyTotal(dayStr, authoritative, clippedForecast);
+          : sum > 0
+            ? hourly
+            : estimateHourlyActualsFromDailyTotal(dayStr, authoritative, clippedForecast);
       }
     }
     return { readings: hourly, isEstimated: false, isStored: false };
   }
+
 
 
   if (isToday) {
