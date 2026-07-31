@@ -324,26 +324,25 @@ const LiveValues = () => {
       new Set(autoMeters.map((m) => m.location_integration_id).filter(Boolean) as string[])
     );
 
-    // Parallel: DB-Polling-Wert, 5-Min-Aggregat (Worker-only Fallback), Bridge-Raw-Wert (Live), Perioden-Totals, Zählerstand (kumulativ), Sensor-Snapshots, Sensor-Rohwerte
-    const [powerRes, power5minRes, bridgeRes, periodRes, cumulativeRes, snapshotRes, sensorRawRes] = await Promise.all([
+    // Parallel: DB-Polling-Wert, 5-Min-Aggregat (Worker-only Fallback), Perioden-Totals,
+    // Zählerstand (kumulativ), Sensor-Snapshots, Sensor-Rohwerte.
+    // bridge_raw_samples wird seit v1.10 im Live-Pfad bewusst nicht mehr befüllt → nicht mehr lesen.
+    const sinceIso = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const [powerRes, power5minRes, periodRes, cumulativeRes, snapshotRes, sensorRawRes] = await Promise.all([
       supabase
         .from("meter_power_readings")
         .select("meter_id, power_value, recorded_at")
         .in("meter_id", meterIds)
-        .gte("recorded_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
-        .order("recorded_at", { ascending: false }),
+        .gte("recorded_at", sinceIso)
+        .order("recorded_at", { ascending: false })
+        .limit(2000),
       supabase
         .from("meter_power_readings_5min")
         .select("meter_id, power_avg, bucket")
         .in("meter_id", meterIds)
-        .gte("bucket", new Date(Date.now() - 60 * 60 * 1000).toISOString())
-        .order("bucket", { ascending: false }),
-      supabase
-        .from("bridge_raw_samples")
-        .select("uuid, value, received_at")
-        .in("uuid", uuids)
-        .gte("received_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
-        .order("received_at", { ascending: false }),
+        .gte("bucket", sinceIso)
+        .order("bucket", { ascending: false })
+        .limit(2000),
       supabase
         .from("meter_period_totals")
         .select("meter_id, period_type, period_start, total_value, energy_type")
@@ -358,14 +357,17 @@ const LiveValues = () => {
             .in("location_integration_id", liIds)
             .gte("fetched_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
             .order("fetched_at", { ascending: false })
+            .limit(liIds.length * 3)
         : Promise.resolve({ data: [] as any[] } as any),
       supabase
         .from("sensor_readings_raw")
         .select("meter_id, value, recorded_at")
         .in("meter_id", meterIds)
-        .gte("recorded_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
-        .order("recorded_at", { ascending: false }),
+        .gte("recorded_at", sinceIso)
+        .order("recorded_at", { ascending: false })
+        .limit(2000),
     ]);
+
 
 
     // Neuester Sensor-Rohwert pro Meter (Momentanwerte: °C, %, bool, …).
