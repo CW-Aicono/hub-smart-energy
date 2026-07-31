@@ -1678,6 +1678,8 @@ export function MeterDetailDialog({
             .select("recorded_at, power_value")
             .eq("meter_id", node.meter_id)
             .gte("recorded_at", since)
+            .lt("recorded_at", until)
+
             .order("recorded_at", { ascending: true })
             .range(offset, to);
           if (error || !data || data.length === 0) break;
