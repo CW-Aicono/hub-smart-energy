@@ -1315,10 +1315,10 @@ type StorageDetailInfo = {
 };
 
 const RANGE_LABEL: Record<DetailRange, string> = {
-  "1h": "1 Stunde",
-  "24h": "24 Stunden",
-  "7d": "7 Tage",
-  "30d": "30 Tage",
+  "1h": "Live (1 Std.)",
+  "24h": "Tag",
+  "7d": "Woche",
+  "30d": "Monat",
 };
 
 const RANGE_MS: Record<DetailRange, number> = {
@@ -1327,6 +1327,60 @@ const RANGE_MS: Record<DetailRange, number> = {
   "7d": 7 * 24 * 3600_000,
   "30d": 30 * 24 * 3600_000,
 };
+
+/**
+ * Kalender-Zeitraum (Tag / Woche / Monat) statt rollendem Fenster, damit die
+ * Energie-KPI exakt zu den Tagesaggregaten der Kacheln passt.
+ * `offset` = 0 → laufender Zeitraum, -1 → vorheriger usw.
+ */
+function calendarRange(
+  range: DetailRange,
+  offset: number,
+  weekStartsOn: number,
+): { startMs: number; endMs: number; label: string } {
+  const now = new Date();
+  if (range === "1h") {
+    return {
+      startMs: now.getTime() - RANGE_MS["1h"],
+      endMs: now.getTime(),
+      label: "letzte Stunde",
+    };
+  }
+  if (range === "24h") {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() + offset);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return {
+      startMs: start.getTime(),
+      endMs: end.getTime(),
+      label: start.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }),
+    };
+  }
+  if (range === "7d") {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const diff = (start.getDay() - weekStartsOn + 7) % 7;
+    start.setDate(start.getDate() - diff + offset * 7);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    const last = new Date(end.getTime() - 1);
+    return {
+      startMs: start.getTime(),
+      endMs: end.getTime(),
+      label: `${start.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} – ${last.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}`,
+    };
+  }
+  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1, 0, 0, 0, 0);
+  const end = new Date(start.getFullYear(), start.getMonth() + 1, 1, 0, 0, 0, 0);
+  return {
+    startMs: start.getTime(),
+    endMs: end.getTime(),
+    label: start.toLocaleDateString("de-DE", { month: "long", year: "numeric" }),
+  };
+}
+
 
 export function MeterDetailDialog({
   node,
