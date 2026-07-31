@@ -20,7 +20,7 @@ Statt der Sonderregel `isFlowLikeType()` (aktuell in `docs/loxone-ws-worker/inde
 
 - `device_type = actuator/sensor` mit `source_unit_power = bool` → **kein** Momentanwert erwartet. Der Block wird als reiner Schalt-/Statusbaustein geführt und taucht gar nicht mehr als offene Zuordnung auf.
 - `source_unit_power` = kW/W → Momentanleistung (Rolle `pwr`), wie bisher.
-- `source_unit_power` = m³/h, l/min, l/h → **Durchfluss** (neue Rolle `flow`) — für Gas und Wasser aus dem Reedkontakt-Impuls, den der Miniserver bereits in eine Menge/Zeit umrechnet.
+- `source_unit_power` = m³/h, l/min, l/h → **Durchfluss** (neue Rolle `flow`) — für Gas und Wasser aus dem Reedkontakt-Impuls, den der Miniserver bereits in eine Menge/Zeit umrechnet. Bei Gas wird daraus zusätzlich kW über Brennwert × Zustandszahl berechnet, bei Wasser bleibt m³/h stehen.
 - Der passende State wird über Name **und** die Einheit aus der Loxone-Struktur gewählt; stimmt die Einheit nicht mit der am Zähler hinterlegten überein, wird nichts geschrieben und die Abweichung gemeldet — statt zu raten.
 
 ### 2. Das Mapping-Panel wird zur Ausnahmeliste
