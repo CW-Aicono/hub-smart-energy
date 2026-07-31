@@ -40,13 +40,24 @@ Im Detaildialog (`MeterDetailDialog` in `EnergyFlowMonitor.tsx`) wird die KPI �
 ### 2. Leistungsverlauf über den gemeinsamen Standardpfad
 Die handgeschriebene Abfragekette im Dialog (5-Min-Tabelle + Roh-Top-up + Sensor-Fallback) wird durch `fetchPowerSeriesAuto` (`src/lib/powerSeries.ts`, RPC `get_power_series_auto`) ersetzt — derselbe Pfad, den Dashboard und Analytics Studio nutzen, inkl. zoomabhängiger Auflösung (5 Min / 15 Min / 1 h / 1 Tag). Ø/Max/Min werden aus dieser Reihe gebildet (Max aus `power_max`). Kein zweiter Datenpfad mehr.
 
-### 3. Fehlzeilen entfernen (Voraussetzung dafür, dass 2 stimmt)
-Migration, die die verunreinigten Buckets löscht: `source = 'bridge_ws'` und `power_avg` innerhalb ±2 % des Zählerstands des jeweiligen Zählers bzw. > 50× des Medians der übrigen Buckets desselben Zählers. Trefferliste je Zähler wird vor dem Löschen ausgegeben; echte Lastspitzen bleiben erhalten.
+### 3. Fehlzeilen entfernen — nur mit eindeutigem Nachweis, nicht nach Größe
+Berechtigter Einwand: Ein Kühlaggregat oder eine Wallbox kann beim Anlauf real riesige Sprünge erzeugen. Ein Kriterium wie „> 50× Median" oder „> 20 kW" würde echte Anlaufspitzen mitlöschen. Das wird deshalb **gestrichen**.
 
-### 4. Worker härten, damit es nicht zurückkommt (v1.15)
-- `classifyAux`: `pwr` erst bei mehreren echten Rückgängen; ein Reset auf 0 oder ein Sprung auf einen kleineren Startwert zählt nicht mehr als Rückgang.
-- Liegt ein Kandidatenwert nahe am bekannten `total`/`today` desselben Bausteins, wird er nie zu `pwr`.
-- Einmal als `total` erkannte States werden nicht mehr umklassifiziert; States mit Einheit V/A/Hz/°C schreiben nie in die Leistungsreihe.
+Gelöscht wird nur, was nachweislich ein Zählerstand und keine Leistung ist. Alle drei Bedingungen müssen gleichzeitig zutreffen:
+1. `source = 'bridge_ws'`,
+2. der Wert liegt innerhalb ±1 % des zum selben Zeitpunkt gültigen kumulativen Zählerstands desselben Zählers (aus `meter_cumulative_readings` / `meter_readings`),
+3. die Werte sind über mindestens 3 aufeinanderfolgende Buckets **monoton steigend** und die Zuwächse entsprechen dem Zählerfortschritt.
+
+Punkt 3 ist der eigentliche Unterscheider: eine echte Anlaufspitze geht nach kurzer Zeit wieder herunter, ein Zählerstand steigt nur. Eine einzelne hohe Zeile ohne monotone Nachbarn bleibt in jedem Fall stehen.
+
+Ablauf: Erst wird die Trefferliste je Zähler mit Zeitstempeln und Werten ausgegeben und dir zur Freigabe gezeigt. Gelöscht wird erst nach deinem OK. Die Rohdaten in `bridge_raw_samples` bleiben unangetastet, eine Neuberechnung ist damit jederzeit möglich.
+
+### 4. Worker härten — Klassifizierung, keine Wertfilterung (v1.15)
+Auch hier wird kein Wert wegen seiner Höhe verworfen. Korrigiert wird ausschließlich, **welcher State als Leistung gilt**:
+- `classifyAux`: Ein State wird erst dann von `total` zu `pwr` umgestuft, wenn er mehrfach echte Rückgänge zeigt; ein einzelner Reset auf 0 oder ein Neustart-Sprung zählt nicht mehr als Rückgang.
+- Liegt ein Kandidatenwert dauerhaft nahe am bekannten `total`/`today` desselben Loxone-Bausteins, wird er nie als Leistung geschrieben.
+- Einmal sicher als `total` erkannte States werden nicht mehr umklassifiziert; States mit Einheit V/A/Hz/°C schreiben grundsätzlich nicht in die Leistungsreihe.
+- Der bestehende Plausibilitätsdeckel (500 kW für Strom im `bridge-aggregator`) bleibt unverändert — echte Anlaufspitzen darunter passieren wie bisher ungefiltert.
 - Update-Anleitung `docs/loxone-ws-worker/UPDATE-v1.15-role-hardening.md`.
 
 ## Verifikation
