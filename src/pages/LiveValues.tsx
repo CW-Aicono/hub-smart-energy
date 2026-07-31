@@ -764,7 +764,17 @@ const LiveValues = () => {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredMeters.map((meter) => {
-                const { value, unit: sensorUnit, totalDay, totalMonth, totalYear, meterReading, meterReadingUnit, source, date } = getValue(meter);
+                const { value, unit: sensorUnit, totalDay, totalMonth, totalYear, meterReading, meterReadingUnit, source, date, liveAt } = getValue(meter);
+                const ageSec = liveAt ? Math.max(0, Math.round((nowTick - liveAt) / 1000)) : null;
+                const isFresh = ageSec !== null && ageSec < 60;
+                const ageLabel =
+                  ageSec === null
+                    ? null
+                    : ageSec < 60
+                      ? `${ageSec} s`
+                      : ageSec < 3600
+                        ? `vor ${Math.floor(ageSec / 60)} Min`
+                        : `vor ${Math.floor(ageSec / 3600)} Std`;
                 const config = ENERGY_TYPE_CONFIG[meter.energy_type] || ENERGY_TYPE_CONFIG.strom;
                 const Icon = getDeviceIconForMeter(meter);
                 const location = locations.find((l) => l.id === meter.location_id);
