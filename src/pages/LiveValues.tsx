@@ -836,7 +836,7 @@ const LiveValues = () => {
                           className="shrink-0 text-[10px] px-1.5 py-0"
                         >
                           {source === "live"
-                            ? (isFresh ? "Live" : ageLabel ?? t("common.cached" as any) ?? "–")
+                            ? (isFresh ? "Live" : ageLabel ?? "–")
                             : source === "virtual"
                               ? t("common.virtual" as any)
                               : source === "manual"
