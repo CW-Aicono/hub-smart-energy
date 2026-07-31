@@ -622,16 +622,32 @@ const LiveValues = () => {
     return map;
   }, [virtualSources, getSourceValue, getSourceTotalDay, cpVirtualValues]);
 
-  const getValue = (meter: typeof meters[0]): { value: number | null; unit: string; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string; source: "live" | "manual" | "virtual" | "none"; date?: string } => {
+  const getValue = (meter: typeof meters[0]): { value: number | null; unit: string; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string; source: "live" | "manual" | "virtual" | "none"; date?: string; liveAt?: number } => {
     if (meter.capture_type === "virtual" && virtualValues.has(meter.id)) {
       const vv = virtualValues.get(meter.id)!;
       return { value: vv.value, unit: "", totalDay: vv.totalDay, totalMonth: vv.totalMonth, totalYear: vv.totalYear, meterReading: vv.meterReading, meterReadingUnit: "kWh", source: "virtual" };
     }
 
-    if (meter.capture_type === "automatic" && liveValues.has(meter.id)) {
-      const live = liveValues.get(meter.id)!;
-      return { value: live.value, unit: live.unit, totalDay: live.totalDay, totalMonth: live.totalMonth, totalYear: live.totalYear, meterReading: live.meterReading, meterReadingUnit: live.meterReadingUnit, source: "live" };
+    const bcPwr = liveBroadcast.pwrByMeter[meter.id];
+    const bcTotals = liveBroadcast.totalsByMeter[meter.id];
+    const bcAt = liveBroadcast.updatedAtByMeter[meter.id];
+
+    if (meter.capture_type === "automatic" && (liveValues.has(meter.id) || bcPwr !== undefined || bcTotals)) {
+      const live = liveValues.get(meter.id);
+      return {
+        // Broadcast schlägt den DB-Reconcile-Wert (echter Momentanwert)
+        value: bcPwr ?? live?.value ?? null,
+        unit: live?.unit ?? powerUnitForMeter(meter as any),
+        totalDay: bcTotals?.today ?? live?.totalDay ?? null,
+        totalMonth: bcTotals?.month ?? live?.totalMonth ?? null,
+        totalYear: bcTotals?.year ?? live?.totalYear ?? null,
+        meterReading: bcTotals?.total ?? live?.meterReading ?? null,
+        meterReadingUnit: live?.meterReadingUnit ?? "kWh",
+        source: "live",
+        liveAt: bcAt,
+      };
     }
+
     const manual = manualValues.get(meter.id);
     if (manual) {
       const dailyTotal = manualDailyTotals.get(meter.id) ?? null;
