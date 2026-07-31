@@ -113,30 +113,21 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
 
   useEffect(() => {
     if (meterIds.length === 0) return;
-    // Fetch the latest reading per meter to seed gauges before first Realtime event.
-    // Try meter_power_readings first (highest freshness). For meters without a
-    // recent raw reading (IO-throttled sources, worker-only 5-min buckets), fall
-    // back to meter_power_readings_5min so the gauges don't stay empty.
+    // Ein einziger Sammel-Aufruf statt einer Abfrage pro Zähler.
+    // Rohwert nur, wenn er wirklich frisch ist (≤ 15 Min) — sonst würde ein
+    // Stunden alter Rest-Datensatz als "Jetzt" angezeigt.
     const fetchLatest = async () => {
-      // Rohwert nur, wenn er wirklich frisch ist (≤ 15 Min) — sonst würde ein
-      // Stunden alter Rest-Datensatz als "Jetzt" angezeigt.
       const freshCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-      const rawPromises = meterIds.map((id) =>
-        supabase
-          .from("meter_power_readings")
-          .select("meter_id, power_value")
-          .eq("meter_id", id)
-          .gte("recorded_at", freshCutoff)
-          .order("recorded_at", { ascending: false })
-          .limit(1)
-      );
-
-      const rawResults = await Promise.all(rawPromises);
+      const today = new Date();
+      const { data } = await supabase.rpc("get_meter_power_gauge_seed" as any, {
+        _meter_ids: meterIds,
+        _fresh_cutoff: freshCutoff,
+        _day_start: startOfDay(today).toISOString(),
+        _day_end: endOfDay(today).toISOString(),
+      });
       const current: Record<string, number> = {};
-      for (const { data } of rawResults) {
-        if (data && data.length > 0) {
-          current[data[0].meter_id] = data[0].power_value;
-        }
+      for (const row of (data ?? []) as any[]) {
+        if (row.latest_value != null) current[row.meter_id] = Number(row.latest_value);
       }
 
       const missing = meterIds.filter((id) => current[id] === undefined);
@@ -150,9 +141,9 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
             .limit(1)
         );
         const aggResults = await Promise.all(aggPromises);
-        for (const { data } of aggResults) {
-          if (data && data.length > 0 && data[0].power_avg != null) {
-            current[data[0].meter_id] = Number(data[0].power_avg);
+        for (const { data: aggData } of aggResults) {
+          if (aggData && aggData.length > 0 && aggData[0].power_avg != null) {
+            current[aggData[0].meter_id] = Number(aggData[0].power_avg);
           }
         }
       }
@@ -162,6 +153,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
     };
     fetchLatest();
   }, [meterIds.join(",")]);
+
 
   // Load initial daily peaks
   const [initialPeaks, setInitialPeaks] = useState<Record<string, number>>({});
