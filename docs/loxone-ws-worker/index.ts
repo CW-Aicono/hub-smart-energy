@@ -330,6 +330,10 @@ interface UuidEntry {
   bucket_sum: number;          // Summe aller Werte im Bucket (für avg)
   bucket_max: number;          // Max im Bucket
   bucket_count: number;        // Anzahl Samples im Bucket
+  // v1.13: abgeschlossene Buckets zwischenpuffern, damit der nächste
+  // eintreffende Wert den fertigen Bucket nicht überschreibt.
+  pending_buckets?: Array<{ bucket: number; sum: number; max: number; count: number }>;
+
   // v1.11: Auto-Klassifikation unbekannter States
   state_key?: string;          // Loxone-State-Name (z.B. "actual", "total", "Leistung")
   obs_count?: number;          // Anzahl beobachteter Samples
