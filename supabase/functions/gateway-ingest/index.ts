@@ -1713,6 +1713,7 @@ async function handleListLoxoneWsMeters(): Promise<Response> {
     .select(`
       id, name, energy_type, sensor_uuid, tenant_id, location_integration_id,
       power_state_uuid, power_state_key,
+      device_type, source_unit_power, source_unit_energy, brennwert, zustandszahl,
       location_integration:location_integrations!meters_location_integration_id_fkey (
         id, config, loxone_remote_connect_ws_enabled,
         integration:integrations!location_integrations_integration_id_fkey ( type )
