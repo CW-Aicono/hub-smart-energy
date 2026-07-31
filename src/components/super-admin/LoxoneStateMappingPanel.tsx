@@ -103,9 +103,11 @@ export default function LoxoneStateMappingPanel() {
     return blocks
       .map((b) => {
         const meter = b.meter_id ? meters[b.meter_id] : null;
-        const hasPwr = b.states.some((s) => s.role === "pwr");
+        const kind = momentaryKind(meter);
+        const hasPwr = b.states.some((s) => s.role === "pwr" || s.role === "flow");
         const explicit = meter?.power_state_uuid ?? null;
-        return { block: b, meter, hasPwr, explicit, isGap: !hasPwr && !explicit };
+        // Ohne erwarteten Momentanwert (z. B. Taster/Aktor) ist keine Zuordnung nötig.
+        return { block: b, meter, kind, hasPwr, explicit, isGap: !!kind && !hasPwr && !explicit };
       })
       .filter((r) => (onlyGaps ? r.isGap : true))
       .sort((a, b) => Number(b.isGap) - Number(a.isGap));
