@@ -1,5 +1,6 @@
 import { Navigate, useSearchParams } from "react-router-dom";
 import WorkerControlsPanel from "@/components/super-admin/WorkerControlsPanel";
+import LoxoneStateMappingPanel from "@/components/super-admin/LoxoneStateMappingPanel";
 import WorkerKeyPanel from "@/components/super-admin/WorkerKeyPanel";
 import GatewayWorkerStatusCard from "@/components/super-admin/GatewayWorkerStatusCard";
 import LoxonePollingOverviewCard from "@/components/super-admin/LoxonePollingOverviewCard";
@@ -745,7 +746,9 @@ const SuperAdminGatewayFleet = () => {
               <TabsTrigger value="jobs">Update-Jobs</TabsTrigger>
               <TabsTrigger value="channels">Release-Channels</TabsTrigger>
               <TabsTrigger value="workers">Worker-Steuerung</TabsTrigger>
+              <TabsTrigger value="mapping">State-Zuordnung</TabsTrigger>
               <TabsTrigger value="worker-key">Worker-Key</TabsTrigger>
+
             </TabsList>
 
             <TabsContent value="fleet" className="mt-4 space-y-4">
@@ -1084,6 +1087,11 @@ const SuperAdminGatewayFleet = () => {
             <TabsContent value="workers" className="mt-4">
               <WorkerControlsPanel />
             </TabsContent>
+
+            <TabsContent value="mapping" className="mt-4">
+              <LoxoneStateMappingPanel />
+            </TabsContent>
+
 
             <TabsContent value="worker-key" className="mt-4">
               <WorkerKeyPanel />

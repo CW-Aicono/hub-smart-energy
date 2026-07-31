@@ -88,7 +88,7 @@ const SESSION_HEARTBEAT_MS = Math.max(
 );
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "v1.13-bucket-buffer";
+const WORKER_VERSION = process.env.WORKER_VERSION || "v1.15-role-mapping";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -294,6 +294,9 @@ interface WsMeter {
   name: string;
   energy_type: string;
   sensor_uuid: string | null;
+  /** v1.15: explizit im Backend gesetzte State-UUID der Momentanleistung. */
+  power_state_uuid?: string | null;
+  power_state_key?: string | null;
   tenant_id: string;
   location_integration_id: string;
   location_integration: {
@@ -339,11 +342,15 @@ interface UuidEntry {
   // eintreffende Wert den fertigen Bucket nicht überschreibt.
   pending_buckets?: Array<{ bucket: number; sum: number; max: number; count: number }>;
 
-  // v1.11: Auto-Klassifikation unbekannter States
+  // v1.11: Beobachtung des Werteverlaufs (nur noch Diagnose + total-Erkennung).
+  // v1.15: Eine Beförderung zu "pwr" findet NICHT mehr statt.
   state_key?: string;          // Loxone-State-Name (z.B. "actual", "total", "Leistung")
   obs_count?: number;          // Anzahl beobachteter Samples
   obs_prev?: number | null;    // vorheriger Wert
   obs_decreased?: boolean;     // Wert ist mindestens einmal gefallen / war negativ
+  // v1.15: explizit im Backend gesetzte Leistungs-State-UUID des Zählers
+  explicit_pwr_uuid?: string | null;
+  explicit_pwr_key?: string | null;
 }
 
 interface ConnState {
@@ -726,7 +733,7 @@ async function connect(state: ConnState): Promise<void> {
       energy_type: string;
       control_type: string;
       control_name: string;
-      states: Array<{ key: string; role: string }>;
+      states: Array<{ key: string; role: string; uuid?: string }>;
     }> = [];
     for (const [blockUuid, baseEntry] of blockEntries) {
       const ctrl = findControl(blockUuid);
@@ -737,27 +744,51 @@ async function connect(state: ConnState): Promise<void> {
       let ambiguousPwr: { stateUuid: string; key: string } | null = null;
       let hasStrongPwr = false;
 
-      // v1.11: ALLE States eines Blocks einsammeln. Unbekannte Keys werden als
-      // role="aux" registriert und zur Laufzeit anhand des Werteverlaufs
-      // klassifiziert (fallend/negativ → Leistung, monoton steigend → Zählerstand).
-      // Vorher wurden sie verworfen — dadurch blieben ganze Blöcke stumm.
+      // v1.15: Alle States eines Blocks einsammeln. Unbekannte Keys werden als
+      // role="aux" registriert — sie dienen ausschließlich der Diagnose und
+      // werden NIE zur Momentanleistung befördert. Welcher State die Leistung
+      // liefert, entscheidet entweder die Loxone-Struktur (Name/Einheit) oder
+      // eine explizite Zuordnung am Zähler (power_state_uuid).
       const unknownEntries: Array<{ stateUuid: string; key: string }> = [];
+      const explicitPwrUuid = (baseEntry.explicit_pwr_uuid ?? null)?.toLowerCase() ?? null;
+      let explicitPwrKey: string | null = baseEntry.explicit_pwr_key ?? null;
+      let explicitPwrFound = false;
       if (states && typeof states === "object") {
         for (const [k, v] of Object.entries(states)) {
           if (typeof v !== "string") continue;
+          const stateUuid = v.toLowerCase();
+          // Höchste Priorität: manuell im Backend gesetzte Leistungs-State-UUID.
+          if (explicitPwrUuid && stateUuid === explicitPwrUuid) {
+            explicitPwrFound = true;
+            explicitPwrKey = explicitPwrKey ?? k;
+            stateEntries.push({ stateUuid, role: "pwr", key: k });
+            continue;
+          }
           const cls = classifyState(k);
           if (!cls) {
             if (IGNORED_STATE_RX.test(k)) continue;
-            unknownEntries.push({ stateUuid: v.toLowerCase(), key: k });
+            unknownEntries.push({ stateUuid, key: k });
             continue;
           }
           if (cls === "pwr_ambiguous") {
-            if (!ambiguousPwr) ambiguousPwr = { stateUuid: v.toLowerCase(), key: k };
+            if (!ambiguousPwr) ambiguousPwr = { stateUuid, key: k };
             continue;
           }
           if (cls === "pwr") hasStrongPwr = true;
-          stateEntries.push({ stateUuid: v.toLowerCase(), role: cls, key: k });
+          // Bei expliziter Zuordnung darf kein zweiter State als Leistung gelten.
+          if (cls === "pwr" && explicitPwrUuid) continue;
+          stateEntries.push({ stateUuid, role: cls, key: k });
         }
+      }
+      if (explicitPwrUuid && explicitPwrFound) {
+        hasStrongPwr = true;
+        ambiguousPwr = null;
+        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid}: pwr = explizite Zuordnung "${explicitPwrKey ?? "?"}"`);
+      } else if (explicitPwrUuid && !explicitPwrFound) {
+        log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid}: konfigurierte Leistungs-State-UUID ${explicitPwrUuid} nicht im Miniserver gefunden`);
+        bridgeLog("warn", "ws_explicit_pwr_missing", "Konfigurierte Leistungs-State-UUID existiert nicht mehr", state.serialNumber, {
+          block_uuid: blockUuid, meter_id: baseEntry.meter_id, power_state_uuid: explicitPwrUuid,
+        });
       }
 
       // Ambiguous-pwr NUR akzeptieren, wenn:
@@ -771,10 +802,8 @@ async function connect(state: ConnState): Promise<void> {
         log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): ambiguous pwr-key "${ambiguousPwr.key}" ignoriert (kein echter Momentanwert für ${baseEntry.energy_type})`);
       }
 
-      // v1.11: Wenn der Block keine erkennbare Leistung hat, die unbekannten
-      // States als Kandidaten (aux) aufnehmen. Für Wasser/Gas werden sie nie zu
-      // "pwr" befördert (v1.9-Lehre: Zählerstand ≠ Momentanleistung), können aber
-      // als Zählerstand (total) enden.
+      // v1.15: Unbekannte States werden weiterhin registriert, aber nur um sie
+      // in der Cloud sichtbar zu machen (Zuordnungs-UI). Sie liefern keine Werte.
       const hasPwrEntry = stateEntries.some((se) => se.role === "pwr");
       if (!hasPwrEntry && unknownEntries.length > 0) {
         for (const ue of unknownEntries) {
@@ -808,11 +837,11 @@ async function connect(state: ConnState): Promise<void> {
 
       // Dedup auf Rolle: falls mehrere Keys auf gleiche Rolle mappen, ersten nehmen
       const seenRoles = new Set<StateRole>();
-      const diagStates: Array<{ key: string; role: string }> = [];
+      const diagStates: Array<{ key: string; role: string; uuid?: string }> = [];
       for (const se of stateEntries) {
         // aux-Kandidaten dürfen mehrfach vorkommen (genau einer wird später "pwr")
         if (se.role !== "aux" && seenRoles.has(se.role)) {
-          diagStates.push({ key: se.key, role: `${se.role} (dup, verworfen)` });
+          diagStates.push({ key: se.key, role: `${se.role} (dup, verworfen)`, uuid: se.stateUuid });
           continue;
         }
         seenRoles.add(se.role);
@@ -832,13 +861,18 @@ async function connect(state: ConnState): Promise<void> {
           bucket_max: 0,
           bucket_count: 0,
         });
-        diagStates.push({ key: se.key, role: se.role });
+        diagStates.push({ key: se.key, role: se.role, uuid: se.stateUuid });
         totalSubs++;
       }
       // v1.12: auch die vom Klassifizierer ignorierten States protokollieren —
       // dort steckt bei „stummen" Blöcken oft der echte Leistungs-State.
+      // v1.15: inkl. State-UUID, damit die Zuordnung im Backend ohne Raten geht.
       const usedKeys = new Set(diagStates.map((d) => d.key));
-      for (const k of allStateKeys) if (!usedKeys.has(k)) diagStates.push({ key: k, role: "ignoriert" });
+      for (const k of allStateKeys) {
+        if (usedKeys.has(k)) continue;
+        const v = states && typeof states === "object" ? (states as Record<string, string>)[k] : undefined;
+        diagStates.push({ key: k, role: "ignoriert", uuid: typeof v === "string" ? v.toLowerCase() : undefined });
+      }
       blockDiag.push({
         block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
         control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
@@ -1126,21 +1160,11 @@ function classifyAux(state: ConnState, entry: UuidEntry, value: number): void {
   entry.obs_prev = value;
   if ((entry.obs_count ?? 0) < AUX_MIN_SAMPLES) return;
 
-  const et = (entry.energy_type ?? "").toLowerCase();
-  const flowLike = et === "wasser" || et === "gas" || et === "water";
-
-  if (entry.obs_decreased && !flowLike) {
-    if (blockHasRole(state, entry.block_uuid, "pwr")) return; // anderer State war schneller
-    if (isSpike(value, entry.energy_type, "pwr")) return;     // implausibel → kein pwr
-    entry.role = "pwr";
-    entry.bucket_start = 0; entry.bucket_sum = 0; entry.bucket_max = 0; entry.bucket_count = 0;
-    log("info", `[AutoMap] ${state.serialNumber} block ${entry.block_uuid} state "${entry.state_key}" → pwr (Werteverlauf schwankend)`);
-    bridgeLog("warn", "ws_automap_pwr", `State "${entry.state_key}" als Momentanleistung erkannt`, state.serialNumber, {
-      block_uuid: entry.block_uuid, meter_id: entry.meter_id, state_key: entry.state_key, sample: value,
-    });
-    return;
-  }
-
+  // v1.15: KEINE Beförderung zu "pwr" mehr. Ein kumulativer Zählerstand fällt
+  // bei Reset/Neustart/Überlauf ebenfalls — genau daran ist die alte Heuristik
+  // gescheitert und hat Zählerstände als Leistung in die 5-Min-Reihe geschrieben.
+  // Ein State wird nur noch dann Leistung, wenn Loxone ihn eindeutig so benennt
+  // oder ein Admin ihn dem Zähler explizit zuordnet (meters.power_state_uuid).
   if (!entry.obs_decreased && (entry.obs_count ?? 0) >= AUX_MIN_SAMPLES && value > 0) {
     if (blockHasRole(state, entry.block_uuid, "total")) return;
     entry.role = "total";
@@ -1383,6 +1407,8 @@ async function reloadMeters(): Promise<void> {
           energy_type: m.energy_type,
           block_uuid: blockUuid,
           role: "pwr",                    // wird in connect() durch LoxAPP3-Expansion ersetzt
+          explicit_pwr_uuid: m.power_state_uuid ? m.power_state_uuid.toLowerCase() : null,
+          explicit_pwr_key: m.power_state_key ?? null,
           latest_value: null,
           last_pushed_value: null,
           last_pushed_at: 0,
