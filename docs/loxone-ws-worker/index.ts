@@ -696,6 +696,16 @@ async function connect(state: ConnState): Promise<void> {
       }
       return undefined;
     };
+    // v1.12: Diagnose-Sammler — pro Block ALLE States inkl. zugewiesener Rolle,
+    // damit in der Cloud sichtbar ist, welcher State die Leistung liefert.
+    const blockDiag: Array<{
+      block_uuid: string;
+      meter_id: string;
+      energy_type: string;
+      control_type: string;
+      control_name: string;
+      states: Array<{ key: string; role: string }>;
+    }> = [];
     for (const [blockUuid, baseEntry] of blockEntries) {
       const ctrl = findControl(blockUuid);
       const states = ctrl?.states as Record<string, string> | undefined;
