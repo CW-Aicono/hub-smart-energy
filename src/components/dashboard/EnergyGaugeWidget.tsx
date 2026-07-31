@@ -163,41 +163,17 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
     const fetchPeaks = async () => {
       const today = new Date();
       const peaks: Record<string, number> = {};
-      const dayStart = startOfDay(today).toISOString();
-      const dayEnd = endOfDay(today).toISOString();
-
-      // Primärquelle: 5-Min-Aggregat (power_max). Die Rohtabelle wird für
-      // Worker-Zähler nicht mehr durchgängig befüllt und liefert allein
-      // einen viel zu niedrigen Tages-Peak.
-      const { data: agg } = await supabase
-        .from("meter_power_readings_5min")
-        .select("meter_id, power_max, power_avg")
-        .in("meter_id", meterIds)
-        .gte("bucket", dayStart)
-        .lte("bucket", dayEnd);
-      for (const row of agg ?? []) {
-        const v = Math.abs(Number(row.power_max ?? row.power_avg ?? 0));
+      // Ein Sammel-Aufruf: liefert je Zähler das Maximum aus 5-Min-Aggregat
+      // und Rohwerten (Polling-Ingest-Zähler) in einem Rutsch.
+      const { data } = await supabase.rpc("get_meter_power_gauge_seed" as any, {
+        _meter_ids: meterIds,
+        _fresh_cutoff: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+        _day_start: startOfDay(today).toISOString(),
+        _day_end: endOfDay(today).toISOString(),
+      });
+      for (const row of (data ?? []) as any[]) {
+        const v = Math.abs(Number(row.peak_abs ?? 0));
         if (v > (peaks[row.meter_id] ?? 0)) peaks[row.meter_id] = v;
-      }
-
-      // Top-up aus Rohwerten (Polling-Ingest-Zähler, jüngste Minuten).
-      const peakResults = await Promise.all(
-        meterIds.map((mid) =>
-          supabase
-            .from("meter_power_readings")
-            .select("meter_id, power_value")
-            .eq("meter_id", mid)
-            .gte("recorded_at", dayStart)
-            .lte("recorded_at", dayEnd)
-            .order("power_value", { ascending: false })
-            .limit(1),
-        ),
-      );
-      for (const res of peakResults) {
-        for (const row of res.data ?? []) {
-          const v = Math.abs(Number(row.power_value ?? 0));
-          if (v > (peaks[row.meter_id] ?? 0)) peaks[row.meter_id] = v;
-        }
       }
 
       setInitialPeaks(peaks);
@@ -206,6 +182,7 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
 
     fetchPeaks();
   }, [meterIds.join(",")]);
+
 
   const handleResetPeaks = useCallback(() => {
     resetPeaks();
