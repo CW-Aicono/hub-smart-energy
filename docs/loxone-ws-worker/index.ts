@@ -600,14 +600,20 @@ async function connect(state: ConnState): Promise<void> {
       for (const ev of (events || [])) {
         const uuid = (ev?.uuid || "").toLowerCase();
         const entry = state.uuidMap.get(uuid);
-        if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type, entry.role)) {
-          if (entry.role === "aux") classifyAux(state, entry, ev.value);
-          entry.latest_value = ev.value;
+        if (!entry || typeof ev.value !== "number") continue;
+        // v1.16: Gas — Loxone liefert m³/h, wir rechnen mit Brennwert ×
+        // Zustandszahl in kW um (Einheit von Loxone ist irrelevant).
+        const rawValue = (entry.role === "pwr" && entry.gas_kwh_per_m3)
+          ? ev.value * entry.gas_kwh_per_m3
+          : ev.value;
+        if (!isSpike(rawValue, entry.energy_type, entry.role)) {
+          if (entry.role === "aux") classifyAux(state, entry, rawValue);
+          entry.latest_value = rawValue;
           state.eventsReceived++;
           state.lastEventAt = Date.now();
-          // v1.5: Bucket-Aggregation für Power. Zählerstände (kWh) werden
-          // separat behandelt und laufen nicht in meter_power_readings_5min.
-          if (entry.role === "pwr") {
+          // v1.5: Bucket-Aggregation für Momentanwerte (Leistung/Durchfluss).
+          // Zählerstände (kWh) laufen nicht in meter_power_readings_5min.
+          if (entry.role === "pwr" || entry.role === "flow") {
             const bucket = Math.floor(Date.now() / 300000) * 300000;
             if (entry.bucket_start !== bucket) {
               // v1.13: Bucket-Wechsel — den fertigen Bucket zwischenpuffern,
