@@ -2297,40 +2297,22 @@ function HouseSelfSufficiencyPanel({
     enabled: involvedMeterIds.length > 0 && (pvNodes.length > 0 || gridNodes.length > 0),
     staleTime: 30_000,
     queryFn: async () => {
-      const since = new Date(visibleStartMs).toISOString();
+      const since = new Date(visibleStartMs);
       const result: Record<string, { t: number; kw: number }[]> = {};
-      await Promise.all(
-        involvedMeterIds.map(async (mid) => {
-          const { data } = await supabase
-            .from("meter_power_readings")
-            .select("recorded_at, power_value")
-            .eq("meter_id", mid)
-            .gte("recorded_at", since)
-            .order("recorded_at", { ascending: true })
-            .limit(3000);
-          let rows = (data ?? []).map((r: any) => ({
-            t: new Date(r.recorded_at).getTime(),
-            kw: Number(r.power_value),
-          }));
-          // Fallback: worker-only meters (no raw rows) → 5-min buckets.
-          if (rows.length === 0) {
-            const { data: agg } = await supabase
-              .from("meter_power_readings_5min")
-              .select("bucket, power_avg")
-              .eq("meter_id", mid)
-              .gte("bucket", since)
-              .order("bucket", { ascending: true })
-              .limit(3000);
-            rows = (agg ?? [])
-              .filter((r: any) => r.power_avg != null)
-              .map((r: any) => ({
-                t: new Date(r.bucket).getTime(),
-                kw: Number(r.power_avg),
-              }));
-          }
-          result[mid] = rows;
-        }),
-      );
+      // Aggregat-Serie als Primärquelle (siehe Sparkline oben).
+      const series = await fetchPowerSeriesAuto(involvedMeterIds, since, new Date(), 3000);
+      for (const mid of involvedMeterIds) result[mid] = [];
+      for (const row of series) {
+        if (row.power_avg == null) continue;
+        (result[row.meter_id] ??= []).push({
+          t: new Date(row.bucket).getTime(),
+          kw: Number(row.power_avg),
+        });
+      }
+      for (const mid of Object.keys(result)) {
+        result[mid].sort((a, b) => a.t - b.t);
+      }
+
 
       return result;
     },
