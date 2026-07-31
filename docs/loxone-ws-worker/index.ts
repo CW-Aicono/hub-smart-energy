@@ -303,6 +303,12 @@ interface WsMeter {
   /** v1.15: explizit im Backend gesetzte State-UUID der Momentanleistung. */
   power_state_uuid?: string | null;
   power_state_key?: string | null;
+  /** v1.16: Konfiguration der Messstelle bestimmt die Rolle (nicht Loxone). */
+  device_type?: string | null;
+  source_unit_power?: string | null;
+  source_unit_energy?: string | null;
+  brennwert?: number | null;
+  zustandszahl?: number | null;
   tenant_id: string;
   location_integration_id: string;
   location_integration: {
@@ -320,6 +326,7 @@ interface WsIntegration {
 
 // Rolle einer State-UUID innerhalb eines Loxone-Blocks
 //   pwr     → momentane Leistung (kW)
+//   flow    → momentaner Durchfluss (m³/h, l/min …) — z. B. Wasser (Impulszähler)
 //   today   → Tagesverbrauch (kWh)
 //   total   → Zählerstand gesamt (kWh)
 //   month   → Monatsverbrauch (kWh, optional)
@@ -327,7 +334,46 @@ interface WsIntegration {
 //   soc     → Speicher-Ladezustand / Storage level (%, Slvl)
 //   aux     → noch nicht klassifizierter State (v1.11): wird zur Laufzeit
 //             anhand des Werteverlaufs zu "pwr" oder "total" befördert
-type StateRole = "pwr" | "today" | "total" | "month" | "year" | "soc" | "aux";
+type StateRole = "pwr" | "flow" | "today" | "total" | "month" | "year" | "soc" | "aux";
+
+/**
+ * v1.16: Die von Loxone gelieferte Einheit ist irrelevant. Maßgeblich ist
+ * ausschließlich die Konfiguration der Messstelle in unserer DB.
+ *   - Aktoren/Sensoren mit bool-Einheit  → kein Momentanwert
+ *   - source_unit_power kW/W/MW          → "pwr"
+ *   - source_unit_power m³/h, l/min, …   → "flow"
+ *   - Fallback über energy_type
+ */
+function deriveMomentaryRole(m: {
+  device_type?: string | null;
+  energy_type?: string | null;
+  source_unit_power?: string | null;
+}): StateRole | null {
+  const dt = (m.device_type ?? "").toLowerCase();
+  const up = (m.source_unit_power ?? "").toLowerCase().replace(/\s/g, "");
+  if (dt === "actuator" || dt === "sensor") {
+    if (!up || up === "bool" || up === "an/aus" || up === "on/off") return null;
+  }
+  if (!up || up === "bool" || up === "an/aus" || up === "on/off") {
+    const et = (m.energy_type ?? "").toLowerCase();
+    if (et === "wasser" || et === "water" || et === "gas") return "flow";
+    if (!up) return "pwr";
+    return null;
+  }
+  if (/^(kw|w|mw|kva|va)$/.test(up)) return "pwr";
+  if (/(m3|m³)\/h|l\/(min|h|s)|lpm/.test(up)) return "flow";
+  return "pwr";
+}
+
+/** kWh je m³ Gas aus Brennwert × Zustandszahl (DVGW-Formel). */
+function gasKwhPerM3(m: { energy_type?: string | null; brennwert?: number | null; zustandszahl?: number | null }): number | null {
+  const et = (m.energy_type ?? "").toLowerCase();
+  if (et !== "gas") return null;
+  const bw = Number(m.brennwert);
+  const zz = Number(m.zustandszahl);
+  if (!isFinite(bw) || bw <= 0) return null;
+  return bw * (isFinite(zz) && zz > 0 ? zz : 1);
+}
 
 interface UuidEntry {
   meter_id: string;
@@ -357,6 +403,9 @@ interface UuidEntry {
   // v1.15: explizit im Backend gesetzte Leistungs-State-UUID des Zählers
   explicit_pwr_uuid?: string | null;
   explicit_pwr_key?: string | null;
+  // v1.16: aus der Messstellen-Konfiguration abgeleitet
+  momentary_role?: StateRole | null;   // "pwr" | "flow" | null (kein Momentanwert)
+  gas_kwh_per_m3?: number | null;      // Gas: m³/h → kW Umrechnungsfaktor
 }
 
 interface ConnState {
