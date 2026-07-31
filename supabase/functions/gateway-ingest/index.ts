@@ -1384,9 +1384,10 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
 
   // Phase 7: rollenbasiertes Routing
   //  - role="pwr" (Default)  → bridge_raw_samples (für 5-Min-Aggregator) + Broadcast
+  //  - role="flow" (v1.16)   → wie pwr, aber Momentanwert in m³/h (Wasser)
   //  - role="soc"            → energy_storages.current_soc_pct + Broadcast
   //  - andere Rollen          → nur Broadcast (kein DB-Write); UI nutzt den Wert live in KPI-Kacheln
-  type Role = "pwr" | "today" | "total" | "month" | "year" | "soc";
+  type Role = "pwr" | "flow" | "today" | "total" | "month" | "year" | "soc";
   const rawRows: any[] = [];
   const broadcastRows: Array<{ tenant_id: string | null; uuid: string; value: number; at: string; role: Role }> = [];
   const socRows: Array<{ tenant_id: string; uuid: string; value: number; at: string }> = [];
@@ -1409,7 +1410,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
     const uuid = r.sensor_uuid.toLowerCase();
     const at = r.recorded_at ?? new Date().toISOString();
     broadcastRows.push({ tenant_id: link?.tenant_id ?? null, uuid, value: r.value, at, role });
-    if (role === "pwr") {
+    if (role === "pwr" || role === "flow") {
       const key = `${r.miniserver_serial}|${uuid}`;
       if (lastByUuid.has(key)) coalesced++;
       lastByUuid.set(key, { value: r.value, at, role, miniserver_serial: r.miniserver_serial });
