@@ -83,7 +83,7 @@ const SESSION_HEARTBEAT_MS = Math.max(
 );
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "v1.11-auto-mapping";
+const WORKER_VERSION = process.env.WORKER_VERSION || "v1.12-block-diagnose";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -696,9 +696,21 @@ async function connect(state: ConnState): Promise<void> {
       }
       return undefined;
     };
+    // v1.12: Diagnose-Sammler — pro Block ALLE States inkl. zugewiesener Rolle,
+    // damit in der Cloud sichtbar ist, welcher State die Leistung liefert.
+    const blockDiag: Array<{
+      block_uuid: string;
+      meter_id: string;
+      energy_type: string;
+      control_type: string;
+      control_name: string;
+      states: Array<{ key: string; role: string }>;
+    }> = [];
     for (const [blockUuid, baseEntry] of blockEntries) {
       const ctrl = findControl(blockUuid);
       const states = ctrl?.states as Record<string, string> | undefined;
+      // v1.12: vollständige State-Liste des Blocks (für Diagnose-Events)
+      const allStateKeys: string[] = states && typeof states === "object" ? Object.keys(states) : [];
       const stateEntries: Array<{ stateUuid: string; role: StateRole; key: string }> = [];
       let ambiguousPwr: { stateUuid: string; key: string } | null = null;
       let hasStrongPwr = false;
@@ -753,20 +765,34 @@ async function connect(state: ConnState): Promise<void> {
           // v1.9: Fallback deaktiviert für Wasser/Gas — sonst würde der kumulative
           // Zählerstand als Momentanleistung interpretiert (660-kW-Spikes im Chart).
           log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): kein verwertbarer State — Block wird ignoriert (Fallback deaktiviert für Fluss-Medien)`);
+          blockDiag.push({
+            block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
+            control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
+            states: allStateKeys.map((k) => ({ key: k, role: "ignored" })),
+          });
           continue;
         }
         // Fallback: Block-UUID direkt als pwr behandeln (alte Logik) — nur für Strom/Wärme.
         state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: "pwr" });
         blocksFallback++;
         totalSubs++;
+        blockDiag.push({
+          block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
+          control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
+          states: [{ key: "(block-fallback)", role: "pwr" }],
+        });
         continue;
       }
 
       // Dedup auf Rolle: falls mehrere Keys auf gleiche Rolle mappen, ersten nehmen
       const seenRoles = new Set<StateRole>();
+      const diagStates: Array<{ key: string; role: string }> = [];
       for (const se of stateEntries) {
         // aux-Kandidaten dürfen mehrfach vorkommen (genau einer wird später "pwr")
-        if (se.role !== "aux" && seenRoles.has(se.role)) continue;
+        if (se.role !== "aux" && seenRoles.has(se.role)) {
+          diagStates.push({ key: se.key, role: `${se.role} (dup, verworfen)` });
+          continue;
+        }
         seenRoles.add(se.role);
         state.uuidMap.set(se.stateUuid, {
           ...baseEntry,
@@ -784,8 +810,18 @@ async function connect(state: ConnState): Promise<void> {
           bucket_max: 0,
           bucket_count: 0,
         });
+        diagStates.push({ key: se.key, role: se.role });
         totalSubs++;
       }
+      // v1.12: auch die vom Klassifizierer ignorierten States protokollieren —
+      // dort steckt bei „stummen" Blöcken oft der echte Leistungs-State.
+      const usedKeys = new Set(diagStates.map((d) => d.key));
+      for (const k of allStateKeys) if (!usedKeys.has(k)) diagStates.push({ key: k, role: "ignoriert" });
+      blockDiag.push({
+        block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
+        control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
+        states: diagStates,
+      });
       blocksMapped++;
       log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} → ${[...seenRoles].join(",")} (type=${ctrl?.type ?? "?"}, energy_type=${baseEntry.energy_type})`);
     }
@@ -805,6 +841,61 @@ async function connect(state: ConnState): Promise<void> {
       log("warn", `[WS] ${state.serialNumber} ${gaps.length} Block(s) ohne Momentanleistung — Auto-Klassifikation läuft`);
       bridgeLog("warn", "ws_mapping_gap", `${gaps.length} Block(s) ohne erkannte Momentanleistung`, state.serialNumber, { gaps: gaps.slice(0, 50) });
     }
+
+    // ── v1.12: Block-State-Diagnose ────────────────────────────────────────
+    // Pro Block ALLE Loxone-State-Namen samt zugewiesener Rolle in die Cloud
+    // melden (severity=warn → landet in bridge_event_log). Damit lässt sich die
+    // Mapping-Lücke ohne Raten schließen. In Chunks, damit die Payload klein bleibt.
+    {
+      const CHUNK = 12;
+      for (let i = 0; i < blockDiag.length; i += CHUNK) {
+        const chunk = blockDiag.slice(i, i + CHUNK);
+        void bridgeLog(
+          "warn",
+          "ws_block_states",
+          `Block-States ${i + 1}-${i + chunk.length} von ${blockDiag.length}`,
+          state.serialNumber,
+          { part: Math.floor(i / CHUNK) + 1, total_blocks: blockDiag.length, blocks: chunk },
+        );
+      }
+    }
+
+    // v1.12: 60 s nach Verbindungsaufbau die ersten Echtwerte je State melden —
+    // schwankend/negativ ⇒ Leistung, monoton steigend ⇒ Zählerstand.
+    const diagSerial = state.serialNumber;
+    setTimeout(() => {
+      const cur = connections.get(diagSerial);
+      if (!cur || !cur.authenticated) return;
+      const byBlock = new Map<string, Array<Record<string, unknown>>>();
+      for (const e of cur.uuidMap.values()) {
+        const arr = byBlock.get(e.block_uuid) ?? [];
+        arr.push({
+          key: e.state_key ?? "(block)",
+          role: e.role,
+          value: e.latest_value,
+          obs_count: e.obs_count ?? 0,
+          decreased: e.obs_decreased ?? false,
+        });
+        byBlock.set(e.block_uuid, arr);
+      }
+      const rows = Array.from(byBlock.entries()).map(([block_uuid, sts]) => {
+        const any = Array.from(cur.uuidMap.values()).find((e) => e.block_uuid === block_uuid);
+        return { block_uuid, meter_id: any?.meter_id, energy_type: any?.energy_type, states: sts };
+      });
+      const CHUNK = 12;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK);
+        void bridgeLog(
+          "warn",
+          "ws_block_state_values",
+          `Werte-Snapshot ${i + 1}-${i + chunk.length} von ${rows.length} (60 s nach Verbindung)`,
+          diagSerial,
+          { part: Math.floor(i / CHUNK) + 1, total_blocks: rows.length, blocks: chunk },
+        );
+      }
+    }, 60000);
+
+
 
     log("info", `[WS] ${state.serialNumber} LoxAPP3-Mapping: blocks=${blockEntries.length}, mapped=${blocksMapped}, fallback=${blocksFallback}, totalStateUuids=${totalSubs}`);
     bridgeLog("info", "ws_connected", `Verbunden, ${totalSubs} State-UUIDs aus ${blockEntries.length} Blöcken (mapped=${blocksMapped}, fallback=${blocksFallback})`, state.serialNumber, { blocks: blockEntries.length, mapped: blocksMapped, fallback: blocksFallback, totalStateUuids: totalSubs });
