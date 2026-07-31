@@ -149,9 +149,10 @@ export default function LoxoneStateMappingPanel() {
             )}
           </CardTitle>
           <CardDescription>
-            Der Worker rät keine Rollen mehr. Blöcke ohne eindeutigen Leistungs-State werden hier
-            gelistet und einmalig fest zugeordnet — damit landen nie wieder Zählerstände in der
-            Leistungsreihe.
+            Der Worker rät keine Rollen mehr. Ob ein Block einen Momentanwert liefert und ob dieser
+            Leistung (kW) oder Durchfluss (m³/h) ist, entscheidet die Einheit in der Messstelle.
+            Nur wenn der passende State im Loxone-Block nicht eindeutig ist, wird er hier gelistet
+            und einmalig fest zugeordnet.
           </CardDescription>
         </div>
         <div className="flex items-center gap-2">
