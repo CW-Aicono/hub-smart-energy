@@ -1495,7 +1495,7 @@ async function handleBridgeReadings(req: Request): Promise<Response> {
   // SOC-Werte persistieren: Loxone liefert Slvl am Speicher-Zählerblock. Der Worker
   // sendet deshalb die Speicher-Block-UUID; hier wird sie auf meter → storage gemappt.
   let socUpdated = 0;
-  if (socRows.length > 0) {
+  if (!liveOnly && socRows.length > 0) {
     const tenants = [...new Set(socRows.map((r) => r.tenant_id))];
     const uuids = [...new Set(socRows.map((r) => r.uuid))];
     const { data: meters } = await supabase
