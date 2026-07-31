@@ -802,15 +802,17 @@ async function connect(state: ConnState): Promise<void> {
       const explicitPwrUuid = (baseEntry.explicit_pwr_uuid ?? null)?.toLowerCase() ?? null;
       let explicitPwrKey: string | null = baseEntry.explicit_pwr_key ?? null;
       let explicitPwrFound = false;
+      // v1.16: Momentanwert-Rolle kommt aus der Messstellen-Konfiguration.
+      const momRole: StateRole | null = baseEntry.momentary_role ?? null;
       if (states && typeof states === "object") {
         for (const [k, v] of Object.entries(states)) {
           if (typeof v !== "string") continue;
           const stateUuid = v.toLowerCase();
-          // Höchste Priorität: manuell im Backend gesetzte Leistungs-State-UUID.
+          // Höchste Priorität: manuell im Backend gesetzte Momentanwert-State-UUID.
           if (explicitPwrUuid && stateUuid === explicitPwrUuid) {
             explicitPwrFound = true;
             explicitPwrKey = explicitPwrKey ?? k;
-            stateEntries.push({ stateUuid, role: "pwr", key: k });
+            if (momRole) stateEntries.push({ stateUuid, role: momRole, key: k });
             continue;
           }
           const cls = classifyState(k);
@@ -823,6 +825,15 @@ async function connect(state: ConnState): Promise<void> {
             if (!ambiguousPwr) ambiguousPwr = { stateUuid, key: k };
             continue;
           }
+          if (cls === "pwr") hasStrongPwr = true;
+          // Bei expliziter Zuordnung darf kein zweiter State als Momentanwert gelten.
+          if (cls === "pwr" && explicitPwrUuid) continue;
+          // Konfiguriert der Zähler keinen Momentanwert (z. B. Aktor/Taster),
+          // wird ein „pwr"-benannter State nicht als Messwert übernommen.
+          if (cls === "pwr" && !momRole) continue;
+          stateEntries.push({ stateUuid, role: cls === "pwr" ? momRole! : cls, key: k });
+        }
+      }
           if (cls === "pwr") hasStrongPwr = true;
           // Bei expliziter Zuordnung darf kein zweiter State als Leistung gelten.
           if (cls === "pwr" && explicitPwrUuid) continue;
