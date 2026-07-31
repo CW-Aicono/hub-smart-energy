@@ -409,7 +409,13 @@ const ChargingUsersTab = () => {
                       const status = (g.status ?? "active") as string;
                       return (
                         <TableRow key={g.id}>
-                          <TableCell className="font-medium">{g.name}</TableCell>
+                          <TableCell className="font-medium">
+                            {isAdmin ? (
+                              <button type="button" onClick={() => openEditGroup(g)} className="text-left hover:underline focus:outline-none focus-visible:underline">
+                                {g.name}
+                              </button>
+                            ) : g.name}
+                          </TableCell>
                           <TableCell>{g.description || "—"}</TableCell>
                           <TableCell className="text-sm">{getTariffName(g.tariff_id) || <span className="text-muted-foreground">—</span>}</TableCell>
                           <TableCell>
