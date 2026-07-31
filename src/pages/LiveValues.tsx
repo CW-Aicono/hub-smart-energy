@@ -485,6 +485,8 @@ const LiveValues = () => {
           totalYear: periods.totalYear ?? existing?.totalYear ?? null,
           meterReading: dbReading ?? existing?.meterReading ?? null,
           meterReadingUnit: existing?.meterReadingUnit ?? "kWh",
+          at: chosen?.at ?? existing?.at ?? null,
+
         });
       }
       return next;
