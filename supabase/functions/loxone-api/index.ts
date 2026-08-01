@@ -2614,7 +2614,9 @@ serve(async (req) => {
               const chunk = fiveMinInserts.slice(i, i + 500);
               const { error: insertError } = await supabase
                 .from("meter_power_readings_5min")
-                .upsert(chunk, { onConflict: "meter_id,bucket", ignoreDuplicates: isRange });
+                // Unique-Index der partitionierten Tabelle:
+                // (meter_id, bucket, resolution_minutes) — alle drei Spalten nötig.
+                .upsert(chunk, { onConflict: "meter_id,bucket,resolution_minutes", ignoreDuplicates: isRange });
               if (insertError) {
                 console.error(`Error upserting 5min data for ${file.filename}:`, insertError);
                 errors.push(`${file.filename}: ${insertError.message}`);

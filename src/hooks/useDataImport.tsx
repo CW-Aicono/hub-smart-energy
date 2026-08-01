@@ -297,13 +297,15 @@ export function useDataImport() {
               power_avg: r.value,
               power_max: r.value,
               sample_count: 1,
+              resolution_minutes: 5,
               energy_type: r.energyType || "strom",
             }));
             const q = supabase.from("meter_power_readings_5min");
+            // Unique-Index: (meter_id, bucket, resolution_minutes)
             if (conflictStrategy === "overwrite") {
-              ({ error } = await q.upsert(inserts, { onConflict: "meter_id,bucket" }));
+              ({ error } = await q.upsert(inserts, { onConflict: "meter_id,bucket,resolution_minutes" }));
             } else {
-              ({ error } = await q.upsert(inserts, { onConflict: "meter_id,bucket", ignoreDuplicates: true }));
+              ({ error } = await q.upsert(inserts, { onConflict: "meter_id,bucket,resolution_minutes", ignoreDuplicates: true }));
             }
           }
 

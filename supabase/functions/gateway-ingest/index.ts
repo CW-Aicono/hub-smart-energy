@@ -634,11 +634,13 @@ async function handleCompactDay(req: Request): Promise<Response> {
   const compactedRows = Array.from(buckets.values()).map((b) => ({
     meter_id: b.meter_id, tenant_id: b.tenant_id, energy_type: b.energy_type,
     bucket: b.bucket, power_avg: b.sum / b.count, power_max: b.max, sample_count: b.count,
+    resolution_minutes: 5,
   }));
 
   const { error: upsertError } = await supabase
     .from("meter_power_readings_5min")
-    .upsert(compactedRows, { onConflict: "meter_id,bucket" });
+    // Unique-Index: (meter_id, bucket, resolution_minutes)
+    .upsert(compactedRows, { onConflict: "meter_id,bucket,resolution_minutes" });
 
   if (upsertError) {
     console.error("[compact-day] upsert error:", upsertError.message);
