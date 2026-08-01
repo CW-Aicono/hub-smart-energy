@@ -130,7 +130,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
       if (energyType === "wasser") {
         (totals as any)[energyType] += rawVal;
       } else {
-        (totals as any)[energyType] += toWh(rawVal, energyType, m.unit, m.gas_type ?? null, m.brennwert ?? null, m.zustandszahl ?? null);
+        (totals as any)[energyType] += toWh(rawVal, energyType, m);
       }
     });
 
@@ -144,7 +144,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
         if (energyType === "wasser") {
           (totals as any)[energyType] += r.value;
         } else {
-          (totals as any)[energyType] += toWh(r.value, energyType, meta.unit, meta.gas_type, meta.brennwert, meta.zustandszahl);
+          (totals as any)[energyType] += toWh(r.value, energyType, meta);
         }
       }
     });
