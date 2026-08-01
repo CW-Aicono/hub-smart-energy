@@ -208,6 +208,10 @@ serve(async (req) => {
             gapErrors.push(`${gap.from.toISOString()}: ${json?.error || resp.status}`);
           } else {
             filled += Number(json?.backfilled ?? 0);
+            // Teilfehler der Gateway-Function nicht verschlucken
+            for (const e of (json?.errors || []).slice(0, 3)) {
+              gapErrors.push(`${gap.from.toISOString()}: ${e}`);
+            }
           }
         } catch (e) {
           gapErrors.push(`${gap.from.toISOString()}: ${(e as Error).message}`);
