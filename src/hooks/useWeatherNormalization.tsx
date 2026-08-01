@@ -150,9 +150,8 @@ export function useWeatherNormalization({
       const toWh = (rawValue: number, meterId: string): number => {
         const m = meterMap[meterId];
         if (!m) return rawValue * 1000;
-        if (energyType === "gas" && m.unit === "m³") {
-          const kWh = gasM3ToKWh(rawValue, m.gas_type, m.brennwert, m.zustandszahl);
-          return kWh * 1000;
+        if (energyType === "gas") {
+          return resolveMeterEnergyKWh({ ...m, energy_type: "gas" }, rawValue) * 1000;
         }
         return rawValue * 1000;
       };
