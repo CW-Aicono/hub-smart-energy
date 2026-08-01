@@ -51,6 +51,8 @@ Bei Hetzner/Live/Server/DB/Worker-Themen immer laiengerecht: Alltagssprache, kla
 - [QA Testing Strategy](mem://technical/testing/qa-and-testing-strategy) — 6-batch Vitest testing, Edge integration tests
 - [Mobile Header Layout](mem://style/mobile-header-navigation-layout) — MobileHeader inside DashboardSidebar only
 - [PV Yield Forecasting](mem://features/energy-data/pv-yield-forecasting) — GTI-model via Open-Meteo, resilient fetch, fallback
+- [PV-Stundenwerte & Lückenabgleich](mem://features/energy-data/pv-hourly-gap-reconciliation) — Step-Hold-Backfill, Abgleich nur auf nachgetragenen Stunden
+
 - [EMS Copilot](mem://features/analysis/ems-copilot-functions) — Savings potentials (operational) and investment advisor (ROI)
 - [Dashboard Optimization](mem://technical/performance/dashboard-optimization-policy) — useTransition, stale-request filtering, select component
 - [Meter Management](mem://features/energy-data/meter-management-and-tracking) — Manual/auto meters, 2D/3D floorplan labels, gas m3 -> kWh
