@@ -24,19 +24,14 @@ docker exec -i supabase-db psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1
 -- A) Hoechste vergebene Job-Nummer
 SELECT max(jobid) AS hoechste_job_nummer FROM cron.job;
 
--- B) Name und Stand des Zaehlers, der neue Job-Nummern vergibt
+-- B) Name des Zaehlers, der neue Job-Nummern vergibt
 SELECT pg_get_serial_sequence('cron.job', 'jobid') AS zaehler_name;
 
-SELECT last_value AS zaehler_stand, is_called AS bereits_benutzt
-FROM pg_sequences s
-JOIN LATERAL (
-  SELECT last_value, is_called
-  FROM pg_catalog.pg_sequence_last_value(
-    format('%I.%I', s.schemaname, s.sequencename)::regclass
-  ) AS last_value, LATERAL (SELECT true) AS t(is_called)
-) q ON true
-WHERE format('%I.%I', s.schemaname, s.sequencename)
-      = pg_get_serial_sequence('cron.job', 'jobid');
+-- B2) Stand aller Zaehler im cron-Schema
+SELECT schemaname, sequencename, last_value AS zaehler_stand
+FROM pg_sequences
+WHERE schemaname = 'cron';
+
 
 
 -- C) Welcher Job blockiert die Nummer 122?
