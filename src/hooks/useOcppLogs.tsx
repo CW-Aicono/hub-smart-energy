@@ -26,6 +26,7 @@ export function useOcppLogs(
   messageTypeFilter?: string,
 ) {
   const [logs, setLogs] = useState<OcppLogEntry[]>([]);
+  const [latestAt, setLatestAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
