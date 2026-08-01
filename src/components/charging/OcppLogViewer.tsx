@@ -37,18 +37,26 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chargePointId, chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId)?.id, chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId)?.ocpp_id]);
 
-  const { logs, loading, paused, setPaused, refetch } = useOcppLogs(logIds, messageTypeFilter);
+  const { logs, latestAt, loading, paused, setPaused, refetch } = useOcppLogs(logIds, messageTypeFilter);
 
-  // Warnhinweis, wenn zwar Logs existieren, aber seit >15 Minuten nichts Neues ankommt.
+  // Warnhinweis nur, wenn insgesamt (über alle Nachrichtentypen) seit >15 Minuten
+  // nichts mehr ankommt. Ein aktiver Typfilter darf keinen Fehlalarm auslösen.
   const staleMinutes = React.useMemo(() => {
-    if (loading || logs.length === 0) return null;
+    if (loading || !latestAt) return null;
+    const newest = new Date(latestAt).getTime();
+    if (!newest) return null;
+    return Math.floor((Date.now() - newest) / 60000);
+  }, [latestAt, loading]);
+
+  // Alter des neuesten Eintrags im aktuell gefilterten Typ (nur Info, keine Warnung).
+  const filteredNewestAt = React.useMemo(() => {
+    if (logs.length === 0) return null;
     const newest = logs.reduce(
       (max, l) => Math.max(max, new Date(l.created_at).getTime()),
       0,
     );
-    if (!newest) return null;
-    return Math.floor((Date.now() - newest) / 60000);
-  }, [logs, loading]);
+    return newest ? new Date(newest) : null;
+  }, [logs]);
 
   // Standard OCPP 1.6 message types + types found in current logs
   const STANDARD_OCPP_TYPES = [
@@ -59,11 +67,12 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
     "RemoteStopTransaction", "Reset", "StartTransaction", "StatusNotification",
     "StopTransaction", "TriggerMessage", "UnlockConnector",
   ];
+  // Einmal gesehene Typen merken, damit die Auswahlliste bei aktivem Filter
+  // nicht auf den gefilterten Typ zusammenschrumpft.
+  const seenTypesRef = React.useRef<Set<string>>(new Set());
+  logs.forEach((l) => { if (l.message_type) seenTypesRef.current.add(l.message_type); });
   const messageTypes = Array.from(
-    new Set([
-      ...STANDARD_OCPP_TYPES,
-      ...(logs.map((l) => l.message_type).filter(Boolean) as string[]),
-    ])
+    new Set([...STANDARD_OCPP_TYPES, ...seenTypesRef.current])
   ).sort();
 
   // Detect Preparing→Available timeout (no StartTransaction in between)
@@ -316,6 +325,11 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
           </div>
         )}
         <div className="mt-2 text-xs text-muted-foreground text-right">
+          {messageTypeFilter !== "all" && filteredNewestAt && (
+            <span className="mr-2">
+              Letzter Eintrag dieses Typs: {format(filteredNewestAt, "dd.MM.yy HH:mm:ss")} ·
+            </span>
+          )}
           {filtered.length} Nachricht{filtered.length !== 1 ? "en" : ""}
           {filtered.length !== logs.length && ` (${logs.length} gesamt)`}
         </div>
