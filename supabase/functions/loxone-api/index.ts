@@ -2464,6 +2464,7 @@ serve(async (req) => {
       let totalInserted = 0;
       const errors: string[] = [];
       let processedCount = 0;
+      const touchedDays = new Set<string>();
 
       // 3) Download and parse each stat file (XML format)
       // Loxone stats XML format:
