@@ -344,8 +344,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         if (!info || !info.is_main_meter) continue;
         if (locationId && info.location_id !== locationId) continue;
         if (pt.totalDay != null) {
-          const converted = info.energy_type === "gas" && info.unit === "m³"
-            ? gasM3ToKWh(pt.totalDay, info.gas_type, info.brennwert, info.zustandszahl)
+          const converted = info.energy_type === "gas"
+            ? resolveMeterEnergyKWh(info, pt.totalDay)
             : pt.totalDay;
           addToEnergyBucket(bucket, info.energy_type, converted);
         }
