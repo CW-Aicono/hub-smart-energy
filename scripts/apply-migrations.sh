@@ -68,6 +68,45 @@ applied_count=0
 skipped_count=0
 autoheal_count=0
 
+# Preflight fuer den historischen Berliner-Tagesrefresh vom 31.07.:
+# Diese noch offene Migration ruft refresh_meter_period_totals_5min sofort auf.
+# Auf Installationen, die bereits auf die partitionierte 5-Minuten-Tabelle
+# gewechselt sind, kann der beim Swap verlorene FK alte meter_id-Waisen enthalten.
+# Eine spaetere Reparaturmigration wird sonst nie erreicht. Wir erhalten die
+# Messhistorie und loesen ausschliesslich die nicht mehr gueltige Zuordnung.
+BERLIN_REFRESH_MIGRATION="20260731225555_538403e6-b3a4-4968-97b3-ba59b9e46cdf.sql"
+DESTRUCTIVE_ORPHAN_REPAIR="20260801065203_b0157b2a-69bd-4424-b380-2d2a4c3fa497.sql"
+berlin_refresh_applied="$(psql_exec -At -c "SELECT 1 FROM public._deploy_migrations WHERE filename = '$BERLIN_REFRESH_MIGRATION'")"
+if [ "$berlin_refresh_applied" != "1" ]; then
+  log "Preflight: pruefe verwaiste Messstellen-Zuordnungen vor Berliner Tagesrefresh"
+  orphan_count="$(psql_exec -At -c "
+    SELECT COUNT(*)
+    FROM public.meter_power_readings_5min m5
+    WHERE m5.meter_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM public.meters m WHERE m.id = m5.meter_id)
+  ")"
+  log "Preflight: $orphan_count verwaiste Zuordnungen in meter_power_readings_5min"
+  if [ "$orphan_count" -gt 0 ]; then
+    psql_exec -c "
+      UPDATE public.meter_power_readings_5min m5
+      SET meter_id = NULL
+      WHERE m5.meter_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM public.meters m WHERE m.id = m5.meter_id)
+    " > /dev/null
+    log "Preflight: Historie erhalten und verwaiste meter_id auf NULL gesetzt"
+  fi
+
+  # Die alte Folgemigration loescht per NOT EXISTS auch Zeilen mit meter_id=NULL.
+  # Sie wird durch eine neue, nicht loeschende Haertungsmigration ersetzt und
+  # deshalb auf self-hosted Installationen bewusst als erledigt markiert.
+  psql_exec -c "
+    INSERT INTO public._deploy_migrations (filename)
+    VALUES ('$DESTRUCTIVE_ORPHAN_REPAIR')
+    ON CONFLICT DO NOTHING
+  " > /dev/null
+  log "Preflight: destruktive Alt-Reparatur uebersprungen; sichere Folgemigration uebernimmt"
+fi
+
 # Tiefen-Counter fuer rekursives AUTOHEAL: wenn eine Heal-Migration selbst auf ein fehlendes
 # Objekt stoesst, wird AUTOHEAL erneut aufgerufen. Limit verhindert Endlos-Schleifen bei
 # zirkulaeren Referenzen (real unwahrscheinlich, aber Sicherheitsnetz).

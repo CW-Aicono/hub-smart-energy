@@ -7975,7 +7975,15 @@ export type Database = {
           source?: string | null
           tenant_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "meter_power_readings_5min_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meter_power_readings_5min_bridge: {
         Row: {
