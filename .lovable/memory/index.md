@@ -20,6 +20,7 @@ Bei Hetzner/Live/Server/DB/Worker-Themen immer laiengerecht: Alltagssprache, kla
 - [Layman Instructions Policy](mem://technical/infrastructure/layman-instructions-policy) — Immer laiengerechte Schritt-für-Schritt-Anleitungen bei Hetzner, Live, Docker, Datenbank, Worker, Updates und Keys
 - [Support-Session Bootstrap Plan](mem://features/administration/support-session-bootstrap-plan) — Plan to fix missing features/data in support sessions caused by per-user RLS rows
 - [IO-Budget Playbook](mem://technical/performance/io-budget-investigation-playbook) — Schritt-für-Schritt-Analyse hoher Disk-IO-Last, typische Ursachen (count exact, fehlende Indizes)
+- [Cron-Job-Inventar](mem://technical/performance/cron-job-inventory) — Belegte Minuten-Offsets, Advisory-Lock-Wrapper, Kollisionsprüfung vor jeder Job-Änderung
 - [Cron-Worker-Sättigung](mem://technical/performance/cron-worker-saturation) — Backend-Downtime durch gleichzeitige pg_cron-Starts; Schedules immer mit Offset staffeln
 - [IO-Budget Anzeige-Semantik](mem://technical/performance/io-budget-indicator-semantics) — Lovable-Anzeige ist letzter Alert-Snapshot (max. 48h gehalten), kein Live-Wert; echte IOPS nur via Supabase-Metrics
 - [Partner Portal](mem://features/administration/partner-portal) — Sales-Partner-Backend /partner/*, partner.aicono.org Subdomain, partner_members RBAC
@@ -64,6 +65,8 @@ Bei Hetzner/Live/Server/DB/Worker-Themen immer laiengerecht: Alltagssprache, kla
 - [Room Polygon Editor](mem://features/administration/room-polygon-drawing-editor-logic) — ResizeObserver for proportional overlays
 - [Shelly Cloud Integration](mem://features/gateways/shelly-cloud-integration-and-command-logic) — Gen 1/2+ support, rate limits, label cleaning
 - [Shelly Gen1 Logic](mem://features/gateways/shelly-gen1-meter-logic) — Standalone meters from relay arrays
+- [Loxone Live-Broadcast](mem://features/gateways/loxone-live-broadcast-path) — live_only-Broadcast ohne DB-Last, Persistenz nur über 5-Min-Buckets
+- [Loxone State-Auto-Mapping](mem://features/gateways/loxone-state-auto-mapping) — v1.11: unbekannte States zur Laufzeit als pwr/total klassifizieren, ws_mapping_gap-Diagnose
 - [HA Addon Requirements](mem://technical/infrastructure/ha-addon-compilation-requirements) — better-sqlite3 compilation, config.yaml strictness
 - [Gateway Local Time](mem://features/building-automation/gateway-local-time) — Explicit conversion from UTC to Europe/Berlin in UI
 - [Device Representation](mem://features/building-automation/device-ui-representation) — Hardware categorized into meters, sensors, actuators

@@ -48,16 +48,29 @@ import http from "http";
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY!;
-// IO-Optimierung v1.2 (17.07.2026): Default 5s → 60s, Untergrenze 15s.
-// WebSocket zum Miniserver bleibt permanent verbunden (Push in Echtzeit),
-// Live-UI wird per Broadcast bedient — der Flush schreibt nur historische
-// Rohwerte in bridge_raw_samples. 60s reduziert die Cloud-IOPS um ~92%.
-const FLUSH_INTERVAL_MS = Math.max(
+// v1.10 (31.07.2026): FLUSH ist wieder aktiv — aber als REINER Live-Broadcast
+// (`live_only: true`). gateway-ingest verteilt die Werte nur über Realtime und
+// schreibt NICHTS in die Datenbank. Persistenz läuft weiterhin ausschließlich
+// über flushBuckets() → bridge-power-5min. Damit kostet der Live-Pfad 0 Disk-IO.
+// v1.14: Der Live-Push liest NICHT mehr das alte FLUSH_INTERVAL_MS aus der
+// Server-.env (dort steht aus der IO-Sparphase häufig 60000 → Werte änderten
+// sich nur einmal pro Minute). Nur noch LIVE_PUSH_INTERVAL_MS zählt, und der
+// Wert wird hart auf 2–15 s begrenzt.
+const LIVE_PUSH_INTERVAL_MS = Math.min(
   15000,
-  parseInt(process.env.FLUSH_INTERVAL_MS || "60000", 10),
+  Math.max(2000, parseInt(process.env.LIVE_PUSH_INTERVAL_MS || "5000", 10)),
 );
+const FLUSH_INTERVAL_MS = LIVE_PUSH_INTERVAL_MS;
+
+// Keepalive: spätestens alle 60 s wird ein Wert je Zähler gesendet, auch wenn
+// er sich kaum ändert — damit die UI nach einem Reload sofort Werte hat.
 const MIN_PUSH_INTERVAL_MS = parseInt(process.env.MIN_PUSH_INTERVAL_MS || "60000", 10);
-const MIN_DELTA = parseFloat(process.env.MIN_DELTA || "0.01");
+const MIN_DELTA = parseFloat(process.env.MIN_DELTA || "0.05");
+// Obergrenze je Push-Zyklus, damit ein großer Miniserver den Kanal nicht flutet.
+const MAX_LIVE_EVENTS_PER_PUSH = Math.max(
+  50,
+  parseInt(process.env.MAX_LIVE_EVENTS_PER_PUSH || "500", 10),
+);
 const RELOAD_INTERVAL_MS = parseInt(process.env.RELOAD_INTERVAL_MS || "300000", 10);
 const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
 const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
@@ -75,7 +88,7 @@ const SESSION_HEARTBEAT_MS = Math.max(
 );
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "phase7.8-stuck-slot-reset";
+const WORKER_VERSION = process.env.WORKER_VERSION || "v1.16-unit-driven-roles";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -139,11 +152,17 @@ function describeError(err: unknown): string {
 const SPIKE_THRESHOLDS: Record<string, number> = {
   strom: 10000, gas: 5000, wasser: 1000, wärme: 5000, kälte: 2000, default: 50000,
 };
+// v1.16: Durchfluss (role="flow") hat eigene, viel niedrigere Plausibilitäts-
+// grenzen — ein kumulativer Zählerstand fällt damit sicher raus.
+const FLOW_THRESHOLDS: Record<string, number> = {
+  wasser: 20, water: 20, gas: 200, default: 200,
+};
 // Zählerstände (today/month/year/total) können viele 100.000 kWh groß sein → keinen kW-Spike-Filter darauf anwenden.
 function isSpike(v: number, energyType: string, role: StateRole = "pwr"): boolean {
   if (!isFinite(v) || isNaN(v)) return true;
   if (role === "soc") return v < 0 || v > 100;
-  if (role !== "pwr") return false; // Energiewerte nicht filtern
+  if (role === "flow") return Math.abs(v) > (FLOW_THRESHOLDS[energyType] ?? FLOW_THRESHOLDS.default);
+  if (role !== "pwr") return false; // Energiewerte/aux nicht filtern
   return Math.abs(v) > (SPIKE_THRESHOLDS[energyType] ?? SPIKE_THRESHOLDS.default);
 }
 
@@ -281,6 +300,15 @@ interface WsMeter {
   name: string;
   energy_type: string;
   sensor_uuid: string | null;
+  /** v1.15: explizit im Backend gesetzte State-UUID der Momentanleistung. */
+  power_state_uuid?: string | null;
+  power_state_key?: string | null;
+  /** v1.16: Konfiguration der Messstelle bestimmt die Rolle (nicht Loxone). */
+  device_type?: string | null;
+  source_unit_power?: string | null;
+  source_unit_energy?: string | null;
+  brennwert?: number | null;
+  zustandszahl?: number | null;
   tenant_id: string;
   location_integration_id: string;
   location_integration: {
@@ -298,12 +326,54 @@ interface WsIntegration {
 
 // Rolle einer State-UUID innerhalb eines Loxone-Blocks
 //   pwr     → momentane Leistung (kW)
+//   flow    → momentaner Durchfluss (m³/h, l/min …) — z. B. Wasser (Impulszähler)
 //   today   → Tagesverbrauch (kWh)
 //   total   → Zählerstand gesamt (kWh)
 //   month   → Monatsverbrauch (kWh, optional)
 //   year    → Jahresverbrauch (kWh, optional)
 //   soc     → Speicher-Ladezustand / Storage level (%, Slvl)
-type StateRole = "pwr" | "today" | "total" | "month" | "year" | "soc";
+//   aux     → noch nicht klassifizierter State (v1.11): wird zur Laufzeit
+//             anhand des Werteverlaufs zu "pwr" oder "total" befördert
+type StateRole = "pwr" | "flow" | "today" | "total" | "month" | "year" | "soc" | "aux";
+
+/**
+ * v1.16: Die von Loxone gelieferte Einheit ist irrelevant. Maßgeblich ist
+ * ausschließlich die Konfiguration der Messstelle in unserer DB.
+ *   - Aktoren/Sensoren mit bool-Einheit  → kein Momentanwert
+ *   - source_unit_power kW/W/MW          → "pwr"
+ *   - source_unit_power m³/h, l/min, …   → "flow"
+ *   - Fallback über energy_type
+ */
+function deriveMomentaryRole(m: {
+  device_type?: string | null;
+  energy_type?: string | null;
+  source_unit_power?: string | null;
+}): StateRole | null {
+  const dt = (m.device_type ?? "").toLowerCase();
+  const up = (m.source_unit_power ?? "").toLowerCase().replace(/\s/g, "");
+  if (dt === "actuator" || dt === "sensor") {
+    if (!up || up === "bool" || up === "an/aus" || up === "on/off") return null;
+  }
+  if (!up || up === "bool" || up === "an/aus" || up === "on/off") {
+    const et = (m.energy_type ?? "").toLowerCase();
+    if (et === "wasser" || et === "water" || et === "gas") return "flow";
+    if (!up) return "pwr";
+    return null;
+  }
+  if (/^(kw|w|mw|kva|va)$/.test(up)) return "pwr";
+  if (/(m3|m³)\/h|l\/(min|h|s)|lpm/.test(up)) return "flow";
+  return "pwr";
+}
+
+/** kWh je m³ Gas aus Brennwert × Zustandszahl (DVGW-Formel). */
+function gasKwhPerM3(m: { energy_type?: string | null; brennwert?: number | null; zustandszahl?: number | null }): number | null {
+  const et = (m.energy_type ?? "").toLowerCase();
+  if (et !== "gas") return null;
+  const bw = Number(m.brennwert);
+  const zz = Number(m.zustandszahl);
+  if (!isFinite(bw) || bw <= 0) return null;
+  return bw * (isFinite(zz) && zz > 0 ? zz : 1);
+}
 
 interface UuidEntry {
   meter_id: string;
@@ -320,6 +390,22 @@ interface UuidEntry {
   bucket_sum: number;          // Summe aller Werte im Bucket (für avg)
   bucket_max: number;          // Max im Bucket
   bucket_count: number;        // Anzahl Samples im Bucket
+  // v1.13: abgeschlossene Buckets zwischenpuffern, damit der nächste
+  // eintreffende Wert den fertigen Bucket nicht überschreibt.
+  pending_buckets?: Array<{ bucket: number; sum: number; max: number; count: number }>;
+
+  // v1.11: Beobachtung des Werteverlaufs (nur noch Diagnose + total-Erkennung).
+  // v1.15: Eine Beförderung zu "pwr" findet NICHT mehr statt.
+  state_key?: string;          // Loxone-State-Name (z.B. "actual", "total", "Leistung")
+  obs_count?: number;          // Anzahl beobachteter Samples
+  obs_prev?: number | null;    // vorheriger Wert
+  obs_decreased?: boolean;     // Wert ist mindestens einmal gefallen / war negativ
+  // v1.15: explizit im Backend gesetzte Leistungs-State-UUID des Zählers
+  explicit_pwr_uuid?: string | null;
+  explicit_pwr_key?: string | null;
+  // v1.16: aus der Messstellen-Konfiguration abgeleitet
+  momentary_role?: StateRole | null;   // "pwr" | "flow" | null (kein Momentanwert)
+  gas_kwh_per_m3?: number | null;      // Gas: m³/h → kW Umrechnungsfaktor
 }
 
 interface ConnState {
@@ -514,25 +600,45 @@ async function connect(state: ConnState): Promise<void> {
       for (const ev of (events || [])) {
         const uuid = (ev?.uuid || "").toLowerCase();
         const entry = state.uuidMap.get(uuid);
-        if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type, entry.role)) {
-          entry.latest_value = ev.value;
+        if (!entry || typeof ev.value !== "number") continue;
+        // v1.16: Gas — Loxone liefert m³/h, wir rechnen mit Brennwert ×
+        // Zustandszahl in kW um (Einheit von Loxone ist irrelevant).
+        const rawValue = (entry.role === "pwr" && entry.gas_kwh_per_m3)
+          ? ev.value * entry.gas_kwh_per_m3
+          : ev.value;
+        if (!isSpike(rawValue, entry.energy_type, entry.role)) {
+          if (entry.role === "aux") classifyAux(state, entry, rawValue);
+          entry.latest_value = rawValue;
           state.eventsReceived++;
           state.lastEventAt = Date.now();
-          // v1.5: Bucket-Aggregation für Power. Zählerstände (kWh) werden
-          // separat behandelt und laufen nicht in meter_power_readings_5min.
-          if (entry.role === "pwr") {
+          // v1.5: Bucket-Aggregation für Momentanwerte (Leistung/Durchfluss).
+          // Zählerstände (kWh) laufen nicht in meter_power_readings_5min.
+          if (entry.role === "pwr" || entry.role === "flow") {
             const bucket = Math.floor(Date.now() / 300000) * 300000;
             if (entry.bucket_start !== bucket) {
-              // Bucket-Wechsel: alten Bucket wird per periodischem Flush geliefert.
+              // v1.13: Bucket-Wechsel — den fertigen Bucket zwischenpuffern,
+              // damit der neue Wert ihn nicht überschreibt (bisher gingen bei
+              // häufig aktualisierenden Zählern fast alle Buckets verloren).
+              if (entry.bucket_start !== 0 && entry.bucket_count > 0) {
+                if (!entry.pending_buckets) entry.pending_buckets = [];
+                entry.pending_buckets.push({
+                  bucket: entry.bucket_start,
+                  sum: entry.bucket_sum,
+                  max: entry.bucket_max,
+                  count: entry.bucket_count,
+                });
+                if (entry.pending_buckets.length > 24) entry.pending_buckets.shift();
+              }
               entry.bucket_start = bucket;
               entry.bucket_sum = 0;
               entry.bucket_max = 0;
               entry.bucket_count = 0;
             }
-            const absV = Math.abs(ev.value);
-            entry.bucket_sum += ev.value;
+
+            const absV = Math.abs(rawValue);
+            entry.bucket_sum += rawValue;
             entry.bucket_count += 1;
-            if (absV > Math.abs(entry.bucket_max)) entry.bucket_max = ev.value;
+            if (absV > Math.abs(entry.bucket_max)) entry.bucket_max = rawValue;
           }
         }
       }
@@ -633,6 +739,8 @@ async function connect(state: ConnState): Promise<void> {
     // v1.9: Split pwr in „strong" (eindeutige Momentanleistungs-States) und
     // „ambiguous" (Actual/Value/P — bei Wasser-/Gaszähler oft der kumulative
     // Zählerstand). Für Medien ohne echte Leistung akzeptieren wir nur strong-pwr.
+    // States, die nie Messwerte sind (Sperren, Texte, Fehler, Icons)
+    const IGNORED_STATE_RX = /(locked|jlock|error|textandicon|text|icon|status|mode|entries|link|image|format|sort|serial|name)/i;
     const PWR_STRONG_RX = /^(pwr|power|currentpower|actualpower|cp|chargingpower|currentchargingpower)$/i;
     const PWR_AMBIGUOUS_RX = /^(actual|value|p)$/i;
     const ROLE_PATTERNS: Array<{ role: StateRole; rx: RegExp }> = [
@@ -650,16 +758,10 @@ async function connect(state: ConnState): Promise<void> {
       return null;
     }
 
-    /**
-     * Zählertypen, deren Loxone-Block **keinen** echten Momentanleistungs-State
-     * bereitstellen muss (Impulszähler o. ä.). Für diese Typen dürfen wir
-     * mehrdeutige Keys (Actual/Value/P) NICHT als Leistung interpretieren —
-     * sonst landet der kumulative Zählerstand als „pwr" in der DB (Spikes).
-     */
-    function isFlowLikeType(et: string | undefined | null): boolean {
-      const t = (et ?? "").toLowerCase();
-      return t === "wasser" || t === "gas" || t === "water";
-    }
+    // v1.16: Keine Medien-Heuristik mehr. Ob und welche Momentanwert-Rolle ein
+    // Block bekommt, entscheidet ausschließlich die Messstellen-Konfiguration
+    // (device_type + source_unit_power) — siehe deriveMomentaryRole().
+
     let blocksMapped = 0;
     let blocksFallback = 0;
     let totalSubs = 0;
@@ -678,61 +780,135 @@ async function connect(state: ConnState): Promise<void> {
       }
       return undefined;
     };
+    // v1.12: Diagnose-Sammler — pro Block ALLE States inkl. zugewiesener Rolle,
+    // damit in der Cloud sichtbar ist, welcher State die Leistung liefert.
+    const blockDiag: Array<{
+      block_uuid: string;
+      meter_id: string;
+      energy_type: string;
+      control_type: string;
+      control_name: string;
+      states: Array<{ key: string; role: string; uuid?: string }>;
+    }> = [];
     for (const [blockUuid, baseEntry] of blockEntries) {
       const ctrl = findControl(blockUuid);
       const states = ctrl?.states as Record<string, string> | undefined;
+      // v1.12: vollständige State-Liste des Blocks (für Diagnose-Events)
+      const allStateKeys: string[] = states && typeof states === "object" ? Object.keys(states) : [];
       const stateEntries: Array<{ stateUuid: string; role: StateRole; key: string }> = [];
       let ambiguousPwr: { stateUuid: string; key: string } | null = null;
       let hasStrongPwr = false;
 
+      // v1.15: Alle States eines Blocks einsammeln. Unbekannte Keys werden als
+      // role="aux" registriert — sie dienen ausschließlich der Diagnose und
+      // werden NIE zur Momentanleistung befördert. Welcher State die Leistung
+      // liefert, entscheidet entweder die Loxone-Struktur (Name/Einheit) oder
+      // eine explizite Zuordnung am Zähler (power_state_uuid).
+      const unknownEntries: Array<{ stateUuid: string; key: string }> = [];
+      const explicitPwrUuid = (baseEntry.explicit_pwr_uuid ?? null)?.toLowerCase() ?? null;
+      let explicitPwrKey: string | null = baseEntry.explicit_pwr_key ?? null;
+      let explicitPwrFound = false;
+      // v1.16: Momentanwert-Rolle kommt aus der Messstellen-Konfiguration.
+      const momRole: StateRole | null = baseEntry.momentary_role ?? null;
       if (states && typeof states === "object") {
         for (const [k, v] of Object.entries(states)) {
           if (typeof v !== "string") continue;
+          const stateUuid = v.toLowerCase();
+          // Höchste Priorität: manuell im Backend gesetzte Momentanwert-State-UUID.
+          if (explicitPwrUuid && stateUuid === explicitPwrUuid) {
+            explicitPwrFound = true;
+            explicitPwrKey = explicitPwrKey ?? k;
+            if (momRole) stateEntries.push({ stateUuid, role: momRole, key: k });
+            continue;
+          }
           const cls = classifyState(k);
-          if (!cls) continue;
+          if (!cls) {
+            if (IGNORED_STATE_RX.test(k)) continue;
+            unknownEntries.push({ stateUuid, key: k });
+            continue;
+          }
           if (cls === "pwr_ambiguous") {
-            if (!ambiguousPwr) ambiguousPwr = { stateUuid: v.toLowerCase(), key: k };
+            if (!ambiguousPwr) ambiguousPwr = { stateUuid, key: k };
             continue;
           }
           if (cls === "pwr") hasStrongPwr = true;
-          stateEntries.push({ stateUuid: v.toLowerCase(), role: cls, key: k });
+          // Bei expliziter Zuordnung darf kein zweiter State als Momentanwert gelten.
+          if (cls === "pwr" && explicitPwrUuid) continue;
+          // Konfiguriert der Zähler keinen Momentanwert (z. B. Aktor/Taster),
+          // wird ein „pwr"-benannter State nicht als Messwert übernommen.
+          if (cls === "pwr" && !momRole) continue;
+          stateEntries.push({ stateUuid, role: cls === "pwr" ? momRole! : cls, key: k });
         }
       }
+      if (explicitPwrUuid && explicitPwrFound) {
+        hasStrongPwr = true;
+        ambiguousPwr = null;
+        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid}: ${momRole ?? "kein Momentanwert"} = explizite Zuordnung "${explicitPwrKey ?? "?"}"`);
+      } else if (explicitPwrUuid && !explicitPwrFound) {
+        log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid}: konfigurierte Momentanwert-State-UUID ${explicitPwrUuid} nicht im Miniserver gefunden`);
+        bridgeLog("warn", "ws_explicit_pwr_missing", "Konfigurierte Momentanwert-State-UUID existiert nicht mehr", state.serialNumber, {
+          block_uuid: blockUuid, meter_id: baseEntry.meter_id, power_state_uuid: explicitPwrUuid,
+        });
+      }
 
-      // Ambiguous-pwr NUR akzeptieren, wenn:
-      //  – kein strong-pwr vorhanden, UND
-      //  – der Meter kein reines Fluss-/Impuls-Medium (Wasser/Gas) ist.
-      // Für Wasser/Gas ohne echten Pwr-State → Block läuft als Total-only.
-      const flowLike = isFlowLikeType(baseEntry.energy_type);
-      if (!hasStrongPwr && ambiguousPwr && !flowLike) {
-        stateEntries.push({ stateUuid: ambiguousPwr.stateUuid, role: "pwr", key: ambiguousPwr.key });
-      } else if (!hasStrongPwr && ambiguousPwr && flowLike) {
-        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): ambiguous pwr-key "${ambiguousPwr.key}" ignoriert (kein echter Momentanwert für ${baseEntry.energy_type})`);
+      // v1.16: Mehrdeutige Keys (Actual/Value/P) werden akzeptiert, sobald die
+      // Messstelle einen Momentanwert erwartet — die Rolle (pwr oder flow)
+      // kommt aus der Konfiguration, nicht aus der Loxone-Einheit.
+      if (!hasStrongPwr && ambiguousPwr && momRole) {
+        stateEntries.push({ stateUuid: ambiguousPwr.stateUuid, role: momRole, key: ambiguousPwr.key });
+      } else if (!hasStrongPwr && ambiguousPwr && !momRole) {
+        log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): "${ambiguousPwr.key}" ignoriert — Messstelle erwartet keinen Momentanwert`);
+      }
+
+      // v1.15: Unbekannte States werden weiterhin registriert, aber nur um sie
+      // in der Cloud sichtbar zu machen (Zuordnungs-UI). Sie liefern keine Werte.
+      const hasMomEntry = stateEntries.some((se) => se.role === "pwr" || se.role === "flow");
+      if (!hasMomEntry && unknownEntries.length > 0) {
+        for (const ue of unknownEntries) {
+          stateEntries.push({ stateUuid: ue.stateUuid, role: "aux", key: ue.key });
+        }
       }
 
       if (stateEntries.length === 0) {
-        if (flowLike) {
-          // v1.9: Fallback deaktiviert für Wasser/Gas — sonst würde der kumulative
-          // Zählerstand als Momentanleistung interpretiert (660-kW-Spikes im Chart).
-          log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): kein verwertbarer State — Block wird ignoriert (Fallback deaktiviert für Fluss-Medien)`);
+        if (!momRole) {
+          log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): kein verwertbarer State — Messstelle erwartet keinen Momentanwert`);
+          blockDiag.push({
+            block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
+            control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
+            states: allStateKeys.map((k) => ({ key: k, role: "ignored" })),
+          });
           continue;
         }
-        // Fallback: Block-UUID direkt als pwr behandeln (alte Logik) — nur für Strom/Wärme.
-        state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: "pwr" });
+        // Fallback: Block-UUID direkt als Momentanwert behandeln (alte Logik).
+        state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: momRole });
         blocksFallback++;
         totalSubs++;
+        blockDiag.push({
+          block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
+          control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
+          states: [{ key: "(block-fallback)", role: momRole }],
+        });
         continue;
       }
 
       // Dedup auf Rolle: falls mehrere Keys auf gleiche Rolle mappen, ersten nehmen
       const seenRoles = new Set<StateRole>();
+      const diagStates: Array<{ key: string; role: string; uuid?: string }> = [];
       for (const se of stateEntries) {
-        if (seenRoles.has(se.role)) continue;
+        // aux-Kandidaten dürfen mehrfach vorkommen (genau einer wird später "pwr")
+        if (se.role !== "aux" && seenRoles.has(se.role)) {
+          diagStates.push({ key: se.key, role: `${se.role} (dup, verworfen)`, uuid: se.stateUuid });
+          continue;
+        }
         seenRoles.add(se.role);
         state.uuidMap.set(se.stateUuid, {
           ...baseEntry,
           block_uuid: blockUuid,
           role: se.role,
+          state_key: se.key,
+          obs_count: 0,
+          obs_prev: null,
+          obs_decreased: false,
           latest_value: null,
           last_pushed_value: null,
           last_pushed_at: 0,
@@ -741,11 +917,97 @@ async function connect(state: ConnState): Promise<void> {
           bucket_max: 0,
           bucket_count: 0,
         });
+        diagStates.push({ key: se.key, role: se.role, uuid: se.stateUuid });
         totalSubs++;
       }
+      // v1.12: auch die vom Klassifizierer ignorierten States protokollieren —
+      // dort steckt bei „stummen" Blöcken oft der echte Leistungs-State.
+      // v1.15: inkl. State-UUID, damit die Zuordnung im Backend ohne Raten geht.
+      const usedKeys = new Set(diagStates.map((d) => d.key));
+      for (const k of allStateKeys) {
+        if (usedKeys.has(k)) continue;
+        const v = states && typeof states === "object" ? (states as Record<string, string>)[k] : undefined;
+        diagStates.push({ key: k, role: "ignoriert", uuid: typeof v === "string" ? v.toLowerCase() : undefined });
+      }
+      blockDiag.push({
+        block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
+        control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
+        states: diagStates,
+      });
       blocksMapped++;
       log("info", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} → ${[...seenRoles].join(",")} (type=${ctrl?.type ?? "?"}, energy_type=${baseEntry.energy_type})`);
     }
+
+    // v1.11: Blöcke ohne erkannte Momentanleistung melden — so ist die
+    // Mapping-Lücke in der Cloud sichtbar (bridge_event_log), statt nur im Container-Log.
+    const blocksWithPwr = new Set<string>();
+    const blocksWithAux = new Map<string, string[]>();
+    for (const e of state.uuidMap.values()) {
+      if (e.role === "pwr" || e.role === "flow") blocksWithPwr.add(e.block_uuid);
+      if (e.role === "aux") blocksWithAux.set(e.block_uuid, [...(blocksWithAux.get(e.block_uuid) ?? []), e.state_key ?? "?"]);
+    }
+    const gaps = blockEntries
+      .map(([b, be]) => ({ block_uuid: b, meter_id: be.meter_id, energy_type: be.energy_type, aux_keys: blocksWithAux.get(b) ?? [] }))
+      .filter((g) => !blocksWithPwr.has(g.block_uuid));
+    if (gaps.length > 0) {
+      log("warn", `[WS] ${state.serialNumber} ${gaps.length} Block(s) ohne Momentanleistung — Auto-Klassifikation läuft`);
+      bridgeLog("warn", "ws_mapping_gap", `${gaps.length} Block(s) ohne erkannte Momentanleistung`, state.serialNumber, { gaps: gaps.slice(0, 50) });
+    }
+
+    // ── v1.12: Block-State-Diagnose ────────────────────────────────────────
+    // Pro Block ALLE Loxone-State-Namen samt zugewiesener Rolle in die Cloud
+    // melden (severity=warn → landet in bridge_event_log). Damit lässt sich die
+    // Mapping-Lücke ohne Raten schließen. In Chunks, damit die Payload klein bleibt.
+    {
+      const CHUNK = 12;
+      for (let i = 0; i < blockDiag.length; i += CHUNK) {
+        const chunk = blockDiag.slice(i, i + CHUNK);
+        void bridgeLog(
+          "warn",
+          "ws_block_states",
+          `Block-States ${i + 1}-${i + chunk.length} von ${blockDiag.length}`,
+          state.serialNumber,
+          { part: Math.floor(i / CHUNK) + 1, total_blocks: blockDiag.length, blocks: chunk },
+        );
+      }
+    }
+
+    // v1.12: 60 s nach Verbindungsaufbau die ersten Echtwerte je State melden —
+    // schwankend/negativ ⇒ Leistung, monoton steigend ⇒ Zählerstand.
+    const diagSerial = state.serialNumber;
+    setTimeout(() => {
+      const cur = connections.get(diagSerial);
+      if (!cur || !cur.authenticated) return;
+      const byBlock = new Map<string, Array<Record<string, unknown>>>();
+      for (const e of cur.uuidMap.values()) {
+        const arr = byBlock.get(e.block_uuid) ?? [];
+        arr.push({
+          key: e.state_key ?? "(block)",
+          role: e.role,
+          value: e.latest_value,
+          obs_count: e.obs_count ?? 0,
+          decreased: e.obs_decreased ?? false,
+        });
+        byBlock.set(e.block_uuid, arr);
+      }
+      const rows = Array.from(byBlock.entries()).map(([block_uuid, sts]) => {
+        const any = Array.from(cur.uuidMap.values()).find((e) => e.block_uuid === block_uuid);
+        return { block_uuid, meter_id: any?.meter_id, energy_type: any?.energy_type, states: sts };
+      });
+      const CHUNK = 12;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK);
+        void bridgeLog(
+          "warn",
+          "ws_block_state_values",
+          `Werte-Snapshot ${i + 1}-${i + chunk.length} von ${rows.length} (60 s nach Verbindung)`,
+          diagSerial,
+          { part: Math.floor(i / CHUNK) + 1, total_blocks: rows.length, blocks: chunk },
+        );
+      }
+    }, 60000);
+
+
 
     log("info", `[WS] ${state.serialNumber} LoxAPP3-Mapping: blocks=${blockEntries.length}, mapped=${blocksMapped}, fallback=${blocksFallback}, totalStateUuids=${totalSubs}`);
     bridgeLog("info", "ws_connected", `Verbunden, ${totalSubs} State-UUIDs aus ${blockEntries.length} Blöcken (mapped=${blocksMapped}, fallback=${blocksFallback})`, state.serialNumber, { blocks: blockEntries.length, mapped: blocksMapped, fallback: blocksFallback, totalStateUuids: totalSubs });
@@ -923,18 +1185,50 @@ async function keepaliveTick(): Promise<void> {
   }
 }
 
-// ─── Flush (Phase 5: Smart-Split → bridge_raw_samples) ───────────────────────
-// Schickt Roh-Werte an gateway-ingest?action=bridge-readings.
-// gateway-ingest schreibt sie in `bridge_raw_samples` (Ringpuffer 24 h);
-// die Edge-Function `bridge-aggregator` aggregiert sie alle 5 Min in die
-// Schatten-Tabelle `meter_power_readings_5min_bridge` — parallel zum
-// bestehenden Polling-Pfad, der unberührt weiterläuft.
+// ─── Live-Push (v1.10: Realtime-Broadcast OHNE Datenbank-Schreiblast) ────────
+// Schickt die aktuellen WS-Werte an gateway-ingest?action=bridge-readings mit
+// `live_only: true`. Die Edge-Function verteilt sie ausschließlich über den
+// Realtime-Kanal `loxone-live-<tenant_id>` (Energiefluss-Monitor, Aktuelle
+// Werte, Gerätekacheln/Steuerungen) und schreibt NICHTS in die Datenbank.
+// Historisierung läuft unverändert über flushBuckets() → bridge-power-5min.
+
+
+// ─── v1.11: Laufzeit-Klassifikation unbekannter States ───────────────────────
+// Loxone-Blöcke benennen ihre States uneinheitlich (z.B. "Leistung", "AI1",
+// kundeneigene Bausteine). Statt solche States zu verwerfen, beobachten wir den
+// Werteverlauf:
+//   • Wert fällt irgendwann oder ist negativ  → Momentanleistung  (role="pwr")
+//   • Wert steigt monoton über mehrere Samples → Zählerstand      (role="total")
+// Für Wasser/Gas wird NIE zu "pwr" befördert (Zählerstand ≠ Leistung).
+const AUX_MIN_SAMPLES = 3;
+
+function blockHasRole(state: ConnState, blockUuid: string, role: StateRole): boolean {
+  for (const e of state.uuidMap.values()) {
+    if (e.block_uuid === blockUuid && e.role === role) return true;
+  }
+  return false;
+}
+
+function classifyAux(state: ConnState, entry: UuidEntry, value: number): void {
+  const prev = entry.obs_prev ?? null;
+  entry.obs_count = (entry.obs_count ?? 0) + 1;
+  if (value < 0 || (prev !== null && value < prev - 1e-6)) entry.obs_decreased = true;
+  entry.obs_prev = value;
+  if ((entry.obs_count ?? 0) < AUX_MIN_SAMPLES) return;
+
+  // v1.15: KEINE Beförderung zu "pwr" mehr. Ein kumulativer Zählerstand fällt
+  // bei Reset/Neustart/Überlauf ebenfalls — genau daran ist die alte Heuristik
+  // gescheitert und hat Zählerstände als Leistung in die 5-Min-Reihe geschrieben.
+  // Ein State wird nur noch dann Leistung, wenn Loxone ihn eindeutig so benennt
+  // oder ein Admin ihn dem Zähler explizit zuordnet (meters.power_state_uuid).
+  if (!entry.obs_decreased && (entry.obs_count ?? 0) >= AUX_MIN_SAMPLES && value > 0) {
+    if (blockHasRole(state, entry.block_uuid, "total")) return;
+    entry.role = "total";
+    log("info", `[AutoMap] ${state.serialNumber} block ${entry.block_uuid} state "${entry.state_key}" → total (monoton steigend)`);
+  }
+}
 
 async function flush(): Promise<void> {
-  // v1.6: Legacy-Pfad hart deaktiviert – Rohdaten dürfen NICHT mehr in
-  // bridge_raw_samples geschrieben werden. Aggregation läuft ausschließlich
-  // über flushBuckets() → bridge-power-5min.
-  return;
   if (workerPaused) return;
   const readings: any[] = [];
   const nowMs = Date.now();
@@ -943,16 +1237,17 @@ async function flush(): Promise<void> {
     if (!state.authenticated) continue;
     for (const [, entry] of state.uuidMap) {
       if (entry.latest_value === null) continue;
+      if (entry.role === "aux") continue; // v1.11: noch nicht klassifiziert → nicht senden
 
-      // IO-Optimierung: nur pushen, wenn sich der Wert spürbar geändert hat
-      // ODER der letzte Push älter als MIN_PUSH_INTERVAL_MS ist (Keepalive).
+      // Nur senden, wenn sich der Wert spürbar geändert hat ODER der letzte
+      // Push älter als MIN_PUSH_INTERVAL_MS ist (Keepalive).
       // Energiezähler (today/total/month/year) ändern sich in kleinen Schritten →
       // niedrigere Mindest-Änderung, damit kWh-Inkremente nicht verschluckt werden.
       // SOC (%) soll ebenfalls zuverlässig als eigener Rollenwert gesendet werden.
       const prev = entry.last_pushed_value;
       const ageMs = nowMs - entry.last_pushed_at;
       const delta = prev === null ? Infinity : Math.abs(entry.latest_value - prev);
-      const minDelta = entry.role === "pwr" ? MIN_DELTA : entry.role === "soc" ? 0.1 : 0.001;
+      const minDelta = entry.role === "pwr" ? MIN_DELTA : entry.role === "flow" ? 0.001 : entry.role === "soc" ? 0.1 : 0.001;
       const changed = delta >= minDelta;
       const stale = ageMs >= MIN_PUSH_INTERVAL_MS;
       if (!changed && !stale) continue;
@@ -960,7 +1255,7 @@ async function flush(): Promise<void> {
       readings.push({
         miniserver_serial: state.serialNumber,
         sensor_uuid: entry.block_uuid,   // immer Block-UUID, damit DB-Mapping konsistent bleibt
-        role: entry.role,                 // Phase 7: rollenbasiertes Routing in gateway-ingest
+        role: entry.role,                 // rollenbasiertes Routing in gateway-ingest
         value: entry.latest_value,
         recorded_at: nowIso,
       });
@@ -969,11 +1264,26 @@ async function flush(): Promise<void> {
     }
   }
   if (readings.length === 0) return;
+
+  // Deckelung: bei sehr vielen Änderungen in einem Zyklus nur die ersten N
+  // Events senden — der Rest folgt im nächsten Zyklus (Werte sind ohnehin
+  // auf den jeweils letzten Stand gecoalesct).
+  const batch = readings.length > MAX_LIVE_EVENTS_PER_PUSH
+    ? readings.slice(0, MAX_LIVE_EVENTS_PER_PUSH)
+    : readings;
+  if (batch.length < readings.length) {
+    log("warn", `[Live] ${readings.length} Events > Limit ${MAX_LIVE_EVENTS_PER_PUSH} — sende ${batch.length}, Rest im nächsten Zyklus`);
+  }
+
   try {
-    await ingestPost("bridge-readings", { worker_name: BRIDGE_WORKER_NAME, readings });
-    log("debug", `[Flush] ${readings.length} Roh-Samples an bridge-readings gepusht`);
+    await ingestPost("bridge-readings", {
+      worker_name: BRIDGE_WORKER_NAME,
+      live_only: true,   // v1.10: reiner Broadcast, keine DB-Schreiblast
+      readings: batch,
+    });
+    log("debug", `[Live] ${batch.length} Werte per Broadcast gepusht (live_only)`);
   } catch (err) {
-    log("warn", `[Flush] fehlgeschlagen: ${(err as Error).message}`);
+    log("warn", `[Live] Push fehlgeschlagen: ${(err as Error).message}`);
   }
 }
 
@@ -1147,12 +1457,21 @@ async function reloadMeters(): Promise<void> {
       for (const m of group.meters) {
         if (!m.sensor_uuid) continue;
         const blockUuid = m.sensor_uuid.toLowerCase();
+        // v1.16: Momentanwert-Rolle rein aus der Messstellen-Konfiguration.
+        const gasFactor = gasKwhPerM3(m);
+        let momRole = deriveMomentaryRole(m);
+        // Gas: Durchfluss (m³/h) wird intern sofort in kW umgerechnet.
+        if (momRole === "flow" && gasFactor) momRole = "pwr";
         state.uuidMap.set(blockUuid, {
           meter_id: m.id,
           tenant_id: m.tenant_id,
           energy_type: m.energy_type,
           block_uuid: blockUuid,
-          role: "pwr",                    // wird in connect() durch LoxAPP3-Expansion ersetzt
+          role: momRole ?? "aux",         // wird in connect() durch LoxAPP3-Expansion ersetzt
+          momentary_role: momRole,
+          gas_kwh_per_m3: momRole === "pwr" ? gasFactor : null,
+          explicit_pwr_uuid: m.power_state_uuid ? m.power_state_uuid.toLowerCase() : null,
+          explicit_pwr_key: m.power_state_key ?? null,
           latest_value: null,
           last_pushed_value: null,
           last_pushed_at: 0,
@@ -1308,44 +1627,50 @@ async function flushBuckets(): Promise<void> {
     // Pro Meter nur EIN Bucket-Datensatz pro Flush (verschiedene State-UUIDs
     // desselben Meters mit role="pwr" existieren praktisch nicht, aber wir
     // koalieren defensiv über meter_id.)
+    // v1.13: Key = meter_id + Bucket, damit auch nachgelieferte (gepufferte)
+    // Buckets vollständig übertragen werden.
     const perMeter = new Map<string, { sum: number; max: number; count: number; bucket: number; entry: UuidEntry }>();
-    for (const entry of state.uuidMap.values()) {
-      if (entry.role !== "pwr") continue;
-      if (entry.bucket_count === 0 || entry.bucket_start === 0) continue;
-      // Bucket noch aktiv → nicht flushen
-      if (entry.bucket_start === currentBucket) continue;
-      const key = entry.meter_id;
+    const addBucket = (entry: UuidEntry, bucket: number, sum: number, max: number, count: number) => {
+      if (count === 0 || bucket === 0) return;
+      const key = `${entry.meter_id}|${bucket}`;
       const existing = perMeter.get(key);
       if (existing) {
-        existing.sum += entry.bucket_sum;
-        existing.count += entry.bucket_count;
-        if (Math.abs(entry.bucket_max) > Math.abs(existing.max)) existing.max = entry.bucket_max;
+        existing.sum += sum;
+        existing.count += count;
+        if (Math.abs(max) > Math.abs(existing.max)) existing.max = max;
       } else {
-        perMeter.set(key, {
-          sum: entry.bucket_sum,
-          max: entry.bucket_max,
-          count: entry.bucket_count,
-          bucket: entry.bucket_start,
-          entry,
-        });
+        perMeter.set(key, { sum, max, count, bucket, entry });
       }
-      // Bucket-Zähler zurücksetzen — wird bei nächstem Sample neu befüllt.
-      entry.bucket_start = 0;
-      entry.bucket_sum = 0;
-      entry.bucket_max = 0;
-      entry.bucket_count = 0;
+    };
+
+    for (const entry of state.uuidMap.values()) {
+      if (entry.role !== "pwr" && entry.role !== "flow") continue;
+      // Zwischengepufferte, bereits abgeschlossene Buckets
+      if (entry.pending_buckets && entry.pending_buckets.length > 0) {
+        for (const pb of entry.pending_buckets) addBucket(entry, pb.bucket, pb.sum, pb.max, pb.count);
+        entry.pending_buckets = [];
+      }
+      // Aktueller Bucket nur, wenn er abgeschlossen ist
+      if (entry.bucket_count > 0 && entry.bucket_start !== 0 && entry.bucket_start !== currentBucket) {
+        addBucket(entry, entry.bucket_start, entry.bucket_sum, entry.bucket_max, entry.bucket_count);
+        entry.bucket_start = 0;
+        entry.bucket_sum = 0;
+        entry.bucket_max = 0;
+        entry.bucket_count = 0;
+      }
     }
 
-    for (const [meterId, agg] of perMeter.entries()) {
+    for (const agg of perMeter.values()) {
       const avg = agg.count > 0 ? agg.sum / agg.count : 0;
       const arr = readyByTenant.get(agg.entry.tenant_id) ?? [];
       arr.push({
-        meter_id: meterId,
+        meter_id: agg.entry.meter_id,
         tenant_id: agg.entry.tenant_id,
         energy_type: agg.entry.energy_type,
         bucket: new Date(agg.bucket).toISOString(),
         power_avg: avg,
         power_max: agg.max,
+
         sample_count: agg.count,
       });
       readyByTenant.set(agg.entry.tenant_id, arr);
@@ -1402,13 +1727,13 @@ async function main() {
 
   await reloadMeters();
   setInterval(reloadMeters, RELOAD_INTERVAL_MS);
-  // v1.6: Legacy-Rohdaten-Flush (bridge-readings → bridge_raw_samples) deaktiviert.
-  // Es werden ausschließlich noch aggregierte 5-Minuten-Buckets an
-  // gateway-ingest?action=bridge-power-5min gesendet. Live-Werte laufen weiterhin
-  // via Realtime-Broadcast, ohne die Cloud-DB zu beschreiben.
-  // setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
+  // v1.10: Live-Push wieder aktiv — reiner Realtime-Broadcast (live_only),
+  // KEINE Datenbank-Schreiblast. Persistenz weiterhin ausschließlich über
+  // aggregierte 5-Minuten-Buckets (bridge-power-5min).
+  setInterval(() => { flush().catch((e) => log("error", "live-push:", e)); }, LIVE_PUSH_INTERVAL_MS);
+  log("info", `[Live-Push] aktiv: alle ${LIVE_PUSH_INTERVAL_MS / 1000}s Broadcast (live_only, MIN_DELTA=${MIN_DELTA} kW, Keepalive ${MIN_PUSH_INTERVAL_MS / 1000}s)`);
   setInterval(() => { flushBuckets().catch((e) => log("error", "flushBuckets:", e)); }, 60_000);
-  log("info", "[Bucket-Flush] aktiv: prüft alle 60s auf abgeschlossene 5-Min-Buckets (Legacy bridge-readings deaktiviert)");
+  log("info", "[Bucket-Flush] aktiv: prüft alle 60s auf abgeschlossene 5-Min-Buckets");
 
   // Bridge-Heartbeat: hält bridge_workers.last_heartbeat_at frisch (Phase 2)
   setInterval(() => { bridgeHeartbeat("online").catch(() => { /* siehe bridgeHeartbeat */ }); }, BRIDGE_HEARTBEAT_MS);

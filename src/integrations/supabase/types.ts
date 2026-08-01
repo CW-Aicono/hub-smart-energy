@@ -8863,6 +8863,10 @@ export type Database = {
           position_3d_x: number | null
           position_3d_y: number | null
           position_3d_z: number | null
+          power_state_key: string | null
+          power_state_set_at: string | null
+          power_state_set_by: string | null
+          power_state_uuid: string | null
           replaces_meter_id: string | null
           room_id: string | null
           sensor_uuid: string | null
@@ -8920,6 +8924,10 @@ export type Database = {
           position_3d_x?: number | null
           position_3d_y?: number | null
           position_3d_z?: number | null
+          power_state_key?: string | null
+          power_state_set_at?: string | null
+          power_state_set_by?: string | null
+          power_state_uuid?: string | null
           replaces_meter_id?: string | null
           room_id?: string | null
           sensor_uuid?: string | null
@@ -8977,6 +8985,10 @@ export type Database = {
           position_3d_x?: number | null
           position_3d_y?: number | null
           position_3d_z?: number | null
+          power_state_key?: string | null
+          power_state_set_at?: string | null
+          power_state_set_by?: string | null
+          power_state_uuid?: string | null
           replaces_meter_id?: string | null
           room_id?: string | null
           sensor_uuid?: string | null
@@ -15185,6 +15197,14 @@ export type Database = {
         Args: { p_day?: string }
         Returns: number
       }
+      cron_schedule_collisions: {
+        Args: never
+        Returns: {
+          job_count: number
+          jobs: string
+          schedule: string
+        }[]
+      }
       diagnose_meter_daily_values: {
         Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
         Returns: {
@@ -15313,6 +15333,20 @@ export type Database = {
           total_value: number
         }[]
       }
+      get_meter_power_gauge_seed: {
+        Args: {
+          _day_end: string
+          _day_start: string
+          _fresh_cutoff: string
+          _meter_ids: string[]
+        }
+        Returns: {
+          latest_at: string
+          latest_value: number
+          meter_id: string
+          peak_abs: number
+        }[]
+      }
       get_meter_totals_auto: {
         Args: { p_from: string; p_meter_ids: string[]; p_to: string }
         Returns: {
@@ -15423,10 +15457,29 @@ export type Database = {
           estimated_kwh: number
         }[]
       }
+      get_sensor_readings_5min_multi: {
+        Args: {
+          _from: string
+          _limit_per_meter?: number
+          _meter_ids: string[]
+          _to: string
+        }
+        Returns: {
+          bucket: string
+          meter_id: string
+          value_avg: number
+          value_max: number
+          value_min: number
+        }[]
+      }
       get_tenant_status: { Args: { _tenant_id: string }; Returns: string }
       get_user_email: { Args: never; Returns: string }
       get_user_partner_id: { Args: never; Returns: string }
       get_user_tenant_id: { Args: never; Returns: string }
+      guarded_cleanup_bridge_raw_samples: { Args: never; Returns: undefined }
+      guarded_cleanup_sensor_readings_raw: { Args: never; Returns: undefined }
+      guarded_rollup_meter_power_hourly: { Args: never; Returns: undefined }
+      guarded_rollup_sensor_hourly: { Args: never; Returns: undefined }
       has_location_access: {
         Args: { _location_id: string; _user_id: string }
         Returns: boolean
@@ -15565,6 +15618,8 @@ export type Database = {
         Args: { lookback_months?: number }
         Returns: number
       }
+      run_ems_cron_bundle: { Args: never; Returns: undefined }
+      run_meter_power_hourly_backfill_guarded: { Args: never; Returns: number }
       snapshot_charge_point_uptime: { Args: never; Returns: number }
       touch_location_integration_sync: {
         Args: { _id: string; _min_interval_seconds?: number; _status: string }

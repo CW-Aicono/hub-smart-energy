@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, RefreshCw, Search, Gauge, Zap, Flame, Droplets, Thermometer } from "lucide-react";
 import { getDeviceIconForMeter } from "@/lib/deviceIcons";
 import { supabase } from "@/integrations/supabase/client";
+import { useLoxoneLiveBroadcast } from "@/hooks/useLoxoneLiveBroadcast";
 import { formatEnergy, formatGasDual } from "@/lib/formatEnergy";
 import { cn } from "@/lib/utils";
 import { probeMark } from "@/lib/perfProbe"; // PERF-PROBE
@@ -64,7 +65,7 @@ const LiveValues = () => {
   const [locationScope, setLocationScope] = useState<LocationScope>({ kind: "all" });
   const [selectedEnergyType, setSelectedEnergyType] = useState<string>("all");
   const [selectedCaptureType, setSelectedCaptureType] = useState<string>("all");
-  const [liveValues, setLiveValues] = useState<Map<string, { value: number; unit: string; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string }>>(new Map());
+  const [liveValues, setLiveValues] = useState<Map<string, { value: number; unit: string; totalDay: number | null; totalWeek: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string; at: number | null }>>(new Map());
   useEffect(() => { if (liveValues.size > 0) probeMark("LiveValues:first-value", { once: true }); }, [liveValues.size]); // PERF-PROBE
   const [manualValues, setManualValues] = useState<Map<string, { value: number; date: string }>>(new Map());
   const [manualDailyTotals, setManualDailyTotals] = useState<Map<string, number>>(new Map());
@@ -75,6 +76,32 @@ const LiveValues = () => {
   const [socByMeterId, setSocByMeterId] = useState<Map<string, { pct: number; updatedAt: string | null }>>(new Map());
   const [socUuidToMeterId, setSocUuidToMeterId] = useState<Map<string, string>>(new Map());
   const [detailNode, setDetailNode] = useState<EnergyFlowNode | null>(null);
+
+  // Echte Live-Werte über den Loxone-Broadcast (State-UUID → Meter via Resolver)
+  const resolverMeters = useMemo(
+    () =>
+      meters
+        .filter((m) => !m.is_archived && m.capture_type === "automatic" && !!m.sensor_uuid)
+        .map((m: any) => ({
+          id: m.id,
+          tenant_id: m.tenant_id ?? null,
+          energy_type: m.energy_type ?? null,
+          sensor_uuid: m.sensor_uuid ?? null,
+        })),
+    [meters],
+  );
+  const liveBroadcast = useLoxoneLiveBroadcast(resolverMeters);
+
+  // Sekundentakt für die Frische-Anzeige des Live-Badges
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") setNowTick(Date.now());
+    }, 5_000);
+    return () => clearInterval(id);
+  }, []);
+
+
 
 
   // Fetch SOC values from energy_storages (linked via power_meter_id)
@@ -324,26 +351,25 @@ const LiveValues = () => {
       new Set(autoMeters.map((m) => m.location_integration_id).filter(Boolean) as string[])
     );
 
-    // Parallel: DB-Polling-Wert, 5-Min-Aggregat (Worker-only Fallback), Bridge-Raw-Wert (Live), Perioden-Totals, Zählerstand (kumulativ), Sensor-Snapshots, Sensor-Rohwerte
-    const [powerRes, power5minRes, bridgeRes, periodRes, cumulativeRes, snapshotRes, sensorRawRes] = await Promise.all([
+    // Parallel: DB-Polling-Wert, 5-Min-Aggregat (Worker-only Fallback), Perioden-Totals,
+    // Zählerstand (kumulativ), Sensor-Snapshots, Sensor-Rohwerte.
+    // bridge_raw_samples wird seit v1.10 im Live-Pfad bewusst nicht mehr befüllt → nicht mehr lesen.
+    const sinceIso = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const [powerRes, power5minRes, periodRes, cumulativeRes, snapshotRes, sensorRawRes] = await Promise.all([
       supabase
         .from("meter_power_readings")
         .select("meter_id, power_value, recorded_at")
         .in("meter_id", meterIds)
-        .gte("recorded_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
-        .order("recorded_at", { ascending: false }),
+        .gte("recorded_at", sinceIso)
+        .order("recorded_at", { ascending: false })
+        .limit(2000),
       supabase
         .from("meter_power_readings_5min")
         .select("meter_id, power_avg, bucket")
         .in("meter_id", meterIds)
-        .gte("bucket", new Date(Date.now() - 60 * 60 * 1000).toISOString())
-        .order("bucket", { ascending: false }),
-      supabase
-        .from("bridge_raw_samples")
-        .select("uuid, value, received_at")
-        .in("uuid", uuids)
-        .gte("received_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
-        .order("received_at", { ascending: false }),
+        .gte("bucket", sinceIso)
+        .order("bucket", { ascending: false })
+        .limit(2000),
       supabase
         .from("meter_period_totals")
         .select("meter_id, period_type, period_start, total_value, energy_type")
@@ -358,14 +384,17 @@ const LiveValues = () => {
             .in("location_integration_id", liIds)
             .gte("fetched_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
             .order("fetched_at", { ascending: false })
+            .limit(liIds.length * 3)
         : Promise.resolve({ data: [] as any[] } as any),
       supabase
         .from("sensor_readings_raw")
         .select("meter_id, value, recorded_at")
         .in("meter_id", meterIds)
-        .gte("recorded_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
-        .order("recorded_at", { ascending: false }),
+        .gte("recorded_at", sinceIso)
+        .order("recorded_at", { ascending: false })
+        .limit(2000),
     ]);
+
 
 
     // Neuester Sensor-Rohwert pro Meter (Momentanwerte: °C, %, bool, …).
@@ -397,13 +426,9 @@ const LiveValues = () => {
     }
 
 
-    // Letzten Bridge-Wert pro UUID extrahieren
+    // bridge_raw_samples entfällt im Reconcile (Live-Pfad schreibt dort seit v1.10 nicht mehr)
     const bridgeLatest = new Map<string, { value: number; at: number }>();
-    for (const row of bridgeRes.data ?? []) {
-      const u = row.uuid.toLowerCase();
-      if (bridgeLatest.has(u)) continue;
-      bridgeLatest.set(u, { value: Number(row.value), at: new Date(row.received_at).getTime() });
-    }
+
 
     // Letzten Polling-Wert pro Meter extrahieren (Raw bevorzugt, 5-Min-Aggregat als Fallback)
     const pollingLatest = new Map<string, { value: number; at: number }>();
@@ -460,6 +485,8 @@ const LiveValues = () => {
           totalYear: periods.totalYear ?? existing?.totalYear ?? null,
           meterReading: dbReading ?? existing?.meterReading ?? null,
           meterReadingUnit: existing?.meterReadingUnit ?? "kWh",
+          at: chosen?.at ?? existing?.at ?? null,
+
         });
       }
       return next;
@@ -479,101 +506,23 @@ const LiveValues = () => {
     loadInitialPowerValues();
 
     // Periodischer DB-Reconcile (heilt verpasste Broadcast-Events nach WS-Drop / Tab-Sleep)
+    // Nur wenn der Tab sichtbar ist – im Hintergrund kein DB-Traffic.
     const reconcileInterval = setInterval(() => {
-      loadInitialPowerValues();
+      if (document.visibilityState === "visible") loadInitialPowerValues();
     }, 60_000);
     const onVisibility = () => {
       if (document.visibilityState === "visible") loadInitialPowerValues();
     };
     document.addEventListener("visibilitychange", onVisibility);
 
-
-    // uuid → meter_id Map (für schnelles Lookup im Broadcast-Handler)
-    const uuidToMeterId = new Map<string, string>();
-    for (const m of meters) {
-      if (m.sensor_uuid) uuidToMeterId.set(m.sensor_uuid.toLowerCase(), m.id);
-    }
-
-    // Eindeutige tenant_ids der angezeigten Meter
-    const tenantIds = [...new Set(meters.map((m) => m.tenant_id).filter(Boolean))] as string[];
-    if (tenantIds.length === 0) return;
-
-    // Pro Tenant einen Broadcast-Channel abonnieren
-    const channels = tenantIds.map((tenantId) => {
-      const channelName = `loxone-live-${tenantId}`;
-      const ch = supabase
-        .channel(channelName, { config: { broadcast: { self: false } } })
-        .on("broadcast", { event: "readings" }, (msg: { payload: { events?: Array<{ uuid: string; value: number; at: string; role?: "pwr" | "today" | "total" | "month" | "year" | "soc" }> } }) => {
-          const events = msg.payload?.events ?? [];
-          if (events.length === 0) return;
-          // Handle SOC events separately (update energy_storages-derived map)
-          const socEvents = events.filter((e) => e.role === "soc");
-          if (socEvents.length > 0) {
-            setSocByMeterId((prev) => {
-              const next = new Map(prev);
-              let changed = false;
-              for (const ev of socEvents) {
-                const meterId = socUuidToMeterId.get(ev.uuid.toLowerCase());
-                if (!meterId) continue;
-                if (!Number.isFinite(ev.value) || ev.value < 0 || ev.value > 100) continue;
-                next.set(meterId, { pct: ev.value, updatedAt: ev.at });
-                changed = true;
-              }
-              return changed ? next : prev;
-            });
-          }
-          setLiveValues((prev) => {
-            let changed = false;
-            const next = new Map(prev);
-            let unmatched = 0;
-            for (const ev of events) {
-              const role = ev.role ?? "pwr";
-              // Plausibilitätsfilter: implausible Werte verwerfen (statt anzuzeigen)
-              const limit = role === "pwr" ? 10_000 /* kW */ : 10_000_000 /* kWh */;
-              if (!Number.isFinite(ev.value) || Math.abs(ev.value) > limit) {
-                console.warn("[live-values] dropped implausible event", {
-                  uuid: ev.uuid, role, value: ev.value, at: ev.at,
-                });
-                continue;
-              }
-              const meterId = uuidToMeterId.get(ev.uuid.toLowerCase());
-              if (!meterId) { unmatched++; continue; }
-
-              const existing = next.get(meterId) ?? {
-
-                value: 0, unit: "", totalDay: null, totalWeek: null,
-                totalMonth: null, totalYear: null, meterReading: null, meterReadingUnit: "kWh",
-              };
-              let updated = existing;
-              if (role === "pwr") updated = { ...existing, value: ev.value };
-              else if (role === "today") updated = { ...existing, totalDay: ev.value };
-              else if (role === "month") updated = { ...existing, totalMonth: ev.value };
-              else if (role === "year") updated = { ...existing, totalYear: ev.value };
-              else if (role === "total") updated = { ...existing, meterReading: ev.value };
-              next.set(meterId, updated);
-              changed = true;
-            }
-            if (unmatched > 0) {
-              console.log(`[live-values] ${unmatched}/${events.length} broadcast events ohne passenden Zähler (UUID nicht gemappt).`);
-            }
-            return changed ? next : prev;
-          });
-          setLastRefresh(new Date());
-        })
-        .subscribe((status) => {
-          console.log(`[live-values] channel ${channelName} status: ${status}`);
-        });
-      return ch;
-    });
-
     return () => {
       clearInterval(reconcileInterval);
       document.removeEventListener("visibilitychange", onVisibility);
-      for (const ch of channels) supabase.removeChannel(ch);
     };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meters.length]);
+
 
   // Manuell-Refresh-Button: temporär nur DB lesen, kein loxone-api/getSensors HTTP-Polling.
   const handleManualRefresh = useCallback(async () => {
@@ -675,16 +624,32 @@ const LiveValues = () => {
     return map;
   }, [virtualSources, getSourceValue, getSourceTotalDay, cpVirtualValues]);
 
-  const getValue = (meter: typeof meters[0]): { value: number | null; unit: string; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string; source: "live" | "manual" | "virtual" | "none"; date?: string } => {
+  const getValue = (meter: typeof meters[0]): { value: number | null; unit: string; totalDay: number | null; totalMonth: number | null; totalYear: number | null; meterReading: number | null; meterReadingUnit: string; source: "live" | "manual" | "virtual" | "none"; date?: string; liveAt?: number } => {
     if (meter.capture_type === "virtual" && virtualValues.has(meter.id)) {
       const vv = virtualValues.get(meter.id)!;
       return { value: vv.value, unit: "", totalDay: vv.totalDay, totalMonth: vv.totalMonth, totalYear: vv.totalYear, meterReading: vv.meterReading, meterReadingUnit: "kWh", source: "virtual" };
     }
 
-    if (meter.capture_type === "automatic" && liveValues.has(meter.id)) {
-      const live = liveValues.get(meter.id)!;
-      return { value: live.value, unit: live.unit, totalDay: live.totalDay, totalMonth: live.totalMonth, totalYear: live.totalYear, meterReading: live.meterReading, meterReadingUnit: live.meterReadingUnit, source: "live" };
+    const bcPwr = liveBroadcast.pwrByMeter[meter.id];
+    const bcTotals = liveBroadcast.totalsByMeter[meter.id];
+    const bcAt = liveBroadcast.updatedAtByMeter[meter.id];
+
+    if (meter.capture_type === "automatic" && (liveValues.has(meter.id) || bcPwr !== undefined || bcTotals)) {
+      const live = liveValues.get(meter.id);
+      return {
+        // Broadcast schlägt den DB-Reconcile-Wert (echter Momentanwert)
+        value: bcPwr ?? live?.value ?? null,
+        unit: live?.unit ?? powerUnitForMeter(meter as any),
+        totalDay: bcTotals?.today ?? live?.totalDay ?? null,
+        totalMonth: bcTotals?.month ?? live?.totalMonth ?? null,
+        totalYear: bcTotals?.year ?? live?.totalYear ?? null,
+        meterReading: bcTotals?.total ?? live?.meterReading ?? null,
+        meterReadingUnit: live?.meterReadingUnit ?? "kWh",
+        source: "live",
+        liveAt: bcAt ?? live?.at ?? undefined,
+      };
     }
+
     const manual = manualValues.get(meter.id);
     if (manual) {
       const dailyTotal = manualDailyTotals.get(meter.id) ?? null;
@@ -801,12 +766,24 @@ const LiveValues = () => {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredMeters.map((meter) => {
-                const { value, unit: sensorUnit, totalDay, totalMonth, totalYear, meterReading, meterReadingUnit, source, date } = getValue(meter);
+                const { value, unit: sensorUnit, totalDay, totalMonth, totalYear, meterReading, meterReadingUnit, source, date, liveAt } = getValue(meter);
+                const ageSec = liveAt ? Math.max(0, Math.round((nowTick - liveAt) / 1000)) : null;
+                const isFresh = ageSec !== null && ageSec < 60;
+                const ageLabel =
+                  ageSec === null
+                    ? null
+                    : ageSec < 60
+                      ? `${ageSec} s`
+                      : ageSec < 3600
+                        ? `vor ${Math.floor(ageSec / 60)} Min`
+                        : `vor ${Math.floor(ageSec / 3600)} Std`;
                 const config = ENERGY_TYPE_CONFIG[meter.energy_type] || ENERGY_TYPE_CONFIG.strom;
                 const Icon = getDeviceIconForMeter(meter);
                 const location = locations.find((l) => l.id === meter.location_id);
                 const isFlowType = meter.energy_type === "wasser" || meter.energy_type === "gas";
-                const soc = socByMeterId.get(meter.id);
+                const socLive = liveBroadcast.socByMeter[meter.id];
+                const socDb = socByMeterId.get(meter.id);
+                const soc = socLive !== undefined ? { pct: socLive, updatedAt: new Date(liveBroadcast.updatedAtByMeter[meter.id] ?? Date.now()).toISOString() } : socDb;
                 // Non-Energie-Sensoren (Zustand, Zähler, Zeit, Temperatur …) sollen
                 // keine kWh-Summen anzeigen und "bool" wird als An/Aus dargestellt.
                 const displayUnit = ((meter as any).source_unit_power || meter.unit || "").toString();
@@ -858,8 +835,17 @@ const LiveValues = () => {
                           <Icon className={cn("h-4 w-4 shrink-0", config.colorClass)} />
                           <CardTitle className="text-sm font-medium truncate">{meter.name}</CardTitle>
                         </div>
-                        <Badge variant={source === "live" ? "default" : source === "virtual" ? "outline" : "secondary"} className="shrink-0 text-[10px] px-1.5 py-0">
-                          {source === "live" ? "Live" : source === "virtual" ? t("common.virtual" as any) : source === "manual" ? t("common.manual" as any) : "–"}
+                        <Badge
+                          variant={source === "live" ? (isFresh ? "default" : "secondary") : source === "virtual" ? "outline" : "secondary"}
+                          className="shrink-0 text-[10px] px-1.5 py-0"
+                        >
+                          {source === "live"
+                            ? (isFresh ? "Live" : ageLabel ?? "–")
+                            : source === "virtual"
+                              ? t("common.virtual" as any)
+                              : source === "manual"
+                                ? t("common.manual" as any)
+                                : "–"}
                         </Badge>
                       </div>
                     </CardHeader>

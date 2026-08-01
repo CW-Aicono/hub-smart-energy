@@ -340,17 +340,34 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       const meterIds = await resolvePvMeterIds();
       if (meterIds.length === 0) return 0;
 
+      // "Jetzt": frischer Rohwert (≤ 15 Min), sonst jüngster 5-Min-Bucket.
+      const freshCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
       let totalKw = 0;
       for (const meterId of meterIds) {
         const { data } = await supabase
           .from("meter_power_readings")
           .select("power_value")
           .eq("meter_id", meterId)
+          .gte("recorded_at", freshCutoff)
           .order("recorded_at", { ascending: false })
           .limit(1);
-        if (data && data.length > 0) totalKw += Math.abs(data[0].power_value);
+        if (data && data.length > 0) {
+          totalKw += Math.abs(data[0].power_value);
+          continue;
+        }
+        const { data: agg } = await supabase
+          .from("meter_power_readings_5min")
+          .select("power_avg")
+          .eq("meter_id", meterId)
+          .gte("bucket", new Date(Date.now() - 60 * 60 * 1000).toISOString())
+          .order("bucket", { ascending: false })
+          .limit(1);
+        if (agg && agg.length > 0 && agg[0].power_avg != null) {
+          totalKw += Math.abs(Number(agg[0].power_avg));
+        }
       }
       return totalKw;
+
     },
     enabled: isToday,
     // Realtime invalidation pushes new PV power readings instantly; 5-min fallback poll.

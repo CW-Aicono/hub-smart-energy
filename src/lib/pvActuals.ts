@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
+
 
 export type MeterPowerReading = {
   power_value: number;
@@ -91,6 +93,35 @@ export async function fetchMeterPower5min(meterIds: string[], rangeStart: Date, 
   }
 
   return allData.sort((a, b) => a.recorded_at.localeCompare(b.recorded_at));
+}
+
+/**
+ * Primary hourly source: aggregate power series (`get_power_series_auto`).
+ * Each bucket carries its own resolution, so energy = |power_avg| × res/60.
+ * Values are returned as positive absolutes (PV yield convention).
+ */
+export async function fetchHourlyActualsFromSeries(
+  meterIds: string[],
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<Record<string, number>> {
+  if (meterIds.length === 0 || rangeEnd <= rangeStart) return {};
+
+  const rows = await fetchPowerSeriesAuto(meterIds, rangeStart, rangeEnd, 2000);
+  if (rows.length === 0) return {};
+
+  const hourBuckets: Record<string, number> = {};
+  for (const row of rows) {
+    if (row.power_avg == null || !Number.isFinite(row.power_avg)) continue;
+    const resolution = Number(row.resolution_minutes) > 0 ? Number(row.resolution_minutes) : 5;
+    const hour = toLocalHourKey(row.bucket);
+    const energyKwh = Math.abs(row.power_avg) * (resolution / 60);
+    hourBuckets[hour] = (hourBuckets[hour] ?? 0) + energyKwh;
+  }
+
+  return Object.fromEntries(
+    Object.entries(hourBuckets).map(([hour, kwh]) => [hour, round2(kwh)])
+  );
 }
 
 
@@ -327,23 +358,38 @@ export async function fetchPvActualHourly({
     ? forecastHours.filter((h) => toLocalHourKey(h.timestamp) <= currentHourKey)
     : forecastHours;
 
-  const rawReadings = await fetchMeterPowerReadings(meterIds, rangeStart, effectiveEnd);
-  const readingsSource = rawReadings.length > 0
-    ? rawReadings
-    : await fetchMeterPower5min(meterIds, rangeStart, effectiveEnd);
-  if (readingsSource.length > 0) {
-    let hourly = buildHourlyActuals(readingsSource);
+  // Primary source: zoom-aware aggregate series (5/15/60-min buckets).
+  // The legacy raw table `meter_power_readings` is no longer written for
+  // worker-aggregated meters, so it must never be the primary series source —
+  // a single leftover raw row would collapse the whole day into one hour.
+  const seriesHourly = await fetchHourlyActualsFromSeries(meterIds, rangeStart, effectiveEnd);
+  let hourly = seriesHourly;
+
+  if (Object.keys(hourly).length === 0) {
+    const rawReadings = await fetchMeterPowerReadings(meterIds, rangeStart, effectiveEnd);
+    if (rawReadings.length > 1) {
+      hourly = buildHourlyActuals(rawReadings);
+    }
+  }
+
+  if (Object.keys(hourly).length > 0) {
     if (isToday) {
       const authoritative = await fetchTodayCumulativeKwh(meterIds);
       if (authoritative != null) {
         const sum = Object.values(hourly).reduce((s, v) => s + Math.abs(v), 0);
-        hourly = sum > 0
+        const coveredHours = Object.values(hourly).filter((v) => Math.abs(v) > 0).length;
+        // Only rescale when the hourly distribution is plausible; otherwise a
+        // single covered hour would absorb the entire daily total.
+        hourly = sum > 0 && coveredHours >= 2
           ? scaleHourlyToTotal(hourly, authoritative)
-          : estimateHourlyActualsFromDailyTotal(dayStr, authoritative, clippedForecast);
+          : sum > 0
+            ? hourly
+            : estimateHourlyActualsFromDailyTotal(dayStr, authoritative, clippedForecast);
       }
     }
     return { readings: hourly, isEstimated: false, isStored: false };
   }
+
 
 
   if (isToday) {
