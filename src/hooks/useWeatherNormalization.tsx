@@ -126,12 +126,14 @@ export function useWeatherNormalization({
 
       const meterMap: Record<
         string,
-        { location_id: string; unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }
+        { location_id: string; unit: string; source_unit_energy: string | null; source_unit_power: string | null; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }
       > = {};
       for (const m of meters || []) {
         meterMap[m.id] = {
           location_id: (m as any).location_id,
           unit: m.unit,
+          source_unit_energy: (m as any).source_unit_energy ?? null,
+          source_unit_power: (m as any).source_unit_power ?? null,
           gas_type: (m as any).gas_type ?? null,
           brennwert: (m as any).brennwert ?? null,
           zustandszahl: (m as any).zustandszahl ?? null,
