@@ -193,8 +193,8 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       if (!meta || !meta.is_main_meter) return;
 
       let consumptionVal = r.value;
-      if (meta.energy_type === "gas" && meta.unit === "m³") {
-        consumptionVal = gasM3ToKWh(consumptionVal, meta.gas_type, meta.brennwert, meta.zustandszahl);
+      if (meta.energy_type === "gas") {
+        consumptionVal = resolveMeterEnergyKWh(meta as any, consumptionVal);
       }
 
       const priceKey = `${meta.location_id}:${meta.energy_type}`;
