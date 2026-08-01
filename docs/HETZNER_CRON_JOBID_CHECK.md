@@ -24,9 +24,15 @@ docker exec -i supabase-db psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1
 -- A) Hoechste vergebene Job-Nummer
 SELECT max(jobid) AS hoechste_job_nummer FROM cron.job;
 
--- B) Stand des Zaehlers, der neue Job-Nummern vergibt
-SELECT last_value AS zaehler_stand, is_called AS bereits_benutzt
-FROM cron.job_jobid_seq;
+-- B) Name des Zaehlers, der neue Job-Nummern vergibt
+SELECT pg_get_serial_sequence('cron.job', 'jobid') AS zaehler_name;
+
+-- B2) Stand aller Zaehler im cron-Schema
+SELECT schemaname, sequencename, last_value AS zaehler_stand
+FROM pg_sequences
+WHERE schemaname = 'cron';
+
+
 
 -- C) Welcher Job blockiert die Nummer 122?
 SELECT jobid, jobname, schedule, active FROM cron.job WHERE jobid = 122;
@@ -43,9 +49,12 @@ SQL
 
 ## 3. Ergebnis einordnen
 
+Bereits bekannt: Die höchste vergebene Job-Nummer (A) ist **122** — also genau die Nummer, die der Deploy-Schritt neu vergeben wollte. Das spricht dafür, dass der Zähler hinterherhinkt. Bestätigt ist das erst mit der Ausgabe zu (B2).
+
 Die Ausgabe bitte vollständig zurückmelden. Zwei Fälle sind möglich:
 
-- **Der Zähler (B) ist kleiner oder gleich der höchsten Job-Nummer (A):** Der Zähler ist nicht mehr synchron, typischerweise nach einem Datenbank-Restore. Dann wird er einmalig einmalig korrigiert und der Deploy-Schritt kann erneut laufen.
+- **Der Zählerstand (B2) ist kleiner oder gleich 122:** Der Zähler ist nicht mehr synchron, typischerweise nach einem Datenbank-Restore. Dann wird er einmalig korrigiert und der Deploy-Schritt kann erneut laufen.
 - **Unter (D) steht bereits ein aktiver Retention-Job:** Dann ist die Aufgabe faktisch bereits eingerichtet und der Deploy-Schritt ist nur noch überflüssiges Rauschen.
+
 
 Erst nach dieser Ausgabe wird die passende, minimale Korrektur festgelegt. Es werden keine Cron-Jobs blind neu angelegt oder gelöscht.
