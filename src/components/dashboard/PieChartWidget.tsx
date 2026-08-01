@@ -108,8 +108,8 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
         const energyType = meta?.energy_type || "strom";
         if (energyType in totals) {
           let val = r.value;
-          if (energyType === "gas" && meta && meta.unit === "m³") {
-            val = gasM3ToKWh(val, meta.gas_type, meta.brennwert, meta.zustandszahl);
+          if (energyType === "gas" && meta) {
+            val = resolveMeterEnergyKWh(meta as any, val);
           }
           totals[energyType] += val;
         }
