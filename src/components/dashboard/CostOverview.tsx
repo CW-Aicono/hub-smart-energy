@@ -221,8 +221,8 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       const revenuePrice = revenueLookup.get(priceKey) || 0;
 
       const toConsumption = (rawVal: number) => {
-        if (meta.energy_type === "gas" && meta.unit === "m³") {
-          return gasM3ToKWh(rawVal, meta.gas_type, meta.brennwert, meta.zustandszahl);
+        if (meta.energy_type === "gas") {
+          return resolveMeterEnergyKWh(meta as any, rawVal);
         }
         return rawVal;
       };
