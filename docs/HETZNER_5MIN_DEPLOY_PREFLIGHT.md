@@ -26,7 +26,7 @@ SELECT pt.relid::regclass AS relation,
        c.relreplident AS replica_identity
 FROM pg_partition_tree('public.meter_power_readings_5min'::regclass) pt
 JOIN pg_class c ON c.oid = pt.relid
-ORDER BY pt.level, relation::text;
+ORDER BY pt.level, pt.relid::regclass::text;
 
 SELECT p.pubname, c.oid::regclass AS explicit_publication_member
 FROM pg_publication_rel pr
@@ -44,12 +44,12 @@ FROM public.meter_power_readings_5min m5
 WHERE m5.meter_id IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM public.meters m WHERE m.id = m5.meter_id)
 GROUP BY tableoid
-ORDER BY partition::text;
+ORDER BY tableoid::regclass::text;
 
 SELECT conrelid::regclass AS relation, conname, contype, pg_get_constraintdef(oid)
 FROM pg_constraint
 WHERE conrelid IN (SELECT relid FROM pg_partition_tree('public.meter_power_readings_5min'::regclass))
-ORDER BY relation::text, conname;
+ORDER BY conrelid::regclass::text, conname;
 
 SELECT filename, applied_at
 FROM public._deploy_migrations
@@ -67,6 +67,8 @@ SQL
 ```
 
 ## 3. Ergebnis behandeln
+
+Die Ausgabe ist nur dann vollständig, wenn sie ohne `ERROR` bis zu den Definitionen der beiden Funktionen `refresh_meter_period_totals_5min` und `refresh_meter_daily_totals` durchläuft und danach wieder die normale Shell-Eingabe (`root@...#`) erscheint.
 
 Die vollständige Ausgabe vor dem nächsten Deploy speichern. Erwartet wird:
 
