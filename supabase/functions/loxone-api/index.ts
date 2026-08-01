@@ -2590,10 +2590,12 @@ serve(async (req) => {
           }
 
           // Upsert into meter_power_readings_5min
-          // Skip single-sample buckets: a 30-min Loxone statistics value would otherwise
-          // anchor a sawtooth pattern in charts where 1-min live data is also present.
+          // Skip single-sample buckets in normal backfill: a 30-min Loxone statistics
+          // value would otherwise anchor a sawtooth pattern in charts where 1-min live
+          // data is also present. In gap mode there IS no live data — keep every bucket.
+          const minSamples = isRange ? 1 : 2;
           const fiveMinInserts = Array.from(buckets.entries())
-            .filter(([, d]) => d.count >= 2)
+            .filter(([, d]) => d.count >= minSamples)
             .map(([bucket, d]) => ({
               meter_id: meter!.id,
               tenant_id: meter!.tenant_id,
@@ -2602,6 +2604,8 @@ serve(async (req) => {
               power_avg: d.sum / d.count,
               power_max: d.max,
               sample_count: d.count,
+              resolution_minutes: 5,
+              source: isRange ? "gateway_backfill" : "loxone_backfill",
             }));
 
           if (fiveMinInserts.length > 0 && !onlyTotals) {
@@ -2609,7 +2613,7 @@ serve(async (req) => {
               const chunk = fiveMinInserts.slice(i, i + 500);
               const { error: insertError } = await supabase
                 .from("meter_power_readings_5min")
-                .upsert(chunk, { onConflict: "meter_id,bucket" });
+                .upsert(chunk, { onConflict: "meter_id,bucket", ignoreDuplicates: isRange });
               if (insertError) {
                 console.error(`Error upserting 5min data for ${file.filename}:`, insertError);
                 errors.push(`${file.filename}: ${insertError.message}`);
@@ -2622,27 +2626,34 @@ serve(async (req) => {
             console.log(`Skipping 5-min upsert for ${file.filename} (totalsOnly mode)`);
           }
 
-          // Compute and upsert daily totals
-          const dailyTotals = new Map<string, number>();
-          for (const [, d] of buckets) {
-            const avg = d.sum / d.count;
-            const kwh = avg * (5 / 60); // 5-min bucket → kWh
-            dailyTotals.set(d.day, (dailyTotals.get(d.day) || 0) + kwh);
-          }
+          if (isRange) {
+            // Tagessummen NICHT aus dem Teilfenster schreiben — das würde den
+            // Tagesverbrauch auf die Lücke reduzieren. Stattdessen wird der Tag
+            // nach dem Durchlauf komplett aus den 5-Min-Werten neu berechnet.
+            for (const [, d] of buckets) touchedDays.add(d.day);
+          } else {
+            // Compute and upsert daily totals
+            const dailyTotals = new Map<string, number>();
+            for (const [, d] of buckets) {
+              const avg = d.sum / d.count;
+              const kwh = avg * (5 / 60); // 5-min bucket → kWh
+              dailyTotals.set(d.day, (dailyTotals.get(d.day) || 0) + kwh);
+            }
 
-          for (const [day, totalKwh] of dailyTotals) {
-            if (totalKwh > 0) {
-              await supabase
-                .from("meter_period_totals")
-                .upsert({
-                  tenant_id: meter.tenant_id,
-                  meter_id: meter.id,
-                  period_type: "day",
-                  period_start: day,
-                  total_value: Math.round(totalKwh * 100) / 100,
-                  energy_type: meter.energy_type,
-                  source: "loxone_backfill",
-                }, { onConflict: "meter_id,period_type,period_start" });
+            for (const [day, totalKwh] of dailyTotals) {
+              if (totalKwh > 0) {
+                await supabase
+                  .from("meter_period_totals")
+                  .upsert({
+                    tenant_id: meter.tenant_id,
+                    meter_id: meter.id,
+                    period_type: "day",
+                    period_start: day,
+                    total_value: Math.round(totalKwh * 100) / 100,
+                    energy_type: meter.energy_type,
+                    source: "loxone_backfill",
+                  }, { onConflict: "meter_id,period_type,period_start" });
+              }
             }
           }
         } catch (err) {
