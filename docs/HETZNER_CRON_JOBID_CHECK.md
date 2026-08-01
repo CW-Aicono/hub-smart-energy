@@ -49,9 +49,12 @@ SQL
 
 ## 3. Ergebnis einordnen
 
+Bereits bekannt: Die höchste vergebene Job-Nummer (A) ist **122** — also genau die Nummer, die der Deploy-Schritt neu vergeben wollte. Das spricht dafür, dass der Zähler hinterherhinkt. Bestätigt ist das erst mit der Ausgabe zu (B2).
+
 Die Ausgabe bitte vollständig zurückmelden. Zwei Fälle sind möglich:
 
-- **Der Zähler (B) ist kleiner oder gleich der höchsten Job-Nummer (A):** Der Zähler ist nicht mehr synchron, typischerweise nach einem Datenbank-Restore. Dann wird er einmalig einmalig korrigiert und der Deploy-Schritt kann erneut laufen.
+- **Der Zählerstand (B2) ist kleiner oder gleich 122:** Der Zähler ist nicht mehr synchron, typischerweise nach einem Datenbank-Restore. Dann wird er einmalig korrigiert und der Deploy-Schritt kann erneut laufen.
 - **Unter (D) steht bereits ein aktiver Retention-Job:** Dann ist die Aufgabe faktisch bereits eingerichtet und der Deploy-Schritt ist nur noch überflüssiges Rauschen.
+
 
 Erst nach dieser Ausgabe wird die passende, minimale Korrektur festgelegt. Es werden keine Cron-Jobs blind neu angelegt oder gelöscht.
