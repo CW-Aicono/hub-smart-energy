@@ -51,11 +51,13 @@ export function useMonthlyConsumptionByType({ locationId, energyType, year }: Op
       const { data: meters } = await metersQuery;
       const meterMap: Record<
         string,
-        { unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }
+        { unit: string; source_unit_energy: string | null; source_unit_power: string | null; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }
       > = {};
       for (const m of meters || []) {
         meterMap[m.id] = {
           unit: (m as any).unit,
+          source_unit_energy: (m as any).source_unit_energy ?? null,
+          source_unit_power: (m as any).source_unit_power ?? null,
           gas_type: (m as any).gas_type ?? null,
           brennwert: (m as any).brennwert ?? null,
           zustandszahl: (m as any).zustandszahl ?? null,
@@ -69,9 +71,8 @@ export function useMonthlyConsumptionByType({ locationId, energyType, year }: Op
       const toWh = (rawValue: number, meterId: string): number => {
         const m = meterMap[meterId];
         if (!m) return rawValue * 1000;
-        if (energyType === "gas" && m.unit === "m³") {
-          const kWh = gasM3ToKWh(rawValue, m.gas_type, m.brennwert, m.zustandszahl);
-          return kWh * 1000;
+        if (energyType === "gas") {
+          return resolveMeterEnergyKWh({ ...m, energy_type: "gas" }, rawValue) * 1000;
         }
         return rawValue * 1000;
       };
