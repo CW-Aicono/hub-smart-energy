@@ -498,17 +498,22 @@ export async function fetchPvActualHourly({
         const coveredHours = Object.values(hourly).filter((v) => Math.abs(v) > 0).length;
         const hasCoverageInfo = Object.keys(hourlyCoverage).length > 0;
         if (sum > 0 && coveredHours >= 2) {
-          // Bevorzugt: Abgleich nur auf Stunden mit Messlücken, damit
-          // vollständig gemessene Stunden exakt bleiben.
-          hourly = hasCoverageInfo
-            ? reconcileHourlyWithCoverage(hourly, hourlyCoverage, authoritative)
-            : scaleHourlyToTotal(hourly, authoritative);
+          // Bevorzugt: Abgleich nur auf Stunden mit Messlücken bzw. auf
+          // Stunden, die aus dem Gateway-Speicher nachgetragen wurden.
+          // Live gemessene Vollstunden bleiben exakt.
+          if (hasCoverageInfo) {
+            const derivedHours = await fetchBackfilledHours(meterIds, rangeStart, effectiveEnd);
+            hourly = reconcileHourlyWithCoverage(hourly, hourlyCoverage, authoritative, derivedHours);
+          } else {
+            hourly = scaleHourlyToTotal(hourly, authoritative);
+          }
         } else if (sum <= 0) {
           hourly = estimateHourlyActualsFromDailyTotal(dayStr, authoritative, clippedForecast);
         }
       }
     }
     return { readings: hourly, isEstimated: false, isStored: false };
+
   }
 
 
