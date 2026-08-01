@@ -879,14 +879,25 @@ async function connect(state: ConnState): Promise<void> {
           });
           continue;
         }
-        // Fallback: Block-UUID direkt als Momentanwert behandeln (alte Logik).
-        state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: momRole });
+        // v1.17: KEIN Momentanwert-Fallback auf die Block-UUID mehr.
+        // Bei fehlender/unvollständiger LoxAPP3-Struktur (z. B. direkt nach einem
+        // Reconnect) lieferte die Block-UUID häufig den Zählerstand (kWh) und
+        // erzeugte damit Leistungs-Spitzen in Zählerstandshöhe. Der Block wird
+        // nur noch als Diagnose-Eintrag (role="aux") registriert; die echte
+        // Leistung kommt aus der Struktur oder aus power_state_uuid.
+        state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: "aux", state_key: "(block)" });
         blocksFallback++;
         totalSubs++;
+        const reason = loxApp3Ok ? (ctrl ? "keine passenden States im Block" : "Block nicht in LoxAPP3 gefunden") : "LoxAPP3-Struktur nicht verfügbar";
+        log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): ${reason} — kein Momentanwert gemappt (v1.17)`);
+        bridgeLog("warn", "ws_block_unmapped", `Block ohne Momentanwert-State: ${reason}`, state.serialNumber, {
+          block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
+          expected_role: momRole, loxapp3_ok: loxApp3Ok,
+        });
         blockDiag.push({
           block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
           control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
-          states: [{ key: "(block-fallback)", role: momRole }],
+          states: [{ key: "(block)", role: "aux (kein Fallback, v1.17)" }],
         });
         continue;
       }
