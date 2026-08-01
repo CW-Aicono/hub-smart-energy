@@ -277,9 +277,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
     const convertGas = (meterId: string, value: number): number => {
       const info = meterMap[meterId];
-      if (info?.energy_type === "gas" && info.unit === "m³") {
-        return gasM3ToKWh(value, info.gas_type, info.brennwert, info.zustandszahl);
-      }
+      if (info?.energy_type === "gas") return resolveMeterEnergyKWh(info, value);
       return value;
     };
 
