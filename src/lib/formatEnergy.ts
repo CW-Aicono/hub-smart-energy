@@ -96,6 +96,53 @@ export function gasM3ToKWh(
   return m3 * 10;
 }
 
+export type EnergyMeterLike = {
+  energy_type?: string | null;
+  unit?: string | null;
+  source_unit_energy?: string | null;
+  source_unit_power?: string | null;
+  gas_type?: string | null;
+  brennwert?: number | null;
+  zustandszahl?: number | null;
+};
+
+const VOLUME_UNIT_RX = /^(m³|m3)(\/h)?$/i;
+
+/**
+ * Single source of truth for turning a raw meter value into kWh.
+ *
+ * Rule: the gateway unit decides. If the gateway already reports energy
+ * (kWh/Wh/MWh), no gas conversion is applied — this prevents the historic
+ * double conversion. Only volume units (m³, m³/h) are converted via
+ * brennwert × zustandszahl. Water stays a volume and is returned unchanged.
+ */
+export function resolveMeterEnergyKWh(meter: EnergyMeterLike | null | undefined, rawValue: number): number {
+  if (!meter) return rawValue;
+  if (meter.energy_type === "wasser") return rawValue;
+
+  const unit = (meter.source_unit_energy ?? meter.source_unit_power ?? meter.unit ?? "").toString().trim();
+  const u = unit.toLowerCase();
+
+  if (u === "wh") return rawValue / 1000;
+  if (u === "mwh") return rawValue * 1000;
+  if (u === "kwh" || u === "kw" || u === "w" || u === "mw") return rawValue;
+
+  if (meter.energy_type === "gas") {
+    if (!unit || VOLUME_UNIT_RX.test(unit)) {
+      return gasM3ToKWh(rawValue, meter.gas_type ?? null, meter.brennwert ?? null, meter.zustandszahl ?? null);
+    }
+  }
+  return rawValue;
+}
+
+/** True when a gas meter delivers volume but has no calorific value configured. */
+export function gasNeedsBrennwert(meter: EnergyMeterLike | null | undefined): boolean {
+  if (!meter || meter.energy_type !== "gas") return false;
+  const unit = (meter.source_unit_energy ?? meter.source_unit_power ?? meter.unit ?? "").toString().trim();
+  if (unit && !VOLUME_UNIT_RX.test(unit)) return false;
+  return !(meter.brennwert != null && meter.brennwert > 0);
+}
+
 /**
  * Formats a gas value showing both m³ and the kWh equivalent.
  */

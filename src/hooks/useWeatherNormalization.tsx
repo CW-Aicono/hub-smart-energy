@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
-import { gasM3ToKWh } from "@/lib/formatEnergy";
+import { gasM3ToKWh, resolveMeterEnergyKWh } from "@/lib/formatEnergy";
 import { useTenant } from "./useTenant";
 import {
   estimateHotWaterBaselineKwhPerMonth,
@@ -118,7 +118,7 @@ export function useWeatherNormalization({
       const locationIds = locations.map((l) => l.id);
       const { data: meters } = await supabase
         .from("meters")
-        .select("id, location_id, unit, gas_type, brennwert, zustandszahl")
+        .select("id, location_id, unit, source_unit_energy, source_unit_power, gas_type, brennwert, zustandszahl")
         .in("location_id", locationIds)
         .eq("energy_type", energyType)
         .eq("is_main_meter", true)
@@ -126,12 +126,14 @@ export function useWeatherNormalization({
 
       const meterMap: Record<
         string,
-        { location_id: string; unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }
+        { location_id: string; unit: string; source_unit_energy: string | null; source_unit_power: string | null; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }
       > = {};
       for (const m of meters || []) {
         meterMap[m.id] = {
           location_id: (m as any).location_id,
           unit: m.unit,
+          source_unit_energy: (m as any).source_unit_energy ?? null,
+          source_unit_power: (m as any).source_unit_power ?? null,
           gas_type: (m as any).gas_type ?? null,
           brennwert: (m as any).brennwert ?? null,
           zustandszahl: (m as any).zustandszahl ?? null,
@@ -150,9 +152,8 @@ export function useWeatherNormalization({
       const toWh = (rawValue: number, meterId: string): number => {
         const m = meterMap[meterId];
         if (!m) return rawValue * 1000;
-        if (energyType === "gas" && m.unit === "m³") {
-          const kWh = gasM3ToKWh(rawValue, m.gas_type, m.brennwert, m.zustandszahl);
-          return kWh * 1000;
+        if (energyType === "gas") {
+          return resolveMeterEnergyKWh({ ...m, energy_type: "gas" }, rawValue) * 1000;
         }
         return rawValue * 1000;
       };

@@ -17,7 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
 import { cn } from "@/lib/utils";
-import { gasM3ToKWh } from "@/lib/formatEnergy";
+import { resolveMeterEnergyKWh } from "@/lib/formatEnergy";
 import {
   format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   startOfQuarter, endOfQuarter, startOfYear, endOfYear,
@@ -78,11 +78,10 @@ function getPeriodLabel(period: ChartPeriod, ref: Date, locale: Locale, cwPrefix
 
 function getUnitForPeriod(period: ChartPeriod, energyType: string): string {
   if (period === "day") {
-    if (energyType === "wasser") return "Liter";
-    if (energyType === "gas") return "m³/h";
+    if (energyType === "wasser") return "m³/h";
     return "kW";
   }
-  if (energyType === "wasser" || energyType === "gas") return "m³";
+  if (energyType === "wasser") return "m³";
   return "kWh";
 }
 
@@ -154,8 +153,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const subtitle = selectedLocation ? T("chart.dataFor").replace("{name}", selectedLocation.name) : T("chart.allLocations");
 
   const meterMap = useMemo(() => {
-    const map: Record<string, { energy_type: string; capture_type: string; location_id: string; is_main_meter: boolean; unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
-    meters.forEach((m) => { map[m.id] = { energy_type: m.energy_type, capture_type: m.capture_type, location_id: m.location_id, is_main_meter: m.is_main_meter, unit: m.unit, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null }; });
+    const map: Record<string, { energy_type: string; capture_type: string; location_id: string; is_main_meter: boolean; unit: string; source_unit_energy: string | null; source_unit_power: string | null; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
+    meters.forEach((m) => { map[m.id] = { energy_type: m.energy_type, capture_type: m.capture_type, location_id: m.location_id, is_main_meter: m.is_main_meter, unit: m.unit, source_unit_energy: (m as any).source_unit_energy ?? null, source_unit_power: (m as any).source_unit_power ?? null, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null }; });
     return map;
   }, [meters]);
 
@@ -278,9 +277,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
     const convertGas = (meterId: string, value: number): number => {
       const info = meterMap[meterId];
-      if (info?.energy_type === "gas" && info.unit === "m³") {
-        return gasM3ToKWh(value, info.gas_type, info.brennwert, info.zustandszahl);
-      }
+      if (info?.energy_type === "gas") return resolveMeterEnergyKWh(info, value);
       return value;
     };
 
@@ -347,8 +344,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         if (!info || !info.is_main_meter) continue;
         if (locationId && info.location_id !== locationId) continue;
         if (pt.totalDay != null) {
-          const converted = info.energy_type === "gas" && info.unit === "m³"
-            ? gasM3ToKWh(pt.totalDay, info.gas_type, info.brennwert, info.zustandszahl)
+          const converted = info.energy_type === "gas"
+            ? resolveMeterEnergyKWh(info, pt.totalDay)
             : pt.totalDay;
           addToEnergyBucket(bucket, info.energy_type, converted);
         }
@@ -493,7 +490,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           if (v == null) continue;
           const et = s.et as EnergyKey;
           if (!ENERGY_KEYS.includes(et)) continue;
-          buckets[i][et] += v;
+          // Gas: Durchfluss (m³/h) → Leistung (kW) über Brennwert/Zustandszahl,
+          // damit die Tagesansicht durchgängig in kW beschriftet werden kann.
+          buckets[i][et] += et === "gas" ? convertGas(mid, v) : v;
           if (!filledFlag[mid][i]) realIndices[et]?.add(i);
         }
       }
