@@ -402,15 +402,19 @@ function reconcileHourlyWithCoverage(
   hourly: Record<string, number>,
   coverage: Record<string, number>,
   target: number,
+  derivedHours: Set<string> = new Set(),
 ): Record<string, number> {
   const entries = Object.entries(hourly).sort(([a], [b]) => a.localeCompare(b));
   if (entries.length === 0 || target <= 0) return hourly;
 
-  const incomplete = entries.filter(([hour]) => (coverage[hour] ?? 0) < FULL_COVERAGE_MINUTES);
+  const isAdjustable = (hour: string) =>
+    (coverage[hour] ?? 0) < FULL_COVERAGE_MINUTES || derivedHours.has(hour);
+
+  const incomplete = entries.filter(([hour]) => isAdjustable(hour));
   if (incomplete.length === 0) return hourly;
 
   const completeSum = entries
-    .filter(([hour]) => (coverage[hour] ?? 0) >= FULL_COVERAGE_MINUTES)
+    .filter(([hour]) => !isAdjustable(hour))
     .reduce((s, [, v]) => s + Math.abs(v), 0);
   const incompleteSum = incomplete.reduce((s, [, v]) => s + Math.abs(v), 0);
   const remaining = target - completeSum;
@@ -425,11 +429,13 @@ function reconcileHourlyWithCoverage(
 
   const result: Record<string, number> = {};
   for (const [hour, value] of entries) {
-    const isIncomplete = (coverage[hour] ?? 0) < FULL_COVERAGE_MINUTES;
-    result[hour] = isIncomplete ? round2(Math.abs(value) * factor) : round2(Math.abs(value));
+    result[hour] = isAdjustable(hour)
+      ? round2(Math.abs(value) * factor)
+      : round2(Math.abs(value));
   }
   return result;
 }
+
 
 
 export async function fetchPvActualHourly({
