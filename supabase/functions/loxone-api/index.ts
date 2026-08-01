@@ -2317,15 +2317,30 @@ serve(async (req) => {
     //   Then entries aligned to entrySize, each containing:
     //     - 2x uint16 (UUID parts) + 1x uint32 (Loxone timestamp) + N x float64 (values)
     //   Loxone timestamp = seconds since 2009-01-01 00:00:00 UTC
-    if (action === "backfillStatistics") {
-      const { fromDate, toDate, totalsOnly } = requestBody;
-      if (!fromDate || !toDate) throw new Error("fromDate und toDate sind erforderlich (YYYY-MM-DD)");
+    if (action === "backfillStatistics" || action === "backfillRange") {
+      // backfillRange: Lückenfüllung. Nimmt ISO-Zeitstempel (from/to) statt
+      // Kalendertagen und optional eine Meter-Auswahl. Der Upsert läuft über
+      // (meter_id, bucket) — vorhandene Live-Werte werden nie überschrieben.
+      const isRange = action === "backfillRange";
+      const { fromDate, toDate, totalsOnly, from, to, meterIds } = requestBody;
+      if (isRange) {
+        if (!from || !to) throw new Error("from und to sind erforderlich (ISO-Zeitstempel)");
+      } else if (!fromDate || !toDate) {
+        throw new Error("fromDate und toDate sind erforderlich (YYYY-MM-DD)");
+      }
+
+      const startD = isRange ? new Date(from) : new Date(fromDate + "T00:00:00Z");
+      const endD = isRange ? new Date(to) : new Date(toDate + "T23:59:59Z");
+      if (isNaN(startD.getTime()) || isNaN(endD.getTime())) throw new Error("Ungültiger Zeitraum");
+
+      const restrictMeterIds: string[] | null =
+        Array.isArray(meterIds) && meterIds.length > 0 ? meterIds.filter((m: unknown) => typeof m === "string") : null;
 
       // totalsOnly=true: nur meter_period_totals (Tagessummen) abgleichen,
       // die 5-Min-Werte in meter_power_readings_5min werden NICHT überschrieben.
       // Verwendet vom täglichen Cron, damit der feine Live-Graph erhalten bleibt.
-      const onlyTotals = totalsOnly === true;
-      console.log(`Backfill statistics (binary): ${fromDate} to ${toDate} for integration ${locationIntegrationId} (totalsOnly=${onlyTotals})`);
+      const onlyTotals = !isRange && totalsOnly === true;
+      console.log(`Backfill (${action}): ${startD.toISOString()} → ${endD.toISOString()} for integration ${locationIntegrationId} (totalsOnly=${onlyTotals}, meters=${restrictMeterIds?.length ?? "alle"})`);
 
       const LOXONE_EPOCH_OFFSET = 1230768000; // 2009-01-01 00:00:00 UTC in Unix seconds
 
@@ -2340,12 +2355,14 @@ serve(async (req) => {
       }
 
       // 1) Get linked automatic meters with sensor_uuid
-      const { data: linkedMeters } = await supabase
+      let metersQuery = supabase
         .from("meters")
         .select("id, sensor_uuid, energy_type, tenant_id")
         .eq("location_integration_id", locationIntegrationId)
         .eq("capture_type", "automatic")
         .eq("is_archived", false);
+      if (restrictMeterIds) metersQuery = metersQuery.in("id", restrictMeterIds);
+      const { data: linkedMeters } = await metersQuery;
 
       if (!linkedMeters || linkedMeters.length === 0) {
         return new Response(
@@ -2404,9 +2421,7 @@ serve(async (req) => {
         console.log(`First 10 files: ${availableFiles.slice(0, 10).map(f => `${f.filename} -> uuid=${f.uuid}, month=${f.yearMonth}`).join(" | ")}`);
       }
 
-      // Determine needed months
-      const startD = new Date(fromDate + "T00:00:00Z");
-      const endD = new Date(toDate + "T23:59:59Z");
+      // Determine needed months (startD/endD are resolved above)
       const neededMonths = new Set<string>();
       for (let d = new Date(startD.getFullYear(), startD.getMonth(), 1); d <= endD; d.setMonth(d.getMonth() + 1)) {
         neededMonths.add(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`);
@@ -2449,6 +2464,7 @@ serve(async (req) => {
       let totalInserted = 0;
       const errors: string[] = [];
       let processedCount = 0;
+      const touchedDays = new Set<string>();
 
       // 3) Download and parse each stat file (XML format)
       // Loxone stats XML format:
@@ -2575,10 +2591,12 @@ serve(async (req) => {
           }
 
           // Upsert into meter_power_readings_5min
-          // Skip single-sample buckets: a 30-min Loxone statistics value would otherwise
-          // anchor a sawtooth pattern in charts where 1-min live data is also present.
+          // Skip single-sample buckets in normal backfill: a 30-min Loxone statistics
+          // value would otherwise anchor a sawtooth pattern in charts where 1-min live
+          // data is also present. In gap mode there IS no live data — keep every bucket.
+          const minSamples = isRange ? 1 : 2;
           const fiveMinInserts = Array.from(buckets.entries())
-            .filter(([, d]) => d.count >= 2)
+            .filter(([, d]) => d.count >= minSamples)
             .map(([bucket, d]) => ({
               meter_id: meter!.id,
               tenant_id: meter!.tenant_id,
@@ -2587,6 +2605,8 @@ serve(async (req) => {
               power_avg: d.sum / d.count,
               power_max: d.max,
               sample_count: d.count,
+              resolution_minutes: 5,
+              source: isRange ? "gateway_backfill" : "loxone_backfill",
             }));
 
           if (fiveMinInserts.length > 0 && !onlyTotals) {
@@ -2594,7 +2614,9 @@ serve(async (req) => {
               const chunk = fiveMinInserts.slice(i, i + 500);
               const { error: insertError } = await supabase
                 .from("meter_power_readings_5min")
-                .upsert(chunk, { onConflict: "meter_id,bucket" });
+                // Unique-Index der partitionierten Tabelle:
+                // (meter_id, bucket, resolution_minutes) — alle drei Spalten nötig.
+                .upsert(chunk, { onConflict: "meter_id,bucket,resolution_minutes", ignoreDuplicates: isRange });
               if (insertError) {
                 console.error(`Error upserting 5min data for ${file.filename}:`, insertError);
                 errors.push(`${file.filename}: ${insertError.message}`);
@@ -2607,27 +2629,34 @@ serve(async (req) => {
             console.log(`Skipping 5-min upsert for ${file.filename} (totalsOnly mode)`);
           }
 
-          // Compute and upsert daily totals
-          const dailyTotals = new Map<string, number>();
-          for (const [, d] of buckets) {
-            const avg = d.sum / d.count;
-            const kwh = avg * (5 / 60); // 5-min bucket → kWh
-            dailyTotals.set(d.day, (dailyTotals.get(d.day) || 0) + kwh);
-          }
+          if (isRange) {
+            // Tagessummen NICHT aus dem Teilfenster schreiben — das würde den
+            // Tagesverbrauch auf die Lücke reduzieren. Stattdessen wird der Tag
+            // nach dem Durchlauf komplett aus den 5-Min-Werten neu berechnet.
+            for (const [, d] of buckets) touchedDays.add(d.day);
+          } else {
+            // Compute and upsert daily totals
+            const dailyTotals = new Map<string, number>();
+            for (const [, d] of buckets) {
+              const avg = d.sum / d.count;
+              const kwh = avg * (5 / 60); // 5-min bucket → kWh
+              dailyTotals.set(d.day, (dailyTotals.get(d.day) || 0) + kwh);
+            }
 
-          for (const [day, totalKwh] of dailyTotals) {
-            if (totalKwh > 0) {
-              await supabase
-                .from("meter_period_totals")
-                .upsert({
-                  tenant_id: meter.tenant_id,
-                  meter_id: meter.id,
-                  period_type: "day",
-                  period_start: day,
-                  total_value: Math.round(totalKwh * 100) / 100,
-                  energy_type: meter.energy_type,
-                  source: "loxone_backfill",
-                }, { onConflict: "meter_id,period_type,period_start" });
+            for (const [day, totalKwh] of dailyTotals) {
+              if (totalKwh > 0) {
+                await supabase
+                  .from("meter_period_totals")
+                  .upsert({
+                    tenant_id: meter.tenant_id,
+                    meter_id: meter.id,
+                    period_type: "day",
+                    period_start: day,
+                    total_value: Math.round(totalKwh * 100) / 100,
+                    energy_type: meter.energy_type,
+                    source: "loxone_backfill",
+                  }, { onConflict: "meter_id,period_type,period_start" });
+              }
             }
           }
         } catch (err) {
@@ -2637,7 +2666,23 @@ serve(async (req) => {
         }
       }
 
+      // Nach dem Lückenfüllen die betroffenen Tage vollständig aus den
+      // 5-Min-Werten neu berechnen (nie aus dem Teilfenster ableiten).
+      const recomputedDays: string[] = [];
+      if (isRange && touchedDays.size > 0) {
+        for (const day of Array.from(touchedDays).sort()) {
+          const { error: rpcError } = await supabase.rpc("compute_daily_totals_from_5min", { p_day: day });
+          if (rpcError) {
+            console.error(`Tagesneuberechnung ${day} fehlgeschlagen:`, rpcError.message);
+            errors.push(`recompute ${day}: ${rpcError.message}`);
+          } else {
+            recomputedDays.push(day);
+          }
+        }
+      }
+
       return new Response(
+
         JSON.stringify({
           success: true,
           message: `Backfill abgeschlossen: ${totalInserted} Datenpunkte aus ${processedCount} Dateien nachgetragen`,
@@ -2648,6 +2693,7 @@ serve(async (req) => {
           linkedMeterCount: linkedMeters.length,
           sensorUuids: linkedMeters.map(m => m.sensor_uuid).filter(Boolean),
           statsIndexSample: statsIndexText.substring(0, 1000),
+          recomputedDays: recomputedDays.length > 0 ? recomputedDays : undefined,
           errors: errors.length > 0 ? errors : undefined,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
