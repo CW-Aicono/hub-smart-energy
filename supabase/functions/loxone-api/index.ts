@@ -2691,6 +2691,7 @@ serve(async (req) => {
           linkedMeterCount: linkedMeters.length,
           sensorUuids: linkedMeters.map(m => m.sensor_uuid).filter(Boolean),
           statsIndexSample: statsIndexText.substring(0, 1000),
+          recomputedDays: recomputedDays.length > 0 ? recomputedDays : undefined,
           errors: errors.length > 0 ? errors : undefined,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
