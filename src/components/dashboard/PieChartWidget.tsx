@@ -10,7 +10,7 @@ import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useTranslation } from "@/hooks/useTranslation";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, format } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
-import { gasM3ToKWh } from "@/lib/formatEnergy";
+import { gasM3ToKWh, resolveMeterEnergyKWh } from "@/lib/formatEnergy";
 import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
 import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
 
@@ -54,9 +54,9 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
   }, [meters]);
 
   const meterMap = useMemo(() => {
-    const map: Record<string, { energy_type: string; location_id: string; is_main_meter: boolean; capture_type: string; unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
+    const map: Record<string, { energy_type: string; location_id: string; is_main_meter: boolean; capture_type: string; unit: string; source_unit_energy: string | null; source_unit_power: string | null; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
     meters.forEach((m) => {
-      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, is_main_meter: m.is_main_meter, capture_type: m.capture_type, unit: m.unit, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null };
+      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, is_main_meter: m.is_main_meter, capture_type: m.capture_type, unit: m.unit, source_unit_energy: (m as any).source_unit_energy ?? null, source_unit_power: (m as any).source_unit_power ?? null, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null };
     });
     return map;
   }, [meters]);
@@ -108,8 +108,8 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
         const energyType = meta?.energy_type || "strom";
         if (energyType in totals) {
           let val = r.value;
-          if (energyType === "gas" && meta && meta.unit === "m³") {
-            val = gasM3ToKWh(val, meta.gas_type, meta.brennwert, meta.zustandszahl);
+          if (energyType === "gas" && meta) {
+            val = resolveMeterEnergyKWh(meta as any, val);
           }
           totals[energyType] += val;
         }
@@ -134,8 +134,8 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
 
       if (rawVal != null && rawVal > 0) {
         let val = rawVal;
-        if (energyType === "gas" && m.unit === "m³") {
-          val = gasM3ToKWh(val, m.gas_type ?? null, m.brennwert ?? null, m.zustandszahl ?? null);
+        if (energyType === "gas") {
+          val = resolveMeterEnergyKWh(m as any, val);
         }
         totals[energyType] += val;
       }

@@ -10,7 +10,7 @@
  import { useTranslation } from "@/hooks/useTranslation";
  import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
  import { useMemo, useState, useRef, useEffect } from "react";
- import { formatEnergy, formatEnergyByType, gasM3ToKWh } from "@/lib/formatEnergy";
+ import { formatEnergy, formatEnergyByType, resolveMeterEnergyKWh } from "@/lib/formatEnergy";
  import { supabase } from "@/integrations/supabase/client";
  import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
  import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, endOfDay, addDays, addWeeks, addMonths, addQuarters, addYears, getISOWeek, format } from "date-fns";
@@ -227,9 +227,9 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
     const flowMap: Record<string, number> = {};
 
     // Convert a period total to Wh (base unit for formatEnergy).
-    // Gas meters: totalDay is in m³ → convert to kWh via gasM3ToKWh, then ×1000 → Wh.
-    // Other meters: totalDay is in kWh (default source_unit_energy) → ×1000 → Wh.
-    // If source_unit_energy is "Wh", the value is already in Wh.
+    // Central rule: resolveMeterEnergyKWh decides based on the configured
+    // gateway unit whether a gas volume must be converted (m³ → kWh) or the
+    // value already is energy. Water stays a volume.
     const toBaseUnit = (meterId: string, rawValue: number): number => {
       const m = meterMap[meterId];
       if (!m) return rawValue;
@@ -237,16 +237,7 @@ const SankeyWidget = ({ locationId }: SankeyWidgetProps) => {
       // Water: values are in m³ — no conversion needed, pass through as-is
       if (m.energy_type === "wasser") return rawValue;
 
-      // Gas with m³ unit: convert volume to energy (kWh) → then to Wh for unified display
-      if (m.energy_type === "gas") {
-        const kWh = gasM3ToKWh(rawValue, m.gas_type, m.brennwert, m.zustandszahl);
-        return kWh * 1000; // kWh → Wh
-      }
-
-      // Source unit determines scaling
-      if (m.source_unit_energy === "Wh") return rawValue;
-      // Default: gateway reports kWh
-      return rawValue * 1000; // kWh → Wh
+      return resolveMeterEnergyKWh(m, rawValue) * 1000; // kWh → Wh
     };
 
     const addFlow = (energyType: string, locId: string, floorId: string | null, roomId: string | null, rawValue: number) => {
