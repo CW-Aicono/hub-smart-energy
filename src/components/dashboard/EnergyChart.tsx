@@ -490,7 +490,9 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
           if (v == null) continue;
           const et = s.et as EnergyKey;
           if (!ENERGY_KEYS.includes(et)) continue;
-          buckets[i][et] += v;
+          // Gas: Durchfluss (m³/h) → Leistung (kW) über Brennwert/Zustandszahl,
+          // damit die Tagesansicht durchgängig in kW beschriftet werden kann.
+          buckets[i][et] += et === "gas" ? convertGas(mid, v) : v;
           if (!filledFlag[mid][i]) realIndices[et]?.add(i);
         }
       }
