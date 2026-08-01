@@ -1,49 +1,72 @@
-# Rollen aus den Messstellen-Einstellungen ableiten — kein zweites Regelwerk
+# Hetzner-Deploy dauerhaft entblocken: Waisen und Migrationsreihenfolge beheben
 
-Kein Denkfehler, du hast recht. Die Information, die der Worker zum Zuordnen braucht, steht bereits am Zähler. Das Mapping-Panel soll nicht parallel dazu ein eigenes Wissen aufbauen, sondern das vorhandene benutzen.
+## Bestätigte Ursache
 
-## Was heute schon in der Datenbank steht (verifiziert)
+Der neue Deploy scheitert noch an exakt derselben Migration `20260731225555_...sql`. Der bereits erstellte Schutz steht erst in `20260801065203_...sql` und kann deshalb nie ausgeführt werden:
 
-`meters` hat neben `energy_type` bereits `device_type`, `source_unit_power` und `source_unit_energy` — genau die Felder aus dem Dialog „Gerät bearbeiten" („Einheit des Gateways"). Aktueller Bestand der Loxone-verknüpften Geräte:
+```text
+20260731225555  sofortiger Refresh → FK-Fehler → Deploy-Abbruch/Rollback
+20260801065203  Waisen bereinigen + Funktion härten → wird nie erreicht
+```
 
-- 35 × `meter` / `strom` mit kW + kWh
-- 5 × `meter` / `gas` mit kW + kWh
-- 1 × `meter` / `wasser` mit **m³/h + m³**
-- 16 × `actuator` und 9 × `sensor` mit `bool` + `bool` (Taster, Schaltausgänge — z. B. „Reset Max Gesamt")
+Zusätzlich wurde beim Wechsel auf die partitionierte Tabelle `meter_power_readings_5min` am 30.07. der bisherige Fremdschlüssel zu `meters` nicht übernommen. Dadurch können gelöschte Messstellen weiterhin als UUID in der 5‑Minuten-Historie stehen bleiben. Das erklärt, warum der Datensatz `cdf9b73b-...` überhaupt entstehen und den Refresh dauerhaft blockieren konnte.
 
-Damit ist pro Gerät bereits eindeutig hinterlegt, ob und in welcher Einheit ein Momentanwert erwartet wird.
+Eine zweite Aggregation, `refresh_meter_daily_totals`, liest dieselbe 5‑Minuten-Tabelle ebenfalls ohne Prüfung gegen `meters`. Nach Behebung des ersten Fehlers könnte daher dort der nächste FK-Fehler auftreten.
 
 ## Umsetzung
 
-### 1. Der Worker liest die erwartete Rolle aus dem Zähler (v1.16)
-Statt der Sonderregel `isFlowLikeType()` (aktuell in `docs/loxone-ws-worker/index.ts`, Zeile 706, sperrt Gas/Wasser pauschal aus) entscheidet die Konfiguration des Zählers:
+### 1. Die tatsächlich fehlschlagende Migration selbst deployfähig machen
 
-- `device_type = actuator/sensor` mit `source_unit_power = bool` → **kein** Momentanwert erwartet. Der Block wird als reiner Schalt-/Statusbaustein geführt und taucht gar nicht mehr als offene Zuordnung auf.
-- `source_unit_power` = kW/W → Momentanleistung (Rolle `pwr`), wie bisher.
-- `source_unit_power` = m³/h, l/min, l/h → **Durchfluss** (neue Rolle `flow`) — für Gas und Wasser aus dem Reedkontakt-Impuls, den der Miniserver bereits in eine Menge/Zeit umrechnet. Bei Gas wird daraus zusätzlich kW über Brennwert × Zustandszahl berechnet, bei Wasser bleibt m³/h stehen.
-- Der passende State wird über Name **und** die Einheit aus der Loxone-Struktur gewählt; stimmt die Einheit nicht mit der am Zähler hinterlegten überein, wird nichts geschrieben und die Abweichung gemeldet — statt zu raten.
+Die noch nicht auf Hetzner angewendete Migration `20260731225555_...sql` wird vor ihrem sofortigen Refresh um einen idempotenten Schutz ergänzt:
 
-### 2. Das Mapping-Panel wird zur Ausnahmeliste
-Es bleibt nur für den Rest: Blöcke, bei denen Zählerkonfiguration und Loxone-Struktur nicht zusammenpassen. Konkret:
-- Aktoren/Taster und alles mit `bool` verschwinden aus der Liste.
-- Bei Gas/Wasser heißt die Spalte „Durchfluss-State" (m³/h) statt „Leistungs-State".
-- Zeile mit Konflikt zeigt an, was erwartet wurde und was der Miniserver liefert, plus Direktlink „Messstelle bearbeiten" — der Fix passiert dort, nicht in einem Zweit-UI.
+- Verwaiste `meter_id` in `meter_power_readings_5min` auf `NULL` setzen, statt historische Messzeilen zu löschen.
+- `refresh_meter_period_totals_5min` bereits **vor** ihrem ersten Aufruf mit `meter_id IS NOT NULL` und `EXISTS (SELECT 1 FROM meters ...)` absichern.
+- Erst danach Cron-Kommandos umstellen und den Berliner Tages-Refresh ausführen.
 
-### 3. Gas: m³ ist die Quelle, kWh das Ergebnis
-Korrektur zum vorherigen Entwurf: Die Einheit am Gaszähler ist bereits richtig auf **m³** gesetzt. Der Miniserver liefert m³ (Menge) bzw. m³/h (Durchfluss); die Umrechnung in kWh bzw. kW passiert bei uns über Gasart, Zustandszahl und Brennwert (Beispiel: 0,9636 × 11,5 kWh/m³). Es wird also nichts an den 5 Gaszählern umkonfiguriert.
+Damit läuft der nächste Hetzner-Deploy nicht mehr in den alten Funktionsstand hinein.
 
-Konsequenz für den Worker: Er speichert für Gas den Rohwert in m³/h als `flow` **und** den daraus errechneten kW-Wert in der Leistungsreihe — die Umrechnung erfolgt einmal zentral mit den am Zähler hinterlegten Gas-Parametern, nicht im UI.
+### 2. Dauerhaften Fremdschlüsselschutz wiederherstellen
 
-Wasser bleibt unverändert bei m³ und m³/h — keine Umrechnung, keine kWh, keine kW.
+Auf der partitionierten `meter_power_readings_5min` wird der beim Tabellenwechsel verlorene Fremdschlüssel wieder angelegt:
 
-### 4. Anzeige
-Wasser: Kacheln und Detaildialog zeigen m³/h (Ø/Max/Min) und m³ als Menge. Gas: kW und kWh wie bei Strom, zusätzlich der m³-Rohwert im Tooltip zur Nachvollziehbarkeit. Die Mengen-KPI bleibt in beiden Fällen aus `meter_period_totals`.
+- `meter_id → meters(id) ON DELETE SET NULL`, entsprechend der bereits 2026-04-20 festgelegten Archivierungsregel.
+- Vor dem Anlegen werden bestehende Waisen auf `NULL` gesetzt, damit die Constraint-Anlage nicht scheitert.
+- Der Schutz wird auf der partitionierten Haupttabelle definiert und gilt damit auch für Monats- und Default-Partitionen.
 
+So erzeugt das spätere Löschen einer Messstelle keine neue ungültige UUID mehr; die historische Zeile bleibt erhalten, aber ohne nicht mehr existente Zuordnung.
 
-## Verifikation
-- „Wasserzähler Hausanschluss" (m³/h konfiguriert): Live-Durchfluss erscheint, `total` bleibt Zählerstand.
-- „Reset Max Gesamt" und alle weiteren 24 bool-Geräte tauchen nicht mehr im Mapping-Panel auf.
-- Keine Zeile in `meter_power_readings_5min`, deren Größenordnung einem Zählerstand entspricht (Stichprobe 24 h nach Deploy).
+### 3. Beide Aggregationspfade härten
 
-## Technische Details
-Geändert: `docs/loxone-ws-worker/index.ts` (Rollenableitung aus `device_type`/`source_unit_power`, neue Rolle `flow`, Entfall `isFlowLikeType` als Pauschalsperre) + `docs/loxone-ws-worker/UPDATE-v1.16-unit-driven-roles.md`; `supabase/functions/gateway-ingest` liefert die Einheitenfelder im Link-Payload mit; `bridge-aggregator` routet `flow`; `src/components/super-admin/LoxoneStateMappingPanel.tsx` wird zur Konfliktliste. Worker auf Hetzner nach dem Merge neu bauen und starten.
+Nicht nur `refresh_meter_period_totals_5min`, sondern auch `refresh_meter_daily_totals` erhält denselben Eingangsfilter:
+
+- nur nicht-leere `meter_id`,
+- nur IDs, die aktuell in `meters` existieren,
+- kein Versuch, Waisen in `meter_period_totals` oder `meter_daily_totals_mv` zu schreiben.
+
+Die spätere Reparaturmigration `20260801065203_...sql` bleibt als idempotentes Sicherheitsnetz erhalten, wird aber ebenfalls auf „Zuordnung nullen statt Historie löschen“ korrigiert.
+
+### 4. Deploy-Reihenfolge gegen Wiederholungen absichern
+
+Der Hetzner-Migrationsrunner arbeitet korrekt lexikografisch nach Dateiname und bricht atomar bei Fehlern ab. Ergänzt wird ein gezielter Preflight für diesen Fehlerfall:
+
+- vor sofort ausgeführten Aggregations-Backfills prüfen, ob deren Quelldaten FK-konform sind,
+- im Fehlerlog die Zahl und betroffene Quelltabelle verwaister IDs ausgeben,
+- keine automatische Ausführung einer späteren Migration außerhalb der Reihenfolge.
+
+## Validierung
+
+1. Migrationsreihenfolge in einer Transaktion gegen einen Testbestand mit künstlicher Waisen-ID durchspielen.
+2. Prüfen, dass `20260731225555_...sql` vollständig durchläuft und anschließend `20260801065203_...sql` erreicht wird.
+3. Prüfen, dass beide Refresh-Funktionen für Berliner Heute-/Vortag ohne FK-Fehler laufen.
+4. Prüfen, dass keine nicht-leere `meter_id` ohne passenden Eintrag in `meters` verbleibt.
+5. Eine Test-Messstelle löschen: Historienzeilen bleiben erhalten, `meter_id` wird `NULL`, beide Refresh-Jobs bleiben erfolgreich.
+6. Danach den normalen Go-Live-Workflow erneut starten; das bestehende Rollback bleibt unverändert als Sicherheitsnetz aktiv.
+
+## Betroffene Dateien
+
+- `supabase/migrations/20260731225555_538403e6-b3a4-4968-97b3-ba59b9e46cdf.sql`
+- `supabase/migrations/20260801065203_b0157b2a-69bd-4424-b380-2d2a4c3fa497.sql`
+- neue Folgemigration für FK und `refresh_meter_daily_totals`
+- `scripts/apply-migrations.sh` nur für die diagnostische Preflight-Ausgabe
+
+Keine Frontend-Änderung und keine Löschung historischer Messwerte.
