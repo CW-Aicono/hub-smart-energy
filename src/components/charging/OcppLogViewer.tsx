@@ -325,6 +325,11 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
           </div>
         )}
         <div className="mt-2 text-xs text-muted-foreground text-right">
+          {messageTypeFilter !== "all" && filteredNewestAt && (
+            <span className="mr-2">
+              Letzter Eintrag dieses Typs: {format(filteredNewestAt, "dd.MM.yy HH:mm:ss")} ·
+            </span>
+          )}
           {filtered.length} Nachricht{filtered.length !== 1 ? "en" : ""}
           {filtered.length !== logs.length && ` (${logs.length} gesamt)`}
         </div>
