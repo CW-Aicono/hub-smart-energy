@@ -17,7 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
 import { cn } from "@/lib/utils";
-import { gasM3ToKWh } from "@/lib/formatEnergy";
+import { resolveMeterEnergyKWh } from "@/lib/formatEnergy";
 import {
   format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   startOfQuarter, endOfQuarter, startOfYear, endOfYear,
