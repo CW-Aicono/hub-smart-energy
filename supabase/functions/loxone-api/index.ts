@@ -2571,24 +2571,54 @@ serve(async (req) => {
           processedCount++;
           entries.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
-          // Group into 5-min buckets
+          // Group into 5-min buckets.
+          // Loxone-Statistiken speichern je nach Block nur alle 10/30/60 Minuten
+          // einen Wert. Ein solcher Eintrag repräsentiert die Leistung bis zum
+          // nächsten Eintrag. Im Gap-Modus (isRange) wird der Wert deshalb über
+          // seine tatsächliche Dauer gehalten (Step-Hold) und auf alle davon
+          // abgedeckten 5-Minuten-Buckets verteilt. Ohne das würde eine Stunde
+          // mit 2 Samples nur 10 statt 60 Minuten Energie enthalten.
           const buckets = new Map<string, { sum: number; count: number; max: number; day: string }>();
-          for (const entry of entries) {
-            const t = entry.timestamp;
+          const HOLD_CAP_MS = 60 * 60 * 1000; // maximal 60 Min. halten
+          const addSample = (t: Date, value: number, synthetic: boolean) => {
             const bucketDate = new Date(t);
-            bucketDate.setUTCMinutes(Math.floor(t.getUTCMinutes() / 5) * 5, 0, 0);
+            bucketDate.setUTCSeconds(0, 0);
+            bucketDate.setUTCMinutes(Math.floor(bucketDate.getUTCMinutes() / 5) * 5);
             const bucketKey = bucketDate.toISOString();
-            const dayKey = t.toISOString().slice(0, 10);
-
+            const dayKey = bucketDate.toISOString().slice(0, 10);
             const existing = buckets.get(bucketKey);
             if (existing) {
-              existing.sum += entry.value;
-              existing.count += 1;
-              existing.max = Math.max(existing.max, entry.value);
+              // Echte Samples dominieren synthetische Step-Hold-Werte
+              if (!synthetic || existing.count === 0) {
+                existing.sum += value;
+                existing.count += 1;
+                existing.max = Math.max(existing.max, value);
+              }
             } else {
-              buckets.set(bucketKey, { sum: entry.value, count: 1, max: entry.value, day: dayKey });
+              buckets.set(bucketKey, { sum: value, count: 1, max: value, day: dayKey });
+            }
+          };
+
+          for (let i = 0; i < entries.length; i += 1) {
+            const entry = entries[i];
+            addSample(entry.timestamp, entry.value, false);
+
+            if (!isRange) continue;
+
+            const next = entries[i + 1];
+            const nextTs = next
+              ? next.timestamp.getTime()
+              : Math.min(endD.getTime(), entry.timestamp.getTime() + 5 * 60 * 1000);
+            const holdUntil = Math.min(nextTs, entry.timestamp.getTime() + HOLD_CAP_MS);
+            for (
+              let t = entry.timestamp.getTime() + 5 * 60 * 1000;
+              t < holdUntil;
+              t += 5 * 60 * 1000
+            ) {
+              addSample(new Date(t), entry.value, true);
             }
           }
+
 
           // Upsert into meter_power_readings_5min
           // Skip single-sample buckets in normal backfill: a 30-min Loxone statistics
