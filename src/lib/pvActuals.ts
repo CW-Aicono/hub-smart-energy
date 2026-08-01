@@ -152,6 +152,41 @@ export async function fetchHourlyActualsFromSeries(
   return hourly;
 }
 
+/**
+ * Stunden, die (teilweise) aus dem Gateway-Speicher nachgetragen wurden.
+ * Deren Abtastrate ist grob (Loxone speichert oft nur alle 30 Minuten einen
+ * Wert), deshalb dürfen genau diese Stunden gegen die autoritative
+ * Tagessumme abgeglichen werden — live gemessene Stunden nicht.
+ */
+export async function fetchBackfilledHours(
+  meterIds: string[],
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<Set<string>> {
+  const hours = new Set<string>();
+  if (meterIds.length === 0 || rangeEnd <= rangeStart) return hours;
+
+  const { data, error } = await supabase
+    .from("meter_power_readings_5min")
+    .select("bucket, source")
+    .in("meter_id", meterIds)
+    .gte("bucket", rangeStart.toISOString())
+    .lt("bucket", rangeEnd.toISOString())
+    .in("source", ["gateway_backfill", "loxone_backfill"])
+    .limit(1000);
+
+  if (error) {
+    console.error("fetchBackfilledHours error:", error);
+    return hours;
+  }
+
+  for (const row of (data ?? []) as Array<{ bucket: string }>) {
+    hours.add(toLocalHourKey(row.bucket));
+  }
+  return hours;
+}
+
+
 
 
 export function buildHourlyActuals(readings: MeterPowerReading[]) {
