@@ -1,67 +1,57 @@
-# Worker-Polling-Härtung: Intervalle & Backoff für Loxone-Bridge
+# Fix: 2.600-kW-Geisterwert Jugendzentrum Weiss
 
-## Ziel
-Die externen Loxone-WebSocket-Worker sollen bei kurzzeitigen Backend-Ausfällen oder 5xx-Fehlern nicht mit voller Frequenz weiter gegen das Backend pollen, sondern einen exponentiellen Backoff einlegen und sensible Intervalle dehnen. Dadurch verkürzt sich die Erholungsphase nach einem Gateway/Pooler-Problem.
+## Was tatsächlich passiert ist (in den Daten verifiziert)
 
-## Was die beiden Komponenten heute tun
+Der Peak ist kein Messwert und kein Ausreißer — es ist der **Zählerstand in kWh, der als Leistung in kW verbucht wurde**.
 
-### `bridge_workers` (Tabelle)
-- Zentrale Registrierung der externen Loxone-WS-Worker (z. B. Hetzner-Bridge).
-- Jeder Worker meldet sich mit `name`, `version`, `host`, `status` und `last_heartbeat_at`.
-- Der Edge Function `gateway-worker-status` liest daraus, ob der Worker aktiv/fresh ist.
-- Der Shared-Helper `isWorkerPrimary` entscheidet, ob der HTTP-Pull-Pfad für Loxone aussetzen soll, weil der WS-Worker die Daten bereits schreibt.
-- Standard-Heartbeat-Intervall im Worker: **60 s** (`BRIDGE_HEARTBEAT_MS`, konfigurierbar per Env).
+Gegenprobe aus der Datenbank, Bucket 19:25/19:30 Uhr (Ortszeit):
 
-### `loxone_pending_writes` (Tabelle)
-- Warteschlange für Befehle/Werte, die von der Cloud an die lokale Loxone-Miniserver geschoben werden sollen.
-- Quellen: `loxone-parameter-push` (Arbitrage, Peak-Shaving, Community, CO2) und die UI-Automation (`src/pages/Automation.tsx`).
-- Der Worker ruft alle paar Sekunden `gateway-ingest?action=list-pending-writes` ab und sendet die Werte über die bestehende WS-Verbindung an den Miniserver.
-- Standard-Poll-Intervall im Worker: **5 s**.
-- Bestätigung/Erfolg/Misserfolg läuft über `gateway-ingest?action=ack-pending-write`.
+| Zähler | `power_max` im Peak-Bucket | Zählerstand `energy_total_kwh` |
+|---|---|---|
+| Balkonkraftwerk LoRa | 949,7025 | **949,701** |
+| Zähler PC-Raum | 98,3095 | (eigener Summenstand) |
+| Zähler Hauptanschluss | 2.777,97 | (eigener Summenstand) |
 
-## Aktuelles Problem
-- `processPendingWrites` pollt unabhängig vom Backend-Zustand alle 5 s.
-- `bridgeHeartbeat` pollt unabhängig vom Backend-Zustand alle 60 s.
-- Beide `ingestGet`/`ingestPost`-Helper werfen bei 5xx/Timeouts zwar Fehler, es gibt aber **keinen Backoff**: der nächste Tick kommt pünktlich nach 5 s bzw. 60 s.
-- Bei einem Pooler/Auth-Ausfall (wie heute) erzeugt das unnötige Last und verzögert die Erholung.
+Beim Balkonkraftwerk stimmen Peak und Zählerstand auf drei Nachkommastellen überein. Damit ist bewiesen: In das Leistungsfenster sind Zählerstände geflossen.
 
-## Geplante Änderungen
+Zusätzliche Belege:
+- Die Peak-Buckets haben `sample_count` 211 bzw. 655. Ein normaler 5-Minuten-Bucket hat 30. Es wurden also Ereignisse aus einem ganzen Nachlauf-Schwall in ein einziges Fenster gekippt.
+- Der letzte gesunde Bucket ist 19:15 Uhr (0,58 kW, 30 Samples). Zwischen 19:15 und 19:25 fehlt jede Zeile — das ist das Ausfallfenster.
+- Beide Peak-Zeilen wurden erst um 19:26 und 19:35 geschrieben (`created_at`), also nach der Wiederverbindung.
 
-### 1. Worker-seitiger Backoff (`docs/loxone-ws-worker/index.ts`)
-- Zustandsvariable `backendHealthy: boolean` + `consecutiveFailures: number` pro Kommunikationspfad.
-- Bei 5xx/Timeout/Network-Fehler: `consecutiveFailures++`.
-- Bei Erfolg: `consecutiveFailures = 0`.
-- Dynamisches Intervall für `processPendingWrites`:
-  - Basis 5 s
-  - Backoff-Faktor `min(2^failures, 8)` → max. 40 s
-- Dynamisches Intervall für `bridgeHeartbeat`:
-  - Basis 60 s
-  - Backoff-Faktor `min(2^failures, 4)` → max. 240 s
-- Kein Backoff bei 4xx Client-Fehlern (z. B. falscher API-Key), denn diese verschwinden nicht durch Warten.
+## Ursache im Code
 
-### 2. Edge-Function-Härtung (`supabase/functions/gateway-ingest/index.ts`)
-- `list-pending-writes` und `bridge-heartbeat` schnell beantworten (keine schweren Joins).
-- Optional: 503-Response mit `Retry-After`-Header, damit der Worker sofort in den Backoff geht.
-- Logging der 5xx-Rate, damit wir im Super-Admin sehen, wenn ein Worker "drescht".
+`docs/loxone-ws-worker/index.ts`
 
-### 3. Zustandslose Retries bei `ack-pending-write`
-- Heute: Fehler erhöht `attempts` bis `max_attempts`, dann Status `failed`.
-- Zusätzlich: bei 5xx/Timeout **nicht** als `failed` zählen, sondern nur bei Anwendungsfehlern (z. B. ungültige UUID). Damit werden Befehle nicht wegen eines vorübergehenden Backend-Problems verworfen.
+1. **Zeile 1455–1482 (Reload-Pfad):** Wenn die WebSocket-Verbindung nicht authentifiziert ist — genau der Zustand nach einem Ausfall — baut der Worker die `uuidMap` notdürftig neu auf und registriert dabei die **Block-UUID** mit `role: momRole ?? "aux"`, also in der Regel `"pwr"`. Die Block-UUID eines Loxone-Messblocks liefert aber den **Summenwert (kWh)**, nicht den Momentanwert. Der Kommentar im Code sagt "wird in connect() durch LoxAPP3-Expansion ersetzt" — bis diese Expansion durch ist, laufen Zählerstände als Leistung durch.
+2. **Zeile 616–641 (Bucket-Aggregation):** Der Bucket-Zeitstempel wird aus `Date.now()` beim Empfang gebildet, nicht aus dem Ereigniszeitpunkt. Nach der Wiederverbindung schickt der Miniserver seine komplette Statustabelle in einem Schwall — alle landen im Empfangs-Bucket. Daher 655 Samples in fünf Minuten.
+3. **Zeile 1649–1659 (Flush):** `pending_buckets` wird geleert, **bevor** der POST bestätigt ist. Schlägt der Upload fehl (Backend down), sind die Daten weg. Das erklärt die Lücke 19:15–19:25.
 
-### 4. Konfiguration & Monitoring
-- Neue Env-Variablen im Worker dokumentieren:
-  - `PENDING_WRITES_BASE_MS` (Default 5000)
-  - `PENDING_WRITES_MAX_BACKOFF_MS` (Default 40000)
-  - `BRIDGE_HEARTBEAT_BASE_MS` (Default 60000)
-  - `BRIDGE_HEARTBEAT_MAX_BACKOFF_MS` (Default 240000)
-- Super-Admin-Statuskachel zeigt `last_heartbeat_age` und ggf. "Backoff aktiv" an.
+## Umsetzung
 
-### 5. Test & Rollout
-- Lokalen Worker gegen ein temporär blockiertes `gateway-ingest` testen (z. B. falsches API-Key → 401, Backend-Timeout → 503).
-- Logs prüfen: exponentielles Wachstum der Poll-Intervalle muss sichtbar sein.
-- Nach Deploy: 15 Minuten Beobachtung der `bridge_workers`-Heartbeat-Linie.
+### 1. Worker v1.17 — Rollen niemals provisorisch raten
+- Im Reload-Pfad die Block-UUID **nicht mehr** mit `role: "pwr"` registrieren. Stattdessen `role: "aux"` setzen und `momentary_role` als reine Absichtserklärung mitführen.
+- In der Bucket-Aggregation (Zeile 616) zusätzlich verlangen, dass der Eintrag aus der LoxAPP3-Expansion stammt (neues Flag `role_confirmed: true`). Nur bestätigte `pwr`/`flow`-States dürfen in `meter_power_readings_5min` schreiben. Kein Wert ist besser als ein falscher Wert.
 
-## Nicht im Scope
-- Keine Änderung an der Business-Logik der Automation oder der Arbitrage-Strategien.
-- Keine Änderung am DB-Schema (`bridge_workers`, `loxone_pending_writes` bleiben unverändert).
-- Keine Änderung an anderen Gateways (AICONO-Gateway, Shelly, Schneider etc.).
+### 2. Nachlauf-Schwall nicht in einen Bucket kippen
+- Ereignisse, die innerhalb der ersten Sekunden nach `authenticated` eintreffen, sind der Statustabellen-Dump, keine Zeitreihe. Diese als Initialzustand behandeln (`latest_value` setzen), aber nicht in die Bucket-Summe aufnehmen.
+- Harte Obergrenze pro Bucket: `sample_count` > 90 (dreifache Normalrate) wird als strukturell falsch verworfen und protokolliert — das ist keine Peak-Kosmetik, sondern eine Konsistenzprüfung auf die Anzahl, nicht auf den Wert.
+
+### 3. Flush erst nach bestätigtem Upload leeren
+- `pending_buckets` und der aktuelle Bucket werden erst zurückgesetzt, wenn `ingestPost` erfolgreich war. Bei Fehler bleiben sie im Puffer und werden beim nächsten Durchlauf erneut versucht (Ringpuffer bleibt bei 24 Buckets).
+
+### 4. Serverseitige Einheitensperre in `gateway-ingest`
+- Im Handler `bridge-power-5min` eine Plausibilitätsgrenze gegen die Messstellen-Konfiguration ziehen: Ein Wert wird abgelehnt, wenn er den bekannten Zählerstand des Meters (`meter_loxone_daily_snapshots.energy_total_kwh`) trifft oder überschreitet. Das ist die Signatur einer Einheitenverwechslung, nicht die eines Lastspitzenwerts. Abgelehnte Zeilen werden in `bridge_worker_logs` protokolliert, damit so etwas sichtbar wird statt still im Graphen zu landen.
+
+### 5. Bereinigung der bereits geschriebenen Falschdaten
+- Migration: Zeilen in `meter_power_readings_5min` löschen, deren `sample_count` über 90 liegt (das trifft exakt die kontaminierten Buckets, nicht die gesunden mit 30).
+- Anschließend die abhängigen Aggregate (`meter_period_totals`, stündliche Rollups) für den betroffenen Tag neu berechnen.
+
+## Technische Details
+
+Betroffene Dateien:
+- `docs/loxone-ws-worker/index.ts` — Punkte 1–3, Version auf `v1.17-confirmed-roles`
+- `supabase/functions/gateway-ingest/index.ts` — Punkt 4, Handler `bridge-power-5min`
+- neue Migration — Punkt 5
+
+Der Worker läuft extern auf Hetzner; nach dem Merge ist ein Redeploy des Workers nötig, damit Punkte 1–3 greifen. Punkte 4 und 5 wirken sofort und schützen die Datenbank auch gegen eine ältere Worker-Version.
