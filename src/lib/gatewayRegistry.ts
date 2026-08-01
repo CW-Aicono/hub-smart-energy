@@ -43,6 +43,7 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
     icon: "server",
     description: "Loxone Miniserver über Cloud DNS",
     edgeFunctionName: "loxone-api",
+    supportsBackfill: true,
     configFields: [
       { name: "serial_number", label: "Seriennummer", placeholder: "504F94A0XXXX", type: "text", description: "Seriennummer des Loxone Miniservers", required: true },
       { name: "username", label: "Benutzername", placeholder: "admin", type: "text", required: true },
@@ -317,4 +318,19 @@ export function getGatewayDefinition(type: string): GatewayDefinition | undefine
 /** Get the edge function name for a given integration type */
 export function getEdgeFunctionName(integrationType: string): string {
   return GATEWAY_DEFINITIONS[integrationType]?.edgeFunctionName || "loxone-api";
+}
+
+/**
+ * Kann dieses Gateway Messreihen aus seinem lokalen Speicher nachliefern?
+ * Gateways ohne lokalen Speicher werden vom Lückenfüller übersprungen.
+ */
+export function gatewaySupportsBackfill(integrationType: string): boolean {
+  return GATEWAY_DEFINITIONS[integrationType]?.supportsBackfill === true;
+}
+
+/** Integrationstypen mit lokalem Messreihenspeicher */
+export function getBackfillCapableTypes(): string[] {
+  return Object.values(GATEWAY_DEFINITIONS)
+    .filter((d) => d.supportsBackfill)
+    .map((d) => d.type);
 }
