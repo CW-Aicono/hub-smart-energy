@@ -79,6 +79,21 @@ DESTRUCTIVE_ORPHAN_REPAIR="20260801065203_b0157b2a-69bd-4424-b380-2d2a4c3fa497.s
 berlin_refresh_applied="$(psql_exec -At -c "SELECT 1 FROM public._deploy_migrations WHERE filename = '$BERLIN_REFRESH_MIGRATION'")"
 if [ "$berlin_refresh_applied" != "1" ]; then
   log "Preflight: pruefe verwaiste Messstellen-Zuordnungen vor Berliner Tagesrefresh"
+  psql_exec <<'SQL' > /dev/null
+DO $replica_identity$
+DECLARE
+  v_relation regclass;
+BEGIN
+  FOR v_relation IN
+    SELECT relid
+    FROM pg_partition_tree('public.meter_power_readings_5min'::regclass)
+  LOOP
+    EXECUTE format('ALTER TABLE %s REPLICA IDENTITY FULL', v_relation);
+  END LOOP;
+END
+$replica_identity$;
+SQL
+  log "Preflight: Replica Identity auf Parent und allen Leaf-Partitionen sichergestellt"
   orphan_count="$(psql_exec -At -c "
     SELECT COUNT(*)
     FROM public.meter_power_readings_5min m5
@@ -94,6 +109,17 @@ if [ "$berlin_refresh_applied" != "1" ]; then
         AND NOT EXISTS (SELECT 1 FROM public.meters m WHERE m.id = m5.meter_id)
     " > /dev/null
     log "Preflight: Historie erhalten und verwaiste meter_id auf NULL gesetzt"
+  fi
+
+  remaining_orphans="$(psql_exec -At -c "
+    SELECT COUNT(*)
+    FROM public.meter_power_readings_5min m5
+    WHERE m5.meter_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM public.meters m WHERE m.id = m5.meter_id)
+  ")"
+  if [ "$remaining_orphans" -ne 0 ]; then
+    log "FEHLER: Nach Preflight verbleiben $remaining_orphans verwaiste Zuordnungen. Deploy wird sicher abgebrochen."
+    exit 1
   fi
 
   # Die alte Folgemigration loescht per NOT EXISTS auch Zeilen mit meter_id=NULL.
