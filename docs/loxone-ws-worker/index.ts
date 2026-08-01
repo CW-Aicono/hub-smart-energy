@@ -1467,7 +1467,11 @@ async function reloadMeters(): Promise<void> {
           tenant_id: m.tenant_id,
           energy_type: m.energy_type,
           block_uuid: blockUuid,
-          role: momRole ?? "aux",         // wird in connect() durch LoxAPP3-Expansion ersetzt
+          // v1.17: Die Block-UUID selbst liefert bei vielen Loxone-Blöcken den
+          // Zählerstand (kWh), nicht die Leistung. Sie wird deshalb NIE mehr
+          // provisorisch als Momentanwert registriert — die Rolle entsteht
+          // ausschließlich durch die LoxAPP3-Expansion in connect().
+          role: "aux",
           momentary_role: momRole,
           gas_kwh_per_m3: momRole === "pwr" ? gasFactor : null,
           explicit_pwr_uuid: m.power_state_uuid ? m.power_state_uuid.toLowerCase() : null,
