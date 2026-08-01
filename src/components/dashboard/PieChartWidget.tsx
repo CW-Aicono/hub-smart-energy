@@ -134,8 +134,8 @@ const PieChartWidget = ({ locationId }: PieChartWidgetProps) => {
 
       if (rawVal != null && rawVal > 0) {
         let val = rawVal;
-        if (energyType === "gas" && m.unit === "m³") {
-          val = gasM3ToKWh(val, m.gas_type ?? null, m.brennwert ?? null, m.zustandszahl ?? null);
+        if (energyType === "gas") {
+          val = resolveMeterEnergyKWh(m as any, val);
         }
         totals[energyType] += val;
       }
