@@ -2664,7 +2664,23 @@ serve(async (req) => {
         }
       }
 
+      // Nach dem Lückenfüllen die betroffenen Tage vollständig aus den
+      // 5-Min-Werten neu berechnen (nie aus dem Teilfenster ableiten).
+      const recomputedDays: string[] = [];
+      if (isRange && touchedDays.size > 0) {
+        for (const day of Array.from(touchedDays).sort()) {
+          const { error: rpcError } = await supabase.rpc("compute_daily_totals_from_5min", { p_day: day });
+          if (rpcError) {
+            console.error(`Tagesneuberechnung ${day} fehlgeschlagen:`, rpcError.message);
+            errors.push(`recompute ${day}: ${rpcError.message}`);
+          } else {
+            recomputedDays.push(day);
+          }
+        }
+      }
+
       return new Response(
+
         JSON.stringify({
           success: true,
           message: `Backfill abgeschlossen: ${totalInserted} Datenpunkte aus ${processedCount} Dateien nachgetragen`,
