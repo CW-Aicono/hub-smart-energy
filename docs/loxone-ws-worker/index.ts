@@ -88,7 +88,7 @@ const SESSION_HEARTBEAT_MS = Math.max(
 );
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "v1.16-unit-driven-roles";
+const WORKER_VERSION = process.env.WORKER_VERSION || "v1.17-strict-block-mapping";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -695,6 +695,7 @@ async function connect(state: ConnState): Promise<void> {
     // Phase 7: Antwort auch parsen, um pro registriertem Block (sensor_uuid) die
     // zugehörigen State-UUIDs (Pwr/EnergyToday/EnergyTotal/...) zu ermitteln.
     let loxApp3: any = null;
+    let loxApp3Ok = false;
     try {
       stage = "loxapp3-fetch";
       const resp: any = await socket.send("data/LoxAPP3.json");
@@ -703,11 +704,15 @@ async function connect(state: ConnState): Promise<void> {
         try { loxApp3 = JSON.parse(loxApp3); } catch { /* leave as string */ }
       }
       const controlCount = loxApp3?.controls ? Object.keys(loxApp3.controls).length : 0;
+      loxApp3Ok = controlCount > 0;
       log("info", `[WS] ${state.serialNumber} LoxAPP3.json geladen — Live-Updates aktiviert (controls=${controlCount})`);
       stage = "loxapp3-push-cloud";
       await pushLoxoneStructureSnapshot(state, loxApp3);
     } catch (err) {
       log("warn", `[WS] ${state.serialNumber} LoxAPP3 fehlgeschlagen (stage=${stage}): ${describeError(err)}`);
+    }
+    if (!loxApp3Ok) {
+      bridgeLog("warn", "ws_loxapp3_unavailable", "LoxAPP3-Struktur nicht verfügbar — keine Momentanwert-Zuordnung möglich", state.serialNumber, {});
     }
     stage = "enable-binstatus";
     await socket.send("jdev/sps/enablebinstatusupdate");
@@ -879,14 +884,25 @@ async function connect(state: ConnState): Promise<void> {
           });
           continue;
         }
-        // Fallback: Block-UUID direkt als Momentanwert behandeln (alte Logik).
-        state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: momRole });
+        // v1.17: KEIN Momentanwert-Fallback auf die Block-UUID mehr.
+        // Bei fehlender/unvollständiger LoxAPP3-Struktur (z. B. direkt nach einem
+        // Reconnect) lieferte die Block-UUID häufig den Zählerstand (kWh) und
+        // erzeugte damit Leistungs-Spitzen in Zählerstandshöhe. Der Block wird
+        // nur noch als Diagnose-Eintrag (role="aux") registriert; die echte
+        // Leistung kommt aus der Struktur oder aus power_state_uuid.
+        state.uuidMap.set(blockUuid, { ...baseEntry, block_uuid: blockUuid, role: "aux", state_key: "(block)" });
         blocksFallback++;
         totalSubs++;
+        const reason = loxApp3Ok ? (ctrl ? "keine passenden States im Block" : "Block nicht in LoxAPP3 gefunden") : "LoxAPP3-Struktur nicht verfügbar";
+        log("warn", `[LoxAPP3] ${state.serialNumber} block ${blockUuid} (${baseEntry.energy_type}): ${reason} — kein Momentanwert gemappt (v1.17)`);
+        bridgeLog("warn", "ws_block_unmapped", `Block ohne Momentanwert-State: ${reason}`, state.serialNumber, {
+          block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
+          expected_role: momRole, loxapp3_ok: loxApp3Ok,
+        });
         blockDiag.push({
           block_uuid: blockUuid, meter_id: baseEntry.meter_id, energy_type: baseEntry.energy_type,
           control_type: String(ctrl?.type ?? "?"), control_name: String(ctrl?.name ?? "?"),
-          states: [{ key: "(block-fallback)", role: momRole }],
+          states: [{ key: "(block)", role: "aux (kein Fallback, v1.17)" }],
         });
         continue;
       }
@@ -1467,7 +1483,11 @@ async function reloadMeters(): Promise<void> {
           tenant_id: m.tenant_id,
           energy_type: m.energy_type,
           block_uuid: blockUuid,
-          role: momRole ?? "aux",         // wird in connect() durch LoxAPP3-Expansion ersetzt
+          // v1.17: Die Block-UUID selbst liefert bei vielen Loxone-Blöcken den
+          // Zählerstand (kWh), nicht die Leistung. Sie wird deshalb NIE mehr
+          // provisorisch als Momentanwert registriert — die Rolle entsteht
+          // ausschließlich durch die LoxAPP3-Expansion in connect().
+          role: "aux",
           momentary_role: momRole,
           gas_kwh_per_m3: momRole === "pwr" ? gasFactor : null,
           explicit_pwr_uuid: m.power_state_uuid ? m.power_state_uuid.toLowerCase() : null,
