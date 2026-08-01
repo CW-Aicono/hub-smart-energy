@@ -127,6 +127,10 @@ export function useOcppLogs(
           if (pausedRef.current) return;
           const entry = payload.new as unknown as OcppLogEntry;
           if (ids.length > 1 && !idsSet.has(entry.charge_point_id)) return;
+          // Altersprüfung immer aktualisieren — unabhängig vom Typfilter.
+          setLatestAt((prev) =>
+            !prev || new Date(entry.created_at) > new Date(prev) ? entry.created_at : prev,
+          );
           if (activeType && entry.message_type !== activeType) return;
           setLogs((prev) => {
             if (prev.some((l) => l.id === entry.id)) return prev;
@@ -146,5 +150,5 @@ export function useOcppLogs(
     };
   }, [idsKey, activeType, fetchLogs, idsSet, ids.length]);
 
-  return { logs, loading, paused, setPaused, refetch: fetchLogs };
+  return { logs, latestAt, loading, paused, setPaused, refetch: fetchLogs };
 }
