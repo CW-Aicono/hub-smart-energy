@@ -99,30 +99,59 @@ export async function fetchMeterPower5min(meterIds: string[], rangeStart: Date, 
  * Primary hourly source: aggregate power series (`get_power_series_auto`).
  * Each bucket carries its own resolution, so energy = |power_avg| × res/60.
  * Values are returned as positive absolutes (PV yield convention).
+ *
+ * Zusätzlich wird pro Stunde die tatsächlich durch Messdaten abgedeckte
+ * Minutenzahl ermittelt (max. über alle Zähler). Nur Stunden mit
+ * unvollständiger Deckung dürfen später auf die Tagessumme hochgerechnet
+ * werden — vollständig gemessene Stunden bleiben unverändert.
  */
+export async function fetchHourlyActualsWithCoverage(
+  meterIds: string[],
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<{ hourly: Record<string, number>; coverage: Record<string, number> }> {
+  if (meterIds.length === 0 || rangeEnd <= rangeStart) return { hourly: {}, coverage: {} };
+
+  const rows = await fetchPowerSeriesAuto(meterIds, rangeStart, rangeEnd, 2000);
+  if (rows.length === 0) return { hourly: {}, coverage: {} };
+
+  const hourBuckets: Record<string, number> = {};
+  const coveragePerMeter: Record<string, Record<string, number>> = {};
+
+  for (const row of rows) {
+    if (row.power_avg == null || !Number.isFinite(row.power_avg)) continue;
+    const resolution = Number(row.resolution_minutes) > 0 ? Number(row.resolution_minutes) : 5;
+    const hour = toLocalHourKey(row.bucket);
+    hourBuckets[hour] = (hourBuckets[hour] ?? 0) + Math.abs(row.power_avg) * (resolution / 60);
+
+    const perHour = (coveragePerMeter[row.meter_id] ??= {});
+    perHour[hour] = Math.min(60, (perHour[hour] ?? 0) + resolution);
+  }
+
+  const coverage: Record<string, number> = {};
+  for (const perHour of Object.values(coveragePerMeter)) {
+    for (const [hour, minutes] of Object.entries(perHour)) {
+      coverage[hour] = Math.max(coverage[hour] ?? 0, minutes);
+    }
+  }
+
+  return {
+    hourly: Object.fromEntries(
+      Object.entries(hourBuckets).map(([hour, kwh]) => [hour, round2(kwh)])
+    ),
+    coverage,
+  };
+}
+
 export async function fetchHourlyActualsFromSeries(
   meterIds: string[],
   rangeStart: Date,
   rangeEnd: Date,
 ): Promise<Record<string, number>> {
-  if (meterIds.length === 0 || rangeEnd <= rangeStart) return {};
-
-  const rows = await fetchPowerSeriesAuto(meterIds, rangeStart, rangeEnd, 2000);
-  if (rows.length === 0) return {};
-
-  const hourBuckets: Record<string, number> = {};
-  for (const row of rows) {
-    if (row.power_avg == null || !Number.isFinite(row.power_avg)) continue;
-    const resolution = Number(row.resolution_minutes) > 0 ? Number(row.resolution_minutes) : 5;
-    const hour = toLocalHourKey(row.bucket);
-    const energyKwh = Math.abs(row.power_avg) * (resolution / 60);
-    hourBuckets[hour] = (hourBuckets[hour] ?? 0) + energyKwh;
-  }
-
-  return Object.fromEntries(
-    Object.entries(hourBuckets).map(([hour, kwh]) => [hour, round2(kwh)])
-  );
+  const { hourly } = await fetchHourlyActualsWithCoverage(meterIds, rangeStart, rangeEnd);
+  return hourly;
 }
+
 
 
 export function buildHourlyActuals(readings: MeterPowerReading[]) {
