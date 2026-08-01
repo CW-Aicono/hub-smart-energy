@@ -695,6 +695,7 @@ async function connect(state: ConnState): Promise<void> {
     // Phase 7: Antwort auch parsen, um pro registriertem Block (sensor_uuid) die
     // zugehörigen State-UUIDs (Pwr/EnergyToday/EnergyTotal/...) zu ermitteln.
     let loxApp3: any = null;
+    let loxApp3Ok = false;
     try {
       stage = "loxapp3-fetch";
       const resp: any = await socket.send("data/LoxAPP3.json");
@@ -703,11 +704,15 @@ async function connect(state: ConnState): Promise<void> {
         try { loxApp3 = JSON.parse(loxApp3); } catch { /* leave as string */ }
       }
       const controlCount = loxApp3?.controls ? Object.keys(loxApp3.controls).length : 0;
+      loxApp3Ok = controlCount > 0;
       log("info", `[WS] ${state.serialNumber} LoxAPP3.json geladen — Live-Updates aktiviert (controls=${controlCount})`);
       stage = "loxapp3-push-cloud";
       await pushLoxoneStructureSnapshot(state, loxApp3);
     } catch (err) {
       log("warn", `[WS] ${state.serialNumber} LoxAPP3 fehlgeschlagen (stage=${stage}): ${describeError(err)}`);
+    }
+    if (!loxApp3Ok) {
+      bridgeLog("warn", "ws_loxapp3_unavailable", "LoxAPP3-Struktur nicht verfügbar — keine Momentanwert-Zuordnung möglich", state.serialNumber, {});
     }
     stage = "enable-binstatus";
     await socket.send("jdev/sps/enablebinstatusupdate");
