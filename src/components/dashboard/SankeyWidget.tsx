@@ -10,7 +10,7 @@
  import { useTranslation } from "@/hooks/useTranslation";
  import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
  import { useMemo, useState, useRef, useEffect } from "react";
- import { formatEnergy, formatEnergyByType, gasM3ToKWh } from "@/lib/formatEnergy";
+ import { formatEnergy, formatEnergyByType, resolveMeterEnergyKWh } from "@/lib/formatEnergy";
  import { supabase } from "@/integrations/supabase/client";
  import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
  import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, endOfDay, addDays, addWeeks, addMonths, addQuarters, addYears, getISOWeek, format } from "date-fns";
