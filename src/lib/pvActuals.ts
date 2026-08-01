@@ -99,30 +99,94 @@ export async function fetchMeterPower5min(meterIds: string[], rangeStart: Date, 
  * Primary hourly source: aggregate power series (`get_power_series_auto`).
  * Each bucket carries its own resolution, so energy = |power_avg| × res/60.
  * Values are returned as positive absolutes (PV yield convention).
+ *
+ * Zusätzlich wird pro Stunde die tatsächlich durch Messdaten abgedeckte
+ * Minutenzahl ermittelt (max. über alle Zähler). Nur Stunden mit
+ * unvollständiger Deckung dürfen später auf die Tagessumme hochgerechnet
+ * werden — vollständig gemessene Stunden bleiben unverändert.
  */
+export async function fetchHourlyActualsWithCoverage(
+  meterIds: string[],
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<{ hourly: Record<string, number>; coverage: Record<string, number> }> {
+  if (meterIds.length === 0 || rangeEnd <= rangeStart) return { hourly: {}, coverage: {} };
+
+  const rows = await fetchPowerSeriesAuto(meterIds, rangeStart, rangeEnd, 2000);
+  if (rows.length === 0) return { hourly: {}, coverage: {} };
+
+  const hourBuckets: Record<string, number> = {};
+  const coveragePerMeter: Record<string, Record<string, number>> = {};
+
+  for (const row of rows) {
+    if (row.power_avg == null || !Number.isFinite(row.power_avg)) continue;
+    const resolution = Number(row.resolution_minutes) > 0 ? Number(row.resolution_minutes) : 5;
+    const hour = toLocalHourKey(row.bucket);
+    hourBuckets[hour] = (hourBuckets[hour] ?? 0) + Math.abs(row.power_avg) * (resolution / 60);
+
+    const perHour = (coveragePerMeter[row.meter_id] ??= {});
+    perHour[hour] = Math.min(60, (perHour[hour] ?? 0) + resolution);
+  }
+
+  const coverage: Record<string, number> = {};
+  for (const perHour of Object.values(coveragePerMeter)) {
+    for (const [hour, minutes] of Object.entries(perHour)) {
+      coverage[hour] = Math.max(coverage[hour] ?? 0, minutes);
+    }
+  }
+
+  return {
+    hourly: Object.fromEntries(
+      Object.entries(hourBuckets).map(([hour, kwh]) => [hour, round2(kwh)])
+    ),
+    coverage,
+  };
+}
+
 export async function fetchHourlyActualsFromSeries(
   meterIds: string[],
   rangeStart: Date,
   rangeEnd: Date,
 ): Promise<Record<string, number>> {
-  if (meterIds.length === 0 || rangeEnd <= rangeStart) return {};
+  const { hourly } = await fetchHourlyActualsWithCoverage(meterIds, rangeStart, rangeEnd);
+  return hourly;
+}
 
-  const rows = await fetchPowerSeriesAuto(meterIds, rangeStart, rangeEnd, 2000);
-  if (rows.length === 0) return {};
+/**
+ * Stunden, die (teilweise) aus dem Gateway-Speicher nachgetragen wurden.
+ * Deren Abtastrate ist grob (Loxone speichert oft nur alle 30 Minuten einen
+ * Wert), deshalb dürfen genau diese Stunden gegen die autoritative
+ * Tagessumme abgeglichen werden — live gemessene Stunden nicht.
+ */
+export async function fetchBackfilledHours(
+  meterIds: string[],
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<Set<string>> {
+  const hours = new Set<string>();
+  if (meterIds.length === 0 || rangeEnd <= rangeStart) return hours;
 
-  const hourBuckets: Record<string, number> = {};
-  for (const row of rows) {
-    if (row.power_avg == null || !Number.isFinite(row.power_avg)) continue;
-    const resolution = Number(row.resolution_minutes) > 0 ? Number(row.resolution_minutes) : 5;
-    const hour = toLocalHourKey(row.bucket);
-    const energyKwh = Math.abs(row.power_avg) * (resolution / 60);
-    hourBuckets[hour] = (hourBuckets[hour] ?? 0) + energyKwh;
+  const { data, error } = await supabase
+    .from("meter_power_readings_5min")
+    .select("bucket, source")
+    .in("meter_id", meterIds)
+    .gte("bucket", rangeStart.toISOString())
+    .lt("bucket", rangeEnd.toISOString())
+    .in("source", ["gateway_backfill", "loxone_backfill"])
+    .limit(1000);
+
+  if (error) {
+    console.error("fetchBackfilledHours error:", error);
+    return hours;
   }
 
-  return Object.fromEntries(
-    Object.entries(hourBuckets).map(([hour, kwh]) => [hour, round2(kwh)])
-  );
+  for (const row of (data ?? []) as Array<{ bucket: string }>) {
+    hours.add(toLocalHourKey(row.bucket));
+  }
+  return hours;
 }
+
+
 
 
 export function buildHourlyActuals(readings: MeterPowerReading[]) {
@@ -326,6 +390,54 @@ function scaleHourlyToTotal(hourly: Record<string, number>, target: number): Rec
   );
 }
 
+const FULL_COVERAGE_MINUTES = 55; // 11 von 12 5-Minuten-Buckets gelten als vollständig
+
+/**
+ * Verteilt die Differenz zur autoritativen Tagessumme ausschließlich auf
+ * Stunden mit unvollständiger Messabdeckung. Vollständig gemessene Stunden
+ * bleiben exakt so, wie sie gemessen wurden (keine Verschmierung des
+ * Defizits über den ganzen Tag).
+ */
+function reconcileHourlyWithCoverage(
+  hourly: Record<string, number>,
+  coverage: Record<string, number>,
+  target: number,
+  derivedHours: Set<string> = new Set(),
+): Record<string, number> {
+  const entries = Object.entries(hourly).sort(([a], [b]) => a.localeCompare(b));
+  if (entries.length === 0 || target <= 0) return hourly;
+
+  const isAdjustable = (hour: string) =>
+    (coverage[hour] ?? 0) < FULL_COVERAGE_MINUTES || derivedHours.has(hour);
+
+  const incomplete = entries.filter(([hour]) => isAdjustable(hour));
+  if (incomplete.length === 0) return hourly;
+
+  const completeSum = entries
+    .filter(([hour]) => !isAdjustable(hour))
+    .reduce((s, [, v]) => s + Math.abs(v), 0);
+  const incompleteSum = incomplete.reduce((s, [, v]) => s + Math.abs(v), 0);
+  const remaining = target - completeSum;
+
+  // Nichts zu verteilen oder implausibel (gemessene Vollstunden liegen schon
+  // über der Tagessumme) → Messwerte unverändert lassen.
+  if (remaining <= 0 || incompleteSum <= 0) return hourly;
+
+  const factor = remaining / incompleteSum;
+  // Schutz gegen absurde Hochrechnungen (z. B. defekte Tagessumme)
+  if (!Number.isFinite(factor) || factor > 24) return hourly;
+
+  const result: Record<string, number> = {};
+  for (const [hour, value] of entries) {
+    result[hour] = isAdjustable(hour)
+      ? round2(Math.abs(value) * factor)
+      : round2(Math.abs(value));
+  }
+  return result;
+}
+
+
+
 export async function fetchPvActualHourly({
   meterIds,
   locationId,
@@ -362,13 +474,19 @@ export async function fetchPvActualHourly({
   // The legacy raw table `meter_power_readings` is no longer written for
   // worker-aggregated meters, so it must never be the primary series source —
   // a single leftover raw row would collapse the whole day into one hour.
-  const seriesHourly = await fetchHourlyActualsFromSeries(meterIds, rangeStart, effectiveEnd);
+  const { hourly: seriesHourly, coverage } = await fetchHourlyActualsWithCoverage(
+    meterIds,
+    rangeStart,
+    effectiveEnd,
+  );
   let hourly = seriesHourly;
+  let hourlyCoverage = coverage;
 
   if (Object.keys(hourly).length === 0) {
     const rawReadings = await fetchMeterPowerReadings(meterIds, rangeStart, effectiveEnd);
     if (rawReadings.length > 1) {
       hourly = buildHourlyActuals(rawReadings);
+      hourlyCoverage = {};
     }
   }
 
@@ -378,17 +496,26 @@ export async function fetchPvActualHourly({
       if (authoritative != null) {
         const sum = Object.values(hourly).reduce((s, v) => s + Math.abs(v), 0);
         const coveredHours = Object.values(hourly).filter((v) => Math.abs(v) > 0).length;
-        // Only rescale when the hourly distribution is plausible; otherwise a
-        // single covered hour would absorb the entire daily total.
-        hourly = sum > 0 && coveredHours >= 2
-          ? scaleHourlyToTotal(hourly, authoritative)
-          : sum > 0
-            ? hourly
-            : estimateHourlyActualsFromDailyTotal(dayStr, authoritative, clippedForecast);
+        const hasCoverageInfo = Object.keys(hourlyCoverage).length > 0;
+        if (sum > 0 && coveredHours >= 2) {
+          // Bevorzugt: Abgleich nur auf Stunden mit Messlücken bzw. auf
+          // Stunden, die aus dem Gateway-Speicher nachgetragen wurden.
+          // Live gemessene Vollstunden bleiben exakt.
+          if (hasCoverageInfo) {
+            const derivedHours = await fetchBackfilledHours(meterIds, rangeStart, effectiveEnd);
+            hourly = reconcileHourlyWithCoverage(hourly, hourlyCoverage, authoritative, derivedHours);
+          } else {
+            hourly = scaleHourlyToTotal(hourly, authoritative);
+          }
+        } else if (sum <= 0) {
+          hourly = estimateHourlyActualsFromDailyTotal(dayStr, authoritative, clippedForecast);
+        }
       }
     }
     return { readings: hourly, isEstimated: false, isStored: false };
+
   }
+
 
 
 
