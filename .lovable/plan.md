@@ -1,50 +1,39 @@
-# Hetzner-Vorabtest ausgewertet: Deploy kann freigegeben werden
+# Deploy-Ergebnis geprüft: Blocker behoben, ein Restwarnhinweis offen
 
-## Was die Live-Ausgabe belegt
+## Geprüft und bestätigt
 
-Der lesende Vorabtest auf Hetzner ist diesmal vollständig durchgelaufen (bis zu beiden Funktionsdefinitionen, danach normale Shell). Er bestätigt exakt das vorbereitete Reparaturmodell:
+Der Deploy `25ba66c3` ist vollständig durchgelaufen (Healthcheck OK). Die Nachkontrolle auf Hetzner belegt Punkt für Punkt, dass die Rettungskette gegriffen hat:
 
-- PostgreSQL 15.8; Realtime publiziert Updates und Deletes, `pubviaroot = false` — Änderungen werden also mit der Identität der Leaf-Partition publiziert.
-- Parent `meter_power_readings_5min` hat `REPLICA IDENTITY FULL` (`f`), aber **alle 13 Leaf-Partitionen** stehen auf Default (`d`).
-- Die Partitionen haben **keinerlei Constraints** — kein Primärschlüssel, kein Fremdschlüssel.
-- Damit ist der Deploy-Fehler vollständig erklärt: Ein `UPDATE` auf einer publizierten Leaf-Partition ohne Schlüssel und ohne Replica Identity ist von PostgreSQL verboten.
-- In der Publikation `supabase_realtime` sind **beide** Tabellen eingetragen: die Alt-Tabelle `meter_power_readings_5min_legacy` und der aktuelle Parent.
-- **1426 verwaiste Zeilen** in `meter_power_readings_5min_p_202607` (Zuordnung auf nicht mehr existierende Messstellen).
-- Die blockierenden Migrationen `20260731225554` und `20260731225555` sind **noch nicht angewendet**.
-- Die live laufende `refresh_meter_period_totals_5min` aggregiert die 5-Minuten-Werte **ohne jeden Waisen-Filter** — genau die Ursache des ursprünglichen Fremdschlüsselfehlers.
+- Alle drei Migrationen wurden in der geplanten Reihenfolge angewendet: `20260731225553` (Reparatur), `20260731225554` (Fremdschlüssel + Härtung), `20260731225555` (der frühere Blocker) — letzterer diesmal fehlerfrei inklusive `refresh_meter_period_totals_5min`.
+- Parent **und alle 13 Leaf-Partitionen** melden jetzt `replica_identity = f` (vorher `d`). Der Replica-Identity-Fehler kann nicht mehr auftreten.
+- `orphan_count` ist leer — die 1426 verwaisten Zuordnungen wurden entkoppelt, die Messhistorie ist erhalten geblieben.
+- Der Fremdschlüssel `meter_id → meters(id) ON DELETE SET NULL` liegt auf dem Parent und ist auf alle 14 Relationen vererbt. Neue Waisen können nicht mehr entstehen.
+- In der Realtime-Publikation ist nur noch der aktuelle Parent eingetragen; die Alt-Tabelle `..._legacy` wurde korrekt entfernt.
+- Beide Aggregationsfunktionen enthalten live den Waisen-Filter (`meter_id IS NOT NULL` plus `EXISTS (meters)`).
 
-## Abgleich mit dem vorbereiteten Reparaturpfad
+Damit ist der ursprüngliche Deploy-Blocker abgeschlossen. Kein weiterer Handlungsbedarf an den Migrationen.
 
-Die bereits erstellten Migrationen decken jeden dieser Punkte ab:
+## Ein Restwarnhinweis, nicht deploy-kritisch
 
-| Befund auf Hetzner | Behandlung |
-| --- | --- |
-| Leaf-Partitionen ohne Replica Identity | `20260731225553`: `REPLICA IDENTITY FULL` über den kompletten Partitionsbaum, **vor** jedem Update |
-| 1426 Waisen in `p_202607` | Zuordnung wird auf `NULL` gesetzt, Messhistorie bleibt erhalten; anschließend Abbruchprüfung auf Restwaisen |
-| Legacy-Tabelle noch publiziert | wird aus `supabase_realtime` entfernt, nur der aktuelle Parent bleibt publiziert |
-| Ungeschützte 5-Minuten-Aggregation | gehärtete Funktion wird installiert, bevor sie erstmals aufgerufen wird |
-| Keine Constraints auf den Partitionen | `20260731225554`: Fremdschlüssel `meter_id → meters(id) ON DELETE SET NULL` nach erfolgreicher Waisenprüfung |
-| Zweiter Aggregationspfad | `refresh_meter_daily_totals` erhält denselben Waisen-Filter |
-| Künftige Monats-Partitionen | `ensure_meter_power_5min_partitions` härtet jede neue Partition sofort |
-
-Es besteht keine Abweichung zwischen dem realen Live-Zustand und dem vorbereiteten Pfad. Änderungen an den Migrationen sind nicht erforderlich.
-
-## Nächste Schritte
-
-1. Keine weiteren Code- oder SQL-Änderungen; der Rettungspfad bleibt unverändert.
-2. Den normalen Go-Live-Workflow erneut starten. Snapshot und automatisches Rollback bleiben als Sicherung aktiv.
-3. Im Deploy-Log auf diese Reihenfolge achten:
+Schritt `3c/6 Analytics-Log-Retention` ist abgebrochen:
 
 ```text
-Apply: 20260731225553_...sql   → Notice: 1426 verwaiste Zuordnungen auf NULL gesetzt
-Apply: 20260731225554_...sql   → Fremdschlüssel + gehärtete Tagesaggregation
-Apply: 20260731225555_...sql   → Refresh läuft jetzt fehlerfrei
+ERROR: duplicate key value violates unique constraint "job_pkey"
+DETAIL: Key (jobid)=(122) already exists.
 ```
 
-4. Nach dem Deploy den lesenden Vorabtest ein zweites Mal ausführen. Erwartet: alle Leaf-Partitionen `f`, `orphan_count` leer, Fremdschlüssel vorhanden, nur der Parent in der Publikation, Legacy-Tabelle nicht mehr enthalten.
+Der Deploy hat das korrekt als Warnung behandelt und weitergemacht. Der Fehler entsteht innerhalb von `cron.schedule` beim Einfügen in `cron.job`: Der Konflikt wird auf dem Namen abgefangen, scheitert dann aber am Primärschlüssel `jobid`. Das deutet auf einen Zähler für `jobid`, der nicht mehr zum tatsächlichen Höchstwert in `cron.job` passt — typisch nach einem Restore oder Dump-Import. Bestätigt ist das noch nicht; deshalb steht die Prüfung an erster Stelle.
 
-## Restrisiko, offen benannt
+Wichtig für den Umfang: Der betroffene Deploy-Schritt existiert nur im Hetzner-Main-Stand, nicht im hiesigen `scripts/deploy.sh`. Es geht also um eine Prüfung auf dem Server, nicht um eine Änderung hier.
 
-Der Fremdschlüssel wird auf einer partitionierten Tabelle mit vielen Zeilen angelegt und benötigt kurzzeitig eine Sperre; die Schreibpause während dieses Schritts ist kurz, aber nicht null. Falls währenddessen neue Waisen entstünden, bricht die Migration bewusst mit klarer Meldung ab, statt Daten zu verändern — das Rollback greift dann unverändert.
+## Vorgeschlagenes Vorgehen
 
-Es werden keine historischen Messwerte gelöscht und es gibt keine Frontend-Änderung.
+1. **Nur lesend prüfen** (auf Hetzner): aktuellen Höchstwert von `cron.job.jobid`, den Stand der zugehörigen Sequenz und ob der Retention-Job unter seinem Namen bereits existiert.
+2. Ergebnis auswerten:
+   - Sequenz hinter dem Höchstwert → einmalige Korrektur des Zählers, danach Deploy-Schritt erneut ausführen.
+   - Job existiert bereits korrekt → der Schritt ist faktisch überflüssig und kann idempotent übersprungen werden.
+3. Erst nach diesem Befund die passende, minimale Korrektur festlegen. Kein blindes Neuanlegen oder Löschen von Cron-Jobs.
+
+## Betroffene Bereiche
+
+Keine Änderung an Frontend, Datenbankschema oder den bereits angewendeten Migrationen. Der offene Punkt betrifft ausschließlich einen Cron-Bootstrap-Schritt im Deploy-Skript auf dem Server.
