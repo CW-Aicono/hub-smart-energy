@@ -1,57 +1,54 @@
-# Fix: 2.600-kW-Geisterwert Jugendzentrum Weiss
+# Lückenfüllung aus dem Gateway-Speicher statt Worker-Puffer
 
-## Was tatsächlich passiert ist (in den Daten verifiziert)
+Deine Idee ist tragfähig — und das Fundament dafür existiert bereits.
 
-Der Peak ist kein Messwert und kein Ausreißer — es ist der **Zählerstand in kWh, der als Leistung in kW verbucht wurde**.
+## Was schon da ist (verifiziert)
 
-Gegenprobe aus der Datenbank, Bucket 19:25/19:30 Uhr (Ortszeit):
+`supabase/functions/loxone-api/index.ts`, Zeile 2311–2655: Die Aktion `backfillStatistics` lädt die binären `.LoxStat`-Dateien aus dem Verzeichnis `/stats/` des Miniservers, filtert auf **StatsGroup 1 (Momentanleistung in kW, nicht Zählerstand)**, bildet daraus 5-Minuten-Buckets und schreibt sie per Upsert (`onConflict: meter_id,bucket`) nach `meter_power_readings_5min` — plus Tagessummen nach `meter_period_totals`.
 
-| Zähler | `power_max` im Peak-Bucket | Zählerstand `energy_total_kwh` |
-|---|---|---|
-| Balkonkraftwerk LoRa | 949,7025 | **949,701** |
-| Zähler PC-Raum | 98,3095 | (eigener Summenstand) |
-| Zähler Hauptanschluss | 2.777,97 | (eigener Summenstand) |
+Sie wird heute nur **manuell** ausgelöst und über einen Datumsbereich gesteuert. Es fehlt also nicht der Abruf, sondern die **automatische Lückenerkennung**.
 
-Beim Balkonkraftwerk stimmen Peak und Zählerstand auf drei Nachkommastellen überein. Damit ist bewiesen: In das Leistungsfenster sind Zählerstände geflossen.
+## Warum das die bessere Lösung ist
 
-Zusätzliche Belege:
-- Die Peak-Buckets haben `sample_count` 211 bzw. 655. Ein normaler 5-Minuten-Bucket hat 30. Es wurden also Ereignisse aus einem ganzen Nachlauf-Schwall in ein einziges Fenster gekippt.
-- Der letzte gesunde Bucket ist 19:15 Uhr (0,58 kW, 30 Samples). Zwischen 19:15 und 19:25 fehlt jede Zeile — das ist das Ausfallfenster.
-- Beide Peak-Zeilen wurden erst um 19:26 und 19:35 geschrieben (`created_at`), also nach der Wiederverbindung.
+Der Worker-Puffer (`pending_buckets`, max. 24 Buckets = 2 Stunden) ist eine Krücke: Er geht bei einem Neustart verloren, wird beim Flush geleert bevor der Upload bestätigt ist, und produziert nach Wiederverbindung genau die Verfälschungen, die du im Graphen gesehen hast. Der Miniserver hält die Daten ohnehin monatelang und ist die verlässlichere Quelle.
 
-## Ursache im Code
-
-`docs/loxone-ws-worker/index.ts`
-
-1. **Zeile 1455–1482 (Reload-Pfad):** Wenn die WebSocket-Verbindung nicht authentifiziert ist — genau der Zustand nach einem Ausfall — baut der Worker die `uuidMap` notdürftig neu auf und registriert dabei die **Block-UUID** mit `role: momRole ?? "aux"`, also in der Regel `"pwr"`. Die Block-UUID eines Loxone-Messblocks liefert aber den **Summenwert (kWh)**, nicht den Momentanwert. Der Kommentar im Code sagt "wird in connect() durch LoxAPP3-Expansion ersetzt" — bis diese Expansion durch ist, laufen Zählerstände als Leistung durch.
-2. **Zeile 616–641 (Bucket-Aggregation):** Der Bucket-Zeitstempel wird aus `Date.now()` beim Empfang gebildet, nicht aus dem Ereigniszeitpunkt. Nach der Wiederverbindung schickt der Miniserver seine komplette Statustabelle in einem Schwall — alle landen im Empfangs-Bucket. Daher 655 Samples in fünf Minuten.
-3. **Zeile 1649–1659 (Flush):** `pending_buckets` wird geleert, **bevor** der POST bestätigt ist. Schlägt der Upload fehl (Backend down), sind die Daten weg. Das erklärt die Lücke 19:15–19:25.
+Grenze, die man kennen muss: Loxone speichert Statistikpunkte **wertänderungsbasiert**, nicht in festem 5-Minuten-Raster. Bei ruhigen Zählern sind das teils nur alle 30 Minuten Punkte. Der nachgefüllte Verlauf ist deshalb gröber als die Live-Reihe — aber energetisch korrekt und ohne Geisterwerte. Der bestehende Code verwirft Buckets mit nur einem Sample bereits genau deshalb.
 
 ## Umsetzung
 
-### 1. Worker v1.17 — Rollen niemals provisorisch raten
-- Im Reload-Pfad die Block-UUID **nicht mehr** mit `role: "pwr"` registrieren. Stattdessen `role: "aux"` setzen und `momentary_role` als reine Absichtserklärung mitführen.
-- In der Bucket-Aggregation (Zeile 616) zusätzlich verlangen, dass der Eintrag aus der LoxAPP3-Expansion stammt (neues Flag `role_confirmed: true`). Nur bestätigte `pwr`/`flow`-States dürfen in `meter_power_readings_5min` schreiben. Kein Wert ist besser als ein falscher Wert.
+### 1. Automatische Lückenerkennung (neue Edge Function `gap-backfill-scheduler`)
+- Läuft stündlich per Cron.
+- Ermittelt je Zähler mit `capture_type = automatic` die Lücken in `meter_power_readings_5min` der letzten 48 Stunden (fehlende Buckets in einer erwarteten Reihe).
+- Ignoriert Lücken unter 15 Minuten (normales Rauschen) und Zähler, die generell selten liefern.
+- Fasst zusammenhängende Lücken je `location_integration_id` zu einem Zeitfenster zusammen.
 
-### 2. Nachlauf-Schwall nicht in einen Bucket kippen
-- Ereignisse, die innerhalb der ersten Sekunden nach `authenticated` eintreffen, sind der Statustabellen-Dump, keine Zeitreihe. Diese als Initialzustand behandeln (`latest_value` setzen), aber nicht in die Bucket-Summe aufnehmen.
-- Harte Obergrenze pro Bucket: `sample_count` > 90 (dreifache Normalrate) wird als strukturell falsch verworfen und protokolliert — das ist keine Peak-Kosmetik, sondern eine Konsistenzprüfung auf die Anzahl, nicht auf den Wert.
+### 2. Gateway-neutrale Backfill-Schnittstelle
+- Neue gemeinsame Aktion `backfillRange` mit einheitlichem Vertrag: `{ locationIntegrationId, from, to }` → schreibt 5-Min-Buckets und Tagessummen.
+- Für Loxone wird sie auf die bestehende `backfillStatistics`-Logik gemappt, jetzt aber mit Zeitfenster statt Datumsbereich und beschränkt auf die betroffenen Zähler.
+- Registrierung im `gatewayRegistry`, damit Shelly, Homematic, ABB, MQTT usw. die Aktion nachrüsten können, ohne dass der Scheduler angefasst werden muss. Gateways ohne lokalen Speicher melden `supported: false` und werden übersprungen.
 
-### 3. Flush erst nach bestätigtem Upload leeren
-- `pending_buckets` und der aktuelle Bucket werden erst zurückgesetzt, wenn `ingestPost` erfolgreich war. Bei Fehler bleiben sie im Puffer und werden beim nächsten Durchlauf erneut versucht (Ringpuffer bleibt bei 24 Buckets).
+### 3. Herkunft sichtbar machen
+- Nachgetragene Zeilen bekommen `source = 'gateway_backfill'` (die Spalte existiert bereits in `meter_power_readings_5min`).
+- Upsert bleibt konfliktbasiert auf `meter_id,bucket`: Live-Daten werden nie überschrieben, nur echte Lücken gefüllt.
 
-### 4. Serverseitige Einheitensperre in `gateway-ingest`
-- Im Handler `bridge-power-5min` eine Plausibilitätsgrenze gegen die Messstellen-Konfiguration ziehen: Ein Wert wird abgelehnt, wenn er den bekannten Zählerstand des Meters (`meter_loxone_daily_snapshots.energy_total_kwh`) trifft oder überschreitet. Das ist die Signatur einer Einheitenverwechslung, nicht die eines Lastspitzenwerts. Abgelehnte Zeilen werden in `bridge_worker_logs` protokolliert, damit so etwas sichtbar wird statt still im Graphen zu landen.
+### 4. Worker-Puffer zurückbauen und die Fehlerquelle schließen
+Der Puffer bleibt als Kurzzeitreserve für Sekunden-Aussetzer, verliert aber seine Rolle als Ausfallsicherung:
+- `docs/loxone-ws-worker/index.ts` Zeile 1455–1482: Beim Neuaufbau der `uuidMap` wird die **Block-UUID nicht mehr als `pwr` registriert**. Sie liefert den Zählerstand in kWh — genau daher kamen die 2.777 kW beim Hauptanschluss und die 949,70 beim Balkonkraftwerk, die exakt dem Zählerstand `energy_total_kwh` von 949,701 entsprechen.
+- Nur States, deren Rolle aus der LoxAPP3-Expansion bestätigt wurde (neues Flag `role_confirmed`), dürfen in die Bucket-Aggregation. Kein Wert ist besser als ein falscher Wert.
+- Der Statustabellen-Dump direkt nach `authenticated` setzt nur `latest_value` und fließt nicht in die Bucket-Summe (das erzeugte die 655 Samples in einem 5-Minuten-Fenster).
 
-### 5. Bereinigung der bereits geschriebenen Falschdaten
-- Migration: Zeilen in `meter_power_readings_5min` löschen, deren `sample_count` über 90 liegt (das trifft exakt die kontaminierten Buckets, nicht die gesunden mit 30).
-- Anschließend die abhängigen Aggregate (`meter_period_totals`, stündliche Rollups) für den betroffenen Tag neu berechnen.
+### 5. Bereits geschriebene Falschdaten entfernen
+- Migration: Zeilen in `meter_power_readings_5min` mit `sample_count > 90` löschen. Gesunde Buckets haben 30 — diese Grenze trifft strukturell unmögliche Zeilen, nicht hohe Messwerte.
+- Anschließend die betroffenen Tage per `backfillRange` aus dem Miniserver neu holen und die Tagessummen neu berechnen.
 
 ## Technische Details
 
-Betroffene Dateien:
-- `docs/loxone-ws-worker/index.ts` — Punkte 1–3, Version auf `v1.17-confirmed-roles`
-- `supabase/functions/gateway-ingest/index.ts` — Punkt 4, Handler `bridge-power-5min`
-- neue Migration — Punkt 5
+| Datei | Änderung |
+|---|---|
+| `supabase/functions/gap-backfill-scheduler/index.ts` | neu — Lückenerkennung, stündlicher Cron |
+| `supabase/functions/loxone-api/index.ts` | Aktion `backfillRange` als zeitfenster-basierter Einstieg in die vorhandene Statistik-Logik |
+| `src/lib/gatewayRegistry.ts` | Fähigkeits-Flag `supportsBackfill` je Gateway-Typ |
+| `docs/loxone-ws-worker/index.ts` | Punkt 4, Version `v1.17-confirmed-roles` |
+| neue Migration | Punkt 5 |
 
-Der Worker läuft extern auf Hetzner; nach dem Merge ist ein Redeploy des Workers nötig, damit Punkte 1–3 greifen. Punkte 4 und 5 wirken sofort und schützen die Datenbank auch gegen eine ältere Worker-Version.
+Punkte 1–3 und 5 wirken sofort nach dem Deploy. Punkt 4 erfordert zusätzlich ein Redeploy des Workers auf Hetzner.
