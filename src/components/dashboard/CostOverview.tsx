@@ -9,7 +9,7 @@ import { Euro, TrendingDown, TrendingUp, ArrowDownRight, ArrowUpFromLine } from 
 import { Skeleton } from "@/components/ui/skeleton";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, subDays, subWeeks, subMonths, subQuarters, subYears, format } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
-import { gasM3ToKWh } from "@/lib/formatEnergy";
+import { gasM3ToKWh, resolveMeterEnergyKWh } from "@/lib/formatEnergy";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
 import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
 

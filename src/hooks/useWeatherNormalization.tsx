@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
-import { gasM3ToKWh } from "@/lib/formatEnergy";
+import { gasM3ToKWh, resolveMeterEnergyKWh } from "@/lib/formatEnergy";
 import { useTenant } from "./useTenant";
 import {
   estimateHotWaterBaselineKwhPerMonth,
@@ -118,7 +118,7 @@ export function useWeatherNormalization({
       const locationIds = locations.map((l) => l.id);
       const { data: meters } = await supabase
         .from("meters")
-        .select("id, location_id, unit, gas_type, brennwert, zustandszahl")
+        .select("id, location_id, unit, source_unit_energy, source_unit_power, gas_type, brennwert, zustandszahl")
         .in("location_id", locationIds)
         .eq("energy_type", energyType)
         .eq("is_main_meter", true)

@@ -10,7 +10,7 @@ import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
 import { useTranslation } from "@/hooks/useTranslation";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, format } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
-import { gasM3ToKWh } from "@/lib/formatEnergy";
+import { gasM3ToKWh, resolveMeterEnergyKWh } from "@/lib/formatEnergy";
 import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
 import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
 

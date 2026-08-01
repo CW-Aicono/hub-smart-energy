@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useTenant } from "./useTenant";
-import { gasM3ToKWh } from "@/lib/formatEnergy";
+import { gasM3ToKWh, resolveMeterEnergyKWh } from "@/lib/formatEnergy";
 
 export interface MonthlyConsumptionPoint {
   monthIndex: number; // 0..11
@@ -40,7 +40,7 @@ export function useMonthlyConsumptionByType({ locationId, energyType, year }: Op
       // Resolve eligible main meters for this energy type (and location if given)
       let metersQuery = supabase
         .from("meters")
-        .select("id, location_id, unit, gas_type, brennwert, zustandszahl")
+        .select("id, location_id, unit, source_unit_energy, source_unit_power, gas_type, brennwert, zustandszahl")
         .eq("tenant_id", tenant.id)
         .eq("energy_type", energyType)
         .eq("is_main_meter", true)
