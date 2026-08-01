@@ -48,6 +48,7 @@ export function useOcppLogs(
   const fetchLogs = useCallback(async () => {
     if (ids.length === 0) {
       setLogs([]);
+      setLatestAt(null);
       setLoading(false);
       return;
     }
@@ -66,7 +67,22 @@ export function useOcppLogs(
       return query;
     });
 
-    const results = await Promise.all(requests);
+    // Zusätzlich: neueste Nachricht über ALLE Typen — Basis für die Altersprüfung.
+    // Ohne diese Abfrage würde ein Typfilter (z. B. BootNotification) einen
+    // Fehlalarm auslösen, obwohl laufend andere Nachrichten eintreffen.
+    const latestRequests = ids.map((id) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase.from as any)(OCPP_TABLE)
+        .select("created_at")
+        .eq("charge_point_id", id)
+        .order("created_at", { ascending: false })
+        .limit(1),
+    );
+
+    const [results, latestResults] = await Promise.all([
+      Promise.all(requests),
+      Promise.all(latestRequests),
+    ]);
     const firstError = results.find((result) => result.error)?.error;
     if (firstError) {
       console.error("OCPP logs could not be loaded", firstError);
@@ -78,6 +94,14 @@ export function useOcppLogs(
         .slice(0, 200);
       setLogs(merged);
     }
+
+    const newest = latestResults
+      .flatMap((r: { data?: { created_at: string }[] | null }) => r.data ?? [])
+      .map((row) => row.created_at)
+      .sort()
+      .pop();
+    setLatestAt(newest ?? null);
+
     setLoading(false);
   }, [idsKey, activeType]);
 
