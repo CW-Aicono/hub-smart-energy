@@ -78,11 +78,10 @@ function getPeriodLabel(period: ChartPeriod, ref: Date, locale: Locale, cwPrefix
 
 function getUnitForPeriod(period: ChartPeriod, energyType: string): string {
   if (period === "day") {
-    if (energyType === "wasser") return "Liter";
-    if (energyType === "gas") return "m³/h";
+    if (energyType === "wasser") return "m³/h";
     return "kW";
   }
-  if (energyType === "wasser" || energyType === "gas") return "m³";
+  if (energyType === "wasser") return "m³";
   return "kWh";
 }
 
