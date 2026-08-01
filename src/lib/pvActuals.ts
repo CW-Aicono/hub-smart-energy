@@ -433,13 +433,19 @@ export async function fetchPvActualHourly({
   // The legacy raw table `meter_power_readings` is no longer written for
   // worker-aggregated meters, so it must never be the primary series source —
   // a single leftover raw row would collapse the whole day into one hour.
-  const seriesHourly = await fetchHourlyActualsFromSeries(meterIds, rangeStart, effectiveEnd);
+  const { hourly: seriesHourly, coverage } = await fetchHourlyActualsWithCoverage(
+    meterIds,
+    rangeStart,
+    effectiveEnd,
+  );
   let hourly = seriesHourly;
+  let hourlyCoverage = coverage;
 
   if (Object.keys(hourly).length === 0) {
     const rawReadings = await fetchMeterPowerReadings(meterIds, rangeStart, effectiveEnd);
     if (rawReadings.length > 1) {
       hourly = buildHourlyActuals(rawReadings);
+      hourlyCoverage = {};
     }
   }
 
@@ -449,17 +455,21 @@ export async function fetchPvActualHourly({
       if (authoritative != null) {
         const sum = Object.values(hourly).reduce((s, v) => s + Math.abs(v), 0);
         const coveredHours = Object.values(hourly).filter((v) => Math.abs(v) > 0).length;
-        // Only rescale when the hourly distribution is plausible; otherwise a
-        // single covered hour would absorb the entire daily total.
-        hourly = sum > 0 && coveredHours >= 2
-          ? scaleHourlyToTotal(hourly, authoritative)
-          : sum > 0
-            ? hourly
-            : estimateHourlyActualsFromDailyTotal(dayStr, authoritative, clippedForecast);
+        const hasCoverageInfo = Object.keys(hourlyCoverage).length > 0;
+        if (sum > 0 && coveredHours >= 2) {
+          // Bevorzugt: Abgleich nur auf Stunden mit Messlücken, damit
+          // vollständig gemessene Stunden exakt bleiben.
+          hourly = hasCoverageInfo
+            ? reconcileHourlyWithCoverage(hourly, hourlyCoverage, authoritative)
+            : scaleHourlyToTotal(hourly, authoritative);
+        } else if (sum <= 0) {
+          hourly = estimateHourlyActualsFromDailyTotal(dayStr, authoritative, clippedForecast);
+        }
       }
     }
     return { readings: hourly, isEstimated: false, isStored: false };
   }
+
 
 
 
