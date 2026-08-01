@@ -355,6 +355,48 @@ function scaleHourlyToTotal(hourly: Record<string, number>, target: number): Rec
   );
 }
 
+const FULL_COVERAGE_MINUTES = 55; // 11 von 12 5-Minuten-Buckets gelten als vollständig
+
+/**
+ * Verteilt die Differenz zur autoritativen Tagessumme ausschließlich auf
+ * Stunden mit unvollständiger Messabdeckung. Vollständig gemessene Stunden
+ * bleiben exakt so, wie sie gemessen wurden (keine Verschmierung des
+ * Defizits über den ganzen Tag).
+ */
+function reconcileHourlyWithCoverage(
+  hourly: Record<string, number>,
+  coverage: Record<string, number>,
+  target: number,
+): Record<string, number> {
+  const entries = Object.entries(hourly).sort(([a], [b]) => a.localeCompare(b));
+  if (entries.length === 0 || target <= 0) return hourly;
+
+  const incomplete = entries.filter(([hour]) => (coverage[hour] ?? 0) < FULL_COVERAGE_MINUTES);
+  if (incomplete.length === 0) return hourly;
+
+  const completeSum = entries
+    .filter(([hour]) => (coverage[hour] ?? 0) >= FULL_COVERAGE_MINUTES)
+    .reduce((s, [, v]) => s + Math.abs(v), 0);
+  const incompleteSum = incomplete.reduce((s, [, v]) => s + Math.abs(v), 0);
+  const remaining = target - completeSum;
+
+  // Nichts zu verteilen oder implausibel (gemessene Vollstunden liegen schon
+  // über der Tagessumme) → Messwerte unverändert lassen.
+  if (remaining <= 0 || incompleteSum <= 0) return hourly;
+
+  const factor = remaining / incompleteSum;
+  // Schutz gegen absurde Hochrechnungen (z. B. defekte Tagessumme)
+  if (!Number.isFinite(factor) || factor > 24) return hourly;
+
+  const result: Record<string, number> = {};
+  for (const [hour, value] of entries) {
+    const isIncomplete = (coverage[hour] ?? 0) < FULL_COVERAGE_MINUTES;
+    result[hour] = isIncomplete ? round2(Math.abs(value) * factor) : round2(Math.abs(value));
+  }
+  return result;
+}
+
+
 export async function fetchPvActualHourly({
   meterIds,
   locationId,
