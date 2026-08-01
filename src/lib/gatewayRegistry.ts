@@ -27,6 +27,13 @@ export interface GatewayDefinition {
   edgeFunctionName: string;
   configFields: GatewayConfigField[];
   setupInstructions?: GatewaySetupInstructions;
+  /**
+   * Gateway speichert Messreihen lokal und unterstützt die Aktion
+   * `backfillRange` ({ locationIntegrationId, from, to, meterIds }).
+   * Wird vom `gap-backfill-scheduler` genutzt, um Datenlücken nach einem
+   * Backend-Ausfall aus dem Gerätespeicher nachzuholen.
+   */
+  supportsBackfill?: boolean;
 }
 
 export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
