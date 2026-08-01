@@ -2317,15 +2317,30 @@ serve(async (req) => {
     //   Then entries aligned to entrySize, each containing:
     //     - 2x uint16 (UUID parts) + 1x uint32 (Loxone timestamp) + N x float64 (values)
     //   Loxone timestamp = seconds since 2009-01-01 00:00:00 UTC
-    if (action === "backfillStatistics") {
-      const { fromDate, toDate, totalsOnly } = requestBody;
-      if (!fromDate || !toDate) throw new Error("fromDate und toDate sind erforderlich (YYYY-MM-DD)");
+    if (action === "backfillStatistics" || action === "backfillRange") {
+      // backfillRange: Lückenfüllung. Nimmt ISO-Zeitstempel (from/to) statt
+      // Kalendertagen und optional eine Meter-Auswahl. Der Upsert läuft über
+      // (meter_id, bucket) — vorhandene Live-Werte werden nie überschrieben.
+      const isRange = action === "backfillRange";
+      const { fromDate, toDate, totalsOnly, from, to, meterIds } = requestBody;
+      if (isRange) {
+        if (!from || !to) throw new Error("from und to sind erforderlich (ISO-Zeitstempel)");
+      } else if (!fromDate || !toDate) {
+        throw new Error("fromDate und toDate sind erforderlich (YYYY-MM-DD)");
+      }
+
+      const startD = isRange ? new Date(from) : new Date(fromDate + "T00:00:00Z");
+      const endD = isRange ? new Date(to) : new Date(toDate + "T23:59:59Z");
+      if (isNaN(startD.getTime()) || isNaN(endD.getTime())) throw new Error("Ungültiger Zeitraum");
+
+      const restrictMeterIds: string[] | null =
+        Array.isArray(meterIds) && meterIds.length > 0 ? meterIds.filter((m: unknown) => typeof m === "string") : null;
 
       // totalsOnly=true: nur meter_period_totals (Tagessummen) abgleichen,
       // die 5-Min-Werte in meter_power_readings_5min werden NICHT überschrieben.
       // Verwendet vom täglichen Cron, damit der feine Live-Graph erhalten bleibt.
-      const onlyTotals = totalsOnly === true;
-      console.log(`Backfill statistics (binary): ${fromDate} to ${toDate} for integration ${locationIntegrationId} (totalsOnly=${onlyTotals})`);
+      const onlyTotals = !isRange && totalsOnly === true;
+      console.log(`Backfill (${action}): ${startD.toISOString()} → ${endD.toISOString()} for integration ${locationIntegrationId} (totalsOnly=${onlyTotals}, meters=${restrictMeterIds?.length ?? "alle"})`);
 
       const LOXONE_EPOCH_OFFSET = 1230768000; // 2009-01-01 00:00:00 UTC in Unix seconds
 
@@ -2340,12 +2355,14 @@ serve(async (req) => {
       }
 
       // 1) Get linked automatic meters with sensor_uuid
-      const { data: linkedMeters } = await supabase
+      let metersQuery = supabase
         .from("meters")
         .select("id, sensor_uuid, energy_type, tenant_id")
         .eq("location_integration_id", locationIntegrationId)
         .eq("capture_type", "automatic")
         .eq("is_archived", false);
+      if (restrictMeterIds) metersQuery = metersQuery.in("id", restrictMeterIds);
+      const { data: linkedMeters } = await metersQuery;
 
       if (!linkedMeters || linkedMeters.length === 0) {
         return new Response(
@@ -2404,9 +2421,7 @@ serve(async (req) => {
         console.log(`First 10 files: ${availableFiles.slice(0, 10).map(f => `${f.filename} -> uuid=${f.uuid}, month=${f.yearMonth}`).join(" | ")}`);
       }
 
-      // Determine needed months
-      const startD = new Date(fromDate + "T00:00:00Z");
-      const endD = new Date(toDate + "T23:59:59Z");
+      // Determine needed months (startD/endD are resolved above)
       const neededMonths = new Set<string>();
       for (let d = new Date(startD.getFullYear(), startD.getMonth(), 1); d <= endD; d.setMonth(d.getMonth() + 1)) {
         neededMonths.add(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`);
