@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, CheckCircle2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { RowActions } from "@/components/ui/row-actions";
 
 const PROVIDER_TYPES = [
   { value: "ccv", label: "CCV Cloud-Connect" },
@@ -84,7 +85,11 @@ export default function ProvidersPanel() {
             <TableBody>
               {providers.map((p: any) => (
                 <TableRow key={p.id}>
-                  <TableCell className="font-medium">{p.display_name}</TableCell>
+                  <TableCell className="font-medium">
+                    <button type="button" onClick={() => openEdit(p)} className="text-left font-medium hover:underline focus:outline-none focus-visible:underline">
+                      {p.display_name}
+                    </button>
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline">{PROVIDER_TYPES.find((t) => t.value === p.provider_type)?.label ?? p.provider_type}</Badge>
                   </TableCell>
@@ -102,17 +107,18 @@ export default function ProvidersPanel() {
                       <span className="text-muted-foreground text-sm">Inaktiv</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button size="icon" variant="ghost" onClick={() => openEdit(p)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => confirm("Provider wirklich löschen?") && remove.mutate(p.id)}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                  <TableCell className="text-right">
+                    <RowActions
+                      items={[
+                        { label: "Bearbeiten", icon: Pencil, onClick: () => openEdit(p) },
+                        {
+                          label: "Löschen",
+                          icon: Trash2,
+                          variant: "destructive",
+                          onClick: () => confirm("Provider wirklich löschen?") && remove.mutate(p.id),
+                        },
+                      ]}
+                    />
                   </TableCell>
                 </TableRow>
               ))}

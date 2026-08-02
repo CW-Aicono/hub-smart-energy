@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Pencil, Trash2 } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 
 const currencySymbol = (c?: string) => ({ EUR: "€", CHF: "CHF", GBP: "£", USD: "$" } as Record<string, string>)[c ?? "EUR"] ?? c ?? "€";
 
@@ -141,7 +142,11 @@ export default function PaymentRulesPanel() {
             <TableBody>
               {rules.map((r: any) => (
                 <TableRow key={r.id}>
-                  <TableCell className="font-medium">{r.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <button type="button" onClick={() => { setEditing({ ...r }); setOpen(true); }} className="text-left font-medium hover:underline focus:outline-none focus-visible:underline">
+                      {r.name}
+                    </button>
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
                       <Badge variant="outline" className="w-fit">{SCOPE_LABEL[r.scope]}</Badge>
@@ -155,13 +160,18 @@ export default function PaymentRulesPanel() {
                   <TableCell>
                     <Badge variant={r.enabled ? "default" : "outline"}>{r.enabled ? "Ja" : "Nein"}</Badge>
                   </TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button size="icon" variant="ghost" onClick={() => { setEditing({ ...r }); setOpen(true); }}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => confirm("Regel löschen?") && remove.mutate(r.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                  <TableCell className="text-right">
+                    <RowActions
+                      items={[
+                        { label: "Bearbeiten", icon: Pencil, onClick: () => { setEditing({ ...r }); setOpen(true); } },
+                        {
+                          label: "Löschen",
+                          icon: Trash2,
+                          variant: "destructive",
+                          onClick: () => confirm("Regel löschen?") && remove.mutate(r.id),
+                        },
+                      ]}
+                    />
                   </TableCell>
                 </TableRow>
               ))}

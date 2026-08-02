@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ChevronDown, ChevronRight, Euro, Plus, Pencil, Trash2, Zap, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useEnergyPrices, EnergyPrice } from "@/hooks/useEnergyPrices";
@@ -203,7 +204,13 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                       <TableRow key={p.id}>
                         <TableCell>
                           <div className="flex items-center gap-1.5">
-                            {T(ENERGY_TYPE_KEYS[p.energy_type] || `ep.${p.energy_type}`)}
+                            <button
+                              type="button"
+                              onClick={() => openEditDialog(p)}
+                              className="text-left font-medium hover:underline focus:outline-none focus-visible:underline"
+                            >
+                              {T(ENERGY_TYPE_KEYS[p.energy_type] || `ep.${p.energy_type}`)}
+                            </button>
                             {p.is_dynamic && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5"><Zap className="h-2.5 w-2.5" />{T("ep.dynamic")}</Badge>}
                             {p.direction === "feed_in" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5 text-green-600 border-green-300"><ArrowUpFromLine className="h-2.5 w-2.5" />{T("ep.feedIn")}</Badge>}
                           </div>
@@ -234,14 +241,12 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                         </TableCell>
                         <TableCell>{new Date(p.valid_from).toLocaleDateString("de-DE")}</TableCell>
                         <TableCell>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(p)}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deletePrice(p.id)}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
+                          <RowActions
+                            items={[
+                              { label: T("common.edit"), icon: Pencil, onClick: () => openEditDialog(p) },
+                              { label: T("common.delete"), icon: Trash2, variant: "destructive", onClick: () => deletePrice(p.id) },
+                            ]}
+                          />
                         </TableCell>
                       </TableRow>
                     ))}

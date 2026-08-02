@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Link as LinkIcon, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { RowActions } from "@/components/ui/row-actions";
 
 const TERMINAL_MODELS = ["CCV Edge IM15", "CCV Edge IM25", "CCV Edge IM30", "Nayax VPOS", "Payter P66", "Anderes"];
 
@@ -88,7 +89,11 @@ export default function TerminalsPanel() {
             <TableBody>
               {terminals.map((t: any) => (
                 <TableRow key={t.id}>
-                  <TableCell className="font-mono text-xs">{t.terminal_serial}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    <button type="button" onClick={() => { setEditing({ ...t }); setOpen(true); }} className="text-left hover:underline focus:outline-none focus-visible:underline">
+                      {t.terminal_serial}
+                    </button>
+                  </TableCell>
                   <TableCell>{t.terminal_model || "—"}</TableCell>
                   <TableCell>
                     <span className="text-sm">{t.provider?.display_name}</span>
@@ -119,16 +124,19 @@ export default function TerminalsPanel() {
                       {t.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button size="icon" variant="ghost" onClick={() => setAssignFor(t)}>
-                      <LinkIcon className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => { setEditing({ ...t }); setOpen(true); }}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={() => confirm("Terminal löschen?") && remove.mutate(t.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                  <TableCell className="text-right">
+                    <RowActions
+                      items={[
+                        { label: "Ladepunkt zuordnen", icon: LinkIcon, onClick: () => setAssignFor(t) },
+                        { label: "Bearbeiten", icon: Pencil, onClick: () => { setEditing({ ...t }); setOpen(true); } },
+                        {
+                          label: "Löschen",
+                          icon: Trash2,
+                          variant: "destructive",
+                          onClick: () => confirm("Terminal löschen?") && remove.mutate(t.id),
+                        },
+                      ]}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
