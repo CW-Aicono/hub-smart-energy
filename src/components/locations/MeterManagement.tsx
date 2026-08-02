@@ -40,6 +40,7 @@ import { confirmDialog } from "@/components/ui/confirm-dialog";
 import { getDeviceIconForSensor, getDeviceIconForMeter } from "@/lib/deviceIcons";
 import { energyUnitForMeter } from "@/lib/meterUnits";
 import { useLatestMeterValues } from "@/hooks/useLatestMeterValues";
+import { RowActions } from "@/components/ui/row-actions";
 
 interface MeterManagementProps {
   locationId: string;
@@ -304,22 +305,30 @@ function DeviceTable({
                 </Badge>
               </TableCell>
               {isAdmin && (
-                <TableCell className="flex gap-1">
-                  {linkedMeter && !linkedMeter.is_archived && onArchive && (
-                    <Button variant="ghost" size="icon" onClick={() => onArchive(linkedMeter, true)} title="Archivieren">
-                      <Archive className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {linkedMeter && linkedMeter.is_archived && onArchive && (
-                    <Button variant="ghost" size="icon" onClick={() => onArchive(linkedMeter, false)} title="Wiederherstellen">
-                      <ArchiveRestore className="h-4 w-4 text-primary" />
-                    </Button>
-                  )}
-                  {linkedMeter && linkedMeter.is_archived && onDelete && (
-                    <Button variant="ghost" size="icon" onClick={() => onDelete(linkedMeter)} title="Endgültig löschen">
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  )}
+                <TableCell>
+                  <RowActions
+                    items={[
+                      {
+                        label: "Archivieren",
+                        icon: Archive,
+                        onClick: () => linkedMeter && onArchive?.(linkedMeter, true),
+                        hidden: !linkedMeter || linkedMeter.is_archived || !onArchive,
+                      },
+                      {
+                        label: "Wiederherstellen",
+                        icon: ArchiveRestore,
+                        onClick: () => linkedMeter && onArchive?.(linkedMeter, false),
+                        hidden: !linkedMeter || !linkedMeter.is_archived || !onArchive,
+                      },
+                      {
+                        label: "Endgültig löschen",
+                        icon: Trash2,
+                        variant: "destructive",
+                        onClick: () => linkedMeter && onDelete?.(linkedMeter),
+                        hidden: !linkedMeter || !linkedMeter.is_archived || !onDelete,
+                      },
+                    ]}
+                  />
                 </TableCell>
               )}
             </TableRow>
