@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 
 interface MeasuresTableProps {
   measures: EnergyMeasure[];
@@ -81,9 +82,11 @@ export function MeasuresTable({ measures, onDelete, readOnly }: MeasuresTablePro
               <TableCell className="text-right tabular-nums">{formatDE(m.estimated_annual_savings_eur)}</TableCell>
               {!readOnly && (
                 <TableCell>
-                  <Button variant="ghost" size="icon" className="text-destructive" onClick={() => onDelete?.(m.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <RowActions
+                    items={[
+                      { label: "Löschen", icon: Trash2, variant: "destructive", onClick: () => onDelete?.(m.id) },
+                    ]}
+                  />
                 </TableCell>
               )}
             </TableRow>
