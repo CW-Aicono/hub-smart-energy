@@ -7,8 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, Battery, Calendar, Download, Euro, Plus, Trash2, Zap, TrendingDown, Wifi, WifiOff } from "lucide-react";
+import { Activity, Battery, Calendar, Download, Euro, Plus, Trash2, Zap, TrendingDown, Wifi, WifiOff, Pencil } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import {
   usePeakShavingConfigs, usePeakShavingEvents, usePeakShavingMonthly,
@@ -26,6 +28,7 @@ const fmtNum = (n: number, d = 0) => n.toLocaleString("de-DE", { minimumFraction
 const fmtEur = (n: number) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 
 export default function PeakShaving() {
+  const [editConfigId, setEditConfigId] = useState<string | null>(null);
   const { configs, isLoading, upsert, remove } = usePeakShavingConfigs();
   const { data: events = [] } = usePeakShavingEvents(100);
   const { data: monthly = [] } = usePeakShavingMonthly();
@@ -137,7 +140,13 @@ export default function PeakShaving() {
                       <div key={cfg.id} className="flex flex-wrap items-center justify-between gap-3 border rounded-lg p-4">
                         <div className="flex-1 min-w-[200px]">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="font-semibold">{loc?.name ?? cfg.location_id.slice(0, 8)}</span>
+                            <button
+                              type="button"
+                              onClick={() => setEditConfigId(cfg.id)}
+                              className="text-left font-semibold hover:underline focus:outline-none focus-visible:underline"
+                            >
+                              {loc?.name ?? cfg.location_id.slice(0, 8)}
+                            </button>
                             <Badge variant={cfg.active ? "default" : "secondary"}>{cfg.active ? "Aktiv" : "Inaktiv"}</Badge>
                             <Badge variant="outline">{cfg.mode === "forecast" ? "Schwellwert + Prognose" : cfg.mode === "event" ? "Event-Kalender" : "Schwellwert"}</Badge>
                           </div>
@@ -145,18 +154,23 @@ export default function PeakShaving() {
                             Speicher: {st?.name ?? "—"} · Limit: <b>{fmtNum(Number(cfg.peak_limit_kw), 0)} kW</b> · Netzentgelt: {fmtEur(Number(cfg.network_tariff_eur_per_kw_year))}/kW/Jahr
                           </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex items-center gap-2">
                           <ConfigDialog
-                            trigger={<Button variant="outline" size="sm">Bearbeiten</Button>}
+                            open={editConfigId === cfg.id}
+                            onOpenChange={(v) => setEditConfigId(v ? cfg.id : null)}
                             initial={cfg}
                             onSave={(v) => upsert.mutate({ ...v, id: cfg.id })}
                             locations={locations}
                             storages={storages}
                           />
-                          <ReportButton configId={cfg.id} />
-                          <Button variant="ghost" size="sm" onClick={() => { if (confirm("Wirklich löschen?")) remove.mutate(cfg.id); }}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <RowActions items={[
+                            { label: "Bearbeiten", icon: Pencil, onClick: () => setEditConfigId(cfg.id) },
+                            {
+                              label: "Report herunterladen",
+                              render: <ReportMenuItem key="report" configId={cfg.id} />,
+                            },
+                            { label: "Löschen", icon: Trash2, variant: "destructive", onClick: () => { if (confirm("Wirklich löschen?")) remove.mutate(cfg.id); } },
+                          ]} />
                         </div>
                       </div>
                     );
@@ -240,14 +254,18 @@ function Mini({ label, value }: { label: string; value: string }) {
 }
 
 interface ConfigDialogProps {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
   initial?: PeakShavingConfig;
   onSave: (v: Partial<PeakShavingConfig>) => void;
   locations: Array<{ id: string; name: string }>;
   storages: Array<{ id: string; name: string; location_id?: string | null }>;
+  open?: boolean;
+  onOpenChange?: (v: boolean) => void;
 }
-function ConfigDialog({ trigger, initial, onSave, locations, storages }: ConfigDialogProps) {
-  const [open, setOpen] = useState(false);
+function ConfigDialog({ trigger, initial, onSave, locations, storages, open: controlledOpen, onOpenChange }: ConfigDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [form, setForm] = useState<Partial<PeakShavingConfig>>(
     initial ?? {
       location_id: "",
@@ -272,7 +290,7 @@ function ConfigDialog({ trigger, initial, onSave, locations, storages }: ConfigD
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{initial ? "Konfiguration bearbeiten" : "Neue Peak-Shaving-Konfiguration"}</DialogTitle>
@@ -375,8 +393,8 @@ function ConfigDialog({ trigger, initial, onSave, locations, storages }: ConfigD
   );
 }
 
-// =============== PDF-Report Button ===============
-function ReportButton({ configId }: { configId: string }) {
+// =============== PDF-Report Menüeintrag ===============
+function ReportMenuItem({ configId }: { configId: string }) {
   const [open, setOpen] = useState(false);
   const now = new Date();
   const [year, setYear] = useState(now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
@@ -403,12 +421,12 @@ function ReportButton({ configId }: { configId: string }) {
   ];
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" title="Monats-Report als PDF">
-          <Download className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+    <>
+      <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setOpen(true); }}>
+        <Download className="h-4 w-4 mr-2" />
+        Report herunterladen
+      </DropdownMenuItem>
+      <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>PDF-Report herunterladen</DialogTitle>
@@ -441,7 +459,8 @@ function ReportButton({ configId }: { configId: string }) {
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+    </>
   );
 }
 
@@ -455,6 +474,7 @@ function CalendarSection({
 }) {
   const { items, isLoading, upsert, remove } = usePeakShavingCalendar();
   const activeConfigs = configs.filter((c) => c.active);
+  const [editEventId, setEditEventId] = useState<string | null>(null);
 
   const statusLabel: Record<PeakShavingCalendarEvent["status"], string> = {
     planned: "Geplant",
@@ -514,7 +534,7 @@ function CalendarSection({
                 return (
                   <TableRow key={ev.id}>
                     <TableCell>
-                      <div className="font-medium">{ev.event_name}</div>
+                      <button type="button" onClick={() => setEditEventId(ev.id)} className="text-left font-medium hover:underline focus:outline-none focus-visible:underline">{ev.event_name}</button>
                       <div className="text-xs text-muted-foreground">{loc?.name ?? "—"}</div>
                     </TableCell>
                     <TableCell>{format(new Date(ev.start_at), "dd.MM.yyyy HH:mm", { locale: de })}</TableCell>
@@ -523,18 +543,18 @@ function CalendarSection({
                     <TableCell className="text-right">{fmtNum(Number(ev.pre_charge_target_soc_pct), 0)} %</TableCell>
                     <TableCell><Badge variant={statusVariant[ev.status]}>{statusLabel[ev.status]}</Badge></TableCell>
                     <TableCell className="text-right">
-                      <div className="flex gap-1 justify-end">
-                        <CalendarEventDialog
-                          trigger={<Button variant="outline" size="sm">Bearbeiten</Button>}
-                          initial={ev}
-                          configs={activeConfigs}
-                          locations={locations}
-                          onSave={(v) => upsert.mutate({ ...v, id: ev.id })}
-                        />
-                        <Button variant="ghost" size="sm" onClick={() => { if (confirm("Event löschen?")) remove.mutate(ev.id); }}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <CalendarEventDialog
+                        open={editEventId === ev.id}
+                        onOpenChange={(v) => setEditEventId(v ? ev.id : null)}
+                        initial={ev}
+                        configs={activeConfigs}
+                        locations={locations}
+                        onSave={(v) => upsert.mutate({ ...v, id: ev.id })}
+                      />
+                      <RowActions items={[
+                        { label: "Bearbeiten", icon: Pencil, onClick: () => setEditEventId(ev.id) },
+                        { label: "Löschen", icon: Trash2, variant: "destructive", onClick: () => { if (confirm("Event löschen?")) remove.mutate(ev.id); } },
+                      ]} />
                     </TableCell>
                   </TableRow>
                 );
@@ -560,14 +580,20 @@ function CalendarEventDialog({
   configs,
   locations,
   onSave,
+  open: controlledOpen,
+  onOpenChange,
 }: {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
   initial?: PeakShavingCalendarEvent;
   configs: PeakShavingConfig[];
   locations: Array<{ id: string; name: string }>;
   onSave: (v: Partial<PeakShavingCalendarEvent>) => void;
+  open?: boolean;
+  onOpenChange?: (v: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [form, setForm] = useState<Partial<PeakShavingCalendarEvent>>(
     initial ?? {
       config_id: "",
@@ -597,7 +623,7 @@ function CalendarEventDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{initial ? "Event bearbeiten" : "Neues Event planen"}</DialogTitle>

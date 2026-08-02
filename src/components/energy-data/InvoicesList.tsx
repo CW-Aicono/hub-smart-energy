@@ -6,7 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Upload, FileText, Download, Pencil, Trash2, CornerDownRight, Plus } from "lucide-react";
+import { Upload, FileText, Download, CheckCircle2, Trash2, CornerDownRight, Plus } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useLocations } from "@/hooks/useLocations";
 import { useSupplierInvoices, type SupplierInvoice } from "@/hooks/useSupplierInvoices";
@@ -196,45 +197,14 @@ export default function InvoicesList() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            {inv.file_path && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => handleDownload(inv.file_path)}
-                              >
-                                <Download className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            {inv.status === "draft" && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => handleConfirm(inv)}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => handleAddCorrection(inv.id)}
-                              title={t("invoices.addCorrection" as any)}
-                            >
-                              <CornerDownRight className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive"
-                              onClick={() => deleteInvoice.mutate(inv.id)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
+                          <RowActions
+                            items={[
+                              { label: t("invoices.download" as any) || "Herunterladen", icon: Download, hidden: !inv.file_path, onClick: () => handleDownload(inv.file_path) },
+                              { label: t("invoices.confirm" as any) || "Bestätigen", icon: CheckCircle2, hidden: inv.status !== "draft", onClick: () => handleConfirm(inv) },
+                              { label: t("invoices.addCorrection" as any), icon: CornerDownRight, onClick: () => handleAddCorrection(inv.id) },
+                              { label: t("common.delete"), icon: Trash2, variant: "destructive", onClick: () => deleteInvoice.mutate(inv.id) },
+                            ]}
+                          />
                         </TableCell>
                       </TableRow>
 
@@ -261,14 +231,11 @@ export default function InvoicesList() {
                             <Badge variant="outline" className="text-[10px]">Korrektur</Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive"
-                              onClick={() => deleteInvoice.mutate(corr.id)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            <RowActions
+                              items={[
+                                { label: t("common.delete"), icon: Trash2, variant: "destructive", onClick: () => deleteInvoice.mutate(corr.id) },
+                              ]}
+                            />
                           </TableCell>
                         </TableRow>
                       ))}

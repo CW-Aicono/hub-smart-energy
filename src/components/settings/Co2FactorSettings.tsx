@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Save, Leaf } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const ENERGY_TYPES = [
@@ -159,27 +160,24 @@ export function Co2FactorSettings() {
                   />
                 </TableCell>
                 <TableCell>
-                  <div className="flex gap-1">
-                    {editing[factor.energy_type] && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleSave(editing[factor.energy_type] as any)}
-                      >
-                        <Save className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive"
-                      onClick={async () => {
-                        await deleteFactor(factor.id);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <RowActions
+                    items={[
+                      {
+                        label: t("common.save"),
+                        icon: Save,
+                        hidden: !editing[factor.energy_type],
+                        onClick: () => handleSave(editing[factor.energy_type] as any),
+                      },
+                      {
+                        label: t("common.delete"),
+                        icon: Trash2,
+                        variant: "destructive",
+                        onClick: async () => {
+                          await deleteFactor(factor.id);
+                        },
+                      },
+                    ]}
+                  />
                 </TableCell>
               </TableRow>
             ))}

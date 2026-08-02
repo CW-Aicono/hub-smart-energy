@@ -22,6 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Globe, Plus, Edit, Trash2, Plug, ArrowDownLeft, ArrowUpRight, Info } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import { format } from "date-fns";
 import {
   useRoamingSettings,
@@ -348,7 +349,11 @@ export default function RoamingTab() {
                   ) : (
                     partners.map((p) => (
                       <TableRow key={p.id}>
-                        <TableCell className="font-medium">{p.name}</TableCell>
+                        <TableCell className="font-medium">
+                          <button type="button" onClick={() => openEditPartner(p)} className="text-left font-medium hover:underline focus:outline-none focus-visible:underline">
+                            {p.name}
+                          </button>
+                        </TableCell>
                         <TableCell>{p.role}</TableCell>
                         <TableCell>{p.protocol}</TableCell>
                         <TableCell>{[p.country_code, p.party_id].filter(Boolean).join(" / ") || "—"}</TableCell>
@@ -356,22 +361,12 @@ export default function RoamingTab() {
                         <TableCell className="text-sm text-muted-foreground">
                           {p.last_sync_at ? format(new Date(p.last_sync_at), "dd.MM.yyyy HH:mm") : "—"}
                         </TableCell>
-                        <TableCell className="text-right space-x-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => testConnection.mutate(p)}
-                            disabled={testConnection.isPending}
-                            title="Verbindung testen"
-                          >
-                            <Plug className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => openEditPartner(p)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setDeleteId(p.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                        <TableCell>
+                          <RowActions items={[
+                            { label: "Verbindung testen", icon: Plug, disabled: testConnection.isPending, onClick: () => testConnection.mutate(p) },
+                            { label: "Bearbeiten", icon: Edit, onClick: () => openEditPartner(p) },
+                            { label: "Löschen", icon: Trash2, variant: "destructive", onClick: () => setDeleteId(p.id) },
+                          ]} />
                         </TableCell>
                       </TableRow>
                     ))
