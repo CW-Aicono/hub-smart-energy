@@ -8,7 +8,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, Battery, Calendar, Download, Euro, Plus, Trash2, Zap, TrendingDown, Wifi, WifiOff } from "lucide-react";
+import { Activity, Battery, Calendar, Download, Euro, Plus, Trash2, Zap, TrendingDown, Wifi, WifiOff, Pencil } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import {
   usePeakShavingConfigs, usePeakShavingEvents, usePeakShavingMonthly,
@@ -137,7 +138,13 @@ export default function PeakShaving() {
                       <div key={cfg.id} className="flex flex-wrap items-center justify-between gap-3 border rounded-lg p-4">
                         <div className="flex-1 min-w-[200px]">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="font-semibold">{loc?.name ?? cfg.location_id.slice(0, 8)}</span>
+                            <button
+                              type="button"
+                              onClick={() => setEditConfigId(cfg.id)}
+                              className="text-left font-semibold hover:underline focus:outline-none focus-visible:underline"
+                            >
+                              {loc?.name ?? cfg.location_id.slice(0, 8)}
+                            </button>
                             <Badge variant={cfg.active ? "default" : "secondary"}>{cfg.active ? "Aktiv" : "Inaktiv"}</Badge>
                             <Badge variant="outline">{cfg.mode === "forecast" ? "Schwellwert + Prognose" : cfg.mode === "event" ? "Event-Kalender" : "Schwellwert"}</Badge>
                           </div>
@@ -145,18 +152,24 @@ export default function PeakShaving() {
                             Speicher: {st?.name ?? "—"} · Limit: <b>{fmtNum(Number(cfg.peak_limit_kw), 0)} kW</b> · Netzentgelt: {fmtEur(Number(cfg.network_tariff_eur_per_kw_year))}/kW/Jahr
                           </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex items-center gap-2">
                           <ConfigDialog
-                            trigger={<Button variant="outline" size="sm">Bearbeiten</Button>}
+                            trigger={<span className="hidden" />}
+                            open={editConfigId === cfg.id}
+                            onOpenChange={(v) => setEditConfigId(v ? cfg.id : null)}
                             initial={cfg}
                             onSave={(v) => upsert.mutate({ ...v, id: cfg.id })}
                             locations={locations}
                             storages={storages}
                           />
-                          <ReportButton configId={cfg.id} />
-                          <Button variant="ghost" size="sm" onClick={() => { if (confirm("Wirklich löschen?")) remove.mutate(cfg.id); }}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <RowActions items={[
+                            { label: "Bearbeiten", icon: Pencil, onClick: () => setEditConfigId(cfg.id) },
+                            {
+                              label: "Report herunterladen",
+                              render: <ReportMenuItem key="report" configId={cfg.id} />,
+                            },
+                            { label: "Löschen", icon: Trash2, variant: "destructive", onClick: () => { if (confirm("Wirklich löschen?")) remove.mutate(cfg.id); } },
+                          ]} />
                         </div>
                       </div>
                     );

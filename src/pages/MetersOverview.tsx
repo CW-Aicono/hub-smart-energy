@@ -329,7 +329,17 @@ const MetersOverview = () => {
                                 {isSimulation && (
                                   <FlaskConical className="h-4 w-4 text-amber-600" aria-label="Testzähler" />
                                 )}
-                                {m.name}
+                                {isAdmin && !m.is_archived ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingMeter(m)}
+                                    className="text-left font-medium hover:underline focus:outline-none focus-visible:underline"
+                                  >
+                                    {m.name}
+                                  </button>
+                                ) : (
+                                  m.name
+                                )}
                                 {(m as any).setup_validated_at && (
                                   <Tooltip>
                                     <TooltipTrigger asChild>

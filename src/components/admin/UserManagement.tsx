@@ -10,8 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserCheck, UserX, Shield, User, Mail, Clock, Send, Trash2, CalendarClock, CheckCircle, MapPin } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import { useToast } from "@/hooks/use-toast";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import EditUserDialog from "./EditUserDialog";
 import EditUserLocationsDialog from "./EditUserLocationsDialog";
 import DeleteUserDialog from "./DeleteUserDialog";
@@ -457,104 +457,51 @@ const UserManagement = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        {isInvited ? (
-                          <>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => activateInvitedUser(user)}
-                                  className="text-accent hover:text-accent/80 hover:bg-accent/10"
-                                >
-                                  <CheckCircle className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{t("users.activateUser")}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => resendInvitation(user.invitation_id!, user.email!, user.role)}
-                                >
-                                  <Send className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{t("users.resendInvitation")}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => revokeInvitation(user.invitation_id!)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{t("users.revokeInvitation")}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </>
-                        ) : (
-                          <>
-                            {cannotModify && !user.is_blocked ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span>
-                                    <Button variant="ghost" size="sm" disabled>
-                                      <UserX className="h-4 w-4 mr-1" />
-                                      {t("users.block")}
-                                    </Button>
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>{t("users.cannotBlockLastAdmin")}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => toggleBlockUser(user.user_id, user.is_blocked)}
-                              >
-                                {user.is_blocked ? (
-                                  <>
-                                    <UserCheck className="h-4 w-4 mr-1" />
-                                    {t("users.unblock")}
-                                  </>
-                                ) : (
-                                  <>
-                                    <UserX className="h-4 w-4 mr-1" />
-                                    {t("users.block")}
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                            <DeleteUserDialog
-                              userId={user.user_id}
-                              userName={user.contact_person || t("users.unknown")}
-                              isAdmin={user.role === "admin"}
-                              adminCount={adminCount}
-                              onSuccess={fetchUsers}
-                            />
-                            {user.role !== "admin" && (
-                              <EditUserLocationsDialog
-                                userId={user.user_id}
-                                userName={user.contact_person || t("users.unknown")}
-                              />
-                            )}
-                          </>
-                        )}
-                      </div>
+                      {isInvited ? (
+                        <RowActions
+                          items={[
+                            { label: t("users.activateUser"), icon: CheckCircle, onClick: () => activateInvitedUser(user) },
+                            { label: t("users.resendInvitation"), icon: Send, onClick: () => resendInvitation(user.invitation_id!, user.email!, user.role) },
+                            { label: t("users.revokeInvitation"), icon: Trash2, variant: "destructive", onClick: () => revokeInvitation(user.invitation_id!) },
+                          ]}
+                        />
+                      ) : (
+                        <RowActions
+                          items={[
+                            {
+                              label: user.is_blocked ? t("users.unblock") : t("users.block"),
+                              icon: user.is_blocked ? UserCheck : UserX,
+                              disabled: cannotModify && !user.is_blocked,
+                              onClick: () => toggleBlockUser(user.user_id, user.is_blocked),
+                            },
+                            {
+                              label: t("users.manageLocations"),
+                              icon: MapPin,
+                              hidden: user.role === "admin",
+                              render: (
+                                <EditUserLocationsDialog
+                                  userId={user.user_id}
+                                  userName={user.contact_person || t("users.unknown")}
+                                />
+                              ),
+                            },
+                            {
+                              label: t("common.delete"),
+                              icon: Trash2,
+                              variant: "destructive",
+                              render: (
+                                <DeleteUserDialog
+                                  userId={user.user_id}
+                                  userName={user.contact_person || t("users.unknown")}
+                                  isAdmin={user.role === "admin"}
+                                  adminCount={adminCount}
+                                  onSuccess={fetchUsers}
+                                />
+                              ),
+                            },
+                          ]}
+                        />
+                      )}
                     </TableCell>
                   </TableRow>
                 );

@@ -29,7 +29,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2, ExternalLink, Eye, UserPlus, X, Check } from "lucide-react";
+import { Plus, Trash2, ExternalLink, Eye, UserPlus, X, Check, Pencil } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import {
   useMarketplaceListings,
   useJoinRequests,
@@ -291,7 +292,7 @@ export default function MarketplaceTab({ communityId }: Props) {
                 {listings.map((l) => (
                   <TableRow key={l.id}>
                     <TableCell>
-                      <button onClick={() => startEdit(l)} className="text-primary hover:underline">
+                      <button type="button" onClick={() => startEdit(l)} className="text-left font-medium hover:underline focus:outline-none focus-visible:underline">
                         {l.title}
                       </button>
                       <div className="text-xs text-muted-foreground">/{l.slug}</div>
@@ -310,23 +311,28 @@ export default function MarketplaceTab({ communityId }: Props) {
                     <TableCell className="text-right">
                       {Number(l.view_count).toLocaleString("de-DE")}
                     </TableCell>
-                    <TableCell className="text-right space-x-1">
-                      {l.is_public && (
-                        <Button asChild variant="ghost" size="sm" title="Öffentlich ansehen">
-                          <a href={`/sharing/marktplatz/${l.slug}`} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={async () => {
-                          if (await confirmDialog({ title: "Angebot löschen", description: `Angebot "${l.title}" löschen?` })) deleteListing.mutate(l.id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    <TableCell>
+                      <RowActions items={[
+                        {
+                          label: "Öffentlich ansehen",
+                          hidden: !l.is_public,
+                          render: (
+                            <a
+                              key="view"
+                              href={`/sharing/marktplatz/${l.slug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                            >
+                              <ExternalLink className="h-4 w-4 mr-2" />Öffentlich ansehen
+                            </a>
+                          ),
+                        },
+                        { label: "Bearbeiten", icon: Pencil, onClick: () => startEdit(l) },
+                        { label: "Löschen", icon: Trash2, variant: "destructive", onClick: async () => {
+                            if (await confirmDialog({ title: "Angebot löschen", description: `Angebot "${l.title}" löschen?` })) deleteListing.mutate(l.id);
+                          } },
+                      ]} />
                     </TableCell>
                   </TableRow>
                 ))}
