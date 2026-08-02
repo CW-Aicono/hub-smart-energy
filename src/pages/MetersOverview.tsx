@@ -31,6 +31,7 @@ import { confirmDialog } from "@/components/ui/confirm-dialog";
 import { SimulationMeterControl } from "@/components/meters/SimulationMeterControl";
 import { useSimulationMeterValue } from "@/hooks/useSimulationMeter";
 import { VirtualBalanceBreakdown } from "@/components/meters/VirtualBalanceBreakdown";
+import { RowActions } from "@/components/ui/row-actions";
 
 function SimulationLiveValueCell({ meter }: { meter: Meter }) {
   const { value, loaded } = useSimulationMeterValue(meter.id);
@@ -407,47 +408,54 @@ const MetersOverview = () => {
                               })()}
                             </TableCell>
                             <TableCell>
-                              <div className="flex gap-1">
-                                {!m.is_archived && isManual && (
-                                  <Button size="sm" variant="outline" onClick={() => setReadingDialogMeter(m)}>
-                                    <ClipboardEdit className="h-4 w-4 mr-1" />
-                                    {t("meters.read" as any)}
-                                  </Button>
-                                )}
-                                {!m.is_archived && !isSimulation && (
-                                  <Button size="sm" variant="ghost" onClick={() => setQrMeter(m)} title="QR-Code">
-                                    <QrCode className="h-4 w-4" />
-                                  </Button>
-                                )}
-                                {isAdmin && !m.is_archived && (
-                                  <Button size="sm" variant="ghost" onClick={() => setEditingMeter(m)} title="Bearbeiten">
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                )}
-                                {isAdmin && (
-                                  m.is_archived ? (
-                                    <>
-                                      <Button size="sm" variant="ghost" onClick={() => archiveMeter(m.id, false)} title="Wiederherstellen">
-                                        <ArchiveRestore className="h-4 w-4 text-primary" />
-                                      </Button>
-                                      <Button size="sm" variant="ghost" onClick={async () => {
-                                        const ok = await confirmDialog({
-                                          title: "Zähler endgültig löschen?",
-                                          description: `Möchten Sie "${m.name}" endgültig löschen? Historische Messwerte bleiben erhalten, sind aber nicht mehr dieser Messstelle zugeordnet.`,
-                                          confirmLabel: "Endgültig löschen",
-                                        });
-                                        if (ok) deleteMeter(m.id);
-                                      }} title="Endgültig löschen">
-                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                      </Button>
-                                    </>
-                                  ) : (
-                                    <Button size="sm" variant="ghost" onClick={() => archiveMeter(m.id, true)} title="Archivieren">
-                                      <Archive className="h-4 w-4" />
-                                    </Button>
-                                  )
-                                )}
-                              </div>
+                              <RowActions
+                                items={[
+                                  {
+                                    label: t("meters.read" as any),
+                                    icon: ClipboardEdit,
+                                    onClick: () => setReadingDialogMeter(m),
+                                    hidden: m.is_archived || !isManual,
+                                  },
+                                  {
+                                    label: "QR-Code",
+                                    icon: QrCode,
+                                    onClick: () => setQrMeter(m),
+                                    hidden: m.is_archived || isSimulation,
+                                  },
+                                  {
+                                    label: t("common.edit"),
+                                    icon: Pencil,
+                                    onClick: () => setEditingMeter(m),
+                                    hidden: !isAdmin || m.is_archived,
+                                  },
+                                  {
+                                    label: "Wiederherstellen",
+                                    icon: ArchiveRestore,
+                                    onClick: () => archiveMeter(m.id, false),
+                                    hidden: !isAdmin || !m.is_archived,
+                                  },
+                                  {
+                                    label: "Archivieren",
+                                    icon: Archive,
+                                    onClick: () => archiveMeter(m.id, true),
+                                    hidden: !isAdmin || m.is_archived,
+                                  },
+                                  {
+                                    label: t("common.delete"),
+                                    icon: Trash2,
+                                    variant: "destructive",
+                                    onClick: async () => {
+                                      const ok = await confirmDialog({
+                                        title: "Zähler endgültig löschen?",
+                                        description: `Möchten Sie "${m.name}" endgültig löschen? Historische Messwerte bleiben erhalten, sind aber nicht mehr dieser Messstelle zugeordnet.`,
+                                        confirmLabel: "Endgültig löschen",
+                                      });
+                                      if (ok) deleteMeter(m.id);
+                                    },
+                                    hidden: !isAdmin || !m.is_archived,
+                                  },
+                                ]}
+                              />
                             </TableCell>
                           </TableRow>
                           {isSimulation && isExpanded && (
