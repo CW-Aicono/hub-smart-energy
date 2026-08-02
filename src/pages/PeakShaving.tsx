@@ -27,6 +27,7 @@ const fmtNum = (n: number, d = 0) => n.toLocaleString("de-DE", { minimumFraction
 const fmtEur = (n: number) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 
 export default function PeakShaving() {
+  const [editConfigId, setEditConfigId] = useState<string | null>(null);
   const { configs, isLoading, upsert, remove } = usePeakShavingConfigs();
   const { data: events = [] } = usePeakShavingEvents(100);
   const { data: monthly = [] } = usePeakShavingMonthly();
