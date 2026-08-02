@@ -2,7 +2,6 @@ import { EnergyMeasure } from "@/hooks/useEnergyMeasures";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { RowActions } from "@/components/ui/row-actions";
 

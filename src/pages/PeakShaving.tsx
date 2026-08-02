@@ -474,6 +474,7 @@ function CalendarSection({
 }) {
   const { items, isLoading, upsert, remove } = usePeakShavingCalendar();
   const activeConfigs = configs.filter((c) => c.active);
+  const [editEventId, setEditEventId] = useState<string | null>(null);
 
   const statusLabel: Record<PeakShavingCalendarEvent["status"], string> = {
     planned: "Geplant",
@@ -533,7 +534,7 @@ function CalendarSection({
                 return (
                   <TableRow key={ev.id}>
                     <TableCell>
-                      <div className="font-medium">{ev.event_name}</div>
+                      <button type="button" onClick={() => setEditEventId(ev.id)} className="text-left font-medium hover:underline focus:outline-none focus-visible:underline">{ev.event_name}</button>
                       <div className="text-xs text-muted-foreground">{loc?.name ?? "—"}</div>
                     </TableCell>
                     <TableCell>{format(new Date(ev.start_at), "dd.MM.yyyy HH:mm", { locale: de })}</TableCell>
@@ -542,18 +543,18 @@ function CalendarSection({
                     <TableCell className="text-right">{fmtNum(Number(ev.pre_charge_target_soc_pct), 0)} %</TableCell>
                     <TableCell><Badge variant={statusVariant[ev.status]}>{statusLabel[ev.status]}</Badge></TableCell>
                     <TableCell className="text-right">
-                      <div className="flex gap-1 justify-end">
-                        <CalendarEventDialog
-                          trigger={<Button variant="outline" size="sm">Bearbeiten</Button>}
-                          initial={ev}
-                          configs={activeConfigs}
-                          locations={locations}
-                          onSave={(v) => upsert.mutate({ ...v, id: ev.id })}
-                        />
-                        <Button variant="ghost" size="sm" onClick={() => { if (confirm("Event löschen?")) remove.mutate(ev.id); }}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <CalendarEventDialog
+                        open={editEventId === ev.id}
+                        onOpenChange={(v) => setEditEventId(v ? ev.id : null)}
+                        initial={ev}
+                        configs={activeConfigs}
+                        locations={locations}
+                        onSave={(v) => upsert.mutate({ ...v, id: ev.id })}
+                      />
+                      <RowActions items={[
+                        { label: "Bearbeiten", icon: Pencil, onClick: () => setEditEventId(ev.id) },
+                        { label: "Löschen", icon: Trash2, variant: "destructive", onClick: () => { if (confirm("Event löschen?")) remove.mutate(ev.id); } },
+                      ]} />
                     </TableCell>
                   </TableRow>
                 );
@@ -579,14 +580,20 @@ function CalendarEventDialog({
   configs,
   locations,
   onSave,
+  open: controlledOpen,
+  onOpenChange,
 }: {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
   initial?: PeakShavingCalendarEvent;
   configs: PeakShavingConfig[];
   locations: Array<{ id: string; name: string }>;
   onSave: (v: Partial<PeakShavingCalendarEvent>) => void;
+  open?: boolean;
+  onOpenChange?: (v: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [form, setForm] = useState<Partial<PeakShavingCalendarEvent>>(
     initial ?? {
       config_id: "",
@@ -616,7 +623,7 @@ function CalendarEventDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{initial ? "Event bearbeiten" : "Neues Event planen"}</DialogTitle>
