@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Activity, Battery, Calendar, Download, Euro, Plus, Trash2, Zap, TrendingDown, Wifi, WifiOff, Pencil } from "lucide-react";
 import { RowActions } from "@/components/ui/row-actions";
@@ -155,7 +156,6 @@ export default function PeakShaving() {
                         </div>
                         <div className="flex items-center gap-2">
                           <ConfigDialog
-                            trigger={<span className="hidden" />}
                             open={editConfigId === cfg.id}
                             onOpenChange={(v) => setEditConfigId(v ? cfg.id : null)}
                             initial={cfg}
@@ -254,14 +254,18 @@ function Mini({ label, value }: { label: string; value: string }) {
 }
 
 interface ConfigDialogProps {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
   initial?: PeakShavingConfig;
   onSave: (v: Partial<PeakShavingConfig>) => void;
   locations: Array<{ id: string; name: string }>;
   storages: Array<{ id: string; name: string; location_id?: string | null }>;
+  open?: boolean;
+  onOpenChange?: (v: boolean) => void;
 }
-function ConfigDialog({ trigger, initial, onSave, locations, storages }: ConfigDialogProps) {
-  const [open, setOpen] = useState(false);
+function ConfigDialog({ trigger, initial, onSave, locations, storages, open: controlledOpen, onOpenChange }: ConfigDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [form, setForm] = useState<Partial<PeakShavingConfig>>(
     initial ?? {
       location_id: "",
@@ -286,7 +290,7 @@ function ConfigDialog({ trigger, initial, onSave, locations, storages }: ConfigD
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{initial ? "Konfiguration bearbeiten" : "Neue Peak-Shaving-Konfiguration"}</DialogTitle>
@@ -389,8 +393,8 @@ function ConfigDialog({ trigger, initial, onSave, locations, storages }: ConfigD
   );
 }
 
-// =============== PDF-Report Button ===============
-function ReportButton({ configId }: { configId: string }) {
+// =============== PDF-Report Menüeintrag ===============
+function ReportMenuItem({ configId }: { configId: string }) {
   const [open, setOpen] = useState(false);
   const now = new Date();
   const [year, setYear] = useState(now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
@@ -417,12 +421,12 @@ function ReportButton({ configId }: { configId: string }) {
   ];
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" title="Monats-Report als PDF">
-          <Download className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+    <>
+      <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setOpen(true); }}>
+        <Download className="h-4 w-4 mr-2" />
+        Report herunterladen
+      </DropdownMenuItem>
+      <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>PDF-Report herunterladen</DialogTitle>
@@ -455,7 +459,8 @@ function ReportButton({ configId }: { configId: string }) {
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+    </>
   );
 }
 

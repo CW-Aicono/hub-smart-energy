@@ -42,8 +42,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { RowActions } from "@/components/ui/row-actions";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -117,6 +117,7 @@ export function AiconoHubManager() {
   const [createOpen, setCreateOpen] = useState(false);
   const [pendingLocationId, setPendingLocationId] = useState<string>("none");
   const [pendingLabel, setPendingLabel] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<PairingToken | null>(null);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -251,27 +252,11 @@ export function AiconoHubManager() {
                       <TableCell className="text-sm text-muted-foreground">{formatDateDE(tok.expires_at)}</TableCell>
                       <TableCell className="text-xs font-mono text-muted-foreground">{tok.bound_to_mac || "—"}</TableCell>
                       <TableCell>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>{t("aiconoHub.token.removeQ")}</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                {tok.used_at ? t("aiconoHub.token.removeUsed") : t("aiconoHub.token.removeUnused")}
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>{t("aiconoHub.token.cancel")}</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => deleteMutation.mutate(tok.id)}>
-                                {t("aiconoHub.token.delete")}
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <RowActions
+                          items={[
+                            { label: t("aiconoHub.token.delete"), icon: Trash2, variant: "destructive", onClick: () => setDeleteTarget(tok) },
+                          ]}
+                        />
                       </TableCell>
                     </TableRow>
                   );
@@ -286,6 +271,28 @@ export function AiconoHubManager() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("aiconoHub.token.removeQ")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.used_at ? t("aiconoHub.token.removeUsed") : t("aiconoHub.token.removeUnused")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("aiconoHub.token.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+                setDeleteTarget(null);
+              }}
+            >
+              {t("aiconoHub.token.delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
