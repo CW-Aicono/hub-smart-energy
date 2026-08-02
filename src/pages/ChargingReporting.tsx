@@ -37,6 +37,7 @@ import * as XLSX from "@e965/xlsx";
 import { jsPDF } from "jspdf";
 import { buildAllocations, passesStatusFilter } from "@/lib/chargingReporting";
 import { AlertTriangle } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type Dimension =
@@ -1396,12 +1397,10 @@ const ChargingReporting = () => {
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Switch checked={s.is_active} onCheckedChange={(v) => toggleSchedule(s.id, v)} />
-                          <Button size="sm" variant="ghost" onClick={() => sendScheduleNow(s.id)} title="Jetzt testen">
-                            <Send className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => deleteSchedule(s.id)} title="Löschen">
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
+                          <RowActions items={[
+                            { label: "Jetzt testen", icon: Send, onClick: () => sendScheduleNow(s.id) },
+                            { label: "Löschen", icon: Trash2, variant: "destructive", onClick: () => deleteSchedule(s.id) },
+                          ]} />
                         </div>
                       </TableCell>
                     </TableRow>

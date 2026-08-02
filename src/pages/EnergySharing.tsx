@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, Users as UsersIcon, Sun, Receipt, FileSignature, PenLine, BarChart3, Upload, Calculator, ShieldCheck, Store, Pencil, Smartphone } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 
 import {
   useEnergyCommunities,
@@ -444,9 +445,9 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
               {members.map((m) => (
                 <TableRow key={m.id}>
                   <TableCell>
-                    <Link to={`/energy-sharing/members/${m.id}`} className="text-primary hover:underline">
+                    <button type="button" onClick={() => setEditing(m)} className="text-left font-medium hover:underline focus:outline-none focus-visible:underline">
                       {m.display_name}
-                    </Link>
+                    </button>
                     {m.email && <div className="text-xs text-muted-foreground">{m.email}</div>}
                   </TableCell>
                   <TableCell><Badge variant="secondary">{labelOr(ROLE_LABELS, m.role)}</Badge></TableCell>
@@ -454,22 +455,14 @@ function MembersTab({ communityId, communityName }: { communityId: string; commu
                   <TableCell><Badge variant={m.imsys_status === "installed" ? "default" : "outline"} className="text-xs">{labelOr(IMSYS_STATUS_LABELS, m.imsys_status ?? "missing")}</Badge></TableCell>
                   <TableCell className="text-right">{Number(m.share_kw).toLocaleString("de-DE", { maximumFractionDigits: 2 })}</TableCell>
                   <TableCell><Badge>{labelOr(STATUS_LABELS, m.status)}</Badge></TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(m)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      title={m.status === "active" ? "Vertrag bereits unterzeichnet" : "Vertrag unterzeichnen"}
-                      disabled={m.status === "active"}
-                      onClick={() => setSignMember(m)}
-                    >
-                      <PenLine className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" title="Löschen" onClick={async () => {
-                      if (await confirmDialog({ title: "Mitglied entfernen", description: `Mitglied "${m.display_name}" wirklich entfernen?` })) deleteMember.mutate(m.id);
-                    }}><Trash2 className="h-4 w-4" /></Button>
+                  <TableCell>
+                    <RowActions items={[
+                      { label: "Bearbeiten", icon: Pencil, onClick: () => setEditing(m) },
+                      { label: m.status === "active" ? "Vertrag bereits unterzeichnet" : "Vertrag unterzeichnen", icon: PenLine, disabled: m.status === "active", onClick: () => setSignMember(m) },
+                      { label: "Löschen", icon: Trash2, variant: "destructive", onClick: async () => {
+                          if (await confirmDialog({ title: "Mitglied entfernen", description: `Mitglied "${m.display_name}" wirklich entfernen?` })) deleteMember.mutate(m.id);
+                        } },
+                    ]} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -629,13 +622,13 @@ function AssetsTab({ communityId }: { communityId: string }) {
                     <TableCell>{labelOr(SHARE_MODEL_LABELS, a.share_model)}</TableCell>
                     <TableCell><Badge variant={a.imsys_status === "installed" ? "default" : "outline"} className="text-xs">{labelOr(IMSYS_STATUS_LABELS, a.imsys_status ?? "missing")}</Badge></TableCell>
                     <TableCell>{a.renewable_confirmed ? "✓" : <span className="text-destructive">✗</span>}</TableCell>
-                    <TableCell className="text-right space-x-1">
-                      <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(a)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" title="Löschen" onClick={async () => {
-                        if (await confirmDialog({ title: "Anlage entfernen", description: "Anlage wirklich entfernen?" })) deleteAsset.mutate(a.id);
-                      }}><Trash2 className="h-4 w-4" /></Button>
+                    <TableCell>
+                      <RowActions items={[
+                        { label: "Bearbeiten", icon: Pencil, onClick: () => setEditing(a) },
+                        { label: "Löschen", icon: Trash2, variant: "destructive", onClick: async () => {
+                            if (await confirmDialog({ title: "Anlage entfernen", description: "Anlage wirklich entfernen?" })) deleteAsset.mutate(a.id);
+                          } },
+                      ]} />
                     </TableCell>
                   </TableRow>
                 );
@@ -733,13 +726,13 @@ function TariffTab({ communityId }: { communityId: string }) {
                   <TableCell>{t.valid_to ?? "—"}</TableCell>
                   <TableCell className="text-right">{Number(t.price_ct_kwh).toLocaleString("de-DE", { minimumFractionDigits: 2 })}</TableCell>
                   <TableCell className="text-right">{Number(t.feed_in_ct_kwh).toLocaleString("de-DE", { minimumFractionDigits: 2 })}</TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button variant="ghost" size="sm" title="Bearbeiten" onClick={() => setEditing(t)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" title="Löschen" onClick={async () => {
-                      if (await confirmDialog({ title: "Tarif löschen", description: "Tarif wirklich löschen?" })) deleteTariff.mutate(t.id);
-                    }}><Trash2 className="h-4 w-4" /></Button>
+                  <TableCell>
+                    <RowActions items={[
+                      { label: "Bearbeiten", icon: Pencil, onClick: () => setEditing(t) },
+                      { label: "Löschen", icon: Trash2, variant: "destructive", onClick: async () => {
+                          if (await confirmDialog({ title: "Tarif löschen", description: "Tarif wirklich löschen?" })) deleteTariff.mutate(t.id);
+                        } },
+                    ]} />
                   </TableCell>
                 </TableRow>
               ))}

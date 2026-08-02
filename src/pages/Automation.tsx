@@ -28,9 +28,10 @@ import { de } from "date-fns/locale";
 import {
   Cpu, Zap, BrainCircuit, Thermometer, Lightbulb, Wind, TrendingDown, ArrowRight, Plus,
   Settings2, Activity, Server, Clock, CheckCircle2, AlertTriangle, Sparkles, MapPin,
-  Building2, Layers, DoorOpen, ChevronRight, Play, Loader2, Pencil, Trash2,
+  Building2, Layers, DoorOpen, ChevronRight, Play, Pencil, Trash2,
   RefreshCw, Download, XCircle, Timer, FileText, Search, Filter, GitBranch, WifiOff,
 } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 
 type TFn = (key: any) => string;
 
@@ -520,7 +521,7 @@ const Automation = () => {
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <h3 className="font-semibold">{auto.name}</h3>
+                                  <button type="button" onClick={() => openEdit(auto)} className="text-left font-medium hover:underline focus:outline-none focus-visible:underline">{auto.name}</button>
                                   <Badge variant="outline" className="text-[10px]">{catCfg.label}</Badge>
                                   {auto.actions?.length > 1 && (
                                     <Badge variant="secondary" className="text-[10px]">{auto.actions.length} {T("automation.actions")}</Badge>
@@ -558,11 +559,11 @@ const Automation = () => {
                               </div>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
-                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleExecute(auto)} disabled={isExec || !auto.is_active} title={T("automation.executeNow")}>
-                                {isExec ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(auto)}><Pencil className="h-3.5 w-3.5" /></Button>
-                              <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(auto)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                              <RowActions items={[
+                                { label: T("automation.executeNow"), icon: Play, onClick: () => handleExecute(auto), disabled: isExec || !auto.is_active },
+                                { label: T("common.edit"), icon: Pencil, onClick: () => openEdit(auto) },
+                                { label: T("common.delete"), icon: Trash2, variant: "destructive", onClick: () => handleDelete(auto) },
+                              ]} />
                               <Switch checked={auto.is_active} onCheckedChange={(c) => handleToggle(auto, c)} className="ml-1" />
                             </div>
                           </div>

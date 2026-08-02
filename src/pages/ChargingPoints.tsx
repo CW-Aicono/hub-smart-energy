@@ -17,13 +17,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, PlugZap, Trash2, Zap, ZapOff, AlertTriangle, WifiOff, Info, Search, MapPin, ChevronDown, QrCode, Settings, Shield, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Globe, ArrowUp, ArrowDown, ArrowUpDown, Move, Check } from "lucide-react";
 import PublicStatusLinkDialog from "@/components/charging/PublicStatusLinkDialog";
+import { RowActions } from "@/components/ui/row-actions";
 import { toast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { ChargePointGroupsManager } from "@/components/charging/ChargePointGroupsManager";
@@ -100,6 +101,7 @@ const ChargingPoints = () => {
   const [publicLinkOpen, setPublicLinkOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [duplicateSource, setDuplicateSource] = useState<ChargePoint | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ChargePoint | null>(null);
   const [showAddPassword, setShowAddPassword] = useState(false);
   const generatePw = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -712,36 +714,11 @@ const ChargingPoints = () => {
                                 <ChargePointQrCode ocppId={cp.ocpp_id ?? ""} name={cp.name} address={cp.address} />
                               </TableCell>
                               {isAdmin && (
-                                <TableCell>
-                                  <div className="flex items-center gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      title="Duplizieren"
-                                      onClick={(e) => { e.stopPropagation(); handleDuplicate(cp); }}
-                                    >
-                                      <Copy className="h-4 w-4" />
-                                    </Button>
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>{t("charging.deleteConfirm" as any)}</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            <strong>{cp.name}</strong>{cp.ocpp_id ? ` (${cp.ocpp_id})` : ""} {t("charging.deleteChargePointDesc" as any)}
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>{t("common.cancel" as any)}</AlertDialogCancel>
-                                          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteChargePoint.mutate(cp.id)}>
-                                            {t("charging.deletePermanently" as any)}
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  </div>
+                                <TableCell onClick={(e) => e.stopPropagation()}>
+                                  <RowActions items={[
+                                    { label: "Duplizieren", icon: Copy, onClick: () => handleDuplicate(cp) },
+                                    { label: t("common.delete" as any), icon: Trash2, variant: "destructive", onClick: () => setDeleteTarget(cp) },
+                                  ]} />
                                 </TableCell>
                               )}
                             </TableRow>
@@ -754,6 +731,26 @@ const ChargingPoints = () => {
               </CollapsibleContent>
             </Card>
           </Collapsible>
+
+          <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t("charging.deleteConfirm" as any)}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  <strong>{deleteTarget?.name}</strong>{deleteTarget?.ocpp_id ? ` (${deleteTarget.ocpp_id})` : ""} {t("charging.deleteChargePointDesc" as any)}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t("common.cancel" as any)}</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => { if (deleteTarget) deleteChargePoint.mutate(deleteTarget.id); setDeleteTarget(null); }}
+                >
+                  {t("charging.deletePermanently" as any)}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           {/* Map */}
           <Card>

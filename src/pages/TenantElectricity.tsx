@@ -11,7 +11,7 @@ import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Home, Users, Receipt, Settings, Plus, Trash2, FileText, Sun, Plug2, Archive, ArchiveRestore, X, Smartphone, ExternalLink, Copy, Check, Link, QrCode } from "lucide-react";
+import { Home, Users, Receipt, Settings, Plus, Trash2, FileText, Sun, Plug2, Archive, ArchiveRestore, X, Smartphone, ExternalLink, Copy, Check, Link, QrCode, Edit } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useTenantElectricityTenants } from "@/hooks/useTenantElectricityTenants";
@@ -23,6 +23,7 @@ import { useMeters } from "@/hooks/useMeters";
 import { format } from "date-fns";
 import { useEffect, useRef } from "react";
 import QRCode from "qrcode";
+import { RowActions } from "@/components/ui/row-actions";
 
 const T = (t: (k: any) => string, key: string) => t(key as any);
 
@@ -323,33 +324,48 @@ function TenantsTab() {
                 </Badge>
               </TableCell>
               <TableCell>
-                <div className="flex items-center gap-1">
-                  {te.status === "active" ? (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" title={T(t, "te.archive")}>
-                          <Archive className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>{T(t, "te.archiveTenant")}</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            <strong>{te.name}</strong> {te.unit_label ? `(${te.unit_label})` : ""} {T(t, "te.archiveTenantDesc")}
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>{t("common.cancel" as any)}</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => archiveTenant.mutate(te.id)}>{T(t, "te.archive")}</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  ) : (
-                    <Button variant="ghost" size="icon" onClick={() => handleReactivate(te.id)} title={T(t, "te.statusActive")}>
-                      <ArchiveRestore className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
+                <RowActions
+                  items={[
+                    { label: t("common.edit"), icon: Edit, onClick: () => openEdit(te), hidden: te.status !== "active" },
+                    {
+                      label: T(t, "te.archive"),
+                      icon: Archive,
+                      hidden: te.status !== "active",
+                      render: (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button
+                              type="button"
+                              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Archive className="h-4 w-4 mr-2" />
+                              {T(t, "te.archive")}
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>{T(t, "te.archiveTenant")}</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                <strong>{te.name}</strong> {te.unit_label ? `(${te.unit_label})` : ""} {T(t, "te.archiveTenantDesc")}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>{t("common.cancel" as any)}</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => archiveTenant.mutate(te.id)}>{T(t, "te.archive")}</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      ),
+                    },
+                    {
+                      label: T(t, "te.statusActive"),
+                      icon: ArchiveRestore,
+                      onClick: () => handleReactivate(te.id),
+                      hidden: te.status === "active",
+                    },
+                  ]}
+                />
               </TableCell>
             </TableRow>
           ))}
@@ -493,7 +509,14 @@ function TariffsTab() {
               <TableCell>{fmtEur(tariff.base_fee_monthly)} €</TableCell>
               <TableCell>{format(new Date(tariff.valid_from), "dd.MM.yyyy")}</TableCell>
               <TableCell>{tariff.valid_until ? format(new Date(tariff.valid_until), "dd.MM.yyyy") : T(t, "te.unlimited")}</TableCell>
-              <TableCell><Button variant="ghost" size="icon" onClick={() => deleteTariff.mutate(tariff.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
+              <TableCell>
+                <RowActions
+                  items={[
+                    { label: t("common.edit"), icon: Edit, onClick: () => openEdit(tariff) },
+                    { label: t("common.delete"), icon: Trash2, variant: "destructive", onClick: () => deleteTariff.mutate(tariff.id) },
+                  ]}
+                />
+              </TableCell>
             </TableRow>
           ))}
           {tariffs.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">{T(t, "te.noTariffsYet")}</TableCell></TableRow>}

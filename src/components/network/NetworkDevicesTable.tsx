@@ -9,6 +9,7 @@ import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Wifi, Router, Cable, Search, Pencil, ArrowUp, ArrowDown } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import { type NetworkDevice, formatBytes, formatRate } from "@/data/networkDemoData";
 
 interface Props {
@@ -142,7 +143,15 @@ export default function NetworkDevicesTable({ devices, onUpdateDevice }: Props) 
                 {sorted.map((d) => (
                   <TableRow key={d.id}>
                     <TableCell>{typeIcon(d.type)}</TableCell>
-                    <TableCell className="font-medium">{d.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(d)}
+                        className="text-left font-medium hover:underline focus:outline-none focus-visible:underline"
+                      >
+                        {d.name}
+                      </button>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{d.model}</TableCell>
                     <TableCell className="font-mono text-sm">{d.ip}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{d.mac}</TableCell>
@@ -168,9 +177,11 @@ export default function NetworkDevicesTable({ devices, onUpdateDevice }: Props) 
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground text-sm">{d.uptime}</TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(d)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                      <RowActions
+                        items={[
+                          { label: "Bearbeiten", icon: Pencil, onClick: () => openEdit(d) },
+                        ]}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}

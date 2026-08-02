@@ -21,6 +21,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Plus, Pencil, Trash2, ListChecks, Sparkles, Lock } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import { toast } from "@/hooks/use-toast";
 
 interface Rule {
@@ -347,7 +348,17 @@ export function SalesRulesManager({ scope, partnerId, canManage = true }: SalesR
                     <TableRow key={r.id}>
                       <TableCell className="font-mono text-sm">{r.prio}</TableCell>
                       <TableCell>
-                        <div className="font-medium">{r.name}</div>
+                        {canManage ? (
+                          <button
+                            type="button"
+                            onClick={() => openEdit(r)}
+                            className="text-left font-medium hover:underline focus:outline-none focus-visible:underline"
+                          >
+                            {r.name}
+                          </button>
+                        ) : (
+                          <div className="font-medium">{r.name}</div>
+                        )}
                         {r.beschreibung && (
                           <div className="text-xs text-muted-foreground">{r.beschreibung}</div>
                         )}
@@ -371,18 +382,12 @@ export function SalesRulesManager({ scope, partnerId, canManage = true }: SalesR
                         {r.is_active ? <Badge>aktiv</Badge> : <Badge variant="outline">inaktiv</Badge>}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          {canManage && (
-                            <>
-                              <Button size="icon" variant="ghost" onClick={() => openEdit(r)}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button size="icon" variant="ghost" onClick={() => setDeleteId(r.id)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
+                        <RowActions
+                          items={[
+                            { label: "Bearbeiten", icon: Pencil, hidden: !canManage, onClick: () => openEdit(r) },
+                            { label: "Löschen", icon: Trash2, variant: "destructive", hidden: !canManage, onClick: () => setDeleteId(r.id) },
+                          ]}
+                        />
                       </TableCell>
                     </TableRow>
                   );

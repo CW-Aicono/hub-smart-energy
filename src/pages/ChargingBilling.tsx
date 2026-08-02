@@ -46,6 +46,7 @@ import { fmtNum, fmtCurrency, fmtKwh } from "@/lib/formatCharging";
 import { generateChargingInvoicePdf, downloadBlob } from "@/lib/generateChargingInvoicePdf";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { RowActions } from "@/components/ui/row-actions";
 
 
 
@@ -690,14 +691,9 @@ const ChargingBilling = () => {
                                 <TableCell><Badge variant={s.status === "active" ? "default" : s.status === "completed" ? "secondary" : "destructive"}>{s.status === "active" ? t("charging.statusActive" as any) : s.status === "completed" ? t("charging.statusCompleted" as any) : t("charging.statusError" as any)}</Badge></TableCell>
                                 <TableCell className="text-sm">{resolveTag(s.id_tag) || s.id_tag || "—"}</TableCell>
                                 <TableCell className="text-right">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    title="Eichrechts-Beleg (OCMF) anzeigen"
-                                    onClick={() => setOcmfSessionId(s.id)}
-                                  >
-                                    <ShieldCheck className="h-4 w-4" />
-                                  </Button>
+                                  <RowActions items={[
+                                    { label: "Eichrechts-Beleg (OCMF) anzeigen", icon: ShieldCheck, onClick: () => setOcmfSessionId(s.id) },
+                                  ]} />
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -789,7 +785,9 @@ const ChargingBilling = () => {
 
                           <TableRow key={tariff.id}>
                             <TableCell className="font-medium">
-                              {tariff.name}
+                              <button type="button" onClick={() => openEditTariff(tariff)} className="text-left font-medium hover:underline focus:outline-none focus-visible:underline">
+                                {tariff.name}
+                              </button>
                               {tariff.is_default && <Badge variant="secondary" className="ml-2">Standard</Badge>}
                             </TableCell>
                             <TableCell>{fmtTariffPrice(tariff.price_per_kwh, tariff.currency)}</TableCell>
@@ -812,10 +810,10 @@ const ChargingBilling = () => {
                             </TableCell>
                             {isAdmin && (
                               <TableCell>
-                                <div className="flex gap-1">
-                                  <Button variant="ghost" size="icon" onClick={() => openEditTariff(tariff)}><Edit className="h-4 w-4" /></Button>
-                                  <Button variant="ghost" size="icon" onClick={() => deleteTariff.mutate(tariff.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                </div>
+                                <RowActions items={[
+                                  { label: t("common.edit"), icon: Edit, onClick: () => openEditTariff(tariff) },
+                                  { label: t("common.delete"), icon: Trash2, variant: "destructive", onClick: () => deleteTariff.mutate(tariff.id) },
+                                ]} />
                               </TableCell>
                             )}
                           </TableRow>
@@ -989,19 +987,18 @@ const ChargingBilling = () => {
                               </TableCell>
                               {isAdmin && (
                                 <TableCell onClick={(e) => e.stopPropagation()}>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    title={inv.email_sent_at ? "Erneut versenden" : inv.status === "draft" ? "Ausstellen und versenden" : "Per E-Mail versenden"}
-                                    onClick={() => {
-                                      if (inv.status === "draft") setDraftSendConfirm(inv);
-                                      else if (inv.email_sent_at) setResendConfirm(inv);
-                                      else sendSelectedInvoices.mutate({ invoice_ids: [inv.id] });
-                                    }}
-                                    disabled={sendSelectedInvoices.isPending}
-                                  >
-                                    <Mail className="h-4 w-4" />
-                                  </Button>
+                                  <RowActions items={[
+                                    {
+                                      label: inv.email_sent_at ? "Erneut versenden" : inv.status === "draft" ? "Ausstellen und versenden" : "Per E-Mail versenden",
+                                      icon: Mail,
+                                      disabled: sendSelectedInvoices.isPending,
+                                      onClick: () => {
+                                        if (inv.status === "draft") setDraftSendConfirm(inv);
+                                        else if (inv.email_sent_at) setResendConfirm(inv);
+                                        else sendSelectedInvoices.mutate({ invoice_ids: [inv.id] });
+                                      },
+                                    },
+                                  ]} />
                                 </TableCell>
                               )}
                             </TableRow>

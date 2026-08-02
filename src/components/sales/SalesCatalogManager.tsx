@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Pencil, Trash2, Cpu, Link2, Globe2, Save, Upload, Search } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import { toast } from "@/hooks/use-toast";
 import { CompatibilityEditor } from "@/components/super-admin/CompatibilityEditor";
 import { ClassBadge } from "@/components/sales/ClassBadge";
@@ -490,7 +491,17 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
                   <TableRow key={it.id}>
                     <TableCell><ClassBadge klasse={it.geraete_klasse} /></TableCell>
                     <TableCell>
-                      <div className="font-medium">{it.hersteller}</div>
+                      {canManage ? (
+                        <button
+                          type="button"
+                          onClick={() => openEdit(it)}
+                          className="text-left font-medium hover:underline focus:outline-none focus-visible:underline"
+                        >
+                          {it.hersteller}
+                        </button>
+                      ) : (
+                        <div className="font-medium">{it.hersteller}</div>
+                      )}
                       <div className="text-xs text-muted-foreground">{it.modell}</div>
                       {(it.artikelnummer || it.ean) && (
                         <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
@@ -508,18 +519,12 @@ export function SalesCatalogManager({ scope, partnerId, canManage = true }: Sale
                       {it.is_active ? <Badge>aktiv</Badge> : <Badge variant="outline">inaktiv</Badge>}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        {canManage && (
-                          <>
-                            <Button size="icon" variant="ghost" onClick={() => openEdit(it)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button size="icon" variant="ghost" onClick={() => setDeleteId(it.id)}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
+                      <RowActions
+                        items={[
+                          { label: "Bearbeiten", icon: Pencil, hidden: !canManage, onClick: () => openEdit(it) },
+                          { label: "Löschen", icon: Trash2, variant: "destructive", hidden: !canManage, onClick: () => setDeleteId(it.id) },
+                        ]}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
