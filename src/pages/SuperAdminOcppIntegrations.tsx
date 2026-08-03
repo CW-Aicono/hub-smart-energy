@@ -179,7 +179,6 @@ const SuperAdminOcppIntegrations = () => {
           <Tabs defaultValue="models">
             <TabsList>
               <TabsTrigger value="models">Ladestationsmodelle</TabsTrigger>
-              <TabsTrigger value="ocpp-log">OCPP-Nachrichtenlog</TabsTrigger>
             </TabsList>
 
             <TabsContent value="models" className="mt-6 space-y-4">
