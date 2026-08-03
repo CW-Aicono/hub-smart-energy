@@ -24,7 +24,18 @@ const SuperAdminOcppControl = () => {
   const { user, loading } = useAuth();
   const { t } = useSATranslation();
   const { tenants } = useTenants();
-  const { chargePoints } = useChargePoints();
+  // Super-Admin hat keinen eigenen Mandanten — Ladepunkte deshalb global laden.
+  const { data: chargePoints = [] } = useQuery({
+    queryKey: ["sa-ocpp-charge-points"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charge_points")
+        .select("id, tenant_id, name, ocpp_id")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as { id: string; tenant_id: string; name: string; ocpp_id: string | null }[];
+    },
+  });
   const { sessions, isLoading: sessionsLoading } = useChargingSessions();
   const [tenantFilter, setTenantFilter] = useState<string>("all");
   const [logTenantId, setLogTenantId] = useState<string>("");
