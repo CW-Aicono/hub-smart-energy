@@ -293,10 +293,6 @@ const SuperAdminOcppIntegrations = () => {
                 </CardContent>
               </Card>
             </TabsContent>
-
-            <TabsContent value="ocpp-log" className="mt-6">
-              <OcppLogViewer showCpColumn />
-            </TabsContent>
           </Tabs>
 
           <Dialog open={!!editModel} onOpenChange={(open) => { if (!open) setEditModel(null); }}>
