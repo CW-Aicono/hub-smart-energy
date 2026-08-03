@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Edit, Trash2, PlugZap, Search } from "lucide-react";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
-import OcppLogViewer from "@/components/charging/OcppLogViewer";
+
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 const PROTOCOLS = [
