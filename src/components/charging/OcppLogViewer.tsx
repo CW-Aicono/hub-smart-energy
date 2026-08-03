@@ -13,10 +13,16 @@ import { format } from "date-fns";
 
 interface OcppLogViewerProps {
   chargePointId?: string;
+  /**
+   * Optionale OCPP-ID des Ladepunkts. Im Super-Admin gibt es keinen Mandanten,
+   * daher liefert `useChargePoints` dort nichts — die zweite ID muss dann von
+   * außen mitgegeben werden.
+   */
+  ocppId?: string | null;
   showCpColumn?: boolean;
 }
 
-const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerProps) => {
+const OcppLogViewer = ({ chargePointId, ocppId, showCpColumn = false }: OcppLogViewerProps) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
   const [directionFilter, setDirectionFilter] = useState<"all" | "incoming" | "outgoing" | "error">("all");
@@ -31,11 +37,12 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
     const list = [chargePointId];
     if (cp?.id && !list.includes(cp.id)) list.push(cp.id);
     if (cp?.ocpp_id && !list.includes(cp.ocpp_id)) list.push(cp.ocpp_id);
+    if (ocppId && !list.includes(ocppId)) list.push(ocppId);
     return list;
     // Nur auf die tatsächlich relevanten ID-Werte hören, nicht auf das gesamte
     // chargePoints-Array — sonst löst jedes Realtime-Update einen Reload aus.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chargePointId, chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId)?.id, chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId)?.ocpp_id]);
+  }, [chargePointId, ocppId, chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId)?.id, chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId)?.ocpp_id]);
 
   const { logs, latestAt, loading, paused, setPaused, refetch } = useOcppLogs(logIds, messageTypeFilter);
 
