@@ -248,7 +248,10 @@ const SuperAdminOcppControl = () => {
               </Card>
 
               {logChargePointId ? (
-                <OcppLogViewer chargePointId={logChargePointId} />
+                <OcppLogViewer
+                  chargePointId={logChargePointId}
+                  ocppId={chargePoints.find((cp) => cp.id === logChargePointId)?.ocpp_id ?? null}
+                />
               ) : (
                 <Card style={{ backgroundColor: `hsl(var(--sa-card))`, borderColor: `hsl(var(--sa-border))` }}>
                   <CardContent className="py-12 text-center text-sm" style={{ color: `hsl(var(--sa-muted-foreground))` }}>
