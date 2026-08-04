@@ -4,7 +4,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import { useTenants } from "@/hooks/useTenants";
 import { useChargingSessions } from "@/hooks/useChargingSessions";
-import { useChargePoints } from "@/hooks/useChargePoints";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useOcppLogs } from "@/hooks/useOcppLogs";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import OcppLogViewer from "@/components/charging/OcppLogViewer";
@@ -24,7 +25,18 @@ const SuperAdminOcppControl = () => {
   const { user, loading } = useAuth();
   const { t } = useSATranslation();
   const { tenants } = useTenants();
-  const { chargePoints } = useChargePoints();
+  // Super-Admin hat keinen eigenen Mandanten — Ladepunkte deshalb global laden.
+  const { data: chargePoints = [] } = useQuery({
+    queryKey: ["sa-ocpp-charge-points"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("charge_points")
+        .select("id, tenant_id, name, ocpp_id")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as { id: string; tenant_id: string; name: string; ocpp_id: string | null }[];
+    },
+  });
   const { sessions, isLoading: sessionsLoading } = useChargingSessions();
   const [tenantFilter, setTenantFilter] = useState<string>("all");
   const [logTenantId, setLogTenantId] = useState<string>("");
@@ -236,7 +248,10 @@ const SuperAdminOcppControl = () => {
               </Card>
 
               {logChargePointId ? (
-                <OcppLogViewer chargePointId={logChargePointId} />
+                <OcppLogViewer
+                  chargePointId={logChargePointId}
+                  ocppId={chargePoints.find((cp) => cp.id === logChargePointId)?.ocpp_id ?? null}
+                />
               ) : (
                 <Card style={{ backgroundColor: `hsl(var(--sa-card))`, borderColor: `hsl(var(--sa-border))` }}>
                   <CardContent className="py-12 text-center text-sm" style={{ color: `hsl(var(--sa-muted-foreground))` }}>

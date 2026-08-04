@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Edit, Trash2, PlugZap, Search } from "lucide-react";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
-import OcppLogViewer from "@/components/charging/OcppLogViewer";
+
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 const PROTOCOLS = [
@@ -179,7 +179,6 @@ const SuperAdminOcppIntegrations = () => {
           <Tabs defaultValue="models">
             <TabsList>
               <TabsTrigger value="models">Ladestationsmodelle</TabsTrigger>
-              <TabsTrigger value="ocpp-log">OCPP-Nachrichtenlog</TabsTrigger>
             </TabsList>
 
             <TabsContent value="models" className="mt-6 space-y-4">
@@ -292,10 +291,6 @@ const SuperAdminOcppIntegrations = () => {
                   )}
                 </CardContent>
               </Card>
-            </TabsContent>
-
-            <TabsContent value="ocpp-log" className="mt-6">
-              <OcppLogViewer showCpColumn />
             </TabsContent>
           </Tabs>
 
