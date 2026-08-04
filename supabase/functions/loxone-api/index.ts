@@ -1902,15 +1902,26 @@ serve(async (req) => {
               const freshCutoffIso = new Date(freshCutoffMs).toISOString();
 
               const meterIdsFb = fallbackCandidates.map((c) => c.meter_id);
+              // Ein Zähler gilt als versorgt, wenn im Frische-Fenster ein Bucket aus
+              // IRGENDEINER autoritativen Quelle existiert — nicht nur bridge_ws.
+              // Sonst schreibt der Pull 15-Minuten-Nullwerte in eine bereits
+              // korrekt befüllte Reihe (Sägezahn-Effekt im Graphen).
+              const AUTHORITATIVE_SOURCES = ["bridge_ws", "gateway_backfill", "loxone_backfill"];
               const { data: freshRows } = await supabase
                 .from("meter_power_readings_5min")
                 .select("meter_id")
                 .in("meter_id", meterIdsFb)
-                .eq("source", "bridge_ws")
+                .in("source", AUTHORITATIVE_SOURCES)
                 .gte("bucket", freshCutoffIso);
 
               const freshSet = new Set<string>((freshRows ?? []).map((r: any) => r.meter_id));
-              const stale = fallbackCandidates.filter((c) => !freshSet.has(c.meter_id));
+              // Kandidaten ohne belastbaren Leistungswert (exakt 0 / kein Zahlenwert)
+              // werden übersprungen: Lücke statt falscher Null in der Historie.
+              const stale = fallbackCandidates.filter((c) => {
+                if (freshSet.has(c.meter_id)) return false;
+                const v = Number(c.power_value);
+                return Number.isFinite(v) && v !== 0;
+              });
 
               if (stale.length > 0) {
                 // 5-Min-Bucket-Start (UTC) für den aktuellen Zeitpunkt
@@ -1919,28 +1930,45 @@ serve(async (req) => {
                 bucketDate.setUTCMinutes(Math.floor(bucketDate.getUTCMinutes() / 5) * 5);
                 const bucketIso = bucketDate.toISOString();
 
-                const rows = stale.map((c) => ({
-                  meter_id: c.meter_id,
-                  tenant_id: c.tenant_id,
-                  energy_type: c.energy_type,
-                  bucket: bucketIso,
-                  power_avg: c.power_value,
-                  power_max: c.power_value,
-                  sample_count: 1,
-                  resolution_minutes: 5,
-                  source: "loxone_pull",
-                }));
-
-                const { error: fbErr } = await supabase
+                // Vorrang-Regel: bestehende Buckets aus autoritativen Quellen dürfen
+                // nicht durch loxone_pull überschrieben werden.
+                const staleIds = stale.map((c) => c.meter_id);
+                const { data: occupied } = await supabase
                   .from("meter_power_readings_5min")
-                  .upsert(rows, { onConflict: "meter_id,bucket,resolution_minutes" });
+                  .select("meter_id")
+                  .in("meter_id", staleIds)
+                  .in("source", AUTHORITATIVE_SOURCES)
+                  .eq("bucket", bucketIso)
+                  .eq("resolution_minutes", 5);
+                const occupiedSet = new Set<string>((occupied ?? []).map((r: any) => r.meter_id));
 
-                if (fbErr) {
-                  console.error(`[loxone-api] Pull-Fallback upsert failed: ${fbErr.message}`);
-                } else {
-                  console.log(`[loxone-api] Pull-Fallback: wrote ${rows.length} loxone_pull buckets (WS worker stale > ${2 * pollMin}min)`);
+                const rows = stale
+                  .filter((c) => !occupiedSet.has(c.meter_id))
+                  .map((c) => ({
+                    meter_id: c.meter_id,
+                    tenant_id: c.tenant_id,
+                    energy_type: c.energy_type,
+                    bucket: bucketIso,
+                    power_avg: c.power_value,
+                    power_max: c.power_value,
+                    sample_count: 1,
+                    resolution_minutes: 5,
+                    source: "loxone_pull",
+                  }));
+
+                if (rows.length > 0) {
+                  const { error: fbErr } = await supabase
+                    .from("meter_power_readings_5min")
+                    .upsert(rows, { onConflict: "meter_id,bucket,resolution_minutes" });
+
+                  if (fbErr) {
+                    console.error(`[loxone-api] Pull-Fallback upsert failed: ${fbErr.message}`);
+                  } else {
+                    console.log(`[loxone-api] Pull-Fallback: wrote ${rows.length} loxone_pull buckets (keine autoritative Quelle frisch > ${2 * pollMin}min)`);
+                  }
                 }
               }
+
             } catch (fbEx) {
               console.warn("[loxone-api] Pull-Fallback exception:", (fbEx as Error).message);
             }
