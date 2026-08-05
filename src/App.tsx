@@ -95,6 +95,7 @@ const SuperAdminOcppFirmware = lazy(() => import("./pages/SuperAdminOcppFirmware
 const SuperAdminSimulators = lazy(() => import("./pages/SuperAdminSimulators"));
 
 const SuperAdminChargePointOnboarding = lazy(() => import("./pages/SuperAdminChargePointOnboarding"));
+const SuperAdminChargePoints = lazy(() => import("./pages/SuperAdminChargePoints"));
 const ChargingApp = lazy(() => import("./pages/ChargingApp"));
 const ChargingAppAdmin = lazy(() => import("./pages/ChargingAppAdmin"));
 const ArbitrageTrading = lazy(() => import("./pages/ArbitrageTrading"));
@@ -270,7 +271,8 @@ const App = () => (
                       <Route path="/super-admin/ocpp/firmware" element={<SA><SuperAdminOcppFirmware /></SA>} />
                       <Route path="/super-admin/ocpp/simulators" element={<SA><SuperAdminSimulators /></SA>} />
                       
-                      <Route path="/super-admin/ocpp/onboarding" element={<SA><SuperAdminChargePointOnboarding /></SA>} />
+                      <Route path="/super-admin/ocpp/onboarding" element={<SA><SuperAdminChargePoints /></SA>} />
+                      <Route path="/super-admin/ocpp/onboarding/new" element={<SA><SuperAdminChargePointOnboarding /></SA>} />
                       <Route path="/super-admin/map" element={<SA><SuperAdminMap /></SA>} />
                       <Route path="/super-admin/sales/catalog" element={<SA><SuperAdminSalesCatalog /></SA>} />
                       <Route path="/super-admin/sales/rules" element={<SA><SuperAdminSalesRules /></SA>} />
