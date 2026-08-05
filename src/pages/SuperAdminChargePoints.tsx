@@ -101,7 +101,16 @@ export default function SuperAdminChargePoints() {
     });
   }, [chargePoints, search, tenantFilter, statusFilter, connectorsByCp, activeSessions, tenants]);
 
-  const { sorted, sortKey, sortDir, toggleSort } = useSortableData(filtered, "name" as any);
+  type SortKey = "name" | "tenant_id" | "ocpp_id" | "address" | "max_power_kw" | "last_heartbeat";
+  const { sorted, sort, toggle } = useSortableData<ChargePoint, SortKey>(
+    filtered,
+    (row, key) => {
+      if (key === "tenant_id") return tenantName(row.tenant_id);
+      if (key === "last_heartbeat") return row.last_heartbeat ? new Date(row.last_heartbeat) : null;
+      return (row as any)[key];
+    },
+    { key: "name", direction: "asc" },
+  );
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -202,14 +211,14 @@ export default function SuperAdminChargePoints() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <SortableHead sortKey="name" currentKey={sortKey} direction={sortDir} onSort={toggleSort}>Name</SortableHead>
-                      <SortableHead sortKey="tenant_id" currentKey={sortKey} direction={sortDir} onSort={toggleSort}>Mandant</SortableHead>
+                      <SortableHead sortKey="name" sort={sort} onToggle={toggle}>Name</SortableHead>
+                      <SortableHead sortKey="tenant_id" sort={sort} onToggle={toggle}>Mandant</SortableHead>
                       <TableHead>Stecker</TableHead>
                       <TableHead>Status</TableHead>
-                      <SortableHead sortKey="ocpp_id" currentKey={sortKey} direction={sortDir} onSort={toggleSort}>OCPP-ID</SortableHead>
-                      <SortableHead sortKey="address" currentKey={sortKey} direction={sortDir} onSort={toggleSort}>Standort</SortableHead>
-                      <SortableHead sortKey="max_power_kw" currentKey={sortKey} direction={sortDir} onSort={toggleSort}>Leistung</SortableHead>
-                      <SortableHead sortKey="last_heartbeat" currentKey={sortKey} direction={sortDir} onSort={toggleSort}>Letzter Heartbeat</SortableHead>
+                      <SortableHead sortKey="ocpp_id" sort={sort} onToggle={toggle}>OCPP-ID</SortableHead>
+                      <SortableHead sortKey="address" sort={sort} onToggle={toggle}>Standort</SortableHead>
+                      <SortableHead sortKey="max_power_kw" sort={sort} onToggle={toggle}>Leistung</SortableHead>
+                      <SortableHead sortKey="last_heartbeat" sort={sort} onToggle={toggle}>Letzter Heartbeat</SortableHead>
                       <TableHead className="w-12">QR</TableHead>
                       <TableHead className="w-16"></TableHead>
                     </TableRow>
