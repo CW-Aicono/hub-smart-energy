@@ -95,6 +95,7 @@ const SuperAdminOcppFirmware = lazy(() => import("./pages/SuperAdminOcppFirmware
 const SuperAdminSimulators = lazy(() => import("./pages/SuperAdminSimulators"));
 
 const SuperAdminChargePointOnboarding = lazy(() => import("./pages/SuperAdminChargePointOnboarding"));
+const SuperAdminChargePoints = lazy(() => import("./pages/SuperAdminChargePoints"));
 const ChargingApp = lazy(() => import("./pages/ChargingApp"));
 const ChargingAppAdmin = lazy(() => import("./pages/ChargingAppAdmin"));
 const ArbitrageTrading = lazy(() => import("./pages/ArbitrageTrading"));
