@@ -243,7 +243,7 @@ export default function SuperAdminChargePointOnboarding() {
             <p className="text-sm text-muted-foreground">Geführter Onboarding-Assistent (Monta-Style)</p>
           </div>
         </div>
-        <Button variant="ghost" onClick={() => navigate("/super-admin/ocpp/integrations")}>
+        <Button variant="ghost" onClick={() => navigate("/super-admin/ocpp/onboarding")}>
           <ArrowLeft className="h-4 w-4 mr-2" /> Zurück
         </Button>
       </div>
@@ -572,7 +572,7 @@ export default function SuperAdminChargePointOnboarding() {
                 </Alert>
               )}
               <div className="flex gap-2 pt-4">
-                <Button variant="outline" onClick={() => navigate("/super-admin/ocpp/integrations")}>
+                <Button variant="outline" onClick={() => navigate("/super-admin/ocpp/onboarding")}>
                   Zur Übersicht
                 </Button>
                 <Button onClick={() => {
