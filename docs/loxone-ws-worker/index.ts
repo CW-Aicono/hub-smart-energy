@@ -409,6 +409,11 @@ interface UuidEntry {
   // v1.16: aus der Messstellen-Konfiguration abgeleitet
   momentary_role?: StateRole | null;   // "pwr" | "flow" | null (kein Momentanwert)
   gas_kwh_per_m3?: number | null;      // Gas: m³/h → kW Umrechnungsfaktor
+  // v1.18: Impulszähler — der Verlauf wird aus der Zählerstandsdifferenz
+  // ("total") gebildet und gleichmäßig über die vergangene Zeit verteilt.
+  pulse_meter?: boolean;
+  pulse_prev_value?: number | null;    // letzter Zählerstand
+  pulse_prev_ts?: number;              // ms epoch des letzten Zählerstands
 }
 
 interface ConnState {
