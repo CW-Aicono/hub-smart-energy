@@ -88,7 +88,7 @@ const SESSION_HEARTBEAT_MS = Math.max(
 );
 
 const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
-const WORKER_VERSION = process.env.WORKER_VERSION || "v1.17-strict-block-mapping";
+const WORKER_VERSION = process.env.WORKER_VERSION || "v1.18-pulse-meter-counter-derived";
 // Phase 6.1: Watchdog-Schwelle von 10min auf 30min erhöht. Keepalive zählt jetzt als Lebenszeichen,
 // daher reicht eine deutlich entspanntere Schwelle. Verhindert Reconnect-Stürme alle 11 Minuten.
 const WATCHDOG_STALE_MS = parseInt(process.env.WATCHDOG_STALE_MS || "1800000", 10);
@@ -309,6 +309,9 @@ interface WsMeter {
   source_unit_energy?: string | null;
   brennwert?: number | null;
   zustandszahl?: number | null;
+  /** v1.18: Impulszähler (Reedkontakt) — Momentanwert des Miniservers ist unbrauchbar. */
+  is_pulse_meter?: boolean | null;
+  volume_per_pulse?: number | null;
   tenant_id: string;
   location_integration_id: string;
   location_integration: {
@@ -375,6 +378,7 @@ function gasKwhPerM3(m: { energy_type?: string | null; brennwert?: number | null
   return bw * (isFinite(zz) && zz > 0 ? zz : 1);
 }
 
+
 interface UuidEntry {
   meter_id: string;
   tenant_id: string;
@@ -406,6 +410,60 @@ interface UuidEntry {
   // v1.16: aus der Messstellen-Konfiguration abgeleitet
   momentary_role?: StateRole | null;   // "pwr" | "flow" | null (kein Momentanwert)
   gas_kwh_per_m3?: number | null;      // Gas: m³/h → kW Umrechnungsfaktor
+  // v1.18: Impulszähler — der Verlauf wird aus der Zählerstandsdifferenz
+  // ("total") gebildet und gleichmäßig über die vergangene Zeit verteilt.
+  pulse_meter?: boolean;
+  pulse_prev_value?: number | null;    // letzter Zählerstand
+  pulse_prev_ts?: number;              // ms epoch des letzten Zählerstands
+}
+
+/**
+ * v1.18 — Impulszähler (Gas/Wasser mit Reedkontakt).
+ *
+ * Der Miniserver berechnet den Momentanwert als "Volumen pro Impuls ÷ Zeit
+ * seit letztem Impuls". Bei geringem Verbrauch entstehen dadurch Nadeln mit
+ * 1/t-Abklingkurve, die nichts mit dem echten Durchfluss zu tun haben.
+ *
+ * Stattdessen bilden wir den Verlauf aus der Zählerstandsdifferenz und
+ * verteilen sie gleichmäßig über die vergangene Zeit (Step-Hold). Der noch
+ * offene 5-Minuten-Bucket bleibt ausgespart; sein Anteil wandert als Rest in
+ * den nächsten Durchlauf, damit er nicht zu niedrig geschrieben wird.
+ */
+function accumulatePulseTotal(entry: UuidEntry, totalValue: number, nowMs: number): void {
+  const prevValue = entry.pulse_prev_value;
+  const prevTs = entry.pulse_prev_ts ?? 0;
+  if (prevValue == null || !prevTs) {
+    entry.pulse_prev_value = totalValue;
+    entry.pulse_prev_ts = nowMs;
+    return;
+  }
+  const delta = totalValue - prevValue;
+  const spanMs = nowMs - prevTs;
+  // Zählerwechsel/Reset oder unbrauchbare Zeitspanne → nur Basis neu setzen.
+  if (!isFinite(delta) || delta < 0 || spanMs <= 0) {
+    entry.pulse_prev_value = totalValue;
+    entry.pulse_prev_ts = nowMs;
+    return;
+  }
+  // Rate in Einheit/Stunde (bei Gas via Brennwert bereits kW-äquivalent).
+  const perHour = (delta / (spanMs / 3600000)) * (entry.gas_kwh_per_m3 ?? 1);
+  const currentBucket = Math.floor(nowMs / 300000) * 300000;
+  const firstBucket = Math.floor(prevTs / 300000) * 300000;
+  if (!entry.pending_buckets) entry.pending_buckets = [];
+  const MAX_BUCKETS = 288; // max. 24 h nachfüllen
+  let written = 0;
+  for (let b = firstBucket; b < currentBucket && written < MAX_BUCKETS; b += 300000) {
+    entry.pending_buckets.push({ bucket: b, sum: perHour, max: perHour, count: 1 });
+    written++;
+  }
+  if (entry.pending_buckets.length > 300) {
+    entry.pending_buckets.splice(0, entry.pending_buckets.length - 300);
+  }
+  // Rest des offenen Buckets in die nächste Runde übernehmen.
+  const consumedMs = Math.max(0, currentBucket - prevTs);
+  const consumedDelta = delta * (spanMs > 0 ? consumedMs / spanMs : 0);
+  entry.pulse_prev_value = prevValue + consumedDelta;
+  entry.pulse_prev_ts = Math.max(prevTs, currentBucket);
 }
 
 interface ConnState {
@@ -613,7 +671,12 @@ async function connect(state: ConnState): Promise<void> {
           state.lastEventAt = Date.now();
           // v1.5: Bucket-Aggregation für Momentanwerte (Leistung/Durchfluss).
           // Zählerstände (kWh) laufen nicht in meter_power_readings_5min.
-          if (entry.role === "pwr" || entry.role === "flow") {
+          if (entry.role === "total" && entry.pulse_meter) {
+            // v1.18: Impulszähler — aus der Zählerstandsdifferenz einen
+            // gleichmäßig verteilten Verlauf bilden (statt der 1/t-Nadeln,
+            // die der Miniserver als Momentanwert liefert).
+            accumulatePulseTotal(entry, rawValue, Date.now());
+          } else if (entry.role === "pwr" || entry.role === "flow") {
             const bucket = Math.floor(Date.now() / 300000) * 300000;
             if (entry.bucket_start !== bucket) {
               // v1.13: Bucket-Wechsel — den fertigen Bucket zwischenpuffern,
@@ -1478,6 +1541,10 @@ async function reloadMeters(): Promise<void> {
         let momRole = deriveMomentaryRole(m);
         // Gas: Durchfluss (m³/h) wird intern sofort in kW umgerechnet.
         if (momRole === "flow" && gasFactor) momRole = "pwr";
+        // v1.18: Impulszähler liefern keinen brauchbaren Momentanwert — der
+        // Verlauf entsteht ausschließlich aus der Zählerstandsdifferenz.
+        const isPulse = m.is_pulse_meter === true;
+        if (isPulse) momRole = null;
         state.uuidMap.set(blockUuid, {
           meter_id: m.id,
           tenant_id: m.tenant_id,
@@ -1489,7 +1556,10 @@ async function reloadMeters(): Promise<void> {
           // ausschließlich durch die LoxAPP3-Expansion in connect().
           role: "aux",
           momentary_role: momRole,
-          gas_kwh_per_m3: momRole === "pwr" ? gasFactor : null,
+          gas_kwh_per_m3: (momRole === "pwr" || isPulse) ? gasFactor : null,
+          pulse_meter: isPulse,
+          pulse_prev_value: null,
+          pulse_prev_ts: 0,
           explicit_pwr_uuid: m.power_state_uuid ? m.power_state_uuid.toLowerCase() : null,
           explicit_pwr_key: m.power_state_key ?? null,
           latest_value: null,
@@ -1664,7 +1734,8 @@ async function flushBuckets(): Promise<void> {
     };
 
     for (const entry of state.uuidMap.values()) {
-      if (entry.role !== "pwr" && entry.role !== "flow") continue;
+      const isPulseTotal = entry.role === "total" && entry.pulse_meter === true;
+      if (entry.role !== "pwr" && entry.role !== "flow" && !isPulseTotal) continue;
       // Zwischengepufferte, bereits abgeschlossene Buckets
       if (entry.pending_buckets && entry.pending_buckets.length > 0) {
         for (const pb of entry.pending_buckets) addBucket(entry, pb.bucket, pb.sum, pb.max, pb.count);

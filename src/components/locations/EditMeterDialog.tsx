@@ -90,6 +90,10 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [zustandszahl, setZustandszahl] = useState((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
   const [brennwertVal, setBrennwertVal] = useState((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
   const [sourceUnit, setSourceUnit] = useState((meter as any).source_unit_power || "kW");
+  const [isPulseMeter, setIsPulseMeter] = useState<boolean>((meter as any).is_pulse_meter === true);
+  const [volumePerPulse, setVolumePerPulse] = useState(
+    (meter as any).volume_per_pulse != null ? String((meter as any).volume_per_pulse).replace(".", ",") : ""
+  );
   const [offsetValue, setOffsetValue] = useState(
     (meter as any).meter_offset_kwh != null && Number((meter as any).meter_offset_kwh) !== 0
       ? String((meter as any).meter_offset_kwh).replace(".", ",")
@@ -173,6 +177,8 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setZustandszahl((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
     setBrennwertVal((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
     setSourceUnit((meter as any).source_unit_power || "kW");
+    setIsPulseMeter((meter as any).is_pulse_meter === true);
+    setVolumePerPulse((meter as any).volume_per_pulse != null ? String((meter as any).volume_per_pulse).replace(".", ",") : "");
     setOffsetValue(
       (meter as any).meter_offset_kwh != null && Number((meter as any).meter_offset_kwh) !== 0
         ? String((meter as any).meter_offset_kwh).replace(".", ",")
@@ -359,6 +365,11 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
         zustandszahl: zustandszahl ? parseFloat(zustandszahl.replace(",", ".")) : null,
         brennwert: brennwertVal ? parseFloat(brennwertVal.replace(",", ".")) : null,
       } : { gas_type: null, zustandszahl: null, brennwert: null }),
+      is_pulse_meter: deviceType === "meter" && (energyType === "gas" || energyType === "wasser") ? isPulseMeter : false,
+      volume_per_pulse:
+        deviceType === "meter" && (energyType === "gas" || energyType === "wasser") && isPulseMeter && volumePerPulse.trim()
+          ? parseFloat(volumePerPulse.replace(",", "."))
+          : null,
       source_unit_power: captureType === "automatic" ? sourceUnit : null,
       source_unit_energy: captureType === "automatic" ? deriveEnergyUnit(sourceUnit) : null,
       ...(deviceType === "meter" ? (() => {
@@ -622,6 +633,37 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             <Label>Medium</Label>
             <Input value={medium} onChange={(e) => setMedium(e.target.value)} />
           </div>
+          {/* Impulszähler (Gas/Wasser) */}
+          {deviceType === "meter" && (energyType === "gas" || energyType === "wasser") && (
+            <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Label>Impulszähler (Reedkontakt)</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Der Momentanwert des Miniservers wird ignoriert; der Verlauf wird aus der Zählerstandsdifferenz berechnet.
+                  </p>
+                </div>
+                <Switch checked={isPulseMeter} onCheckedChange={setIsPulseMeter} />
+              </div>
+              {isPulseMeter && (
+                <>
+                  <div>
+                    <Label>Volumen je Impuls (m³)</Label>
+                    <Input
+                      value={volumePerPulse}
+                      onChange={(e) => setVolumePerPulse(e.target.value)}
+                      placeholder="0,1"
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-0.5">z. B. 10 Impulse = 1 m³ → 0,1</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Wichtig: Am Miniserver muss der Zählerstand (Gesamt) als State zugeordnet sein — nur daraus entsteht der Verlauf.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
           {/* Gas-specific fields */}
           {deviceType === "meter" && energyType === "gas" && unit === "m³" && (
             <div className="space-y-3 rounded-md border p-3 bg-muted/30">
