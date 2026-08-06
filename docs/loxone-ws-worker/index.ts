@@ -1541,6 +1541,10 @@ async function reloadMeters(): Promise<void> {
         let momRole = deriveMomentaryRole(m);
         // Gas: Durchfluss (m³/h) wird intern sofort in kW umgerechnet.
         if (momRole === "flow" && gasFactor) momRole = "pwr";
+        // v1.18: Impulszähler liefern keinen brauchbaren Momentanwert — der
+        // Verlauf entsteht ausschließlich aus der Zählerstandsdifferenz.
+        const isPulse = m.is_pulse_meter === true;
+        if (isPulse) momRole = null;
         state.uuidMap.set(blockUuid, {
           meter_id: m.id,
           tenant_id: m.tenant_id,
@@ -1552,7 +1556,10 @@ async function reloadMeters(): Promise<void> {
           // ausschließlich durch die LoxAPP3-Expansion in connect().
           role: "aux",
           momentary_role: momRole,
-          gas_kwh_per_m3: momRole === "pwr" ? gasFactor : null,
+          gas_kwh_per_m3: (momRole === "pwr" || isPulse) ? gasFactor : null,
+          pulse_meter: isPulse,
+          pulse_prev_value: null,
+          pulse_prev_ts: 0,
           explicit_pwr_uuid: m.power_state_uuid ? m.power_state_uuid.toLowerCase() : null,
           explicit_pwr_key: m.power_state_key ?? null,
           latest_value: null,
