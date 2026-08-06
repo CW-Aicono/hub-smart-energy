@@ -1664,7 +1664,8 @@ async function flushBuckets(): Promise<void> {
     };
 
     for (const entry of state.uuidMap.values()) {
-      if (entry.role !== "pwr" && entry.role !== "flow") continue;
+      const isPulseTotal = entry.role === "total" && entry.pulse_meter === true;
+      if (entry.role !== "pwr" && entry.role !== "flow" && !isPulseTotal) continue;
       // Zwischengepufferte, bereits abgeschlossene Buckets
       if (entry.pending_buckets && entry.pending_buckets.length > 0) {
         for (const pb of entry.pending_buckets) addBucket(entry, pb.bucket, pb.sum, pb.max, pb.count);
