@@ -621,7 +621,12 @@ async function connect(state: ConnState): Promise<void> {
           state.lastEventAt = Date.now();
           // v1.5: Bucket-Aggregation für Momentanwerte (Leistung/Durchfluss).
           // Zählerstände (kWh) laufen nicht in meter_power_readings_5min.
-          if (entry.role === "pwr" || entry.role === "flow") {
+          if (entry.role === "total" && entry.pulse_meter) {
+            // v1.18: Impulszähler — aus der Zählerstandsdifferenz einen
+            // gleichmäßig verteilten Verlauf bilden (statt der 1/t-Nadeln,
+            // die der Miniserver als Momentanwert liefert).
+            accumulatePulseTotal(entry, rawValue, Date.now());
+          } else if (entry.role === "pwr" || entry.role === "flow") {
             const bucket = Math.floor(Date.now() / 300000) * 300000;
             if (entry.bucket_start !== bucket) {
               // v1.13: Bucket-Wechsel — den fertigen Bucket zwischenpuffern,
