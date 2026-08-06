@@ -309,6 +309,9 @@ interface WsMeter {
   source_unit_energy?: string | null;
   brennwert?: number | null;
   zustandszahl?: number | null;
+  /** v1.18: Impulszähler (Reedkontakt) — Momentanwert des Miniservers ist unbrauchbar. */
+  is_pulse_meter?: boolean | null;
+  volume_per_pulse?: number | null;
   tenant_id: string;
   location_integration_id: string;
   location_integration: {
