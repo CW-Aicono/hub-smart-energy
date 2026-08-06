@@ -378,6 +378,7 @@ function gasKwhPerM3(m: { energy_type?: string | null; brennwert?: number | null
   return bw * (isFinite(zz) && zz > 0 ? zz : 1);
 }
 
+
 interface UuidEntry {
   meter_id: string;
   tenant_id: string;
