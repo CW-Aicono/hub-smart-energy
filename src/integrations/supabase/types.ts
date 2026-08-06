@@ -8851,6 +8851,7 @@ export type Database = {
           is_archived: boolean
           is_bidirectional: boolean
           is_main_meter: boolean
+          is_pulse_meter: boolean
           location_id: string
           location_integration_id: string | null
           malo_id: string | null
@@ -8893,6 +8894,7 @@ export type Database = {
           tenant_id: string
           unit: string
           updated_at: string
+          volume_per_pulse: number | null
           zustandszahl: number | null
         }
         Insert: {
@@ -8912,6 +8914,7 @@ export type Database = {
           is_archived?: boolean
           is_bidirectional?: boolean
           is_main_meter?: boolean
+          is_pulse_meter?: boolean
           location_id: string
           location_integration_id?: string | null
           malo_id?: string | null
@@ -8954,6 +8957,7 @@ export type Database = {
           tenant_id: string
           unit?: string
           updated_at?: string
+          volume_per_pulse?: number | null
           zustandszahl?: number | null
         }
         Update: {
@@ -8973,6 +8977,7 @@ export type Database = {
           is_archived?: boolean
           is_bidirectional?: boolean
           is_main_meter?: boolean
+          is_pulse_meter?: boolean
           location_id?: string
           location_integration_id?: string | null
           malo_id?: string | null
@@ -9015,6 +9020,7 @@ export type Database = {
           tenant_id?: string
           unit?: string
           updated_at?: string
+          volume_per_pulse?: number | null
           zustandszahl?: number | null
         }
         Relationships: [
