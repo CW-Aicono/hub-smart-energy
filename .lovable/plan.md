@@ -18,6 +18,18 @@ Für Impulszähler wird der Verlauf nicht mehr aus dem Momentanwert gebildet, so
 4. **Live-Kachel „Aktuelle Werte"**: zeigt für Impulszähler den mittleren Durchfluss der letzten abgeschlossenen Periode statt des springenden Momentanwerts, mit Hinweis „Mittelwert (Impulszähler)". Damit verschwinden auch die 17-fachen Ausreißer in der Kachel.
 5. **Altdaten**: einmalige Bereinigung — für die betroffenen Gas-/Wasserzähler werden die aus dem Momentanwert entstandenen 5-Minuten-Buckets der letzten 30 Tage aus den Zählerständen neu berechnet; anschließend Neuberechnung der betroffenen Perioden-Summen.
 
+## Zusätzlich: Empfehlung an der Quelle (Miniserver)
+
+Die saubere Variante ist, den Miniserver gar nicht erst den Momentanwert liefern zu lassen:
+
+- **Impulswertigkeit korrekt hinterlegen** (z. B. 10 Impulse = 1 m³ → 0,1 m³ je Impuls) — sorgt für einen korrekten Zählerstand.
+- **Nur den Ausgang „Zählerstand" (m³) mappen**, den Ausgang „aktueller Verbrauch" (m³/h) bei Impulszählern nicht zuordnen. Der Momentanwert ist bei Impulszählern prinzipbedingt „Volumen ÷ Zeit seit letztem Impuls" und damit für Verlaufsgrafiken unbrauchbar.
+- Soll der Momentanwert dennoch übertragen werden, muss er im Miniserver über ein festes Zeitfenster gemittelt werden (z. B. 15-Minuten-Mittelwert).
+
+Umsetzung im Produkt: In der State-Zuordnung (Super-Admin) und in der Zählerverwaltung wird bei Gas/Wasser mit Quelleinheit m³/h ein **Hinweis-Badge „Impulszähler: bitte Zählerstand mappen"** angezeigt, inklusive Kurzanleitung. Ergänzung dieser Empfehlung in `docs/loxone-state-zuordnung.md`. Die Backend-Logik oben bleibt trotzdem nötig, damit bereits verbaute, anders konfigurierte Anlagen korrekte Kurven zeigen.
+
+
+
 ## Was sich für dich sichtbar ändert
 
 - Der Gas-/Wasserverlauf zeigt flache Stufen in Höhe des tatsächlichen Verbrauchs statt Nadeln mit Abklingkurve.
