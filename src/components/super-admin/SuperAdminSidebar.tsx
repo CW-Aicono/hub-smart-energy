@@ -126,6 +126,7 @@ export default function SuperAdminSidebar() {
       ],
     },
     { to: "/super-admin/board", icon: BoardIcon, label: "C-Level Dashboard" },
+    { to: "/super-admin/roadmap", icon: ListChecks, label: "Roadmap" },
     {
       to: "/super-admin/ocpp",
       icon: Server,
