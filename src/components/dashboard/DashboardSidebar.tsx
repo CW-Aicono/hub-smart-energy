@@ -384,6 +384,13 @@ const DashboardSidebar = () => {
         </Button>
       </div>
 
+      {/* Bereichs-Umschalter (nur für Partner mit eigenem Mandanten) */}
+      {!collapsed && canSwitchArea && (
+        <div className="px-4 pt-3">
+          <AreaSwitcher current="ems" className="w-full justify-between" />
+        </div>
+      )}
+
       {/* Nav - scrollable */}
       <nav className={cn(
         "flex-1 space-y-1 overflow-y-auto scrollbar-hide",
@@ -442,6 +449,18 @@ const DashboardSidebar = () => {
                 {t("nav.myProfile")}
               </NavLink>
             </DropdownMenuItem>
+            {canSwitchArea && (
+              <DropdownMenuItem
+                onClick={() => {
+                  setAreaPreference("partner");
+                  navigate("/partner");
+                }}
+                className="cursor-pointer"
+              >
+                <Briefcase className="h-4 w-4 mr-2" />
+                Zum Partner-Portal
+              </DropdownMenuItem>
+            )}
             {!isDemo && (
               <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
                 <LogOut className="h-4 w-4 mr-2" />
