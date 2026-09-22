@@ -1,5 +1,9 @@
 import { useState, useEffect, useMemo, Fragment, useCallback } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { AreaSwitcher } from "@/components/common/AreaSwitcher";
+import { useAreaAccess } from "@/hooks/useAreaAccess";
+import { setAreaPreference } from "@/lib/areaPreference";
+import { Briefcase } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -44,6 +48,8 @@ const DashboardSidebar = () => {
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { canSwitch: canSwitchArea } = useAreaAccess();
   const { isNavItemVisible } = useModuleGuard();
   const isDemo = useDemoMode();
   const demoPath = useDemoPath();
@@ -384,6 +390,13 @@ const DashboardSidebar = () => {
         </Button>
       </div>
 
+      {/* Bereichs-Umschalter (nur für Partner mit eigenem Mandanten) */}
+      {!collapsed && canSwitchArea && (
+        <div className="px-4 pt-3">
+          <AreaSwitcher current="ems" className="w-full justify-between" />
+        </div>
+      )}
+
       {/* Nav - scrollable */}
       <nav className={cn(
         "flex-1 space-y-1 overflow-y-auto scrollbar-hide",
@@ -442,6 +455,18 @@ const DashboardSidebar = () => {
                 {t("nav.myProfile")}
               </NavLink>
             </DropdownMenuItem>
+            {canSwitchArea && (
+              <DropdownMenuItem
+                onClick={() => {
+                  setAreaPreference("partner");
+                  navigate("/partner");
+                }}
+                className="cursor-pointer"
+              >
+                <Briefcase className="h-4 w-4 mr-2" />
+                Zum Partner-Portal
+              </DropdownMenuItem>
+            )}
             {!isDemo && (
               <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
                 <LogOut className="h-4 w-4 mr-2" />

@@ -1,5 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { LayoutDashboard, Building2, LogOut, Briefcase, Users, Receipt, Cpu, ListChecks, Palette, BarChart3, PiggyBank } from "lucide-react";
+import { useAreaAccess } from "@/hooks/useAreaAccess";
+import { setAreaPreference } from "@/lib/areaPreference";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -10,6 +12,7 @@ export default function PartnerSidebar() {
   const { user, signOut } = useAuth();
   const { partnerName, partnerLogoUrl, isPartnerAdmin, permissions } = usePartnerAccess();
   const navigate = useNavigate();
+  const { canSwitch } = useAreaAccess();
   const initials = (partnerName || user?.email || "P").substring(0, 2).toUpperCase();
 
   const NAV: Array<{ to: string; icon: any; label: string; end?: boolean; show: boolean }> = [
@@ -59,6 +62,23 @@ export default function PartnerSidebar() {
           </NavLink>
         ))}
       </nav>
+
+      {canSwitch && (
+        <div className="border-t p-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start gap-2"
+            onClick={() => {
+              setAreaPreference("ems");
+              navigate("/");
+            }}
+          >
+            <Cpu className="h-4 w-4" />
+            Zum EMS (technisch)
+          </Button>
+        </div>
+      )}
 
       <div className="border-t p-3 flex items-center gap-3">
         <Avatar className="h-8 w-8">
