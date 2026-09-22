@@ -6,6 +6,7 @@ import { usePartnerAccess } from "@/hooks/usePartnerAccess";
 import PartnerSidebar from "./PartnerSidebar";
 import { Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AreaSwitcher } from "@/components/common/AreaSwitcher";
 
 interface PartnerLayoutProps {
   children: ReactNode;
@@ -48,7 +49,12 @@ export function PartnerLayout({ children }: PartnerLayoutProps) {
   return (
     <div className="flex min-h-screen bg-background">
       <PartnerSidebar />
-      <main className="flex-1 overflow-auto">{children}</main>
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex justify-end border-b px-4 py-2">
+          <AreaSwitcher current="partner" />
+        </div>
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
     </div>
   );
 }
