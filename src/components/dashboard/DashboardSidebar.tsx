@@ -1,5 +1,9 @@
 import { useState, useEffect, useMemo, Fragment, useCallback } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { AreaSwitcher } from "@/components/common/AreaSwitcher";
+import { useAreaAccess } from "@/hooks/useAreaAccess";
+import { setAreaPreference } from "@/lib/areaPreference";
+import { Briefcase } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -44,6 +48,8 @@ const DashboardSidebar = () => {
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { canSwitch: canSwitchArea } = useAreaAccess();
   const { isNavItemVisible } = useModuleGuard();
   const isDemo = useDemoMode();
   const demoPath = useDemoPath();
