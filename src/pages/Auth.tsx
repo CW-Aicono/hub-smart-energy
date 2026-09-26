@@ -210,16 +210,7 @@ const Auth = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password">{t("auth.password")}</Label>
-                    <button
-                      type="button"
-                      onClick={() => setView("forgotPassword")}
-                      className="text-xs text-accent hover:underline font-medium"
-                    >
-                      {t("auth.forgotPassword")}
-                    </button>
-                  </div>
+                  <Label htmlFor="password">{t("auth.password")}</Label>
                   <Input
                     id="password"
                     type="password"
@@ -233,6 +224,15 @@ const Auth = () => {
                 <Button type="submit" style={{ backgroundColor: brandPrimary }} className="w-full text-white hover:opacity-90" disabled={submitting}>
                   {submitting ? t("common.loading") : t("auth.login")}
                 </Button>
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => setView("forgotPassword")}
+                    className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    {t("auth.forgotPassword")}
+                  </button>
+                </div>
               </form>
             )}
           </CardContent>
