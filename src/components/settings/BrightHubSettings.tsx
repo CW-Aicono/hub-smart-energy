@@ -151,7 +151,22 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
                 <Label>{T("bh.enable")}</Label>
                 <p className="text-sm text-muted-foreground">{T("bh.enableDesc")}</p>
               </div>
-              <Switch checked={isEnabled} onCheckedChange={setIsEnabled} />
+              <Switch
+                checked={isEnabled}
+                disabled={saving}
+                onCheckedChange={async (checked) => {
+                  setIsEnabled(checked);
+                  setSaving(true);
+                  await saveSettings({
+                    api_key: apiKeyDirty ? apiKey.trim() : settings?.api_key || "",
+                    webhook_secret: webhookSecretDirty ? webhookSecret.trim() : settings?.webhook_secret || "",
+                    webhook_url: webhookUrl.trim(),
+                    is_enabled: checked,
+                    auto_sync_readings: autoSync,
+                  });
+                  setSaving(false);
+                }}
+              />
             </div>
 
             <div className="space-y-2">
@@ -181,7 +196,22 @@ export const BrightHubSettings = ({ locationId }: BrightHubSettingsProps) => {
                 <Label>{T("bh.autoSync")}</Label>
                 <p className="text-sm text-muted-foreground">{T("bh.autoSyncDesc")}</p>
               </div>
-              <Switch checked={autoSync} onCheckedChange={setAutoSync} />
+              <Switch
+                checked={autoSync}
+                disabled={saving}
+                onCheckedChange={async (checked) => {
+                  setAutoSync(checked);
+                  setSaving(true);
+                  await saveSettings({
+                    api_key: apiKeyDirty ? apiKey.trim() : settings?.api_key || "",
+                    webhook_secret: webhookSecretDirty ? webhookSecret.trim() : settings?.webhook_secret || "",
+                    webhook_url: webhookUrl.trim(),
+                    is_enabled: isEnabled,
+                    auto_sync_readings: checked,
+                  });
+                  setSaving(false);
+                }}
+              />
             </div>
 
             <Button onClick={handleSave} disabled={saving} className="w-full">

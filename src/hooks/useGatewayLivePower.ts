@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 import type { Meter } from "./useMeters";
 
 export interface GatewayLivePowerValue {
@@ -112,10 +113,12 @@ export function useGatewayLivePower(meters: Meter[]) {
 
           try {
             const edgeFunction = getEdgeFunctionName(integrationTypes.get(integrationId) ?? "");
-            // Push-based gateways (gateway-ingest) don't support getSensors – skip them
-            if (edgeFunction === "gateway-ingest") return;
+            // Push-based gateways (gateway-ingest) don't support getSensors – skip them.
+            // Loxone-API hat den non-WS-Messpfad deaktiviert (410) – Live-Werte kommen
+            // ausschließlich über die WS-Bridge / Realtime-Broadcast.
+            if (edgeFunction === "gateway-ingest" || edgeFunction === "loxone-api") return;
 
-            const { data } = await supabase.functions.invoke(edgeFunction, {
+            const { data } = await invokeWithRetry(edgeFunction, {
               body: { locationIntegrationId: integrationId, action: "getSensors" },
             });
 

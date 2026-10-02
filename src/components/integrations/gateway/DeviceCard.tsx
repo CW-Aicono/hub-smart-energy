@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "@/hooks/useTranslation";
 import type { GatewayDeviceWithMetrics } from "@/hooks/useGatewayDevices";
 import { StatusBadge } from "./StatusBadge";
-import { ApiKeyDialog } from "./ApiKeyDialog";
 import { PinConfigDialog } from "./PinConfigDialog";
 import { HaConfigDialog } from "./HaConfigDialog";
+import { GatewayConfigDialog } from "./GatewayConfigDialog";
+import { RemoteDeviceWizard } from "./RemoteDeviceWizard";
 import { DeviceMetrics } from "./DeviceMetrics";
 import {
   Server,
@@ -14,10 +15,11 @@ import {
   Download,
   ArrowUpCircle,
   Clock,
-  Key,
   Lock,
-  ShieldCheck,
   ClipboardList,
+  Sparkles,
+  Settings2,
+  PlugZap,
 } from "lucide-react";
 
 interface DeviceCardProps {
@@ -29,9 +31,10 @@ interface DeviceCardProps {
 
 export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: DeviceCardProps) {
   const { t } = useTranslation();
-  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [pinDialogOpen, setPinDialogOpen] = useState(false);
   const [haConfigOpen, setHaConfigOpen] = useState(false);
+  const [gwConfigOpen, setGwConfigOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const hasUpdate =
     device.latest_available_version &&
     device.addon_version &&
@@ -65,12 +68,6 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
                     Update
                   </Badge>
                 )}
-                {device.api_key_hash && (
-                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                    <ShieldCheck className="h-3 w-3 mr-1" />
-                    Device-Key
-                  </Badge>
-                )}
                 {(device.config as any)?.ui_pin_hash && (
                   <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
                     <Lock className="h-3 w-3 mr-1" />
@@ -99,20 +96,18 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
             </Button>
             {isAdmin && (
               <>
+                <Button variant="ghost" size="icon" onClick={() => setWizardOpen(true)} title="Geräte einbinden">
+                  <PlugZap className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => setGwConfigOpen(true)} title="Gateway-Konfiguration">
+                  <Settings2 className="h-4 w-4" />
+                </Button>
                 <Button variant="ghost" size="icon" onClick={() => setPinDialogOpen(true)} title="UI-PIN konfigurieren">
                   <Lock className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => setKeyDialogOpen(true)} title={t("gatewayDevices.apiKey")}>
-                  <Key className="h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "backup")} title={t("gatewayDevices.backup")}>
                   <Download className="h-4 w-4" />
                 </Button>
-                {hasUpdate && (
-                  <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "update")} title={t("gatewayDevices.update")}>
-                    <ArrowUpCircle className="h-4 w-4" />
-                  </Button>
-                )}
                 <Button variant="ghost" size="icon" onClick={() => onCommand(device.id, "restart")} title={t("gatewayDevices.restart")}>
                   <RefreshCw className="h-4 w-4" />
                 </Button>
@@ -120,6 +115,29 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
             )}
           </div>
         </div>
+
+        {/* Update banner */}
+        {hasUpdate && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/5 p-2">
+            <div className="flex items-center gap-2 text-sm">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span className="font-medium">Update verfügbar</span>
+              <span className="text-muted-foreground">
+                v{device.addon_version} → v{device.latest_available_version}
+              </span>
+            </div>
+            {isAdmin && (
+              <Button
+                size="sm"
+                onClick={() => onCommand(device.id, "update")}
+                className="gap-1"
+              >
+                <ArrowUpCircle className="h-4 w-4" />
+                Update installieren
+              </Button>
+            )}
+          </div>
+        )}
 
         {/* Metrics row */}
         <DeviceMetrics device={device} />
@@ -133,17 +151,23 @@ export function DeviceCard({ device, onCommand, isAdmin, onKeyGenerated }: Devic
 
       {isAdmin && (
         <>
-          <ApiKeyDialog
-            device={device}
-            open={keyDialogOpen}
-            onOpenChange={setKeyDialogOpen}
-            onKeyGenerated={onKeyGenerated}
-          />
           <PinConfigDialog
             device={device}
             open={pinDialogOpen}
             onOpenChange={setPinDialogOpen}
             onUpdated={onKeyGenerated}
+          />
+          <GatewayConfigDialog
+            deviceId={device.id}
+            deviceName={device.device_name}
+            open={gwConfigOpen}
+            onOpenChange={setGwConfigOpen}
+          />
+          <RemoteDeviceWizard
+            deviceId={device.id}
+            deviceName={device.device_name}
+            open={wizardOpen}
+            onOpenChange={setWizardOpen}
           />
         </>
       )}

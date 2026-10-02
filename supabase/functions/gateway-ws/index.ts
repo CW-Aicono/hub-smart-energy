@@ -30,9 +30,17 @@
  */
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+function jsonResponse(req: Request, body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+  });
+}
 
 function svc(): SupabaseClient {
   return createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
@@ -42,10 +50,17 @@ function normalizeMac(input: string): string {
   return (input || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 async function bcryptVerify(plain: string, hash: string): Promise<boolean> {
   try {
-    const bcrypt = await import("https://deno.land/x/bcrypt@v0.4.1/mod.ts");
-    return await bcrypt.compare(plain, hash);
+    // Use bcryptjs via npm: specifier — pure JS, no Web Worker, works in Supabase Edge Runtime.
+    // npm: avoids the email-obfuscation issue that mangles esm.sh URLs containing "@".
+    const bcrypt: any = await import("npm:bcryptjs@2.4.3");
+    const compare = bcrypt.compare ?? bcrypt.default?.compare;
+    return await compare(plain, hash);
   } catch (e) {
     console.error("[gateway-ws] bcrypt error", e);
     return false;
@@ -57,9 +72,72 @@ interface Session {
   deviceId: string;
   tenantId: string;
   locationId: string | null;
+  locationIntegrationId: string | null;
   channel: ReturnType<SupabaseClient["channel"]> | null;
   closeRequested: boolean;
+  // Session-log bookkeeping
+  sessionLogId: string | null;
+  pendingEvents: number;
+  lastFlushMs: number;
+  flushTimer: number | null;
 }
+
+interface AuthCacheEntry {
+  device: any;
+  tenantName: string | null;
+  resolvedLocationId: string | null;
+  locationName: string | null;
+  expiresAt: number;
+}
+
+// In-memory auth cache to reduce DB load when the gateway reconnects rapidly
+// after Edge Function isolate recycling (happens every ~3 minutes).
+// Keyed by normalized MAC. TTL is intentionally short so credential rotations
+// propagate within one minute.
+const authCache = new Map<string, AuthCacheEntry>();
+const AUTH_CACHE_TTL_MS = 60_000;
+
+// Session-log flush cadence: buffer event counts and flush at most once per
+// minute to avoid per-frame writes (protects IO budget, consistent with worker
+// aggregation policy).
+const SESSION_FLUSH_INTERVAL_MS = 60_000;
+
+async function flushSessionCounters(session: Session, opts?: { force?: boolean }) {
+  if (!session.sessionLogId) return;
+  const delta = session.pendingEvents;
+  if (delta === 0 && !opts?.force) return;
+  session.pendingEvents = 0;
+  session.lastFlushMs = Date.now();
+  try {
+    // Increment via RPC-less pattern: read-then-write is racy across isolates
+    // but each session lives in exactly one isolate, so a plain UPDATE with
+    // arithmetic is safe.
+    if (delta > 0) {
+      const sb = svc();
+      const { data: cur } = await sb
+        .from("gateway_ws_session_log")
+        .select("events_received")
+        .eq("id", session.sessionLogId)
+        .maybeSingle();
+      const next = ((cur as any)?.events_received ?? 0) + delta;
+      await sb
+        .from("gateway_ws_session_log")
+        .update({ events_received: next, updated_at: new Date().toISOString() })
+        .eq("id", session.sessionLogId);
+    }
+  } catch (e) {
+    console.warn("[gateway-ws] session flush failed", e);
+  }
+}
+
+function scheduleFlush(session: Session) {
+  if (session.flushTimer != null) return;
+  session.flushTimer = setTimeout(async () => {
+    session.flushTimer = null;
+    await flushSessionCounters(session);
+  }, SESSION_FLUSH_INTERVAL_MS) as unknown as number;
+}
+
 
 /** Send safely (no throw if socket already closed). */
 function safeSend(ws: WebSocket, msg: unknown) {
@@ -70,10 +148,488 @@ function safeSend(ws: WebSocket, msg: unknown) {
   }
 }
 
-/** Mark device offline + tear down realtime subscription. */
-async function tearDown(session: Session) {
+function getExplicitBinaryState(value: unknown): "on" | "off" | null {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "on") return "on";
+  if (normalized === "off") return "off";
+  return null;
+}
+
+async function mirrorGatewayInventoryState(params: {
+  gatewayDeviceId: string;
+  entityId: string;
+  nextState: "on" | "off";
+  locationIntegrationId?: string | null;
+}) {
+  const nowIso = new Date().toISOString();
+  const update: Record<string, unknown> = {
+    state: params.nextState,
+    last_state_at: nowIso,
+    last_seen_at: nowIso,
+    updated_at: nowIso,
+  };
+  if (params.locationIntegrationId) update.location_integration_id = params.locationIntegrationId;
+
+  const { error } = await svc()
+    .from("gateway_device_inventory")
+    .update(update)
+    .eq("gateway_device_id", params.gatewayDeviceId)
+    .eq("entity_id", params.entityId);
+
+  if (error) {
+    console.warn("[gateway-ws] inventory mirror failed", {
+      gatewayDeviceId: params.gatewayDeviceId,
+      entityId: params.entityId,
+      nextState: params.nextState,
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * Verify the HTTP caller's Supabase user JWT and confirm they belong to the
+ * tenant that owns `locationIntegrationId`. Super-admins bypass the tenant
+ * check. Returns null on success, or a Response (401/403) on failure.
+ *
+ * WebSocket connections from gateways do NOT go through this path — they are
+ * authenticated separately via bcrypt(mac+password) in the upgrade handler.
+ */
+async function authorizeHttpCaller(
+  req: Request,
+  locationIntegrationId: string,
+): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization") || "";
+  if (!authHeader.toLowerCase().startsWith("bearer ")) {
+    return jsonResponse(req, { success: false, error: "Unauthorized" }, 401);
+  }
+
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const userClient = createClient(SUPABASE_URL, anonKey, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  const { data: userData, error: userErr } = await userClient.auth.getUser();
+  const user = userData?.user;
+  if (userErr || !user) {
+    return jsonResponse(req, { success: false, error: "Unauthorized" }, 401);
+  }
+
+  const sb = svc();
+
+  // Super-admin bypass: full access regardless of tenant.
+  const { data: roles } = await sb
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id);
+  if (roles?.some((r: any) => r.role === "super_admin")) {
+    return null;
+  }
+
+  // Resolve the tenant that owns the requested location_integration.
+  const { data: liRow, error: liErr } = await sb
+    .from("location_integrations")
+    .select("location:locations!inner(tenant_id)")
+    .eq("id", locationIntegrationId)
+    .maybeSingle();
+  if (liErr) {
+    console.error("[gateway-ws] authorizeHttpCaller li lookup failed", liErr);
+    return jsonResponse(req, { success: false, error: "Authorization check failed" }, 500);
+  }
+  const ownerTenantId = (liRow as any)?.location?.tenant_id ?? null;
+  if (!liRow || !ownerTenantId) {
+    return jsonResponse(req, { success: false, error: "Integration nicht gefunden" }, 404);
+  }
+
+  // Caller's tenant from profiles.
+  const { data: profile } = await sb
+    .from("profiles")
+    .select("tenant_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const callerTenantId = (profile as any)?.tenant_id ?? null;
+
+  if (!callerTenantId || callerTenantId !== ownerTenantId) {
+    return jsonResponse(req, { success: false, error: "Forbidden" }, 403);
+  }
+  return null;
+}
+
+async function handleHttpAction(req: Request): Promise<Response | null> {
+  if (req.method !== "POST") return null;
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonResponse(req, { error: "Invalid JSON body" }, 400);
+  }
+
+  if (body?.action === "executeCommand") {
+    return await handleExecuteCommand(req, body);
+  }
+
+  const action = body?.action;
+  if (action !== "getSensors" && action !== "refreshSensors" && action !== "getSensorsCached") return null;
+
+  const locationIntegrationId = String(body.locationIntegrationId || "").trim();
+  if (!locationIntegrationId) {
+    return jsonResponse(req, { success: false, error: "locationIntegrationId is required" }, 400);
+  }
+  if (!isUuid(locationIntegrationId)) {
+    return jsonResponse(req, { success: false, error: "locationIntegrationId must be a valid UUID" }, 400);
+  }
+
+  const authError = await authorizeHttpCaller(req, locationIntegrationId);
+  if (authError) return authError;
+
+
+  const sb = svc();
+
+  // ── Cache-first short-circuit ──
+  if (action === "getSensorsCached") {
+    const { data: snap } = await sb
+      .from("gateway_sensor_snapshots")
+      .select("sensors, system_messages, status, fetched_at, error_message")
+      .eq("location_integration_id", locationIntegrationId)
+      .maybeSingle();
+    if (snap) {
+      return jsonResponse(req, {
+        success: true,
+        sensors: (snap as any).sensors ?? [],
+        systemMessages: (snap as any).system_messages ?? [],
+        cached: true,
+        snapshotStatus: (snap as any).status,
+        fetchedAt: (snap as any).fetched_at,
+      });
+    }
+    // No snapshot yet → fall through and build it live (cheap DB read).
+  }
+
+  console.log(`[gateway-ws] ${action} request`, { locationIntegrationId });
+
+  const { data: meters, error: meterError } = await sb
+    .from("meters")
+    .select("id, name, sensor_uuid, unit, energy_type")
+    .eq("location_integration_id", locationIntegrationId)
+    .eq("is_archived", false)
+    .not("sensor_uuid", "is", null)
+    .order("name");
+
+  if (meterError) {
+    console.error("[gateway-ws] getSensors meter query failed", meterError);
+    return jsonResponse(req, { success: false, error: "Database error" }, 500);
+  }
+
+  const { data: automations } = await sb
+    .from("location_automations")
+    .select("actuator_uuid, actuator_name")
+    .eq("location_integration_id", locationIntegrationId)
+    .not("actuator_uuid", "is", null);
+
+  // Pull live device inventory pushed by the HA add-on (any gateway_device
+  // linked to this location_integration).
+  const { data: gateways } = await sb
+    .from("gateway_devices")
+    .select("id")
+    .eq("location_integration_id", locationIntegrationId);
+  const gatewayIds = (gateways ?? []).map((g: any) => g.id);
+
+  let inventory: any[] = [];
+  if (gatewayIds.length > 0) {
+    const { data: inv } = await sb
+      .from("gateway_device_inventory")
+      .select("entity_id, domain, category, friendly_name, state, unit, device_class, last_state_at")
+      .in("gateway_device_id", gatewayIds)
+      .order("friendly_name");
+    inventory = inv || [];
+  }
+
+  const mappedSensorIds = new Set((meters ?? []).map((m: any) => m.sensor_uuid));
+  const mappedActuatorIds = new Set((automations ?? []).map((a: any) => a.actuator_uuid));
+
+  // Build entity_id -> latest inventory row map (inventory may contain duplicates,
+  // pick the row with the most recent last_state_at).
+  const latestByEntity = new Map<string, any>();
+  for (const inv of inventory) {
+    const eid = String(inv.entity_id || "");
+    if (!eid) continue;
+    const existing = latestByEntity.get(eid);
+    if (!existing) {
+      latestByEntity.set(eid, inv);
+      continue;
+    }
+    const a = existing.last_state_at ? new Date(existing.last_state_at).getTime() : 0;
+    const b = inv.last_state_at ? new Date(inv.last_state_at).getTime() : 0;
+    if (b > a) latestByEntity.set(eid, inv);
+  }
+
+  /** Try to convert a HA state string to a number; returns null if not numeric. */
+  const toNumeric = (s: any): number | null => {
+    if (s == null) return null;
+    if (typeof s === "number") return isFinite(s) ? s : null;
+    const str = String(s).trim();
+    if (str === "" || str === "—" || str === "unknown" || str === "unavailable") return null;
+    if (str === "on") return 1;
+    if (str === "off") return 0;
+    const n = parseFloat(str.replace(",", "."));
+    return isFinite(n) ? n : null;
+  };
+
+  const sensorItems = (meters ?? []).map((meter: any) => {
+    const inv = latestByEntity.get(String(meter.sensor_uuid));
+    const rawState = inv?.state ?? null;
+    const numeric = toNumeric(rawState);
+    const unit = inv?.unit || meter.unit || "";
+    return {
+      id: meter.sensor_uuid,
+      name: meter.name,
+      type: meter.energy_type === "strom" ? "power" : meter.energy_type,
+      controlType: "Meter",
+      room: "",
+      category: "Zähler",
+      value: rawState ?? "—",
+      rawValue: numeric,
+      unit,
+      status: "online",
+      stateName: meter.energy_type,
+      isMapped: true,
+      lastStateAt: inv?.last_state_at ?? null,
+    };
+  });
+
+  const seenActuators = new Set<string>();
+  const actuatorItems = (automations ?? [])
+    .filter((row: any) => row.actuator_uuid)
+    .filter((row: any) => {
+      const key = String(row.actuator_uuid);
+      if (seenActuators.has(key)) return false;
+      seenActuators.add(key);
+      return true;
+    })
+    .map((row: any) => {
+      const inv = latestByEntity.get(String(row.actuator_uuid));
+      const rawState = inv?.state ?? null;
+      const numeric = toNumeric(rawState);
+      return {
+        id: row.actuator_uuid,
+        name: row.actuator_name || row.actuator_uuid,
+        type: "actuator",
+        controlType: row.actuator_uuid?.split?.(".")?.[0] || "switch",
+        room: "",
+        category: "Aktor",
+        value: rawState ?? "—",
+        rawValue: numeric,
+        unit: inv?.unit || "",
+        status: "online",
+        stateName: "state",
+        isMapped: true,
+        lastStateAt: inv?.last_state_at ?? null,
+      };
+    });
+
+  // Append discovered (unmapped) entities from the live inventory so the UI
+  // can offer them for assignment to a meter / automation.
+  const inventoryItems = inventory
+    .filter((d: any) => !mappedSensorIds.has(d.entity_id) && !mappedActuatorIds.has(d.entity_id))
+    .map((d: any) => {
+      const cat = String(d.category || "sensor");
+      const isActuator = cat === "actuator";
+      const isMeter = cat === "meter";
+      return {
+        id: d.entity_id,
+        name: d.friendly_name || d.entity_id,
+        type: isActuator ? "actuator" : (d.device_class || "sensor"),
+        controlType: isActuator ? d.domain : (isMeter ? "Meter" : "Sensor"),
+        room: "",
+        category: isActuator ? "Aktor" : (isMeter ? "Zähler" : "Sensor"),
+        value: d.state ?? "—",
+        unit: d.unit || "",
+        status: "online",
+        stateName: d.device_class || "state",
+        isMapped: false,
+      };
+    });
+
+  console.log("[gateway-ws] getSensors response", {
+    locationIntegrationId,
+    meters: sensorItems.length,
+    actuators: actuatorItems.length,
+    inventory: inventoryItems.length,
+    gatewayCount: gatewayIds.length,
+  });
+
+  const allSensors = [...sensorItems, ...actuatorItems, ...inventoryItems];
+
+  // ── Write snapshot so cache-first reads stay instant ──
+  try {
+    const { data: liRow } = await sb
+      .from("location_integrations")
+      .select("location_id, location:locations!inner(tenant_id)")
+      .eq("id", locationIntegrationId)
+      .maybeSingle();
+    const tenantId = (liRow as any)?.location?.tenant_id ?? null;
+    const locationId = (liRow as any)?.location_id ?? null;
+    const row: Record<string, unknown> = {
+      location_integration_id: locationIntegrationId,
+      sensors: allSensors,
+      system_messages: [],
+      status: "fresh",
+      fetched_at: new Date().toISOString(),
+      source: "gateway-ws",
+    };
+    if (tenantId) row.tenant_id = tenantId;
+    if (locationId) row.location_id = locationId;
+    await sb.from("gateway_sensor_snapshots").upsert(row, { onConflict: "location_integration_id" });
+    // Sensor-Verlauf: Rohwerte in sensor_readings_raw persistieren (Delta-Guard aktiv)
+    const { persistSensorHistory } = await import("../_shared/sensorHistory.ts");
+    await persistSensorHistory(sb, {
+      locationIntegrationId,
+      tenantId,
+      locationId,
+      sensors: allSensors,
+    });
+  } catch (snapErr) {
+    console.warn("[gateway-ws] snapshot write failed:", snapErr);
+  }
+
+  return jsonResponse(req, { success: true, sensors: allSensors, cached: false });
+}
+
+/**
+ * HTTP → enqueue actuator command for the connected Pi via gateway_commands.
+ * The Pi receives it through the realtime subscription set up in subscribeCommands().
+ */
+async function handleExecuteCommand(req: Request, body: any): Promise<Response> {
+  const locationIntegrationId = String(body.locationIntegrationId || "").trim();
+  const entityId = String(body.entity_id || body.controlUuid || "").trim();
+  const service = String(body.service || "").trim().toLowerCase();
+  const command = String(
+    body.command
+      || body.commandValue
+      || body.action_value
+      || body.action_type
+      || (service === "turn_on" ? "on" : service === "turn_off" ? "off" : service === "toggle" ? "toggle" : "toggle"),
+  ).trim().toLowerCase();
+
+  if (!locationIntegrationId || !entityId) {
+    return jsonResponse(req, { success: false, error: "locationIntegrationId and entity_id (or controlUuid) are required" }, 400);
+  }
+  if (!isUuid(locationIntegrationId)) {
+    return jsonResponse(req, { success: false, error: "locationIntegrationId must be a valid UUID" }, 400);
+  }
+
+  const authError = await authorizeHttpCaller(req, locationIntegrationId);
+  if (authError) return authError;
+
+  const sb = svc();
+
+  const { data: devices, error: devErr } = await sb
+    .from("gateway_devices")
+    .select("id, tenant_id, status")
+    .eq("location_integration_id", locationIntegrationId);
+  if (devErr || !devices || devices.length === 0) {
+    return jsonResponse(req, { success: false, error: "No gateway device found for this integration" }, 404);
+  }
+  const device = devices.find((d: any) => d.status === "online") || devices[0];
+
+  console.log("[gateway-ws] executeCommand enqueue", { deviceId: device.id, entityId, command });
+
+  const payload: Record<string, unknown> = { entity_id: entityId, command };
+  if (body.domain) payload.domain = body.domain;
+  if (body.service) payload.service = body.service;
+
+  const { data: cmd, error: insErr } = await sb
+    .from("gateway_commands")
+    .insert({
+      tenant_id: device.tenant_id,
+      gateway_device_id: device.id,
+      command_type: "execute_actuator",
+      payload,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+  if (insErr || !cmd) {
+    console.error("[gateway-ws] executeCommand insert failed", insErr);
+    return jsonResponse(req, { success: false, error: insErr?.message || "Failed to enqueue command" }, 500);
+  }
+
+  // Poll for ack long enough to cover observed gateway delivery delays.
+  // Real requests have been acknowledged just after ~6s, which produced false
+  // 504s even though the command ultimately completed successfully.
+  const cmdId = cmd.id as string;
+  const deadline = Date.now() + 12000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 250));
+    const { data: row } = await sb
+      .from("gateway_commands")
+      .select("status, error_message, response")
+      .eq("id", cmdId)
+      .maybeSingle();
+    if (!row) continue;
+    if (row.status === "completed") {
+      const explicitState = getExplicitBinaryState(command);
+      if (explicitState) {
+        await mirrorGatewayInventoryState({
+          gatewayDeviceId: device.id,
+          entityId,
+          nextState: explicitState,
+          locationIntegrationId,
+        });
+      }
+      return jsonResponse(req, { success: true, response: row.response ?? null });
+    }
+    if (row.status === "failed") {
+      return jsonResponse(req, { success: false, error: row.error_message || "Command failed on gateway" }, 502);
+    }
+  }
+  return jsonResponse(req, {
+    success: true,
+    status: "queued",
+    pending_ack: true,
+    command_id: cmdId,
+    message: "Gateway command queued; acknowledgement is still pending",
+  });
+}
+
+/**
+ * Tear down realtime subscription on socket close.
+ *
+ * IMPORTANT: We do NOT mark the device offline or clear `ws_connected_since`
+ * here. Supabase Edge Function isolates are recycled roughly every ~3 minutes
+ * for long-lived WebSockets, which triggers `onclose` even though the addon
+ * on the Pi is perfectly healthy and reconnects within ~5s. Nulling the
+ * connection state on every isolate recycle caused the UI to report a
+ * "reconnect every 3 minutes" flap.
+ *
+ * True offline detection is done in the UI / a scheduled job based on
+ * `last_heartbeat_at` staleness (> configured stale threshold).
+ */
+async function tearDown(session: Session, reason?: string, code?: number) {
   if (session.closeRequested) return;
   session.closeRequested = true;
+  if (session.flushTimer != null) {
+    try { clearTimeout(session.flushTimer as unknown as number); } catch { /* ignore */ }
+    session.flushTimer = null;
+  }
+  await flushSessionCounters(session, { force: true });
+  if (session.sessionLogId) {
+    try {
+      await svc()
+        .from("gateway_ws_session_log")
+        .update({
+          ended_at: new Date().toISOString(),
+          disconnect_reason: reason ?? "socket_closed",
+          disconnect_code: typeof code === "number" ? code : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", session.sessionLogId);
+    } catch (e) {
+      console.warn("[gateway-ws] session close failed", e);
+    }
+  }
   try {
     if (session.channel) {
       await svc().removeChannel(session.channel);
@@ -81,19 +637,8 @@ async function tearDown(session: Session) {
   } catch (e) {
     console.warn("[gateway-ws] removeChannel failed", e);
   }
-  try {
-    await svc()
-      .from("gateway_devices")
-      .update({
-        status: "offline",
-        ws_connected_since: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", session.deviceId);
-  } catch (e) {
-    console.warn("[gateway-ws] mark offline failed", e);
-  }
 }
+
 
 /** Try to send a command to the Pi over WS, mark sent_at. */
 async function pushCommand(session: Session, cmd: any) {
@@ -126,7 +671,22 @@ async function subscribeCommands(session: Session) {
     await pushCommand(session, cmd);
   }
 
-  // 2. Realtime subscription for new INSERTs
+  // 2. Push current config snapshot so the gateway boots with up-to-date settings.
+  const { data: cfgRow } = await sb
+    .from("gateway_device_config")
+    .select("config, version, updated_at")
+    .eq("gateway_device_id", session.deviceId)
+    .maybeSingle();
+  if (cfgRow) {
+    safeSend(session.socket, {
+      type: "config_update",
+      version: (cfgRow as any).version,
+      config: (cfgRow as any).config ?? {},
+      updated_at: (cfgRow as any).updated_at,
+    });
+  }
+
+  // 3. Realtime subscription for new INSERTs (commands) + config updates.
   session.channel = sb
     .channel(`gw-cmds-${session.deviceId}`)
     .on(
@@ -143,7 +703,77 @@ async function subscribeCommands(session: Session) {
         await pushCommand(session, cmd);
       },
     )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "gateway_device_config",
+        filter: `gateway_device_id=eq.${session.deviceId}`,
+      },
+      (payload) => {
+        const row = (payload.new ?? payload.old) as any;
+        if (!row) return;
+        safeSend(session.socket, {
+          type: "config_update",
+          version: row.version,
+          config: row.config ?? {},
+          updated_at: row.updated_at,
+        });
+      },
+    )
     .subscribe();
+}
+
+/** Resolve tenant/location names for a device row. Cached per MAC. */
+async function resolveAuthContext(sb: SupabaseClient, device: any): Promise<Omit<AuthCacheEntry, "expiresAt">> {
+  let tenantName: string | null = null;
+  let resolvedLocationId: string | null = device.location_id ?? null;
+  let locationName: string | null = null;
+
+  if (device.tenant_id) {
+    const { data: tenantRow, error: tenantError } = await sb
+      .from("tenants")
+      .select("name")
+      .eq("id", device.tenant_id)
+      .maybeSingle();
+    if (tenantError) {
+      console.warn("[gateway-ws] tenant lookup failed", { tenantId: device.tenant_id, error: tenantError.message });
+    } else {
+      tenantName = (tenantRow as any)?.name ?? null;
+    }
+  }
+
+  if (!resolvedLocationId && device.location_integration_id) {
+    const { data: integrationRow, error: integrationError } = await sb
+      .from("location_integrations")
+      .select("location_id")
+      .eq("id", device.location_integration_id)
+      .maybeSingle();
+    if (integrationError) {
+      console.warn("[gateway-ws] location integration lookup failed", {
+        locationIntegrationId: device.location_integration_id,
+        error: integrationError.message,
+      });
+    } else {
+      resolvedLocationId = (integrationRow as any)?.location_id ?? null;
+    }
+  }
+
+  if (resolvedLocationId) {
+    const { data: locationRow, error: locationError } = await sb
+      .from("locations")
+      .select("name")
+      .eq("id", resolvedLocationId)
+      .maybeSingle();
+    if (locationError) {
+      console.warn("[gateway-ws] location lookup failed", { locationId: resolvedLocationId, error: locationError.message });
+    } else {
+      locationName = (locationRow as any)?.name ?? null;
+    }
+  }
+
+  return { device, tenantName, resolvedLocationId, locationName };
 }
 
 /** Handle the very first frame: must be `auth`. */
@@ -164,9 +794,22 @@ async function handleAuth(
   }
 
   const sb = svc();
+
+  // 1) Device lookup must always hit the DB so we can read the latest
+  //    heartbeat / ws_connected_since timestamps for seamless reconnect logic.
   const { data: device, error } = await sb
     .from("gateway_devices")
-    .select("id, tenant_id, location_id, gateway_username, gateway_password_hash, mac_address")
+    .select(`
+      id,
+      tenant_id,
+      location_id,
+      location_integration_id,
+      gateway_username,
+      gateway_password_hash,
+      mac_address,
+      ws_connected_since,
+      last_heartbeat_at
+    `)
     .eq("mac_address", mac)
     .maybeSingle();
 
@@ -182,52 +825,163 @@ async function handleAuth(
     safeSend(socket, { type: "auth_error", error: "Device has no credentials configured" });
     return null;
   }
+
   if (device.gateway_username !== username) {
     safeSend(socket, { type: "auth_error", error: "Invalid username/password" });
     return null;
   }
-  const ok = await bcryptVerify(password, device.gateway_password_hash);
-  if (!ok) {
-    safeSend(socket, { type: "auth_error", error: "Invalid username/password" });
-    return null;
+
+  // 2) Password verification is expensive (bcrypt). Cache a successful result
+  //    for rapid reconnects after Edge Function isolate recycling.
+  let cached = authCache.get(mac);
+  let passwordOk = false;
+  if (cached && cached.expiresAt > Date.now() && cached.device?.id === device.id) {
+    passwordOk = true;
+    console.log(`[gateway-ws] auth cache hit for ${mac.slice(0, 8)}…`);
+  } else {
+    passwordOk = await bcryptVerify(password, device.gateway_password_hash);
+    if (!passwordOk) {
+      safeSend(socket, { type: "auth_error", error: "Invalid username/password" });
+      return null;
+    }
+    // Prime cache asynchronously after successful verify.
+    cached = undefined as any;
   }
 
-  // Update presence fields + optional metadata from auth frame
+  // 3) Resolve tenant/location context (cached when available).
+  let ctx: Omit<AuthCacheEntry, "expiresAt">;
+  if (cached) {
+    ctx = cached;
+  } else {
+    ctx = await resolveAuthContext(sb, device);
+    authCache.set(mac, { ...ctx, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
+  }
+
+  // 4) Update presence fields + optional metadata from auth frame.
+  //
+  // SEAMLESS RECONNECT: Supabase Edge Function isolates are recycled every
+  // few minutes, causing the WSS socket to close even though the gateway
+  // itself never went offline. To avoid the UI showing a "reconnect every
+  // 3 minutes" flap, we preserve `ws_connected_since` when the previous
+  // session was clearly alive (last heartbeat within 5 minutes).
   const nowIso = new Date().toISOString();
+  const prevHbMs = (device as any).last_heartbeat_at
+    ? Date.parse((device as any).last_heartbeat_at)
+    : NaN;
+  const prevConnectedSince = (device as any).ws_connected_since ?? null;
+  const seamless =
+    !!prevConnectedSince &&
+    Number.isFinite(prevHbMs) &&
+    Date.now() - prevHbMs < 5 * 60 * 1000;
+
+  const presenceUpdate: Record<string, unknown> = {
+    status: "online",
+    ws_connected_since: seamless ? prevConnectedSince : nowIso,
+    last_heartbeat_at: nowIso,
+    last_ws_ping_at: nowIso,
+    addon_version: raw.addon_version ?? undefined,
+    ha_version: raw.ha_version ?? undefined,
+    local_ip: raw.local_ip ?? undefined,
+    local_time: raw.local_time ?? undefined,
+    updated_at: nowIso,
+  };
   await sb
     .from("gateway_devices")
-    .update({
-      status: "online",
-      ws_connected_since: nowIso,
-      last_heartbeat_at: nowIso,
-      last_ws_ping_at: nowIso,
-      addon_version: raw.addon_version ?? undefined,
-      ha_version: raw.ha_version ?? undefined,
-      local_ip: raw.local_ip ?? undefined,
-      local_time: raw.local_time ?? undefined,
-      updated_at: nowIso,
-    })
+    .update(presenceUpdate)
     .eq("id", device.id);
+
+  // Mark the parent location_integration as successfully connected so the
+  // map / locations overview shows the gateway as online (not "pending").
+  // IO-Optimierung: gedrosselter RPC (nur bei Status-Wechsel oder älter als 60s).
+  if (device.location_integration_id) {
+    await sb.rpc("touch_location_integration_sync", {
+      _id: device.location_integration_id,
+      _status: "success",
+      _min_interval_seconds: 300,
+    });
+  }
+
+
+  // Session-log bookkeeping: reuse the open row when we detect a seamless
+  // isolate recycle, otherwise open a fresh session and count the reconnect.
+  let sessionLogId: string | null = null;
+  try {
+    if (seamless) {
+      const { data: openRow } = await sb
+        .from("gateway_ws_session_log")
+        .select("id, seamless_recycle_count")
+        .eq("gateway_device_id", device.id)
+        .is("ended_at", null)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (openRow) {
+        sessionLogId = (openRow as any).id;
+        await sb
+          .from("gateway_ws_session_log")
+          .update({
+            seamless_recycle_count: ((openRow as any).seamless_recycle_count ?? 0) + 1,
+            updated_at: nowIso,
+          })
+          .eq("id", sessionLogId);
+      }
+    }
+    if (!sessionLogId) {
+      // Close any leftover open rows first so aggregates stay clean.
+      await sb
+        .from("gateway_ws_session_log")
+        .update({ ended_at: nowIso, disconnect_reason: "superseded", updated_at: nowIso })
+        .eq("gateway_device_id", device.id)
+        .is("ended_at", null);
+      // Count the reconnect on the freshly opened row.
+      const { data: inserted } = await sb
+        .from("gateway_ws_session_log")
+        .insert({
+          gateway_device_id: device.id,
+          tenant_id: device.tenant_id,
+          started_at: nowIso,
+          reconnect_count: 1,
+        })
+        .select("id")
+        .single();
+      sessionLogId = (inserted as any)?.id ?? null;
+    }
+  } catch (e) {
+    console.warn("[gateway-ws] session log setup failed", e);
+  }
 
   safeSend(socket, {
     type: "auth_ok",
     device_id: device.id,
     tenant_id: device.tenant_id,
-    location_id: device.location_id,
+    location_id: ctx.resolvedLocationId,
+    location_integration_id: device.location_integration_id,
+    tenant_name: ctx.tenantName,
+    location_name: ctx.locationName,
+    seamless_reconnect: seamless,
   });
 
   return {
     socket,
     deviceId: device.id,
     tenantId: device.tenant_id,
-    locationId: device.location_id,
+    locationId: ctx.resolvedLocationId,
+    locationIntegrationId: device.location_integration_id ?? null,
     channel: null,
     closeRequested: false,
+    sessionLogId,
+    pendingEvents: 0,
+    lastFlushMs: Date.now(),
+    flushTimer: null,
   };
 }
 
+
 /** Handle subsequent frames after auth. */
 async function handleFrame(session: Session, raw: any) {
+  // Count every valid frame as one received event; flushed on a 60 s cadence.
+  session.pendingEvents += 1;
+  scheduleFlush(session);
   switch (raw?.type) {
     case "heartbeat":
     case "ping": {
@@ -246,6 +1000,15 @@ async function handleFrame(session: Session, raw: any) {
         update.offline_buffer_count = raw.offline_buffer_count;
       }
       await svc().from("gateway_devices").update(update).eq("id", session.deviceId);
+      if (session.locationIntegrationId) {
+        // IO-Optimierung: gedrosselter RPC (nur bei Status-Wechsel oder >60s).
+        await svc().rpc("touch_location_integration_sync", {
+          _id: session.locationIntegrationId,
+          _status: "success",
+          _min_interval_seconds: 300,
+        });
+      }
+
       safeSend(session.socket, { type: "pong" });
       break;
     }
@@ -253,7 +1016,15 @@ async function handleFrame(session: Session, raw: any) {
       const cmdId = String(raw.command_id || "");
       if (!cmdId) return;
       const isError = !!raw.error;
-      await svc()
+      const sb = svc();
+      const { data: cmdRow } = await sb
+        .from("gateway_commands")
+        .select("payload")
+        .eq("id", cmdId)
+        .eq("gateway_device_id", session.deviceId)
+        .maybeSingle();
+
+      await sb
         .from("gateway_commands")
         .update({
           status: isError ? "failed" : "completed",
@@ -263,6 +1034,84 @@ async function handleFrame(session: Session, raw: any) {
         })
         .eq("id", cmdId)
         .eq("gateway_device_id", session.deviceId);
+
+      if (!isError) {
+        const payload = (cmdRow?.payload ?? {}) as Record<string, unknown>;
+        const entityId = String(payload.entity_id || "").trim();
+        const explicitState = getExplicitBinaryState(payload.command);
+        if (entityId && explicitState) {
+          await mirrorGatewayInventoryState({
+            gatewayDeviceId: session.deviceId,
+            entityId,
+            nextState: explicitState,
+            locationIntegrationId: session.locationIntegrationId,
+          });
+        }
+      }
+      break;
+    }
+    case "config_ack": {
+      // Gateway acknowledges that a remote-config snapshot was applied.
+      console.log(`[gateway-ws] config_ack v${raw.version} from ${session.deviceId}`);
+      break;
+    }
+    case "discoveries": {
+      // Phase 3: gateway pushes discovery results into the cloud buffer.
+      const items = Array.isArray(raw.items) ? raw.items : [];
+      if (items.length === 0) break;
+      const rows = items.slice(0, 200).map((it: any) => ({
+        gateway_device_id: session.deviceId,
+        tenant_id: session.tenantId,
+        discovery_method: String(it.discovery_method || "manual"),
+        discovered_payload: it.discovered_payload ?? {},
+      }));
+      const { error } = await svc().from("gateway_device_discoveries").insert(rows);
+      if (error) console.warn("[gateway-ws] discovery insert failed:", error.message);
+      break;
+    }
+    case "provision_result": {
+      // Phase 3: gateway reports provisioning outcome for an entity.
+      const entityId = String(raw.entity_id || "");
+      if (!entityId) break;
+      const ok = Boolean(raw.ok);
+      await svc()
+        .from("gateway_device_entities")
+        .update({
+          provision_status: ok ? "active" : "error",
+          last_error: ok ? null : (raw.error ? String(raw.error) : "unknown"),
+          last_synced_at: new Date().toISOString(),
+        })
+        .eq("id", entityId)
+        .eq("gateway_device_id", session.deviceId);
+      break;
+    }
+    case "update_progress": {
+      // Phase 4: gateway reports update job state (running / success / failed).
+      const jobId = String(raw.job_id || "");
+      if (!jobId) break;
+      const status = String(raw.status || "running");
+      const allowed = ["running", "success", "failed"];
+      if (!allowed.includes(status)) break;
+      const patch: Record<string, unknown> = {
+        status,
+        log_excerpt: raw.log ? String(raw.log).slice(0, 2000) : null,
+        error_message: raw.error ? String(raw.error).slice(0, 1000) : null,
+      };
+      const now = new Date().toISOString();
+      if (status === "running") patch.started_at = now;
+      if (status === "success" || status === "failed") patch.finished_at = now;
+      await svc().from("gateway_update_jobs").update(patch)
+        .eq("id", jobId).eq("gateway_device_id", session.deviceId);
+
+      // Bump device-level diagnostics
+      const devicePatch: Record<string, unknown> = {
+        last_update_attempt_at: now,
+        last_update_error: status === "failed" ? (raw.error ? String(raw.error).slice(0, 500) : "unknown") : null,
+      };
+      if (status === "success" && raw.installed_version) {
+        devicePatch.addon_version = String(raw.installed_version);
+      }
+      await svc().from("gateway_devices").update(devicePatch).eq("id", session.deviceId);
       break;
     }
     default:
@@ -272,14 +1121,18 @@ async function handleFrame(session: Session, raw: any) {
 }
 
 Deno.serve((req) => {
-  // Health probe (HTTP GET)
+  // CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: getCorsHeaders(req) });
+  }
+
   if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") {
-    return new Response(
-      JSON.stringify({ ok: true, service: "gateway-ws" }),
-      { headers: { "Content-Type": "application/json" } },
+    return handleHttpAction(req).then((response) =>
+      response ?? jsonResponse(req, { ok: true, service: "gateway-ws" }),
     );
   }
 
+  // Health probe (HTTP GET)
   const { socket, response } = Deno.upgradeWebSocket(req);
   let session: Session | null = null;
   let authTimeout: number | undefined = setTimeout(() => {
@@ -309,13 +1162,13 @@ Deno.serve((req) => {
     );
   };
 
-  socket.onclose = async () => {
+  socket.onclose = async (ev) => {
     if (authTimeout) clearTimeout(authTimeout);
-    if (session) await tearDown(session);
+    if (session) await tearDown(session, (ev as CloseEvent)?.reason || "socket_closed", (ev as CloseEvent)?.code);
   };
   socket.onerror = async (e) => {
     console.error("[gateway-ws] socket error", e);
-    if (session) await tearDown(session);
+    if (session) await tearDown(session, "socket_error");
   };
 
   return response;

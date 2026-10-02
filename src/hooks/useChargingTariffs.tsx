@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { getT } from "@/i18n/getT";
+import { useTenant } from "@/hooks/useTenant";
 
 export interface ChargingTariff {
   id: string;
@@ -14,17 +15,25 @@ export interface ChargingTariff {
   tax_rate_percent: number;
   currency: string;
   is_active: boolean;
+  is_default: boolean;
   created_at: string;
   updated_at: string;
+  price_includes_vat: boolean;
 }
 
 export function useChargingTariffs() {
   const queryClient = useQueryClient();
+  const { tenant } = useTenant();
 
   const { data: tariffs = [], isLoading } = useQuery({
-    queryKey: ["charging-tariffs"],
+    queryKey: ["charging-tariffs", tenant?.id],
+    enabled: !!tenant?.id,
     queryFn: async () => {
-      const { data, error } = await supabase.from("charging_tariffs").select("*").order("name");
+      const { data, error } = await supabase
+        .from("charging_tariffs")
+        .select("*")
+        .eq("tenant_id", tenant!.id)
+        .order("name");
       if (error) throw error;
       return data as ChargingTariff[];
     },

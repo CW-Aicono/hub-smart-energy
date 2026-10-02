@@ -1,0 +1,58 @@
+-- Create the missing roles that should be created by Supabase image migrations
+-- This runs before 09999-custom.sql
+
+DO $$
+BEGIN
+  CREATE ROLE anon NOLOGIN;
+EXCEPTION WHEN DUPLICATE_OBJECT THEN
+  NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE ROLE authenticated NOLOGIN;
+EXCEPTION WHEN DUPLICATE_OBJECT THEN
+  NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE ROLE service_role NOLOGIN;
+EXCEPTION WHEN DUPLICATE_OBJECT THEN
+  NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE ROLE authenticator NOLOGIN;
+EXCEPTION WHEN DUPLICATE_OBJECT THEN
+  NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE ROLE supabase_auth_admin LOGIN;
+EXCEPTION WHEN DUPLICATE_OBJECT THEN
+  NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE ROLE supabase_functions_admin LOGIN;
+EXCEPTION WHEN DUPLICATE_OBJECT THEN
+  NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE ROLE supabase_storage_admin LOGIN;
+EXCEPTION WHEN DUPLICATE_OBJECT THEN
+  NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE ROLE pgbouncer NOLOGIN;
+EXCEPTION WHEN DUPLICATE_OBJECT THEN
+  NULL;
+END $$;

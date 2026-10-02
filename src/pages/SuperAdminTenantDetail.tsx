@@ -1,4 +1,5 @@
-import { Navigate, useParams } from "react-router-dom";
+import { Navigate, useParams, useNavigate } from "react-router-dom";
+import { beginImpersonation, getActiveSupportSessionId, endImpersonationAndReturn } from "@/lib/supportView";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useTenantModules, ALL_MODULES } from "@/hooks/useTenantModules";
@@ -17,7 +18,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock, Pencil, Save, Blocks, Plus, X, Award } from "lucide-react";
+import { HeadsetIcon, RotateCcw, UserPlus, Mail, Shield, User, Copy, Check, Building2, MapPin, UserCircle, Package, Gauge, Users, Receipt, Clock, Pencil, Save, Blocks, Plus, X, Award, Trash2, Send, CalendarClock, FileSearch, Euro, Search } from "lucide-react";
+import { AuditLogList } from "@/components/audit/AuditLogList";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useModuleBundles } from "@/hooks/useModuleBundles";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -25,6 +32,9 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
+import TenantPartnerTransferCard from "@/components/super-admin/TenantPartnerTransferCard";
+import TenantMeterDuplicatesCard from "@/components/super-admin/TenantMeterDuplicatesCard";
+import SavingsShareTab from "@/components/super-admin/savings-share/SavingsShareTab";
 
 interface InviteTenantAdminDialogProps {
   tenantId: string;
@@ -139,10 +149,24 @@ const SuperAdminTenantDetail = () => {
   const { bundles: allBundles, bundleItems: allBundleItems, getBundleModules } = useModuleBundles();
   const { t } = useSATranslation();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [licenseForm, setLicenseForm] = useState<Record<string, string | number>>({});
   const [editingTenantInfo, setEditingTenantInfo] = useState(false);
   const [savingTenantInfo, setSavingTenantInfo] = useState(false);
-  const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "", is_aicono_member: false, is_kommune: true });
+  const [tenantInfoForm, setTenantInfoForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "", is_aicono_member: false, is_kommune: true, partner_id: "" as string });
+
+  const { data: allPartners = [] } = useQuery({
+    queryKey: ["sa-tenant-detail-partners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("partners")
+        .select("id, name, is_active")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).filter((p: any) => p.is_active !== false);
+    },
+  });
+
   const [bundleDialogOpen, setBundleDialogOpen] = useState(false);
 
   const { data: tenant } = useQuery({
@@ -155,11 +179,29 @@ const SuperAdminTenantDetail = () => {
     },
   });
 
+  const currentPartner = allPartners.find((p: any) => p.id === (tenant as any)?.partner_id);
+
+
   const { data: users = [] } = useQuery({
     queryKey: ["tenant-users", id],
     enabled: !!id,
     queryFn: async () => {
       const { data, error } = await supabase.from("profiles").select("*").eq("tenant_id", id!);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: pendingInvitations = [] } = useQuery({
+    queryKey: ["tenant-invitations", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_invitations")
+        .select("*")
+        .eq("tenant_id", id!)
+        .is("accepted_at", null)
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -212,11 +254,66 @@ const SuperAdminTenantDetail = () => {
     },
   });
 
-  if (authLoading || roleLoading) {
-    return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
-  }
-  if (!user) return <Navigate to="/auth" replace />;
-  if (!isSuperAdmin) return <Navigate to="/" replace />;
+  // Active (not ended, not expired) remote-support session for this tenant
+  const activeSession = (supportSessions as any[]).find(
+    (s) => !s.ended_at && new Date(s.expires_at).getTime() > Date.now()
+  );
+
+  const [startingSupport, setStartingSupport] = useState(false);
+  const handleStartRemoteSupport = async () => {
+    if (!id || !user) return;
+    setStartingSupport(true);
+    try {
+      // 1) Original-Session des Super-Admins sichern
+      const { data: cur } = await supabase.auth.getSession();
+      if (!cur.session) throw new Error("Keine aktive Session");
+      const original = {
+        access_token: cur.session.access_token,
+        refresh_token: cur.session.refresh_token,
+      };
+
+      // 2) Impersonation-Tokens für den technischen Support-User des Tenants anfordern
+      const { data: imp, error: impErr } = await supabase.functions.invoke(
+        "support-session-impersonate",
+        { body: { target_tenant_id: id, reason: "Remote-Support Sitzung" } }
+      );
+      if (impErr) throw impErr;
+      if (!imp?.access_token) throw new Error(imp?.error || "Impersonation fehlgeschlagen");
+
+      // 3) Lokal als Support-User anmelden + Impersonations-Flags setzen
+      beginImpersonation({
+        sessionId: imp.session_id,
+        tenantId: id,
+        originalSession: original,
+      });
+      const { error: setErr } = await supabase.auth.setSession({
+        access_token: imp.access_token,
+        refresh_token: imp.refresh_token,
+      });
+      if (setErr) throw setErr;
+
+      queryClient.invalidateQueries({ queryKey: ["tenant-support-sessions", id] });
+      navigate("/");
+    } catch (e: any) {
+      toast.error("Remote-Support konnte nicht gestartet werden: " + (e?.message ?? ""));
+    } finally {
+      setStartingSupport(false);
+    }
+  };
+
+  const handleEndRemoteSupport = async () => {
+    const sessionId = getActiveSupportSessionId() ?? activeSession?.id;
+    if (!sessionId) return;
+    try {
+      toast.success("Remote-Support beendet");
+      await endImpersonationAndReturn(supabase, { sessionId, tenantId: id });
+      // hard reload — kein Code danach
+    } catch (e: any) {
+      toast.error("Beenden fehlgeschlagen: " + (e?.message ?? ""));
+    }
+  };
+
+
 
   const getModuleEnabled = (code: string) => modules.find((m) => m.module_code === code)?.is_enabled ?? false;
   const getModulePriceOverride = (code: string): number | null => {
@@ -276,6 +373,142 @@ const SuperAdminTenantDetail = () => {
 
   const totalSupportCost = supportSessions.reduce((sum, s) => sum + calcSessionCost(s), 0);
 
+  // Search + sort states for sub-tables
+  const [userSearch, setUserSearch] = useState("");
+  const filteredUsers = userSearch.trim()
+    ? users.filter((u: any) => {
+        const q = userSearch.toLowerCase();
+        return (
+          (u.email ?? "").toLowerCase().includes(q) ||
+          (u.contact_person ?? "").toLowerCase().includes(q)
+        );
+      })
+    : users;
+  const filteredInvitations = userSearch.trim()
+    ? pendingInvitations.filter((inv: any) => (inv.email ?? "").toLowerCase().includes(userSearch.toLowerCase()))
+    : pendingInvitations;
+  const { sorted: sortedUsers, sort: userSort, toggle: toggleUserSort } = useSortableData<any, "email" | "contact" | "status" | "created">(
+    filteredUsers,
+    (u, k) => {
+      switch (k) {
+        case "email": return u.email ?? "";
+        case "contact": return u.contact_person ?? "";
+        case "status": return u.is_blocked ? 1 : 0;
+        case "created": return u.created_at ? new Date(u.created_at) : null;
+        default: return null;
+      }
+    },
+    { key: "email", direction: "asc" },
+  );
+
+  const [moduleSearch, setModuleSearch] = useState("");
+  const filteredModuleList = moduleSearch.trim()
+    ? [...ALL_MODULES].filter((mod) =>
+        mod.label.toLowerCase().includes(moduleSearch.toLowerCase()) ||
+        mod.code.toLowerCase().includes(moduleSearch.toLowerCase())
+      )
+    : [...ALL_MODULES];
+
+  const { sorted: sortedModules, sort: moduleSort, toggle: toggleModuleSort } = useSortableData<any, "label" | "enabled" | "global" | "override" | "effective">(
+    filteredModuleList,
+    (mod, k) => {
+      const isAlwaysOn = "alwaysOn" in mod;
+      const isMember = !!(tenant as any)?.is_aicono_member;
+      const isKommune = (tenant as any)?.is_kommune !== false;
+      const globalPrice = isKommune
+        ? (isMember ? getGlobalPrice(mod.code) : getGlobalStandardPrice(mod.code))
+        : (isMember ? getGlobalIndustryPrice(mod.code) : getGlobalIndustryStandardPrice(mod.code));
+      const override = getModulePriceOverride(mod.code);
+      switch (k) {
+        case "label": return mod.label;
+        case "enabled": return isAlwaysOn ? 2 : (getModuleEnabled(mod.code) ? 1 : 0);
+        case "global": return isAlwaysOn ? -1 : globalPrice;
+        case "override": return override ?? -1;
+        case "effective": return isAlwaysOn ? -1 : getEffectivePrice(mod.code);
+        default: return null;
+      }
+    },
+    { key: "label", direction: "asc" },
+  );
+
+  const { sorted: sortedSupportSessions, sort: supportSort, toggle: toggleSupportSort } = useSortableData<any, "date" | "reason" | "duration" | "cost">(
+    supportSessions,
+    (s, k) => {
+      switch (k) {
+        case "date": return s.started_at ? new Date(s.started_at) : null;
+        case "reason": return s.reason ?? "";
+        case "duration": return calcSessionDurationMin(s);
+        case "cost": return calcSessionCost(s);
+        default: return null;
+      }
+    },
+    { key: "date", direction: "desc" },
+  );
+
+  if (authLoading || roleLoading) {
+    return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
+  }
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!isSuperAdmin) return <Navigate to="/" replace />;
+
+
+
+
+
+  const refreshUsers = () => {
+    queryClient.invalidateQueries({ queryKey: ["tenant-users", id] });
+    queryClient.invalidateQueries({ queryKey: ["tenant-invitations", id] });
+  };
+
+  const handleDeleteUser = async (userId: string, email: string | null) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-user", { body: { userId } });
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data.error);
+      toast.success(`Benutzer ${email ?? ""} gelöscht`);
+      refreshUsers();
+    } catch (err: any) {
+      toast.error("Löschen fehlgeschlagen: " + (err?.message ?? "Unbekannter Fehler"));
+    }
+  };
+
+  const handleRevokeInvitation = async (invitationId: string) => {
+    try {
+      const { error } = await supabase.from("user_invitations").delete().eq("id", invitationId);
+      if (error) throw error;
+      toast.success("Einladung zurückgezogen");
+      refreshUsers();
+    } catch (err: any) {
+      toast.error("Zurückziehen fehlgeschlagen: " + (err?.message ?? "Unbekannter Fehler"));
+    }
+  };
+
+  const handleResendInvitation = async (email: string, role: "admin" | "user", invitationId: string) => {
+    if (!id) return;
+    try {
+      // Remove old invitation first so a fresh one is generated
+      await supabase.from("user_invitations").delete().eq("id", invitationId);
+      const { data, error } = await supabase.functions.invoke("invite-tenant-admin", {
+        body: { adminEmail: email, role, tenantId: id },
+      });
+      if (error) throw error;
+      if (data?.success === false) throw new Error(data.error);
+      toast.success(`Einladung erneut an ${email} gesendet`);
+      refreshUsers();
+    } catch (err: any) {
+      toast.error("Erneute Einladung fehlgeschlagen: " + (err?.message ?? "Unbekannter Fehler"));
+    }
+  };
+
+  const formatExpiration = (expiresAt: string) => {
+    const date = new Date(expiresAt);
+    const now = new Date();
+    const daysLeft = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysLeft <= 0) return "Abgelaufen";
+    if (daysLeft === 1) return "Läuft in 1 Tag ab";
+    return `Läuft in ${daysLeft} Tagen ab`;
+  };
+
   return (
     <div className="flex min-h-screen bg-background">
       <SuperAdminSidebar />
@@ -285,15 +518,23 @@ const SuperAdminTenantDetail = () => {
             <h1 className="text-2xl font-bold">{tenant?.name ?? t("billing.tenant")}</h1>
             <p className="text-sm text-muted-foreground mt-1">{tenant?.slug}</p>
           </div>
-          <Button
-            variant={(tenant as any)?.remote_support_enabled ? "default" : "outline"}
-            disabled={!(tenant as any)?.remote_support_enabled}
-            onClick={() => { if ((tenant as any)?.remote_support_enabled) toast.success(t("tenant_detail.remote_support") + " – " + tenant?.name); }}
-          >
-            <HeadsetIcon className="h-4 w-4 mr-2" />
-            {t("tenant_detail.remote_support")}
-            {(tenant as any)?.remote_support_enabled && <Badge variant="secondary" className="ml-2 bg-green-500/20 text-green-600">{t("common.active")}</Badge>}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={(tenant as any)?.remote_support_enabled ? "default" : "outline"}
+              disabled={!(tenant as any)?.remote_support_enabled || startingSupport}
+              onClick={handleStartRemoteSupport}
+            >
+              <HeadsetIcon className="h-4 w-4 mr-2" />
+              {activeSession ? "Sitzung fortsetzen" : t("tenant_detail.remote_support")}
+              {activeSession && <Badge variant="secondary" className="ml-2 bg-green-500/20 text-green-600">{t("common.active")}</Badge>}
+            </Button>
+            {activeSession && (
+              <Button variant="outline" onClick={handleEndRemoteSupport}>
+                Beenden
+              </Button>
+            )}
+          </div>
+
         </header>
         <div className="p-6">
           <Tabs defaultValue="info">
@@ -303,6 +544,8 @@ const SuperAdminTenantDetail = () => {
               <TabsTrigger value="license">{t("tenant_detail.license")}</TabsTrigger>
               <TabsTrigger value="users">{t("nav.users")}</TabsTrigger>
               <TabsTrigger value="billing"><Receipt className="h-4 w-4 mr-1" />{t("tenant_detail.billing")}</TabsTrigger>
+              <TabsTrigger value="gain_sharing"><Euro className="h-4 w-4 mr-1" />Gain-Sharing</TabsTrigger>
+              <TabsTrigger value="audit"><FileSearch className="h-4 w-4 mr-1" />Aktivitätslog</TabsTrigger>
             </TabsList>
 
             <TabsContent value="info" className="mt-6 space-y-6">
@@ -448,6 +691,7 @@ const SuperAdminTenantDetail = () => {
                         contact_email: tenant?.contact_email ?? "",
                         is_aicono_member: (tenant as any)?.is_aicono_member ?? false,
                         is_kommune: (tenant as any)?.is_kommune !== false,
+                        partner_id: (tenant as any)?.partner_id ?? "",
                       });
                       setEditingTenantInfo(true);
                     }}>
@@ -468,6 +712,8 @@ const SuperAdminTenantDetail = () => {
                           contact_email: tenantInfoForm.contact_email.trim() || null,
                           is_aicono_member: tenantInfoForm.is_aicono_member,
                           is_kommune: tenantInfoForm.is_kommune,
+                          partner_id: tenantInfoForm.partner_id ? tenantInfoForm.partner_id : null,
+                          support_owner: tenantInfoForm.partner_id ? "partner" : "platform",
                         }).eq("id", tenant!.id);
                         setSavingTenantInfo(false);
                         if (error) { toast.error("Fehler beim Speichern"); console.error(error); }
@@ -592,34 +838,73 @@ const SuperAdminTenantDetail = () => {
                             <p>{(tenant as any)?.is_kommune !== false ? <Badge variant="outline" className="text-xs">Kommune</Badge> : <Badge variant="outline" className="text-xs">Industrie</Badge>}</p>
                           </div>
                         </div>
+                        <div className="flex items-start gap-2">
+                          <Users className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground">Partner-Zuordnung</p>
+                            <p>
+                              {currentPartner
+                                ? <Badge variant="secondary" className="text-xs">{currentPartner.name}</Badge>
+                                : <Badge variant="outline" className="text-xs">Direkt AICONO</Badge>}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
                 </CardContent>
               </Card>
+
+              {tenant && (
+                <TenantMeterDuplicatesCard
+                  tenantId={(tenant as any).id}
+                  tenantName={(tenant as any).name}
+                />
+              )}
+
+              {tenant && (
+                <TenantPartnerTransferCard
+                  tenantId={(tenant as any).id}
+                  tenantName={(tenant as any).name}
+                  currentPartnerId={(tenant as any).partner_id ?? null}
+                />
+              )}
             </TabsContent>
 
             <TabsContent value="modules" className="mt-6 space-y-6">
               <Card>
-                <CardHeader><CardTitle>{t("tenant_detail.modules_prices")}</CardTitle></CardHeader>
+                <CardHeader>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <CardTitle>{t("tenant_detail.modules_prices")}</CardTitle>
+                    <div className="relative w-full sm:w-64">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder={t("common.search")}
+                        value={moduleSearch}
+                        onChange={(e) => setModuleSearch(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
                 <CardContent>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{t("tenant_detail.modules")}</TableHead>
-                        <TableHead className="w-24 text-center">{t("common.active")}</TableHead>
-                        <TableHead className="w-36 text-right">
+                        <SortableHead sortKey="label" sort={moduleSort} onToggle={toggleModuleSort}>{t("tenant_detail.modules")}</SortableHead>
+                        <SortableHead sortKey="enabled" sort={moduleSort} onToggle={toggleModuleSort} className="w-24 text-center">{t("common.active")}</SortableHead>
+                        <SortableHead sortKey="global" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-36">
                           <span className="inline-flex items-center gap-1 justify-end">
                             Standardpreis
                             {(tenant as any)?.is_aicono_member && <Award className="h-4 w-4 text-primary" />}
                           </span>
-                        </TableHead>
-                        <TableHead className="w-44 text-right">{t("tenant_detail.individual_price")}</TableHead>
-                        <TableHead className="w-32 text-right">{t("tenant_detail.effective")}</TableHead>
+                        </SortableHead>
+                        <SortableHead sortKey="override" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-44">{t("tenant_detail.individual_price")}</SortableHead>
+                        <SortableHead sortKey="effective" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-32">{t("tenant_detail.effective")}</SortableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {ALL_MODULES.map((mod) => {
+                      {sortedModules.map((mod) => {
                         const isAlwaysOn = "alwaysOn" in mod;
                         const isMember = !!(tenant as any)?.is_aicono_member;
                         const isKommune = (tenant as any)?.is_kommune !== false;
@@ -663,6 +948,13 @@ const SuperAdminTenantDetail = () => {
                           </TableRow>
                         );
                       })}
+                      {sortedModules.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                            Keine Module gefunden.
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                   <div className="flex justify-end mt-4 pt-4 border-t">
@@ -827,37 +1119,140 @@ const SuperAdminTenantDetail = () => {
             <TabsContent value="users" className="mt-6">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>{t("nav.users")} ({users.length})</CardTitle>
+                  <CardTitle>{t("nav.users")} ({users.length}{pendingInvitations.length > 0 ? ` + ${pendingInvitations.length} ausstehend` : ""})</CardTitle>
                   {tenant && (
                     <InviteTenantAdminDialog
                       tenantId={tenant.id}
                       tenantName={tenant.name}
-                      onSuccess={() => queryClient.invalidateQueries({ queryKey: ["tenant-users", id] })}
+                      onSuccess={refreshUsers}
                     />
                   )}
                 </CardHeader>
                 <CardContent className="p-0">
+                  <div className="p-4 pb-0">
+                    <div className="relative max-w-sm">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Suchen (Email, Ansprechpartner)…"
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                  </div>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{t("common.email")}</TableHead>
-                        <TableHead>{t("tenant_detail.contact_person")}</TableHead>
-                        <TableHead>{t("common.status")}</TableHead>
-                        <TableHead>{t("common.created")}</TableHead>
+                        <SortableHead sortKey="email" sort={userSort} onToggle={toggleUserSort}>{t("common.email")}</SortableHead>
+                        <SortableHead sortKey="contact" sort={userSort} onToggle={toggleUserSort}>{t("tenant_detail.contact_person")}</SortableHead>
+                        <SortableHead sortKey="status" sort={userSort} onToggle={toggleUserSort}>{t("common.status")}</SortableHead>
+                        <SortableHead sortKey="created" sort={userSort} onToggle={toggleUserSort}>{t("common.created")}</SortableHead>
+                        <TableHead className="text-right">Aktionen</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {users.length === 0 ? (
-                        <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t("tenant_detail.no_users")}</TableCell></TableRow>
+                      {sortedUsers.length === 0 && filteredInvitations.length === 0 ? (
+                        <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{userSearch.trim() ? `Keine Treffer für „${userSearch}".` : t("tenant_detail.no_users")}</TableCell></TableRow>
                       ) : (
-                        users.map((u) => (
-                          <TableRow key={u.id}>
-                            <TableCell>{u.email ?? "–"}</TableCell>
-                            <TableCell>{u.contact_person ?? "–"}</TableCell>
-                            <TableCell><Badge variant={u.is_blocked ? "destructive" : "secondary"}>{u.is_blocked ? t("common.blocked") : t("common.active")}</Badge></TableCell>
-                            <TableCell className="text-muted-foreground">{new Date(u.created_at).toLocaleDateString("de-DE")}</TableCell>
-                          </TableRow>
-                        ))
+                        <>
+                          {sortedUsers.map((u) => (
+                            <TableRow key={u.id}>
+                              <TableCell>{u.email ?? "–"}</TableCell>
+                              <TableCell>{u.contact_person ?? "–"}</TableCell>
+                              <TableCell><Badge variant={u.is_blocked ? "destructive" : "secondary"}>{u.is_blocked ? t("common.blocked") : t("common.active")}</Badge></TableCell>
+                              <TableCell className="text-muted-foreground">{new Date(u.created_at).toLocaleDateString("de-DE")}</TableCell>
+                              <TableCell className="text-right">
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Benutzer löschen?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Der Benutzer <strong>{u.email}</strong> wird unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                        onClick={() => handleDeleteUser(u.user_id, u.email)}
+                                      >
+                                        Löschen
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {filteredInvitations.map((inv: any) => {
+                            const expired = new Date(inv.expires_at).getTime() < Date.now();
+                            return (
+                              <TableRow key={inv.id} className="opacity-80">
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Mail className="h-4 w-4 text-muted-foreground" />
+                                    {inv.email}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">–</TableCell>
+                                <TableCell>
+                                  <div className="space-y-1">
+                                    <Badge variant={expired ? "destructive" : "secondary"} className="flex items-center gap-1 w-fit">
+                                      <Clock className="h-3 w-3" />
+                                      {expired ? "Abgelaufen" : "Eingeladen"}
+                                    </Badge>
+                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                      <CalendarClock className="h-3 w-3" />
+                                      {formatExpiration(inv.expires_at)}
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">{new Date(inv.created_at).toLocaleDateString("de-DE")}</TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleResendInvitation(inv.email, inv.role as "admin" | "user", inv.id)}
+                                      title="Einladung erneut senden"
+                                    >
+                                      <Send className="h-4 w-4" />
+                                    </Button>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Einladung zurückziehen">
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Einladung zurückziehen?</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Die Einladung an <strong>{inv.email}</strong> wird gelöscht und der Link funktioniert nicht mehr.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                            onClick={() => handleRevokeInvitation(inv.id)}
+                                          >
+                                            Zurückziehen
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </>
                       )}
                     </TableBody>
                   </Table>
@@ -928,17 +1323,17 @@ const SuperAdminTenantDetail = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{t("tenant_detail.date_time")}</TableHead>
-                        <TableHead>{t("support.reason")}</TableHead>
-                        <TableHead className="text-right">{t("tenant_detail.duration")}</TableHead>
-                        <TableHead className="text-right">{t("tenant_detail.cost")}</TableHead>
+                        <SortableHead sortKey="date" sort={supportSort} onToggle={toggleSupportSort}>{t("tenant_detail.date_time")}</SortableHead>
+                        <SortableHead sortKey="reason" sort={supportSort} onToggle={toggleSupportSort}>{t("support.reason")}</SortableHead>
+                        <SortableHead sortKey="duration" sort={supportSort} onToggle={toggleSupportSort} align="right">{t("tenant_detail.duration")}</SortableHead>
+                        <SortableHead sortKey="cost" sort={supportSort} onToggle={toggleSupportSort} align="right">{t("tenant_detail.cost")}</SortableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {supportSessions.length === 0 ? (
+                      {sortedSupportSessions.length === 0 ? (
                         <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t("tenant_detail.no_support_sessions")}</TableCell></TableRow>
                       ) : (
-                        supportSessions.map((s: any) => {
+                        sortedSupportSessions.map((s: any) => {
                           const durMin = calcSessionDurationMin(s);
                           const cost = calcSessionCost(s);
                           return (
@@ -974,6 +1369,20 @@ const SuperAdminTenantDetail = () => {
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="gain_sharing" className="mt-6">
+              {id && (
+                <SavingsShareTab
+                  tenantId={id}
+                  moduleEnabled={modules.some((m) => m.module_code === "gain_sharing" && m.is_enabled)}
+                />
+              )}
+            </TabsContent>
+
+            <TabsContent value="audit" className="mt-6">
+
+              <AuditLogList tenantId={id} title="Aktivitätslog dieses Mandanten" />
             </TabsContent>
           </Tabs>
         </div>

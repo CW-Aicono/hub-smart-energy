@@ -6,15 +6,21 @@ import { useSATranslation } from "@/hooks/useSATranslation";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, ExternalLink, Building2, User, Mail, AlertCircle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQuery } from "@tanstack/react-query";
+import { Plus, Trash2, ExternalLink, Building2, User, Mail, AlertCircle, Users } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import TenantLifecycleActions, { TenantStatusBadge } from "@/components/super-admin/TenantLifecycleActions";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
+
+type SortKey = "name" | "slug" | "status" | "email" | "created_at";
 
 const SuperAdminTenants = () => {
   const { user, loading: authLoading } = useAuth();
@@ -34,18 +40,42 @@ const SuperAdminTenants = () => {
   const [newEmail, setNewEmail] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminName, setAdminName] = useState("");
+  const [newPartnerId, setNewPartnerId] = useState<string>("");
   const [creating, setCreating] = useState(false);
+
+  const { data: partnerOptions = [] } = useQuery({
+    queryKey: ["sa-tenants-partner-options"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("partners")
+        .select("id, name, is_active")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return (data ?? []).filter((p: any) => p.is_active !== false);
+    },
+  });
+
+  const filtered = tenants.filter((tnt) =>
+    tnt.name.toLowerCase().includes(search.toLowerCase()) ||
+    tnt.slug.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(filtered, (r, k) => {
+    switch (k) {
+      case "name": return r.name;
+      case "slug": return r.slug;
+      case "status": return r.status;
+      case "email": return r.contact_email ?? "";
+      case "created_at": return r.created_at ? new Date(r.created_at) : null;
+      default: return null;
+    }
+  }, { key: "name", direction: "asc" });
 
   if (authLoading || roleLoading) {
     return <div className="flex min-h-screen items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">{t("common.loading")}</div></div>;
   }
   if (!user) return <Navigate to="/auth" replace />;
   if (!isSuperAdmin) return <Navigate to="/" replace />;
-
-  const filtered = tenants.filter((tnt) =>
-    tnt.name.toLowerCase().includes(search.toLowerCase()) ||
-    tnt.slug.toLowerCase().includes(search.toLowerCase())
-  );
 
   const slugify = (str: string) =>
     str.toLowerCase().replace(/[äöü]/g, c => ({ ä: "ae", ö: "oe", ü: "ue" }[c] || c))
@@ -63,16 +93,20 @@ const SuperAdminTenants = () => {
     setCreating(true);
 
     try {
-      // 1. Create tenant
       const { data: tenant, error: tenantError } = await supabase
         .from("tenants")
-        .insert({ name: newName, slug: newSlug, contact_email: newEmail || adminEmail })
+        .insert({
+          name: newName,
+          slug: newSlug,
+          contact_email: newEmail || adminEmail,
+          partner_id: newPartnerId ? newPartnerId : null,
+          support_owner: newPartnerId ? "partner" : "platform",
+        })
         .select()
         .single();
 
       if (tenantError) throw new Error(tenantError.message);
 
-      // 2. Invite tenant admin via edge function
       const { data: inviteData, error: inviteError } = await supabase.functions.invoke("invite-tenant-admin", {
         body: {
           tenantId: tenant.id,
@@ -82,10 +116,8 @@ const SuperAdminTenants = () => {
         },
       });
 
-      // Parse error from response body if available
       let result = typeof inviteData === "string" ? JSON.parse(inviteData) : inviteData;
       if (inviteError) {
-        // Try to get actual error message from response body
         const bodyText = (inviteError as { context?: { text?: string } })?.context?.text;
         if (bodyText) {
           try { result = JSON.parse(bodyText); } catch { /* ignore */ }
@@ -100,7 +132,6 @@ const SuperAdminTenants = () => {
       });
       setDialogOpen(false);
       resetForm();
-      // Refresh by navigating to the same page
       window.location.reload();
     } catch (err: unknown) {
       toast({
@@ -119,6 +150,7 @@ const SuperAdminTenants = () => {
     setNewEmail("");
     setAdminEmail("");
     setAdminName("");
+    setNewPartnerId("");
   };
 
   return (
@@ -134,7 +166,7 @@ const SuperAdminTenants = () => {
             <DialogTrigger asChild>
               <Button><Plus className="h-4 w-4 mr-2" /> {t("tenants.new")}</Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>{t("tenants.create_title")}</DialogTitle></DialogHeader>
               <div className="space-y-5 pt-2">
 
@@ -157,6 +189,25 @@ const SuperAdminTenants = () => {
                     <Label>{t("tenants.contact_email")}</Label>
                     <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="info@firma.de" type="email" />
                     <p className="text-xs text-muted-foreground">Allgemeine Kontaktadresse des Mandanten (optional)</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" />
+                      Zuordnung zu Partner
+                    </Label>
+                    <Select
+                      value={newPartnerId || "__platform__"}
+                      onValueChange={(v) => setNewPartnerId(v === "__platform__" ? "" : v)}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__platform__">Direkt AICONO (Super-Admin)</SelectItem>
+                        {partnerOptions.map((p: any) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Wird kein Partner ausgewählt, betreut AICONO den Mandanten direkt.</p>
                   </div>
                 </div>
 
@@ -205,31 +256,34 @@ const SuperAdminTenants = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("common.name")}</TableHead>
-                    <TableHead>Slug</TableHead>
-                    <TableHead>{t("common.email")}</TableHead>
-                    <TableHead>{t("common.created")}</TableHead>
-                    <TableHead className="w-24">{t("common.actions")}</TableHead>
+                    <SortableHead label={t("common.name")} sortKey="name" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Slug" sortKey="slug" sort={sort} onToggle={toggle} />
+                    <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
+                    <SortableHead label={t("common.email")} sortKey="email" sort={sort} onToggle={toggle} />
+                    <SortableHead label={t("common.created")} sortKey="created_at" sort={sort} onToggle={toggle} />
+                    <TableCell className="w-48">{t("common.actions")}</TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
-                  ) : filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("tenants.not_found")}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
+                  ) : sorted.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("tenants.not_found")}</TableCell></TableRow>
                   ) : (
-                    filtered.map((tenant) => (
+                    sorted.map((tenant: any) => (
                       <TableRow key={tenant.id} className="cursor-pointer" onClick={() => navigate(`/super-admin/tenants/${tenant.id}`)}>
                         <TableCell className="font-medium">{tenant.name}</TableCell>
                         <TableCell className="text-muted-foreground">{tenant.slug}</TableCell>
+                        <TableCell><TenantStatusBadge status={tenant.status} /></TableCell>
                         <TableCell className="text-muted-foreground">{tenant.contact_email || "–"}</TableCell>
                         <TableCell className="text-muted-foreground">{new Date(tenant.created_at).toLocaleDateString("de-DE")}</TableCell>
                         <TableCell>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); navigate(`/super-admin/tenants/${tenant.id}`); }}>
+                          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" onClick={() => navigate(`/super-admin/tenants/${tenant.id}`)}>
                               <ExternalLink className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteTarget({ id: tenant.id, name: tenant.name }); setConfirmName(""); }}>
+                            <TenantLifecycleActions tenant={{ id: tenant.id, name: tenant.name, status: tenant.status }} />
+                            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => { setDeleteTarget({ id: tenant.id, name: tenant.name }); setConfirmName(""); }}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>

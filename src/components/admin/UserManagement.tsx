@@ -10,8 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserCheck, UserX, Shield, User, Mail, Clock, Send, Trash2, CalendarClock, CheckCircle, MapPin } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import { useToast } from "@/hooks/use-toast";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import EditUserDialog from "./EditUserDialog";
 import EditUserLocationsDialog from "./EditUserLocationsDialog";
 import DeleteUserDialog from "./DeleteUserDialog";
@@ -81,7 +81,14 @@ const UserManagement = () => {
     }
 
     // Combine registered users
-    const registeredUsers: UserWithRole[] = profiles.map((profile: any) => {
+    // Technische Support-User (Remote-Support-Impersonation) ausblenden.
+    // Diese haben immer eine @aicono.internal E-Mail und sollen für Tenants
+    // nicht sichtbar sein.
+    const visibleProfiles = (profiles || []).filter(
+      (p: any) => !(typeof p.email === "string" && p.email.endsWith("@aicono.internal"))
+    );
+
+    const registeredUsers: UserWithRole[] = visibleProfiles.map((profile: any) => {
       const userRole = roles?.find((r: any) => r.user_id === profile.user_id);
       return {
         id: profile.id,
@@ -226,41 +233,20 @@ const UserManagement = () => {
   };
 
   const resendInvitation = async (invitationId: string, email: string, role: "admin" | "user") => {
-    // Update expiration date
-    const newExpiresAt = new Date();
-    newExpiresAt.setDate(newExpiresAt.getDate() + 7);
-
-    const { data: invitation, error: updateError } = await supabase
-      .from("user_invitations")
-      .update({ expires_at: newExpiresAt.toISOString() })
-      .eq("id", invitationId)
-      .select()
-      .single();
-
-    if (updateError || !invitation) {
-      toast({
-        title: t("common.error"),
-        description: t("users.invitationResendError"),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Resend email
     try {
-      const inviteLink = `${window.location.origin}/auth?token=${invitation.token}`;
-      
-      const { error: emailError } = await supabase.functions.invoke("send-invitation-email", {
+      const { data, error } = await supabase.functions.invoke("activate-invited-user", {
         body: {
+          directInvite: true,
           email,
-          inviteLink,
-          invitedByEmail: currentUser?.email,
           role,
           tenantId: tenant?.id,
+          redirectTo: `${window.location.origin}/set-password`,
         },
       });
 
-      if (emailError) throw emailError;
+      if (error) throw error;
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      if (!result?.success) throw new Error(result?.error || t("users.invitationResendError"));
 
       toast({
         title: t("users.invitationResent"),
@@ -271,7 +257,7 @@ const UserManagement = () => {
       console.error("Error resending invitation email:", error);
       toast({
         title: t("common.error"),
-        description: t("users.invitationResendError"),
+        description: error instanceof Error ? error.message : t("users.invitationResendError"),
         variant: "destructive",
       });
     }
@@ -471,104 +457,51 @@ const UserManagement = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-1">
-                        {isInvited ? (
-                          <>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => activateInvitedUser(user)}
-                                  className="text-accent hover:text-accent/80 hover:bg-accent/10"
-                                >
-                                  <CheckCircle className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{t("users.activateUser")}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => resendInvitation(user.invitation_id!, user.email!, user.role)}
-                                >
-                                  <Send className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{t("users.resendInvitation")}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => revokeInvitation(user.invitation_id!)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>{t("users.revokeInvitation")}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </>
-                        ) : (
-                          <>
-                            {cannotModify && !user.is_blocked ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span>
-                                    <Button variant="ghost" size="sm" disabled>
-                                      <UserX className="h-4 w-4 mr-1" />
-                                      {t("users.block")}
-                                    </Button>
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>{t("users.cannotBlockLastAdmin")}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => toggleBlockUser(user.user_id, user.is_blocked)}
-                              >
-                                {user.is_blocked ? (
-                                  <>
-                                    <UserCheck className="h-4 w-4 mr-1" />
-                                    {t("users.unblock")}
-                                  </>
-                                ) : (
-                                  <>
-                                    <UserX className="h-4 w-4 mr-1" />
-                                    {t("users.block")}
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                            <DeleteUserDialog
-                              userId={user.user_id}
-                              userName={user.contact_person || t("users.unknown")}
-                              isAdmin={user.role === "admin"}
-                              adminCount={adminCount}
-                              onSuccess={fetchUsers}
-                            />
-                            {user.role !== "admin" && (
-                              <EditUserLocationsDialog
-                                userId={user.user_id}
-                                userName={user.contact_person || t("users.unknown")}
-                              />
-                            )}
-                          </>
-                        )}
-                      </div>
+                      {isInvited ? (
+                        <RowActions
+                          items={[
+                            { label: t("users.activateUser"), icon: CheckCircle, onClick: () => activateInvitedUser(user) },
+                            { label: t("users.resendInvitation"), icon: Send, onClick: () => resendInvitation(user.invitation_id!, user.email!, user.role) },
+                            { label: t("users.revokeInvitation"), icon: Trash2, variant: "destructive", onClick: () => revokeInvitation(user.invitation_id!) },
+                          ]}
+                        />
+                      ) : (
+                        <RowActions
+                          items={[
+                            {
+                              label: user.is_blocked ? t("users.unblock") : t("users.block"),
+                              icon: user.is_blocked ? UserCheck : UserX,
+                              disabled: cannotModify && !user.is_blocked,
+                              onClick: () => toggleBlockUser(user.user_id, user.is_blocked),
+                            },
+                            {
+                              label: t("users.manageLocations"),
+                              icon: MapPin,
+                              hidden: user.role === "admin",
+                              render: (
+                                <EditUserLocationsDialog
+                                  userId={user.user_id}
+                                  userName={user.contact_person || t("users.unknown")}
+                                />
+                              ),
+                            },
+                            {
+                              label: t("common.delete"),
+                              icon: Trash2,
+                              variant: "destructive",
+                              render: (
+                                <DeleteUserDialog
+                                  userId={user.user_id}
+                                  userName={user.contact_person || t("users.unknown")}
+                                  isAdmin={user.role === "admin"}
+                                  adminCount={adminCount}
+                                  onSuccess={fetchUsers}
+                                />
+                              ),
+                            },
+                          ]}
+                        />
+                      )}
                     </TableCell>
                   </TableRow>
                 );

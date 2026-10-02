@@ -66,9 +66,22 @@ export function SalesProjectForm({ mode, projectId, initialValues }: Props) {
         toast.error("Nicht angemeldet");
         return;
       }
+      // Falls Partner-Member: Projekt der Partner-Organisation zuordnen
+      const { data: pm } = await supabase
+        .from("partner_members")
+        .select("partner_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const partnerOrgId = (pm as { partner_id?: string } | null)?.partner_id ?? null;
+
       const { data, error } = await supabase
         .from("sales_projects")
-        .insert({ ...payload, partner_id: user.id, status: "draft" })
+        .insert({
+          ...payload,
+          partner_id: user.id,
+          partner_org_id: partnerOrgId,
+          status: "draft",
+        } as never)
         .select("id")
         .single();
       setLoading(false);

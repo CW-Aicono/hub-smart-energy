@@ -1,11 +1,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { isWorkerEnabled } from "../_shared/workerKillswitch.ts";
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  if (!(await isWorkerEnabled("shelly_periodic_sync"))) {
+    console.log("shelly-periodic-sync: paused via worker_controls — skipping");
+    return new Response(JSON.stringify({ success: true, skipped: true, reason: "worker_paused" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -172,8 +181,47 @@ serve(async (req) => {
               power_value: powerValue,
               recorded_at: now,
             });
+            continue;
+          }
+
+          // Fallback für kumulative Energie-Zähler (kWh/Wh): letzte Rohwerte aus
+          // sensor_readings_raw laden und ΔkWh / Δh in kW berechnen. Nur schreiben
+          // wenn Δt zwischen 30 s und 15 min liegt (schließt Neustart-Ausreißer aus).
+          if (unit === "kWh" || unit === "Wh") {
+            const cumRaw = typeof rawVal === "number" && isFinite(rawVal)
+              ? rawVal
+              : (typeof sensor.value === "string" ? parseFloat(sensor.value) : Number(sensor.value));
+            if (!isFinite(cumRaw)) continue;
+            const cumKwh = unit === "Wh" ? cumRaw / 1000 : cumRaw;
+
+            const { data: prev } = await supabase
+              .from("sensor_readings_raw")
+              .select("value, recorded_at")
+              .eq("meter_id", meter.id)
+              .order("recorded_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (prev && isFinite(Number(prev.value))) {
+              const prevKwh = unit === "Wh" ? Number(prev.value) / 1000 : Number(prev.value);
+              const dtSec = (Date.parse(now) - Date.parse(prev.recorded_at)) / 1000;
+              const dKwh = cumKwh - prevKwh;
+              if (dtSec >= 30 && dtSec <= 15 * 60 && dKwh >= 0 && isFinite(dKwh)) {
+                const kw = (dKwh / dtSec) * 3600;
+                if (isFinite(kw) && kw < 1e5) {
+                  readingsToInsert.push({
+                    meter_id: meter.id,
+                    tenant_id: meter.tenant_id,
+                    energy_type: meter.energy_type || "strom",
+                    power_value: kw,
+                    recorded_at: now,
+                  });
+                }
+              }
+            }
           }
         }
+
 
         // 4. Batch insert into meter_power_readings
         if (readingsToInsert.length > 0) {

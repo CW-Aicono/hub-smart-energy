@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { TrendingUp, TrendingDown, Battery, Zap, Plus, Trash2, Edit, BarChart3, Sun, Brain, Archive, Sparkles } from "lucide-react";
+import { TrendingUp, TrendingDown, Battery, Zap, Plus, Trash2, Pencil, BarChart3, Sun, Brain, Archive, Sparkles } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import { useEnergyStorages } from "@/hooks/useEnergyStorages";
 import ArbitrageAiSuggestions from "@/components/charging/ArbitrageAiSuggestions";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
@@ -328,15 +329,20 @@ function StoragesTab() {
         <TableBody>
           {storages.map((s) => (
             <TableRow key={s.id}>
-              <TableCell className="font-medium"><Battery className="inline h-4 w-4 mr-1" />{s.name}</TableCell>
+              <TableCell className="font-medium">
+                <Battery className="inline h-4 w-4 mr-1" />
+                <button type="button" onClick={() => openEdit(s)} className="text-left font-medium hover:underline focus:outline-none focus-visible:underline">{s.name}</button>
+              </TableCell>
               <TableCell>{(s as any).locations?.name || "–"}</TableCell>
               <TableCell>{s.capacity_kwh} kWh</TableCell>
               <TableCell>{s.max_charge_kw}/{s.max_discharge_kw} kW</TableCell>
               <TableCell>{s.efficiency_pct}%</TableCell>
               <TableCell><Badge variant={s.status === "active" ? "default" : "secondary"}>{s.status}</Badge></TableCell>
-              <TableCell className="flex gap-1">
-                <Button variant="ghost" size="icon" onClick={() => openEdit(s)}><Edit className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="icon" onClick={() => deleteStorage.mutate(s.id)}><Trash2 className="h-4 w-4" /></Button>
+              <TableCell>
+                <RowActions items={[
+                  { label: t("common.edit" as any), icon: Pencil, onClick: () => openEdit(s) },
+                  { label: t("common.delete" as any), icon: Trash2, variant: "destructive", onClick: () => deleteStorage.mutate(s.id) },
+                ]} />
               </TableCell>
             </TableRow>
           ))}
@@ -407,7 +413,11 @@ function StrategiesTab() {
     <TableRow key={s.id} className={isArchived ? "opacity-60" : ""}>
       <TableCell className="font-medium">
         <div className="flex items-center gap-2">
-          {s.name}
+          {!isArchived && s.source !== "ai" ? (
+            <button type="button" onClick={() => openEdit(s)} className="text-left font-medium hover:underline focus:outline-none focus-visible:underline">{s.name}</button>
+          ) : (
+            s.name
+          )}
           {s.source === "ai" && (
             <Badge variant="secondary" className="gap-1 bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 text-xs">
               <Sparkles className="h-3 w-3" />
@@ -426,14 +436,12 @@ function StrategiesTab() {
           <Switch checked={s.is_active} onCheckedChange={(v) => updateStrategy.mutate({ id: s.id, is_active: v })} />
         )}
       </TableCell>
-      <TableCell className="flex gap-1">
-        {!isArchived && s.source !== "ai" && (
-          <Button variant="ghost" size="icon" onClick={() => openEdit(s)}><Edit className="h-4 w-4" /></Button>
-        )}
-        {!isArchived && s.source === "ai" && (
-          <Button variant="ghost" size="icon" title={t("arbitrage.archived" as any)} onClick={() => archiveStrategy.mutate(s.id)}><Archive className="h-4 w-4" /></Button>
-        )}
-        <Button variant="ghost" size="icon" onClick={() => deleteStrategy.mutate(s.id)}><Trash2 className="h-4 w-4" /></Button>
+      <TableCell>
+        <RowActions items={[
+          { label: t("common.edit" as any), icon: Pencil, onClick: () => openEdit(s), hidden: isArchived || s.source === "ai" },
+          { label: t("arbitrage.archived" as any), icon: Archive, onClick: () => archiveStrategy.mutate(s.id), hidden: isArchived || s.source !== "ai" },
+          { label: t("common.delete" as any), icon: Trash2, variant: "destructive", onClick: () => deleteStrategy.mutate(s.id) },
+        ]} />
       </TableCell>
     </TableRow>
   );

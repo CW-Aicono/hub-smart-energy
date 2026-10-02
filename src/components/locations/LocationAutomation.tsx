@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -58,12 +58,14 @@ import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useLoxoneSensorsMulti, LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { GATEWAY_DEFINITIONS } from "@/lib/gatewayRegistry";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
+import { filterAssignedGatewayDevices } from "@/lib/gatewayDeviceFiltering";
 import { useLocationAutomations, LocationAutomationRecord } from "@/hooks/useLocationAutomations";
 import { useMeters } from "@/hooks/useMeters";
 import { AutomationRuleBuilder, AutomationRuleData } from "@/components/locations/AutomationRuleBuilder";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { de } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
 
 function getSensorIcon(type: string) {
   switch (type) {
@@ -188,7 +190,8 @@ function AutomationFlowDiagram({ auto, actuatorStates }: {
       )}
       <div className="flex flex-col gap-1">
         {actionChips.map((action, i) => {
-          const state = actuatorStates.get(action.actuator_uuid);
+          const state = actuatorStates.get(`${auto.location_integration_id}:${action.actuator_uuid}`)
+            || actuatorStates.get(action.actuator_uuid);
           return (
             <span
               key={i}
@@ -280,6 +283,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     const result: (LoxoneSensor & { _integrationId: string; _integrationLabel: string })[] = [];
     sensorQueries.forEach((q, idx) => {
       const intId = integrationIds[idx];
+      const intType = integrationTypes[idx];
       const label = integrationLabelMap[intId] || "Unknown";
       (q.data || []).forEach((s) => {
         result.push({
@@ -287,35 +291,89 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
           name: sensorNameMap[s.id] || s.name,
           _integrationId: intId,
           _integrationLabel: label,
+          _integrationType: intType,
         });
       });
     });
     return result;
-  }, [sensorQueries, integrationIds, integrationLabelMap, sensorNameMap]);
+  }, [sensorQueries, integrationIds, integrationTypes, integrationLabelMap, sensorNameMap]);
 
   const hasAnyIntegration = gatewayIntegrations.length > 0;
   // For backward compat: pick the first gateway integration as default for new automations
   const defaultIntegration = gatewayIntegrations[0] || null;
 
   const {
-    automations, lastErrors, loading: autoLoading, executing,
-    createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation,
+    automations, lastErrors, lastSuccess, loading: autoLoading, executing,
+    createAutomation, updateAutomation, deleteAutomation, duplicateAutomation, executeAutomation, refetch,
   } = useLocationAutomations(locationId);
 
+  // ── Installierte Loxone-Templates dieser Location (für Template-basierte Regeln) ──
+  const [installedTemplates, setInstalledTemplates] = useState<Array<{
+    template_key: string;
+    instance_id: string | null;
+    installed_version: string | null;
+    title: string;
+    parameters: Array<{ name: string; key?: string; type: string; description?: string }>;
+  }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [{ data: inst }, { data: reg }] = await Promise.all([
+        supabase
+          .from("location_loxone_templates")
+          .select("template_key, instance_id, installed_version")
+          .eq("location_id", locationId),
+        supabase
+          .from("loxone_template_registry")
+          .select("template_key, title, parameters")
+          .eq("is_active", true),
+      ]);
+      if (cancelled) return;
+      const regMap = new Map((reg ?? []).map((r: any) => [r.template_key, r]));
+      const merged = ((inst as any[]) ?? []).map((row) => {
+        const r = regMap.get(row.template_key);
+        return {
+          template_key: row.template_key,
+          instance_id: row.instance_id,
+          installed_version: row.installed_version,
+          title: r?.title ?? row.template_key,
+          parameters: Array.isArray(r?.parameters)
+            ? (r.parameters as any[]).map((p) => ({ ...p, name: p.name ?? p.key }))
+            : [],
+        };
+      });
+      setInstalledTemplates(merged);
+    })();
+    return () => { cancelled = true; };
+  }, [locationId]);
+
   // Use explicit device_type when available and fall back to the same gateway heuristics as the tabs.
-  const actuators = allSensorsWithSource.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
-  const sensorDevices = allSensorsWithSource.filter((s) => {
+  // IMPORTANT: Only show devices that the user has explicitly assigned via the
+  // "Gefundene Geräte"-Dialog (= devices that have a corresponding meters row
+  // with matching sensor_uuid). Single source of truth for this rule:
+  // src/lib/gatewayDeviceFiltering.ts
+  const assignedDevicesWithSource = useMemo(
+    () => filterAssignedGatewayDevices(allSensorsWithSource, meters),
+    [allSensorsWithSource, meters],
+  );
+
+  const actuators = assignedDevicesWithSource.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
+  const sensorDevices = assignedDevicesWithSource.filter((s) => {
     const t = getResolvedDeviceType(s, deviceTypeMap);
     return t === "sensor";
   });
-  const allSensors = allSensorsWithSource as LoxoneSensor[];
+  const allSensors = assignedDevicesWithSource as LoxoneSensor[];
 
   // Build actuator state map for live status display
   const actuatorStates = useMemo(() => {
     const map = new Map<string, { value: string; status: string }>();
     allSensorsWithSource.forEach((s) => {
       if (s.value !== undefined && s.value !== null) {
-        map.set(s.id, { value: String(s.value), status: s.status });
+        const state = { value: String(s.value), status: s.status };
+        map.set(`${s._integrationId}:${s.id}`, state);
+        if (!map.has(s.id)) {
+          map.set(s.id, state);
+        }
       }
     });
     return map;
@@ -359,46 +417,95 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
     setRuleBuilderOpen(true);
   };
 
+  const pushToLoxone = async (automationId: string) => {
+    try {
+      const { error } = await supabase.functions.invoke("loxone-template-sync", {
+        body: { action: "push", automationId, source: "save" },
+      });
+      if (error) {
+        toast.warning("Regel gespeichert, Loxone-Push fehlgeschlagen: " + (error.message || "Unbekannt"));
+      } else {
+        await supabase
+          .from("location_automations")
+          .update({ last_executed_at: new Date().toISOString() })
+          .eq("id", automationId);
+        await refetch();
+        toast.success("An Miniserver übertragen");
+      }
+    } catch (e: any) {
+      toast.warning("Regel gespeichert, Loxone-Push fehlgeschlagen: " + (e?.message || "Unbekannt"));
+    }
+  };
+
   const handleSaveRule = async (data: AutomationRuleData) => {
     if (!defaultIntegration) throw new Error(T("auto.noIntegration"));
 
+    // Template-basierte Regel (execution_mode != cloud + template gewählt)
+    const isTemplateRule = !!data.loxone_template_key && data.execution_mode !== "cloud";
+
     // Use first action as primary actuator for backward compatibility
     const primary = data.actions[0];
+    // Bei Template-Regeln ohne freie Aktion: leere Platzhalter, damit NOT-NULL-Spalten befriedigt sind
+    const primaryOrPlaceholder = primary ?? {
+      actuator_uuid: `AICO_TEMPLATE::${data.loxone_template_key}`,
+      actuator_name: data.loxone_template_key || "Loxone-Template",
+      control_type: "loxone_template",
+      action_type: "command",
+      action_value: "template",
+    } as any;
+
+    // Determine the correct location_integration_id: the primary action's actuator
+    // decides which gateway executes the automation. Fallback to defaultIntegration
+    // only when nothing can be resolved (e.g. pure template automations).
+    const resolvedIntegrationId: string =
+      (primary as any)?.gateway_id
+      || (primary?.actuator_uuid
+        ? allSensorsWithSource.find((s) => s.id === primary.actuator_uuid)?._integrationId
+        : undefined)
+      || defaultIntegration.id;
+
+    const resolvedIntegrationType: string | undefined =
+      allSensorsWithSource.find((s) => s._integrationId === resolvedIntegrationId)?._integrationType
+      || defaultIntegration?.integration?.type;
+
+    const commonPayload: any = {
+      name: data.name,
+      description: data.description || undefined,
+      actuator_uuid: primaryOrPlaceholder.actuator_uuid,
+      actuator_name: primaryOrPlaceholder.actuator_name,
+      actuator_control_type: primaryOrPlaceholder.control_type,
+      action_type: primaryOrPlaceholder.action_type === "pulse" ? "pulse" : "command",
+      action_value: primaryOrPlaceholder.action_value || primaryOrPlaceholder.action_type,
+      conditions: data.conditions,
+      actions: data.actions,
+      logic_operator: data.logic_operator,
+      is_active: data.is_active,
+      execution_mode: data.execution_mode,
+      location_integration_id: resolvedIntegrationId,
+      loxone_template_key: isTemplateRule ? data.loxone_template_key : null,
+      loxone_template_instance_id: isTemplateRule ? data.loxone_template_instance_id ?? null : null,
+      loxone_template_bindings: isTemplateRule ? (data.loxone_template_bindings ?? {}) : null,
+    };
+
+    const isLoxoneIntegration = resolvedIntegrationType === "loxone_miniserver" || resolvedIntegrationType === "loxone_miniserver_go";
 
     if (editAutomation) {
-      const { error } = await updateAutomation(editAutomation.id, {
-        name: data.name,
-        description: data.description || undefined,
-        actuator_uuid: primary.actuator_uuid,
-        actuator_name: primary.actuator_name,
-        actuator_control_type: primary.control_type,
-        action_type: primary.action_type === "pulse" ? "pulse" : "command",
-        action_value: primary.action_value || primary.action_type,
-        conditions: data.conditions,
-        actions: data.actions,
-        logic_operator: data.logic_operator,
-        is_active: data.is_active,
-      } as any);
+      const { error } = await updateAutomation(editAutomation.id, commonPayload);
       if (error) throw error;
       toast.success(T("auto.updated"));
+      if (data.execution_mode && data.execution_mode !== "cloud" && data.is_active && isLoxoneIntegration) {
+        await pushToLoxone(editAutomation.id);
+      }
     } else {
-      const { error } = await createAutomation({
+      const { data: created, error } = await createAutomation({
         location_id: locationId,
-        location_integration_id: defaultIntegration.id,
-        name: data.name,
-        description: data.description || undefined,
-        actuator_uuid: primary.actuator_uuid,
-        actuator_name: primary.actuator_name,
-        actuator_control_type: primary.control_type,
-        action_type: primary.action_type === "pulse" ? "pulse" : "command",
-        action_value: primary.action_value || primary.action_type,
-        conditions: data.conditions,
-        actions: data.actions,
-        logic_operator: data.logic_operator,
-        is_active: data.is_active,
+        ...commonPayload,
       });
       if (error) throw error;
       toast.success(T("auto.created"));
+      if (created?.id && data.execution_mode && data.execution_mode !== "cloud" && data.is_active && isLoxoneIntegration) {
+        await pushToLoxone(created.id);
+      }
     }
   };
 
@@ -501,18 +608,58 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
                           {actionsCount > 1 && (
                             <Badge variant="secondary" className="text-[10px]">{actionsCount} {T("auto.actions")}</Badge>
                           )}
+                          {(() => {
+                            const mode = (auto.execution_mode || "cloud") as "cloud" | "loxone_local" | "hybrid";
+                            const leaseUntilRaw = (auto as any).owner_lease_until as string | null | undefined;
+                            const leaseUntilMs = leaseUntilRaw ? new Date(leaseUntilRaw).getTime() : 0;
+                            const leaseActive = leaseUntilMs > Date.now();
+                            let hybridTitle = "Hybrid: lokal mit Cloud-Fallback";
+                            if (mode === "hybrid") {
+                              if (leaseActive) {
+                                const t = new Date(leaseUntilMs).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+                                hybridTitle = `Aktiv: Lokal (Lease bis ${t}) – Cloud-Fallback pausiert`;
+                              } else {
+                                hybridTitle = "Fallback: Cloud aktiv (kein aktueller lokaler Ausführungs-Nachweis)";
+                              }
+                            }
+                            const map = {
+                              cloud: { label: "Cloud", cls: "bg-sky-500/10 text-sky-700 border-sky-500/30 dark:text-sky-300", title: "Ausführung über die Cloud" },
+                              loxone_local: { label: "Lokal", cls: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-300", title: "Ausführung lokal auf dem Gateway/Miniserver" },
+                              hybrid: { label: "Hybrid", cls: "bg-violet-500/10 text-violet-700 border-violet-500/30 dark:text-violet-300", title: hybridTitle },
+                            } as const;
+                            const m = map[mode] ?? map.cloud;
+                            return (
+                              <Badge variant="outline" className={`text-[10px] ${m.cls}`} title={m.title}>
+                                {m.label}
+                              </Badge>
+                            );
+                          })()}
+
                         </div>
                         {auto.description && (
                           <p className="text-xs text-muted-foreground mt-0.5">{auto.description}</p>
                         )}
                         <AutomationFlowDiagram auto={auto} actuatorStates={actuatorStates} />
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
-                          {auto.last_executed_at && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {formatDistanceToNow(new Date(auto.last_executed_at), { addSuffix: true, locale: de })}
-                            </span>
-                          )}
+                          {(() => {
+                            const succ = lastSuccess[auto.id];
+                            const succTime = succ ? new Date(succ.executed_at).getTime() : 0;
+                            const autoTime = auto.last_executed_at ? new Date(auto.last_executed_at).getTime() : 0;
+                            const chosen = succTime >= autoTime ? succ?.executed_at : auto.last_executed_at;
+                            if (!chosen) return null;
+                            const source = succTime >= autoTime ? succ?.execution_source : null;
+                            const sourceLabel =
+                              source === "local" ? "Lokal" : source === "cloud" ? "Cloud" : null;
+                            return (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatDistanceToNow(new Date(chosen), { addSuffix: true, locale: de })}
+                                {sourceLabel && (
+                                  <span className="text-[10px] text-muted-foreground/80">· {sourceLabel}</span>
+                                )}
+                              </span>
+                            );
+                          })()}
                           {(() => {
                             const err = lastErrors[auto.id];
                             const isScheduledError = err?.status === "error" && err?.trigger_type === "scheduled";
@@ -770,6 +917,7 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
         sensors={allSensors}
         sensorsLoading={sensorsLoading}
         deviceTypeMap={deviceTypeMap}
+        installedTemplates={installedTemplates}
         initialData={editAutomation ? {
           name: editAutomation.name,
           description: editAutomation.description || "",
@@ -777,11 +925,15 @@ export const LocationAutomation = ({ locationId }: LocationAutomationProps) => {
           actions: editAutomation.actions,
           logic_operator: editAutomation.logic_operator,
           is_active: editAutomation.is_active,
+          execution_mode: (editAutomation.execution_mode as any) || "cloud",
           actuator_uuid: editAutomation.actuator_uuid,
           actuator_name: editAutomation.actuator_name,
           actuator_control_type: editAutomation.actuator_control_type,
           action_type: editAutomation.action_type,
           action_value: editAutomation.action_value,
+          loxone_template_key: (editAutomation as any).loxone_template_key ?? null,
+          loxone_template_instance_id: (editAutomation as any).loxone_template_instance_id ?? null,
+          loxone_template_bindings: (editAutomation as any).loxone_template_bindings ?? null,
         } : undefined}
         onSave={handleSaveRule}
         isEdit={!!editAutomation}

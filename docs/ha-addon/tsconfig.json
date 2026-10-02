@@ -10,6 +10,6 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["index.ts"],
+  "include": ["index.ts", "setup-wizard.ts", "modbus-wallbox-bridge.ts"],
   "exclude": ["node_modules", "dist", "ui", "packages"]
 }

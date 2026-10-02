@@ -1,0 +1,68 @@
+# =====================================================================
+# AICONO Theme – Phase 1 White-Label
+# =====================================================================
+# Setzt die Home-Assistant-Oberflaeche (Login-Screen, Sidebar, evtl.
+# sichtbare Bereiche) auf AICONO Corporate Identity:
+#   Navy  #0A1F44   (Primaerfarbe)
+#   Teal  #14B8A6   (Akzent)
+#   White #FFFFFF
+# Wird als Default-Theme in configuration.yaml referenziert.
+# ---------------------------------------------------------------------
+
+aicono:
+  # ---- Markenfarben ----
+  primary-color: "#14B8A6"           # Teal – aktive Links, Buttons
+  accent-color: "#0A1F44"            # Navy – Hervorhebung
+  dark-primary-color: "#0F766E"
+  light-primary-color: "#5EEAD4"
+
+  # ---- App-Header / Sidebar ----
+  app-header-background-color: "#0A1F44"
+  app-header-text-color: "#FFFFFF"
+  sidebar-background-color: "#0A1F44"
+  sidebar-text-color: "#E2E8F0"
+  sidebar-selected-text-color: "#14B8A6"
+  sidebar-selected-icon-color: "#14B8A6"
+  sidebar-icon-color: "#94A3B8"
+
+  # ---- Hintergruende ----
+  primary-background-color: "#F8FAFC"
+  secondary-background-color: "#FFFFFF"
+  card-background-color: "#FFFFFF"
+
+  # ---- Text ----
+  primary-text-color: "#0A1F44"
+  secondary-text-color: "#475569"
+  text-primary-color: "#FFFFFF"
+
+  # ---- Status ----
+  state-icon-color: "#14B8A6"
+  state-icon-active-color: "#14B8A6"
+  label-badge-background-color: "#FFFFFF"
+  label-badge-text-color: "#0A1F44"
+
+  # ---- Switches / Toggles ----
+  switch-checked-color: "#14B8A6"
+  switch-unchecked-color: "#94A3B8"
+  paper-toggle-button-checked-button-color: "#14B8A6"
+  paper-toggle-button-checked-bar-color: "#14B8A6"
+
+  # ---- Login-Screen ----
+  primary-color-login: "#0A1F44"
+
+aicono-dark:
+  primary-color: "#14B8A6"
+  accent-color: "#5EEAD4"
+  app-header-background-color: "#020617"
+  app-header-text-color: "#FFFFFF"
+  sidebar-background-color: "#020617"
+  sidebar-text-color: "#CBD5E1"
+  sidebar-selected-text-color: "#14B8A6"
+  sidebar-selected-icon-color: "#14B8A6"
+  primary-background-color: "#0F172A"
+  secondary-background-color: "#1E293B"
+  card-background-color: "#1E293B"
+  primary-text-color: "#F1F5F9"
+  secondary-text-color: "#94A3B8"
+  state-icon-color: "#14B8A6"
+  switch-checked-color: "#14B8A6"

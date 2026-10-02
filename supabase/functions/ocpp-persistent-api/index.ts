@@ -1,0 +1,886 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { normalizeRfidTag, type RfidReadMode } from "../_shared/rfidNormalize.ts";
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const admin = createClient(supabaseUrl, serviceKey, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
+
+let settingsCache: { checkedAt: number; ocppLogging: boolean; emergencyMode: boolean } | null = null;
+const SETTINGS_TTL_MS = 60_000;
+const SETTINGS_TIMEOUT_MS = 1_500;
+
+async function readSettingsOnce() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SETTINGS_TIMEOUT_MS);
+  try {
+    const { data, error } = await admin
+      .from("system_settings")
+      .select("key, value")
+      .in("key", ["ocpp_message_logging_enabled", "backend_emergency_mode"])
+      .abortSignal(controller.signal);
+    if (error) throw new Error(error.message);
+    const map = new Map((data ?? []).map((row: any) => [String(row.key), String(row.value ?? "").toLowerCase()]));
+    const emergencyRaw = map.get("backend_emergency_mode") ?? "false";
+    const loggingRaw = map.get("ocpp_message_logging_enabled") ?? "false";
+    return {
+      emergencyMode: emergencyRaw === "true" || emergencyRaw === "1" || emergencyRaw === "on",
+      ocppLogging: loggingRaw === "true" || loggingRaw === "1" || loggingRaw === "on",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function getRuntimeSettings() {
+  const now = Date.now();
+  if (settingsCache && now - settingsCache.checkedAt < SETTINGS_TTL_MS) return settingsCache;
+  // Ein einzelner DB-Timeout darf das Logging nicht stundenlang abwürgen:
+  // ein kurzer Retry, und im Fehlerfall wird das Ergebnis nur kurz gecacht.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const result = await readSettingsOnce();
+      settingsCache = { checkedAt: now, ...result };
+      return settingsCache;
+    } catch (error) {
+      if (attempt === 0) continue;
+      console.warn(
+        "[ocpp-persistent-api] settings lookup failed; disabling raw log writes temporarily",
+        error instanceof Error ? error.message : String(error),
+      );
+      // nur 5 s cachen, damit sich der Zustand nach kurzer DB-Last selbst heilt
+      settingsCache = { checkedAt: now - (SETTINGS_TTL_MS - 5_000), emergencyMode: true, ocppLogging: false };
+    }
+  }
+  return settingsCache!;
+}
+
+function json(status: number, body: Record<string, unknown>) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function ok(data: unknown = {}) {
+  return json(200, { ok: true, data: data as Record<string, unknown> });
+}
+
+function fail(status: number, error: string) {
+  return json(status, { ok: false, error });
+}
+
+function checkBasicAuth(authHeader: string | null | undefined, expectedPassword: string): boolean {
+  if (!authHeader || !authHeader.startsWith("Basic ")) return false;
+  try {
+    const decoded = atob(authHeader.substring(6));
+    const idx = decoded.indexOf(":");
+    const provided = idx >= 0 ? decoded.substring(idx + 1) : "";
+    return provided === expectedPassword;
+  } catch {
+    return false;
+  }
+}
+
+function parseMessage(raw: string): { messageType: string | null; parsedJson: unknown } {
+  let messageType: string | null = null;
+  let parsedJson: unknown = raw;
+  try {
+    const parsed = JSON.parse(raw);
+    parsedJson = parsed;
+    if (Array.isArray(parsed)) {
+      if (parsed[0] === 2) messageType = parsed[2] ?? null;
+      else if (parsed[0] === 3) messageType = "CALLRESULT";
+      else if (parsed[0] === 4) messageType = `CALLERROR:${parsed[2] ?? "unknown"}`;
+    }
+  } catch {
+    // keep raw
+  }
+  return { messageType, parsedJson };
+}
+
+function onlyPatch(input: Record<string, unknown>, allowed: string[]) {
+  const out: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(input, key)) out[key] = input[key];
+  }
+  return out;
+}
+
+function normalizeOcppStatus(raw: string | null | undefined): "available" | "charging" | "faulted" | "unavailable" | "unconfigured" {
+  const s = String(raw ?? "").toLowerCase().trim();
+  if (!s) return "unconfigured";
+  if (s.includes("fault") || s.includes("error")) return "faulted";
+  if (s.includes("unavailable") || s.includes("inoperative")) return "unavailable";
+  if (
+    s.includes("charg") ||
+    s.includes("occup") ||
+    s.includes("suspendedev") ||
+    s.includes("suspendedevse") ||
+    s.includes("preparing") ||
+    s.includes("finishing") ||
+    s.includes("reserved")
+  ) return "charging";
+  if (s.includes("avail")) return "available";
+  return "unconfigured";
+}
+
+async function syncChargePointStatusFromConnectors(chargePointId: string) {
+  const { data, error } = await admin
+    .from("charge_point_connectors")
+    .select("status")
+    .eq("charge_point_id", chargePointId);
+  if (error) throw error;
+  const statuses = (data ?? []).map((row) => normalizeOcppStatus(row.status as string | null));
+  const priority = ["faulted", "unavailable", "charging", "unconfigured", "available"] as const;
+  const status = priority.find((candidate) => statuses.includes(candidate)) ?? "available";
+  await admin.from("charge_points").update({ status }).eq("id", chargePointId);
+}
+
+async function handle(action: string, body: Record<string, unknown>) {
+  switch (action) {
+    case "authenticate-charge-point": {
+      const rawOcppId = String(body.ocppId ?? "");
+      const ocppId = rawOcppId.trim();
+      const authorization = typeof body.authorization === "string" ? body.authorization : null;
+      if (!ocppId) return fail(400, "Missing ocppId");
+
+      console.log(`[ocpp-persistent-api] authenticate-charge-point raw="${rawOcppId}" trimmed="${ocppId}"`);
+
+      const { data: cp, error } = await admin
+        .from("charge_points")
+        .select("id, ocpp_id, tenant_id, ocpp_password, auth_required, connection_protocol")
+        .ilike("ocpp_id", ocppId)
+        .maybeSingle();
+
+      if (error) return fail(500, error.message);
+      if (!cp) {
+        console.warn(`[ocpp-persistent-api] unknown charge point raw="${rawOcppId}" trimmed="${ocppId}"`);
+        return ok({ authorized: false, statusCode: 404, message: `Unknown charge point: ${ocppId}` });
+      }
+
+      const needsPassword = Boolean(cp.auth_required ?? true) && Boolean(cp.ocpp_password);
+      if (needsPassword && !checkBasicAuth(authorization, cp.ocpp_password)) {
+        return ok({ authorized: false, statusCode: 401, message: "Unauthorized" });
+      }
+
+      return ok({
+        authorized: true,
+        statusCode: 200,
+        message: "Accepted",
+        authSkipped: !needsPassword,
+        chargePoint: {
+          id: cp.id,
+          ocpp_id: cp.ocpp_id,
+          tenant_id: cp.tenant_id,
+          auth_required: cp.auth_required ?? true,
+          connection_protocol: cp.connection_protocol ?? "wss",
+        },
+      });
+    }
+
+    case "update-charge-point": {
+      const id = String(body.id ?? "");
+      const patch = typeof body.patch === "object" && body.patch ? body.patch as Record<string, unknown> : {};
+      if (!id) return fail(400, "Missing id");
+      const safePatch = onlyPatch(patch, [
+        "vendor",
+        "model",
+        "firmware_version",
+        "last_heartbeat",
+        "ws_connected",
+        "ws_connected_since",
+        "last_ws_pong_at",
+        "status",
+        "supports_charging_profile",
+        "supports_change_configuration",
+        "rfid_read_mode",
+        "linked_meter_id",
+      ]);
+      const { error } = await admin.from("charge_points").update(safePatch).eq("id", id);
+      if (error) return fail(500, error.message);
+      return ok();
+    }
+
+    case "update-connector-status": {
+      const chargePointId = String(body.chargePointId ?? "");
+      const connectorId = Number(body.connectorId ?? 0);
+      const status = String(body.status ?? "Unknown");
+      if (!chargePointId || !Number.isFinite(connectorId) || connectorId <= 0) return fail(400, "Invalid connector");
+      const { error } = await admin
+        .from("charge_point_connectors")
+        .update({ status, last_status_at: new Date().toISOString() })
+        .eq("charge_point_id", chargePointId)
+        .eq("connector_id", connectorId);
+      if (error) return fail(500, error.message);
+      await syncChargePointStatusFromConnectors(chargePointId);
+      return ok();
+    }
+
+    case "authorize-id-tag": {
+      const tenantId = String(body.tenantId ?? "");
+      const idTag = String(body.idTag ?? "");
+      const chargePointId = String(body.chargePointId ?? ""); // PK aus charge_points.id (optional)
+      if (!tenantId || !idTag) return fail(400, "Missing tenantId/idTag");
+
+      // Lese-Modus der Wallbox ermitteln (Default: raw)
+      let readMode: RfidReadMode = "raw";
+      if (chargePointId) {
+        const { data: cp } = await admin
+          .from("charge_points")
+          .select("rfid_read_mode")
+          .eq("id", chargePointId)
+          .maybeSingle();
+        const mode = (cp as { rfid_read_mode?: string } | null)?.rfid_read_mode;
+        if (
+          mode === "raw" ||
+          mode === "byte_reversed" ||
+          mode === "nibble_swap" ||
+          mode === "byte_reversed_nibble_swap"
+        ) {
+          readMode = mode;
+        }
+      }
+
+      const normalizedIdTag = normalizeRfidTag(idTag, readMode);
+      console.log(
+        `[ocpp-persistent-api] authorize-id-tag raw="${idTag}" mode="${readMode}" normalized="${normalizedIdTag}"`,
+      );
+
+      // Case-insensitiver Match: in der DB können RFID-Tags in beliebiger
+      // Schreibweise gespeichert sein (z.B. lowercase), normalizeRfidTag liefert
+      // jedoch immer Uppercase-Hex. Daher ilike statt eq.
+      // 1) Legacy rfid_tag column on charging_users
+      let { data: user, error } = await admin
+        .from("charging_users")
+        .select("id, status, group_id")
+        .eq("tenant_id", tenantId)
+        .ilike("rfid_tag", normalizedIdTag)
+        .maybeSingle();
+
+      // 2) Neue Multi-Tag-Tabelle
+      if (!user && !error) {
+        const { data: tagRow, error: tagErr } = await admin
+          .from("charging_user_rfid_tags")
+          .select("user:charging_users!inner(id, status, group_id)")
+          .eq("tenant_id", tenantId)
+          .ilike("tag", normalizedIdTag)
+          .maybeSingle();
+        user = (tagRow as any)?.user ?? null;
+        error = tagErr;
+      }
+
+      if (!user && !error) {
+        const result = await admin
+          .from("charging_users")
+          .select("id, status, group_id")
+          .eq("tenant_id", tenantId)
+          .ilike("app_tag", normalizedIdTag)
+          .maybeSingle();
+        user = result.data;
+        error = result.error;
+      }
+
+      if (error) return fail(500, error.message);
+      if (!user || user.status !== "active") return ok({ status: "Invalid" });
+
+      // Group block check: reject if user is in a non-active group
+      if (user.group_id) {
+        const { data: grp } = await admin
+          .from("charging_user_groups")
+          .select("status")
+          .eq("id", user.group_id)
+          .maybeSingle();
+        if (grp && grp.status !== "active") return ok({ status: "Invalid" });
+      }
+
+      return ok({ status: "Accepted" });
+    }
+
+
+    case "create-charging-session": {
+      const tenantId = String(body.tenantId ?? "");
+      const chargePointId = String(body.chargePointId ?? "");
+      const connectorId = Number(body.connectorId ?? 1);
+      const idTag = String(body.idTag ?? "");
+      const meterStart = Number(body.meterStart ?? 0);
+      const startTime = String(body.startTime ?? new Date().toISOString());
+      const newTransactionId = Number(body.transactionId ?? 0);
+
+      // RFID-Tag gemäß rfid_read_mode der Wallbox normalisieren, damit
+      // charging_sessions.id_tag identisch zum Wert in charging_users.rfid_tag
+      // ist und der Resolver den Ladevorgang dem Nutzer zuordnen kann.
+      let readMode: RfidReadMode = "raw";
+      if (chargePointId) {
+        const { data: cp } = await admin
+          .from("charge_points")
+          .select("rfid_read_mode")
+          .eq("id", chargePointId)
+          .maybeSingle();
+        const mode = (cp as { rfid_read_mode?: string } | null)?.rfid_read_mode;
+        if (
+          mode === "raw" ||
+          mode === "byte_reversed" ||
+          mode === "nibble_swap" ||
+          mode === "byte_reversed_nibble_swap"
+        ) {
+          readMode = mode;
+        }
+      }
+      const normalizedIdTag = idTag ? normalizeRfidTag(idTag, readMode) : idTag;
+      if (normalizedIdTag !== idTag) {
+        console.log(
+          `[ocpp-persistent-api] create-charging-session raw="${idTag}" mode="${readMode}" normalized="${normalizedIdTag}"`,
+        );
+      }
+
+      // Dedup: bestehende aktive Session auf demselben CP+Connector suchen.
+      const { data: activeSessions } = await admin
+        .from("charging_sessions")
+        .select("id, transaction_id, meter_start, start_time, id_tag")
+        .eq("charge_point_id", chargePointId)
+        .eq("connector_id", connectorId)
+        .is("stop_time", null)
+        .order("start_time", { ascending: false });
+
+      const active = activeSessions ?? [];
+      if (active.length > 0) {
+        const newest = active[0];
+        const ageMs = Date.now() - new Date(newest.start_time as string).getTime();
+        const sameStart = Number(newest.meter_start ?? -1) === meterStart;
+        const sameTag = String(newest.id_tag ?? "") === normalizedIdTag;
+
+        // Idempotenz: identischer meterStart + idTag innerhalb 5 Minuten -> Duplicate-Retry der Wallbox.
+        if (sameStart && sameTag && ageMs < 5 * 60 * 1000) {
+          console.warn(
+            `[ocpp-persistent-api] duplicate StartTransaction detected, returning existing session ${newest.id} (tx=${newest.transaction_id})`,
+          );
+          await admin
+            .from("charge_point_connectors")
+            .update({ status: "Charging", last_status_at: new Date().toISOString() })
+            .eq("charge_point_id", chargePointId)
+            .eq("connector_id", connectorId);
+          await syncChargePointStatusFromConnectors(chargePointId);
+          return ok({
+            id: newest.id,
+            transactionId: Number(newest.transaction_id ?? newTransactionId),
+            duplicate: true,
+          });
+        }
+        // Sonst: alte verwaiste aktive Session(en) auf diesem Connector schließen,
+        // damit niemals zwei aktive Rows koexistieren ("Belegt"-Phantom).
+        const orphanIds = active.map((s) => s.id as string);
+        await admin
+          .from("charging_sessions")
+          .update({
+            stop_time: new Date().toISOString(),
+            stop_reason: "DuplicateStart",
+            status: "orphaned",
+          })
+          .in("id", orphanIds);
+        console.warn(
+          `[ocpp-persistent-api] orphaned ${orphanIds.length} stale active session(s) on cp=${chargePointId} connector=${connectorId}`,
+        );
+      }
+
+      const { data, error } = await admin
+        .from("charging_sessions")
+        .insert({
+          tenant_id: tenantId,
+          charge_point_id: chargePointId,
+          connector_id: connectorId,
+          id_tag: normalizedIdTag,
+          meter_start: meterStart,
+
+          start_time: startTime,
+          transaction_id: newTransactionId,
+          status: "active",
+        })
+        .select("id")
+        .single();
+      if (error) return fail(500, error.message);
+      await admin
+        .from("charge_point_connectors")
+        .update({ status: "Charging", last_status_at: new Date().toISOString() })
+        .eq("charge_point_id", chargePointId)
+        .eq("connector_id", connectorId);
+      await syncChargePointStatusFromConnectors(chargePointId);
+      return ok({ id: data.id, transactionId: newTransactionId, duplicate: false });
+    }
+
+    case "get-charging-session": {
+      const chargePointId = String(body.chargePointId ?? "");
+      const transactionId = Number(body.transactionId ?? 0);
+      const { data, error } = await admin
+        .from("charging_sessions")
+        .select("id, meter_start")
+        .eq("charge_point_id", chargePointId)
+        .eq("transaction_id", transactionId)
+        .maybeSingle();
+      if (error) return fail(500, error.message);
+      return ok({ session: data ?? null });
+    }
+
+    case "update-charging-session": {
+      const id = String(body.id ?? "");
+      const patch = typeof body.patch === "object" && body.patch ? body.patch as Record<string, unknown> : {};
+      if (!id) return fail(400, "Missing id");
+      const safePatch = onlyPatch(patch, ["meter_stop", "stop_time", "stop_reason", "status", "energy_kwh"]);
+      const { error } = await admin.from("charging_sessions").update(safePatch).eq("id", id);
+      if (error) return fail(500, error.message);
+
+      // K1 Eichrecht: bei Abschluss automatisch OCMF finalisieren (fire-and-forget)
+      if (safePatch.status === "completed") {
+        fetch(`${supabaseUrl}/functions/v1/ocmf-finalize`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+          body: JSON.stringify({ session_id: id }),
+        }).catch((e) => console.warn("[ocpp-persistent-api] ocmf-finalize trigger failed", e));
+      }
+      return ok();
+    }
+
+    case "insert-ocmf-record": {
+      // body: { sessionId, chargePointId, sampled_at, context, meter_format, raw_payload, signed_value?, reading_wh? }
+      const sessionId = String(body.sessionId ?? "");
+      const chargePointId = body.chargePointId ? String(body.chargePointId) : null;
+      const rawPayload = String(body.raw_payload ?? "");
+      if (!sessionId || !rawPayload) return fail(400, "Missing sessionId or raw_payload");
+
+      const { data: sess, error: sErr } = await admin
+        .from("charging_sessions")
+        .select("tenant_id")
+        .eq("id", sessionId)
+        .maybeSingle();
+      if (sErr) return fail(500, sErr.message);
+      if (!sess) return fail(404, "Unknown session");
+
+      const { error } = await admin.from("charging_session_meter_records").insert({
+        tenant_id: sess.tenant_id,
+        session_id: sessionId,
+        charge_point_id: chargePointId,
+        sampled_at: String(body.sampled_at ?? new Date().toISOString()),
+        context: String(body.context ?? "Sample.Periodic"),
+        meter_format: String(body.meter_format ?? "OCMF"),
+        raw_payload: rawPayload,
+        signed_value: body.signed_value != null ? String(body.signed_value) : null,
+        reading_wh: body.reading_wh != null ? Number(body.reading_wh) : null,
+        verification_status: "pending",
+      });
+      if (error) return fail(500, error.message);
+      return ok();
+    }
+
+    case "log-message": {
+      const settings = await getRuntimeSettings();
+      if (!settings.ocppLogging || settings.emergencyMode) return ok({ skipped: "ocpp_message_logging_disabled" });
+      // Legacy: einzelne Zeile (Request ODER Response). Rückwärtskompatibel.
+      const chargePointId = String(body.chargePointId ?? "");
+      const direction = body.direction === "outgoing" ? "outgoing" : "incoming";
+      const raw = String(body.raw ?? "");
+      if (!chargePointId || !raw) return fail(400, "Missing message data");
+      const { messageType, parsedJson } = parseMessage(raw);
+      const { error } = await admin.from("ocpp_message_log").insert({
+        charge_point_id: chargePointId,
+        direction,
+        message_type: messageType,
+        raw_message: parsedJson,
+      });
+      if (error) return fail(500, error.message);
+      return ok();
+    }
+
+    case "log-messages-batch": {
+      const settings = await getRuntimeSettings();
+      if (!settings.ocppLogging || settings.emergencyMode) return ok({ inserted: 0, skipped: "ocpp_message_logging_disabled" });
+      // Bulk-Insert mehrerer Einträge in EINEM DB-Roundtrip.
+      // Jeder Eintrag kann eine gepaarte Response enthalten -> 1 Zeile statt 2.
+      const entries = Array.isArray(body.entries) ? body.entries : [];
+      if (entries.length === 0) return ok({ inserted: 0 });
+      if (entries.length > 200) return fail(400, "Batch zu groß (max 200)");
+
+      const rows: Record<string, unknown>[] = [];
+      for (const raw of entries) {
+        if (!raw || typeof raw !== "object") continue;
+        const e = raw as Record<string, unknown>;
+        const chargePointId = String(e.chargePointId ?? "");
+        const rawMsg = String(e.raw ?? "");
+        if (!chargePointId || !rawMsg) continue;
+        const direction = e.direction === "outgoing" ? "outgoing" : "incoming";
+        const reqParsed = parseMessage(rawMsg);
+        let responseMessage: unknown = null;
+        let responseAt: string | null = null;
+        if (typeof e.responseRaw === "string" && e.responseRaw.length > 0) {
+          responseMessage = parseMessage(e.responseRaw).parsedJson;
+          responseAt = typeof e.responseAt === "string" ? e.responseAt : new Date().toISOString();
+        }
+        rows.push({
+          charge_point_id: chargePointId,
+          direction,
+          message_type: reqParsed.messageType,
+          raw_message: reqParsed.parsedJson,
+          response_message: responseMessage,
+          response_at: responseAt,
+          ...(typeof e.createdAt === "string" ? { created_at: e.createdAt } : {}),
+        });
+      }
+      if (rows.length === 0) return ok({ inserted: 0 });
+      const { error } = await admin.from("ocpp_message_log").insert(rows);
+      if (error) return fail(500, error.message);
+      return ok({ inserted: rows.length });
+    }
+
+    case "fetch-pending-commands": {
+      const connectedIds = Array.isArray(body.connectedIds) ? body.connectedIds.map(String).filter(Boolean) : [];
+      if (connectedIds.length === 0) return ok({ commands: [] });
+      const { data, error } = await admin
+        .from("pending_ocpp_commands")
+        .select("*")
+        .in("charge_point_ocpp_id", connectedIds)
+        .in("status", ["pending", "scheduled"])
+        .or(`scheduled_at.is.null,scheduled_at.lte.${new Date().toISOString()}`)
+        .order("created_at", { ascending: true })
+        .limit(50);
+      if (error) return fail(500, error.message);
+      return ok({ commands: data ?? [] });
+    }
+
+    case "update-pending-command": {
+      const id = String(body.id ?? "");
+      const patch = typeof body.patch === "object" && body.patch ? body.patch as Record<string, unknown> : {};
+      if (!id) return fail(400, "Missing id");
+      const safePatch = onlyPatch(patch, ["status", "processed_at", "result"]);
+      const { error } = await admin.from("pending_ocpp_commands").update(safePatch).eq("id", id);
+      if (error) return fail(500, error.message);
+      return ok();
+    }
+
+    case "insert-meter-samples": {
+      // body: { chargePointId, samples: Array<{ connector_id, transaction_id?, measurand, phase?, unit?, value, context?, sampled_at }> }
+      const chargePointId = String(body.chargePointId ?? "");
+      const samples = Array.isArray(body.samples) ? body.samples as Record<string, unknown>[] : [];
+      if (!chargePointId) return fail(400, "Missing charge_point_id");
+      if (samples.length === 0) return ok({ inserted: 0 });
+      if (samples.length > 200) return fail(400, "Sample-Batch zu groß (max 200)");
+
+      const { data: cp, error: cpErr } = await admin
+        .from("charge_points")
+        .select("id, tenant_id, linked_meter_id, group_id, location_id")
+        .eq("id", chargePointId)
+        .maybeSingle();
+      if (cpErr) return fail(500, cpErr.message);
+      if (!cp) return fail(404, "Unknown charge_point_id");
+
+      const rows = samples
+        .map((s) => {
+          const value = Number(s.value);
+          if (!Number.isFinite(value)) return null;
+          return {
+            tenant_id: cp.tenant_id,
+            charge_point_id: cp.id,
+            connector_id: Number(s.connector_id ?? 1) || 1,
+            transaction_id: s.transaction_id != null ? Number(s.transaction_id) : null,
+            measurand: String(s.measurand ?? "Energy.Active.Import.Register"),
+            phase: s.phase != null ? String(s.phase) : null,
+            unit: s.unit != null ? String(s.unit) : null,
+            value,
+            context: s.context != null ? String(s.context) : null,
+            sampled_at: String(s.sampled_at ?? new Date().toISOString()),
+          };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+
+      if (rows.length === 0) return ok({ inserted: 0 });
+      const { error } = await admin.from("ocpp_meter_samples").insert(rows);
+      if (error) return fail(500, error.message);
+
+      // ------------------------------------------------------------------
+      // Forward Power / Energy readings to meter tables
+      // ------------------------------------------------------------------
+      // Zielzähler-Kandidaten sammeln:
+      //  1) charge_points.linked_meter_id (direkte 1:1-Verknüpfung)
+      //  2) virtuelle Zähler mit virtual_meter_sources, die diesen CP referenzieren:
+      //     - source_charge_point_id = cp.id
+      //     - source_charge_point_group_id = cp.group_id
+      //     - source_all_charge_points = true (mit meters.location_id = cp.location_id)
+      // Pro Zielzähler-Kandidat merken wir uns das Vorzeichen (operator '+' oder '-').
+      const targets: Array<{ meterId: string; sign: 1 | -1 }> = [];
+      if (cp.linked_meter_id) targets.push({ meterId: cp.linked_meter_id as string, sign: 1 });
+
+      try {
+        const { data: vSources } = await admin
+          .from("virtual_meter_sources")
+          .select(
+            "virtual_meter_id, operator, source_charge_point_id, source_charge_point_group_id, source_all_charge_points",
+          )
+          .or(
+            [
+              `source_charge_point_id.eq.${cp.id}`,
+              cp.group_id ? `source_charge_point_group_id.eq.${cp.group_id}` : null,
+              `source_all_charge_points.eq.true`,
+            ]
+              .filter(Boolean)
+              .join(","),
+          );
+
+        const allCpsVirtualIds = new Set<string>();
+        (vSources ?? []).forEach((s: any) => {
+          if (s.source_all_charge_points) allCpsVirtualIds.add(s.virtual_meter_id);
+        });
+
+        // Für "all charge points" Quellen: nur virtuelle Zähler übernehmen, deren
+        // location_id dem CP-Standort entspricht.
+        let allowedAllCpsVmIds = new Set<string>();
+        if (allCpsVirtualIds.size > 0 && cp.location_id) {
+          const { data: vMeters } = await admin
+            .from("meters")
+            .select("id, location_id")
+            .in("id", Array.from(allCpsVirtualIds));
+          (vMeters ?? []).forEach((m: any) => {
+            if (m.location_id === cp.location_id) allowedAllCpsVmIds.add(m.id);
+          });
+        }
+
+        const seen = new Map<string, 1 | -1>();
+        if (cp.linked_meter_id) seen.set(cp.linked_meter_id as string, 1);
+        (vSources ?? []).forEach((s: any) => {
+          if (s.source_all_charge_points && !allowedAllCpsVmIds.has(s.virtual_meter_id)) return;
+          const sign: 1 | -1 = s.operator === "-" ? -1 : 1;
+          // Falls derselbe Zähler mehrfach referenziert wird, ist die letzte Definition maßgeblich.
+          seen.set(s.virtual_meter_id, sign);
+        });
+        // Reset targets to unified list
+        targets.length = 0;
+        seen.forEach((sign, meterId) => targets.push({ meterId, sign }));
+      } catch (e) {
+        console.warn("[insert-meter-samples] virtual source lookup failed", e);
+      }
+
+      if (targets.length === 0) {
+        return ok({ inserted: rows.length, forwarded: 0 });
+      }
+
+      // Power.Active.Import → meter_power_readings (kW)
+      const powerRows: Array<Record<string, unknown>> = [];
+      // Energy.Active.Import.Register → meter_cumulative_readings (kWh, monoton).
+      // Für Aggregations-Quellen (Gruppe / all-cps) müsste man streng den Summen-
+      // zählerstand aller involvierten CPs bilden. Da wir hier nur einen CP pro
+      // Request sehen, würden konkurrierende CPs Ping-Pong-Werte schreiben. Wir
+      // beschränken den Energie-Forward daher konservativ auf direkte
+      // 1:1-Quellen (linked_meter_id oder source_charge_point_id).
+      const energyDirectMeterIds = new Set<string>();
+      if (cp.linked_meter_id) energyDirectMeterIds.add(cp.linked_meter_id as string);
+      try {
+        const { data: directOnly } = await admin
+          .from("virtual_meter_sources")
+          .select("virtual_meter_id, operator")
+          .eq("source_charge_point_id", cp.id);
+        (directOnly ?? []).forEach((s: any) => {
+          if (s.operator !== "-") energyDirectMeterIds.add(s.virtual_meter_id);
+        });
+      } catch (_) { /* noop */ }
+
+      const cumulativeRows: Array<Record<string, unknown>> = [];
+
+      for (const row of rows) {
+        const unit = (row.unit ?? "").toUpperCase();
+        if (row.measurand === "Power.Active.Import") {
+          const powerKw = unit === "KW" ? row.value : row.value / 1000;
+          for (const t of targets) {
+            powerRows.push({
+              tenant_id: row.tenant_id,
+              meter_id: t.meterId,
+              energy_type: "electricity",
+              power_value: powerKw * t.sign,
+              recorded_at: row.sampled_at,
+            });
+          }
+        } else if (row.measurand === "Energy.Active.Import.Register") {
+          const kwh = unit === "WH" ? row.value / 1000 : row.value; // default kWh
+          for (const meterId of energyDirectMeterIds) {
+            cumulativeRows.push({
+              tenant_id: row.tenant_id,
+              meter_id: meterId,
+              reading_at: row.sampled_at,
+              kwh_total: kwh,
+              source: "ocpp",
+            });
+          }
+        }
+      }
+
+      if (powerRows.length > 0) {
+        const { error: pErr } = await admin.from("meter_power_readings").insert(powerRows);
+        if (pErr) console.warn("[insert-meter-samples] power insert failed", pErr.message);
+      }
+      if (cumulativeRows.length > 0) {
+        const { error: cErr } = await admin
+          .from("meter_cumulative_readings")
+          .upsert(cumulativeRows, { onConflict: "meter_id,reading_at" });
+        if (cErr) console.warn("[insert-meter-samples] cumulative upsert failed", cErr.message);
+      }
+      return ok({
+        inserted: rows.length,
+        forwarded: powerRows.length,
+        cumulative: cumulativeRows.length,
+        targets: targets.length,
+      });
+    }
+
+    case "upsert-capabilities": {
+      const chargePointId = String(body.chargePointId ?? "");
+      if (!chargePointId) return fail(400, "Missing chargePointId");
+
+      // Der OCPP-Server (docs/ocpp-persistent-server/src/backendApi.ts) schickt
+      // die Felder verschachtelt unter `capabilities` (snake_case). Frühere
+      // Versionen schickten sie flach (camelCase). Beide Varianten akzeptieren.
+      const caps = (typeof body.capabilities === "object" && body.capabilities)
+        ? body.capabilities as Record<string, unknown>
+        : {};
+
+      const supportedRaw = caps.supported_measurands ?? body.supportedMeasurands;
+      const supported = Array.isArray(supportedRaw) ? supportedRaw.map(String) : [];
+
+      const configuration = (typeof caps.configuration === "object" && caps.configuration)
+        ? caps.configuration
+        : {};
+      const unsupportedKeys = Array.isArray(caps.unsupported_keys) ? caps.unsupported_keys : [];
+      const rawConfigSource = (typeof body.rawConfig === "object" && body.rawConfig)
+        ? body.rawConfig
+        : { configuration, unsupported_keys: unsupportedKeys, vendor: caps.vendor ?? null, model: caps.model ?? null };
+
+      const maxLen = body.maxSampleLength != null ? Number(body.maxSampleLength) : null;
+      const minInt = body.minSampleInterval != null ? Number(body.minSampleInterval) : null;
+
+      const { data: cp, error: cpErr } = await admin
+        .from("charge_points")
+        .select("tenant_id")
+        .eq("id", chargePointId)
+        .maybeSingle();
+      if (cpErr) return fail(500, cpErr.message);
+      if (!cp) return fail(404, "Charge point not found");
+
+      const { error } = await admin
+        .from("charge_point_capabilities")
+        .upsert({
+          charge_point_id: chargePointId,
+          tenant_id: cp.tenant_id,
+          supported_measurands: supported,
+          max_sample_length: maxLen,
+          min_sample_interval: minInt,
+          raw_config: rawConfigSource,
+          last_probed_at: new Date().toISOString(),
+        }, { onConflict: "charge_point_id" });
+      if (error) return fail(500, error.message);
+      return ok();
+    }
+
+    case "get-capabilities-age": {
+      const chargePointId = String(body.chargePointId ?? "");
+      if (!chargePointId) return fail(400, "Missing chargePointId");
+      const { data, error } = await admin
+        .from("charge_point_capabilities")
+        .select("last_probed_at")
+        .eq("charge_point_id", chargePointId)
+        .maybeSingle();
+      if (error) return fail(500, error.message);
+      return ok({ lastProbedAt: data?.last_probed_at ?? null });
+    }
+
+    case "record-firmware-status": {
+      const chargePointId = String(body.chargePointId ?? "");
+      const status = String(body.status ?? "");
+      const rawPayload = (typeof body.rawPayload === "object" && body.rawPayload) ? body.rawPayload : {};
+      if (!chargePointId || !status) return fail(400, "Missing chargePointId or status");
+
+      const { data: cp, error: cpErr } = await admin
+        .from("charge_points")
+        .select("id, tenant_id")
+        .eq("id", chargePointId)
+        .maybeSingle();
+      if (cpErr) return fail(500, cpErr.message);
+      if (!cp) return fail(404, "Unknown charge_point_id");
+
+      // Aktuell offenen Job ermitteln (neuester nicht-terminaler)
+      const { data: openJob } = await admin
+        .from("cp_firmware_jobs")
+        .select("id, status")
+        .eq("charge_point_id", chargePointId)
+        .not("status", "in", "(installed,failed,cancelled)")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const nowIso = new Date().toISOString();
+      const insertEvt = await admin.from("cp_firmware_status_events").insert({
+        tenant_id: cp.tenant_id,
+        job_id: openJob?.id ?? null,
+        charge_point_id: cp.id,
+        status,
+        raw_payload: rawPayload,
+        received_at: nowIso,
+      });
+      if (insertEvt.error) return fail(500, insertEvt.error.message);
+
+      if (openJob) {
+        // Status auf normalisierten Wert mappen
+        const map: Record<string, string> = {
+          Downloading: "downloading",
+          Downloaded: "downloaded",
+          DownloadFailed: "failed",
+          Installing: "installing",
+          Installed: "installed",
+          InstallationFailed: "failed",
+          Idle: openJob.status, // unverändert
+        };
+        const newStatus = map[status] ?? openJob.status;
+        const patch: Record<string, unknown> = {
+          status: newStatus,
+          last_status_at: nowIso,
+        };
+        if (newStatus === "installed" || newStatus === "failed") {
+          patch.finished_at = nowIso;
+          if (status === "DownloadFailed" || status === "InstallationFailed") {
+            patch.error_code = status;
+            patch.error_message = status === "DownloadFailed" ? "Wallbox meldet Download fehlgeschlagen" : "Wallbox meldet Installation fehlgeschlagen";
+          }
+        }
+        await admin.from("cp_firmware_jobs").update(patch).eq("id", openJob.id);
+      }
+      return ok();
+    }
+
+    default:
+      return fail(400, `Unknown action: ${action}`);
+  }
+}
+
+
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return fail(405, "Method not allowed");
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return fail(400, "Invalid JSON");
+  }
+
+  const action = String(body.action ?? "");
+  try {
+    return await handle(action, body);
+  } catch (error) {
+    console.error("[ocpp-persistent-api]", error);
+    return fail(500, error instanceof Error ? error.message : String(error));
+  }
+});

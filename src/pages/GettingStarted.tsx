@@ -79,10 +79,13 @@ const GettingStarted = () => {
   };
 
   const markOnboardingComplete = async () => {
+    if (!tenant) return;
+    // Onboarding wird pro Tenant gespeichert (nicht pro User),
+    // damit nachfolgende Nutzer desselben Mandanten den Wizard nicht erneut sehen.
     await supabase
-      .from("user_preferences")
+      .from("tenants")
       .update({ onboarding_completed: true } as any)
-      .eq("user_id", user.id);
+      .eq("id", tenant.id);
   };
 
   const handleFinish = async () => {

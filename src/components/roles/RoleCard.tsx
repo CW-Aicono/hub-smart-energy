@@ -42,6 +42,7 @@ const CATEGORY_LABELS: Record<string, Record<string, string>> = {
   email_templates: { de: "E-Mail-Vorlagen", en: "Email Templates", es: "Plantillas de correo", nl: "E-mailsjablonen" },
   energy_prices: { de: "Energiepreise", en: "Energy Prices", es: "Precios de energía", nl: "Energieprijzen" },
   live_values: { de: "Live-Sensorwerte", en: "Live Sensor Values", es: "Valores de sensores en vivo", nl: "Live sensorwaarden" },
+  board: { de: "C-Level Dashboard", en: "C-Level Dashboard", es: "Panel C-Level", nl: "C-Level Dashboard" },
 };
 
 export function RoleCard({

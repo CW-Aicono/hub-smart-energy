@@ -74,15 +74,8 @@ export default function GroupSolarChargingConfig({ groupId, isAdmin, pvSurplusEn
   if (!pvSurplusEnabled) return null;
 
   return (
-    <div className="border rounded-lg p-4 space-y-4 bg-yellow-500/5 border-yellow-500/20">
-      <div className="flex items-center gap-2">
-        <Sun className="h-4 w-4 text-yellow-500" />
-        <p className="font-medium text-sm">PV-Überschussladen – Konfiguration</p>
-        <div className="ml-auto flex items-center gap-2">
-          <Label htmlFor={`solar-active-${groupId}`} className="text-xs">Aktiv</Label>
-          <Switch id={`solar-active-${groupId}`} checked={isActive} onCheckedChange={setIsActive} disabled={!isAdmin} />
-        </div>
-      </div>
+    <div className="space-y-4">
+
 
       {/* Reference meter */}
       <div className="space-y-1.5">

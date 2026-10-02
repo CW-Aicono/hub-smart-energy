@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
 import {
   Dialog,
@@ -9,7 +9,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -20,15 +19,15 @@ import {
 } from "@/components/ui/select";
 import { useLocations } from "@/hooks/useLocations";
 import { useMeters } from "@/hooks/useMeters";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Building2, Layers, DoorOpen, MapPin } from "lucide-react";
 
 interface AssignMeterSensor {
   id: string;
   name: string;
   controlType?: string;
   unit: string;
+  /** Pre-classified device type from the discovery dialog */
+  deviceType?: "meter" | "sensor" | "actuator";
 }
 
 interface AssignMeterDialogProps {
@@ -38,18 +37,8 @@ interface AssignMeterDialogProps {
   sensor?: AssignMeterSensor;
   sensors?: AssignMeterSensor[];
   locationIntegrationId: string;
+  /** Liegenschaft des Gateways – Geräte werden hier automatisch zugeordnet. */
   currentLocationId: string;
-}
-
-interface Floor {
-  id: string;
-  name: string;
-  floor_number: number;
-}
-
-interface Room {
-  id: string;
-  name: string;
 }
 
 export function AssignMeterDialog({
@@ -60,7 +49,6 @@ export function AssignMeterDialog({
   locationIntegrationId,
   currentLocationId,
 }: AssignMeterDialogProps) {
-  // Support both single sensor (legacy) and multiple sensors
   const sensorList = sensorsProp || (sensor ? [sensor] : []);
 
   const { locations } = useLocations();
@@ -68,118 +56,78 @@ export function AssignMeterDialog({
   const T = (key: string) => t(key as any);
   const { addMeter } = useMeters();
 
-  const [deviceType, setDeviceType] = useState<"meter" | "sensor" | "actuator">("meter");
-  const [energyType, setEnergyType] = useState("strom");
-  const [selectedLocationId, setSelectedLocationId] = useState(currentLocationId);
-  const [selectedFloorId, setSelectedFloorId] = useState<string>("");
-  const [selectedRoomId, setSelectedRoomId] = useState<string>("");
-  const [floors, setFloors] = useState<Floor[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const inferEnergyType = (u: string, name: string): string => {
+    const unit = (u || "").trim();
+    const n = (name || "").toLowerCase();
+    if (["m³", "m³/h", "l", "l/min"].includes(unit) || /wasser|water/.test(n)) return "wasser";
+    if (/gas/.test(n)) return "gas";
+    if (/wärme|waerme|heat/.test(n)) return "waerme";
+    return "strom";
+  };
+  const firstSensor = sensorList[0];
+  const [energyType, setEnergyType] = useState(() =>
+    firstSensor ? inferEnergyType(firstSensor.unit, firstSensor.name) : "strom",
+  );
   const [saving, setSaving] = useState(false);
 
-  const locationOptions = locations.map((loc) => ({
-    id: loc.id,
-    name: loc.name,
-    type: loc.type,
-    parentId: loc.parent_id,
-  }));
+  const uniformDeviceType: "meter" | "sensor" | "actuator" | null = (() => {
+    if (sensorList.length === 0) return null;
+    const first = sensorList[0].deviceType;
+    if (!first) return null;
+    return sensorList.every((s) => s.deviceType === first) ? first : null;
+  })();
 
-  // Fetch floors when location changes
-  useEffect(() => {
-    if (!selectedLocationId) {
-      setFloors([]);
-      setSelectedFloorId("");
-      setRooms([]);
-      setSelectedRoomId("");
-      return;
-    }
-
-    const fetchFloors = async () => {
-      const { data } = await supabase
-        .from("floors")
-        .select("id, name, floor_number")
-        .eq("location_id", selectedLocationId)
-        .order("floor_number");
-      const floorList = (data as Floor[]) || [];
-      setFloors(floorList);
-      // Auto-select if only one floor exists
-      if (floorList.length === 1) {
-        setSelectedFloorId(floorList[0].id);
-      } else {
-        setSelectedFloorId("");
-      }
-      setRooms([]);
-      setSelectedRoomId("");
-    };
-    fetchFloors();
-  }, [selectedLocationId]);
-
-  // Fetch rooms when floor changes
-  useEffect(() => {
-    if (!selectedFloorId) {
-      setRooms([]);
-      setSelectedRoomId("");
-      return;
-    }
-
-    const fetchRooms = async () => {
-      const { data } = await supabase
-        .from("floor_rooms")
-        .select("id, name")
-        .eq("floor_id", selectedFloorId)
-        .order("name");
-      setRooms((data as Room[]) || []);
-      setSelectedRoomId("");
-    };
-    fetchRooms();
-  }, [selectedFloorId]);
-
-  useEffect(() => {
-    setSelectedLocationId(currentLocationId);
-  }, [currentLocationId]);
+  const targetLocation = locations.find((l) => l.id === currentLocationId);
 
   const handleSubmit = async () => {
-    if (!selectedLocationId || sensorList.length === 0) return;
+    if (!currentLocationId || sensorList.length === 0) return;
     setSaving(true);
 
     try {
       for (const s of sensorList) {
+        const dt: "meter" | "sensor" | "actuator" = s.deviceType ?? "sensor";
+        const rawUnit = (s.unit || "").trim();
+        // Meter.unit stores the totalizer/cumulative unit. Map rate units to their totalizer counterpart.
+        const totalizerUnit =
+          rawUnit === "m³/h" ? "m³" :
+          rawUnit === "l/min" ? "l" :
+          rawUnit === "kW" ? "kWh" :
+          rawUnit === "W" ? "Wh" :
+          rawUnit;
+        const meterUnit = dt === "meter"
+          ? (totalizerUnit || (energyType === "wasser" || energyType === "gas" ? "m³" : "kWh"))
+          : (rawUnit || "");
         await addMeter({
           name: s.name.trim(),
-          location_id: selectedLocationId,
-          energy_type: deviceType === "meter" ? energyType : "none",
-          unit: s.unit || (deviceType === "meter" ? "kWh" : ""),
-          capture_type: deviceType === "meter" ? "automatic" : "automatic",
-          device_type: deviceType,
+          location_id: currentLocationId,
+          energy_type: energyType,
+          unit: meterUnit,
+          capture_type: "automatic",
+          device_type: dt,
           location_integration_id: locationIntegrationId,
           sensor_uuid: s.id,
-        });
-
-        // If floor or room was selected, update the meter
-        if (selectedFloorId || selectedRoomId) {
-          const { data: createdMeter } = await supabase
-            .from("meters")
-            .select("id")
-            .eq("sensor_uuid", s.id)
-            .eq("location_integration_id", locationIntegrationId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (createdMeter) {
-            const updates: Record<string, string | null> = {};
-            if (selectedFloorId) updates.floor_id = selectedFloorId;
-            if (selectedRoomId) updates.room_id = selectedRoomId;
-            await supabase.from("meters").update(updates).eq("id", createdMeter.id);
-          }
-        }
+          ...(dt === "meter" && rawUnit ? { source_unit_power: rawUnit, source_unit_energy: totalizerUnit } : {}),
+        } as any);
       }
 
       const count = sensorList.length;
-      const typeLabel = deviceType === "meter" ? "Zähler" : deviceType === "sensor" ? "Sensor" : "Aktor";
+      const typeLabel = uniformDeviceType === "meter"
+        ? "Zähler"
+        : uniformDeviceType === "actuator"
+          ? "Aktor"
+          : uniformDeviceType === "sensor"
+            ? "Sensor"
+            : "Gerät";
+      const pluralLabel = uniformDeviceType === "meter"
+        ? "Zähler"
+        : uniformDeviceType === "actuator"
+          ? "Aktoren"
+          : uniformDeviceType === "sensor"
+            ? "Sensoren"
+            : "Geräte";
       toast.success(count === 1
         ? `${typeLabel} "${sensorList[0].name}" erfolgreich zugeordnet`
-        : `${count} ${typeLabel} erfolgreich zugeordnet`
+        : `${count} ${pluralLabel} erfolgreich zugeordnet`
       );
       onOpenChange(false);
     } catch (err) {
@@ -199,8 +147,8 @@ export function AssignMeterDialog({
           </DialogTitle>
           <DialogDescription>
             {sensorList.length === 1
-              ? `Ordnen Sie „${sensorList[0].name}" einem Gerätetyp und Standort zu.`
-              : `Ordnen Sie ${sensorList.length} ausgewählte Geräte dem Standort zu.`}
+              ? `Ordnen Sie „${sensorList[0].name}" der Liegenschaft des Gateways zu.`
+              : `Ordnen Sie ${sensorList.length} ausgewählte Geräte der Liegenschaft des Gateways zu.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -217,106 +165,33 @@ export function AssignMeterDialog({
             </div>
           )}
 
-          {/* Device type */}
+          {/* Liegenschaft (read-only info) */}
+          <div className="rounded-md border p-3 bg-muted/30">
+            <p className="text-xs font-medium text-muted-foreground mb-1">Liegenschaft (vom Gateway)</p>
+            <p className="text-sm font-medium">{targetLocation?.name ?? "—"}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Etage und Raum können später je Gerät individuell zugeordnet werden.
+            </p>
+          </div>
+
+          {/* Energy type */}
           <div>
-            <Label>Gerätetyp</Label>
-            <Select value={deviceType} onValueChange={(v) => setDeviceType(v as "meter" | "sensor" | "actuator")}>
+            <Label>Energieart</Label>
+            <Select value={energyType} onValueChange={setEnergyType}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="meter">Zähler</SelectItem>
-                <SelectItem value="sensor">Sensor</SelectItem>
-                <SelectItem value="actuator">Aktor</SelectItem>
+                <SelectItem value="strom">{T("energy.strom")}</SelectItem>
+                <SelectItem value="gas">{T("energy.gas")}</SelectItem>
+                <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
+                <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
+                <SelectItem value="none">Keine / Sonstige</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          {/* Energy type - only for meters */}
-          {deviceType === "meter" && (
-            <div>
-              <Label>Energieart</Label>
-              <Select value={energyType} onValueChange={setEnergyType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="strom">{T("energy.strom")}</SelectItem>
-                  <SelectItem value="gas">{T("energy.gas")}</SelectItem>
-                  <SelectItem value="waerme">{T("energy.waerme")}</SelectItem>
-                  <SelectItem value="wasser">{T("energy.wasser")}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* Hierarchical assignment */}
-          <div className="space-y-3 rounded-md border p-3 bg-muted/30">
-            <p className="text-sm font-medium text-muted-foreground">Zuordnung</p>
-
-            {/* Location */}
-            <div>
-              <Label className="flex items-center gap-1.5 mb-1">
-                <MapPin className="h-3.5 w-3.5" />
-                Liegenschaft *
-              </Label>
-              <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Liegenschaft wählen" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locationOptions.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
-                      {loc.parentId ? "  └ " : ""}{loc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Floor */}
-            {floors.length > 0 && (
-              <div>
-                <Label className="flex items-center gap-1.5 mb-1">
-                  <Layers className="h-3.5 w-3.5" />
-                  Etage
-                </Label>
-                <Select value={selectedFloorId} onValueChange={setSelectedFloorId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Optional: Etage wählen" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {floors.map((f) => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Room */}
-            {rooms.length > 0 && selectedFloorId && (
-              <div>
-                <Label className="flex items-center gap-1.5 mb-1">
-                  <DoorOpen className="h-3.5 w-3.5" />
-                  Raum
-                </Label>
-                <Select value={selectedRoomId} onValueChange={setSelectedRoomId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Optional: Raum wählen" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {rooms.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>
-                        {r.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              Gilt für alle ausgewählten Geräte. Kann später je Gerät angepasst werden.
+            </p>
           </div>
         </div>
 
@@ -324,7 +199,7 @@ export function AssignMeterDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Abbrechen
           </Button>
-          <Button onClick={handleSubmit} disabled={!selectedLocationId || saving}>
+          <Button onClick={handleSubmit} disabled={!currentLocationId || saving}>
             {saving ? "Wird zugeordnet..." : sensorList.length === 1 ? "Zuordnen" : `${sensorList.length} Zuordnen`}
           </Button>
         </DialogFooter>

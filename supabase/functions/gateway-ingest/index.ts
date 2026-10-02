@@ -17,6 +17,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { recordWorkerHeartbeat } from "../_shared/workerStatus.ts";
+import { persistSensorHistory } from "../_shared/sensorHistory.ts";
 
 // Module-level default for helpers called outside handler context
 let corsHeaders: Record<string, string> = getCorsHeaders();
@@ -27,12 +28,51 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+// IO-Notbremse deaktiviert (24.07.2026): Ersetzt durch Delta-Guard +
+// Batch-Coalescing direkt in handleBridgeReadings (siehe unten).
+const LOXONE_WS_IO_EMERGENCY_PAUSE = false;
+const LOXONE_WS_IO_PAUSED_ACTIONS = new Set<string>([]);
+
+// Modul-globaler LRU-Cache pro warmer Function-Instanz. Key: `${serial}|${uuid}`.
+// Wird für den Delta-Guard in handleBridgeReadings verwendet.
+const bridgeRawLastCache = new Map<string, { value: number; atMs: number }>();
+
+// v1.10: Lookup-Cache für den Live-Broadcast-Pfad (live_only). Der Worker pusht
+// alle paar Sekunden — ohne Cache würde jeder Push zwei DB-Reads auslösen.
+// TTL 5 Min, pro warmer Function-Instanz.
+const bridgeLookupCache = new Map<string, { value: unknown; expiresAt: number }>();
+const BRIDGE_LOOKUP_TTL_MS = 5 * 60_000;
+function bridgeLookupGet<T>(key: string): T | undefined {
+  const hit = bridgeLookupCache.get(key);
+  if (!hit) return undefined;
+  if (hit.expiresAt < Date.now()) { bridgeLookupCache.delete(key); return undefined; }
+  return hit.value as T;
+}
+function bridgeLookupSet(key: string, value: unknown): void {
+  bridgeLookupCache.set(key, { value, expiresAt: Date.now() + BRIDGE_LOOKUP_TTL_MS });
+}
+
+async function handleLoxoneWsEmergencyPause(req: Request, action: string | null): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  return json({
+    success: true,
+    paused: true,
+    action,
+    inserted: 0,
+    accepted: 0,
+    reason: "loxone_ws_io_emergency_pause",
+  }, 202);
+}
+
 /* ── Auth helper ─────────────────────────────────────────────────────────────── */
 
 /**
- * Hash an API key using SHA-256 for storage/comparison.
+ * Hash a string using SHA-256.
+ * Kept as utility for future use; no per-device API keys anymore.
  */
-async function hashApiKey(key: string): Promise<string> {
+async function sha256Hex(key: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(key);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -41,11 +81,17 @@ async function hashApiKey(key: string): Promise<string> {
 }
 
 /**
- * Validates the API key from the request.
- * Supports both the global GATEWAY_API_KEY and per-device keys.
- * Per-device keys are validated against gateway_devices.api_key_hash (SHA-256).
+ * Validates the request authentication.
+ * Supports Basic Auth (username/password) and the global GATEWAY_API_KEY.
+ * Per-device API keys have been removed.
+ *
+ * Returns { tenantId } context for Basic Auth requests (used to scope GET
+ * routes to the device's own tenant). For the global GATEWAY_API_KEY
+ * tenantId is null and the caller is treated as trusted server-to-server.
  */
-async function validateApiKey(req: Request): Promise<Response | null> {
+export interface GatewayAuthContext { tenantId: string | null }
+
+async function validateApiKey(req: Request): Promise<Response | GatewayAuthContext> {
   const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
   if (!gatewayApiKey) {
     console.error("[gateway-ingest] GATEWAY_API_KEY secret not configured");
@@ -53,10 +99,10 @@ async function validateApiKey(req: Request): Promise<Response | null> {
   }
   const authHeader = req.headers.get("Authorization") || "";
 
-  // 1) Basic Auth (Loxone-style: username + password against gateway_devices)
+  // 1) Basic Auth (username + password against gateway_devices)
   if (/^Basic\s+/i.test(authHeader)) {
     const ctx = await getDeviceFromBasicAuth(req);
-    if (ctx) return null;
+    if (ctx) return { tenantId: ctx.tenant_id };
     return json({ error: "Unauthorized" }, 401);
   }
 
@@ -65,25 +111,41 @@ async function validateApiKey(req: Request): Promise<Response | null> {
     return json({ error: "Unauthorized" }, 401);
   }
 
-  // 2) Global GATEWAY_API_KEY (legacy)
-  if (providedKey === gatewayApiKey) {
-    return null;
+  // 2) Tenant-eigener API-Key (aic_live_...) → SHA-256 Lookup in tenant_api_keys
+  if (providedKey.startsWith("aic_live_")) {
+    try {
+      const hash = await sha256Hex(providedKey);
+      const supabase = getSupabase();
+      const { data: keyRow } = await supabase
+        .from("tenant_api_keys")
+        .select("id, tenant_id, revoked_at")
+        .eq("key_hash", hash)
+        .is("revoked_at", null)
+        .maybeSingle();
+      if (keyRow?.tenant_id) {
+        // fire-and-forget last_used_at
+        supabase.from("tenant_api_keys")
+          .update({ last_used_at: new Date().toISOString() })
+          .eq("id", keyRow.id)
+          .then(() => {});
+        return { tenantId: keyRow.tenant_id };
+      }
+    } catch (e) {
+      console.error("[gateway-ingest] tenant key lookup failed:", e);
+    }
+    return json({ error: "Unauthorized" }, 401);
   }
 
-  // 3) Per-device API key: hash and check against gateway_devices.api_key_hash
-  const keyHash = await hashApiKey(providedKey);
-  const supabase = getSupabase();
-  const { data: device } = await supabase
-    .from("gateway_devices")
-    .select("id, tenant_id")
-    .eq("api_key_hash", keyHash)
-    .maybeSingle();
-
-  if (device) {
-    return null; // Per-device key valid
+  // 3) Globaler GATEWAY_API_KEY (Hetzner-Worker / Bridge, server-to-server)
+  if (providedKey === gatewayApiKey) {
+    return { tenantId: null };
   }
 
   return json({ error: "Unauthorized" }, 401);
+}
+
+function isAuthError(v: Response | GatewayAuthContext): v is Response {
+  return v instanceof Response;
 }
 
 /**
@@ -103,17 +165,18 @@ function parseBasicAuth(req: Request): { username: string; password: string } | 
   }
 }
 
+function normalizeMac(input: string | null): string {
+  return (input || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
+}
+
 /**
- * bcrypt verify – uses Web Crypto via deno-std bcrypt.
+ * bcrypt verify – uses bcryptjs (pure JS) via npm: specifier.
  */
 async function bcryptVerify(plain: string, hash: string): Promise<boolean> {
   try {
-    const bcrypt = await import("https://deno.land/x/bcrypt@v0.4.1/mod.ts");
-    // Edge Runtime has no Worker → use sync API as fallback.
-    if (typeof globalThis.Worker === "undefined") {
-      return bcrypt.compareSync(plain, hash);
-    }
-    return await bcrypt.compare(plain, hash);
+    const bcrypt: any = await import("npm:bcryptjs@2.4.3");
+    const compare = bcrypt.compare ?? bcrypt.default?.compare;
+    return await compare(plain, hash);
   } catch (e) {
     console.error("[gateway-ingest] bcrypt verify error:", e);
     return false;
@@ -129,12 +192,17 @@ async function getDeviceFromBasicAuth(req: Request): Promise<
 > {
   const creds = parseBasicAuth(req);
   if (!creds || !creds.username || !creds.password) return null;
+  const requestMac = normalizeMac(req.headers.get("x-gateway-mac"));
   const supabase = getSupabase();
-  const { data: device } = await supabase
+  const { data: devices } = await supabase
     .from("gateway_devices")
     .select("id, tenant_id, mac_address, gateway_password_hash")
     .eq("gateway_username", creds.username)
-    .maybeSingle();
+    .limit(requestMac ? 10 : 2);
+  const device = (devices || []).find((row) => {
+    if (!requestMac) return true;
+    return normalizeMac(row.mac_address) === requestMac;
+  });
   if (!device || !device.gateway_password_hash) return null;
   const ok = await bcryptVerify(creds.password, device.gateway_password_hash);
   if (!ok) return null;
@@ -147,28 +215,13 @@ async function getDeviceFromBasicAuth(req: Request): Promise<
 }
 
 /**
- * Extracts device context from a per-device API key OR Basic-Auth.
- * Returns { device_id, tenant_id } when known, null otherwise.
+ * Extracts device context from Basic-Auth only.
+ * Per-device API keys are no longer supported.
  */
 async function getDeviceFromApiKey(req: Request): Promise<{ device_id: string; tenant_id: string | null } | null> {
-  // Basic Auth path
   const basic = await getDeviceFromBasicAuth(req);
   if (basic) return { device_id: basic.device_id, tenant_id: basic.tenant_id };
-
-  const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
-  const authHeader = req.headers.get("Authorization") || "";
-  const providedKey = authHeader.replace(/^Bearer\s+/i, "").trim();
-  if (!providedKey || providedKey === gatewayApiKey) return null;
-
-  const keyHash = await hashApiKey(providedKey);
-  const supabase = getSupabase();
-  const { data: device } = await supabase
-    .from("gateway_devices")
-    .select("id, tenant_id")
-    .eq("api_key_hash", keyHash)
-    .maybeSingle();
-
-  return device ? { device_id: device.id, tenant_id: device.tenant_id } : null;
+  return null;
 }
 
 function getSupabase() {
@@ -231,14 +284,17 @@ function parseMeterIds(url: URL): string[] {
 
 /* ── GET Route handlers ──────────────────────────────────────────────────────── */
 
-async function handleListLocations(): Promise<Response> {
+async function handleListLocations(scopeTenantId: string | null): Promise<Response> {
   const supabase = getSupabase();
-  const { data, error } = await supabase
+  let query = supabase
     .from("locations")
     .select("id, tenant_id, name, address, city, postal_code, country, type, usage_type, energy_sources, latitude, longitude")
     .eq("is_archived", false)
     .order("name");
 
+  if (scopeTenantId) query = query.eq("tenant_id", scopeTenantId);
+
+  const { data, error } = await query;
   if (error) {
     console.error("[gateway-ingest] list-locations error:", error.message);
     return json({ success: false, error: "Internal error" }, 500);
@@ -246,7 +302,7 @@ async function handleListLocations(): Promise<Response> {
   return json({ success: true, locations: data || [] });
 }
 
-async function handleListMeters(url: URL): Promise<Response> {
+async function handleListMeters(url: URL, scopeTenantId: string | null): Promise<Response> {
   const supabase = getSupabase();
   const locationId = url.searchParams.get("location_id");
 
@@ -275,6 +331,7 @@ async function handleListMeters(url: URL): Promise<Response> {
     `)
     .eq("is_archived", false);
 
+  if (scopeTenantId) query = query.eq("tenant_id", scopeTenantId);
   if (locationId) {
     query = query.eq("location_id", locationId);
   }
@@ -288,7 +345,7 @@ async function handleListMeters(url: URL): Promise<Response> {
   return json({ success: true, meters: data || [] });
 }
 
-async function handleGetDailyTotals(url: URL): Promise<Response> {
+async function handleGetDailyTotals(url: URL, scopeTenantId: string | null): Promise<Response> {
   const range = parseDateRange(url);
   if (!range) {
     return json({ error: "Parameters 'from' and 'to' required (ISO date, max 90 days)" }, 400);
@@ -303,14 +360,25 @@ async function handleGetDailyTotals(url: URL): Promise<Response> {
 
   const supabase = getSupabase();
 
-  // If location_id provided but no meter_ids, resolve meters first
+  // If explicit meter_ids supplied, restrict them to scope tenant
   let resolvedMeterIds = meterIds;
+  if (resolvedMeterIds.length > 0 && scopeTenantId) {
+    const { data: own } = await supabase
+      .from("meters")
+      .select("id")
+      .eq("tenant_id", scopeTenantId)
+      .in("id", resolvedMeterIds);
+    resolvedMeterIds = (own || []).map((m: { id: string }) => m.id);
+  }
+
   if (resolvedMeterIds.length === 0 && locationId) {
-    const { data: meters, error: mErr } = await supabase
+    let q = supabase
       .from("meters")
       .select("id")
       .eq("location_id", locationId)
       .eq("is_archived", false);
+    if (scopeTenantId) q = q.eq("tenant_id", scopeTenantId);
+    const { data: meters, error: mErr } = await q;
     if (mErr) return json({ error: "Internal error" }, 500);
     resolvedMeterIds = (meters || []).map((m: { id: string }) => m.id);
   }
@@ -378,7 +446,7 @@ async function handleGetDailyTotals(url: URL): Promise<Response> {
   return json({ success: true, daily_totals: results });
 }
 
-async function handleGetReadings(url: URL): Promise<Response> {
+async function handleGetReadings(url: URL, scopeTenantId: string | null): Promise<Response> {
   const range = parseDateRange(url);
   if (!range) {
     return json({ error: "Parameters 'from' and 'to' required (ISO date, max 90 days)" }, 400);
@@ -394,12 +462,22 @@ async function handleGetReadings(url: URL): Promise<Response> {
   const supabase = getSupabase();
 
   let resolvedMeterIds = meterIds;
+  if (resolvedMeterIds.length > 0 && scopeTenantId) {
+    const { data: own } = await supabase
+      .from("meters")
+      .select("id")
+      .eq("tenant_id", scopeTenantId)
+      .in("id", resolvedMeterIds);
+    resolvedMeterIds = (own || []).map((m: { id: string }) => m.id);
+  }
   if (resolvedMeterIds.length === 0 && locationId) {
-    const { data: meters, error: mErr } = await supabase
+    let q = supabase
       .from("meters")
       .select("id")
       .eq("location_id", locationId)
       .eq("is_archived", false);
+    if (scopeTenantId) q = q.eq("tenant_id", scopeTenantId);
+    const { data: meters, error: mErr } = await q;
     if (mErr) return json({ error: "Internal error" }, 500);
     resolvedMeterIds = (meters || []).map((m: { id: string }) => m.id);
   }
@@ -431,9 +509,10 @@ async function handleGetReadings(url: URL): Promise<Response> {
   });
 }
 
-async function handleGetLocationsSummary(url: URL): Promise<Response> {
+
+async function handleGetLocationsSummary(url: URL, scopeTenantId: string | null): Promise<Response> {
   const supabase = getSupabase();
-  const tenantId = url.searchParams.get("tenant_id");
+  const tenantId = scopeTenantId ?? url.searchParams.get("tenant_id");
 
   let locQuery = supabase
     .from("locations")
@@ -483,8 +562,8 @@ async function handleGetLocationsSummary(url: URL): Promise<Response> {
 /* ── POST Route handlers ─────────────────────────────────────────────────────── */
 
 async function handleCompactDay(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   const supabase = getSupabase();
 
@@ -555,11 +634,13 @@ async function handleCompactDay(req: Request): Promise<Response> {
   const compactedRows = Array.from(buckets.values()).map((b) => ({
     meter_id: b.meter_id, tenant_id: b.tenant_id, energy_type: b.energy_type,
     bucket: b.bucket, power_avg: b.sum / b.count, power_max: b.max, sample_count: b.count,
+    resolution_minutes: 5,
   }));
 
   const { error: upsertError } = await supabase
     .from("meter_power_readings_5min")
-    .upsert(compactedRows, { onConflict: "meter_id,bucket" });
+    // Unique-Index: (meter_id, bucket, resolution_minutes)
+    .upsert(compactedRows, { onConflict: "meter_id,bucket,resolution_minutes" });
 
   if (upsertError) {
     console.error("[compact-day] upsert error:", upsertError.message);
@@ -583,8 +664,9 @@ async function handleCompactDay(req: Request): Promise<Response> {
 }
 
 async function handlePostReadings(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+  const scopeTenantId = _auth.tenantId; // wenn gesetzt: Tenant-Key → strikt scoped
 
   let body: { readings?: PowerReading[] };
   try {
@@ -604,6 +686,11 @@ async function handlePostReadings(req: Request): Promise<Response> {
   for (const r of readings) {
     if (!r.meter_id || !r.tenant_id || r.power_value === undefined || !r.energy_type) {
       skipped.push(`${r.meter_id ?? "unknown"}: missing required fields`);
+      continue;
+    }
+    // Tenant-scope enforcement: bei Tenant-Key MUSS jede reading.tenant_id passen
+    if (scopeTenantId && r.tenant_id !== scopeTenantId) {
+      skipped.push(`${r.meter_id}: tenant_id mismatch (key scoped to ${scopeTenantId})`);
       continue;
     }
     const powerValue = Number(r.power_value);
@@ -758,8 +845,8 @@ async function validateBasicAuth(
   }
 
   // Fall back to API key auth
-  const apiKeyErr = await validateApiKey(req);
-  if (apiKeyErr) return apiKeyErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   // If using API key, load config from any matching integration for this tenant
   const locIntegrations = await findSchneiderIntegrations();
@@ -880,8 +967,8 @@ async function handleSchneiderPush(req: Request): Promise<Response> {
 /* ── Heartbeat handler ────────────────────────────────────────────────────────── */
 
 async function handleHeartbeat(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: {
     device_name?: string;
@@ -1065,8 +1152,8 @@ async function handleHeartbeat(req: Request): Promise<Response> {
  * POST ?action=worker-heartbeat   Body: { worker_id?: string, version?: string }
  */
 async function handleWorkerHeartbeat(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: { worker_id?: string; version?: string } = {};
   try { body = await req.json(); } catch { /* body optional */ }
@@ -1087,11 +1174,923 @@ async function handleWorkerHeartbeat(req: Request): Promise<Response> {
   return json({ success: true, recorded_at: new Date().toISOString() });
 }
 
+/* ── Bridge-Worker (Variante B): Heartbeat & Event-Log ─────────────────────── */
+
+/**
+ * POST ?action=bridge-heartbeat
+ * Body: { worker_name: string, version?: string, host?: string,
+ *         status?: "online"|"degraded"|"offline", last_error?: string|null,
+ *         links_state?: Array<{ miniserver_serial: string,
+ *                               last_connected_at?: string, last_event_at?: string }> }
+ *
+ * Aktualisiert `bridge_workers.last_heartbeat_at` (anhand worker_name) und
+ * optional die Zeitstempel der zugehörigen `bridge_miniserver_links`.
+ */
+async function handleBridgeHeartbeat(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    worker_name?: string;
+    version?: string;
+    host?: string;
+    status?: string;
+    last_error?: string | null;
+    links_state?: Array<{
+      miniserver_serial: string;
+      last_connected_at?: string;
+      last_event_at?: string;
+    }>;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.worker_name) return json({ error: "worker_name required" }, 400);
+
+  const supabase = getSupabase();
+  const nowIso = new Date().toISOString();
+
+  const patch: Record<string, unknown> = {
+    last_heartbeat_at: nowIso,
+    status: body.status ?? "online",
+  };
+  if (body.version !== undefined) patch.version = body.version;
+  if (body.host !== undefined) patch.host = body.host;
+  if (body.last_error !== undefined) patch.last_error = body.last_error;
+
+  const { data: worker, error } = await supabase
+    .from("bridge_workers")
+    .update(patch)
+    .eq("name", body.worker_name)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !worker) {
+    return json({ success: false, error: error?.message ?? "worker not found" }, 404);
+  }
+
+  // Optional: pro Miniserver Zeitstempel nachziehen
+  if (Array.isArray(body.links_state) && body.links_state.length > 0) {
+    for (const link of body.links_state) {
+      if (!link.miniserver_serial) continue;
+      const linkPatch: Record<string, unknown> = {};
+      if (link.last_connected_at) linkPatch.last_connected_at = link.last_connected_at;
+      if (link.last_event_at) linkPatch.last_event_at = link.last_event_at;
+      if (Object.keys(linkPatch).length === 0) continue;
+      await supabase
+        .from("bridge_miniserver_links")
+        .update(linkPatch)
+        .eq("worker_id", worker.id)
+        .eq("miniserver_serial", link.miniserver_serial);
+    }
+  }
+
+  return json({ success: true, worker_id: worker.id, recorded_at: nowIso });
+}
+
+/**
+ * POST ?action=bridge-log-event
+ * Body: { worker_name: string, severity?: "debug"|"info"|"warn"|"error",
+ *         event_type: string, message?: string, details?: any,
+ *         miniserver_serial?: string }
+ *
+ * Schreibt einen Eintrag in `bridge_event_log` (Retention: 7 Tage).
+ * Dient als Diagnose-Quelle für stille WebSocket-Abbrüche / Token-Refresh-Fehler.
+ */
+async function handleBridgeLogEvent(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    worker_name?: string;
+    severity?: "debug" | "info" | "warn" | "error";
+    event_type?: string;
+    message?: string;
+    details?: unknown;
+    miniserver_serial?: string;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.worker_name || !body.event_type) {
+    return json({ error: "worker_name and event_type required" }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  // Worker + (optional) Link auflösen
+  const { data: worker } = await supabase
+    .from("bridge_workers")
+    .select("id")
+    .eq("name", body.worker_name)
+    .maybeSingle();
+
+  let linkId: string | null = null;
+  let tenantId: string | null = null;
+  if (worker && body.miniserver_serial) {
+    const { data: link } = await supabase
+      .from("bridge_miniserver_links")
+      .select("id, tenant_id")
+      .eq("worker_id", worker.id)
+      .eq("miniserver_serial", body.miniserver_serial)
+      .maybeSingle();
+    if (link) { linkId = link.id; tenantId = link.tenant_id ?? null; }
+  }
+
+  const { error } = await supabase.from("bridge_event_log").insert({
+    worker_id: worker?.id ?? null,
+    link_id: linkId,
+    tenant_id: tenantId,
+    severity: body.severity ?? "info",
+    event_type: body.event_type,
+    message: body.message ?? null,
+    details: body.details ?? null,
+  });
+
+  if (error) return json({ success: false, error: error.message }, 500);
+  return json({ success: true });
+}
+
+/**
+ * POST ?action=bridge-readings
+ * Body: {
+ *   worker_name: string,
+ *   readings: [{ miniserver_serial, sensor_uuid, value, recorded_at? }]
+ * }
+ * Schreibt die Roh-Werte in `bridge_raw_samples` (Ringpuffer, 24 h).
+ * Aggregation in die Schatten-Tabellen passiert separat in der
+ * Edge-Function `bridge-aggregator` (pg_cron, alle 5 Min).
+ */
+async function handleBridgeReadings(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    worker_name?: string;
+    /**
+     * v1.10: Reiner Live-Kanal. true = Werte werden NUR per Realtime-Broadcast
+     * verteilt (keine Inserts in bridge_raw_samples, kein SOC-Update, keine
+     * Aggregation). Damit kostet der Live-Pfad keine Datenbank-Schreiblast.
+     */
+    live_only?: boolean;
+    readings?: Array<{
+      miniserver_serial?: string;
+      sensor_uuid?: string;
+      value?: number;
+      recorded_at?: string;
+      role?: "pwr" | "flow" | "today" | "total" | "month" | "year" | "soc";
+    }>;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.worker_name || !Array.isArray(body.readings) || body.readings.length === 0) {
+    return json({ error: "worker_name and non-empty readings[] required" }, 400);
+  }
+
+  const liveOnly = body.live_only === true;
+  const supabase = getSupabase();
+
+  const workerCacheKey = `worker:${body.worker_name}`;
+  let worker = liveOnly ? bridgeLookupGet<{ id: string }>(workerCacheKey) : undefined;
+  if (!worker) {
+    const { data } = await supabase
+      .from("bridge_workers")
+      .select("id")
+      .eq("name", body.worker_name)
+      .maybeSingle();
+    worker = (data as { id: string } | null) ?? undefined;
+    if (worker && liveOnly) bridgeLookupSet(workerCacheKey, worker);
+  }
+  if (!worker) return json({ error: "unknown worker_name" }, 404);
+
+  // Link-Cache pro Aufruf (1 DB-Query je Miniserver, nicht je Reading).
+  // Im Live-Modus zusätzlich über Requests hinweg gecacht (TTL 5 Min).
+  const linkCache = new Map<string, { id: string; tenant_id: string | null }>();
+  const serials = [...new Set(body.readings.map(r => r.miniserver_serial).filter(Boolean) as string[])];
+  const missingSerials: string[] = [];
+  for (const s of serials) {
+    const cached = liveOnly ? bridgeLookupGet<{ id: string; tenant_id: string | null }>(`link:${worker.id}:${s}`) : undefined;
+    if (cached) linkCache.set(s, cached);
+    else missingSerials.push(s);
+  }
+  if (missingSerials.length > 0) {
+    const { data: links } = await supabase
+      .from("bridge_miniserver_links")
+      .select("id, tenant_id, miniserver_serial")
+      .eq("worker_id", worker.id)
+      .in("miniserver_serial", missingSerials);
+    for (const l of links ?? []) {
+      const entry = { id: l.id, tenant_id: l.tenant_id ?? null };
+      linkCache.set(l.miniserver_serial, entry);
+      if (liveOnly) bridgeLookupSet(`link:${worker.id}:${l.miniserver_serial}`, entry);
+    }
+  }
+
+  // Phase 7: rollenbasiertes Routing
+  //  - role="pwr" (Default)  → bridge_raw_samples (für 5-Min-Aggregator) + Broadcast
+  //  - role="flow" (v1.16)   → wie pwr, aber Momentanwert in m³/h (Wasser)
+  //  - role="soc"            → energy_storages.current_soc_pct + Broadcast
+  //  - andere Rollen          → nur Broadcast (kein DB-Write); UI nutzt den Wert live in KPI-Kacheln
+  type Role = "pwr" | "flow" | "today" | "total" | "month" | "year" | "soc";
+  const rawRows: any[] = [];
+  const broadcastRows: Array<{ tenant_id: string | null; uuid: string; value: number; at: string; role: Role }> = [];
+  const socRows: Array<{ tenant_id: string; uuid: string; value: number; at: string }> = [];
+  const socReadingRows: Array<{ storage_id: string; tenant_id: string; sensor_uuid: string; soc_pct: number; recorded_at: string; source: string }> = [];
+  let skipped = 0;
+  let coalesced = 0;
+  let deltaSkipped = 0;
+
+  // Phase A: Batch-Coalescing — mehrere Readings desselben Sensors innerhalb
+  // eines Requests werden auf den letzten Wert reduziert (Broadcast trotzdem
+  // für alle Events, damit die Live-UI keine Zwischenwerte verliert).
+  const lastByUuid = new Map<string, { value: number; at: string; role: Role; miniserver_serial: string }>();
+  for (const r of body.readings) {
+    if (!r.miniserver_serial || !r.sensor_uuid || typeof r.value !== "number" || !isFinite(r.value)) {
+      skipped++;
+      continue;
+    }
+    const role: Role = (r.role as Role) ?? "pwr";
+    const link = linkCache.get(r.miniserver_serial);
+    const uuid = r.sensor_uuid.toLowerCase();
+    const at = r.recorded_at ?? new Date().toISOString();
+    broadcastRows.push({ tenant_id: link?.tenant_id ?? null, uuid, value: r.value, at, role });
+    if (role === "pwr" || role === "flow") {
+      const key = `${r.miniserver_serial}|${uuid}`;
+      if (lastByUuid.has(key)) coalesced++;
+      lastByUuid.set(key, { value: r.value, at, role, miniserver_serial: r.miniserver_serial });
+    } else if (role === "soc") {
+      if (link?.tenant_id && r.value >= 0 && r.value <= 100) {
+        socRows.push({ tenant_id: link.tenant_id, uuid, value: r.value, at });
+      }
+    }
+  }
+
+  // Ingest-Guard v1.16: Für Wasser darf ein Momentanwert (m³/h) nicht wie ein
+  // kumulativer Zählerstand aussehen. Schwelle 20 m³/h — reale Hausanschlüsse
+  // liegen deutlich darunter. Gas wird vom Worker bereits in kW umgerechnet
+  // und deshalb hier nicht mehr gefiltert.
+  const pwrUuids = [...lastByUuid.keys()].map(k => k.split("|")[1]);
+  let flowGuardDropped = 0;
+  if (!liveOnly && pwrUuids.length > 0) {
+    const { data: metersForGuard } = await supabase
+      .from("meters")
+      .select("sensor_uuid, energy_type")
+      .in("sensor_uuid", [...new Set(pwrUuids)])
+      .in("energy_type", ["wasser", "water"]);
+    const flowUuidSet = new Set(
+      (metersForGuard ?? [])
+        .map((m: any) => String(m.sensor_uuid ?? "").toLowerCase())
+    );
+    if (flowUuidSet.size > 0) {
+      for (const [key, s] of [...lastByUuid.entries()]) {
+        const uuid = key.split("|")[1];
+        if (!flowUuidSet.has(uuid)) continue;
+        if (Math.abs(s.value) > 20) {
+          lastByUuid.delete(key);
+          flowGuardDropped++;
+          console.warn(`[bridge-readings] flow-guard: dropped pwr=${s.value} for wasser/gas uuid ${uuid} (looks like cumulative meter reading)`);
+        }
+      }
+    }
+  }
+
+  // Phase B: In-Memory Delta-Guard pro warmer Function-Instanz. Skippt Inserts,
+  // wenn |Δ| < 5 W (abs) UND < 1% (rel) UND letzter Insert < 60s her.
+  // Cold-Start setzt den Cache zurück → nach Boot wird jeder Sensor 1x geschrieben.
+  const now = Date.now();
+  for (const [key, s] of (liveOnly ? [] : [...lastByUuid.entries()])) {
+    const link = linkCache.get(s.miniserver_serial);
+    const prev = bridgeRawLastCache.get(key);
+    const atMs = new Date(s.at).getTime();
+    if (prev) {
+      const dv = Math.abs(s.value - prev.value);
+      const rel = prev.value !== 0 ? dv / Math.abs(prev.value) : Infinity;
+      const ageMs = atMs - prev.atMs;
+      if (dv < 5 && rel < 0.01 && ageMs < 60_000) {
+        deltaSkipped++;
+        continue;
+      }
+    }
+    const uuid = key.split("|")[1];
+    rawRows.push({
+      worker_id: worker.id,
+      link_id: link?.id ?? null,
+      tenant_id: link?.tenant_id ?? null,
+      miniserver_serial: s.miniserver_serial,
+      uuid,
+      value: s.value,
+      received_at: s.at,
+    });
+    bridgeRawLastCache.set(key, { value: s.value, atMs });
+  }
+  // LRU-Grenze verhindert Speicherleck bei sehr vielen Sensoren.
+  if (bridgeRawLastCache.size > 5000) {
+    const excess = bridgeRawLastCache.size - 5000;
+    let i = 0;
+    for (const k of bridgeRawLastCache.keys()) { if (i++ >= excess) break; bridgeRawLastCache.delete(k); }
+  }
+
+  // Power-Werte in bridge_raw_samples persistieren (für 5-Min-Aggregator).
+  if (rawRows.length > 0) {
+    const { error } = await supabase.from("bridge_raw_samples").insert(rawRows);
+    if (error) return json({ success: false, error: error.message }, 500);
+  }
+
+  // SOC-Werte persistieren: Loxone liefert Slvl am Speicher-Zählerblock. Der Worker
+  // sendet deshalb die Speicher-Block-UUID; hier wird sie auf meter → storage gemappt.
+  let socUpdated = 0;
+  if (!liveOnly && socRows.length > 0) {
+    const tenants = [...new Set(socRows.map((r) => r.tenant_id))];
+    const uuids = [...new Set(socRows.map((r) => r.uuid))];
+    const { data: meters } = await supabase
+      .from("meters")
+      .select("id, tenant_id, location_id, sensor_uuid")
+      .in("tenant_id", tenants)
+      .in("sensor_uuid", uuids)
+      .eq("is_archived", false);
+
+    for (const row of socRows) {
+      const meter = (meters ?? []).find((m: any) => m.tenant_id === row.tenant_id && String(m.sensor_uuid).toLowerCase() === row.uuid);
+      if (!meter?.location_id) continue;
+
+      const { data: storages } = await supabase
+        .from("energy_storages")
+        .select("id, power_meter_id, soc_sensor_uuid, current_soc_pct, soc_updated_at")
+        .eq("tenant_id", row.tenant_id)
+        .eq("location_id", meter.location_id);
+
+      const storage = (storages ?? []).find((s: any) => s.power_meter_id === meter.id)
+        ?? (storages ?? []).find((s: any) => String(s.soc_sensor_uuid ?? "").toLowerCase() === row.uuid)
+        ?? (storages ?? []).find((s: any) => !s.power_meter_id);
+      if (!storage) continue;
+
+      // IO-Reduktion: SOC nur schreiben, wenn Delta ≥ 0.5% ODER letzte
+      // Aktualisierung >5 Min alt. Vorher: 9k Updates/Tag auf 3 Zeilen.
+      const currentSoc = (storage as any).current_soc_pct as number | null;
+      const currentSocAt = (storage as any).soc_updated_at as string | null;
+      const delta = currentSoc == null ? Infinity : Math.abs(currentSoc - row.value);
+      const ageMs = currentSocAt ? Date.now() - new Date(currentSocAt).getTime() : Infinity;
+      const uuidChanged = storage.soc_sensor_uuid !== row.uuid;
+      const meterLinkChanged = storage.power_meter_id !== meter.id;
+      if (!uuidChanged && !meterLinkChanged && delta < 0.5 && ageMs < 5 * 60_000) continue;
+
+      const patch: Record<string, unknown> = {
+        current_soc_pct: row.value,
+        soc_updated_at: row.at,
+      };
+      if (uuidChanged) patch.soc_sensor_uuid = row.uuid;
+      if (meterLinkChanged) patch.power_meter_id = meter.id;
+
+      const { error: socErr } = await supabase
+        .from("energy_storages")
+        .update(patch)
+        .eq("id", storage.id);
+      if (socErr) {
+        console.warn(`[bridge-readings] SOC update failed for ${row.uuid}: ${socErr.message}`);
+      } else {
+        socReadingRows.push({
+          storage_id: storage.id,
+          tenant_id: row.tenant_id,
+          sensor_uuid: row.uuid,
+          soc_pct: row.value,
+          recorded_at: row.at,
+          source: "bridge_readings",
+        });
+        socUpdated++;
+      }
+
+    }
+  }
+
+  if (socReadingRows.length > 0) {
+    const { error: socReadingsErr } = await supabase
+      .from("storage_soc_readings")
+      .insert(socReadingRows);
+    if (socReadingsErr) {
+      console.warn(`[bridge-readings] SOC history insert failed: ${socReadingsErr.message}`);
+    }
+  }
+
+  // Realtime-Broadcast pro Tenant: Power + Energiestände (today/total/...) zusammen.
+  // UI unterscheidet anhand der `role`, welches Feld zu aktualisieren ist.
+  try {
+    const byTenant = new Map<string, Array<{ uuid: string; value: number; at: string; role: Role }>>();
+    for (const r of broadcastRows) {
+      if (!r.tenant_id) continue;
+      const arr = byTenant.get(r.tenant_id) ?? [];
+      arr.push({ uuid: r.uuid, value: r.value, at: r.at, role: r.role });
+      byTenant.set(r.tenant_id, arr);
+    }
+    if (byTenant.size > 0) {
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+      const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const messages = [...byTenant.entries()].map(([tenantId, events]) => ({
+        topic: `loxone-live-${tenantId}`,
+        event: "readings",
+        payload: { events },
+        private: false,
+      }));
+      fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SERVICE_ROLE,
+          Authorization: `Bearer ${SERVICE_ROLE}`,
+        },
+        body: JSON.stringify({ messages }),
+      }).then(async (r) => {
+        if (!r.ok) {
+          const txt = await r.text().catch(() => "");
+          console.error(`[bridge-readings] broadcast HTTP ${r.status}: ${txt}`);
+        } else {
+          console.log(`[bridge-readings] broadcast ok: ${messages.length} topic(s), ${broadcastRows.length} event(s) (raw_inserted=${rawRows.length}, soc_updated=${socUpdated})`);
+        }
+      }).catch((e) => console.error("[bridge-readings] broadcast failed:", e?.message ?? e));
+    }
+  } catch (e) {
+    console.error("[bridge-readings] broadcast prep error:", (e as Error).message);
+  }
+
+  return json({ success: true, live_only: liveOnly, inserted: rawRows.length, broadcast: broadcastRows.length, soc_updated: socUpdated, skipped, coalesced, delta_skipped: deltaSkipped });
+}
+
+/**
+ * POST ?action=bridge-power-5min
+ * Body: {
+ *   worker_name: string,
+ *   rows: [{
+ *     meter_id: string,
+ *     tenant_id: string,
+ *     energy_type: string,
+ *     bucket: string (ISO, 5-Min-aligned),
+ *     power_avg: number,
+ *     power_max: number,
+ *     sample_count: number
+ *   }]
+ * }
+ * Direkter Upsert in meter_power_readings_5min. Ersetzt den Umweg über
+ * bridge_raw_samples + 5-Min-Aggregator-Cron für alle Meter, deren Worker
+ * v1.5+ (Bucket-Aggregation) liefern. Source = 'bridge_ws'.
+ */
+async function handleBridgePower5min(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    worker_name?: string;
+    rows?: Array<{
+      meter_id?: string;
+      tenant_id?: string;
+      energy_type?: string;
+      bucket?: string;
+      power_avg?: number;
+      power_max?: number;
+      sample_count?: number;
+    }>;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.worker_name || !Array.isArray(body.rows) || body.rows.length === 0) {
+    return json({ error: "worker_name and non-empty rows[] required" }, 400);
+  }
+
+  const supabase = getSupabase();
+  const { data: worker } = await supabase
+    .from("bridge_workers")
+    .select("id")
+    .eq("name", body.worker_name)
+    .maybeSingle();
+  if (!worker) return json({ error: "unknown worker_name" }, 404);
+
+  const upsertRows: any[] = [];
+  let skipped = 0;
+  for (const r of body.rows) {
+    if (!r.meter_id || !r.tenant_id || !r.energy_type || !r.bucket ||
+        typeof r.power_avg !== "number" || !isFinite(r.power_avg) ||
+        typeof r.power_max !== "number" || !isFinite(r.power_max) ||
+        typeof r.sample_count !== "number" || r.sample_count <= 0) {
+      skipped++;
+      continue;
+    }
+    // Bucket auf 5-Min-Grid normalisieren (Sicherheit gegen Worker-Bugs).
+    const ts = new Date(r.bucket).getTime();
+    if (!isFinite(ts)) { skipped++; continue; }
+    const alignedMs = Math.floor(ts / 300000) * 300000;
+    upsertRows.push({
+      meter_id: r.meter_id,
+      tenant_id: r.tenant_id,
+      energy_type: r.energy_type,
+      bucket: new Date(alignedMs).toISOString(),
+      power_avg: r.power_avg,
+      power_max: r.power_max,
+      sample_count: r.sample_count,
+      resolution_minutes: 5,
+      source: "bridge_ws",
+    });
+  }
+
+  if (upsertRows.length === 0) {
+    return json({ success: true, upserted: 0, skipped });
+  }
+
+  const { error } = await supabase
+    .from("meter_power_readings_5min")
+    .upsert(upsertRows, { onConflict: "meter_id,bucket,resolution_minutes" });
+  if (error) return json({ success: false, error: error.message }, 500);
+
+  return json({ success: true, upserted: upsertRows.length, skipped });
+}
+
+/* ── Loxone Remote-Connect WebSocket Feldtest ───────────────────────────────── */
+
+
+/**
+ * GET ?action=list-loxone-ws-meters
+ * Liefert ausschließlich Loxone-Zähler an Standort-Integrationen mit
+ * loxone_remote_connect_ws_enabled = TRUE. Wird vom Loxone-WS-Worker
+ * auf Hetzner gepollt (alle 5 Min), um die Test-Tenants zu kennen.
+ */
+async function handleListLoxoneWsMeters(): Promise<Response> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("meters")
+    .select(`
+      id, name, energy_type, sensor_uuid, tenant_id, location_integration_id,
+      power_state_uuid, power_state_key,
+      device_type, source_unit_power, source_unit_energy, brennwert, zustandszahl,
+      is_pulse_meter, volume_per_pulse,
+      location_integration:location_integrations!meters_location_integration_id_fkey (
+        id, config, loxone_remote_connect_ws_enabled,
+        integration:integrations!location_integrations_integration_id_fkey ( type )
+      )
+    `)
+    .eq("is_archived", false)
+    .not("sensor_uuid", "is", null);
+
+  if (error) {
+    console.error("[gateway-ingest] list-loxone-ws-meters error:", error.message);
+    return json({ success: false, error: "Internal error" }, 500);
+  }
+
+  const filtered = (data || []).filter((m: any) => {
+    const li = m.location_integration;
+    if (!li || li.loxone_remote_connect_ws_enabled !== true) return false;
+    const type = li.integration?.type;
+    return type === "loxone" || type === "loxone_miniserver";
+  });
+
+  // Wichtig: Der WS-Worker muss auch dann verbinden und Heartbeats schreiben,
+  // wenn an einer Loxone-Integration aktuell noch kein aktiver Zähler mit
+  // sensor_uuid hängt. Sonst wird der Miniserver im Fleet-Monitor fälschlich
+  // "stale", obwohl Zugangsdaten und Remote-Connect grundsätzlich funktionieren.
+  const { data: integrations, error: liError } = await supabase
+    .from("location_integrations")
+    .select(`
+      id, location_id, config, loxone_remote_connect_ws_enabled, is_enabled,
+      integration:integrations!location_integrations_integration_id_fkey ( type ),
+      location:locations!location_integrations_location_id_fkey ( tenant_id )
+    `)
+    .eq("is_enabled", true)
+    .eq("loxone_remote_connect_ws_enabled", true);
+
+  if (liError) {
+    console.error("[gateway-ingest] list-loxone-ws-integrations error:", liError.message);
+    return json({ success: false, error: "Internal error" }, 500);
+  }
+
+  const wsIntegrations = (integrations || [])
+    .filter((li: any) => {
+      const type = li.integration?.type;
+      const cfg = li.config || {};
+      return (
+        (type === "loxone" || type === "loxone_miniserver") &&
+        !!cfg.serial_number &&
+        !!cfg.username &&
+        !!cfg.password &&
+        !!li.location?.tenant_id
+      );
+    })
+    .map((li: any) => ({
+      id: li.id,
+      location_id: li.location_id,
+      tenant_id: li.location.tenant_id,
+      config: li.config,
+    }));
+
+  return json({ success: true, meters: filtered, integrations: wsIntegrations });
+}
+
+/**
+ * POST ?action=ws-session-start
+ * Body: { tenant_id, location_integration_id, worker_host? }
+ * Antwort: { success, session_id }
+ */
+async function handleWsSessionStart(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: { tenant_id?: string; location_integration_id?: string; worker_host?: string };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.tenant_id || !body.location_integration_id) {
+    return json({ error: "tenant_id and location_integration_id required" }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  // A) Vor dem Anlegen einer neuen Session alle noch offenen Vorgänger-Zeilen
+  //    derselben (tenant_id, location_integration_id) schließen.
+  //    Verhindert Zombie-Rows mit ended_at=NULL, die im Monitor als "200+ Sitzungen" zählen.
+  const { error: closeErr } = await supabase
+    .rpc("close_orphan_loxone_ws_sessions", {
+      _tenant_id: body.tenant_id,
+      _location_integration_id: body.location_integration_id,
+    });
+  if (closeErr) {
+    console.warn("[gateway-ingest] ws-session-start orphan close warning:", closeErr.message);
+  }
+
+  const { data, error } = await supabase
+    .from("loxone_ws_session_log")
+    .insert({
+      tenant_id: body.tenant_id,
+      location_integration_id: body.location_integration_id,
+      worker_host: body.worker_host || null,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.error("[gateway-ingest] ws-session-start error:", error.message);
+    return json({ error: "Database error" }, 500);
+  }
+
+  return json({ success: true, session_id: data.id });
+}
+
+
+/**
+ * POST ?action=ws-session-end
+ * Body: { session_id, disconnect_reason?, events_received?, reconnect_count? }
+ */
+async function handleWsSessionEnd(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    session_id?: string;
+    disconnect_reason?: string;
+    events_received?: number;
+    reconnect_count?: number;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.session_id) return json({ error: "session_id required" }, 400);
+
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from("loxone_ws_session_log")
+    .update({
+      ended_at: new Date().toISOString(),
+      disconnect_reason: body.disconnect_reason || null,
+      events_received: body.events_received ?? 0,
+      reconnect_count: body.reconnect_count ?? 0,
+    })
+    .eq("id", body.session_id);
+
+  if (error) {
+    console.error("[gateway-ingest] ws-session-end error:", error.message);
+    return json({ error: "Database error" }, 500);
+  }
+
+  return json({ success: true });
+}
+
+/**
+ * POST ?action=ws-session-heartbeat
+ * Body: { session_id, events_received?, reconnect_count? }
+ * Hält die aktive WS-Session "live" (updated_at) und aktualisiert den Event-Zähler.
+ */
+async function handleWsSessionHeartbeat(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: { session_id?: string; events_received?: number; reconnect_count?: number };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+  if (!body.session_id) return json({ error: "session_id required" }, 400);
+
+  const supabase = getSupabase();
+  // IO-Reduktion: Heartbeat nur schreiben, wenn seit letztem Update >60s vergangen.
+  // Vorher: pro Worker-Tick ein Update auf loxone_ws_session_log (13k Updates/Tag).
+  const cutoff = new Date(Date.now() - 60_000).toISOString();
+  const { error } = await supabase
+    .from("loxone_ws_session_log")
+    .update({
+      updated_at: new Date().toISOString(),
+      events_received: body.events_received ?? 0,
+      reconnect_count: body.reconnect_count ?? 0,
+    })
+    .eq("id", body.session_id)
+    .is("ended_at", null)
+    .lt("updated_at", cutoff);
+
+
+  if (error) {
+    console.error("[gateway-ingest] ws-session-heartbeat error:", error.message);
+    return json({ error: "Database error" }, 500);
+  }
+  return json({ success: true });
+}
+
+/**
+ * POST ?action=loxone-structure-snapshot
+ * Persistiert die per WebSocket geladene Loxone-Struktur als Discovery-Fallback,
+ * falls der direkte HTTP-Abruf von /data/LoxAPP3.json am Miniserver 401/403 liefert.
+ */
+async function handleLoxoneStructureSnapshot(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: { location_integration_id?: string; serial_number?: string; structure?: any };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.location_integration_id || !body.serial_number || !body.structure?.controls) {
+    return json({ error: "location_integration_id, serial_number and structure.controls required" }, 400);
+  }
+
+  const supabase = getSupabase();
+  const { data: li, error: liError } = await supabase
+    .from("location_integrations")
+    .select("id, location_id, config, location:locations!location_integrations_location_id_fkey ( tenant_id )")
+    .eq("id", body.location_integration_id)
+    .maybeSingle();
+
+  if (liError || !li) {
+    console.error("[gateway-ingest] loxone-structure-snapshot lookup error:", liError?.message);
+    return json({ error: "Integration not found" }, 404);
+  }
+
+  const configuredSerial = String((li as any).config?.serial_number || "").toUpperCase();
+  const incomingSerial = String(body.serial_number || "").toUpperCase();
+  if (!configuredSerial || configuredSerial !== incomingSerial) {
+    return json({ error: "Serial number mismatch" }, 403);
+  }
+
+  const structure = body.structure;
+  const controls = structure.controls || {};
+  const rooms = structure.rooms || {};
+  const cats = structure.cats || {};
+  const sensors = Object.entries(controls).map(([uuid, controlAny]) => {
+    const control: any = controlAny || {};
+    const controlType = String(control.type || "");
+    const stateKeys = Object.keys(control.states || {});
+    const isPower = /meter|wallbox|energy|fronius|power/i.test(controlType) || stateKeys.some((k) => /pwr|power|cp|pf/i.test(k));
+    return {
+      id: uuid,
+      name: control.name || "Unbekannt",
+      type: isPower ? "power" : (/analog/i.test(controlType) ? "analog" : (/digital|switch|pushbutton/i.test(controlType) ? "digital" : "sensor")),
+      controlType,
+      room: control.room ? (rooms[control.room]?.name || "Unbekannt") : "Unbekannt",
+      category: control.cat ? (cats[control.cat]?.name || "Sonstige") : "Sonstige",
+      value: "-",
+      rawValue: null,
+      unit: isPower ? "kW" : "",
+      status: "online",
+      stateName: stateKeys[0] || "",
+      secondaryValue: "",
+      secondaryStateName: "",
+      secondaryUnit: "",
+    };
+  });
+
+  // IO-Reduktion: nur schreiben, wenn sich `sensors` tatsächlich geändert hat.
+  // Vorher: bei jedem Struktur-Snapshot Upsert → 10k Updates/Tag auf 8 Zeilen.
+  const { data: prevSnap } = await supabase
+    .from("gateway_sensor_snapshots")
+    .select("sensors")
+    .eq("location_integration_id", body.location_integration_id)
+    .maybeSingle();
+  const sameSensors = prevSnap && JSON.stringify(prevSnap.sensors) === JSON.stringify(sensors);
+  if (sameSensors) {
+    return json({ success: true, sensors: sensors.length, unchanged: true });
+  }
+
+  const { error } = await supabase
+    .from("gateway_sensor_snapshots")
+    .upsert({
+      location_integration_id: body.location_integration_id,
+      tenant_id: (li as any).location?.tenant_id,
+      location_id: (li as any).location_id,
+      sensors,
+      system_messages: [],
+      status: "fresh",
+      fetched_at: new Date().toISOString(),
+      error_message: null,
+      source: "loxone-ws-worker",
+    }, { onConflict: "location_integration_id" });
+
+
+  if (error) {
+    console.error("[gateway-ingest] loxone-structure-snapshot upsert error:", error.message);
+    return json({ error: "Database error", details: error.message }, 500);
+  }
+
+  return json({ success: true, sensors: sensors.length });
+}
+
+/* ── Loxone WS auth status handler ─────────────────────────────────────────────
+ * Wird vom Loxone-WS-Worker gerufen, sobald ein Anmeldeversuch am Miniserver
+ * entweder erfolgreich war ("success") oder wegen falscher Zugangsdaten
+ * abgelehnt wurde ("auth_failed"). Konsequenzen:
+ *   - location_integrations.sync_status wird gesetzt (auth_failed | success)
+ *   - Bei auth_failed: aktiver integration_errors-Eintrag (error_type='auth'),
+ *     dedupliziert per (location_integration_id, error_type, is_resolved=false)
+ *   - Bei success: alle offenen 'auth'-Fehler der Integration werden aufgelöst
+ */
+async function handleMarkLoxoneAuthStatus(req: Request): Promise<Response> {
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
+
+  let body: {
+    location_integration_id?: string;
+    serial_number?: string;
+    status?: "success" | "auth_failed";
+    reason?: string | null;
+    username_tried?: string | null;
+  };
+  try { body = await req.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+  if (!body.location_integration_id || (body.status !== "success" && body.status !== "auth_failed")) {
+    return json({ error: "location_integration_id and status (success|auth_failed) required" }, 400);
+  }
+
+  const supabase = getSupabase();
+  const { data: li, error: liErr } = await supabase
+    .from("location_integrations")
+    .select("id, location_id, sync_status, location:locations!location_integrations_location_id_fkey ( tenant_id )")
+    .eq("id", body.location_integration_id)
+    .maybeSingle();
+  if (liErr || !li) return json({ error: "Integration not found" }, 404);
+
+  const tenantId = (li as any).location?.tenant_id as string | undefined;
+  const locationId = (li as any).location_id as string | undefined;
+
+  const nextStatus = body.status === "success" ? "success" : "auth_failed";
+  const { error: updErr } = await supabase
+    .from("location_integrations")
+    .update({ sync_status: nextStatus, last_sync_at: new Date().toISOString() })
+    .eq("id", body.location_integration_id);
+  if (updErr) return json({ error: "Failed to update integration", details: updErr.message }, 500);
+
+  if (body.status === "auth_failed" && tenantId) {
+    // Deduplizieren: falls bereits ein offener 'auth'-Fehler existiert, updaten statt neu einfügen.
+    const { data: existing } = await supabase
+      .from("integration_errors")
+      .select("id")
+      .eq("location_integration_id", body.location_integration_id)
+      .eq("error_type", "auth")
+      .eq("is_resolved", false)
+      .maybeSingle();
+
+    const msg = `Anmeldung am Loxone-Miniserver ${body.serial_number ?? ""} abgelehnt (User "${body.username_tried ?? "?"}"). Bitte Zugangsdaten in der Integration prüfen.`;
+    if (existing?.id) {
+      await supabase.from("integration_errors").update({
+        error_message: msg,
+        severity: "error",
+        updated_at: new Date().toISOString(),
+      }).eq("id", existing.id);
+    } else {
+      await supabase.from("integration_errors").insert({
+        tenant_id: tenantId,
+        location_id: locationId,
+        location_integration_id: body.location_integration_id,
+        integration_type: "loxone_miniserver",
+        error_type: "auth",
+        error_message: msg,
+        severity: "error",
+      });
+    }
+  }
+
+  if (body.status === "success") {
+    // Offene Auth-Fehler auflösen (self-healing bei korrigierten Credentials).
+    await supabase
+      .from("integration_errors")
+      .update({ is_resolved: true, resolved_at: new Date().toISOString() })
+      .eq("location_integration_id", body.location_integration_id)
+      .eq("error_type", "auth")
+      .eq("is_resolved", false);
+  }
+
+  return json({ success: true, status: nextStatus });
+}
+
+
+
+
 /* ── Gateway backup handler ──────────────────────────────────────────────────── */
 
 async function handleGatewayBackup(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: {
     tenant_id?: string;
@@ -1154,7 +2153,7 @@ async function handleAddonVersion(): Promise<Response> {
 async function validateApiKeyOrAdmin(req: Request): Promise<Response | null> {
   // Try API key first
   const apiKeyResult = await validateApiKey(req);
-  if (!apiKeyResult) return null; // API key is valid
+  if (!isAuthError(apiKeyResult)) return null; // API key is valid
 
   // Fall back to JWT auth for admin users
   const authHeader = req.headers.get("Authorization") || "";
@@ -1204,11 +2203,9 @@ async function handleGatewayCommand(req: Request): Promise<Response> {
   }
 
   const supabase = getSupabase();
-
-  // Store command in device config for the add-on to pick up on next heartbeat
   const { data: device, error: fetchErr } = await supabase
     .from("gateway_devices")
-    .select("id, config")
+    .select("id, tenant_id, status, config")
     .eq("id", body.device_id)
     .single();
 
@@ -1217,6 +2214,47 @@ async function handleGatewayCommand(req: Request): Promise<Response> {
   }
 
   const currentConfig = (device.config || {}) as Record<string, unknown>;
+  const pendingCommand = currentConfig.pending_command as string | undefined;
+  const pendingCommandAt = currentConfig.pending_command_at as string | undefined;
+
+  if (pendingCommand && pendingCommand === body.command && pendingCommandAt) {
+    const pendingAgeMs = Date.now() - new Date(pendingCommandAt).getTime();
+    if (Number.isFinite(pendingAgeMs) && pendingAgeMs < 5 * 60 * 1000) {
+      return json({ success: true, command: body.command, device_id: device.id, status: "already_pending" });
+    }
+  }
+
+  if (device.status === "online" && device.tenant_id) {
+    const { data: existingQueued } = await supabase
+      .from("gateway_commands")
+      .select("id")
+      .eq("gateway_device_id", device.id)
+      .in("status", ["pending", "sent"])
+      .in("command_type", [body.command, "execute_actuator"])
+      .limit(1);
+
+    if ((existingQueued?.length ?? 0) > 0) {
+      return json({ success: true, command: body.command, device_id: device.id, status: "already_queued" });
+    }
+
+    const { error: queueError } = await supabase
+      .from("gateway_commands")
+      .insert({
+        tenant_id: device.tenant_id,
+        gateway_device_id: device.id,
+        command_type: body.command,
+        payload: body.params || {},
+        status: "pending",
+      });
+
+    if (queueError) {
+      console.error("[gateway-ingest] gateway-command queue error:", queueError.message);
+      return json({ error: "Database error" }, 500);
+    }
+
+    return json({ success: true, command: body.command, device_id: device.id, status: "queued" });
+  }
+
   const { error } = await supabase
     .from("gateway_devices")
     .update({
@@ -1230,11 +2268,11 @@ async function handleGatewayCommand(req: Request): Promise<Response> {
     .eq("id", device.id);
 
   if (error) {
-    console.error("[gateway-ingest] gateway-command error:", error.message);
+    console.error("[gateway-ingest] gateway-command pending fallback error:", error.message);
     return json({ error: "Database error" }, 500);
   }
 
-  return json({ success: true, command: body.command, device_id: device.id });
+  return json({ success: true, command: body.command, device_id: device.id, status: "scheduled_for_heartbeat" });
 }
 
 /* ── Sync Automations handler (Cloud → Hub) ──────────────────────────────────── */
@@ -1302,11 +2340,15 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
 
   console.log(`[sync-automations] tenant=${tenantId} li=${locationIntegrationId} loc=${locationId}`);
 
-  // Sync ALL automations (active + inactive) so the local engine can manage state
+  // Sync automations the local engine may execute: loxone_local + hybrid.
+  // execution_mode = 'cloud' is intentionally excluded so the gateway
+  // cannot double-fire cloud-owned rules.
   let query = supabase
     .from("location_automations")
-    .select("*, locations!location_automations_location_id_fkey(timezone)")
-    .eq("tenant_id", tenantId);
+    .select("*, locations!location_automations_location_id_fkey(timezone), location_integrations!location_automations_location_integration_id_fkey(integration:integrations(type))")
+    .eq("tenant_id", tenantId)
+    .in("execution_mode", ["loxone_local", "hybrid"]);
+
 
   // Filter by location_integration_id (preferred – only automations this gateway can execute)
   if (locationIntegrationId) {
@@ -1326,7 +2368,43 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
     return json({ error: "Internal error" }, 500);
   }
 
-  const automations = (data || []).map((auto: any) => ({
+  let rows = data || [];
+
+  // Guardrail: if this caller is an AICONO gateway, also include HA-entity automations
+  // on the same location that were (historically) tagged with a different integration.
+  if (locationIntegrationId && locationId) {
+    const { data: liRow } = await supabase
+      .from("location_integrations")
+      .select("integration:integrations(type)")
+      .eq("id", locationIntegrationId)
+      .maybeSingle();
+    const callerType = (liRow as any)?.integration?.type;
+    if (callerType === "aicono_gateway") {
+      const { data: extras } = await supabase
+        .from("location_automations")
+        .select("*, locations!location_automations_location_id_fkey(timezone)")
+        .eq("tenant_id", tenantId)
+        .eq("location_id", locationId)
+        .in("execution_mode", ["loxone_local", "hybrid"])
+        .neq("location_integration_id", locationIntegrationId);
+
+      const haEntityRe = /^[a-z_]+\.[a-z0-9_]+$/i;
+      const extraHa = (extras || []).filter((a: any) => {
+        if (a.actuator_uuid && haEntityRe.test(a.actuator_uuid)) return true;
+        const actions = Array.isArray(a.actions) ? a.actions : [];
+        return actions.some((ac: any) => ac?.actuator_uuid && haEntityRe.test(ac.actuator_uuid));
+      });
+      const seen = new Set(rows.map((r: any) => r.id));
+      for (const r of extraHa) {
+        if (!seen.has(r.id)) {
+          rows.push(r);
+          seen.add(r.id);
+        }
+      }
+    }
+  }
+
+  const automations = rows.map((auto: any) => ({
     id: auto.id,
     name: auto.name,
     tenant_id: auto.tenant_id,
@@ -1341,17 +2419,19 @@ async function handleSyncAutomations(url: URL, req: Request): Promise<Response> 
     action_type: auto.action_type,
     last_executed_at: auto.last_executed_at,
     updated_at: auto.updated_at,
+    execution_mode: auto.execution_mode || "cloud",
     location_timezone: auto.locations?.timezone || "Europe/Berlin",
   }));
 
   return json({ success: true, automations, count: automations.length, location_id: locationId });
 }
 
+
 /* ── Push Execution Logs handler (Hub → Cloud) ────────────────────────────────── */
 
 async function handlePushExecutionLogs(req: Request): Promise<Response> {
-  const authErr = await validateApiKey(req);
-  if (authErr) return authErr;
+  const _auth = await validateApiKey(req);
+  if (isAuthError(_auth)) return _auth;
 
   let body: {
     logs?: Array<{
@@ -1397,8 +2477,258 @@ async function handlePushExecutionLogs(req: Request): Promise<Response> {
     return json({ error: "Database error" }, 500);
   }
 
+  // Mirror the most recent successful execution timestamp per automation
+  // to location_automations.last_executed_at so the tenant UI reflects
+  // local (gateway) executions the same as cloud executions.
+  const latestSuccessByAuto = new Map<string, string>();
+  for (const r of rows) {
+    if (r.status !== "success") continue;
+    const prev = latestSuccessByAuto.get(r.automation_id);
+    if (!prev || new Date(r.executed_at).getTime() > new Date(prev).getTime()) {
+      latestSuccessByAuto.set(r.automation_id, r.executed_at);
+    }
+  }
+  const LEASE_SECONDS = 90;
+  const leaseUntil = new Date(Date.now() + LEASE_SECONDS * 1000).toISOString();
+  for (const [automationId, executedAt] of latestSuccessByAuto.entries()) {
+    // Bump last_executed_at (only forward) and — for hybrid rules — extend the
+    // ownership lease so the cloud scheduler skips this rule for LEASE_SECONDS.
+    const { error: updateErr } = await supabase
+      .from("location_automations")
+      .update({ last_executed_at: executedAt })
+      .eq("id", automationId)
+      .or(`last_executed_at.is.null,last_executed_at.lt.${executedAt}`);
+    if (updateErr) {
+      console.warn(
+        `[gateway-ingest] failed to bump last_executed_at for ${automationId}:`,
+        updateErr.message,
+      );
+    }
+    const { error: leaseErr } = await supabase
+      .from("location_automations")
+      .update({ owner_lease_until: leaseUntil })
+      .eq("id", automationId)
+      .eq("execution_mode", "hybrid");
+    if (leaseErr) {
+      console.warn(
+        `[gateway-ingest] failed to extend lease for ${automationId}:`,
+        leaseErr.message,
+      );
+    }
+  }
+
   return json({ success: true, inserted: rows.length });
 }
+
+
+/* ── Device Inventory Snapshot (HA Add-on -> Cloud) ──────────────────────────── */
+/**
+ * POST ?action=device-snapshot
+ * Body: { mac_address?, devices: [{ entity_id, domain, category, friendly_name, state, unit, device_class, last_updated }] }
+ * Speichert/aktualisiert das vollständige lokale Geräte-Inventar des Add-ons,
+ * damit die Cloud-UI Sensoren/Aktoren/Zähler zur Zuordnung anbieten kann.
+ */
+async function handleDeviceSnapshot(req: Request): Promise<Response> {
+  const auth = await validateApiKey(req);
+  if (isAuthError(auth)) {
+    console.warn("[device-snapshot] auth failed");
+    return auth;
+  }
+
+  let bodyText = "";
+  let body: { mac_address?: string; devices?: any[] };
+  try {
+    bodyText = await req.text();
+    body = JSON.parse(bodyText);
+  } catch (e) {
+    console.error("[device-snapshot] invalid JSON. Length=", bodyText.length, "first200=", bodyText.slice(0, 200));
+    return json({ error: "Invalid JSON", stage: "parse", length: bodyText.length }, 400);
+  }
+
+  if (!Array.isArray(body?.devices)) {
+    console.error("[device-snapshot] devices not array. keys=", Object.keys(body || {}), "type=", typeof (body as any)?.devices);
+    return json({ error: "devices array is required", stage: "validate", got_keys: Object.keys(body || {}) }, 400);
+  }
+
+  const supabase = getSupabase();
+
+  const macRaw = body.mac_address || req.headers.get("x-gateway-mac") || "";
+  const mac = macRaw.toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
+  let device: { id: string; tenant_id: string | null; location_integration_id: string | null } | null = null;
+
+  if (mac.length === 12) {
+    const { data } = await supabase
+      .from("gateway_devices")
+      .select("id, tenant_id, location_integration_id")
+      .eq("mac_address", mac)
+      .maybeSingle();
+    device = data as any;
+  }
+  if (!device) {
+    const ctx = await getDeviceFromBasicAuth(req);
+    if (ctx?.device_id) {
+      const { data } = await supabase
+        .from("gateway_devices")
+        .select("id, tenant_id, location_integration_id")
+        .eq("id", ctx.device_id)
+        .maybeSingle();
+      device = data as any;
+    }
+  }
+  if (!device || !device.tenant_id) {
+    return json({ error: "Gateway device not found or not assigned to a tenant" }, 404);
+  }
+
+  const nowIso = new Date().toISOString();
+  const incoming = body.devices
+    .filter((d: any) => typeof d?.entity_id === "string" && d.entity_id.includes("."))
+    .slice(0, 2000)
+    .map((d: any) => ({
+      gateway_device_id: device!.id,
+      tenant_id: device!.tenant_id,
+      location_integration_id: device!.location_integration_id,
+      entity_id: String(d.entity_id),
+      domain: String(d.domain || d.entity_id.split(".")[0] || "unknown"),
+      category: String(d.category || "sensor"),
+      friendly_name: d.friendly_name ? String(d.friendly_name).slice(0, 200) : null,
+      state: d.state != null ? String(d.state).slice(0, 200) : null,
+      unit: d.unit ? String(d.unit).slice(0, 32) : null,
+      device_class: d.device_class ? String(d.device_class).slice(0, 64) : null,
+      last_seen_at: nowIso,
+      last_state_at: d.last_updated || null,
+    }));
+
+  if (incoming.length === 0) {
+    return json({ success: true, upserted: 0, pruned: 0 });
+  }
+
+  // IO-Optimierung: bestehende Zeilen laden und nur tatsächlich geänderte Einträge
+  // schreiben. Spart bei stabilen Inventaren (>95% der Snapshots) fast alle Writes.
+  const { data: existingRows } = await supabase
+    .from("gateway_device_inventory")
+    .select("id, entity_id, friendly_name, state, unit, device_class, domain, category, last_state_at, location_integration_id")
+    .eq("gateway_device_id", device.id);
+
+  const existingMap = new Map<string, any>();
+  for (const r of existingRows || []) existingMap.set(r.entity_id, r);
+
+  const changed = incoming.filter((row) => {
+    const prev = existingMap.get(row.entity_id);
+    if (!prev) return true; // neu
+    return (
+      prev.friendly_name !== row.friendly_name ||
+      prev.state !== row.state ||
+      prev.unit !== row.unit ||
+      prev.device_class !== row.device_class ||
+      prev.domain !== row.domain ||
+      prev.category !== row.category ||
+      prev.location_integration_id !== row.location_integration_id ||
+      (prev.last_state_at || null) !== (row.last_state_at || null)
+    );
+  });
+
+  if (changed.length > 0) {
+    const { error: upErr } = await supabase
+      .from("gateway_device_inventory")
+      .upsert(changed, { onConflict: "gateway_device_id,entity_id" });
+    if (upErr) {
+      console.error("[gateway-ingest] device-snapshot upsert error:", upErr.message);
+      return json({ error: "Database error", details: upErr.message }, 500);
+    }
+  }
+
+  const seen = new Set(incoming.map((r) => r.entity_id));
+  const stale = (existingRows || []).filter((e: any) => !seen.has(e.entity_id)).map((e: any) => e.id);
+  let pruned = 0;
+  if (stale.length > 0) {
+    const { error: delErr } = await supabase
+      .from("gateway_device_inventory")
+      .delete()
+      .in("id", stale);
+    if (!delErr) pruned = stale.length;
+  }
+
+  // Historisierung: Momentanwerte in sensor_readings_raw (fire-and-forget,
+  // interner Delta-Guard vermeidet IO-Druck).
+  try {
+    const sensorItems = incoming.map((row) => ({
+      id: row.entity_id,
+      value: row.state,
+      state: row.state,
+      unit: row.unit,
+    }));
+    await persistSensorHistory(supabase, {
+      locationIntegrationId: device.location_integration_id ?? device.id,
+      tenantId: device.tenant_id,
+      sensors: sensorItems,
+    });
+  } catch (e) {
+    console.warn("[device-snapshot] sensor history skipped:", (e as Error).message);
+  }
+
+  // Zusätzlich: Leistungswerte in meter_power_readings spiegeln, damit die
+  // Detail-Charts für HA-Gateway-Zähler nicht leer bleiben. Nur Meter mit
+  // Leistungseinheit (W/kW/MW); Delta-Guard: nur schreiben, wenn kein Wert
+  // der letzten 55 s existiert.
+  try {
+    if (device.location_integration_id) {
+      const entityIds = incoming.map((r) => r.entity_id);
+      const { data: linkedMeters } = await supabase
+        .from("meters")
+        .select("id, tenant_id, sensor_uuid, energy_type, source_unit_power")
+        .eq("location_integration_id", device.location_integration_id)
+        .eq("capture_type", "automatic")
+        .eq("is_archived", false)
+        .in("sensor_uuid", entityIds);
+
+      const incomingByEntity = new Map<string, any>();
+      for (const row of incoming) incomingByEntity.set(row.entity_id, row);
+
+      const throttleCutoff = new Date(Date.now() - 55_000).toISOString();
+      const powerRows: Array<{ meter_id: string; tenant_id: string; energy_type: string; power_value: number; recorded_at: string }> = [];
+
+      for (const meter of linkedMeters || []) {
+        const src = String((meter as any).source_unit_power || "").toLowerCase();
+        let scale: number | null = null;
+        if (src === "w") scale = 1 / 1000;
+        else if (src === "kw") scale = 1;
+        else if (src === "mw") scale = 1000;
+        else continue;
+        const row = incomingByEntity.get(String(meter.sensor_uuid));
+        if (!row) continue;
+        const raw = row.state;
+        if (raw == null) continue;
+        const num = typeof raw === "number" ? raw : Number(String(raw).replace(",", "."));
+        if (!Number.isFinite(num)) continue;
+        const { data: recent } = await supabase
+          .from("meter_power_readings")
+          .select("recorded_at")
+          .eq("meter_id", meter.id)
+          .gte("recorded_at", throttleCutoff)
+          .limit(1)
+          .maybeSingle();
+        if (recent) continue;
+        powerRows.push({
+          meter_id: meter.id,
+          tenant_id: meter.tenant_id,
+          energy_type: meter.energy_type || "strom",
+          power_value: num * scale,
+          recorded_at: nowIso,
+        });
+      }
+
+      if (powerRows.length > 0) {
+        const { error: prErr } = await supabase.from("meter_power_readings").insert(powerRows);
+        if (prErr) console.warn("[device-snapshot] meter_power_readings insert error:", prErr.message);
+      }
+    }
+  } catch (e) {
+    console.warn("[device-snapshot] power mirror skipped:", (e as Error).message);
+  }
+
+  return json({ success: true, upserted: changed.length, pruned, unchanged: incoming.length - changed.length });
+}
+
 
 /* ── Main router ─────────────────────────────────────────────────────────────── */
 
@@ -1413,37 +2743,64 @@ Deno.serve(async (req) => {
 
   // GET routes
   if (req.method === "GET") {
-    const authErr = await validateApiKey(req);
-    if (authErr) return authErr;
-    if (action === "list-locations") return handleListLocations();
-    if (action === "list-meters") return handleListMeters(url);
-    if (action === "get-daily-totals") return handleGetDailyTotals(url);
-    if (action === "get-readings") return handleGetReadings(url);
-    if (action === "get-locations-summary") return handleGetLocationsSummary(url);
+    const _auth = await validateApiKey(req);
+    if (isAuthError(_auth)) return _auth;
+    const scopeTenantId = _auth.tenantId; // null = global server key (trusted)
+    if (action === "list-locations") return handleListLocations(scopeTenantId);
+    if (action === "list-meters") return handleListMeters(url, scopeTenantId);
+    if (action === "get-daily-totals") return handleGetDailyTotals(url, scopeTenantId);
+    if (action === "get-readings") return handleGetReadings(url, scopeTenantId);
+    if (action === "get-locations-summary") return handleGetLocationsSummary(url, scopeTenantId);
     if (action === "addon-version") return handleAddonVersion();
     if (action === "sync-automations") return handleSyncAutomations(url, req);
+    if (action === "list-loxone-ws-meters") return handleListLoxoneWsMeters();
+    if (action === "list-pending-writes") return handleListPendingWrites(req);
+
   }
 
   // POST routes
   if (req.method === "POST") {
+    if (LOXONE_WS_IO_EMERGENCY_PAUSE && LOXONE_WS_IO_PAUSED_ACTIONS.has(action ?? "")) {
+      return handleLoxoneWsEmergencyPause(req, action);
+    }
+
+    if (action === "ws-session-start") return handleWsSessionStart(req);
+    if (action === "ws-session-end") return handleWsSessionEnd(req);
+    if (action === "ws-session-heartbeat") return handleWsSessionHeartbeat(req);
+    if (action === "loxone-structure-snapshot") return handleLoxoneStructureSnapshot(req);
+    if (action === "mark-loxone-auth-status") return handleMarkLoxoneAuthStatus(req);
+
     if (action === "compact-day") return handleCompactDay(req);
     if (action === "schneider-push") return handleSchneiderPush(req);
     if (action === "heartbeat") return handleHeartbeat(req);
     if (action === "worker-heartbeat") return handleWorkerHeartbeat(req);
+    if (action === "bridge-heartbeat") return handleBridgeHeartbeat(req);
+    if (action === "bridge-log-event") return handleBridgeLogEvent(req);
+    if (action === "bridge-readings") return handleBridgeReadings(req);
+    if (action === "bridge-power-5min") return handleBridgePower5min(req);
     if (action === "gateway-backup") return handleGatewayBackup(req);
     if (action === "gateway-command") return handleGatewayCommand(req);
     if (action === "push-execution-logs") return handlePushExecutionLogs(req);
     if (action === "sync-automations") return handleSyncAutomations(url, req);
+    if (action === "device-snapshot") return handleDeviceSnapshot(req);
+    if (action === "list-pending-writes") return handleListPendingWrites(req);
+    if (action === "ack-pending-write") return handleAckPendingWrite(req);
+
 
     // Check if the body contains a getSensors action (called by frontend for all integration types).
     // Push-based gateways don't support sensor discovery — return empty list gracefully.
     try {
       const clonedReq = req.clone();
       const body = await clonedReq.json();
-      if (body?.action === "getSensors") {
+      if (
+        body?.action === "getSensors" ||
+        body?.action === "getSensorsCached" ||
+        body?.action === "refreshSensors"
+      ) {
         return json({ success: true, sensors: [], push_gateway: true });
       }
     } catch { /* not JSON or no body – continue to normal routing */ }
+
 
     // Fallback: if tenant_id is present and Basic Auth is used, route to Schneider handler
     const hasTenantId = url.searchParams.has("tenant_id");
@@ -1453,8 +2810,79 @@ Deno.serve(async (req) => {
       return handleSchneiderPush(req);
     }
 
-    return handlePostReadings(req);
+    return json({
+      success: false,
+      error: "Temporär deaktiviert: alter Polling-/Push-Pfad ohne action. Für Loxone sind nur bridge-readings per WS-Bridge erlaubt.",
+      disabled: "legacy_post_readings",
+    }, 410);
   }
 
   return json({ error: "Method not allowed" }, 405);
 });
+
+/* ── Loxone Pending Writes (Cloud → Worker → Miniserver) ───────────────────── */
+
+async function handleListPendingWrites(req: Request): Promise<Response> {
+  try {
+    const supabase = createServiceClient();
+    const url = new URL(req.url);
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 50), 200);
+    const integrationId = url.searchParams.get("location_integration_id");
+
+    let q = supabase
+      .from("loxone_pending_writes")
+      .select("id, tenant_id, location_integration_id, template_key, instance, parameter, target_uuid, value_num, value_bool, priority, attempts, max_attempts")
+      .eq("status", "queued")
+      .lte("attempts", 3)
+      .gt("expires_at", new Date().toISOString())
+      .order("priority", { ascending: true })
+      .order("requested_at", { ascending: true })
+      .limit(limit);
+    if (integrationId) q = q.eq("location_integration_id", integrationId);
+
+    const { data, error } = await q;
+    if (error) return json({ success: false, error: error.message }, 500);
+    return json({ success: true, writes: data ?? [] });
+  } catch (e) {
+    return json({ success: false, error: (e as Error).message }, 500);
+  }
+}
+
+async function handleAckPendingWrite(req: Request): Promise<Response> {
+  try {
+    const supabase = createServiceClient();
+    const body = await req.json().catch(() => ({}));
+    const id = String(body?.id ?? "");
+    const ok = Boolean(body?.success);
+    const errorMessage = body?.error_message ? String(body.error_message).slice(0, 500) : null;
+    const targetUuid = body?.target_uuid ? String(body.target_uuid) : null;
+    if (!id) return json({ success: false, error: "id required" }, 400);
+
+    if (ok) {
+      const patch: any = { status: "sent", sent_at: new Date().toISOString(), acked_at: new Date().toISOString(), error_message: null };
+      if (targetUuid) patch.target_uuid = targetUuid;
+      const { error } = await supabase.from("loxone_pending_writes").update(patch).eq("id", id);
+      if (error) return json({ success: false, error: error.message }, 500);
+      return json({ success: true });
+    }
+
+    // Fehlerfall: attempts +1, ggf. auf 'failed'
+    const { data: cur } = await supabase.from("loxone_pending_writes").select("attempts, max_attempts").eq("id", id).maybeSingle();
+    const attempts = (cur?.attempts ?? 0) + 1;
+    const failed = attempts >= (cur?.max_attempts ?? 3);
+    const { error } = await supabase.from("loxone_pending_writes").update({
+      attempts,
+      status: failed ? "failed" : "queued",
+      error_message: errorMessage,
+    }).eq("id", id);
+    if (error) return json({ success: false, error: error.message }, 500);
+    return json({ success: true, retried: !failed });
+  } catch (e) {
+    return json({ success: false, error: (e as Error).message }, 500);
+  }
+}
+
+function createServiceClient() {
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+}
+

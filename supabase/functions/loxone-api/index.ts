@@ -49,6 +49,7 @@ interface StateMapping {
 
 const CONTROL_TYPE_MAPPINGS: Record<string, StateMapping> = {
   Meter:          { primaryState: "actual",   primaryUnit: "kW",  secondaryState: "total",    secondaryUnit: "kWh", sensorType: "power" },
+  Wallbox2:       { primaryState: "actual",   primaryUnit: "kW",  secondaryState: "total",    secondaryUnit: "kWh", sensorType: "power" },
   EFM:            { primaryState: "Ppwr",     primaryUnit: "kW",  secondaryState: "Gpwr",     secondaryUnit: "kW",  sensorType: "power" },
   EnergyManager2: { primaryState: "Gpwr",     primaryUnit: "kW",  secondaryState: "Ppwr",     secondaryUnit: "kW",  sensorType: "power" },
   Fronius:        { primaryState: "consCurr", primaryUnit: "kW",  secondaryState: "prodCurr", secondaryUnit: "kW",  sensorType: "power" },
@@ -57,6 +58,30 @@ const CONTROL_TYPE_MAPPINGS: Record<string, StateMapping> = {
   Pushbutton:     { primaryState: "active",   primaryUnit: "",    sensorType: "button" },
   TextState:      { primaryState: "textAndIcon", primaryUnit: "", sensorType: "text" },
 };
+
+// Extract a physical unit from a Loxone format string like "%.3f m³/h", "%.1f°C", "%.0f kWh".
+function extractUnitFromFormat(fmt: unknown): string | null {
+  if (typeof fmt !== "string" || !fmt) return null;
+  // Take everything after the last format specifier (%…f, %…d, %…g, %s)
+  const m = fmt.match(/%[^a-zA-Z]*[a-zA-Z]\s*(.+)$/);
+  const tail = (m ? m[1] : fmt).trim();
+  if (!tail) return null;
+  // Common units, order matters (longest first)
+  const known = ["m³/h", "kWh", "Wh", "kW", "kVA", "kvar", "m³", "l/min", "l/h", "°C", "°F", "hPa", "bar", "Pa", "ppm", "lx", "V", "A", "%", "W", "l", "K"];
+  for (const u of known) {
+    if (tail === u || tail.endsWith(u)) return u;
+  }
+  return null;
+}
+
+// Given a rate unit, return the counterpart totalizer unit (or null if unknown).
+function totalizerUnitFor(rateUnit: string): string | null {
+  if (rateUnit === "m³/h") return "m³";
+  if (rateUnit === "l/min" || rateUnit === "l/h") return "l";
+  if (rateUnit === "kW") return "kWh";
+  if (rateUnit === "W") return "Wh";
+  return null;
+}
 
 // Mapping from Loxone /all output names to our internal state names
 const LOXONE_OUTPUT_TO_STATE: Record<string, string> = {
@@ -86,6 +111,8 @@ const LOXONE_OUTPUT_TO_STATE: Record<string, string> = {
   "Gpwr": "Gpwr",       // Grid power
   "consCurr": "consCurr",
   "prodCurr": "prodCurr",
+  "Cp": "actual",       // Wallbox2 current charging power (not _primary status/mode)
+  "Slvl": "soc",        // Storage level / state of charge (Speicher-Ladezustand)
 };
 
 // States to never use as fallback
@@ -93,6 +120,20 @@ const IGNORED_STATES = new Set(["jLocked", "locked"]);
 
 // Fallback priority list for unknown control types
 const FALLBACK_STATES = ["value", "actual", "position", "level", "brightness", "temperature"];
+
+const LOXONE_FETCH_TIMEOUT_MS = 8_000;
+const LOXONE_STATE_FETCH_TIMEOUT_MS = 2_500;
+const LOXONE_STATE_BATCH_SIZE = 5;
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = LOXONE_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function getStateMapping(controlType: string, availableStates: string[]): { primary?: string; secondary?: string; mapping?: StateMapping } {
   // 1. Check exact match in mapping table
@@ -128,22 +169,85 @@ function detectSensorMeta(controlType: string): { sensorType: string; unit: stri
   return { sensorType: "unknown", unit: "" };
 }
 
-// Resolve Loxone Cloud DNS by following the redirect
+// In-memory cache for resolved Cloud-DNS URLs (TTL 15 min).
+// connect.loxonecloud.com rate-limits to ~10 req/min per IP.
+const cloudUrlCache = new Map<string, { url: string; expiresAt: number }>();
+const CLOUD_URL_TTL_MS = 15 * 60 * 1000;
+
+// In-memory cache for LoxAPP3.json structure (TTL 1 h).
+// The structure file is several MB and rarely changes — caching it cuts
+// per-sync traffic by ~30–50 %. Cache is per Edge-Function instance and
+// auto-invalidates on cold start.
+const structureCache = new Map<string, { structure: any; expiresAt: number }>();
+const STRUCTURE_CACHE_TTL_MS = 60 * 60 * 1000;
+
+// Resolve Loxone Cloud DNS via the new Remote Connect endpoint.
+// Loxone migrated `dns.loxonecloud.com` (legacy, returns 404 since 2026-05-03)
+// to `connect.loxonecloud.com` which serves an HTTP 307 with the actual
+// `https://{ipv6-encoded}.{Serial}.dyndns.loxonecloud.com:{port}/` URL in the
+// `Location` header (Loxone Remote Connect / lcs-proxy).
 async function resolveLoxoneCloudURL(serialNumber: string): Promise<string | null> {
-  try {
-    const dnsUrl = `http://dns.loxonecloud.com/${serialNumber}`;
-    console.log(`Resolving via Loxone Cloud redirect: ${dnsUrl}`);
-    const response = await fetch(dnsUrl, { method: "HEAD", redirect: "follow" });
-    const finalUrl = response.url;
-    console.log(`Resolved to final URL: ${finalUrl}`);
-    const urlObj = new URL(finalUrl);
-    const baseUrl = `${urlObj.protocol}//${urlObj.host}`;
-    console.log(`Using base URL: ${baseUrl}`);
-    return baseUrl;
-  } catch (error) {
-    console.error("Cloud DNS resolution error:", error);
-    return null;
+  const cached = cloudUrlCache.get(serialNumber);
+  if (cached && cached.expiresAt > Date.now()) {
+    console.log(`Using cached Cloud-DNS URL for ${serialNumber}: ${cached.url}`);
+    return cached.url;
   }
+
+  const tryEndpoint = async (url: string, follow: boolean): Promise<string | null> => {
+    console.log(`Resolving via ${url} (follow=${follow})`);
+    const res = await fetchWithTimeout(url, { method: "GET", redirect: follow ? "follow" : "manual" });
+    // Manual mode: read Location header from 3xx response
+    if (!follow && res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location");
+      if (loc) {
+        const u = new URL(loc);
+        return `${u.protocol}//${u.host}`;
+      }
+    }
+    // Follow mode: use res.url after redirect chain
+    if (res.ok) {
+      const u = new URL(res.url);
+      return `${u.protocol}//${u.host}`;
+    }
+    return null;
+  };
+
+  // Primary: new Remote-Connect endpoint
+  try {
+    const baseUrl = await tryEndpoint(`https://connect.loxonecloud.com/${serialNumber}`, false);
+    if (baseUrl) {
+      console.log(`Resolved (Remote Connect) ${serialNumber} → ${baseUrl}`);
+      cloudUrlCache.set(serialNumber, { url: baseUrl, expiresAt: Date.now() + CLOUD_URL_TTL_MS });
+      return baseUrl;
+    }
+  } catch (error) {
+    console.warn(`Remote Connect resolution failed for ${serialNumber}:`, error);
+  }
+
+  // Fallback: legacy DNS endpoint (still works for some firmware/regions)
+  try {
+    const baseUrl = await tryEndpoint(`http://dns.loxonecloud.com/${serialNumber}`, true);
+    if (baseUrl) {
+      console.log(`Resolved (legacy DNS) ${serialNumber} → ${baseUrl}`);
+      cloudUrlCache.set(serialNumber, { url: baseUrl, expiresAt: Date.now() + CLOUD_URL_TTL_MS });
+      return baseUrl;
+    }
+  } catch (error) {
+    console.error(`Legacy DNS resolution failed for ${serialNumber}:`, error);
+  }
+
+  return null;
+}
+
+// Resolve base URL with optional local override (`config.local_host`) bypassing the cloud entirely.
+function resolveLocalOrCloud(config: LoxoneConfig & { local_host?: string }): Promise<string | null> {
+  const localHost = (config as { local_host?: string }).local_host?.trim();
+  if (localHost) {
+    const normalized = localHost.startsWith("http") ? localHost : `http://${localHost}`;
+    console.log(`Using local_host override: ${normalized}`);
+    return Promise.resolve(normalized.replace(/\/+$/, ""));
+  }
+  return resolveLoxoneCloudURL(config.serial_number);
 }
 
 // Fetch state value using control UUID (not state UUID!)
@@ -156,7 +260,7 @@ async function fetchStateValue(
   try {
     const url = `${baseUrl}/jdev/sps/io/${controlUuid}/state`;
     console.log(`Fetching state: ${url}`);
-    const response = await fetch(url, { method: "GET", headers: { Authorization: authHeader } });
+    const response = await fetchWithTimeout(url, { method: "GET", headers: { Authorization: authHeader } }, LOXONE_STATE_FETCH_TIMEOUT_MS);
     if (!response.ok) {
       console.warn(`State fetch failed for ${controlUuid}: HTTP ${response.status}`);
       return null;
@@ -185,13 +289,13 @@ async function fetchAllStates(
   try {
     const url = `${baseUrl}/jdev/sps/io/${controlUuid}/all`;
     console.log(`Fetching all states: ${url}`);
-    const response = await fetch(url, { method: "GET", headers: { Authorization: authHeader } });
+    const response = await fetchWithTimeout(url, { method: "GET", headers: { Authorization: authHeader } }, LOXONE_STATE_FETCH_TIMEOUT_MS);
     if (!response.ok) {
       console.warn(`All-states fetch failed for ${controlUuid}: HTTP ${response.status}`);
       return results;
     }
     const data = await response.json();
-    console.log(`All-states response for ${controlUuid}: ${JSON.stringify(data).substring(0, 500)}`);
+    console.log(`All-states response for ${controlUuid}: HTTP ${data?.LL?.Code ?? "unknown"}`);
     
     if (data?.LL) {
       const ll = data.LL;
@@ -218,16 +322,102 @@ async function fetchAllStates(
 }
 
 // Update sync status in database
+// IO-Optimierung: rpc schreibt nur wenn sich Status ändert oder last_sync_at > 60s alt ist
 async function updateSyncStatus(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   locationIntegrationId: string,
   status: "success" | "error" | "syncing"
 ) {
-  await supabase
-    .from("location_integrations")
-    .update({ sync_status: status, last_sync_at: new Date().toISOString() })
-    .eq("id", locationIntegrationId);
+  await supabase.rpc("touch_location_integration_sync", {
+    _id: locationIntegrationId,
+    _status: status,
+  });
   console.log(`Updated sync_status to: ${status}`);
+}
+
+// ── Snapshot Cache Helpers (Cache-First Architecture) ──
+async function writeSensorSnapshot(
+  supabase: any,
+  locationIntegrationId: string,
+  payload: {
+    sensors: any[];
+    systemMessages?: any[];
+    status?: "fresh" | "stale" | "error";
+    errorMessage?: string | null;
+    tenantId?: string | null;
+    locationId?: string | null;
+  },
+) {
+  try {
+    const row: Record<string, unknown> = {
+      location_integration_id: locationIntegrationId,
+      sensors: payload.sensors ?? [],
+      system_messages: payload.systemMessages ?? [],
+      status: payload.status ?? "fresh",
+      error_message: payload.errorMessage ?? null,
+      fetched_at: new Date().toISOString(),
+      source: "loxone-api",
+    };
+    if (payload.tenantId) row.tenant_id = payload.tenantId;
+    if (payload.locationId) row.location_id = payload.locationId;
+
+    const { error } = await supabase
+      .from("gateway_sensor_snapshots")
+      .upsert(row, { onConflict: "location_integration_id" });
+    if (error) console.warn("[snapshot] upsert failed:", error.message);
+    // Sensor-Verlauf: Rohwerte in sensor_readings_raw persistieren
+    const { persistSensorHistory } = await import("../_shared/sensorHistory.ts");
+    await persistSensorHistory(supabase, {
+      locationIntegrationId,
+      tenantId: payload.tenantId ?? null,
+      locationId: payload.locationId ?? null,
+      sensors: payload.sensors ?? [],
+    });
+  } catch (err) {
+    console.warn("[snapshot] write error:", err);
+  }
+}
+
+async function readSensorSnapshot(supabase: any, locationIntegrationId: string) {
+  const { data, error } = await supabase
+    .from("gateway_sensor_snapshots")
+    .select("sensors, system_messages, status, fetched_at, error_message")
+    .eq("location_integration_id", locationIntegrationId)
+    .maybeSingle();
+  if (error) {
+    console.warn("[snapshot] read failed:", error.message);
+    return null;
+  }
+  return data;
+}
+
+async function tryAcquireRefreshLock(
+  supabase: any,
+  locationIntegrationId: string,
+  owner: string,
+  ttlSeconds = 60,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc("try_acquire_gateway_refresh_lock", {
+    p_integration_id: locationIntegrationId,
+    p_owner: owner,
+    p_ttl_seconds: ttlSeconds,
+  });
+  if (error) {
+    console.warn("[lock] acquire failed:", error.message);
+    return true; // fail-open
+  }
+  return Boolean(data);
+}
+
+async function releaseRefreshLock(supabase: any, locationIntegrationId: string, owner: string) {
+  try {
+    await supabase.rpc("release_gateway_refresh_lock", {
+      p_integration_id: locationIntegrationId,
+      p_owner: owner,
+    });
+  } catch (err) {
+    console.warn("[lock] release failed:", err);
+  }
 }
 
 // Format a numeric value for display
@@ -245,6 +435,457 @@ function formatValue(rawValue: number | string, sensorType: string): string {
     return rawValue.toFixed(2);
   }
   return String(rawValue);
+}
+
+// ── Battery SOC Discovery & Sync ─────────────────────────────────────────────
+// Findet den State-of-Charge-Ausgang eines Fronius/Battery-Bausteins im
+// Loxone-Structure-File (LoxAPP3.json), holt den aktuellen Wert vom Miniserver
+// und schreibt ihn in energy_storages.current_soc_pct.
+//
+// Motivation: Der SOC-Wert ist in Loxone Config oft ein interner Analog-Output
+// des Fronius-Battery-Bausteins ohne eigenen sichtbaren VI. Er hat trotzdem eine
+// eigene uuidAction im Structure-File und kann per /jdev/sps/io/{uuid}/all
+// abgefragt werden. Diese Discovery ist heuristisch und toleriert unterschiedliche
+// Loxone-Config-Konventionen (deutsch/englisch/Fronius-Plugin/Community-Lib).
+
+interface SocCandidate {
+  uuid: string;
+  name: string;
+  room: string;
+  cat: string;
+  type: string;
+  score: number;
+  currentValue: number | null;
+}
+
+function scoreSocCandidate(
+  uuid: string,
+  control: LoxoneControl,
+  rooms: Record<string, { name: string }>,
+  cats: Record<string, { name: string }>,
+): { score: number; roomName: string; catName: string } {
+  const name = (control.name || "").toLowerCase();
+  const roomName = control.room ? rooms[control.room]?.name || "" : "";
+  const catName = control.cat ? cats[control.cat]?.name || "" : "";
+  const roomLc = roomName.toLowerCase();
+  const catLc = catName.toLowerCase();
+  const type = control.type || "";
+
+  let score = 0;
+
+  // Starke Namensignale
+  if (/\bsoc\b|state.?of.?charge|ladezustand/i.test(name)) score += 10;
+  if (/stateofcharge/i.test(name)) score += 10;
+  // Schwächere Namensignale
+  if (/batter|speicher|akku/i.test(name)) score += 3;
+  if (/meter/i.test(type) && /speicher|akku|batter/i.test(name)) score += 7;
+
+  // Kontext (Raum/Kategorie)
+  if (/batter|speicher|akku|fronius|solar|pv/i.test(roomLc)) score += 2;
+  if (/batter|speicher|akku|fronius|solar|pv/i.test(catLc)) score += 2;
+
+  // Typ
+  if (/InfoOnlyAnalog|InfoOnlyDigital/i.test(type)) score += 1;
+  if (/Fronius|Battery/i.test(type)) score += 2;
+
+  // Format % (aus details, falls vorhanden)
+  const details = (control as any).details;
+  if (details && typeof details === "object") {
+    const format = String(details.format ?? details.formatValue ?? "");
+    if (format.includes("%")) score += 3;
+  }
+
+  return { score, roomName, catName };
+}
+
+// Erkennt SOC-artige Namen für Sub-States (Fronius/Battery-Baustein-Ausgänge)
+function isSocStateName(name: string): boolean {
+  const lc = name.toLowerCase();
+  if (/^slvl$/.test(lc)) return true;
+  if (/^soc$/.test(lc)) return true;
+  if (/storage.?level|speicher.?stand|speicher.?level/i.test(name)) return true;
+  if (/stateofcharge/i.test(name)) return true;
+  if (/state.?of.?charge/i.test(name)) return true;
+  if (/ladezustand/i.test(lc)) return true;
+  return false;
+}
+
+function extractSocValueFromAllStates(states: Record<string, number | string | null>): number | null {
+  const preferredKeys = ["Slvl", "soc", "SOC", "stateOfCharge", "stateOfCharge_Relative", "storageLevel", "ladezustand"];
+  for (const key of preferredKeys) {
+    for (const [k, v] of Object.entries(states)) {
+      if (k === "_primary") continue;
+      if (k.toLowerCase() === key.toLowerCase() && typeof v === "number" && v >= 0 && v <= 100 && Number.isFinite(v)) {
+        return v;
+      }
+    }
+  }
+  for (const [k, v] of Object.entries(states)) {
+    if (k === "_primary") continue;
+    if (isSocStateName(k) && typeof v === "number" && v >= 0 && v <= 100 && Number.isFinite(v)) {
+      return v;
+    }
+  }
+  return null;
+}
+
+async function discoverSocCandidates(
+  baseUrl: string,
+  loxoneAuth: string,
+  structure: LoxoneStructure,
+): Promise<SocCandidate[]> {
+  const controls = structure.controls || {};
+  const rooms = structure.rooms || {};
+  const cats = structure.cats || {};
+
+  // Schritt 1: Kandidaten sammeln — sowohl Controls (Standalone-VI mit SOC im Namen)
+  // als auch Sub-States von Fronius/Battery/Meter-Bausteinen (SOC als Output eines Blocks).
+  const prelim: Array<{
+    uuid: string;
+    displayName: string;
+    controlName: string;
+    controlType: string;
+    roomName: string;
+    catName: string;
+    score: number;
+    parentControlUuid: string;
+    subStateKey: string | null;
+  }> = [];
+
+  for (const [ctrlUuid, control] of Object.entries(controls)) {
+    const { score, roomName, catName } = scoreSocCandidate(ctrlUuid, control, rooms, cats);
+    // (1a) Control selbst als Kandidat, wenn Name/Typ passen
+    if (score >= 5) {
+      prelim.push({
+        uuid: ctrlUuid,
+        displayName: control.name || "",
+        controlName: control.name || "",
+        controlType: control.type || "",
+        roomName, catName,
+        score,
+        parentControlUuid: ctrlUuid,
+        subStateKey: null,
+      });
+    }
+    // (1b) Sub-States des Controls durchgehen (z. B. Fronius-Baustein → stateOfCharge_Relative)
+    const states = control.states as Record<string, string> | undefined;
+    if (!states || typeof states !== "object") continue;
+    const type = control.type || "";
+    const isBatteryContext =
+      /Fronius|Battery/i.test(type) ||
+      /batter|speicher|akku|fronius/i.test((control.name || "").toLowerCase()) ||
+      /batter|speicher|akku|fronius/i.test(roomName.toLowerCase()) ||
+      /batter|speicher|akku|fronius/i.test(catName.toLowerCase());
+
+    for (const [stateKey, stateUuid] of Object.entries(states)) {
+      if (typeof stateUuid !== "string") continue;
+      let subScore = 0;
+      if (isSocStateName(stateKey)) subScore += 12;
+      else if (/soc/i.test(stateKey)) subScore += 6;
+      else if (/batter|akku|speicher/i.test(stateKey)) subScore += 2;
+      if (subScore === 0) continue;
+      if (isBatteryContext) subScore += 3;
+      // Fronius-Bausteine sind der Regelfall in DE-Anlagen
+      if (/Fronius/i.test(type)) subScore += 2;
+      const isSlvl = /^slvl$/i.test(stateKey);
+      prelim.push({
+        // Slvl is the SOC output of the Loxone storage meter block. Store the
+        // parent block UUID so websocket SOC events map to the storage meter.
+        uuid: (isSlvl ? ctrlUuid : stateUuid).toLowerCase(),
+        displayName: `${control.name || "?"} → ${stateKey}`,
+        controlName: control.name || "",
+        controlType: type,
+        roomName, catName,
+        score: subScore,
+        parentControlUuid: ctrlUuid,
+        subStateKey: stateKey,
+      });
+    }
+  }
+
+  // Dedupe auf uuid (falls doppelt), Max-Score behalten
+  const byUuid = new Map<string, typeof prelim[number]>();
+  for (const p of prelim) {
+    const prev = byUuid.get(p.uuid);
+    if (!prev || p.score > prev.score) byUuid.set(p.uuid, p);
+  }
+
+  // Top 12 nach Score prüfen (Live-Wert holen; Plausibilität 0–100)
+  const sorted = [...byUuid.values()].sort((a, b) => b.score - a.score).slice(0, 12);
+
+  // Cache für /all pro parentControl (spart HTTP-Requests bei mehreren Sub-States pro Baustein)
+  const allStatesCache = new Map<string, Record<string, number | string | null>>();
+  async function getAll(controlUuid: string) {
+    const cached = allStatesCache.get(controlUuid);
+    if (cached) return cached;
+    try {
+      const s = await fetchAllStates(baseUrl, loxoneAuth, controlUuid);
+      allStatesCache.set(controlUuid, s);
+      return s;
+    } catch (err) {
+      console.warn(`[SOC-Discovery] fetchAllStates fehlgeschlagen für ${controlUuid}:`, (err as Error).message);
+      return {} as Record<string, number | string | null>;
+    }
+  }
+
+  const results: SocCandidate[] = [];
+  for (const cand of sorted) {
+    let value: number | null = null;
+    // Wert ermitteln: bei Sub-State über parentControl/all + Output-Name; bei Control direkt /all
+    if (cand.subStateKey) {
+      const all = await getAll(cand.parentControlUuid);
+      value = extractSocValueFromAllStates(all);
+      // Loxone /all liefert Outputs mit `name` == stateKey. Match case-insensitive.
+      if (value == null) {
+        const targetKey = cand.subStateKey.toLowerCase();
+        for (const [k, v] of Object.entries(all)) {
+          if (k === "_primary") continue;
+          if (k.toLowerCase() === targetKey && typeof v === "number") { value = v; break; }
+        }
+      }
+    } else {
+      const all = await getAll(cand.parentControlUuid);
+      value = extractSocValueFromAllStates(all);
+      if (value == null) {
+        const primary = all["_primary"];
+        if (typeof primary === "number") value = primary;
+        else {
+          for (const v of Object.values(all)) {
+            if (typeof v === "number") { value = v; break; }
+          }
+        }
+      }
+    }
+    // Plausibilität: 0–100 (Werte außerhalb sind i. d. R. Leistung/Zählerstand, nicht SOC)
+    const plausible = value != null && value >= 0 && value <= 100 && Number.isFinite(value);
+    if (plausible || cand.score >= 14) {
+      results.push({
+        uuid: cand.uuid,
+        name: cand.displayName,
+        room: cand.roomName,
+        cat: cand.catName,
+        type: cand.controlType,
+        score: cand.score + (plausible ? 5 : 0),
+        currentValue: plausible ? value : null,
+      });
+    }
+  }
+  results.sort((a, b) => {
+    const ap = a.currentValue != null ? 1 : 0;
+    const bp = b.currentValue != null ? 1 : 0;
+    if (ap !== bp) return bp - ap;
+    return b.score - a.score;
+  });
+  return results;
+}
+
+
+async function syncBatterySoc(
+  supabase: any,
+  locationIntegrationId: string,
+  tenantId: string | null,
+  locationId: string | null,
+  baseUrl: string,
+  loxoneAuth: string,
+  structure: LoxoneStructure,
+): Promise<void> {
+  console.log(`[SOC-Sync] START li=${locationIntegrationId} tenant=${tenantId} location=${locationId}`);
+  if (!tenantId || !locationId) {
+    console.log(`[SOC-Sync] skip: missing tenant/location`);
+    return;
+  }
+  try {
+    const { data: storages, error } = await supabase
+      .from("energy_storages")
+      .select("id, name, soc_sensor_uuid, current_soc_pct, soc_updated_at, power_meter_id")
+      .eq("tenant_id", tenantId)
+      .eq("location_id", locationId);
+    if (error) {
+      console.warn(`[SOC-Sync] energy_storages read failed:`, error.message);
+      return;
+    }
+
+    const rows = (storages ?? []) as Array<{ id: string; name: string; soc_sensor_uuid: string | null; current_soc_pct: number | null; soc_updated_at: string | null; power_meter_id: string | null }>;
+
+    const { data: locationMeters } = await supabase
+      .from("meters")
+      .select("id, sensor_uuid")
+      .eq("tenant_id", tenantId)
+      .eq("location_id", locationId)
+      .eq("is_archived", false)
+      .not("sensor_uuid", "is", null);
+    const meterIdBySensorUuid = new Map<string, string>();
+    for (const meter of locationMeters ?? []) {
+      meterIdBySensorUuid.set(String((meter as any).sensor_uuid).toLowerCase(), (meter as any).id);
+    }
+
+    // Discovery, falls (a) mindestens ein Storage ohne UUID existiert
+    // oder (b) noch gar keiner existiert (dann evtl. auto-anlegen).
+    const needsDiscovery = rows.length === 0 || rows.some((r) => !r.soc_sensor_uuid || r.current_soc_pct == null || !r.soc_updated_at);
+    let candidates: SocCandidate[] = [];
+    if (needsDiscovery) {
+      const controlsCount = Object.keys(structure.controls || {}).length;
+      candidates = await discoverSocCandidates(baseUrl, loxoneAuth, structure);
+      console.log(`[SOC-Sync] Discovery rows=${rows.length} controls=${controlsCount} candidates=${candidates.length}`,
+        candidates.slice(0, 5).map(c => `${c.name}[${c.uuid.slice(0,8)}]=${c.currentValue}(sc=${c.score})`).join(" | "));
+    } else {
+      console.log(`[SOC-Sync] Discovery skipped (all rows have uuid). rows=${rows.length}`);
+    }
+
+
+    // A) Keine Storage-Zeile, aber Kandidat gefunden → automatisch anlegen
+    if (rows.length === 0 && candidates.length > 0) {
+      const best = candidates[0];
+      const { data: locRow } = await supabase
+        .from("locations").select("name").eq("id", locationId).maybeSingle();
+      const locName = locRow?.name ?? "Standort";
+      const { data: created, error: insErr } = await supabase
+        .from("energy_storages")
+        .insert({
+          tenant_id: tenantId,
+          location_id: locationId,
+          name: `Speicher ${locName}`.slice(0, 100),
+          capacity_kwh: 0,
+          max_charge_kw: 0,
+          max_discharge_kw: 0,
+          efficiency_pct: 90,
+          soc_sensor_uuid: best.uuid,
+          power_meter_id: meterIdBySensorUuid.get(best.uuid) ?? null,
+          current_soc_pct: best.currentValue,
+          soc_updated_at: best.currentValue != null ? new Date().toISOString() : null,
+        })
+        .select("id")
+        .single();
+      if (insErr) {
+        console.warn(`[SOC-Sync] Auto-Anlage Speicher fehlgeschlagen:`, insErr.message);
+      } else {
+        console.log(`[SOC-Sync] Speicher-Datensatz auto-angelegt (id=${created?.id}, soc=${best.currentValue}%, uuid=${best.uuid})`);
+      }
+      return;
+    }
+
+    // B) Für jede Zeile: UUID zuweisen (falls fehlt) und aktuellen Wert schreiben
+    for (const row of rows) {
+      let uuid = row.soc_sensor_uuid;
+      let value: number | null = null;
+
+      if (!uuid && candidates.length > 0) {
+        // Nimm besten (noch nicht anderweitig verwendeten) Kandidaten
+        const used = new Set(rows.map((r) => r.soc_sensor_uuid).filter(Boolean) as string[]);
+        const pick = candidates.find((c) => !used.has(c.uuid));
+        if (pick) {
+          uuid = pick.uuid;
+          value = pick.currentValue;
+          console.log(`[SOC-Sync] Zuweisung uuid=${uuid} an Speicher ${row.id} (${row.name})`);
+        }
+      }
+
+      if (!uuid) continue;
+
+      // Aktuellen Wert vom Miniserver holen (falls noch nicht durch Discovery).
+      // Zwei Fälle:
+      //   (a) uuid ist eine Control-UUID (Standalone-VI) → /jdev/sps/io/{uuid}/all direkt.
+      //   (b) uuid ist eine Sub-State-UUID eines Bausteins (Fronius etc.) → müssen
+      //       den Parent-Control finden und dessen /all lesen; darin steckt der
+      //       benannte Output mit dem Wert.
+      if (value == null) {
+        // Parent + State-Key im Structure-File suchen
+        let parentUuid: string | null = null;
+        let stateKey: string | null = null;
+        for (const [cUuid, ctrl] of Object.entries(structure.controls || {})) {
+          const states = (ctrl as any)?.states as Record<string, string> | undefined;
+          if (!states) continue;
+          for (const [k, v] of Object.entries(states)) {
+            if (typeof v === "string" && v.toLowerCase() === uuid.toLowerCase()) {
+              parentUuid = cUuid;
+              stateKey = k;
+              break;
+            }
+          }
+          if (parentUuid) break;
+        }
+        try {
+          const targetUuid = parentUuid ?? uuid;
+          const states = await fetchAllStates(baseUrl, loxoneAuth, targetUuid);
+          if (stateKey) {
+            value = extractSocValueFromAllStates(states);
+            const targetLc = stateKey.toLowerCase();
+            if (value == null) {
+              for (const [k, v] of Object.entries(states)) {
+                if (k === "_primary") continue;
+                if (k.toLowerCase() === targetLc && typeof v === "number") { value = v; break; }
+              }
+            }
+          }
+          if (value == null) {
+            value = extractSocValueFromAllStates(states);
+          }
+          if (value == null) {
+            const primary = states["_primary"];
+            if (typeof primary === "number") value = primary;
+            else {
+              for (const v of Object.values(states)) {
+                if (typeof v === "number") { value = v; break; }
+              }
+            }
+          }
+        } catch (err) {
+          console.warn(`[SOC-Sync] Wert-Abruf fehlgeschlagen für ${uuid}:`, (err as Error).message);
+        }
+      }
+
+      if (value == null && candidates.length > 0) {
+        const replacement = candidates.find((c) => c.currentValue != null && c.uuid !== uuid) ?? candidates.find((c) => c.currentValue != null);
+        if (replacement) {
+          console.log(`[SOC-Sync] Ersetze ungültige SOC-Quelle ${uuid} durch ${replacement.uuid} (${replacement.name}, value=${replacement.currentValue})`);
+          uuid = replacement.uuid;
+          value = replacement.currentValue ?? null;
+        }
+      }
+
+
+      // Plausibilitätsprüfung
+      if (value != null && (value < 0 || value > 100 || !isFinite(value))) {
+        console.warn(`[SOC-Sync] unplausibler Wert ${value} für ${uuid} — ignoriert`);
+        value = null;
+      }
+
+      const patch: Record<string, unknown> = {};
+      if (uuid !== row.soc_sensor_uuid) patch.soc_sensor_uuid = uuid;
+      const matchingPowerMeterId = meterIdBySensorUuid.get(uuid);
+      if (matchingPowerMeterId && matchingPowerMeterId !== row.power_meter_id) patch.power_meter_id = matchingPowerMeterId;
+      let socRecordedAt: string | null = null;
+      if (value != null) {
+        socRecordedAt = new Date().toISOString();
+        patch.current_soc_pct = value;
+        patch.soc_updated_at = socRecordedAt;
+      }
+      if (Object.keys(patch).length === 0) continue;
+
+      const { error: upErr } = await supabase
+        .from("energy_storages").update(patch).eq("id", row.id);
+      if (upErr) {
+        console.warn(`[SOC-Sync] Update ${row.id} fehlgeschlagen:`, upErr.message);
+      } else {
+        if (value != null && socRecordedAt) {
+          const { error: histErr } = await supabase
+            .from("storage_soc_readings")
+            .insert({
+              storage_id: row.id,
+              tenant_id: tenantId,
+              sensor_uuid: uuid,
+              soc_pct: value,
+              recorded_at: socRecordedAt,
+              source: "loxone_api_sync",
+            });
+          if (histErr) console.warn(`[SOC-Sync] Historie konnte nicht gespeichert werden:`, histErr.message);
+        }
+        console.log(`[SOC-Sync] Speicher ${row.id} aktualisiert: ${JSON.stringify(patch)}`);
+      }
+    }
+  } catch (err) {
+    console.error(`[SOC-Sync] unerwarteter Fehler (li=${locationIntegrationId}):`, (err as Error).message);
+  }
 }
 
 serve(async (req) => {
@@ -266,7 +907,20 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const token = authHeader.replace("Bearer ", "");
-    const isServiceRole = token === supabaseServiceKey;
+    // Robust service-role detection: equality OR JWT payload role === "service_role".
+    // Equality alone is brittle when keys are rotated or different deployment snapshots
+    // hold different copies of SUPABASE_SERVICE_ROLE_KEY.
+    let isServiceRole = token === supabaseServiceKey;
+    if (!isServiceRole) {
+      try {
+        const part = token.split(".")[1];
+        if (part) {
+          const padded = part + "=".repeat((4 - (part.length % 4)) % 4);
+          const payload = JSON.parse(atob(padded.replace(/-/g, "+").replace(/_/g, "/")));
+          if (payload?.role === "service_role") isServiceRole = true;
+        }
+      } catch { /* not a JWT, fall through */ }
+    }
 
     let userTenantId: string | null = null;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -288,20 +942,99 @@ serve(async (req) => {
 
       // Get user's tenant_id
       const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userId).single();
-      if (!profile?.tenant_id) {
+      // Super-admins have no tenant_id but should still be able to call this
+      // (e.g. during a Remote-Support session). Tenant ownership is enforced
+      // below against the location_integration.
+      const { data: roleRow } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "super_admin")
+        .maybeSingle();
+      const isSuperAdmin = !!roleRow;
+
+      if (!profile?.tenant_id && !isSuperAdmin) {
         return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      userTenantId = profile.tenant_id;
+      userTenantId = profile?.tenant_id ?? null;
+      if (isSuperAdmin) {
+        // Treat super-admin like service-role for downstream tenant checks
+        isServiceRole = true;
+      }
     }
 
     const requestBody = await req.json();
-    const { locationIntegrationId, action, sensorName } = requestBody;
+    let { locationIntegrationId, action, sensorName } = requestBody;
+    // refreshSensors is implemented as getSensors + persist + lock
+    const isRefreshAction = action === "refreshSensors";
+    if (isRefreshAction) action = "getSensors";
+    const shouldPersistReadings = isServiceRole || isRefreshAction || requestBody?.persistToDb === true;
+    // Hybrid-Strategie (Phase 6.4): getSensors/Details/backfill sind wieder
+    // aktiv — sie liefern die driftfreien Zählerstände, während die WS-Bridge
+    // parallel die Live-Power-Events sendet.
+
+    // Manual UI-triggered refresh (Tacho/Discovery button) → bypass the 1 h
+    // structure cache so newly added Loxone sensors/actuators show up instantly.
+    // Cron/background calls (service role) keep using the cache to save traffic.
+    const forceStructureRefresh =
+      requestBody?.forceStructureRefresh === true ||
+      (isRefreshAction && !isServiceRole);
+
 
     if (!locationIntegrationId) {
       throw new Error("Location Integration ID ist erforderlich");
     }
 
-    console.log(`Loxone API request: action=${action}, locationIntegrationId=${locationIntegrationId}, sensorName=${sensorName || "N/A"}`);
+    // ── ACTION: getSensorsCached ── (cache-first, no external HTTP)
+    if (action === "getSensorsCached") {
+      const snap = await readSensorSnapshot(supabase, locationIntegrationId);
+      if (snap) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            sensors: snap.sensors ?? [],
+            systemMessages: snap.system_messages ?? [],
+            cached: true,
+            snapshotStatus: snap.status,
+            fetchedAt: snap.fetched_at,
+            errorMessage: snap.error_message,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      // No snapshot yet → return empty result; the UI can trigger refreshSensors.
+      return new Response(
+        JSON.stringify({ success: true, sensors: [], systemMessages: [], cached: true, snapshotStatus: "missing" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    console.log(
+      `Loxone API request: action=${action}, locationIntegrationId=${locationIntegrationId}, sensorName=${sensorName || "N/A"}, persist=${shouldPersistReadings}, refresh=${isRefreshAction}`,
+    );
+
+    // ── refreshSensors: acquire lock so parallel UI calls don't stampede ──
+    const lockOwner = `loxone-api:${crypto.randomUUID()}`;
+    let heldLock = false;
+    if (isRefreshAction) {
+      heldLock = await tryAcquireRefreshLock(supabase, locationIntegrationId, lockOwner, 60);
+      if (!heldLock) {
+        // Another refresh is in flight – return current snapshot instead of duplicating work
+        const snap = await readSensorSnapshot(supabase, locationIntegrationId);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            sensors: snap?.sensors ?? [],
+            systemMessages: snap?.system_messages ?? [],
+            cached: true,
+            snapshotStatus: snap?.status ?? "refreshing",
+            fetchedAt: snap?.fetched_at ?? null,
+            refreshing: true,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     const { data: locationIntegration, error: liError } = await supabase
       .from("location_integrations")
@@ -325,9 +1058,11 @@ serve(async (req) => {
 
     console.log(`Config: serial=${config.serial_number}, user=${config.username}`);
 
-    const baseUrl = await resolveLoxoneCloudURL(config.serial_number);
+    const baseUrl = await resolveLocalOrCloud(config as LoxoneConfig & { local_host?: string });
     if (!baseUrl) {
-      await updateSyncStatus(supabase, locationIntegrationId, "error");
+      if (shouldPersistReadings) {
+        await updateSyncStatus(supabase, locationIntegrationId, "error");
+      }
       throw new Error("Cloud DNS Auflösung fehlgeschlagen. Miniserver nicht erreichbar.");
     }
 
@@ -338,7 +1073,7 @@ serve(async (req) => {
     if (action === "test") {
       const testUrl = `${baseUrl}/jdev/cfg/api`;
       console.log(`Testing connection: ${testUrl}`);
-      const response = await fetch(testUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const response = await fetchWithTimeout(testUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       if (!response.ok) {
         await updateSyncStatus(supabase, locationIntegrationId, "error");
         throw new Error(`Verbindung fehlgeschlagen: ${response.status}`);
@@ -350,19 +1085,98 @@ serve(async (req) => {
 
     // ── ACTION: getSensors ──
     if (action === "getSensors") {
-      await updateSyncStatus(supabase, locationIntegrationId, "syncing");
-
-      const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      console.log(`Fetching structure: ${structureUrl}`);
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
-
-      if (!structureResponse.ok) {
-        await updateSyncStatus(supabase, locationIntegrationId, "error");
-        if (structureResponse.status === 401) throw new Error("Authentifizierung fehlgeschlagen.");
-        throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
+      if (shouldPersistReadings) {
+        await updateSyncStatus(supabase, locationIntegrationId, "syncing");
       }
 
-      const structure = await structureResponse.json() as LoxoneStructure & { messageCenter?: any };
+      // ── Structure file (LoxAPP3.json) — cached for 1 h per location_integration ──
+      // The structure rarely changes, so we serve it from an in-memory cache and
+      // only re-fetch on cache miss / expiry. This alone cuts ~30–50 % of traffic.
+      const cacheKey = locationIntegrationId;
+      if (forceStructureRefresh) {
+        structureCache.delete(cacheKey);
+        console.log("Manual refresh: structure cache invalidated for this integration");
+      }
+      const cached = structureCache.get(cacheKey);
+      let structure: LoxoneStructure & { messageCenter?: any };
+
+      if (cached && cached.expiresAt > Date.now()) {
+        structure = cached.structure;
+        console.log(`Using cached LoxAPP3.json structure (expires in ${Math.round((cached.expiresAt - Date.now()) / 1000)}s)`);
+      } else {
+
+        const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
+        console.log(`Fetching structure: ${structureUrl}`);
+        const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+
+        if (!structureResponse.ok) {
+          if (structureResponse.status === 401 || structureResponse.status === 403) {
+            const snap = await readSensorSnapshot(supabase, locationIntegrationId);
+            if (snap?.sensors && Array.isArray(snap.sensors) && snap.sensors.length > 0) {
+              console.warn(`[loxone-api] HTTP ${structureResponse.status} for LoxAPP3.json — using worker snapshot with ${snap.sensors.length} sensors`);
+              if (shouldPersistReadings) {
+                await updateSyncStatus(supabase, locationIntegrationId, "success");
+              }
+              if (heldLock) await releaseRefreshLock(supabase, locationIntegrationId, lockOwner);
+              return new Response(
+                JSON.stringify({
+                  success: true,
+                  sensors: snap.sensors ?? [],
+                  systemMessages: snap.system_messages ?? [],
+                  cached: true,
+                  snapshotStatus: snap.status,
+                  fetchedAt: snap.fetched_at,
+                  source: "worker_snapshot_after_http_auth_error",
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+              );
+            }
+          }
+          if (shouldPersistReadings) {
+            await updateSyncStatus(supabase, locationIntegrationId, "error");
+          }
+          if (structureResponse.status === 401) throw new Error("Authentifizierung fehlgeschlagen.");
+          throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
+        }
+
+        structure = await structureResponse.json() as LoxoneStructure & { messageCenter?: any };
+        structureCache.set(cacheKey, { structure, expiresAt: Date.now() + STRUCTURE_CACHE_TTL_MS });
+        console.log(`Cached structure for ${STRUCTURE_CACHE_TTL_MS / 1000}s`);
+
+        // ── Auto-link bridge_miniserver_links (idempotent) ──
+        // Trigger only on cache-miss (i.e. structure was actually just fetched)
+        // to keep it cheap. RPC does an UPSERT and backfills missing tenant/location.
+        try {
+          const serialFromStructure =
+            (structure as any)?.msInfo?.serialNr ||
+            (structure as any)?.msInfo?.serial ||
+            config.serial_number;
+          const tenantIdForLink =
+            (locationIntegration as any)?.location?.tenant_id ?? null;
+          const locationIdForLink =
+            (locationIntegration as any)?.location_id ?? null;
+
+          if (serialFromStructure && tenantIdForLink && locationIdForLink) {
+            const { error: linkErr } = await supabase.rpc(
+              "ensure_bridge_miniserver_link",
+              {
+                p_serial: String(serialFromStructure),
+                p_tenant_id: tenantIdForLink,
+                p_location_id: locationIdForLink,
+                p_connection_kind: "cloud_dns",
+              },
+            );
+            if (linkErr) {
+              console.warn("[loxone-api] ensure_bridge_miniserver_link failed:", linkErr.message);
+            } else {
+              console.log(`[loxone-api] bridge_miniserver_links upserted for serial=${serialFromStructure}`);
+            }
+          }
+        } catch (linkCatch) {
+          console.warn("[loxone-api] auto-link exception (non-fatal):", linkCatch);
+        }
+      }
+
       const controls = structure.controls || {};
       const rooms = structure.rooms || {};
       const categories = structure.cats || {};
@@ -395,14 +1209,49 @@ serve(async (req) => {
 
       console.log(`Loaded structure with ${Object.keys(controls).length} controls`);
 
-      // Collect control UUIDs that need state fetching
-      const controlUuids = Object.keys(controls);
+      // ── Option 2: Only poll controls actually used by configured meters ──
+      // On background sync (refreshSensors) we don't need live values for every
+      // control — only for those linked to a meter row. This cuts ~70 % of the
+      // remaining state-fetch traffic on customers with many unused controls.
+      // On UI discovery (action=getSensors without refresh) we still poll all.
+      let allControlUuids = Object.keys(controls);
+      let controlUuids = allControlUuids;
+
+      // Skip the linked-meter filter on manual UI refresh so new (yet unlinked)
+      // controls also get state values and appear in discovery.
+      if (isRefreshAction && !forceStructureRefresh) {
+
+        const { data: linkedMetersForFilter } = await supabase
+          .from("meters")
+          .select("sensor_uuid")
+          .eq("location_integration_id", locationIntegrationId)
+          .eq("capture_type", "automatic")
+          .eq("is_archived", false);
+
+        const allowed = new Set(
+          (linkedMetersForFilter ?? [])
+            .map((m: any) => m.sensor_uuid)
+            .filter((u: any): u is string => typeof u === "string" && u.length > 0),
+        );
+
+        if (allowed.size > 0) {
+          controlUuids = allControlUuids.filter((u) => allowed.has(u));
+          console.log(
+            `refreshSensors: filtered ${allControlUuids.length} → ${controlUuids.length} controls (only linked meters)`,
+          );
+        } else {
+          console.log("refreshSensors: no linked meters found, polling nothing");
+          controlUuids = [];
+        }
+      }
 
       console.log(`Querying states for ${controlUuids.length} controls via /all endpoint...`);
 
       // Batch fetch all states using control UUIDs
       const stateResults: Record<string, StateValueResult> = {};
-      const batchSize = 20;
+      const batchSize = LOXONE_STATE_BATCH_SIZE;
+
+
 
       for (let i = 0; i < controlUuids.length; i += batchSize) {
         const batch = controlUuids.slice(i, i + batchSize);
@@ -560,6 +1409,16 @@ serve(async (req) => {
           unit = detected.unit;
         }
 
+        // Override the (possibly hardcoded) unit with the real unit from the Loxone
+        // control's format string when available (e.g. water meter → "m³/h" instead of "kW").
+        const _details = (control as any).details;
+        const _formatUnit = _details && typeof _details === "object"
+          ? extractUnitFromFormat(_details.format ?? _details.formatValue)
+          : null;
+        if (_formatUnit) {
+          unit = _formatUnit;
+        }
+
         // Get the fetched value(s)
         const stateData = stateResults[uuid];
         let value = "-";
@@ -579,7 +1438,9 @@ serve(async (req) => {
 
         if (stateData?.secondaryValue !== null && stateData?.secondaryValue !== undefined) {
           secondaryStateName = stateData.secondaryStateName || "";
-          secondaryUnit = stateData.secondaryUnit || (mappingEntry?.secondaryUnit || "");
+          // Prefer totalizer unit derived from primary rate unit (e.g. m³/h → m³).
+          const _inferredSecondary = totalizerUnitFor(unit);
+          secondaryUnit = stateData.secondaryUnit || _inferredSecondary || (mappingEntry?.secondaryUnit || "");
           const rawSecondary = stateData.secondaryValue;
           if (typeof rawSecondary === "number") {
             secondaryValue = rawSecondary.toLocaleString("de-DE", { maximumFractionDigits: secondaryUnit === "kWh" ? 0 : 2 });
@@ -628,7 +1489,9 @@ serve(async (req) => {
 
       console.log(`Parsed ${sensors.length} sensors with values`);
 
-      // Auto-save instantaneous power readings for time-series charts
+      // Only background sync jobs should persist readings and archive totals.
+      // Interactive UI reads must stay lightweight to avoid edge-runtime timeouts.
+      if (shouldPersistReadings) {
       try {
         const { data: linkedMeters } = await supabase
           .from("meters")
@@ -639,9 +1502,18 @@ serve(async (req) => {
 
         if (linkedMeters && linkedMeters.length > 0) {
           const now = new Date();
-          // Previous month's first day for monthly archiving
-          const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          const periodStart = prevMonthDate.toISOString().split("T")[0];
+          // Previous month's first day for monthly archiving (Europe/Berlin TZ).
+          // FIX (Step 3): Avoid local→UTC off-by-one near month boundaries by computing
+          // the calendar date in Berlin TZ before subtracting a month.
+          const berlinFmtM = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Europe/Berlin",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
+          const [ny, nm] = berlinFmtM.format(now).split("-").map(Number);
+          const prevMonth = new Date(Date.UTC(ny, nm - 2, 1));
+          const periodStart = prevMonth.toISOString().split("T")[0];
 
           const monthUpserts: Array<{
             tenant_id: string;
@@ -660,6 +1532,42 @@ serve(async (req) => {
             energy_type: string;
             recorded_at: string;
           }> = [];
+
+          // Fallback für meter_power_readings_5min: wird nur beschrieben,
+          // wenn der Loxone-WS-Worker seit >2 Poll-Intervallen keinen
+          // bridge_ws-Bucket geliefert hat. So bleibt der Chart gefüllt,
+          // wenn der Worker offline ist. Siehe Phase 4a im Plan.
+          const fallbackCandidates: Array<{
+            meter_id: string;
+            tenant_id: string;
+            energy_type: string;
+            power_value: number;
+          }> = [];
+
+
+          // Kumulative Zählerstands-Snapshots (für intervall-unabhängige Ist-Berechnung)
+          const cumulativeInserts: Array<{
+            tenant_id: string;
+            meter_id: string;
+            reading_at: string;
+            kwh_total: number;
+            source: string;
+          }> = [];
+
+          // Phase 7: Tagessnapshot pro Meter (Loxone-Wahrheit). Wird mehrmals täglich
+          // durch den 15-Min-Poll überschrieben → letzter Wert vor Mitternacht bleibt
+          // als finaler Tageswert stehen. Grundlage für Monat/Jahr-Berechnung
+          // (= aktuelles total minus Snapshot vom 01. des Monats / 01.01.) und für
+          // Wochen-/Quartalsaggregation.
+          const dailySnapshotInserts: Array<{
+            tenant_id: string;
+            meter_id: string;
+            snapshot_date: string;
+            energy_total_kwh: number | null;
+            energy_today_kwh: number | null;
+            source: string;
+          }> = [];
+
 
           // Spike-Detection: Fetch the last few power readings per meter to compute a baseline.
           // A new reading is considered a spike if it is > SPIKE_FACTOR × median of recent readings.
@@ -714,9 +1622,23 @@ serve(async (req) => {
             }
 
             // Archive yesterday's daily total (Rldc/Rldd/Rld)
+            // FIX (Step 3): Date must be computed in Europe/Berlin TZ.
+            // Previous code used `new Date(Y, M, D-1)` (local midnight) + toISOString(),
+            // which shifts to UTC and produced an off-by-one (or -two) day label.
+            // Loxone's "TotalDayLast" represents the completed previous calendar day in
+            // Berlin local time — we now compute that date deterministically.
             if (stateData?.totalDayLast != null && stateData.totalDayLast > 0) {
-              const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-              const yesterdayStr = yesterday.toISOString().split("T")[0];
+              const berlinFmt = new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Europe/Berlin",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+              });
+              const todayBerlin = berlinFmt.format(now); // "YYYY-MM-DD"
+              const [by, bm, bd] = todayBerlin.split("-").map(Number);
+              const yest = new Date(Date.UTC(by, bm - 1, bd));
+              yest.setUTCDate(yest.getUTCDate() - 1);
+              const yesterdayStr = yest.toISOString().split("T")[0];
               monthUpserts.push({
                 tenant_id: meter.tenant_id,
                 meter_id: meter.id,
@@ -727,6 +1649,119 @@ serve(async (req) => {
                 source: "loxone",
               });
             }
+
+            // Berlin-Datum einmal pro Meter berechnen (für day/month/year period_start)
+            const berlinFmtT = new Intl.DateTimeFormat("en-CA", {
+              timeZone: "Europe/Berlin",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            });
+            const todayStr = berlinFmtT.format(now); // YYYY-MM-DD in Berlin
+            const firstOfMonthStr = `${todayStr.slice(0, 7)}-01`;
+            const firstOfYearStr = `${todayStr.slice(0, 4)}-01-01`;
+
+            // Persist TODAY's running total (Rd/Rdc/Rdd) so dashboards & RPCs
+            // can rely on the authoritative Loxone counter instead of a
+            // 5-min power-aggregation estimate. Stored as source='loxone_live'
+            // on today's date (Europe/Berlin). Overwritten at midnight when
+            // 'loxone' source archives totalDayLast for the completed day.
+            if (stateData?.totalDay != null && stateData.totalDay >= 0) {
+              monthUpserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                period_type: "day",
+                period_start: todayStr,
+                total_value: stateData.totalDay,
+                energy_type: meter.energy_type,
+                source: "loxone_live",
+              });
+            }
+
+            // Persist CURRENT month total (Rm/Rmc/Rmd) als Loxone-Gold-Standard.
+            // Quelle: Loxone Miniserver HTTP-Counter, alle 15 Min aktualisiert.
+            // Überschreibt etwaige 5-Min-aggregierte Schätzungen.
+            if (stateData?.totalMonth != null && stateData.totalMonth >= 0) {
+              monthUpserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                period_type: "month",
+                period_start: firstOfMonthStr,
+                total_value: stateData.totalMonth,
+                energy_type: meter.energy_type,
+                source: "loxone_live",
+              });
+            }
+
+            // Persist CURRENT year total (Ry/Ryc/Ryd) als Loxone-Gold-Standard.
+            // Damit ist der Jahres-Wert auch dann korrekt, wenn die WS-Bridge
+            // zwischenzeitlich offline war und Day-Rows fehlen.
+            if (stateData?.totalYear != null && stateData.totalYear >= 0) {
+              monthUpserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                period_type: "year",
+                period_start: firstOfYearStr,
+                total_value: stateData.totalYear,
+                energy_type: meter.energy_type,
+                source: "loxone_live",
+              });
+            }
+
+            // Snapshot des kumulativen Zählerstandes — Priorität:
+            //   1. Mr (echter Zählerstand, in stateData.secondaryValue für Meter-Controls)
+            //   2. totalYear (Ry) als Fallback
+            //   3. totalDay als letzter Fallback
+            // Wird in `meter_cumulative_readings` geschrieben und vom Aggregator
+            // `aggregate_pv_actual_hourly` zur intervall-unabhängigen Berechnung
+            // der Ist-Erzeugung pro Stunde verwendet.
+            const mrRaw = stateData?.secondaryValue;
+            const mrNum = typeof mrRaw === "number"
+              ? mrRaw
+              : (typeof mrRaw === "string" && mrRaw.trim() !== "" ? parseFloat(mrRaw) : NaN);
+            const mrValid = isFinite(mrNum) && mrNum > 0;
+            const cumulativeKwh = mrValid
+              ? mrNum
+              : (stateData?.totalYear != null && stateData.totalYear > 0)
+                ? Number(stateData.totalYear)
+                : (stateData?.totalDay != null && stateData.totalDay >= 0 ? Number(stateData.totalDay) : null);
+            const cumulativeSource = mrValid
+              ? "loxone_live_total"
+              : (stateData?.totalYear != null && stateData.totalYear > 0)
+                ? "loxone_live_year"
+                : "loxone_live_day";
+            if (cumulativeKwh != null && isFinite(cumulativeKwh)) {
+              cumulativeInserts.push({
+                tenant_id: meter.tenant_id,
+                meter_id: meter.id,
+                reading_at: now.toISOString(),
+                kwh_total: cumulativeKwh,
+                source: cumulativeSource,
+              });
+            }
+
+
+            // Phase 7: Tagessnapshot (Europe/Berlin-Datum) — letzter Wert pro Tag bleibt persistent.
+            try {
+              const berlinDate = new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit",
+              }).format(now); // → "YYYY-MM-DD"
+              const totalKwh = (stateData?.totalYear != null && stateData.totalYear > 0)
+                ? Number(stateData.totalYear)
+                : (stateData?.totalDay != null ? Number(stateData.totalDay) : null);
+              const todayKwh = stateData?.totalDay != null ? Number(stateData.totalDay) : null;
+              if ((totalKwh != null && isFinite(totalKwh)) || (todayKwh != null && isFinite(todayKwh))) {
+                dailySnapshotInserts.push({
+                  tenant_id: meter.tenant_id,
+                  meter_id: meter.id,
+                  snapshot_date: berlinDate,
+                  energy_total_kwh: totalKwh != null && isFinite(totalKwh) ? totalKwh : null,
+                  energy_today_kwh: todayKwh != null && isFinite(todayKwh) ? todayKwh : null,
+                  source: "loxone_http_poll",
+                });
+              }
+            } catch (_e) { /* date formatting issues → snapshot überspringen */ }
+
 
             // Store instantaneous power reading for time-series (with spike filter)
             if (stateData?.value != null) {
@@ -758,21 +1793,78 @@ serve(async (req) => {
                     energy_type: meter.energy_type,
                     recorded_at: now.toISOString(),
                   });
+                  fallbackCandidates.push({
+                    meter_id: meter.id,
+                    tenant_id: meter.tenant_id,
+                    energy_type: meter.energy_type,
+                    power_value: powerVal,
+                  });
                 }
+
               }
             }
           }
 
           if (monthUpserts.length > 0) {
-            const { error: upsertError } = await supabase
+            // IO-Optimierung: vor dem Upsert vorhandene Zeilen lesen und nur
+            // schreiben, wenn sich total_value oder source tatsächlich geändert
+            // hat. Quelle der vorherigen ~9,77 Mio. UPDATES auf 5.676 Zeilen.
+            const meterIds = Array.from(new Set(monthUpserts.map((u: any) => u.meter_id)));
+            const periodStarts = Array.from(new Set(monthUpserts.map((u: any) => u.period_start)));
+            const { data: existingRows } = await supabase
               .from("meter_period_totals")
-              .upsert(monthUpserts, { onConflict: "meter_id,period_type,period_start" });
-            if (upsertError) {
-              console.error("Error upserting period totals:", upsertError);
+              .select("meter_id, period_type, period_start, total_value, source")
+              .in("meter_id", meterIds)
+              .in("period_start", periodStarts);
+
+            const existingMap = new Map<string, { total_value: number; source: string | null }>();
+            for (const r of (existingRows || [])) {
+              const key = `${r.meter_id}|${r.period_type}|${r.period_start}`;
+              existingMap.set(key, { total_value: Number(r.total_value), source: r.source });
+            }
+
+            const toUpsert = monthUpserts.filter((u: any) => {
+              const key = `${u.meter_id}|${u.period_type}|${u.period_start}`;
+              const existing = existingMap.get(key);
+              if (!existing) return true;
+              const valChanged = Number(existing.total_value) !== Number(u.total_value);
+              const srcChanged = (existing.source ?? null) !== (u.source ?? null);
+              return valChanged || srcChanged;
+            });
+
+            if (toUpsert.length > 0) {
+              // Chunk-Fix: bei großen Integrationen (z.B. AICONO Zentrale mit
+              // 30 Metern → ~90 Zeilen) bricht ein einzelner Upsert still ab,
+              // weil PostgREST/Edge die große Payload ablehnt. 20er-Chunks
+              // umgehen das ohne Schema-Änderung. Fehler werden mit vollem
+              // Inhalt geloggt (kürzeste Retention-Zeit der Edge-Logs reicht).
+              const CHUNK = 20;
+              let okCount = 0;
+              let errCount = 0;
+              for (let i = 0; i < toUpsert.length; i += CHUNK) {
+                const slice = toUpsert.slice(i, i + CHUNK);
+                const { error: upsertError } = await supabase
+                  .from("meter_period_totals")
+                  .upsert(slice, { onConflict: "meter_id,period_type,period_start" });
+                if (upsertError) {
+                  errCount += slice.length;
+                  console.error(
+                    `Error upserting period totals chunk ${i}-${i + slice.length} (size=${slice.length}): ${JSON.stringify(upsertError)} | first row: ${JSON.stringify(slice[0])}`
+                  );
+                } else {
+                  okCount += slice.length;
+                }
+              }
+              if (errCount > 0) {
+                console.error(`Period-totals upsert: ${okCount} ok / ${errCount} failed (of ${monthUpserts.length} total, ${monthUpserts.length - toUpsert.length} unchanged)`);
+              } else {
+                console.log(`Upserted ${okCount}/${monthUpserts.length} period totals for ${periodStart} (skipped ${monthUpserts.length - toUpsert.length} unchanged)`);
+              }
             } else {
-              console.log(`Upserted ${monthUpserts.length} monthly period totals for ${periodStart}`);
+              console.log(`Skipped all ${monthUpserts.length} period totals for ${periodStart} (no value changes)`);
             }
           }
+
 
           if (powerInserts.length > 0) {
             // WORKER_ACTIVE feature flag: when the Hetzner gateway-worker is the
@@ -793,15 +1885,191 @@ serve(async (req) => {
               }
             }
           }
+
+          // ── Phase 4a: Pull-Fallback in meter_power_readings_5min ──
+          // Wenn der WS-Worker seit > 2 × poll_interval_minutes keinen bridge_ws-
+          // Bucket geschrieben hat (oder noch nie), erzeugt der HTTP-Poll einen
+          // synthetischen 5-Min-Bucket aus dem aktuellen Sample. Sobald der WS-
+          // Worker wieder aggregiert, überschreibt dessen Upsert diesen Bucket
+          // (identisches onConflict-Ziel), source wechselt zurück auf bridge_ws.
+          if (fallbackCandidates.length > 0) {
+            try {
+              const rawInterval = Number((config as any).poll_interval_minutes);
+              const pollMin = Number.isFinite(rawInterval) && rawInterval >= 5 && rawInterval <= 60
+                ? Math.floor(rawInterval)
+                : 15;
+              const freshCutoffMs = Date.now() - 2 * pollMin * 60_000;
+              const freshCutoffIso = new Date(freshCutoffMs).toISOString();
+
+              const meterIdsFb = fallbackCandidates.map((c) => c.meter_id);
+              // Ein Zähler gilt als versorgt, wenn im Frische-Fenster ein Bucket aus
+              // IRGENDEINER autoritativen Quelle existiert — nicht nur bridge_ws.
+              // Sonst schreibt der Pull 15-Minuten-Nullwerte in eine bereits
+              // korrekt befüllte Reihe (Sägezahn-Effekt im Graphen).
+              const AUTHORITATIVE_SOURCES = ["bridge_ws", "gateway_backfill", "loxone_backfill"];
+              const { data: freshRows } = await supabase
+                .from("meter_power_readings_5min")
+                .select("meter_id")
+                .in("meter_id", meterIdsFb)
+                .in("source", AUTHORITATIVE_SOURCES)
+                .gte("bucket", freshCutoffIso);
+
+              const freshSet = new Set<string>((freshRows ?? []).map((r: any) => r.meter_id));
+              // Kandidaten ohne belastbaren Leistungswert (exakt 0 / kein Zahlenwert)
+              // werden übersprungen: Lücke statt falscher Null in der Historie.
+              const stale = fallbackCandidates.filter((c) => {
+                if (freshSet.has(c.meter_id)) return false;
+                const v = Number(c.power_value);
+                return Number.isFinite(v) && v !== 0;
+              });
+
+              if (stale.length > 0) {
+                // 5-Min-Bucket-Start (UTC) für den aktuellen Zeitpunkt
+                const bucketDate = new Date(now);
+                bucketDate.setUTCSeconds(0, 0);
+                bucketDate.setUTCMinutes(Math.floor(bucketDate.getUTCMinutes() / 5) * 5);
+                const bucketIso = bucketDate.toISOString();
+
+                // Vorrang-Regel: bestehende Buckets aus autoritativen Quellen dürfen
+                // nicht durch loxone_pull überschrieben werden.
+                const staleIds = stale.map((c) => c.meter_id);
+                const { data: occupied } = await supabase
+                  .from("meter_power_readings_5min")
+                  .select("meter_id")
+                  .in("meter_id", staleIds)
+                  .in("source", AUTHORITATIVE_SOURCES)
+                  .eq("bucket", bucketIso)
+                  .eq("resolution_minutes", 5);
+                const occupiedSet = new Set<string>((occupied ?? []).map((r: any) => r.meter_id));
+
+                const rows = stale
+                  .filter((c) => !occupiedSet.has(c.meter_id))
+                  .map((c) => ({
+                    meter_id: c.meter_id,
+                    tenant_id: c.tenant_id,
+                    energy_type: c.energy_type,
+                    bucket: bucketIso,
+                    power_avg: c.power_value,
+                    power_max: c.power_value,
+                    sample_count: 1,
+                    resolution_minutes: 5,
+                    source: "loxone_pull",
+                  }));
+
+                if (rows.length > 0) {
+                  const { error: fbErr } = await supabase
+                    .from("meter_power_readings_5min")
+                    .upsert(rows, { onConflict: "meter_id,bucket,resolution_minutes" });
+
+                  if (fbErr) {
+                    console.error(`[loxone-api] Pull-Fallback upsert failed: ${fbErr.message}`);
+                  } else {
+                    console.log(`[loxone-api] Pull-Fallback: wrote ${rows.length} loxone_pull buckets (keine autoritative Quelle frisch > ${2 * pollMin}min)`);
+                  }
+                }
+              }
+
+            } catch (fbEx) {
+              console.warn("[loxone-api] Pull-Fallback exception:", (fbEx as Error).message);
+            }
+          }
+
+
+
+          // Bulk-Insert der Zählerstands-Snapshots (Konflikt = bereits vorhandener Zeitpunkt → ignorieren)
+          if (cumulativeInserts.length > 0) {
+            const { error: cumErr } = await supabase
+              .from("meter_cumulative_readings")
+              .upsert(cumulativeInserts, { onConflict: "meter_id,reading_at" });
+            if (cumErr) {
+              console.error("Error inserting cumulative readings:", cumErr);
+            } else {
+              console.log(`Inserted ${cumulativeInserts.length} cumulative meter readings`);
+            }
+          }
+
+          // Phase 7: Tagessnapshot upserten (1 Zeile pro Meter+Tag, mehrfach pro Tag überschrieben)
+          // IO-Reduktion: vorher lesen und nur schreiben, wenn sich Werte tatsächlich
+          // geändert haben. Quelle der ~44k Updates/Tag auf 1.259 Zeilen.
+          if (dailySnapshotInserts.length > 0) {
+            const meterIds2 = Array.from(new Set(dailySnapshotInserts.map((s: any) => s.meter_id)));
+            const dates2 = Array.from(new Set(dailySnapshotInserts.map((s: any) => s.snapshot_date)));
+            const { data: existingSnaps } = await supabase
+              .from("meter_loxone_daily_snapshots")
+              .select("meter_id, snapshot_date, energy_total_kwh, energy_today_kwh")
+              .in("meter_id", meterIds2)
+              .in("snapshot_date", dates2);
+            const snapMap = new Map<string, { total: number | null; today: number | null }>();
+            for (const r of existingSnaps ?? []) {
+              snapMap.set(`${r.meter_id}|${r.snapshot_date}`, {
+                total: r.energy_total_kwh == null ? null : Number(r.energy_total_kwh),
+                today: r.energy_today_kwh == null ? null : Number(r.energy_today_kwh),
+              });
+            }
+            const toWrite = dailySnapshotInserts.filter((s: any) => {
+              const prev = snapMap.get(`${s.meter_id}|${s.snapshot_date}`);
+              if (!prev) return true;
+              const totalChanged = Number(prev.total ?? NaN) !== Number(s.energy_total_kwh ?? NaN);
+              const todayChanged = Number(prev.today ?? NaN) !== Number(s.energy_today_kwh ?? NaN);
+              return totalChanged || todayChanged;
+            });
+
+            if (toWrite.length > 0) {
+              const { error: snapErr } = await supabase
+                .from("meter_loxone_daily_snapshots")
+                .upsert(toWrite, { onConflict: "meter_id,snapshot_date" });
+              if (snapErr) {
+                console.error("Error upserting daily snapshots:", snapErr);
+              } else {
+                console.log(`Upserted ${toWrite.length}/${dailySnapshotInserts.length} daily Loxone snapshots (skipped ${dailySnapshotInserts.length - toWrite.length} unchanged)`);
+              }
+            } else {
+              console.log(`Skipped all ${dailySnapshotInserts.length} daily snapshots (no changes)`);
+            }
+          }
+
         }
+
       } catch (archiveErr) {
         console.error("Error archiving data:", archiveErr);
       }
+      }
 
-      await updateSyncStatus(supabase, locationIntegrationId, "success");
+      // ── Battery-SOC sync (Fronius/Battery Sub-Output aus LoxAPP3.json) ──
+      // Läuft bei jedem getSensors, benutzt die bereits geladene Struktur und Auth.
+      // Idempotent, kostet 1–8 zusätzliche Miniserver-Requests nur beim allerersten
+      // Sync einer Location; danach nur noch 1 Request pro konfiguriertem Speicher.
+      try {
+        await syncBatterySoc(
+          supabase,
+          locationIntegrationId,
+          (locationIntegration as any).location?.tenant_id ?? null,
+          (locationIntegration as any).location_id ?? null,
+          baseUrl,
+          loxoneAuth,
+          structure,
+        );
+      } catch (socErr) {
+        console.warn("[SOC-Sync] fehlgeschlagen:", (socErr as Error).message);
+      }
+
+      if (shouldPersistReadings) {
+        await updateSyncStatus(supabase, locationIntegrationId, "success");
+      }
+
+
+      // ── Always write snapshot on successful sensor fetch ──
+      await writeSensorSnapshot(supabase, locationIntegrationId, {
+        sensors,
+        systemMessages,
+        status: "fresh",
+        tenantId: (locationIntegration as any).location?.tenant_id ?? null,
+        locationId: (locationIntegration as any).location_id ?? null,
+      });
+      if (heldLock) await releaseRefreshLock(supabase, locationIntegrationId, lockOwner);
 
       return new Response(
-        JSON.stringify({ success: true, sensors, systemMessages }),
+        JSON.stringify({ success: true, sensors, systemMessages, cached: false }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -812,7 +2080,7 @@ serve(async (req) => {
 
       console.log(`Searching for sensor: "${sensorName}"`);
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       if (!structureResponse.ok) throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
 
       const structure: LoxoneStructure = await structureResponse.json();
@@ -884,7 +2152,7 @@ serve(async (req) => {
     // ── ACTION: listAllSensors ──
     if (action === "listAllSensors") {
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       if (!structureResponse.ok) throw new Error(`Struktur konnte nicht geladen werden: ${structureResponse.status}`);
 
       const structure: LoxoneStructure = await structureResponse.json();
@@ -902,7 +2170,7 @@ serve(async (req) => {
       }
 
       const sensorsWithPfMrc = sensorList.filter(s =>
-        s.stateNames.includes("Pf") || s.stateNames.includes("Mrc") || s.stateNames.includes("Mrd")
+        s.stateNames.includes("Pf") || s.stateNames.includes("Mrc") || s.stateNames.includes("Mrd") || s.stateNames.includes("Slvl")
       );
 
       return new Response(
@@ -1077,11 +2345,30 @@ serve(async (req) => {
     //   Then entries aligned to entrySize, each containing:
     //     - 2x uint16 (UUID parts) + 1x uint32 (Loxone timestamp) + N x float64 (values)
     //   Loxone timestamp = seconds since 2009-01-01 00:00:00 UTC
-    if (action === "backfillStatistics") {
-      const { fromDate, toDate } = requestBody;
-      if (!fromDate || !toDate) throw new Error("fromDate und toDate sind erforderlich (YYYY-MM-DD)");
+    if (action === "backfillStatistics" || action === "backfillRange") {
+      // backfillRange: Lückenfüllung. Nimmt ISO-Zeitstempel (from/to) statt
+      // Kalendertagen und optional eine Meter-Auswahl. Der Upsert läuft über
+      // (meter_id, bucket) — vorhandene Live-Werte werden nie überschrieben.
+      const isRange = action === "backfillRange";
+      const { fromDate, toDate, totalsOnly, from, to, meterIds } = requestBody;
+      if (isRange) {
+        if (!from || !to) throw new Error("from und to sind erforderlich (ISO-Zeitstempel)");
+      } else if (!fromDate || !toDate) {
+        throw new Error("fromDate und toDate sind erforderlich (YYYY-MM-DD)");
+      }
 
-      console.log(`Backfill statistics (binary): ${fromDate} to ${toDate} for integration ${locationIntegrationId}`);
+      const startD = isRange ? new Date(from) : new Date(fromDate + "T00:00:00Z");
+      const endD = isRange ? new Date(to) : new Date(toDate + "T23:59:59Z");
+      if (isNaN(startD.getTime()) || isNaN(endD.getTime())) throw new Error("Ungültiger Zeitraum");
+
+      const restrictMeterIds: string[] | null =
+        Array.isArray(meterIds) && meterIds.length > 0 ? meterIds.filter((m: unknown) => typeof m === "string") : null;
+
+      // totalsOnly=true: nur meter_period_totals (Tagessummen) abgleichen,
+      // die 5-Min-Werte in meter_power_readings_5min werden NICHT überschrieben.
+      // Verwendet vom täglichen Cron, damit der feine Live-Graph erhalten bleibt.
+      const onlyTotals = !isRange && totalsOnly === true;
+      console.log(`Backfill (${action}): ${startD.toISOString()} → ${endD.toISOString()} for integration ${locationIntegrationId} (totalsOnly=${onlyTotals}, meters=${restrictMeterIds?.length ?? "alle"})`);
 
       const LOXONE_EPOCH_OFFSET = 1230768000; // 2009-01-01 00:00:00 UTC in Unix seconds
 
@@ -1096,12 +2383,14 @@ serve(async (req) => {
       }
 
       // 1) Get linked automatic meters with sensor_uuid
-      const { data: linkedMeters } = await supabase
+      let metersQuery = supabase
         .from("meters")
         .select("id, sensor_uuid, energy_type, tenant_id")
         .eq("location_integration_id", locationIntegrationId)
         .eq("capture_type", "automatic")
         .eq("is_archived", false);
+      if (restrictMeterIds) metersQuery = metersQuery.in("id", restrictMeterIds);
+      const { data: linkedMeters } = await metersQuery;
 
       if (!linkedMeters || linkedMeters.length === 0) {
         return new Response(
@@ -1160,9 +2449,7 @@ serve(async (req) => {
         console.log(`First 10 files: ${availableFiles.slice(0, 10).map(f => `${f.filename} -> uuid=${f.uuid}, month=${f.yearMonth}`).join(" | ")}`);
       }
 
-      // Determine needed months
-      const startD = new Date(fromDate + "T00:00:00Z");
-      const endD = new Date(toDate + "T23:59:59Z");
+      // Determine needed months (startD/endD are resolved above)
       const neededMonths = new Set<string>();
       for (let d = new Date(startD.getFullYear(), startD.getMonth(), 1); d <= endD; d.setMonth(d.getMonth() + 1)) {
         neededMonths.add(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`);
@@ -1171,7 +2458,7 @@ serve(async (req) => {
 
       // Also fetch structure to map statistic output UUIDs back to control UUIDs
       const structureUrl = `${baseUrl}/data/LoxAPP3.json`;
-      const structureResponse = await fetch(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
+      const structureResponse = await fetchWithTimeout(structureUrl, { method: "GET", headers: { Authorization: loxoneAuth } });
       let statsUuidToControlUuid = new Map<string, string>();
       if (structureResponse.ok) {
         const structure = await structureResponse.json() as LoxoneStructure;
@@ -1205,6 +2492,7 @@ serve(async (req) => {
       let totalInserted = 0;
       const errors: string[] = [];
       let processedCount = 0;
+      const touchedDays = new Set<string>();
 
       // 3) Download and parse each stat file (XML format)
       // Loxone stats XML format:
@@ -1311,42 +2599,82 @@ serve(async (req) => {
           processedCount++;
           entries.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
-          // Group into 5-min buckets
+          // Group into 5-min buckets.
+          // Loxone-Statistiken speichern je nach Block nur alle 10/30/60 Minuten
+          // einen Wert. Ein solcher Eintrag repräsentiert die Leistung bis zum
+          // nächsten Eintrag. Im Gap-Modus (isRange) wird der Wert deshalb über
+          // seine tatsächliche Dauer gehalten (Step-Hold) und auf alle davon
+          // abgedeckten 5-Minuten-Buckets verteilt. Ohne das würde eine Stunde
+          // mit 2 Samples nur 10 statt 60 Minuten Energie enthalten.
           const buckets = new Map<string, { sum: number; count: number; max: number; day: string }>();
-          for (const entry of entries) {
-            const t = entry.timestamp;
+          const HOLD_CAP_MS = 60 * 60 * 1000; // maximal 60 Min. halten
+          const addSample = (t: Date, value: number, synthetic: boolean) => {
             const bucketDate = new Date(t);
-            bucketDate.setUTCMinutes(Math.floor(t.getUTCMinutes() / 5) * 5, 0, 0);
+            bucketDate.setUTCSeconds(0, 0);
+            bucketDate.setUTCMinutes(Math.floor(bucketDate.getUTCMinutes() / 5) * 5);
             const bucketKey = bucketDate.toISOString();
-            const dayKey = t.toISOString().slice(0, 10);
-
+            const dayKey = bucketDate.toISOString().slice(0, 10);
             const existing = buckets.get(bucketKey);
             if (existing) {
-              existing.sum += entry.value;
-              existing.count += 1;
-              existing.max = Math.max(existing.max, entry.value);
+              // Echte Samples dominieren synthetische Step-Hold-Werte
+              if (!synthetic || existing.count === 0) {
+                existing.sum += value;
+                existing.count += 1;
+                existing.max = Math.max(existing.max, value);
+              }
             } else {
-              buckets.set(bucketKey, { sum: entry.value, count: 1, max: entry.value, day: dayKey });
+              buckets.set(bucketKey, { sum: value, count: 1, max: value, day: dayKey });
+            }
+          };
+
+          for (let i = 0; i < entries.length; i += 1) {
+            const entry = entries[i];
+            addSample(entry.timestamp, entry.value, false);
+
+            if (!isRange) continue;
+
+            const next = entries[i + 1];
+            const nextTs = next
+              ? next.timestamp.getTime()
+              : Math.min(endD.getTime(), entry.timestamp.getTime() + 5 * 60 * 1000);
+            const holdUntil = Math.min(nextTs, entry.timestamp.getTime() + HOLD_CAP_MS);
+            for (
+              let t = entry.timestamp.getTime() + 5 * 60 * 1000;
+              t < holdUntil;
+              t += 5 * 60 * 1000
+            ) {
+              addSample(new Date(t), entry.value, true);
             }
           }
 
-          // Upsert into meter_power_readings_5min
-          const fiveMinInserts = Array.from(buckets.entries()).map(([bucket, d]) => ({
-            meter_id: meter!.id,
-            tenant_id: meter!.tenant_id,
-            energy_type: meter!.energy_type,
-            bucket,
-            power_avg: d.sum / d.count,
-            power_max: d.max,
-            sample_count: d.count,
-          }));
 
-          if (fiveMinInserts.length > 0) {
+          // Upsert into meter_power_readings_5min
+          // Skip single-sample buckets in normal backfill: a 30-min Loxone statistics
+          // value would otherwise anchor a sawtooth pattern in charts where 1-min live
+          // data is also present. In gap mode there IS no live data — keep every bucket.
+          const minSamples = isRange ? 1 : 2;
+          const fiveMinInserts = Array.from(buckets.entries())
+            .filter(([, d]) => d.count >= minSamples)
+            .map(([bucket, d]) => ({
+              meter_id: meter!.id,
+              tenant_id: meter!.tenant_id,
+              energy_type: meter!.energy_type,
+              bucket,
+              power_avg: d.sum / d.count,
+              power_max: d.max,
+              sample_count: d.count,
+              resolution_minutes: 5,
+              source: isRange ? "gateway_backfill" : "loxone_backfill",
+            }));
+
+          if (fiveMinInserts.length > 0 && !onlyTotals) {
             for (let i = 0; i < fiveMinInserts.length; i += 500) {
               const chunk = fiveMinInserts.slice(i, i + 500);
               const { error: insertError } = await supabase
                 .from("meter_power_readings_5min")
-                .upsert(chunk, { onConflict: "meter_id,bucket" });
+                // Unique-Index der partitionierten Tabelle:
+                // (meter_id, bucket, resolution_minutes) — alle drei Spalten nötig.
+                .upsert(chunk, { onConflict: "meter_id,bucket,resolution_minutes", ignoreDuplicates: isRange });
               if (insertError) {
                 console.error(`Error upserting 5min data for ${file.filename}:`, insertError);
                 errors.push(`${file.filename}: ${insertError.message}`);
@@ -1355,29 +2683,38 @@ serve(async (req) => {
               }
             }
             console.log(`Upserted ${fiveMinInserts.length} 5-min buckets for ${file.filename}`);
+          } else if (onlyTotals) {
+            console.log(`Skipping 5-min upsert for ${file.filename} (totalsOnly mode)`);
           }
 
-          // Compute and upsert daily totals
-          const dailyTotals = new Map<string, number>();
-          for (const [, d] of buckets) {
-            const avg = d.sum / d.count;
-            const kwh = avg * (5 / 60); // 5-min bucket → kWh
-            dailyTotals.set(d.day, (dailyTotals.get(d.day) || 0) + kwh);
-          }
+          if (isRange) {
+            // Tagessummen NICHT aus dem Teilfenster schreiben — das würde den
+            // Tagesverbrauch auf die Lücke reduzieren. Stattdessen wird der Tag
+            // nach dem Durchlauf komplett aus den 5-Min-Werten neu berechnet.
+            for (const [, d] of buckets) touchedDays.add(d.day);
+          } else {
+            // Compute and upsert daily totals
+            const dailyTotals = new Map<string, number>();
+            for (const [, d] of buckets) {
+              const avg = d.sum / d.count;
+              const kwh = avg * (5 / 60); // 5-min bucket → kWh
+              dailyTotals.set(d.day, (dailyTotals.get(d.day) || 0) + kwh);
+            }
 
-          for (const [day, totalKwh] of dailyTotals) {
-            if (totalKwh > 0) {
-              await supabase
-                .from("meter_period_totals")
-                .upsert({
-                  tenant_id: meter.tenant_id,
-                  meter_id: meter.id,
-                  period_type: "day",
-                  period_start: day,
-                  total_value: Math.round(totalKwh * 100) / 100,
-                  energy_type: meter.energy_type,
-                  source: "loxone_backfill",
-                }, { onConflict: "meter_id,period_type,period_start" });
+            for (const [day, totalKwh] of dailyTotals) {
+              if (totalKwh > 0) {
+                await supabase
+                  .from("meter_period_totals")
+                  .upsert({
+                    tenant_id: meter.tenant_id,
+                    meter_id: meter.id,
+                    period_type: "day",
+                    period_start: day,
+                    total_value: Math.round(totalKwh * 100) / 100,
+                    energy_type: meter.energy_type,
+                    source: "loxone_backfill",
+                  }, { onConflict: "meter_id,period_type,period_start" });
+              }
             }
           }
         } catch (err) {
@@ -1387,7 +2724,23 @@ serve(async (req) => {
         }
       }
 
+      // Nach dem Lückenfüllen die betroffenen Tage vollständig aus den
+      // 5-Min-Werten neu berechnen (nie aus dem Teilfenster ableiten).
+      const recomputedDays: string[] = [];
+      if (isRange && touchedDays.size > 0) {
+        for (const day of Array.from(touchedDays).sort()) {
+          const { error: rpcError } = await supabase.rpc("compute_daily_totals_from_5min", { p_day: day });
+          if (rpcError) {
+            console.error(`Tagesneuberechnung ${day} fehlgeschlagen:`, rpcError.message);
+            errors.push(`recompute ${day}: ${rpcError.message}`);
+          } else {
+            recomputedDays.push(day);
+          }
+        }
+      }
+
       return new Response(
+
         JSON.stringify({
           success: true,
           message: `Backfill abgeschlossen: ${totalInserted} Datenpunkte aus ${processedCount} Dateien nachgetragen`,
@@ -1398,6 +2751,7 @@ serve(async (req) => {
           linkedMeterCount: linkedMeters.length,
           sensorUuids: linkedMeters.map(m => m.sensor_uuid).filter(Boolean),
           statsIndexSample: statsIndexText.substring(0, 1000),
+          recomputedDays: recomputedDays.length > 0 ? recomputedDays : undefined,
           errors: errors.length > 0 ? errors : undefined,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }

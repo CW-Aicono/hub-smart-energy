@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.gateway_inventory_sensor_history() FROM service_role;

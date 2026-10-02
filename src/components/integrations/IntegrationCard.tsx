@@ -9,20 +9,24 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
-import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge, RefreshCw } from "lucide-react";
+import { Server, Trash2, Pencil, CheckCircle2, XCircle, Clock, Loader2, Gauge, RefreshCw, ArrowRightLeft, Puzzle } from "lucide-react";
+import { ReplaceGatewayDialog } from "./ReplaceGatewayDialog";
 import { LocationIntegration } from "@/hooks/useIntegrations";
 import { SensorsDialog } from "./SensorsDialog";
 import { DeviceCard } from "./gateway/DeviceCard";
 import { useUserRole } from "@/hooks/useUserRole";
 import { MiniserverStatus } from "./MiniserverStatus";
+import { LoxoneWsStatus } from "./LoxoneWsStatus";
 import { EditIntegrationDialog } from "./EditIntegrationDialog";
 import { getGatewayDefinition, getEdgeFunctionName } from "@/lib/gatewayRegistry";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 import { LoxoneFirmwareSection } from "./LoxoneFirmwareSection";
 import { SchneiderSetupInfo } from "./SchneiderSetupInfo";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useGatewayDevices } from "@/hooks/useGatewayDevices";
+import { LoxoneManualDownloadButton } from "./LoxoneManualDownloadButton";
 
 interface IntegrationCardProps {
   locationIntegration: LocationIntegration;
@@ -35,7 +39,9 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const [isToggling, setIsToggling] = useState(false);
   const [sensorsOpen, setSensorsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [replaceGatewayOpen, setReplaceGatewayOpen] = useState(false);
   const [isBackfilling, setIsBackfilling] = useState(false);
+  const [isScanningTemplates, setIsScanningTemplates] = useState(false);
   const [backfillFrom, setBackfillFrom] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 2);
     return d.toISOString().slice(0, 10);
@@ -52,8 +58,9 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   const isLoxone = integration?.type === "loxone" || integration?.type === "loxone_miniserver";
   const isAiconoGateway = integration?.type === "aicono_gateway";
 
-  // For AICONO Gateway integrations, fetch all tenant devices (including unlinked ones)
-  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(isAiconoGateway ? undefined : locationIntegration.id, locationIntegration.location_id);
+  // Fetch only the gateway devices linked to THIS location_integration so each
+  // location card shows its own hub (avoids cross-tenant duplicate display).
+  const { devices: gatewayDevices, sendCommand, refetch: refetchDevices } = useGatewayDevices(locationIntegration.id, locationIntegration.location_id);
   const gatewayLocalTime = !isLoxone && gatewayDevices.length > 0 ? gatewayDevices[0].local_time : null;
 
   const handleToggleEnabled = async (enabled: boolean) => {
@@ -85,7 +92,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
     setIsBackfilling(true);
     try {
       const edgeFunction = getEdgeFunctionName(locationIntegration.integration?.type || "");
-      const { data, error } = await supabase.functions.invoke(edgeFunction, {
+      const { data, error } = await invokeWithRetry(edgeFunction, {
         body: { locationIntegrationId: locationIntegration.id, action: "backfillStatistics", fromDate: backfillFrom, toDate: backfillTo },
       });
       if (error || !data?.success) {
@@ -106,12 +113,37 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
     }
   };
 
+  const handleScanTemplates = async () => {
+    setIsScanningTemplates(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("loxone-template-sync", {
+        body: { action: "discover", locationIntegrationId: locationIntegration.id },
+      });
+      if (error) throw error;
+      const found = (data as any)?.discovered ?? (data as any)?.count ?? 0;
+      toast({ title: "Templates gescannt", description: `${found} Template-Instanz(en) auf dem Miniserver erkannt.` });
+      window.dispatchEvent(new CustomEvent("loxone-template-scan-complete", {
+        detail: { locationId: locationIntegration.location_id },
+      }));
+    } catch (e: any) {
+      toast({ title: "Scan fehlgeschlagen", description: e?.message || "Unbekannter Fehler", variant: "destructive" });
+    } finally {
+      setIsScanningTemplates(false);
+    }
+  };
+
   const isConfigured = (() => {
+    if (isAiconoGateway) return true;
     if (!gatewayDef || !config) return false;
     return gatewayDef.configFields.filter((f) => f.required).every((f) => { const val = config[f.name]; return val && String(val).length > 0; });
   })();
 
   const configSubtitle = (() => {
+    if (isAiconoGateway) {
+      const count = gatewayDevices.length;
+      if (count === 0) return "Warte auf Hub-Verbindung…";
+      return count === 1 ? "1 Hub verbunden" : `${count} Hubs verbunden`;
+    }
     if (!gatewayDef || !config) return t("intCard.notConfigured" as any);
     const firstField = gatewayDef.configFields.find((f) => f.type !== "password" && config[f.name]);
     if (!firstField) return t("intCard.notConfigured" as any);
@@ -119,15 +151,29 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
   })();
 
   const getSyncStatusBadge = () => {
-    if (!isConfigured) {
+    if (!isConfigured && !isAiconoGateway) {
       return <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border"><Clock className="h-3 w-3" />{t("intCard.notConfigured" as any)}</Badge>;
+    }
+    // For AICONO Gateway parent cards: derive status from connected child gateway_devices
+    // (the parent itself never syncs – it's a virtual container for the push-based hubs).
+    if (isAiconoGateway) {
+      const hasOnlineChild = gatewayDevices.some((d) => d.status === "online");
+      if (hasOnlineChild) {
+        return <Badge variant="outline" className="gap-1 bg-primary/10 text-primary border-primary/20"><CheckCircle2 className="h-3 w-3" />{t("intCard.connected" as any)}</Badge>;
+      }
+      if (gatewayDevices.length > 0) {
+        return <Badge variant="outline" className="gap-1 bg-destructive/10 text-destructive border-destructive/20"><XCircle className="h-3 w-3" />Offline</Badge>;
+      }
+      return <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border"><Clock className="h-3 w-3" />{t("intCard.pending" as any)}</Badge>;
     }
     switch (locationIntegration.sync_status) {
       case "success": return <Badge variant="outline" className="gap-1 bg-primary/10 text-primary border-primary/20"><CheckCircle2 className="h-3 w-3" />{t("intCard.connected" as any)}</Badge>;
+      case "auth_failed": return <Badge variant="outline" className="gap-1 bg-destructive/10 text-destructive border-destructive/20" title="Anmeldung am Miniserver abgelehnt — Zugangsdaten prüfen"><XCircle className="h-3 w-3" />Zugangsdaten prüfen</Badge>;
       case "error": return <Badge variant="outline" className="gap-1 bg-destructive/10 text-destructive border-destructive/20"><XCircle className="h-3 w-3" />{t("intCard.error" as any)}</Badge>;
       case "syncing": return <Badge variant="outline" className="gap-1 bg-secondary text-secondary-foreground border-border"><Loader2 className="h-3 w-3 animate-spin" />{t("intCard.syncing" as any)}</Badge>;
       default: return <Badge variant="outline" className="gap-1 bg-muted text-muted-foreground border-border"><Clock className="h-3 w-3" />{t("intCard.pending" as any)}</Badge>;
     }
+
   };
 
   return (
@@ -139,7 +185,7 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
               <div className="p-2 rounded-lg bg-primary/10"><Server className="h-5 w-5 text-primary" /></div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <h4 className="font-medium">{integration?.name || "Integration"}</h4>
+                  <h4 className="font-medium">{locationIntegration.custom_name?.trim() || integration?.name || "Integration"}</h4>
                   {getSyncStatusBadge()}
                 </div>
                 <p className="text-sm text-muted-foreground">{configSubtitle}</p>
@@ -153,6 +199,15 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
                   locationIntegrationId={locationIntegration.id}
                   integrationType={integration?.type}
                   lastSyncAt={locationIntegration.last_sync_at}
+                  syncStatus={locationIntegration.sync_status}
+                />
+
+                <LoxoneWsStatus
+                  locationIntegrationId={locationIntegration.id}
+                  enabled={
+                    (integration?.type === "loxone" || integration?.type === "loxone_miniserver") &&
+                    !!locationIntegration.loxone_remote_connect_ws_enabled
+                  }
                 />
                 {integration?.description && <p className="text-xs text-muted-foreground">{integration.description}</p>}
                 {integration?.type === "loxone_miniserver" && isConfigured && (
@@ -165,6 +220,20 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
             </div>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" onClick={() => setSensorsOpen(true)} title={t("intCard.showSensors" as any)}><Gauge className="h-4 w-4" /></Button>
+              {isLoxone && isConfigured && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleScanTemplates}
+                    disabled={isScanningTemplates}
+                    title="Loxone-Templates auf dem Miniserver scannen"
+                  >
+                    {isScanningTemplates ? <Loader2 className="h-4 w-4 animate-spin" /> : <Puzzle className="h-4 w-4" />}
+                  </Button>
+                  <LoxoneManualDownloadButton locationId={locationIntegration.location_id} />
+                </>
+              )}
               {/* Backfill Re-Sync Button */}
               {integration?.type === "loxone_miniserver" && isConfigured && (
                 <AlertDialog>
@@ -203,6 +272,14 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
                 </AlertDialog>
               )}
               <Switch checked={locationIntegration.is_enabled} onCheckedChange={handleToggleEnabled} disabled={isToggling} />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setReplaceGatewayOpen(true)}
+                title="Gateway tauschen"
+              >
+                <ArrowRightLeft className="h-4 w-4" />
+              </Button>
               <Button variant="ghost" size="icon" onClick={() => setEditOpen(true)} title={t("common.edit")}><Pencil className="h-4 w-4" /></Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -241,6 +318,11 @@ export function IntegrationCard({ locationIntegration, onUpdate, onDelete }: Int
       </Card>
       <SensorsDialog locationIntegration={locationIntegration} open={sensorsOpen} onOpenChange={setSensorsOpen} locationId={locationIntegration.location_id} />
       <EditIntegrationDialog locationIntegration={locationIntegration} open={editOpen} onOpenChange={setEditOpen} onUpdate={onUpdate} />
+      <ReplaceGatewayDialog
+        oldGateway={locationIntegration}
+        open={replaceGatewayOpen}
+        onOpenChange={setReplaceGatewayOpen}
+      />
     </>
   );
 }

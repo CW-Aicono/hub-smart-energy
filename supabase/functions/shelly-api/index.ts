@@ -12,8 +12,9 @@ function normalizeShellyId(id: string): string {
   return String(id).toLowerCase().replace(/[:\-\s]/g, "").trim();
 }
 
-async function updateSyncStatus(supabase: ReturnType<typeof createClient>, id: string, status: string) {
-  await supabase.from("location_integrations").update({ sync_status: status, last_sync_at: new Date().toISOString() }).eq("id", id);
+async function updateSyncStatus(supabase: any, id: string, status: string) {
+  // IO-Optimierung: Nur schreiben wenn sich Status ändert oder last_sync_at > 60s alt ist
+  await supabase.rpc("touch_location_integration_sync", { _id: id, _status: status });
 }
 
 /**
@@ -76,6 +77,56 @@ function extractNameFromStatus(deviceStatus: any): string | null {
   return null;
 }
 
+async function writeSensorSnapshot(
+  supabase: any,
+  locationIntegrationId: string,
+  sensors: any[],
+  tenantId: string | null,
+  locationId: string | null,
+) {
+  try {
+    const row: Record<string, unknown> = {
+      location_integration_id: locationIntegrationId,
+      sensors,
+      system_messages: [],
+      status: "fresh",
+      error_message: null,
+      fetched_at: new Date().toISOString(),
+      source: "shelly-api",
+    };
+    if (tenantId) row.tenant_id = tenantId;
+    if (locationId) row.location_id = locationId;
+    const { error } = await supabase
+      .from("gateway_sensor_snapshots")
+      .upsert(row, { onConflict: "location_integration_id" });
+    if (error) console.warn("[shelly snapshot] upsert failed:", error.message);
+    // Sensor-Verlauf: Rohwerte in sensor_readings_raw persistieren
+    const { persistSensorHistory } = await import("../_shared/sensorHistory.ts");
+    console.log(`[shelly snapshot] persistSensorHistory li=${locationIntegrationId} sensors=${Array.isArray(sensors) ? sensors.length : 0} tenant=${tenantId ?? "-"}`);
+    await persistSensorHistory(supabase, {
+      locationIntegrationId,
+      tenantId,
+      locationId,
+      sensors,
+    });
+  } catch (err) {
+    console.warn("[shelly snapshot] write error:", err);
+  }
+}
+
+async function readSensorSnapshot(supabase: any, locationIntegrationId: string) {
+  const { data, error } = await supabase
+    .from("gateway_sensor_snapshots")
+    .select("sensors, system_messages, status, fetched_at, error_message")
+    .eq("location_integration_id", locationIntegrationId)
+    .maybeSingle();
+  if (error) {
+    console.warn("[shelly snapshot] read failed:", error.message);
+    return null;
+  }
+  return data;
+}
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -93,7 +144,17 @@ serve(async (req) => {
 
     const token = authHeader.replace("Bearer ", "");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const isServiceInvocation = token === supabaseServiceKey;
+    let isServiceInvocation = token === supabaseServiceKey;
+    if (!isServiceInvocation) {
+      try {
+        const part = token.split(".")[1];
+        if (part) {
+          const padded = part + "=".repeat((4 - (part.length % 4)) % 4);
+          const payload = JSON.parse(atob(padded.replace(/-/g, "+").replace(/_/g, "/")));
+          if (payload?.role === "service_role") isServiceInvocation = true;
+        }
+      } catch { /* not a JWT, fall through */ }
+    }
 
     let tenantId: string | null = null;
 
@@ -101,12 +162,13 @@ serve(async (req) => {
       const authClient = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } },
       });
-      const { data: { user }, error: userError } = await authClient.auth.getUser(token);
-      if (userError || !user) {
+      const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+      const userId = claimsData?.claims?.sub as string | undefined;
+      if (claimsError || !userId) {
         return new Response(JSON.stringify({ success: false, error: "Ungültiges Token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", user.id).single();
+      const { data: profile } = await supabase.from("profiles").select("tenant_id").eq("user_id", userId).single();
       if (!profile?.tenant_id) {
         return new Response(JSON.stringify({ success: false, error: "Kein Mandant zugeordnet" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -141,7 +203,29 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    if (action === "getSensors") {
+    if (action === "getSensorsCached") {
+      const snap = await readSensorSnapshot(supabase, locationIntegrationId);
+      if (snap) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            sensors: snap.sensors ?? [],
+            systemMessages: snap.system_messages ?? [],
+            cached: true,
+            snapshotStatus: snap.status,
+            fetchedAt: snap.fetched_at,
+            errorMessage: snap.error_message,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({ success: true, sensors: [], systemMessages: [], cached: true, snapshotStatus: "missing" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (action === "getSensors" || action === "refreshSensors") {
       await updateSyncStatus(supabase, locationIntegrationId, "syncing");
 
       // Step 1: Fetch all device statuses
@@ -295,12 +379,27 @@ serve(async (req) => {
 
       sensors.sort((a, b) => a.name.localeCompare(b.name));
       await updateSyncStatus(supabase, locationIntegrationId, "success");
+      await writeSensorSnapshot(
+        supabase,
+        locationIntegrationId,
+        sensors,
+        (li as any).location?.tenant_id ?? null,
+        (li as any).location_id ?? null,
+      );
       return new Response(JSON.stringify({ success: true, sensors }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (action === "executeCommand") {
       // controlUuid format: "<deviceId>_switch<ch>" or "<deviceId>_relay<ch>"
       if (!controlUuid) throw new Error("controlUuid ist erforderlich");
+
+      // Guard: HA-Entity-Pattern (e.g. "switch.shelly_plug_s") gehört zum AICONO Gateway,
+      // nicht zur Shelly-Cloud-Integration. Klarer Fehler statt kryptischer Meldung.
+      if (/^[a-z_]+\.[a-z0-9_]+$/i.test(controlUuid)) {
+        throw new Error(
+          `Aktor ${controlUuid} gehört zum AICONO Gateway. Bitte die Automation neu speichern, damit sie über das Gateway läuft.`
+        );
+      }
 
       // Parse deviceId and channel from controlUuid
       const switchMatch = controlUuid.match(/^(.+)_switch(\d+)$/);

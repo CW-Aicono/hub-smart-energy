@@ -1,0 +1,1 @@
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS show_empty_widgets boolean NOT NULL DEFAULT false;

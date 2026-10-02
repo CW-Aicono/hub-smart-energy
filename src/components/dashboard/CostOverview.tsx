@@ -9,7 +9,7 @@ import { Euro, TrendingDown, TrendingUp, ArrowDownRight, ArrowUpFromLine } from 
 import { Skeleton } from "@/components/ui/skeleton";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, subDays, subWeeks, subMonths, subQuarters, subYears, format } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
-import { gasM3ToKWh } from "@/lib/formatEnergy";
+import { gasM3ToKWh, resolveMeterEnergyKWh } from "@/lib/formatEnergy";
 import { useSpotPrices } from "@/hooks/useSpotPrices";
 import { usePeriodSumsWithFallback } from "@/hooks/usePeriodSumsWithFallback";
 
@@ -89,9 +89,9 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
   const { currentPrice: currentSpotPrice } = useSpotPrices();
 
   const meterMap = useMemo(() => {
-    const map: Record<string, { energy_type: string; location_id: string; is_main_meter: boolean; unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
+    const map: Record<string, { energy_type: string; location_id: string; is_main_meter: boolean; unit: string; source_unit_energy: string | null; source_unit_power: string | null; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
     meters.forEach((m) => {
-      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, is_main_meter: m.is_main_meter, unit: m.unit, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null };
+      map[m.id] = { energy_type: m.energy_type, location_id: m.location_id, is_main_meter: m.is_main_meter, unit: m.unit, source_unit_energy: (m as any).source_unit_energy ?? null, source_unit_power: (m as any).source_unit_power ?? null, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null };
     });
     return map;
   }, [meters]);
@@ -193,8 +193,8 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       if (!meta || !meta.is_main_meter) return;
 
       let consumptionVal = r.value;
-      if (meta.energy_type === "gas" && meta.unit === "m³") {
-        consumptionVal = gasM3ToKWh(consumptionVal, meta.gas_type, meta.brennwert, meta.zustandszahl);
+      if (meta.energy_type === "gas") {
+        consumptionVal = resolveMeterEnergyKWh(meta as any, consumptionVal);
       }
 
       const priceKey = `${meta.location_id}:${meta.energy_type}`;
@@ -221,8 +221,8 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
       const revenuePrice = revenueLookup.get(priceKey) || 0;
 
       const toConsumption = (rawVal: number) => {
-        if (meta.energy_type === "gas" && meta.unit === "m³") {
-          return gasM3ToKWh(rawVal, meta.gas_type, meta.brennwert, meta.zustandszahl);
+        if (meta.energy_type === "gas") {
+          return resolveMeterEnergyKWh(meta as any, rawVal);
         }
         return rawVal;
       };
@@ -272,9 +272,9 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
 
   if (loading) {
     return (
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid h-full gap-4 md:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <Card key={i}><CardContent className="p-6"><Skeleton className="h-16" /></CardContent></Card>
+          <Card key={i} className="h-full min-h-[120px]"><CardContent className="flex h-full items-center p-4"><Skeleton className="h-12 w-full" /></CardContent></Card>
         ))}
       </div>
     );
@@ -317,14 +317,14 @@ const CostOverview = ({ locationId }: CostOverviewProps) => {
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-4">
+    <div className="grid h-full gap-4 md:grid-cols-4">
       {kpis.map((kpi) => (
-        <Card key={kpi.label}>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <Card key={kpi.label} className="h-full min-h-[120px]">
+          <CardHeader className="flex flex-row items-center justify-between p-4 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{kpi.label}</CardTitle>
             <kpi.icon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-4">
             <div className="text-2xl font-display font-bold">{kpi.value}</div>
             <p className={`text-xs mt-1 ${kpi.positive ? "text-accent" : "text-muted-foreground"}`}>
               {kpi.positive && <ArrowDownRight className="inline h-3 w-3 mr-1" />}

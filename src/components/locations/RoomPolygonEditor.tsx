@@ -6,7 +6,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { DoorOpen, Plus, Trash2, Pencil, Check, X, Undo2, Crosshair } from "lucide-react";
 import { toast } from "sonner";
 import { RoomOverlay2D } from "./RoomOverlay2D";
-import { FloorPlanImage } from "./FloorPlanRenderer";
+import { FloorPlanImage, isPdfUrl } from "./FloorPlanRenderer";
+
 import { useTranslation } from "@/hooks/useTranslation";
 
 interface PolygonPoint {
@@ -38,19 +39,32 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
   const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const isPdf = isPdfUrl(floorPlanUrl);
+
   // Calculate the actual rendered image area within the object-contain container
   const updateOverlayStyle = useCallback(() => {
-    if (!imageRef.current) return;
-    const img = imageRef.current;
-    const container = img.parentElement;
+    const container = containerRef.current;
     if (!container) return;
-    
     const containerRect = container.getBoundingClientRect();
+
+    // For PDFs (or if image dimensions aren't available yet), use the full container
+    const img = imageRef.current;
+    if (isPdf || !img || !img.naturalWidth || !img.naturalHeight) {
+      setOverlayStyle({
+        position: 'absolute',
+        left: '0px',
+        top: '0px',
+        width: `${containerRect.width}px`,
+        height: `${containerRect.height}px`,
+      });
+      return;
+    }
+
     const imgRatio = img.naturalWidth / img.naturalHeight;
     const containerRatio = containerRect.width / containerRect.height;
-    
+
     let renderWidth: number, renderHeight: number, offsetX: number, offsetY: number;
-    
+
     if (imgRatio > containerRatio) {
       renderWidth = containerRect.width;
       renderHeight = containerRect.width / imgRatio;
@@ -62,7 +76,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
       offsetX = (containerRect.width - renderWidth) / 2;
       offsetY = 0;
     }
-    
+
     setOverlayStyle({
       position: 'absolute',
       left: `${offsetX}px`,
@@ -70,7 +84,8 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
       width: `${renderWidth}px`,
       height: `${renderHeight}px`,
     });
-  }, []);
+  }, [isPdf]);
+
 
   useEffect(() => {
     if (imgLoaded) updateOverlayStyle();
@@ -275,7 +290,7 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
                 return (
                   <div
                     key={room.id}
-                    className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors group ${
+                    className={`grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 overflow-hidden p-2 rounded-md cursor-pointer transition-colors group ${
                       selectedRoom?.id === room.id || editingRoom?.id === room.id
                         ? "bg-primary/10 border border-primary"
                         : "hover:bg-muted border border-transparent"
@@ -288,13 +303,13 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
                       className="w-3 h-3 rounded-full border flex-shrink-0"
                       style={{ backgroundColor: room.color || "#3b82f6" }}
                     />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{room.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                    <div className="min-w-0 overflow-hidden">
+                      <p className="text-sm font-medium truncate" title={room.name}>{room.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
                         {hasPolygon ? "Platziert" : "Nicht platziert"}
                       </p>
                     </div>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex h-7 w-[3.5rem] flex-shrink-0 items-center justify-end gap-0.5 opacity-100">
                       {!hasPolygon && (
                         <Button
                           variant="ghost"
@@ -331,10 +346,12 @@ export function RoomPolygonEditor({ floorId, floorPlanUrl }: RoomPolygonEditorPr
                           e.stopPropagation();
                           handleDeleteRoom(room);
                         }}
+                        title="Raum löschen"
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
+
                   </div>
                 );
               })

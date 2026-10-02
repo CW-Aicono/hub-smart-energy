@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   User, ExternalLink, Zap, AlertTriangle, PlugZap,
   Clock, CheckCircle2, Circle, ArrowRight, XCircle, CalendarDays,
-  History, MessageSquare, ArrowLeftRight, Send, Pencil, Check, X, ImageIcon,
+  History, MessageSquare, ArrowLeftRight, Send, Pencil, Check, X, ImageIcon, Repeat, ListChecks,
 } from "lucide-react";
 import { TaskImageGallery } from "./TaskImageGallery";
 import { cn } from "@/lib/utils";
@@ -417,6 +417,57 @@ export const TaskDetailSheet = ({ task, open, onOpenChange }: TaskDetailSheetPro
                 </p>
               )}
             </div>
+
+            {/* Checklist */}
+            {task.checklist && task.checklist.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <ListChecks className="h-3.5 w-3.5" /> Checkliste
+                    <span className="ml-auto text-xs font-normal normal-case">
+                      {task.checklist.filter((c) => c.done).length}/{task.checklist.length}
+                    </span>
+                  </Label>
+                  <ul className="space-y-1.5">
+                    {task.checklist.map((item, idx) => (
+                      <li key={item.id} className="flex items-start gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={item.done}
+                          onChange={(e) => {
+                            const updated = task.checklist!.map((c, i) =>
+                              i === idx ? { ...c, done: e.target.checked } : c
+                            );
+                            updateTask.mutate({ id: task.id, checklist: updated });
+                          }}
+                          className="mt-0.5 h-4 w-4 rounded border-input"
+                        />
+                        <span className={item.done ? "line-through text-muted-foreground" : ""}>{item.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            )}
+
+            {/* Recurrence */}
+            {task.recurrence_rule && (
+              <>
+                <Separator />
+                <div className="flex items-center gap-2 text-sm">
+                  <Repeat className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">Wiederholung:</span>
+                  <Badge variant="outline" className="text-xs">
+                    {(() => {
+                      const [u, i] = task.recurrence_rule.split(":");
+                      const unitLabel = u === "daily" ? "Tag(e)" : u === "weekly" ? "Woche(n)" : u === "monthly" ? "Monat(e)" : u;
+                      return `alle ${i} ${unitLabel}`;
+                    })()}
+                  </Badge>
+                </div>
+              </>
+            )}
 
             <Separator />
 

@@ -1,0 +1,1638 @@
+# Loxone WebSocket Worker – Schritt-für-Schritt für Anfänger
+
+> **Ziel:** Ein kleines Programm auf Ihrem Hetzner-Server installieren, das automatisch eine dauerhafte Verbindung zu Ihrem Loxone-Miniserver aufbaut.  
+> **Zeitaufwand:** ca. 20–30 Minuten (meiste Zeit wartet man, dass der Computer fertig wird).  
+> **Vorkenntnisse:** Keine. Sie müssen nur genau das tun, was hier steht.
+
+---
+
+## Was macht das überhaupt? (ganz einfach erklärt)
+
+Ihr Loxone-Miniserver hat dauernd neue Werte (Temperatur, Stromverbrauch, Schalter-Status). Normalerweise fragt AICONO diese Werte nur alle 15 Minuten ab. Das ist manchmal zu langsam.
+
+Dieses Programm (der „Worker“) sitzt auf Ihrem Hetzner-Server und hält eine **dauerhafte Verbindung** zu Ihrem Miniserver offen. Sobald sich ein Wert ändert, kommt er sofort bei AICONO an – in Echtzeit.
+
+> **Wichtig:** Der Worker ersetzt nichts. Das alte Abfragen läuft weiter als Sicherheitsnetz. Er ist nur ein **Zusatz** für den Feldtest.
+
+> **Neu in Phase 2:** Der Worker meldet sich zusätzlich alle 30 Sekunden in der Datenbank (Tabellen `bridge_workers` + `bridge_event_log`) und stellt eine kleine Statusseite unter `http://<server>:8080/healthz` und `/state` bereit. So sehen wir sofort, ob er noch lebt – und sehen jede Verbindungsänderung im Klartext.
+>
+> **Neu in Phase 3:** Ein eingebauter **Watchdog** prüft alle 30 Sekunden, ob noch Daten von jedem Miniserver kommen. Wenn von einem Miniserver **5 Minuten lang kein einziges Ereignis** mehr eintrifft (obwohl die Verbindung scheinbar steht), erzwingt der Worker einen **kompletten Reconnect**. Zusätzlich verteilt er die Reconnect-Versuche mit ±20 % Zufallsverzögerung, damit nach einem Netzaussetzer nicht alle Miniserver gleichzeitig versuchen, wieder zu verbinden. Genau das war die Hauptursache, warum die alte Worker-Version „still" stehen blieb.
+>
+> **Neu in Phase 4:** Ein **Keep-Alive-Ping alle 60 Sekunden** an jeden Miniserver. Das hält NAT- und Firewall-Pfade dauerhaft offen (verhindert „stille" Verbindungsabbrüche durch Router) **und** validiert in einem Rutsch, dass Socket und Loxone-Token noch funktionieren. Wenn der Ping fehlschlägt, erzwingt der Worker einen Reconnect **sofort** — statt bis zu 5 Minuten auf den Watchdog zu warten.
+
+---
+
+## Was brauchen Sie vorher?
+
+| Was | Woher | Wofür |
+|-----|-------|-------|
+| Zugang zu Ihrem Hetzner-Server | Bekommen Sie von Ihrem IT-Administrator oder Hetzner-Login | Dort wird das Programm installiert |
+| Docker | Ist meist schon auf dem Hetzner-Server installiert | Damit läuft das Programm in einer geschlossenen Box |
+| Den `GATEWAY_API_KEY` | AICONO-Backend → Einstellungen → Integrationen → Reiter **API** | Damit sich das Programm bei AICONO anmelden kann |
+| Mindestens ein Loxone-Standort mit Seriennummer, Benutzername und Passwort | In Ihrer Loxone-Konfiguration hinterlegt | Damit verbindet sich das Programm mit dem Miniserver |
+
+> **Sie brauchen keine Programmierkenntnisse.** Sie kopieren nur Textblöcke und fügen sie ein.
+
+---
+
+## Wichtige Warnung
+
+Diese Funktion ist ein **Feldtest (BETA)**. Bitte aktivieren Sie sie nur an 2–3 Test-Standorten, nicht an allen Kunden-Standorten. Wenn etwas schiefgeht, können Sie sie jederzeit wieder ausschalten.
+
+---
+
+## Schritt 0: Auf Ihren Hetzner-Server zugreifen
+
+Sie müssen sich auf Ihren Server „einklinken“, als würden Sie eine Fernwartung starten.
+
+### Windows:
+
+1. Drücken Sie die **Windows-Taste**.
+2. Tippen Sie `cmd` und drücken Sie **Enter**.
+3. Ein schwarzes Fenster öffnet sich (das ist die Eingabeaufforderung).
+
+### Mac:
+
+1. Drücken Sie **Cmd + Leertaste**.
+2. Tippen Sie `Terminal` und drücken Sie **Enter**.
+
+### Den Verbindungsbefehl eingeben:
+
+Tippen Sie folgenden Befehl ein und drücken Sie **Enter**. Ersetzen Sie `root` und `123.456.789.012` durch den Benutzernamen und die IP-Adresse, die Sie von Ihrem Administrator bekommen haben:
+
+```bash
+ssh root@123.456.789.012
+```
+
+> **Was passiert hier?** `ssh` ist wie ein sicheres Telefon zu Ihrem Server. Sie sehen danach ein Passwort-Feld oder eine Frage, ob Sie dem Server vertrauen. Tippen Sie `yes` (falls gefragt) und dann Ihr Passwort.  
+> **Tipp:** Wenn Sie das Passwort eingeben, erscheinen keine Sternchen – das ist normal. Einfach tippen und Enter drücken.
+
+Wenn alles geklappt hat, sehen Sie jetzt etwas wie:
+
+```
+root@mein-server:~#
+```
+
+Das bedeutet: Sie sind drin! Ab jetzt sind alle Befehle für Ihren Server.
+
+---
+
+## Schritt 1: Einen Ordner erstellen
+
+Das Programm braucht einen eigenen Ordner auf dem Server. Tippen Sie exakt diesen Befehl ein und drücken Sie **Enter**:
+
+```bash
+mkdir -p /opt/loxone-ws-worker
+```
+
+> **Was passiert hier?** `mkdir` heißt „make directory“ – einen Ordner erstellen. `/opt/loxone-ws-worker` ist der Pfad, also die Adresse des Ordners.
+
+Wechseln Sie in den Ordner:
+
+```bash
+cd /opt/loxone-ws-worker
+```
+
+> **Was passiert hier?** `cd` heißt „change directory“ – in den Ordner springen. Die Zeile `root@mein-server:/opt/loxone-ws-worker#` zeigt Ihnen danach, dass Sie im richtigen Ordner sind.
+
+---
+
+## Schritt 2: Die erste Datei anlegen (package.json)
+
+Diese Datei sagt dem Programm, welche Hilfs-Bibliotheken es braucht. Sie müssen nicht verstehen, was drinsteht – einfach kopieren und einfügen.
+
+Tippen Sie folgenden Befehl ein. **Achtung:** Kopieren Sie den kompletten Block von `cat` bis `EOF`, fügen Sie ihn ein und drücken Sie **Enter**.
+
+```bash
+cat << 'EOF' > package.json
+{
+  "name": "loxone-ws-worker",
+  "version": "0.1.0",
+  "description": "Feldtest-Worker: persistente Loxone-WebSocket über Remote Connect",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node index.ts"
+  },
+  "dependencies": {
+    "lxcommunicator": "^1.1.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.13",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}
+EOF
+```
+
+> **Was passiert hier?** `cat << 'EOF'` sagt dem Computer: „Schreibe alles, was jetzt kommt, in eine Datei, bis ich `EOF` sage.“ Die Datei heißt `package.json`.
+
+---
+
+## Schritt 3: Die zweite Datei anlegen (tsconfig.json)
+
+Diese Datei sagt dem Computer, wie er das Programm übersetzen soll. Wieder: einfach kopieren, einfügen, Enter.
+
+```bash
+cat << 'EOF' > tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "include": ["index.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+EOF
+```
+
+---
+
+## Schritt 4: Die dritte Datei anlegen (Dockerfile)
+
+Diese Datei baut eine geschlossene Box (einen „Container“), in der das Programm läuft. So kann nichts mit anderen Programmen auf dem Server kollidieren.
+
+```bash
+cat << 'EOF' > Dockerfile
+# Loxone WS Worker – Dockerfile
+FROM node:20-alpine AS builder
+RUN apk add --no-cache python3 make g++
+WORKDIR /app
+COPY package.json ./
+RUN npm install
+COPY tsconfig.json ./
+COPY index.ts ./
+RUN npm run build
+
+FROM node:20-alpine AS runner
+RUN addgroup -g 1001 -S nodejs && adduser -S worker -u 1001
+USER worker
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist/index.js ./index.js
+
+ENV NODE_ENV=production
+ENV LOG_LEVEL=info
+ENV FLUSH_INTERVAL_MS=1000
+ENV RELOAD_INTERVAL_MS=300000
+ENV BRIDGE_WORKER_NAME=hetzner-bridge-test
+ENV BRIDGE_HEARTBEAT_MS=60000
+ENV HEALTH_PORT=8080
+
+EXPOSE 8080
+
+# Healthcheck nutzt den eingebauten /healthz Endpoint
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+  CMD wget -q -O- http://127.0.0.1:8080/healthz || exit 1
+
+CMD ["node", "index.js"]
+EOF
+```
+
+---
+
+## Schritt 5: Die vierte Datei anlegen (index.ts)
+
+Das ist das eigentliche Programm. Es ist etwas länger, aber Sie müssen es trotzdem nur kopieren und einfügen.
+
+> **Tipp:** Klicken Sie in das Terminal-Fenster, drücken Sie **Rechtsklick** (Windows) oder **Cmd + V** (Mac), um den Text einzufügen. Warten Sie, bis alles eingefügt ist, und drücken Sie dann **Enter**.
+
+```bash
+cat << 'EOF' > index.ts
+/**
+ * Loxone Remote-Connect WebSocket Worker (Feldtest)
+ * ==================================================
+ * Hält pro Loxone-Miniserver, der für den Feldtest freigeschaltet ist
+ * (location_integrations.loxone_remote_connect_ws_enabled = TRUE), EINE
+ * persistente WebSocket-Verbindung über Loxone Remote Connect
+ * (dns.loxonecloud.com/<serial>).
+ *
+ * Aufgaben:
+ *   1. Meter-Liste alle 5 Min beim Backend abfragen
+ *   2. Pro Miniserver einen lxcommunicator-Socket aufbauen
+ *      (übernimmt Auth, AES, JWT, Keepalive)
+ *   3. Werte sekündlich an gateway-ingest pushen
+ *   4. Session-Start/-Ende loggen
+ *   5. Phase 2: Heartbeat an bridge_workers + Diagnose-Events an bridge_event_log
+ *   6. Phase 2: HTTP-Endpoint /healthz und /state
+ *
+ * Umgebungsvariablen:
+ *   SUPABASE_URL        z. B. https://ihre-projekt-id.supabase.co
+ *   GATEWAY_API_KEY     Bearer Token (gleicher Wert wie bei gateway-ingest)
+ *   FLUSH_INTERVAL_MS   Wie oft Werte gepusht werden (Standard: 5000)
+ *   MIN_PUSH_INTERVAL_MS Mindestabstand zwischen 2 Pushes desselben Werts (Standard: 60000)
+ *   MIN_DELTA           Minimale Änderung in kW, ab der gepusht wird (Standard: 0.01)
+ *   RELOAD_INTERVAL_MS  Wie oft die Meter-Liste neu geladen wird (Standard: 300000)
+ *   LOG_LEVEL           "debug" | "info" | "warn" | "error" (Standard: "info")
+ *   WORKER_HOST         Freier Text, taucht im Session-Log auf (Standard: hostname)
+ *   BRIDGE_WORKER_NAME  Name in Tabelle bridge_workers (Standard: hetzner-bridge-test)
+ *   BRIDGE_HEARTBEAT_MS Heartbeat-Intervall in ms (Standard: 60000)
+ *   HEALTH_PORT         HTTP-Port für /healthz und /state (Standard: 8080, 0 = aus)
+ *   WORKER_VERSION      Versions-String, taucht in bridge_workers.version auf
+ */
+
+import os from "os";
+import http from "http";
+
+const SUPABASE_URL = process.env.SUPABASE_URL!;
+const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY!;
+const FLUSH_INTERVAL_MS = parseInt(process.env.FLUSH_INTERVAL_MS || "5000", 10);
+const MIN_PUSH_INTERVAL_MS = parseInt(process.env.MIN_PUSH_INTERVAL_MS || "60000", 10);
+const MIN_DELTA = parseFloat(process.env.MIN_DELTA || "0.01");
+const RELOAD_INTERVAL_MS = parseInt(process.env.RELOAD_INTERVAL_MS || "300000", 10);
+const LOG_LEVEL = (process.env.LOG_LEVEL || "info") as "debug" | "info" | "warn" | "error";
+const WORKER_HOST = process.env.WORKER_HOST || os.hostname();
+const BRIDGE_WORKER_NAME = process.env.BRIDGE_WORKER_NAME || "hetzner-bridge-test";
+const BRIDGE_HEARTBEAT_MS = parseInt(process.env.BRIDGE_HEARTBEAT_MS || "60000", 10);
+const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || "8080", 10);
+const WORKER_VERSION = process.env.WORKER_VERSION || "phase2-skeleton";
+
+if (!SUPABASE_URL || !GATEWAY_API_KEY) {
+  console.error("[FATAL] SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein");
+  process.exit(1);
+}
+
+const INGEST_URL = `${SUPABASE_URL}/functions/v1/gateway-ingest`;
+
+const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
+const currentLevel = LOG_LEVELS[LOG_LEVEL] ?? 1;
+function log(level: keyof typeof LOG_LEVELS, msg: string, ...args: any[]) {
+  if (LOG_LEVELS[level] >= currentLevel) {
+    const ts = new Date().toISOString();
+    const fn = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
+    fn(`[${ts}] [${level.toUpperCase()}] ${msg}`, ...args);
+  }
+}
+
+const SPIKE_THRESHOLDS: Record<string, number> = {
+  strom: 10000, gas: 5000, wasser: 1000, wärme: 5000, kälte: 2000, default: 50000,
+};
+function isSpike(v: number, energyType: string): boolean {
+  if (!isFinite(v) || isNaN(v)) return true;
+  return Math.abs(v) > (SPIKE_THRESHOLDS[energyType] ?? SPIKE_THRESHOLDS.default);
+}
+
+async function ingestGet(action: string): Promise<any> {
+  const r = await fetch(`${INGEST_URL}?action=${action}`, {
+    headers: { Authorization: `Bearer ${GATEWAY_API_KEY}` },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!r.ok) throw new Error(`GET ${action} HTTP ${r.status}`);
+  return r.json();
+}
+
+async function ingestPost(action: string | null, body: any): Promise<any> {
+  const url = action ? `${INGEST_URL}?action=${action}` : INGEST_URL;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${GATEWAY_API_KEY}` },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!r.ok) throw new Error(`POST ${action ?? "(readings)"} HTTP ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+// Bridge-Worker (Phase 2): Heartbeat & Event-Log
+async function bridgeHeartbeat(status: "online" | "degraded" | "offline" = "online", lastError: string | null = null): Promise<void> {
+  const linksState: Array<{ miniserver_serial: string; last_connected_at?: string; last_event_at?: string }> = [];
+  for (const s of connections.values()) {
+    const item: any = { miniserver_serial: s.serialNumber };
+    if (s.lastConnectedAt) item.last_connected_at = new Date(s.lastConnectedAt).toISOString();
+    if (s.lastEventAt) item.last_event_at = new Date(s.lastEventAt).toISOString();
+    linksState.push(item);
+  }
+  try {
+    await ingestPost("bridge-heartbeat", {
+      worker_name: BRIDGE_WORKER_NAME, version: WORKER_VERSION, host: WORKER_HOST,
+      status, last_error: lastError, links_state: linksState,
+    });
+  } catch (err) {
+    log("debug", `[Bridge] heartbeat fehlgeschlagen: ${(err as Error).message}`);
+  }
+}
+
+async function bridgeLog(severity: "debug" | "info" | "warn" | "error", event_type: string,
+  message: string, miniserver_serial?: string, details?: unknown): Promise<void> {
+  try {
+    await ingestPost("bridge-log-event", {
+      worker_name: BRIDGE_WORKER_NAME, severity, event_type, message, miniserver_serial, details,
+    });
+  } catch { /* never crash on event-log failure */ }
+}
+
+interface WsMeter {
+  id: string; name: string; energy_type: string; sensor_uuid: string;
+  tenant_id: string; location_integration_id: string;
+  location_integration: { id: string; config: { serial_number?: string; username?: string; password?: string } };
+}
+
+interface UuidEntry {
+  meter_id: string; tenant_id: string; energy_type: string;
+  latest_value: number | null; last_pushed_value: number | null; last_pushed_at: number;
+}
+
+interface ConnState {
+  serialNumber: string; username: string; password: string;
+  tenantId: string; locationIntegrationId: string;
+  uuidMap: Map<string, UuidEntry>;
+  ws: any; authenticated: boolean; reconnectDelay: number; reconnecting: boolean;
+  sessionId: string | null; eventsReceived: number; reconnectCount: number;
+  lastConnectedAt: number; lastEventAt: number;
+}
+
+const connections = new Map<string, ConnState>();
+
+const dnsCache = new Map<string, string>();
+async function resolveLoxoneHost(serial: string): Promise<string | null> {
+  if (dnsCache.has(serial)) return dnsCache.get(serial)!;
+  try {
+    const r = await fetch(`https://dns.loxonecloud.com/${serial}`, {
+      method: "GET", redirect: "follow", signal: AbortSignal.timeout(8000),
+    });
+    const finalUrl = r.url;
+    if (finalUrl && finalUrl.toLowerCase().includes(serial.toLowerCase())) {
+      const host = new URL(finalUrl).host;
+      dnsCache.set(serial, host);
+      log("info", `[DNS] ${serial} → ${host}`);
+      return host;
+    }
+  } catch (err) {
+    log("warn", `[DNS] ${serial} fehlgeschlagen: ${(err as Error).message}`);
+  }
+  const fb = `${serial.toLowerCase()}.dns.loxonecloud.com`;
+  dnsCache.set(serial, fb);
+  return fb;
+}
+
+async function sessionStart(state: ConnState): Promise<void> {
+  try {
+    const r = await ingestPost("ws-session-start", {
+      tenant_id: state.tenantId, location_integration_id: state.locationIntegrationId, worker_host: WORKER_HOST,
+    });
+    state.sessionId = r.session_id || null;
+    state.eventsReceived = 0;
+    state.reconnectCount = 0;
+  } catch (err) { log("warn", `[Session] start fehlgeschlagen: ${(err as Error).message}`); }
+}
+
+async function sessionEnd(state: ConnState, reason: string): Promise<void> {
+  if (!state.sessionId) return;
+  try {
+    await ingestPost("ws-session-end", {
+      session_id: state.sessionId, disconnect_reason: reason,
+      events_received: state.eventsReceived, reconnect_count: state.reconnectCount,
+    });
+  } catch (err) { log("warn", `[Session] end fehlgeschlagen: ${(err as Error).message}`); }
+  state.sessionId = null;
+}
+
+async function connect(state: ConnState): Promise<void> {
+  if (state.ws) { try { state.ws.close(); } catch { /* ignore */ } state.ws = null; }
+  state.authenticated = false;
+
+  const host = await resolveLoxoneHost(state.serialNumber);
+  if (!host) {
+    bridgeLog("warn", "dns_failed", `DNS-Auflösung fehlgeschlagen: ${state.serialNumber}`, state.serialNumber);
+    scheduleReconnect(state, "dns-failed");
+    return;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const LxCommunicator = require("lxcommunicator");
+  const config = new LxCommunicator.WebSocketConfig(
+    LxCommunicator.WebSocketConfig.protocol.WSS, state.serialNumber,
+    "LoxoneWsWorker", LxCommunicator.WebSocketConfig.permission.APP, false,
+  );
+
+  config.delegate = {
+    socketOnEventReceived: (_s: any, events: any[]) => {
+      for (const ev of events) {
+        const uuid = (ev.uuid || "").toLowerCase();
+        const entry = state.uuidMap.get(uuid);
+        if (entry && typeof ev.value === "number" && !isSpike(ev.value, entry.energy_type)) {
+          entry.latest_value = ev.value;
+          state.eventsReceived++;
+          state.lastEventAt = Date.now();
+        }
+      }
+    },
+    socketOnConnectionClosed: (_s: any, code: number) => {
+      log("warn", `[WS] ${state.serialNumber} geschlossen (code=${code})`);
+      bridgeLog("warn", "ws_closed", `WebSocket geschlossen (code=${code})`, state.serialNumber, { code });
+      state.authenticated = false; state.ws = null;
+      sessionEnd(state, `close-${code}`);
+      scheduleReconnect(state, `close-${code}`);
+    },
+    socketOnTokenRefreshFailed: () => {
+      log("warn", `[WS] Token-Refresh fehlgeschlagen: ${state.serialNumber}`);
+      bridgeLog("error", "token_refresh_failed", "Token-Refresh fehlgeschlagen", state.serialNumber);
+    },
+  };
+
+  const socket = new LxCommunicator.WebSocket(config);
+  state.ws = socket;
+
+  log("info", `[WS] verbinde ${state.serialNumber} → ${host}`);
+  try {
+    await socket.open(host, state.username, state.password);
+    await socket.send("jdev/sps/enablebinstatusupdate");
+    // Phase 5.1: zusätzlich analoge Statusupdates abonnieren (kWh, Power, Temperatur, Zählerstände)
+    await socket.send("jdev/sps/enablestatusupdate");
+    state.authenticated = true;
+    state.reconnectDelay = 1000;
+    state.lastConnectedAt = Date.now();
+    await sessionStart(state);
+    log("info", `[WS] authentifiziert ${state.serialNumber} (${state.uuidMap.size} UUIDs)`);
+    bridgeLog("info", "ws_connected", `Verbunden, ${state.uuidMap.size} UUIDs abonniert`, state.serialNumber);
+  } catch (err) {
+    log("warn", `[WS] Verbindung fehlgeschlagen ${state.serialNumber}: ${err}`);
+    bridgeLog("error", "ws_connect_failed", `Verbindung fehlgeschlagen: ${(err as Error).message ?? err}`, state.serialNumber);
+    state.ws = null;
+    scheduleReconnect(state, `connect-error: ${(err as Error).message ?? err}`);
+  }
+}
+
+function scheduleReconnect(state: ConnState, reason: string): void {
+  if (state.reconnecting) return;
+  state.reconnecting = true;
+  state.reconnectCount++;
+  const delay = state.reconnectDelay;
+  state.reconnectDelay = Math.min(state.reconnectDelay * 2, 60000);
+  log("info", `[WS] Reconnect ${state.serialNumber} in ${delay}ms (reason=${reason})`);
+  bridgeLog("info", "ws_reconnect_scheduled", `Reconnect in ${delay}ms (Grund: ${reason})`, state.serialNumber, { delay_ms: delay, reason });
+  setTimeout(() => { state.reconnecting = false; connect(state); }, delay);
+}
+
+async function flush(): Promise<void> {
+  const readings: any[] = [];
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  for (const state of connections.values()) {
+    if (!state.authenticated) continue;
+    for (const entry of state.uuidMap.values()) {
+      if (entry.latest_value === null) continue;
+      const prev = entry.last_pushed_value;
+      const ageMs = nowMs - entry.last_pushed_at;
+      const delta = prev === null ? Infinity : Math.abs(entry.latest_value - prev);
+      const changed = delta >= MIN_DELTA;
+      const stale = ageMs >= MIN_PUSH_INTERVAL_MS;
+      if (!changed && !stale) continue;
+      readings.push({
+        meter_id: entry.meter_id, tenant_id: entry.tenant_id,
+        power_value: entry.latest_value, energy_type: entry.energy_type, recorded_at: nowIso,
+      });
+      entry.last_pushed_value = entry.latest_value;
+      entry.last_pushed_at = nowMs;
+    }
+  }
+  if (readings.length === 0) return;
+  try {
+    await ingestPost(null, { readings });
+    log("debug", `[Flush] ${readings.length} Werte gepusht`);
+  } catch (err) {
+    log("warn", `[Flush] fehlgeschlagen: ${(err as Error).message}`);
+  }
+}
+
+async function reloadMeters(): Promise<void> {
+  let meters: WsMeter[] = [];
+  try {
+    const r = await ingestGet("list-loxone-ws-meters");
+    meters = (r.meters || []) as WsMeter[];
+  } catch (err) {
+    log("error", `[Reload] fehlgeschlagen: ${(err as Error).message}`);
+    return;
+  }
+
+  const bySerial = new Map<string, { config: any; meters: WsMeter[]; tenantId: string; integrationId: string }>();
+  for (const m of meters) {
+    const cfg = m.location_integration?.config;
+    if (!cfg?.serial_number || !cfg.username || !cfg.password || !m.sensor_uuid) continue;
+    const serial = cfg.serial_number;
+    if (!bySerial.has(serial)) {
+      bySerial.set(serial, { config: cfg, meters: [], tenantId: m.tenant_id, integrationId: m.location_integration_id });
+    }
+    bySerial.get(serial)!.meters.push(m);
+  }
+
+  for (const [serial, group] of bySerial) {
+    let state = connections.get(serial);
+    if (!state) {
+      state = {
+        serialNumber: serial, username: group.config.username, password: group.config.password,
+        tenantId: group.tenantId, locationIntegrationId: group.integrationId,
+        uuidMap: new Map(), ws: null, authenticated: false,
+        reconnectDelay: 1000, reconnecting: false,
+        sessionId: null, eventsReceived: 0, reconnectCount: 0,
+        lastConnectedAt: 0, lastEventAt: 0,
+      };
+      connections.set(serial, state);
+    }
+    state.uuidMap.clear();
+    for (const m of group.meters) {
+      state.uuidMap.set(m.sensor_uuid.toLowerCase(), {
+        meter_id: m.id, tenant_id: m.tenant_id, energy_type: m.energy_type,
+        latest_value: null, last_pushed_value: null, last_pushed_at: 0,
+      });
+    }
+    if (!state.ws) connect(state);
+  }
+
+  for (const [serial, state] of connections) {
+    if (!bySerial.has(serial)) {
+      log("info", `[Reload] entferne ${serial} (nicht mehr im Feldtest)`);
+      try { state.ws?.close(); } catch { /* ignore */ }
+      await sessionEnd(state, "removed-from-test");
+      connections.delete(serial);
+    }
+  }
+  log("info", `[Reload] aktive Miniserver: ${connections.size}`);
+}
+
+// Health-HTTP-Server (Phase 2)
+function startHealthServer(): void {
+  if (!HEALTH_PORT || HEALTH_PORT <= 0) return;
+  const server = http.createServer((req, res) => {
+    if (req.url === "/healthz") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, worker: BRIDGE_WORKER_NAME, host: WORKER_HOST }));
+      return;
+    }
+    if (req.url === "/state") {
+      const state = {
+        worker: BRIDGE_WORKER_NAME, version: WORKER_VERSION, host: WORKER_HOST,
+        connections: Array.from(connections.values()).map((c) => ({
+          serial: c.serialNumber, authenticated: c.authenticated, uuids: c.uuidMap.size,
+          events_received: c.eventsReceived, reconnect_count: c.reconnectCount,
+          last_connected_at: c.lastConnectedAt ? new Date(c.lastConnectedAt).toISOString() : null,
+          last_event_at: c.lastEventAt ? new Date(c.lastEventAt).toISOString() : null,
+        })),
+      };
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(state, null, 2));
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  server.listen(HEALTH_PORT, () => log("info", `[Health] HTTP-Endpoint auf Port ${HEALTH_PORT} (GET /healthz, /state)`));
+}
+
+async function main() {
+  log("info", `Loxone WS Worker startet — worker=${BRIDGE_WORKER_NAME} host=${WORKER_HOST} version=${WORKER_VERSION}`);
+  log("info", `  SUPABASE_URL=${SUPABASE_URL}`);
+  log("info", `  FLUSH_INTERVAL_MS=${FLUSH_INTERVAL_MS}  RELOAD_INTERVAL_MS=${RELOAD_INTERVAL_MS}  BRIDGE_HEARTBEAT_MS=${BRIDGE_HEARTBEAT_MS}`);
+
+  startHealthServer();
+
+  const shutdown = async (signal: string) => {
+    log("info", `${signal} — beende Sessions...`);
+    await bridgeHeartbeat("offline", `shutdown-${signal}`);
+    await bridgeLog("info", "worker_shutdown", `Worker beendet (${signal})`);
+    for (const state of connections.values()) {
+      try { state.ws?.close(); } catch { /* ignore */ }
+      await sessionEnd(state, `shutdown-${signal}`);
+    }
+    process.exit(0);
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+
+  await bridgeHeartbeat("online");
+  await bridgeLog("info", "worker_started", `Worker gestartet auf ${WORKER_HOST}`);
+
+  await reloadMeters();
+  setInterval(reloadMeters, RELOAD_INTERVAL_MS);
+  setInterval(() => { flush().catch((e) => log("error", "flush:", e)); }, FLUSH_INTERVAL_MS);
+  setInterval(() => { bridgeHeartbeat("online").catch(() => {}); }, BRIDGE_HEARTBEAT_MS);
+
+  setInterval(async () => {
+    for (const state of connections.values()) {
+      if (!state.sessionId || !state.authenticated) continue;
+      try {
+        await ingestPost("ws-session-heartbeat", {
+          session_id: state.sessionId, events_received: state.eventsReceived, reconnect_count: state.reconnectCount,
+        });
+      } catch (err) { log("debug", `[Heartbeat] ${state.serialNumber}: ${(err as Error).message}`); }
+    }
+  }, 15000);
+}
+
+main().catch((err) => { console.error("[FATAL]", err); process.exit(1); });
+EOF
+```
+
+> **Wichtig:** Warten Sie, bis der Cursor wieder erscheint (das kann ein paar Sekunden dauern). Wenn Sie stattdessen `cat >` sehen, haben Sie möglicherweise das `EOF` am Ende nicht richtig eingefügt. In dem Fall drücken Sie **Strg + C**, um abzubrechen, und fangen Sie bei Schritt 5 nochmal an.
+
+---
+
+## Schritt 6: Das Docker-Image bauen
+
+Jetzt bauen wir die geschlossene Box (den Container). Tippen Sie:
+
+```bash
+docker build -t loxone-ws-worker .
+```
+
+> **Was passiert hier?** Docker liest die Dateien, lädt Hilfsprogramme herunter und packt alles zusammen.  
+> **Dauer:** ca. 1–2 Minuten beim ersten Mal. Sie sehen viele Zeilen mit „Downloading“ und „Installing“ – das ist normal.  
+> **Fertig:** Wenn am Ende `Successfully tagged loxone-ws-worker:latest` steht, hat es geklappt.
+
+---
+
+## Schritt 7: Den Container starten
+
+Bevor Sie den folgenden Befehl eingeben, müssen Sie **zwei Platzhalter ersetzen**:
+
+1. `[HIER_SUPABASE_URL]` → Ihre Backend-URL. Für die Live-Umgebung dieses Projekts ist das `https://api-ems.aicono.org`.
+2. `[HIER_API_KEY]` → Ihr `GATEWAY_API_KEY`. Diesen finden Sie im AICONO-Backend unter **Einstellungen → Integrationen → Reiter API**. Dort steht ein Feld mit der Beschriftung **API-Key** – kopieren Sie den Wert daraus.
+
+Ersetzen Sie die Platzhalter im folgenden Befehl und fügen Sie ihn ein:
+
+```bash
+docker run -d --restart=always --name loxone-ws-worker \
+  -p 8080:8080 \
+  -e SUPABASE_URL=[HIER_SUPABASE_URL] \
+  -e GATEWAY_API_KEY=[HIER_API_KEY] \
+  -e LOG_LEVEL=info \
+  -e WORKER_HOST=hetzner-prod-1 \
+  -e BRIDGE_WORKER_NAME=hetzner-bridge-test \
+  loxone-ws-worker
+```
+
+> **Beispiel, wie es aussieht, wenn es fertig ist:**
+> ```bash
+> docker run -d --restart=always --name loxone-ws-worker \
+>   -p 8080:8080 \
+>   -e SUPABASE_URL=https://api-ems.aicono.org \
+>   -e GATEWAY_API_KEY=sk_live_51H8xyz... \
+>   -e LOG_LEVEL=info \
+>   -e WORKER_HOST=hetzner-prod-1 \
+>   -e BRIDGE_WORKER_NAME=hetzner-bridge-test \
+>   loxone-ws-worker
+> ```
+
+> **Was passiert hier?**
+> - `docker run` startet die Box. `-d` bedeutet „im Hintergrund".
+> - `--restart=always` startet die Box automatisch nach einem Server-Neustart.
+> - `-p 8080:8080` öffnet den Port 8080 für die Statusseite (`/healthz` und `/state`).
+> - `WORKER_HOST` ist ein beliebiger Name, taucht im Log auf.
+> - `BRIDGE_WORKER_NAME` muss exakt mit dem Eintrag in der Tabelle `bridge_workers` übereinstimmen (Standard: `hetzner-bridge-test`, ist bereits angelegt).
+
+Wenn alles geklappt hat, sehen Sie eine lange Zeichenkette aus Buchstaben und Zahlen – das ist die ID des gestarteten Containers.
+
+---
+
+## Schritt 8: Prüfen, ob es läuft
+
+Schauen wir nach, ob das Programm gestartet ist und arbeitet:
+
+```bash
+docker logs -f loxone-ws-worker
+```
+
+> **Was passiert hier?** Sie sehen das „Tagebuch" des Programms. `-f` bedeutet: Zeige neue Einträge sofort an.
+
+Drücken Sie **Enter**. Sie sollten nach einigen Sekunden etwa Folgendes sehen:
+
+```
+[INFO] Loxone WS Worker startet — worker=hetzner-bridge-test host=hetzner-prod-1 version=phase2-skeleton
+[INFO]   SUPABASE_URL=https://...
+[INFO]   FLUSH_INTERVAL_MS=1000  RELOAD_INTERVAL_MS=300000  BRIDGE_HEARTBEAT_MS=300000
+[INFO] [Health] HTTP-Endpoint auf Port 8080 (GET /healthz, /state)
+[INFO] [Reload] aktive Miniserver: 0
+```
+
+**Steht dort `aktive Miniserver: 0`?** Das ist im Moment noch richtig! Das bedeutet nur, dass noch kein Standort im Backend für den Feldtest freigeschaltet wurde.
+
+**Zweite kurze Prüfung – die Statusseite:** Tippen Sie auf dem Server (oder von Ihrem Rechner aus, falls Port 8080 nach außen geöffnet ist):
+
+```bash
+curl http://127.0.0.1:8080/healthz
+```
+
+Sie sollten so etwas sehen:
+
+```
+{"ok":true,"worker":"hetzner-bridge-test","host":"hetzner-prod-1"}
+```
+
+Drücken Sie **Strg + C**, um die Log-Anzeige zu beenden (das Programm läuft weiter im Hintergrund).
+
+---
+
+## Schritt 9: Im AICONO-Backend freischalten
+
+Jetzt müssen Sie dem System sagen: „Dieser Standort darf am Feldtest teilnehmen.“
+
+### Für Tenant-Administratoren (die einfache Methode):
+
+1. Melden Sie sich im AICONO-Backend an.
+2. Gehen Sie zu dem Standort, an dem der Loxone-Miniserver hängt.
+3. Klicken Sie auf die Loxone-Integration (die Karte mit dem Miniserver).
+4. Klicken Sie auf das **Zahnrad-Symbol** (Bearbeiten).
+5. Scrollen Sie nach unten zum Abschnitt **„Remote Connect WebSocket (BETA)“**.
+6. Klicken Sie auf den Button **„Aktivieren“**.
+7. Das System speichert die Einstellung automatisch.
+
+> **Wichtig:** Dieser Button ist nur für Test-Standorte gedacht. Aktivieren Sie ihn nicht auf Produktiv-Systemen.
+
+### Für Super-Administratoren (Fallback):
+
+Falls der Button nicht sichtbar ist oder Sie mehrere Standorte auf einmal freischalten möchten, können Sie im Super-Admin-Bereich unter **SQL-Editor** folgenden Befehl ausführen:
+
+```sql
+UPDATE location_integrations
+SET loxone_remote_connect_ws_enabled = TRUE
+WHERE id IN ('<integration-id-1>', '<integration-id-2>');
+```
+
+> Ersetzen Sie `<integration-id-1>` und `<integration-id-2>` durch die tatsächlichen IDs der Standorte. Diese finden Sie in der Datenbank oder fragen Sie Ihren Administrator.
+
+---
+
+## Schritt 10: Warten und nochmal prüfen
+
+Nachdem Sie den Standort freigeschaltet haben, warten Sie **maximal 5 Minuten**. Der Worker lädt die Liste automatisch neu.
+
+Schauen Sie nochmal in die Logs:
+
+```bash
+docker logs -f loxone-ws-worker
+```
+
+Jetzt sollten Sie etwa Folgendes sehen:
+
+```
+[INFO] [Reload] aktive Miniserver: 1
+[INFO] [DNS] 504F94AB1234 → 504f94ab1234.dns.loxonecloud.com
+[INFO] [WS] verbinde 504F94AB1234 → 504f94ab1234.dns.loxonecloud.com
+[INFO] [WS] authentifiziert 504F94AB1234 (5 UUIDs)
+```
+
+**Herzlichen Glückwunsch!** Die Verbindung steht. Werte kommen jetzt in Echtzeit an.
+
+Drücken Sie wieder **Strg + C**, um die Log-Anzeige zu beenden.
+
+---
+
+## Schritt 11: Im AICONO-Backend den Bridge-Worker-Status sehen (Phase 2)
+
+Der Worker meldet sich jetzt zusätzlich alle 30 Sekunden bei zwei neuen Tabellen in der Datenbank. So sehen wir auf einen Blick, ob er noch lebt und welcher Miniserver verbunden ist.
+
+**So prüfen Sie es:**
+
+1. Öffnen Sie das AICONO-Backend (Lovable-Umgebung) und gehen Sie als Super-Admin auf **View Backend → Tables**.
+2. Öffnen Sie die Tabelle **`bridge_workers`**.
+3. Sie sollten dort einen Eintrag sehen mit:
+   - **`name`** = `hetzner-bridge-test`
+   - **`status`** = `online`
+   - **`last_heartbeat_at`** = nicht älter als 1 Minute
+   - **`version`** = `phase3` (oder Ihr Wert aus `WORKER_VERSION`)
+4. Öffnen Sie zusätzlich die Tabelle **`bridge_event_log`** und sortieren Sie nach `occurred_at` absteigend. Sie sollten ganz oben Ereignisse sehen wie:
+   - `worker_started` – beim Start des Containers
+   - `ws_connected` – sobald ein Miniserver verbunden ist
+   - `ws_reconnect_scheduled` – nur wenn die Verbindung zwischendurch abreißt
+
+**Wenn in `bridge_workers` nichts erscheint** (oder `last_heartbeat_at` bleibt leer):
+
+- Prüfen Sie in den Docker-Logs (`docker logs --tail 50 loxone-ws-worker`), ob Zeilen wie `[Bridge] heartbeat fehlgeschlagen` auftauchen.
+- Häufigste Ursache: Der `GATEWAY_API_KEY` ist falsch oder der Worker erreicht das Backend nicht (z.B. Firewall).
+- Zweithäufigste Ursache: `BRIDGE_WORKER_NAME` weicht vom Eintrag in `bridge_workers` ab (Groß-/Kleinschreibung zählt).
+
+> **Warum ist das wichtig?** Genau das war der Grund, warum die alte Worker-Version unbemerkt stehen blieb: Es gab keine zentrale Stelle, an der wir gesehen haben, ob sie noch arbeitet. Jetzt sind beide Tabellen unsere „Lebenszeichen-Kontrolle".
+
+---
+
+## Schritt 12: Auf Phase 3 (Watchdog) aktualisieren
+
+Wenn der Worker bei Ihnen bereits in Phase 2 läuft und Sie nur die neue Watchdog-Funktion aktivieren möchten, gehen Sie genau diese Schritte durch. **Es werden keine Daten gelöscht** – nur der Container wird neu gebaut.
+
+> **Tipp:** Öffnen Sie diese Anleitung in einem Fenster und Ihr Terminal in einem zweiten Fenster, damit Sie hin- und herkopieren können.
+
+### 12.1 Mit dem Server verbinden
+
+Öffnen Sie ein Terminal (Mac: „Terminal"; Windows: „PowerShell") und tippen Sie (ersetzen Sie `123.456.789.012` durch die echte IP-Adresse Ihres Servers):
+
+```bash
+ssh root@123.456.789.012
+```
+
+Tippen Sie Ihr Passwort ein und drücken Sie **Enter**. Sie sind auf dem Server, wenn Sie am Ende `root@...` sehen.
+
+### 12.2 In den Worker-Ordner wechseln
+
+Tippen Sie exakt diesen Befehl ein:
+
+```bash
+cd /opt/loxone-ws-worker
+```
+
+### 12.3 Die neue Datei `index.ts` auf den Server bringen
+
+Sie haben den neuen Code in Lovable im Browser vor sich. Jetzt müssen Sie ihn auf den Server übertragen. Das geht am einfachsten mit dem Texteditor **Nano** direkt auf dem Server.
+
+**Schritt-für-Schritt:**
+
+1. **Löschen Sie die alte Datei** (damit keine Reste übrigbleiben):
+   ```bash
+   rm -f index.ts
+   ```
+
+2. **Öffnen Sie den Editor Nano** mit einer neuen Datei:
+   ```bash
+   nano index.ts
+   ```
+   Der Bildschirm wird jetzt weiß oder zeigt unten eine Hilfszeile an. Das ist Nano.
+
+3. **Wechseln Sie in Ihren Browser**, wo Lovable geöffnet ist. Klicken Sie dort auf die Datei `docs/loxone-ws-worker/index.ts` im Dateibaum.
+
+4. **Markieren Sie den gesamten Inhalt** der Datei:
+   - Drücken Sie **Strg + A** (alles markieren).
+   - Drücken Sie **Strg + C** (kopieren).
+
+5. **Wechseln Sie zurück in Ihr Terminal** (das Nano-Fenster).
+
+6. **Fügen Sie den kopierten Text ein**:
+   - **Windows (PowerShell):** Klicken Sie mit der **rechten Maustaste** ins Nano-Fenster.
+   - **Mac (Terminal):** Drücken Sie **Cmd + V**.
+   - **Alternativ bei älteren Windows-Systemen:** Drücken Sie **Umschalt + Einfügen**.
+
+   > Sie werden sehen, wie der gesamte Code in Nano erscheint. Das kann einen Moment dauern, weil die Datei lang ist.
+
+7. **Speichern und beenden:**
+   - Drücken Sie **Strg + O** (das Buchstabe „O" wie „Otto"). Unten fragt Nano: `File Name to Write: index.ts`.
+   - Drücken Sie **Enter**, um zu bestätigen.
+   - Drücken Sie **Strg + X**, um Nano zu schließen.
+
+8. **Prüfen, dass die Datei aktualisiert ist:**
+   ```bash
+   grep "phase3" /opt/loxone-ws-worker/index.ts
+   ```
+   ➡️ **Erwartetes Ergebnis:** Sie sehen mindestens eine Zeile mit `"phase3"`.
+   > **Wenn nichts erscheint:** Die Datei wurde nicht richtig gespeichert. Wiederholen Sie die Schritte 12.3.2 bis 12.3.7 noch einmal.
+
+### 12.4 Container-Konfiguration sichern – unbedingt vor dem Löschen
+
+Bevor ein bestehender Container ersetzt wird, sichern Sie zuerst seine Startwerte. Sonst gehen Werte wie `SUPABASE_URL`, `GATEWAY_API_KEY`, Ports und Namen verloren.
+
+```bash
+mkdir -p /root/aicono-worker-backup
+docker inspect loxone-ws-worker > /root/aicono-worker-backup/loxone-ws-worker.inspect.json
+docker inspect loxone-ws-worker --format '{{range .Config.Env}}{{println .}}{{end}}' > /root/aicono-worker-backup/loxone-ws-worker.env.txt
+docker inspect loxone-ws-worker --format '{{json .HostConfig.PortBindings}}' > /root/aicono-worker-backup/loxone-ws-worker.ports.json
+```
+
+Prüfen:
+
+```bash
+grep -E "SUPABASE_URL|GATEWAY_API_KEY|WORKER_HOST|BRIDGE_WORKER_NAME" /root/aicono-worker-backup/loxone-ws-worker.env.txt
+```
+
+Wenn hier `SUPABASE_URL` oder `GATEWAY_API_KEY` fehlen: **nicht fortfahren und den Container nicht löschen.**
+
+### 12.5 Alten Container stoppen und löschen
+
+```bash
+docker rm -f loxone-ws-worker
+```
+
+➡️ **Erwartetes Ergebnis:** `loxone-ws-worker`
+
+### 12.6 Docker-Image neu bauen
+
+```bash
+docker build -t loxone-ws-worker .
+```
+
+➡️ **Erwartetes Ergebnis:** Dauert ca. 30–60 Sekunden. Am Ende muss `Successfully tagged loxone-ws-worker:latest` stehen.
+
+### 12.7 Container neu starten
+
+> **Wichtig:** Ersetzen Sie in den folgenden Zeilen die beiden Platzhalter durch Ihre echten Werte:
+> - `[HIER_SUPABASE_URL]` → Ihre Backend-URL. Für Live: `https://api-ems.aicono.org`
+> - `[HIER_API_KEY]` → Ihr `GATEWAY_API_KEY` aus dem AICONO-Backend (Einstellungen → Integrationen → Reiter API)
+
+```bash
+docker run -d --restart=always --name loxone-ws-worker \
+  -p 8080:8080 \
+  -e SUPABASE_URL=[HIER_SUPABASE_URL] \
+  -e GATEWAY_API_KEY=[HIER_API_KEY] \
+  -e LOG_LEVEL=info \
+  -e WORKER_HOST=hetzner-prod-1 \
+  -e BRIDGE_WORKER_NAME=hetzner-bridge-test \
+  loxone-ws-worker
+```
+
+> **Beispiel, wie es aussieht, wenn es fertig ist:**
+> ```bash
+> docker run -d --restart=always --name loxone-ws-worker \
+>   -p 8080:8080 \
+>   -e SUPABASE_URL=https://api-ems.aicono.org \
+>   -e GATEWAY_API_KEY=sk_live_51H8xyz... \
+>   -e LOG_LEVEL=info \
+>   -e WORKER_HOST=hetzner-prod-1 \
+>   -e BRIDGE_WORKER_NAME=hetzner-bridge-test \
+>   loxone-ws-worker
+> ```
+
+➡️ **Erwartetes Ergebnis:** Eine lange Zeichenkette aus Buchstaben und Zahlen – das ist die ID des gestarteten Containers.
+
+### 12.8 Erfolg in den Logs prüfen
+
+```bash
+docker logs --tail 20 loxone-ws-worker
+```
+
+➡️ **Erwartetes Ergebnis:** Sie sollten **diese Zeile** sehen:
+
+```
+[INFO] [Watchdog] aktiv: prüft alle 30s, Schwelle 300s
+```
+
+Und in der Startzeile darüber muss `version=phase3` stehen.
+
+### 12.8 In der Datenbank prüfen
+
+Öffnen Sie im AICONO-Backend die Tabelle **`bridge_workers`**. Der Eintrag `hetzner-bridge-test` muss jetzt:
+
+- **`version`** = `phase3`
+- **`last_heartbeat_at`** = jünger als 1 Minute
+
+Wenn beides stimmt, ist Phase 3 erfolgreich aktiv. Ab jetzt taucht im Fehlerfall in `bridge_event_log` der neue Ereignis-Typ **`watchdog_stale`** auf – das wäre das erste Mal in der Geschichte des Workers, dass wir „stille" Hänger direkt sehen, **bevor** ein Nutzer sie meldet.
+
+---
+
+## Schritt 13: Auf Phase 4 (Keep-Alive) aktualisieren
+
+Phase 4 ergänzt einen **Keep-Alive-Ping alle 60 Sekunden** an jeden Miniserver. Vorgehen ist **identisch zu Schritt 12** – nur die zu prüfende Versionsnummer ist anders. **Es werden keine Daten gelöscht.**
+
+### 13.1 Mit dem Server verbinden
+
+Wie in **Schritt 12.1**.
+
+### 13.2 In den Worker-Ordner wechseln
+
+Wie in **Schritt 12.2**.
+
+### 13.3 Die neue Datei `index.ts` auf den Server bringen
+
+Wie in **Schritt 12.3** (Nano-Anleitung) – mit einer Änderung im **letzten Prüf-Schritt (12.3.8)**:
+
+```bash
+grep "phase4" /opt/loxone-ws-worker/index.ts
+```
+
+➡️ **Erwartetes Ergebnis:** Mindestens eine Zeile mit `"phase4"`.
+> **Wenn nichts erscheint:** Die Datei wurde nicht richtig gespeichert. Wiederholen Sie die Schritte aus 12.3 noch einmal.
+
+### 13.4 Alten Container stoppen und löschen
+
+```bash
+docker rm -f loxone-ws-worker
+```
+
+### 13.5 Docker-Image neu bauen
+
+```bash
+docker build -t loxone-ws-worker .
+```
+
+### 13.6 Container neu starten
+
+Wie in **Schritt 12.6** – derselbe `docker run`-Befehl, keine Änderungen an den Umgebungsvariablen nötig.
+
+> **Optional:** Wenn Sie das Ping-Intervall ändern wollen, fügen Sie eine zusätzliche Zeile hinzu (Beispiel: alle 30 Sekunden statt 60):
+> ```
+>   -e KEEPALIVE_INTERVAL_MS=30000 \
+> ```
+> Wert `0` deaktiviert den Keep-Alive komplett (nicht empfohlen).
+
+### 13.7 Erfolg in den Logs prüfen
+
+```bash
+docker logs --tail 25 loxone-ws-worker
+```
+
+➡️ **Erwartetes Ergebnis:** Sie sollten **diese zwei neuen Zeilen** sehen:
+
+```
+[INFO] [Watchdog] aktiv: prüft alle 30s, Schwelle 300s
+[INFO] [Keepalive] aktiv: Ping alle 60s
+```
+
+Und in der Startzeile ganz oben muss `version=phase4` stehen.
+
+### 13.8 In der Datenbank prüfen
+
+Öffnen Sie im AICONO-Backend die Tabelle **`bridge_workers`**. Der Eintrag `hetzner-bridge-test` muss jetzt:
+
+- **`version`** = `phase4`
+- **`last_heartbeat_at`** = jünger als 1 Minute
+
+Wenn beides stimmt, ist Phase 4 erfolgreich aktiv. Ab jetzt taucht im Fehlerfall in `bridge_event_log` der neue Ereignis-Typ **`keepalive_failed`** auf – das bedeutet, der Worker hat selbständig erkannt, dass der Token oder Socket abgelaufen war, und sofort neu verbunden.
+
+---
+
+## Schritt 14: Auf Phase 5 (Smart-Split – echte Daten in die Datenbank) aktualisieren
+
+Ab Phase 5 schickt der Worker die Loxone-Werte **wirklich** an die AICONO-Cloud — in eine **Schatten-Tabelle** parallel zum bestehenden Polling-Pfad. Es wird **nichts** an den alten Daten verändert.
+
+> **Was wurde vorbereitet (haben wir schon erledigt, Sie müssen nichts tun):**
+> - Drei neue Tabellen in der AICONO-Datenbank: `bridge_raw_samples`, `meter_power_readings_5min_bridge`, `meter_cumulative_readings_bridge`
+> - Neue Cloud-Funktion `bridge-aggregator`, die alle 5 Minuten automatisch läuft
+> - Feature-Schalter `loxone_remote_connect_ws_enabled` ist für die 3 Miniserver Stadt Steinfurt bereits aktiviert
+>
+> **Was Sie jetzt machen müssen:** Den Worker-Container auf die neue Code-Version neu bauen — Vorgehen identisch zu Schritt 12 und 13, nur die zu prüfende Version ist anders.
+
+### 14.1 Mit dem Server verbinden
+
+Wie in **Schritt 12.1**.
+
+### 14.2 In den Worker-Ordner wechseln
+
+Wie in **Schritt 12.2**.
+
+### 14.3 Die neue Datei `index.ts` auf den Server bringen
+
+Wie in **Schritt 12.3** (Nano-Anleitung) – mit einer Änderung im **letzten Prüf-Schritt (12.3.8)**:
+
+```bash
+grep "phase5-smart-split" /opt/loxone-ws-worker/index.ts
+```
+
+➡️ **Erwartetes Ergebnis:** Mindestens eine Zeile mit `"phase5-smart-split"`.
+> **Wenn nichts erscheint:** Die Datei wurde nicht richtig gespeichert. Wiederholen Sie die Schritte aus 12.3 noch einmal.
+
+### 14.4 Alten Container stoppen und löschen
+
+```bash
+docker rm -f loxone-ws-worker
+```
+
+### 14.5 Docker-Image neu bauen
+
+```bash
+docker build -t loxone-ws-worker .
+```
+
+### 14.6 Container neu starten
+
+Wie in **Schritt 12.6** – derselbe `docker run`-Befehl, keine Änderungen an den Umgebungsvariablen nötig.
+
+### 14.7 Erfolg in den Logs prüfen
+
+Warten Sie **30 Sekunden** nach dem Start, dann:
+
+```bash
+docker logs loxone-ws-worker 2>&1 | grep -E "phase5-smart-split|aktive Miniserver"
+```
+
+➡️ **Erwartetes Ergebnis:**
+
+```
+[INFO] Loxone WS Worker startet — worker=hetzner-bridge-test host=hetzner-prod-1 version=phase5-smart-split
+[INFO] [Reload] aktive Miniserver: 3
+```
+
+Die Zahl `3` ist entscheidend — vorher war sie `0`, weil das Feature-Flag fehlte. Jetzt findet der Worker die Miniserver der Stadt Steinfurt.
+
+### 14.8 Nach 6 Minuten in der Datenbank prüfen, ob Daten kommen
+
+Warten Sie nach dem Container-Start **mindestens 6 Minuten** (Worker pusht alle 5 s in `bridge_raw_samples`, Aggregator läuft alle 5 Min und schreibt in die Schatten-Tabelle).
+
+Im AICONO-Backend (Super-Admin) folgende Tabellen prüfen:
+
+**a) `bridge_raw_samples`** — Roh-Werte vom Worker:
+- Sollte **viele Zeilen** mit `received_at` der letzten Minuten enthalten
+- Spalte `miniserver_serial` zeigt die 3 Loxone-Seriennummern
+- Spalte `processed_at` ist **NULL für ganz frische Zeilen** (gut!) und **gefüllt für ältere** (Aggregator hat sie verarbeitet)
+
+**b) `meter_power_readings_5min_bridge`** — aggregierte Werte:
+- Sollte alle 5 Minuten **neue Zeilen** bekommen, eine pro Zähler pro 5-Min-Block
+- Spalte `source` = `bridge_ws`
+- Spalte `sample_count` zeigt, wie viele Roh-Werte aggregiert wurden (typisch 1–60)
+
+**c) `bridge_workers`**:
+- `version` = `phase5-smart-split`
+- `last_heartbeat_at` = jünger als 1 Minute
+
+### 14.9 Wenn nach 10 Minuten keine Daten in den Tabellen sind
+
+1. Worker-Logs auf Fehler prüfen:
+   ```bash
+   docker logs --tail 50 loxone-ws-worker 2>&1 | grep -E "Flush|fehlgeschlagen|error"
+   ```
+   - Erwartet: `[Flush] N Roh-Samples an bridge-readings gepusht` (alle 5 s)
+   - Falls `Flush fehlgeschlagen` → Fehlertext an Lovable schicken.
+
+2. Aggregator-Logs in der AICONO-Cloud prüfen (Backend → Edge Functions → `bridge-aggregator` → Logs). Letzter Eintrag sollte ein JSON wie `{"raw_read":523,"buckets_written":47,...}` sein.
+
+3. Wenn `unmapped_uuids` hoch ist, heißt das: der Worker sendet UUIDs, denen kein Zähler (Tabelle `meters`) zugeordnet ist. Das ist **normal für Option A** (= alle UUIDs der Loxone-Struktur). Wir filtern später in Phase 6 nach Zuordnung.
+
+---
+
+## Schritt 15: Auf Phase 5.1 (analoge Events – kWh, Power, Zählerstände) aktualisieren
+
+In Phase 5 hat der Worker zwar erfolgreich verbunden und Roh-Samples gepusht, es kamen aber **nur binäre Werte** (z. B. Wasserimpulse, Status-Bits) an. Der Grund: Der Befehl `enablebinstatusupdate` aktiviert beim Miniserver **ausschließlich binäre** Status-Pushes. Für **analoge** Werte (Energie in kWh, Leistung in W, Zählerstände, Temperaturen) muss zusätzlich `enablestatusupdate` gesendet werden.
+
+> **Was wurde geändert (haben wir bereits gemacht):**
+> - In `index.ts` wird nach `enablebinstatusupdate` zusätzlich `enablestatusupdate` gesendet.
+> - Die Versionskennung lautet jetzt `phase5.1-analog-events`.
+>
+> **Was Sie jetzt machen müssen:** Den Worker-Container mit der neuen `index.ts` neu bauen — Vorgehen identisch zu Schritt 14, nur die zu prüfende Version ist anders.
+
+### 15.1 Mit dem Server verbinden
+
+Wie in **Schritt 12.1**.
+
+### 15.2 In den Worker-Ordner wechseln
+
+Wie in **Schritt 12.2**.
+
+### 15.3 Die neue Datei `index.ts` auf den Server bringen
+
+Wie in **Schritt 12.3** (Nano-Anleitung) – mit dieser Änderung im **letzten Prüf-Schritt (12.3.8)**:
+
+```bash
+grep "phase5.1-analog-events" /opt/loxone-ws-worker/index.ts
+```
+
+➡️ **Erwartetes Ergebnis:** Mindestens eine Zeile mit `"phase5.1-analog-events"`.
+> **Wenn nichts erscheint:** Die Datei wurde nicht richtig gespeichert. Wiederholen Sie die Schritte aus 12.3 noch einmal.
+
+Zur Sicherheit zusätzlich prüfen, dass **beide** Subscribe-Befehle in der Datei stehen:
+
+```bash
+grep -E "enablebinstatusupdate|enablestatusupdate" /opt/loxone-ws-worker/index.ts
+```
+
+➡️ **Erwartetes Ergebnis:** **zwei** Zeilen — eine mit `enablebinstatusupdate`, eine mit `enablestatusupdate`.
+
+### 15.4 Alten Container stoppen und löschen
+
+```bash
+docker rm -f loxone-ws-worker
+```
+
+### 15.5 Docker-Image neu bauen
+
+```bash
+docker build -t loxone-ws-worker .
+```
+
+### 15.6 Container neu starten
+
+Wie in **Schritt 12.6** – derselbe `docker run`-Befehl, keine Änderungen an den Umgebungsvariablen nötig.
+
+### 15.7 Erfolg in den Logs prüfen
+
+Warten Sie **30 Sekunden** nach dem Start, dann:
+
+```bash
+docker logs loxone-ws-worker 2>&1 | grep -E "phase5.1-analog-events|aktive Miniserver|authentifiziert"
+```
+
+➡️ **Erwartetes Ergebnis:**
+
+```
+[INFO] Loxone WS Worker startet — worker=hetzner-bridge-test host=hetzner-prod-1 version=phase5.1-analog-events
+[INFO] [Reload] aktive Miniserver: 3
+[INFO] [WS] authentifiziert 504F94A22D9C (30 UUIDs)
+[INFO] [WS] authentifiziert 504F94A2BAA2 (10 UUIDs)
+[INFO] [WS] authentifiziert 504F94D107EE (7 UUIDs)
+```
+
+### 15.8 Nach 5–10 Minuten in der Datenbank prüfen, ob analoge Werte ankommen
+
+Warten Sie nach dem Container-Start **mindestens 5 Minuten** und lassen Sie idealerweise an einem Verbraucher tatsächlich Strom fließen (sonst sendet Loxone keine Wert-Änderungen).
+
+Geben Sie Lovable kurz Bescheid mit `prüfen`, sobald 5 Minuten vergangen sind. Wir prüfen dann in der Datenbank:
+
+- **`bridge_raw_samples`** sollte jetzt **deutlich mehr unterschiedliche UUIDs** mit **wechselnden Werten** enthalten (vorher: nur 2 UUIDs, beide konstant 0/1).
+- **`meter_power_readings_5min_bridge`** sollte neue 5-Min-Buckets mit `source = bridge_ws` und Werten **> 0** für Leistungs-Zähler bekommen.
+- **`bridge_workers.version`** = `phase5.1-analog-events`.
+
+### 15.9 Wenn nach 10 Minuten immer noch nur binäre Werte ankommen
+
+1. Im Worker-Log nach Push-Aktivität schauen:
+   ```bash
+   docker logs --tail 100 loxone-ws-worker 2>&1 | grep -E "Flush|Samples|enablestatus"
+   ```
+   Erwartet: regelmäßige `[Flush] N Roh-Samples ...`-Zeilen, wobei `N` größer ist als vor dem Update.
+
+2. Falls weiterhin nur 2 UUIDs Werte liefern: An Lovable melden mit der Ausgabe von Schritt 15.7. Dann prüfen wir Option C (`jdev/sps/io/<uuid>/all` explizit pro UUID abfragen).
+
+---
+
+## Schritt 16: Auf Phase 5.2 (Per-UUID-Subscribe – Option C) aktualisieren
+
+Phase 5.1 (nur `enablestatusupdate`) hat bei den getesteten Miniservern **nicht** ausgereicht — es kamen weiterhin nur zwei binäre Status-UUIDs an, keine analogen Werte (kWh, Power, Zählerstände). In Phase 5.2 fragt der Worker daher nach erfolgreichem Login **gezielt für jede einzelne abonnierte UUID** den Befehl `jdev/sps/io/<uuid>/all` ab. Das hat zwei Effekte:
+
+1. Der Miniserver liefert in der Antwort **sofort den aktuellen Wert** der UUID (Initial-Sample).
+2. Die UUID wird vom Miniserver in den **Live-Push-Stream aufgenommen**, sodass danach Wert-Änderungen automatisch gepusht werden.
+
+> **Was wurde geändert (haben wir bereits gemacht):**
+> - In `index.ts` wird nach `enablestatusupdate` für jede UUID `jdev/sps/io/<uuid>/all` gesendet.
+> - Die Versionskennung lautet jetzt `phase5.2-per-uuid-subscribe`.
+> - Eine neue Log-Zeile zeigt das Ergebnis: `[WS] <serial> per-UUID subscribe: ok=<n> err=<m>`.
+>
+> **Was Sie jetzt machen müssen:** Den Worker-Container mit der neuen `index.ts` neu bauen — Vorgehen identisch zu Schritt 15, nur die zu prüfende Version ist anders.
+
+### 16.1 Mit dem Server verbinden
+
+Wie in **Schritt 12.1**.
+
+### 16.2 In den Worker-Ordner wechseln
+
+Wie in **Schritt 12.2**.
+
+### 16.3 Die neue Datei `index.ts` auf den Server bringen
+
+Wie in **Schritt 12.3** (Nano-Anleitung) – mit dieser Änderung im **letzten Prüf-Schritt (12.3.8)**:
+
+```bash
+grep "phase5.2-per-uuid-subscribe" /opt/loxone-ws-worker/index.ts
+```
+
+➡️ **Erwartetes Ergebnis:** Mindestens eine Zeile mit `"phase5.2-per-uuid-subscribe"`.
+> **Wenn nichts erscheint:** Die Datei wurde nicht richtig gespeichert. Wiederholen Sie die Schritte aus 12.3 noch einmal.
+
+Zur Sicherheit zusätzlich prüfen, dass die neue Subscribe-Schleife in der Datei steht:
+
+```bash
+grep -E "per-UUID subscribe|jdev/sps/io/\\\$\\{uuid\\}/all" /opt/loxone-ws-worker/index.ts
+```
+
+➡️ **Erwartetes Ergebnis:** **zwei** Zeilen — eine mit `per-UUID subscribe` (Log-Text) und eine mit `jdev/sps/io/${uuid}/all` (die eigentliche Anfrage).
+
+### 16.4 Alten Container stoppen und löschen
+
+```bash
+docker rm -f loxone-ws-worker
+```
+
+### 16.5 Docker-Image neu bauen
+
+```bash
+docker build -t loxone-ws-worker .
+```
+
+### 16.6 Container neu starten
+
+Wie in **Schritt 12.6** – derselbe `docker run`-Befehl, keine Änderungen an den Umgebungsvariablen nötig.
+
+### 16.7 Erfolg in den Logs prüfen
+
+Warten Sie **30 Sekunden** nach dem Start, dann:
+
+```bash
+docker logs loxone-ws-worker 2>&1 | grep -E "phase5.2-per-uuid-subscribe|aktive Miniserver|authentifiziert|per-UUID subscribe"
+```
+
+➡️ **Erwartetes Ergebnis (Beispiel):**
+
+```
+[INFO] Loxone WS Worker startet — worker=hetzner-bridge-test host=hetzner-prod-1 version=phase5.2-per-uuid-subscribe
+[INFO] [Reload] aktive Miniserver: 3
+[INFO] [WS] authentifiziert 504F94A22D9C (30 UUIDs)
+[INFO] [WS] 504F94A22D9C per-UUID subscribe: ok=30 err=0
+[INFO] [WS] authentifiziert 504F94A2BAA2 (10 UUIDs)
+[INFO] [WS] 504F94A2BAA2 per-UUID subscribe: ok=10 err=0
+[INFO] [WS] authentifiziert 504F94D107EE (7 UUIDs)
+[INFO] [WS] 504F94D107EE per-UUID subscribe: ok=7 err=0
+```
+
+> **Wichtig:** `ok=<n>` sollte möglichst der UUID-Anzahl entsprechen, `err=<m>` idealerweise `0`. Falls `err` hoch ist: Das bedeutet, dass diese UUIDs auf dem Miniserver gar nicht (mehr) existieren — dann ist die Konfiguration in der AICONO-Integration veraltet und sollte überprüft werden.
+
+### 16.8 Nach 5–10 Minuten in der Datenbank prüfen, ob analoge Werte ankommen
+
+Warten Sie nach dem Container-Start **mindestens 5 Minuten** und lassen Sie idealerweise an einem Verbraucher tatsächlich Strom fließen.
+
+Geben Sie Lovable kurz Bescheid mit `prüfen`, sobald 5 Minuten vergangen sind. Wir prüfen dann in der Datenbank:
+
+- **`bridge_raw_samples`** sollte jetzt **deutlich mehr unterschiedliche UUIDs** mit **wechselnden Werten** enthalten — auch für die Miniserver Jugendzentrum (504F94A2BAA2) und Rathaus (504F94D107EE), die in Phase 5.1 noch gar nichts geliefert haben.
+- **`meter_power_readings_5min_bridge`** sollte neue 5-Min-Buckets mit `source = bridge_ws` und Werten **> 0** für Leistungs-Zähler bekommen.
+- **`bridge_workers.version`** = `phase5.2-per-uuid-subscribe`.
+
+### 16.9 Wenn auch Phase 5.2 keine analogen Werte liefert
+
+Dann hat das Miniserver-Modell auf diesem Firmware-Stand keinen funktionierenden WebSocket-Push für analoge Werte. In dem Fall sagen Sie uns kurz Bescheid — wir greifen dann auf das bestehende HTTP-Polling als Datenquelle zurück (läuft ohnehin parallel weiter, keine Datenlücke).
+
+---
+
+
+
+
+
+
+
+
+
+
+
+
+## Befehle für später (Stoppen, Neustarten, Löschen)
+
+Sie müssen diese jetzt nicht ausführen, aber merken Sie sich diese Befehle für den Fall, dass Sie etwas ändern möchten:
+
+| Was möchten Sie? | Befehl |
+|---|---|
+| Programm anhalten (ohne zu löschen) | `docker stop loxone-ws-worker` |
+| Programm wieder starten | `docker start loxone-ws-worker` |
+| Programm komplett neu starten | `docker restart loxone-ws-worker` |
+| Programm und Box löschen | `docker rm -f loxone-ws-worker` |
+| Logs anschauen (live) | `docker logs -f loxone-ws-worker` |
+| Logs anschauen (letzte 50 Zeilen) | `docker logs --tail 50 loxone-ws-worker` |
+| Alle laufenden Boxen anzeigen | `docker ps` |
+
+> **Wichtig:** Wenn Sie Programm-Code ändern, sichern Sie zuerst die Container-Konfiguration mit `docker inspect` (siehe Schritt 12.4). Erst danach darf der Container ersetzt werden. Niemals direkt mit `docker rm -f` beginnen.
+
+---
+
+## Wenn etwas nicht klappt
+
+### „docker: command not found“
+
+Docker ist nicht installiert. Fragen Sie Ihren Administrator, ob Docker auf dem Server vorhanden ist. Falls nicht, muss er es installieren.
+
+### „FATAL: SUPABASE_URL und GATEWAY_API_KEY müssen gesetzt sein“
+
+Sie haben in Schritt 7 die Platzhalter `[HIER_SUPABASE_URL]` und `[HIER_API_KEY]` nicht durch die richtigen Werte ersetzt. Löschen Sie den Container nicht direkt, sondern prüfen Sie zuerst die gesicherten Werte aus Schritt 12.4 oder holen Sie den API-Key erneut aus der Live-App.
+
+### „aktive Miniserver: 0“ bleibt für immer
+
+1. Prüfen Sie im AICONO-Backend, ob der Standort wirklich freigeschaltet ist (Schritt 9).
+2. Prüfen Sie, ob in der Loxone-Integration die **Seriennummer, der Benutzername und das Passwort** korrekt eingetragen sind.
+3. Warten Sie noch etwas – es kann bis zu 5 Minuten dauern.
+
+### „WS Verbindung fehlgeschlagen“
+
+1. Prüfen Sie, ob der Miniserver überhaupt online ist (können Sie sich normal in die Loxone-App einloggen?).
+2. Prüfen Sie, ob Benutzername und Passwort in der Integration stimmen.
+3. Prüfen Sie, ob der Miniserver über Remote Connect erreichbar ist (dns.loxonecloud.com).
+
+### „bridge_workers" zeigt `status = offline` oder kein `last_heartbeat_at`
+
+1. `docker logs --tail 100 loxone-ws-worker` aufrufen und nach Zeilen mit `[Bridge]` suchen.
+2. Prüfen Sie, dass die Umgebungsvariable `BRIDGE_WORKER_NAME` exakt dem Eintrag in der Tabelle entspricht (Standard: `hetzner-bridge-test`).
+3. Prüfen Sie, ob der `GATEWAY_API_KEY` korrekt ist – dieselbe Variable wird auch für `bridge-heartbeat` verwendet.
+
+### `curl http://127.0.0.1:8080/healthz` gibt keine Antwort
+
+1. Im Container ist der Health-Server vielleicht abgeschaltet. Prüfen Sie in `docker logs` nach der Zeile `[Health] HTTP-Endpoint auf Port 8080`.
+2. Falls Sie den Port von außen erreichen wollen: Stellen Sie sicher, dass beim `docker run` der Parameter `-p 8080:8080` mit angegeben wurde, und dass Ihre Firewall den Port nicht blockiert.
+
+### Ich habe mich vertippt und weiß nicht, wie ich zurückkomme
+
+Drücken Sie **Strg + C**. Das bricht den aktuellen Befehl ab. Dann können Sie es nochmal versuchen.
+
+---
+
+## Noch Fragen?
+
+Wenn Sie an einer Stelle nicht weiterkommen, machen Sie einen **Screenshot** des Terminal-Fensters und schreiben Sie eine kurze E-Mail an **support@aicono.org** mit dem Betreff „Loxone WS Worker Einrichtung“. Fügen Sie den Screenshot bei.
+
+> **Denken Sie daran:** Sagen Sie uns Bescheid, sobald Sie einen Schritt geschafft haben (z. B. „Schritt 6 ist fertig, das Image wurde gebaut“). So können wir Sie bei Problemen gezielt unterstützen, bevor Sie mit dem nächsten Schritt weitermachen.
+
+---
+
+# Anhang: Zweiten Worker für die LIVE-Umgebung auf demselben Server einrichten
+
+> **Wann brauchen Sie diesen Anhang?**
+> Sie haben bereits den Test-Worker (`loxone-ws-worker`) auf Ihrem Hetzner-Server laufen und möchten **zusätzlich** einen zweiten Worker einrichten, der die Daten in die **Produktiv-Umgebung (Live)** schickt. Beide Worker laufen dann **gleichzeitig** auf demselben Server, nebeneinander, ohne sich gegenseitig zu stören.
+>
+> **Wichtig:** Sie müssen den Test-Worker dafür NICHT anhalten oder löschen. Er läuft einfach weiter.
+
+## Was ist anders als beim Test-Worker?
+
+Damit zwei Worker friedlich auf einem Server leben können, müssen sich nur drei Dinge unterscheiden:
+
+| Was | Test-Worker (alt) | Live-Worker (neu) |
+|---|---|---|
+| Container-Name | `loxone-ws-worker` | `loxone-ws-worker-live` |
+| Arbeitsordner | `/opt/loxone-ws-worker` | `/opt/loxone-ws-worker-live` |
+| Health-Port (Statusseite) | `8080` | `8081` |
+| SUPABASE_URL | Test-Backend-URL | **Live-Backend-URL** |
+| GATEWAY_API_KEY | Test-API-Key | **Live-API-Key** |
+
+Alles andere (der Programm-Code in `index.ts`, `package.json`, `Dockerfile`) ist **identisch** — wir kopieren die Dateien einfach 1:1 in einen neuen Ordner.
+
+---
+
+## Schritt L1: Die Live-SUPABASE-URL
+
+Bei diesem Projekt läuft die Live-Datenbank (Supabase) **selbst gehostet** auf demselben Hetzner-Server wie die App. Die Adresse ist fest und lautet:
+
+```
+https://api-ems.aicono.org
+```
+
+Schreiben Sie diesen Wert in Ihr Notiz-Dokument und beschriften Sie ihn mit **„LIVE_SUPABASE_URL"**.
+
+> **Hinweis:** Die App selbst läuft unter `https://ems.aicono.org` — das ist **nicht** die SUPABASE_URL. Verwenden Sie für den Worker **ausschließlich** `https://api-ems.aicono.org` (das ist das API-Tor zur Datenbank). Kein Schrägstrich am Ende.
+
+
+
+---
+
+## Schritt L2: Den Live-GATEWAY_API_KEY holen
+
+1. Bleiben Sie in Ihrer **Live-AICONO-App**.
+2. Klicken Sie links im Menü auf **Einstellungen**.
+3. Klicken Sie auf **Integrationen**.
+4. Klicken Sie oben auf den Reiter **API**.
+5. Sie sehen ein Feld mit der Beschriftung **API-Key** (oder „Gateway API Key"). Daneben ist ein Kopier-Knopf (kleines Symbol mit zwei übereinanderliegenden Rechtecken).
+6. Klicken Sie auf den **Kopier-Knopf**.
+7. Fügen Sie den kopierten Wert in Ihrem Notiz-Dokument ein. Beschriften Sie ihn mit **„LIVE_GATEWAY_API_KEY"**.
+
+> **Falls dort noch kein API-Key steht:** Klicken Sie auf **„Neuen API-Key erstellen"**, vergeben Sie als Name z. B. `Loxone Live Worker` und kopieren Sie den dann angezeigten Wert sofort — er wird aus Sicherheitsgründen nur einmal angezeigt.
+
+---
+
+## Schritt L3: Auf dem Server einen neuen Ordner anlegen
+
+Verbinden Sie sich wie in Schritt 0 (oben in der Hauptanleitung) per SSH auf Ihren Hetzner-Server. Sobald Sie die Zeile `root@mein-server:~#` sehen, geben Sie folgende Befehle **einzeln nacheinander** ein und drücken nach jedem Befehl **Enter**:
+
+```bash
+mkdir -p /opt/loxone-ws-worker-live
+```
+
+```bash
+cd /opt/loxone-ws-worker-live
+```
+
+> **Was passiert hier?** Sie erstellen einen neuen, eigenen Ordner für den Live-Worker und wechseln dorthin. Der Test-Worker im Ordner `/opt/loxone-ws-worker` bleibt davon unberührt.
+
+Wenn Sie jetzt `pwd` eingeben und Enter drücken, muss als Antwort kommen:
+
+```
+/opt/loxone-ws-worker-live
+```
+
+---
+
+## Schritt L4: Die vier Programmdateien aus dem Test-Ordner kopieren
+
+Die vier Dateien (`package.json`, `tsconfig.json`, `index.ts`, `Dockerfile`) sind beim Live-Worker exakt dieselben wie beim Test-Worker. Wir kopieren sie deshalb einfach. Geben Sie diesen einen Befehl ein (alles in einer Zeile) und drücken Sie **Enter**:
+
+```bash
+cp /opt/loxone-ws-worker/package.json /opt/loxone-ws-worker/tsconfig.json /opt/loxone-ws-worker/index.ts /opt/loxone-ws-worker/Dockerfile /opt/loxone-ws-worker-live/
+```
+
+Prüfen Sie mit:
+
+```bash
+ls /opt/loxone-ws-worker-live
+```
+
+Es müssen **genau diese vier Dateien** angezeigt werden:
+
+```
+Dockerfile  index.ts  package.json  tsconfig.json
+```
+
+> **Wichtig:** Wenn später eine neue Version des Worker-Codes kommt, müssen Sie diesen Kopier-Befehl noch einmal ausführen, damit der Live-Worker auch die neueste Version bekommt.
+
+---
+
+## Schritt L5: Eigenes Docker-Image für den Live-Worker bauen
+
+Geben Sie diesen Befehl ein und drücken Sie **Enter** (Sie müssen im Ordner `/opt/loxone-ws-worker-live` sein — der Punkt am Ende ist wichtig):
+
+```bash
+docker build -t loxone-ws-worker-live .
+```
+
+> **Was passiert hier?** Docker baut aus den vier Dateien eine eigene „Box" (Image) mit dem Namen `loxone-ws-worker-live`. Das dauert 1–3 Minuten. Es scrollen viele Zeilen vorbei — das ist normal. Am Ende muss eine Zeile kommen wie:
+>
+> ```
+> Successfully tagged loxone-ws-worker-live:latest
+> ```
+
+Falls eine Fehlermeldung kommt, gehen Sie zum Hauptkapitel **„Häufige Probleme"** der Anleitung oben.
+
+---
+
+## Schritt L6: Den Live-Worker-Container starten
+
+Jetzt kommt der wichtigste Schritt. Sie brauchen die zwei Werte aus den Schritten L1 und L2 aus Ihrem Notiz-Dokument.
+
+**Kopieren Sie den folgenden Block in Ihren Editor (z. B. Windows-Editor / TextEdit)** und ersetzen Sie die beiden eckigen Klammern durch Ihre Werte:
+
+```bash
+docker run -d --restart=always --name loxone-ws-worker-live \
+  -p 8081:8080 \
+  -e SUPABASE_URL=[HIER_LIVE_SUPABASE_URL] \
+  -e GATEWAY_API_KEY=[HIER_LIVE_API_KEY] \
+  loxone-ws-worker-live
+```
+
+**Beispiel mit echten Live-Werten** (SUPABASE_URL ist hier bereits korrekt eingetragen; nur den API-Key noch ersetzen):
+
+```bash
+docker run -d --restart=always --name loxone-ws-worker-live \
+  -p 8081:8080 \
+  -e SUPABASE_URL=https://api-ems.aicono.org \
+  -e GATEWAY_API_KEY=[HIER_LIVE_API_KEY] \
+  loxone-ws-worker-live
+```
+
+**Worauf Sie achten müssen, bevor Sie auf Enter drücken:**
+
+- Alle vier Backslashes (`\`) am Zeilenende sind drin (kein Leerzeichen dahinter!).
+- Die eckigen Klammern `[` und `]` beim API-Key sind **vollständig entfernt** und durch Ihren echten Live-Wert ersetzt.
+- Die SUPABASE_URL lautet **exakt** `https://api-ems.aicono.org` (kein Schrägstrich am Ende).
+- Der Container-Name ist `loxone-ws-worker-live` (NICHT `loxone-ws-worker` — sonst überschreiben Sie den Test-Worker).
+- Der Port ist `8081:8080` (NICHT `8080:8080` — Port 8080 ist vom Test-Worker belegt).
+
+Jetzt den fertigen Befehl ins Terminal einfügen (Rechtsklick → Einfügen im SSH-Fenster) und **Enter** drücken.
+
+Wenn alles passt, kommt nach 1–2 Sekunden eine lange Hex-Zahl als Antwort (z. B. `4f8a2b...`). **Das ist gut** — der Container läuft jetzt im Hintergrund.
+
+---
+
+## Schritt L7: Prüfen, dass beide Worker laufen
+
+Geben Sie ein:
+
+```bash
+docker ps
+```
+
+Sie müssen **zwei Zeilen** mit Container-Namen sehen:
+
+```
+CONTAINER ID   IMAGE                    ...   PORTS                    NAMES
+xxxxxxx        loxone-ws-worker-live    ...   0.0.0.0:8081->8080/tcp   loxone-ws-worker-live
+yyyyyyy        loxone-ws-worker         ...   0.0.0.0:8080->8080/tcp   loxone-ws-worker
+```
+
+**Wenn Sie nur einen sehen:** Etwas ist schiefgegangen. Mit `docker ps -a` sehen Sie auch gestoppte Container, und mit `docker logs loxone-ws-worker-live` die letzten Fehlermeldungen.
+
+### Statusseite des Live-Workers prüfen
+
+```bash
+curl http://localhost:8081/healthz
+```
+
+Erwartete Antwort:
+
+```
+ok
+```
+
+### Live-Logs ansehen (für 20 Sekunden, dann mit Strg+C abbrechen)
+
+```bash
+docker logs -f --tail 50 loxone-ws-worker-live
+```
+
+Sie sollten Zeilen sehen wie:
+
+```
+[INFO] Loxone WS Worker startet...
+[INFO]   SUPABASE_URL=https://abcdefg12345.supabase.co
+[INFO]   GATEWAY_API_KEY=sk_live_***
+[INFO] Heartbeat gesendet
+[INFO] Verbinde zu Miniserver ...
+```
+
+Wenn Sie `[FATAL]`-Zeilen sehen, schauen Sie ins Hauptkapitel **„Häufige Probleme"** ganz unten in der Anleitung.
+
+---
+
+## Schritt L8: In der Live-AICONO-App prüfen
+
+1. Öffnen Sie die **Live-AICONO-App** im Browser.
+2. Gehen Sie zu **Einstellungen → Integrationen**.
+3. Suchen Sie den Bereich **Bridge-Worker** (oder „Worker-Status").
+4. Innerhalb von 1–2 Minuten muss dort ein neuer Eintrag erscheinen, der als **„online"** / grün angezeigt wird.
+5. Wenn Sie an einem Loxone-Standort schauen, müssen innerhalb weniger Minuten neue Messwerte ankommen.
+
+**Fertig!** Ab jetzt laufen beide Worker parallel: Der Test-Worker liefert weiterhin in die Test-Datenbank, der Live-Worker neu in die Live-Datenbank.
+
+---
+
+## Wenn etwas nicht funktioniert
+
+| Symptom | Was tun |
+|---|---|
+| `docker ps` zeigt den Live-Worker nicht | `docker logs loxone-ws-worker-live` — die Fehlermeldung sagt meist direkt, was fehlt (meistens falsche SUPABASE_URL oder API_KEY) |
+| Logs zeigen `401 Unauthorized` | API_KEY ist falsch oder stammt aus dem Test-System. Schritt L2 wiederholen, dann mit `docker rm -f loxone-ws-worker-live` löschen und Schritt L6 neu ausführen |
+| Logs zeigen `getaddrinfo ENOTFOUND` | SUPABASE_URL ist falsch geschrieben. Schritt L1 wiederholen |
+| Port 8081 bereits belegt | Anderen Port wählen, z. B. `-p 8082:8080`, sonst alles gleich lassen |
+| Bridge-Worker erscheint nicht in der Live-App | 2 Minuten warten, Browser-Tab mit Strg+F5 hart neu laden |
+
+Bei allem anderen: Screenshot vom Terminal + kurze Beschreibung an **support@aicono.org** mit Betreff „Loxone WS Worker Live Einrichtung".

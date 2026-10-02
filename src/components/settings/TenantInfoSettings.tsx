@@ -1,14 +1,22 @@
 import { useState, useEffect } from "react";
-import { useTenant } from "@/hooks/useTenant";
+import { useTenant, type TenantType } from "@/hooks/useTenant";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, Save } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+
+const TENANT_TYPE_OPTIONS: { value: TenantType; label: string }[] = [
+  { value: "gewerbe_industrie", label: "Gewerbe / Industrie" },
+  { value: "kommune", label: "Kommune" },
+  { value: "privat", label: "Privat" },
+  { value: "sonstige", label: "Sonstige" },
+];
 
 export function TenantInfoSettings() {
   const { tenant, refetch } = useTenant();
@@ -17,11 +25,11 @@ export function TenantInfoSettings() {
   const { t } = useTranslation();
   const [saving, setSaving] = useState(false);
 
-  const [form, setForm] = useState({ name: "", street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "" });
+  const [form, setForm] = useState({ name: "", tenant_type: "kommune" as TenantType, street: "", house_number: "", postal_code: "", city: "", contact_person: "", contact_email: "" });
 
   useEffect(() => {
     if (tenant) {
-      setForm({ name: tenant.name || "", street: tenant.street || "", house_number: tenant.house_number || "", postal_code: tenant.postal_code || "", city: tenant.city || "", contact_person: tenant.contact_person || "", contact_email: tenant.contact_email || "" });
+      setForm({ name: tenant.name || "", tenant_type: tenant.tenant_type || "kommune", street: tenant.street || "", house_number: tenant.house_number || "", postal_code: tenant.postal_code || "", city: tenant.city || "", contact_person: tenant.contact_person || "", contact_email: tenant.contact_email || "" });
     }
   }, [tenant]);
 
@@ -31,7 +39,7 @@ export function TenantInfoSettings() {
 
   const handleSave = async () => {
     setSaving(true);
-    const { error } = await supabase.from("tenants").update({ name: form.name.trim() || tenant.name, street: form.street.trim() || null, house_number: form.house_number.trim() || null, postal_code: form.postal_code.trim() || null, city: form.city.trim() || null, contact_person: form.contact_person.trim() || null, contact_email: form.contact_email.trim() || null }).eq("id", tenant.id);
+    const { error } = await supabase.from("tenants").update({ name: form.name.trim() || tenant.name, tenant_type: form.tenant_type, street: form.street.trim() || null, house_number: form.house_number.trim() || null, postal_code: form.postal_code.trim() || null, city: form.city.trim() || null, contact_person: form.contact_person.trim() || null, contact_email: form.contact_email.trim() || null } as any).eq("id", tenant.id);
     setSaving(false);
     if (error) {
       toast({ title: t("common.error"), description: t("tenantInfo.saveError" as any), variant: "destructive" });
@@ -54,6 +62,18 @@ export function TenantInfoSettings() {
         <div className="space-y-2">
           <Label htmlFor="tenant-name">{t("tenantInfo.name" as any)}</Label>
           <Input id="tenant-name" value={form.name} onChange={(e) => handleChange("name", e.target.value)} placeholder={t("tenantInfo.namePlaceholder" as any)} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="tenant-type">Art des Mandanten</Label>
+          <Select value={form.tenant_type} onValueChange={(v) => setForm((prev) => ({ ...prev, tenant_type: v as TenantType }))}>
+            <SelectTrigger id="tenant-type"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {TENANT_TYPE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">Bestimmt u.&nbsp;a. die Ausrichtung des Energieberichts. Aktuell ist der Bericht ausschließlich für kommunale Berichtspflichten ausgelegt; weitere Varianten folgen.</p>
         </div>
         <div className="space-y-2">
           <Label>{t("tenantInfo.address" as any)}</Label>

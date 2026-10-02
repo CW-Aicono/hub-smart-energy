@@ -12,9 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Server, Loader2, Plug, Wifi, WifiOff, Globe, Smartphone } from "lucide-react";
+import { Server, Loader2, Plug, Wifi, WifiOff, Globe, Smartphone, HardDrive, Activity } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiSettings } from "@/components/settings/ApiSettings";
+import { AiconoHubManager } from "@/components/integrations/AiconoHubManager";
+import { SmartMeterImport } from "@/components/integrations/SmartMeterImport";
 import { getGatewayDefinition } from "@/lib/gatewayRegistry";
 
 const Integrations = () => {
@@ -89,7 +91,8 @@ const Integrations = () => {
 
     try {
       const edgeFunction = gatewayDef?.edgeFunctionName || "loxone-api";
-      const { data, error: fnError } = await supabase.functions.invoke(edgeFunction, {
+      const { invokeWithRetry } = await import("@/lib/invokeWithRetry");
+      const { data, error: fnError } = await invokeWithRetry(edgeFunction, {
         body: { locationIntegrationId: locIntegrations[0].id, action: "getSensors" },
       });
       const success = !fnError && data?.success;
@@ -168,15 +171,24 @@ const Integrations = () => {
                 <Server className="h-4 w-4" />
                 Gateways
               </TabsTrigger>
+              <TabsTrigger value="hub" className="gap-2">
+                <HardDrive className="h-4 w-4" />
+                {t("aiconoHub.title")}
+              </TabsTrigger>
               <TabsTrigger value="scanners" className="gap-2">
                 <Smartphone className="h-4 w-4" />
                 Mobile Scanner
+              </TabsTrigger>
+              <TabsTrigger value="smart-meter" className="gap-2">
+                <Activity className="h-4 w-4" />
+                Smart-Meter
               </TabsTrigger>
               <TabsTrigger value="api" className="gap-2">
                 <Globe className="h-4 w-4" />
                 API
               </TabsTrigger>
             </TabsList>
+
 
             <TabsContent value="gateways">
               {loading ? (
@@ -253,8 +265,16 @@ const Integrations = () => {
               )}
             </TabsContent>
 
+            <TabsContent value="hub">
+              <AiconoHubManager />
+            </TabsContent>
+
             <TabsContent value="scanners">
               <ScannerManagement />
+            </TabsContent>
+
+            <TabsContent value="smart-meter">
+              <SmartMeterImport />
             </TabsContent>
 
             <TabsContent value="api">

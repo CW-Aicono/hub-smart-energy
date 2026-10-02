@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { resendFrom } from "../_shared/resend-from.ts";
 
 function formatDE(n: number, decimals = 2): string {
   return n.toLocaleString("de-DE", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
@@ -12,6 +13,26 @@ function formatDateDE(d: string): string {
   if (parts.length === 3) return `${parts[2]}.${parts[1]}.${parts[0]}`;
   return d;
 }
+
+/**
+ * K1 Eichrecht: HMAC-SHA256 Token für public-ocmf-download.
+ * Muss identisch sein zur Berechnung in supabase/functions/public-ocmf-download.
+ */
+async function ocmfDownloadToken(sessionId: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(sessionId));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+
 
 function getLastMonth(): { from: string; to: string; label: string } {
   const now = new Date();
@@ -41,6 +62,7 @@ function buildInvoiceHTML(
   invoiceNumber: string,
   userName: string,
   userEmail: string,
+  userTags: { tag: string; label: string | null }[],
   sessions: any[],
   tariffName: string,
   pricePerKwh: number,
@@ -63,27 +85,72 @@ function buildInvoiceHTML(
 ): string {
   const currencySymbol = currency === "EUR" ? "€" : currency;
 
-  const sessionRows = sessions.map((s: any, i: number) => {
+  const tagLabelMap = new Map<string, string | null>();
+  for (const t of userTags) tagLabelMap.set(t.tag.toUpperCase(), t.label);
+
+  // Group sessions by tag
+  const groups = new Map<string, any[]>();
+  for (const s of sessions) {
+    const key = (s.id_tag || "—").toUpperCase();
+    const arr = groups.get(key) ?? [];
+    arr.push(s);
+    groups.set(key, arr);
+  }
+
+  const renderSessionRow = (s: any, i: number) => {
     const startDate = new Date(s.start_time);
     const endDate = s.stop_time ? new Date(s.stop_time) : null;
     const duration = endDate ? Math.round((endDate.getTime() - startDate.getTime()) / 60000) : 0;
     const durationStr = duration > 60 ? `${Math.floor(duration / 60)}h ${duration % 60}min` : `${duration}min`;
     const idleMinutes = Math.max(0, duration - idleFeeGraceMinutes);
     const sessionIdleFee = idleFeePerMinute > 0 && idleMinutes > 0 ? idleMinutes * idleFeePerMinute : 0;
+    const energyNet = (s.energy_kwh || 0) * pricePerKwh;
+    const net = energyNet + sessionIdleFee;
+    const gross = net * (1 + taxRatePercent / 100);
     const bg = i % 2 === 0 ? "#ffffff" : "#f8fafc";
     return `<tr>
-      <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${startDate.toLocaleDateString("de-DE")}</td>
-      <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${startDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}${endDate ? " – " + endDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : ""}</td>
+      <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${startDate.toLocaleDateString("de-DE")} ${startDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</td>
       <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg}">${durationStr}</td>
       <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${formatDE(s.energy_kwh)} kWh</td>
-      <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${formatDE(s.energy_kwh * pricePerKwh)} ${currencySymbol}</td>
-      ${idleFeePerMinute > 0 ? `<td style="padding:8px 12px;font-size:12px;color:${sessionIdleFee > 0 ? '#dc2626' : '#94a3b8'};border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${sessionIdleFee > 0 ? formatDE(sessionIdleFee) + ' ' + currencySymbol : '—'}</td>` : ""}
+      <td style="padding:8px 12px;font-size:12px;color:${sessionIdleFee > 0 ? '#dc2626' : '#94a3b8'};border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${sessionIdleFee > 0 ? formatDE(sessionIdleFee) + ' ' + currencySymbol : '—'}</td>
+      <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right">${formatDE(net)} ${currencySymbol}</td>
+      <td style="padding:8px 12px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;background:${bg};text-align:right;font-weight:600">${formatDE(gross)} ${currencySymbol}</td>
     </tr>`;
+  };
+
+  const tagGroupsHtml = Array.from(groups.entries()).map(([tagKey, sess]) => {
+    const label = tagLabelMap.get(tagKey);
+    const header = label ? `${tagKey} · ${label}` : tagKey;
+    const rows = sess.map((s, i) => renderSessionRow(s, i)).join("");
+    return `<div style="margin-bottom:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+      <div style="padding:8px 12px;background:#f1f5f9;font-size:12px;color:#1e293b">
+        <strong style="font-family:ui-monospace,monospace">${tagKey}</strong>${label ? `<span style="color:#64748b"> · ${label}</span>` : ""}
+        <span style="float:right;color:#64748b">${sess.length} Vorgang/Vorgänge</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr>
+            <th style="padding:6px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;background:#fafbfc;border-bottom:1px solid #e2e8f0">Zeitpunkt</th>
+            <th style="padding:6px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;background:#fafbfc;border-bottom:1px solid #e2e8f0">Dauer</th>
+            <th style="padding:6px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;background:#fafbfc;border-bottom:1px solid #e2e8f0">Energie</th>
+            <th style="padding:6px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;background:#fafbfc;border-bottom:1px solid #e2e8f0">Blockiergeb.</th>
+            <th style="padding:6px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;background:#fafbfc;border-bottom:1px solid #e2e8f0">Netto</th>
+            <th style="padding:6px 12px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;background:#fafbfc;border-bottom:1px solid #e2e8f0">Brutto</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
   }).join("");
+
+  const tagsListHtml = userTags.length
+    ? userTags.map(t => `<span style="display:inline-block;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;margin:2px 4px 2px 0;font-size:11px"><span style="font-family:ui-monospace,monospace;font-weight:600">${t.tag}</span>${t.label ? `<span style="color:#64748b"> · ${t.label}</span>` : ""}</span>`).join("")
+    : `<span style="font-size:12px;color:#94a3b8">—</span>`;
 
   const logoImgTag = logoUrl
     ? `<img src="${logoUrl}" alt="Logo" style="max-height:52px;max-width:160px;object-fit:contain;border-radius:6px" />`
     : "";
+
 
   const colCount = idleFeePerMinute > 0 ? 6 : 5;
 
@@ -124,29 +191,20 @@ function buildInvoiceHTML(
         <div style="font-size:11px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-bottom:4px">Kunde</div>
         <div style="font-size:14px;font-weight:600">${userName}</div>
         <div style="font-size:13px;color:#64748b">${userEmail}</div>
+        <div style="font-size:11px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-top:12px;margin-bottom:4px">RFID-Tags</div>
+        <div>${tagsListHtml}</div>
         <div style="font-size:11px;text-transform:uppercase;color:#94a3b8;letter-spacing:0.5px;margin-top:12px;margin-bottom:4px">Tarif</div>
         <div style="font-size:13px">${tariffName} (${formatDE(pricePerKwh, 4)} ${currencySymbol}/kWh)</div>
       </td>
     </tr>
   </table>
 
-  <!-- Sessions Table -->
+  <!-- Sessions grouped by Tag -->
   <div style="margin-bottom:24px">
-    <div style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:12px">Ladevorgänge</div>
-    <table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
-      <thead>
-        <tr>
-          <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Datum</th>
-          <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Zeitraum</th>
-          <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Dauer</th>
-          <th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Energie</th>
-          <th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Betrag</th>
-          ${idleFeePerMinute > 0 ? `<th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc">Blockiergebühr</th>` : ""}
-        </tr>
-      </thead>
-      <tbody>${sessionRows}</tbody>
-    </table>
+    <div style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:12px">Ladevorgänge (gruppiert nach Tag)</div>
+    ${tagGroupsHtml || '<div style="font-size:12px;color:#94a3b8">Keine Ladevorgänge verknüpft.</div>'}
   </div>
+
 
   <!-- Totals with MwSt -->
   <table style="width:100%;margin-bottom:24px;border-collapse:collapse">
@@ -169,6 +227,127 @@ function buildInvoiceHTML(
 </html>`;
 }
 
+/**
+ * Re-send (or first-send) a single, already-issued invoice by ID.
+ * Updates email_sent_at + email_send_count on success.
+ */
+async function sendInvoiceById(
+  supabase: any,
+  resend: any,
+  invoiceId: string,
+  opts: { allowDraft?: boolean } = {},
+): Promise<{ ok: boolean; error?: string; skipped?: string }> {
+  const { data: invoice, error: invErr } = await supabase
+    .from("charging_invoices").select("*").eq("id", invoiceId).maybeSingle();
+  if (invErr) return { ok: false, error: invErr.message };
+  if (!invoice) return { ok: false, error: "Rechnung nicht gefunden" };
+  if (!opts.allowDraft && invoice.status !== "issued") {
+    return { ok: false, skipped: "Nur ausgestellte Rechnungen können versendet werden." };
+  }
+
+  const { data: tenant } = await supabase
+    .from("tenants").select("name, logo_url, branding").eq("id", invoice.tenant_id).maybeSingle();
+  const tenantName = tenant?.name || "";
+  const logoUrl = tenant?.logo_url || null;
+  const branding = (tenant?.branding as Record<string, string>) || {};
+  const primaryColor = branding.primaryColor || "#1e293b";
+  const accentColor = branding.accentColor || "#334155";
+
+  const { data: user } = await supabase
+    .from("charging_users").select("*").eq("id", invoice.user_id).maybeSingle();
+  if (!user?.email) return { ok: false, error: "Empfänger hat keine E-Mail-Adresse" };
+
+  const { data: links } = await supabase
+    .from("charging_invoice_sessions").select("charging_sessions(*)").eq("invoice_id", invoiceId);
+  const sessions = (links ?? []).map((l: any) => l.charging_sessions).filter(Boolean)
+    .sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+
+  let tariff: any = null;
+  if (invoice.tariff_id) {
+    const { data } = await supabase.from("charging_tariffs").select("*").eq("id", invoice.tariff_id).maybeSingle();
+    tariff = data;
+  }
+  const pricePerKwh = tariff?.price_per_kwh ?? 0;
+  const baseFee = tariff?.base_fee ?? 0;
+  const idleFeePerMinute = tariff?.idle_fee_per_minute ?? 0;
+  const idleFeeGraceMinutes = tariff?.idle_fee_grace_minutes ?? 60;
+  const taxRatePercent = invoice.tax_rate_percent ?? tariff?.tax_rate_percent ?? 19;
+  const currency = invoice.currency ?? "EUR";
+  const tariffName = tariff?.name ?? "Standard";
+
+  const { data: tagsData } = await supabase
+    .from("charging_user_rfid_tags").select("tag, label").eq("user_id", invoice.user_id);
+  const userTagsForInvoice: { tag: string; label: string | null }[] = (tagsData ?? []).map((t: any) => ({ tag: t.tag, label: t.label ?? null }));
+  if (user.rfid_tag && !userTagsForInvoice.some(x => x.tag.toUpperCase() === user.rfid_tag.toUpperCase())) {
+    userTagsForInvoice.push({ tag: user.rfid_tag, label: user.rfid_label ?? null });
+  }
+
+  const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+  const pFrom = invoice.period_start || invoice.invoice_date;
+  const pTo = invoice.period_end || invoice.invoice_date;
+  const dd = new Date(pFrom);
+  const period = { from: pFrom, to: pTo, label: `${monthNames[dd.getMonth()]} ${dd.getFullYear()}` };
+
+  const htmlContent = buildInvoiceHTML(
+    invoice.invoice_number ?? "—", user.name, user.email, userTagsForInvoice, sessions,
+    tariffName, pricePerKwh, baseFee, idleFeePerMinute, idleFeeGraceMinutes, currency,
+    invoice.net_amount ?? 0, invoice.tax_amount ?? 0, invoice.total_amount ?? 0, taxRatePercent,
+    invoice.total_energy_kwh ?? 0, invoice.idle_fee_amount ?? 0, period, tenantName, logoUrl,
+    primaryColor, accentColor, invoice.invoice_date ?? new Date().toISOString().split("T")[0],
+  );
+
+  let downloadUrl = "";
+  try {
+    const storagePath = `${invoice.tenant_id}/${(invoice.invoice_number ?? invoiceId).replace(/[^a-zA-Z0-9-]/g, "_")}.html`;
+    const htmlBlob = new Blob([htmlContent], { type: "text/html" });
+    await supabase.storage.from("charging-invoices").upload(storagePath, htmlBlob, { contentType: "text/html", upsert: true });
+    const { data: signedData } = await supabase.storage.from("charging-invoices").createSignedUrl(storagePath, 60 * 60 * 24 * 30);
+    if (signedData?.signedUrl) downloadUrl = signedData.signedUrl;
+    await supabase.from("charging_invoices").update({ pdf_storage_path: storagePath }).eq("id", invoiceId);
+  } catch { /* non-fatal */ }
+
+  const downloadSection = downloadUrl
+    ? `<div style="text-align:center;margin:24px 0"><a href="${downloadUrl}" target="_blank" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,${primaryColor},${accentColor});color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600">📥 Rechnung herunterladen</a><div style="font-size:11px;color:#94a3b8;margin-top:8px">Der Download-Link ist 30 Tage gültig.</div></div>`
+    : "";
+  let emailHtml = htmlContent.replace("<!-- Footer -->", `${downloadSection}\n  <!-- Footer -->`);
+
+  try {
+    const ocmfSecret = Deno.env.get("OCMF_DOWNLOAD_SECRET") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const sessionsWithOcmf = sessions.filter((s: any) => s.ocmf_payload);
+    if (sessionsWithOcmf.length > 0 && ocmfSecret && supabaseUrl) {
+      const items: string[] = [];
+      for (const s of sessionsWithOcmf) {
+        const tok = await ocmfDownloadToken(s.id, ocmfSecret);
+        const url = `${supabaseUrl}/functions/v1/public-ocmf-download?session=${encodeURIComponent(s.id)}&token=${tok}`;
+        const dateLabel = s.start_time ? new Date(s.start_time).toLocaleDateString("de-DE") : "";
+        const tx = s.transaction_id ?? s.id.substring(0, 8);
+        items.push(`<li style="margin:4px 0"><a href="${url}" style="color:${primaryColor};text-decoration:underline">Transaktion ${tx} (${dateLabel})</a></li>`);
+      }
+      const eichrechtSection = `<div style="margin:24px 0;padding:16px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc"><div style="font-size:14px;font-weight:600;margin-bottom:8px;color:#0f172a">🛡️ Eichrechtskonforme Transparenz-Belege (OCMF)</div><div style="font-size:12px;color:#475569;margin-bottom:8px">Für jede Ladesitzung können Sie hier den signierten Messbeleg herunterladen und mit der Transparenzsoftware der S.A.F.E. e. V. prüfen:</div><ul style="font-size:12px;color:#1e293b;padding-left:18px;margin:0">${items.join("")}</ul></div>`;
+      emailHtml = emailHtml.replace("<!-- Footer -->", `${eichrechtSection}\n  <!-- Footer -->`);
+    }
+  } catch { /* non-fatal */ }
+
+  try {
+    await resend.emails.send({
+      from: resendFrom(tenantName || "Ladeinfrastruktur"),
+      to: [user.email],
+      subject: `Laderechnung ${invoice.invoice_number ?? ""} – ${period.label}`,
+      html: emailHtml,
+    });
+  } catch (e: any) {
+    return { ok: false, error: e.message };
+  }
+
+  await supabase.from("charging_invoices").update({
+    email_sent_at: new Date().toISOString(),
+    email_send_count: (invoice.email_send_count ?? 0) + 1,
+  }).eq("id", invoiceId);
+
+  return { ok: true };
+}
+
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -184,7 +363,9 @@ serve(async (req) => {
     // Parse request body
     let tenantFilter: string | null = null;
     let periodOverride: { from: string; to: string; label: string } | null = null;
-    let mode: "generate" | "send" | "both" = "both";
+    let mode: "generate" | "send" | "both" | "send-selected" = "both";
+    let invoiceIdsToSend: string[] = [];
+    let allowDraftSend = false;
 
     try {
       const body = await req.json();
@@ -198,7 +379,33 @@ serve(async (req) => {
         periodOverride = { from, to, label };
       }
       if (body.mode) mode = body.mode;
+      if (Array.isArray(body.invoice_ids)) invoiceIdsToSend = body.invoice_ids.filter((x: any) => typeof x === "string");
+      if (body.allow_draft === true) allowDraftSend = true;
     } catch { /* no body = cron run */ }
+
+    // ============ NEW: send-selected mode (per-invoice) ============
+    if (mode === "send-selected") {
+      if (!resend) {
+        return new Response(JSON.stringify({ error: "RESEND_API_KEY nicht konfiguriert" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (invoiceIdsToSend.length === 0) {
+        return new Response(JSON.stringify({ error: "invoice_ids fehlen" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const sendResults: { invoice_id: string; ok: boolean; error?: string; skipped?: string }[] = [];
+      let sentCount = 0;
+      for (const id of invoiceIdsToSend) {
+        const r = await sendInvoiceById(supabase, resend, id, { allowDraft: allowDraftSend });
+        if (r.ok) sentCount++;
+        sendResults.push({ invoice_id: id, ...r });
+      }
+      return new Response(JSON.stringify({ success: true, sent: sentCount, results: sendResults }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const period = periodOverride || getLastMonth();
 
@@ -219,10 +426,11 @@ serve(async (req) => {
       });
     }
 
-    const results: { tenant_id: string; invoices_created: number; emails_sent: number; errors: string[] }[] = [];
+    const results: { tenant_id: string; invoices_created: number; created_invoice_ids: string[]; emails_sent: number; errors: string[] }[] = [];
+
 
     for (const tenantId of tenantIds) {
-      const tenantResult = { tenant_id: tenantId, invoices_created: 0, emails_sent: 0, errors: [] as string[] };
+      const tenantResult = { tenant_id: tenantId, invoices_created: 0, created_invoice_ids: [] as string[], emails_sent: 0, errors: [] as string[] };
 
       try {
         // Get tenant info
@@ -269,25 +477,67 @@ serve(async (req) => {
         const userByRfid = new Map<string, any>();
         const userByAppTag = new Map<string, any>();
         for (const cu of chargingUsers) {
-          if (cu.rfid_tag) userByRfid.set(cu.rfid_tag, cu);
+          if (cu.rfid_tag) userByRfid.set(cu.rfid_tag.toUpperCase(), cu);
           if (cu.app_tag) userByAppTag.set(cu.app_tag, cu);
         }
+        // Multi-Tag-Tabelle einbeziehen (inkl. Label)
+        const { data: extraTags } = await supabase
+          .from("charging_user_rfid_tags")
+          .select("tag, label, user_id")
+          .eq("tenant_id", tenantId);
+        const usersById = new Map(chargingUsers.map((u: any) => [u.id, u]));
+        const tagsByUserId = new Map<string, { tag: string; label: string | null }[]>();
+        // legacy single tag
+        for (const cu of chargingUsers) {
+          if (cu.rfid_tag) {
+            const arr = tagsByUserId.get(cu.id) ?? [];
+            arr.push({ tag: cu.rfid_tag, label: cu.rfid_label ?? null });
+            tagsByUserId.set(cu.id, arr);
+          }
+        }
+        for (const t of (extraTags ?? [])) {
+          const u = usersById.get((t as any).user_id);
+          if (u && (t as any).tag) {
+            userByRfid.set(((t as any).tag as string).toUpperCase(), u);
+            const arr = tagsByUserId.get((t as any).user_id) ?? [];
+            // avoid duplicates
+            if (!arr.some(x => x.tag.toUpperCase() === ((t as any).tag as string).toUpperCase())) {
+              arr.push({ tag: (t as any).tag, label: (t as any).label ?? null });
+            }
+            tagsByUserId.set((t as any).user_id, arr);
+          }
+        }
+
         const groupById = new Map<string, any>();
         for (const g of (chargingGroups || [])) groupById.set(g.id, g);
+
+        // Mitglieder von Rechnungsgruppen ermitteln – diese werden über
+        // send-charging-group-invoices als Sammelrechnung abgerechnet und dürfen
+        // hier NICHT zusätzlich eine Einzelrechnung erhalten.
+        const { data: billingGroupMembers } = await supabase
+          .from("charging_billing_group_members")
+          .select("user_id")
+          .eq("tenant_id", tenantId);
+        const billingGroupUserIds = new Set<string>(
+          (billingGroupMembers ?? []).map((m: any) => m.user_id).filter(Boolean)
+        );
 
         // Group sessions by charging user
         const userSessions = new Map<string, { user: any; sessions: any[] }>();
         for (const session of sessions) {
           const idTag = session.id_tag;
           if (!idTag) continue;
-          const chargingUser = userByRfid.get(idTag) || userByAppTag.get(idTag);
+          const chargingUser = userByRfid.get(idTag.toUpperCase()) || userByAppTag.get(idTag);
           if (!chargingUser) continue;
+          // Mitglieder einer Rechnungsgruppe überspringen (Sammelrechnung)
+          if (billingGroupUserIds.has(chargingUser.id)) continue;
 
           if (!userSessions.has(chargingUser.id)) {
             userSessions.set(chargingUser.id, { user: chargingUser, sessions: [] });
           }
           userSessions.get(chargingUser.id)!.sessions.push(session);
         }
+
 
         const invoiceDate = new Date().toISOString().split("T")[0];
         const invoiceYear = new Date().getFullYear();
@@ -373,13 +623,14 @@ serve(async (req) => {
               }
 
               tenantResult.invoices_created++;
+              if (newInvoice?.id) tenantResult.created_invoice_ids.push(newInvoice.id);
             }
 
-            // Send email
+            // Send email — NEW gating: only issued + not yet sent
             if ((mode === "send" || mode === "both") && user.email && resend) {
-              // Re-fetch the invoice if mode=send
+              // Re-fetch the invoice (always — we need status + email_sent_at to gate)
               let invoiceData: any;
-              if (mode === "send") {
+              {
                 const { data } = await supabase
                   .from("charging_invoices")
                   .select("*")
@@ -387,9 +638,14 @@ serve(async (req) => {
                   .eq("user_id", userId)
                   .eq("period_start", period.from)
                   .eq("period_end", period.to)
-                  .single();
+                  .maybeSingle();
                 invoiceData = data;
               }
+              // Skip drafts and already-sent invoices in the bulk path
+              if (!invoiceData || invoiceData.status !== "issued" || invoiceData.email_sent_at) {
+                continue;
+              }
+
 
               const group = user.group_id ? groupById.get(user.group_id) : null;
               const tariff = resolveTariff(user, group, allTariffs || []);
@@ -414,13 +670,15 @@ serve(async (req) => {
               const totalAmount = invoiceData?.total_amount ?? Math.round((netAmount + taxAmount) * 100) / 100;
               const invoiceNumber = invoiceData?.invoice_number ?? "—";
 
+              const userTagsForInvoice = tagsByUserId.get(userId) ?? [];
               const htmlContent = buildInvoiceHTML(
-                invoiceNumber, user.name, user.email, userSessionList,
+                invoiceNumber, user.name, user.email, userTagsForInvoice, userSessionList,
                 tariffName, pricePerKwh, baseFee, idleFeePerMinute, idleFeeGraceMinutes, currency,
                 netAmount, taxAmount, totalAmount, taxRatePercent,
                 totalEnergy, totalIdleFee, period, tenantName, logoUrl,
                 primaryColor, accentColor, invoiceData?.invoice_date ?? invoiceDate,
               );
+
 
               // Upload invoice HTML to storage and get signed download URL
               let downloadUrl = "";
@@ -465,14 +723,51 @@ serve(async (req) => {
                 `${downloadSection}\n  <!-- Footer -->`
               );
 
+              // K1 Eichrecht: pro Session OCMF-Download-Link (public, token-signiert)
+              let eichrechtSection = "";
+              try {
+                const ocmfSecret = Deno.env.get("OCMF_DOWNLOAD_SECRET") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+                const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+                const sessionsWithOcmf = userSessionList.filter((s: any) => s.ocmf_payload);
+                if (sessionsWithOcmf.length > 0 && ocmfSecret && supabaseUrl) {
+                  const items: string[] = [];
+                  for (const s of sessionsWithOcmf) {
+                    const tok = await ocmfDownloadToken(s.id, ocmfSecret);
+                    const url = `${supabaseUrl}/functions/v1/public-ocmf-download?session=${encodeURIComponent(s.id)}&token=${tok}`;
+                    const dateLabel = s.start_time ? new Date(s.start_time).toLocaleDateString("de-DE") : "";
+                    const tx = s.transaction_id ?? s.id.substring(0, 8);
+                    items.push(
+                      `<li style="margin:4px 0"><a href="${url}" style="color:${primaryColor};text-decoration:underline">Transaktion ${tx} (${dateLabel})</a></li>`,
+                    );
+                  }
+                  eichrechtSection = `<div style="margin:24px 0;padding:16px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc">
+                    <div style="font-size:14px;font-weight:600;margin-bottom:8px;color:#0f172a">🛡️ Eichrechtskonforme Transparenz-Belege (OCMF)</div>
+                    <div style="font-size:12px;color:#475569;margin-bottom:8px">Für jede Ladesitzung können Sie hier den signierten Messbeleg herunterladen und mit der Transparenzsoftware der S.A.F.E. e. V. prüfen:</div>
+                    <ul style="font-size:12px;color:#1e293b;padding-left:18px;margin:0">${items.join("")}</ul>
+                  </div>`;
+                }
+              } catch (ocmfErr: any) {
+                console.warn("[send-charging-invoices] OCMF section failed:", ocmfErr.message);
+              }
+
+              const emailHtmlFinal = (downloadSection || eichrechtSection)
+                ? emailHtml.replace("<!-- Footer -->", `${eichrechtSection}\n  <!-- Footer -->`)
+                : emailHtml;
+
               try {
                 await resend.emails.send({
-                  from: `${tenantName || "Ladeinfrastruktur"} <noreply@mailtest.my-ips.de>`,
+                  from: resendFrom(tenantName || "Ladeinfrastruktur"),
                   to: [user.email],
                   subject: `Laderechnung ${invoiceNumber} – ${period.label}`,
-                  html: emailHtml,
+                  html: emailHtmlFinal,
                 });
                 tenantResult.emails_sent++;
+                if (invoiceData?.id) {
+                  await supabase.from("charging_invoices").update({
+                    email_sent_at: new Date().toISOString(),
+                    email_send_count: (invoiceData.email_send_count ?? 0) + 1,
+                  }).eq("id", invoiceData.id);
+                }
               } catch (emailErr: any) {
                 tenantResult.errors.push(`Email to ${user.email} failed: ${emailErr.message}`);
               }

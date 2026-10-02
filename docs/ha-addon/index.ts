@@ -27,6 +27,55 @@ try {
   WebSocketClient = require("ws") as any;
 } catch { /* ws not available, WebSocket features disabled */ }
 
+import { WallboxBridgeManager, type WallboxInstance, type WallboxTemplate } from "./modbus-wallbox-bridge";
+let wallboxManager: WallboxBridgeManager | null = null;
+
+function getWallboxManager(): WallboxBridgeManager {
+  if (!wallboxManager) {
+    const cloudWsBase = (config.cloud_url || "").replace(/^http/, "ws").replace(/\/$/, "") + "/functions/v1/ocpp-ws";
+    const password = process.env.GATEWAY_OCPP_PASSWORD || config.gateway_password || "";
+    wallboxManager = new WallboxBridgeManager(cloudWsBase, password);
+  }
+  return wallboxManager;
+}
+
+async function fetchWallboxInstanceAndTemplate(instanceId: string): Promise<{ inst: WallboxInstance; tpl: WallboxTemplate } | null> {
+  try {
+    // Authentifizierter Gateway-Endpoint (RLS-Bypass via GATEWAY_API_KEY).
+    const url = `${config.cloud_url}/functions/v1/gateway-wallbox-fetch`;
+    const key = config.gateway_api_key || process.env.GATEWAY_API_KEY || "";
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({ instance_id: instanceId }),
+    });
+    if (!res.ok) {
+      console.error("[wb-bridge] fetch instance HTTP", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    const data = await res.json() as { instance: any; template: WallboxTemplate };
+    if (!data?.instance || !data?.template) return null;
+    return {
+      inst: {
+        id: data.instance.id,
+        template_id: data.instance.template_id,
+        charge_point_ocpp_id: data.instance.charge_point_ocpp_id ?? data.instance.id,
+        modbus_host: data.instance.modbus_host,
+        modbus_port: data.instance.modbus_port,
+        unit_id: data.instance.unit_id,
+      },
+      tpl: data.template,
+    };
+  } catch (e) {
+    console.error("[wb-bridge] fetch instance failed", (e as Error).message);
+    return null;
+  }
+}
+
+
 /* ── Configuration ───────────────────────────────────────────────────────────── */
 
 interface AddonConfig {
@@ -50,26 +99,61 @@ interface AddonConfig {
 
 const DEFAULT_CLOUD_URL = "https://xnveugycurplszevdxtw.supabase.co";
 
+/**
+ * Normalize cloud_url so the rest of the code can safely append paths.
+ * - Accepts ws://, wss://, http://, https:// and rewrites to http(s)://
+ * - Strips trailing slashes
+ * - Strips any accidentally appended /functions/... path so URL builders
+ *   like `${cloud_url}/functions/v1/gateway-ingest` produce clean URLs
+ *   instead of `wss://.../functions/v1/gateway-ws/functions/v1/gateway-ingest`.
+ * - Falls back to DEFAULT_CLOUD_URL if input is empty/invalid.
+ */
+function normalizeCloudUrl(input: string | undefined | null): string {
+  let url = (input || "").trim();
+  if (!url) return DEFAULT_CLOUD_URL;
+  // ws:// → http:// , wss:// → https://
+  url = url.replace(/^wss:\/\//i, "https://").replace(/^ws:\/\//i, "http://");
+  // If user pasted a bare host without scheme, default to https
+  if (!/^https?:\/\//i.test(url)) {
+    url = "https://" + url.replace(/^\/+/, "");
+  }
+  // Strip trailing slashes
+  url = url.replace(/\/+$/, "");
+  // Strip any /functions/... suffix the user may have included
+  url = url.replace(/\/functions\/.*$/i, "");
+  // Final sanity check
+  try {
+    const u = new URL(url);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    console.warn(`[config] Invalid cloud_url "${input}", falling back to default`);
+    return DEFAULT_CLOUD_URL;
+  }
+}
+
 function loadConfig(): AddonConfig {
   const optionsPath = "/data/options.json";
   try {
     const raw = fs.readFileSync(optionsPath, "utf-8");
     console.log("[config] Loaded /data/options.json");
     const parsed = JSON.parse(raw);
-    const cloudUrl = parsed.cloud_url || parsed.supabase_url || DEFAULT_CLOUD_URL;
+    const cloudUrl = normalizeCloudUrl(parsed.cloud_url || parsed.supabase_url);
+    if (cloudUrl !== (parsed.cloud_url || parsed.supabase_url)) {
+      console.log(`[config] Normalized cloud_url → ${cloudUrl}`);
+    }
     return { automation_eval_seconds: 30, ...parsed, cloud_url: cloudUrl };
   } catch (error: any) {
     console.warn(`[config] Cannot read ${optionsPath} (${error?.code || error?.message}), using env vars`);
   }
   return {
-    cloud_url: process.env.CLOUD_URL || process.env.SUPABASE_URL || DEFAULT_CLOUD_URL,
+    cloud_url: normalizeCloudUrl(process.env.CLOUD_URL || process.env.SUPABASE_URL),
     gateway_api_key: process.env.GATEWAY_API_KEY || "",
     tenant_id: process.env.TENANT_ID || "",
     device_name: process.env.DEVICE_NAME || "aicono-ems",
     gateway_username: process.env.GATEWAY_USERNAME || "",
     gateway_password: process.env.GATEWAY_PASSWORD || "",
     poll_interval_seconds: Number(process.env.POLL_INTERVAL_SECONDS) || 30,
-    flush_interval_seconds: Number(process.env.FLUSH_INTERVAL_SECONDS) || 5,
+    flush_interval_seconds: Number(process.env.FLUSH_INTERVAL_SECONDS) || 60,
     heartbeat_interval_seconds: Number(process.env.HEARTBEAT_INTERVAL_SECONDS) || 60,
     entity_filter: process.env.ENTITY_FILTER || "sensor.*_energy,sensor.*_power",
     offline_buffer_max_mb: Number(process.env.OFFLINE_BUFFER_MAX_MB) || 100,
@@ -83,7 +167,94 @@ const SUPERVISOR_TOKEN = process.env.SUPERVISOR_TOKEN || "";
 const HA_API_BASE = "http://supervisor/core/api";
 const INGEST_URL = `${config.cloud_url}/functions/v1/gateway-ingest`;
 const GATEWAY_WS_URL = `${config.cloud_url.replace(/^http/, "ws")}/functions/v1/gateway-ws`;
-const ADDON_VERSION = "3.0.0";
+// Version wird beim Docker-Build automatisch aus config.yaml injiziert
+// (siehe Dockerfile: ENV ADDON_VERSION=...). Fallback nur für lokale Dev-Runs.
+const ADDON_VERSION = process.env.ADDON_VERSION || "dev";
+const SUPERVISOR_COMMAND_COOLDOWN_MS = 5 * 60 * 1000;
+let supervisorCommandInFlight: { command: string; startedAt: number } | null = null;
+
+/* ── Phase 2: Worker timers + remote-config state ────────────────────────────── */
+type TimerName = "poll" | "flush" | "watchdog" | "automation" | "syncAutomations" | "meterMappings" | "snapshot" | "backup";
+const workerTimers: Partial<Record<TimerName, NodeJS.Timeout>> = {};
+let remoteConfigVersion = 0;
+
+function clampInt(v: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+/** Apply a remote config patch coming from the Cloud. Resets affected timers live. */
+function applyRemoteConfig(incoming: Record<string, unknown> | null | undefined, version: number): void {
+  if (!incoming || typeof incoming !== "object") return;
+  if (version > 0 && version === remoteConfigVersion) {
+    return; // no-op, same version
+  }
+  const before = {
+    poll: config.poll_interval_seconds,
+    flush: config.flush_interval_seconds,
+    heartbeat: config.heartbeat_interval_seconds,
+    automation: config.automation_eval_seconds,
+    filter: config.entity_filter,
+    bufferMb: config.offline_buffer_max_mb,
+    backup: config.auto_backup_hours,
+  };
+
+  if (incoming.poll_interval_seconds !== undefined)
+    config.poll_interval_seconds = clampInt(incoming.poll_interval_seconds, 5, 3600, before.poll);
+  if (incoming.flush_interval_seconds !== undefined)
+    config.flush_interval_seconds = clampInt(incoming.flush_interval_seconds, 15, 600, before.flush);
+  if (incoming.heartbeat_interval_seconds !== undefined)
+    config.heartbeat_interval_seconds = clampInt(incoming.heartbeat_interval_seconds, 10, 600, before.heartbeat);
+  if (incoming.automation_eval_seconds !== undefined)
+    config.automation_eval_seconds = clampInt(incoming.automation_eval_seconds, 5, 600, before.automation);
+  if (typeof incoming.entity_filter === "string" && incoming.entity_filter.trim().length > 0)
+    config.entity_filter = incoming.entity_filter;
+  if (incoming.offline_buffer_max_mb !== undefined)
+    config.offline_buffer_max_mb = clampInt(incoming.offline_buffer_max_mb, 10, 5000, before.bufferMb);
+  if (incoming.auto_backup_hours !== undefined)
+    config.auto_backup_hours = clampInt(incoming.auto_backup_hours, 0, 168, before.backup);
+
+  remoteConfigVersion = version;
+  saveRemoteConfigToCache(incoming, version);
+
+  // Live-reset timers if values changed
+  if (before.poll !== config.poll_interval_seconds && workerTimers.poll) {
+    clearInterval(workerTimers.poll);
+    workerTimers.poll = setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
+    console.log(`[remote-config] poll_interval → ${config.poll_interval_seconds}s`);
+  }
+  if (before.flush !== config.flush_interval_seconds && workerTimers.flush) {
+    clearInterval(workerTimers.flush);
+    workerTimers.flush = setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
+    console.log(`[remote-config] flush_interval → ${config.flush_interval_seconds}s`);
+  }
+  if (before.automation !== config.automation_eval_seconds && workerTimers.automation) {
+    clearInterval(workerTimers.automation);
+    workerTimers.automation = setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
+    console.log(`[remote-config] automation_eval → ${config.automation_eval_seconds}s`);
+  }
+  if (before.heartbeat !== config.heartbeat_interval_seconds && cloudWsHeartbeatTimer) {
+    clearInterval(cloudWsHeartbeatTimer);
+    cloudWsHeartbeatTimer = setInterval(sendCloudHeartbeat, config.heartbeat_interval_seconds * 1000);
+    console.log(`[remote-config] heartbeat_interval → ${config.heartbeat_interval_seconds}s`);
+  }
+  if (before.filter !== config.entity_filter) {
+    compileEntityFilter();
+    console.log(`[remote-config] entity_filter updated`);
+  }
+  if (before.backup !== config.auto_backup_hours) {
+    if (workerTimers.backup) {
+      clearInterval(workerTimers.backup);
+      workerTimers.backup = undefined;
+    }
+    if (config.auto_backup_hours > 0) {
+      workerTimers.backup = setInterval(() => sendBackup(), config.auto_backup_hours * 60 * 60 * 1000);
+    }
+    console.log(`[remote-config] auto_backup_hours → ${config.auto_backup_hours}`);
+  }
+  console.log(`[remote-config] applied version ${version}`);
+}
 
 /* ── Auth header helper for gateway-ingest (Daten-Upload) ────────────────────── */
 // gateway-ingest akzeptiert weiterhin Basic Auth (username/password) ODER Bearer.
@@ -95,6 +266,83 @@ function authHeader(): string {
     return `Basic ${Buffer.from(creds, "utf-8").toString("base64")}`;
   }
   return `Bearer ${config.gateway_api_key || ""}`;
+}
+
+async function cloudAuthHeaders(extra: Record<string, string> = {}): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    Authorization: authHeader(),
+    ...extra,
+  };
+  try {
+    const mac = (await getHostMAC() || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
+    if (mac.length === 12) headers["x-gateway-mac"] = mac;
+  } catch {
+    // ignore MAC lookup failures
+  }
+  return headers;
+}
+
+function isSupervisorCommandBlocked(command: string): boolean {
+  return !!supervisorCommandInFlight
+    && Date.now() - supervisorCommandInFlight.startedAt < SUPERVISOR_COMMAND_COOLDOWN_MS
+    && (supervisorCommandInFlight.command === command || ["update", "restart"].includes(supervisorCommandInFlight.command));
+}
+
+function markSupervisorCommandStart(command: string): boolean {
+  if (isSupervisorCommandBlocked(command)) return false;
+  supervisorCommandInFlight = { command, startedAt: Date.now() };
+  return true;
+}
+
+function clearSupervisorCommandLock(command: string): void {
+  if (supervisorCommandInFlight?.command === command) {
+    supervisorCommandInFlight = null;
+  }
+}
+
+async function callSupervisorAddonCommand(command: "update" | "restart"): Promise<void> {
+  if (!markSupervisorCommandStart(command)) {
+    console.warn(`[command] Supervisor command '${command}' skipped because another lifecycle job is already in progress`);
+    return;
+  }
+
+  try {
+    const addonSlug = process.env.HOSTNAME || "local_aicono_ems_gateway";
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+
+    try {
+      const res = await fetch(`http://supervisor/addons/${addonSlug}/${command}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${SUPERVISOR_TOKEN}` },
+        signal: controller.signal,
+      });
+
+      if (res.ok) {
+        console.log(`[command] Supervisor command '${command}' accepted`);
+        return;
+      }
+
+      const bodyText = await res.text().catch(() => "");
+      const lowerText = bodyText.toLowerCase();
+      if (res.status === 409 || lowerText.includes("another job is running") || lowerText.includes("timeout") || lowerText.includes("reload request")) {
+        console.warn(`[command] Supervisor busy for '${command}': ${res.status} ${bodyText}`);
+        return;
+      }
+
+      throw new Error(`Supervisor API returned ${res.status}: ${bodyText}`);
+    } finally {
+      clearTimeout(timeout);
+    }
+  } catch (err) {
+    if ((err as any)?.name === "AbortError") {
+      console.warn(`[command] Supervisor command '${command}' timed out while another HA job may still be running`);
+      return;
+    }
+
+    clearSupervisorCommandLock(command);
+    throw err;
+  }
 }
 
 /* ── (Cloudflare-Tunnel entfernt in v3.0 – ersetzt durch WebSocket-Push) ─────── */
@@ -169,8 +417,8 @@ function markCloudUnreachable(): void {
 
 async function checkCloudConnectivity(): Promise<boolean> {
   try {
-    const res = await fetch(`${config.cloud_url}/functions/v1/gateway-ingest?action=addon-version`, {
-      headers: { Authorization: authHeader() },
+    const res = await fetch(`${INGEST_URL}?action=addon-version`, {
+      headers: await cloudAuthHeaders(),
       signal: AbortSignal.timeout(15000),
     });
     if (res.ok) {
@@ -224,6 +472,9 @@ db.exec(`
 `);
 
 // Local execution log
+const LOCAL_EXEC_LOG_RETENTION_DAYS = 30;
+const LOCAL_EXEC_LOG_MAX_ROWS = 2000;
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS automation_exec_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -239,6 +490,18 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_exec_log_synced ON automation_exec_log(synced);
 `);
+
+function pruneExecutionLogs(): void {
+  db.prepare(`DELETE FROM automation_exec_log WHERE created_at < datetime('now', ?)`)
+    .run(`-${LOCAL_EXEC_LOG_RETENTION_DAYS} days`);
+
+  db.prepare(`
+    DELETE FROM automation_exec_log
+    WHERE id NOT IN (
+      SELECT id FROM automation_exec_log ORDER BY id DESC LIMIT ?
+    )
+  `).run(LOCAL_EXEC_LOG_MAX_ROWS);
+}
 
 // ── NEW: Meter Mappings Cache (Offline-Persistent) ──
 db.exec(`
@@ -261,6 +524,58 @@ db.exec(`
     cached_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS gateway_assignment_cache (
+    cache_key TEXT PRIMARY KEY,
+    device_id TEXT,
+    tenant_id TEXT,
+    tenant_name TEXT,
+    location_id TEXT,
+    location_name TEXT,
+    location_integration_id TEXT,
+    assignment_status TEXT NOT NULL DEFAULT 'unknown',
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+// ── NEW: Remote Config Cache (Phase 2 – Cloud-managed Worker-Settings) ──
+db.exec(`
+  CREATE TABLE IF NOT EXISTS gateway_remote_config (
+    cache_key TEXT PRIMARY KEY,
+    config_json TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+function loadRemoteConfigFromCache(): { config: Record<string, unknown>; version: number } | null {
+  try {
+    const row = db
+      .prepare(`SELECT config_json, version FROM gateway_remote_config WHERE cache_key = 'primary'`)
+      .get() as { config_json: string; version: number } | undefined;
+    if (!row) return null;
+    return { config: JSON.parse(row.config_json), version: row.version };
+  } catch (err) {
+    console.warn("[remote-config] cache load failed:", err);
+    return null;
+  }
+}
+
+function saveRemoteConfigToCache(cfg: Record<string, unknown>, version: number): void {
+  try {
+    db.prepare(
+      `INSERT INTO gateway_remote_config (cache_key, config_json, version, updated_at)
+       VALUES ('primary', ?, ?, datetime('now'))
+       ON CONFLICT(cache_key) DO UPDATE SET
+         config_json = excluded.config_json,
+         version = excluded.version,
+         updated_at = excluded.updated_at`
+    ).run(JSON.stringify(cfg), version);
+  } catch (err) {
+    console.warn("[remote-config] cache save failed:", err);
+  }
+}
 
 /* ── Readings Buffer Statements ──────────────────────────────────────────────── */
 
@@ -377,7 +692,7 @@ async function fetchMeterMappings(): Promise<void> {
   }
   try {
     const res = await fetch(`${INGEST_URL}?action=list-meters`, {
-      headers: { Authorization: authHeader() },
+      headers: await cloudAuthHeaders(),
     });
     if (!res.ok) {
       console.error(`[mapping] Failed to fetch meters: ${res.status}`);
@@ -581,6 +896,15 @@ function updateLocalExecutionTime(id: string): void {
     .run(new Date().toISOString(), id);
 }
 
+function normalizeSqliteTimestampToIso(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (/z$/i.test(value) || /[+-]\d{2}:\d{2}$/.test(value)) return value;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
+    return value.replace(" ", "T") + "Z";
+  }
+  return value;
+}
+
 function insertExecLog(entry: {
   automation_id: string;
   tenant_id: string;
@@ -590,7 +914,7 @@ function insertExecLog(entry: {
   duration_ms?: number;
   trigger_type?: string;
 }): void {
-  db.prepare(`INSERT INTO automation_exec_log (automation_id, tenant_id, status, error_message, actions_executed, duration_ms, trigger_type) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+  db.prepare(`INSERT INTO automation_exec_log (automation_id, tenant_id, status, error_message, actions_executed, duration_ms, trigger_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(
       entry.automation_id,
       entry.tenant_id,
@@ -598,9 +922,18 @@ function insertExecLog(entry: {
       entry.error_message || null,
       entry.actions_executed ? JSON.stringify(entry.actions_executed) : null,
       entry.duration_ms || null,
-      entry.trigger_type || "scheduled"
+      entry.trigger_type || "scheduled",
+      new Date().toISOString()
     );
+
+  pruneExecutionLogs();
+
+  // Push automation logs to the cloud immediately (coalesced) so the
+  // owner-lease on hybrid rules is extended before the cloud scheduler's
+  // next 30-s evaluation cycle. Prevents double-execution local + cloud.
+  schedulePushExecutionLogsSoon();
 }
+
 
 function getLocalTimeParts(timezone: string): { hours: number; minutes: number; seconds: number; weekday: number; timeStr: string; totalSeconds: number } {
   const now = new Date();
@@ -839,18 +1172,24 @@ async function syncAutomationsFromCloud(): Promise<void> {
     const mismatch = lastAutomationCount >= 0 && localCount !== lastAutomationCount;
     const isFullSync = !lastAutomationSync || automationSyncCount % 6 === 0 || mismatch;
 
-    const tenantIdParam = config.tenant_id || cloudWsAssignment.tenant_id || "";
+    const tenantIdParam = cloudWsAssignment.tenant_id || config.tenant_id || "";
     const params = new URLSearchParams({
       action: "sync-automations",
       tenant_id: tenantIdParam,
       device_name: config.device_name,
     });
-    if (!isFullSync && lastAutomationSync) {
-      params.set("since", lastAutomationSync);
+    if (cloudWsAssignment.location_id) {
+      params.set("location_id", cloudWsAssignment.location_id);
     }
+    if (cloudWsAssignment.location_integration_id) {
+      params.set("location_integration_id", cloudWsAssignment.location_integration_id);
+    }
+    // Always request a full automation snapshot.
+    // Reason: status changes (active/inactive) must reach the gateway reliably,
+    // even if the cloud row timestamp was not updated exactly as expected.
 
     const res = await fetch(`${INGEST_URL}?${params.toString()}`, {
-      headers: { Authorization: authHeader() },
+      headers: await cloudAuthHeaders(),
       signal: AbortSignal.timeout(15000),
     });
 
@@ -905,7 +1244,36 @@ async function syncAutomationsFromCloud(): Promise<void> {
   }
 }
 
-async function pushExecutionLogs(): Promise<void> {
+// Coalesce bursts of automation executions into one immediate push (≤2 s).
+// Keeps the regular 60-s flush as safety net for retries after network errors.
+const AUTO_LOG_COALESCE_MS = 2000;
+const AUTO_LOG_RETRY_MS = 5000;
+let autoLogPushTimer: ReturnType<typeof setTimeout> | null = null;
+let autoLogPushInFlight = false;
+
+function schedulePushExecutionLogsSoon(): void {
+  if (autoLogPushTimer || autoLogPushInFlight) return;
+  autoLogPushTimer = setTimeout(async () => {
+    autoLogPushTimer = null;
+    autoLogPushInFlight = true;
+    try {
+      const ok = await pushExecutionLogs();
+      if (!ok) {
+        // One quick retry; after that the regular 60-s flush handles it.
+        setTimeout(() => {
+          autoLogPushInFlight = false;
+          schedulePushExecutionLogsSoon();
+        }, AUTO_LOG_RETRY_MS);
+        return;
+      }
+    } finally {
+      autoLogPushInFlight = false;
+    }
+  }, AUTO_LOG_COALESCE_MS);
+}
+
+async function pushExecutionLogs(): Promise<boolean> {
+
   // Always attempt – connectivity is tracked by heartbeat/sync results
 
   const unsyncedLogs = db.prepare(
@@ -922,7 +1290,7 @@ async function pushExecutionLogs(): Promise<void> {
     created_at: string;
   }>;
 
-  if (unsyncedLogs.length === 0) return;
+  if (unsyncedLogs.length === 0) return true;
 
   try {
     const logs = unsyncedLogs.map((log) => ({
@@ -950,15 +1318,19 @@ async function pushExecutionLogs(): Promise<void> {
       const maxId = unsyncedLogs[unsyncedLogs.length - 1].id;
       db.prepare(`UPDATE automation_exec_log SET synced = 1 WHERE id <= ?`).run(maxId);
       console.log(`[sync] Pushed ${logs.length} execution logs to cloud`);
+      return true;
     }
+    return false;
   } catch (err) {
     console.warn("[sync] Failed to push execution logs:", err);
+    return false;
   }
 }
 
+
 /* ── Flush Buffer to Cloud ───────────────────────────────────────────────────── */
 
-const FLUSH_BATCH_SIZE = 200;
+const FLUSH_BATCH_SIZE = 1000;
 
 async function flushBuffer(): Promise<void> {
   // Always attempt flush – cloud status is determined by heartbeat/sync
@@ -1005,7 +1377,96 @@ async function flushBuffer(): Promise<void> {
   }
 }
 
-/* ── Heartbeat ───────────────────────────────────────────────────────────────── */
+/* ── Device Inventory Snapshot Push (HA -> Cloud) ────────────────────────────── */
+/**
+ * Sendet das vollständige lokale Geräte-Inventar (Sensoren, Aktoren, Zähler)
+ * an die Cloud, damit AICONO sie für Zuordnung und Steuerung anbieten kann.
+ */
+async function pushDeviceSnapshot(): Promise<void> {
+  if (!isCloudReachable && !cloudWsConnected) return;
+  if (latestHAStates.length === 0) return;
+
+  const actuatorDomains = new Set(["switch", "light", "cover", "climate", "fan", "lock", "valve"]);
+  const ignoredDomains = new Set([
+    "automation", "script", "scene", "zone", "person", "persistent_notification",
+    "update", "button", "number", "select", "input_boolean", "input_number",
+    "input_select", "input_text", "input_datetime", "timer", "counter", "schedule",
+    "todo", "conversation", "tts", "stt", "wake_word", "calendar", "device_tracker",
+    "media_player", "camera", "weather", "sun", "moon",
+  ]);
+
+  const domainCounts: Record<string, number> = {};
+  const categoryCounts: Record<string, number> = { meter: 0, actuator: 0, sensor: 0 };
+  let ignoredCount = 0;
+
+  const devices: Array<Record<string, unknown>> = [];
+  for (const s of latestHAStates) {
+    const domain = s.entity_id.split(".")[0];
+    domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+    if (ignoredDomains.has(domain)) {
+      ignoredCount++;
+      continue;
+    }
+
+    let category = "sensor";
+    if (actuatorDomains.has(domain)) {
+      category = "actuator";
+    } else if (domain === "sensor") {
+      const unit = asString(s.attributes?.unit_of_measurement);
+      const dc = asString(s.attributes?.device_class);
+      if (["energy", "power", "gas", "water"].includes(dc) || /kwh|kw|wh|m³/i.test(unit)) {
+        category = "meter";
+      }
+    }
+    categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+
+    devices.push({
+      entity_id: s.entity_id,
+      domain,
+      category,
+      friendly_name: asString(s.attributes?.friendly_name, s.entity_id),
+      state: s.state,
+      unit: asString(s.attributes?.unit_of_measurement),
+      device_class: asString(s.attributes?.device_class),
+      last_updated: s.last_updated,
+    });
+  }
+
+  console.log(
+    `[snapshot] inventory analysis: ha_states=${latestHAStates.length} ignored=${ignoredCount} ` +
+    `meters=${categoryCounts.meter} actuators=${categoryCounts.actuator} sensors=${categoryCounts.sensor} ` +
+    `domains=${JSON.stringify(domainCounts)}`,
+  );
+  if (devices.length > 0) {
+    const sample = devices.slice(0, 20).map((d) => `${d.entity_id}[${d.category}]`);
+    console.log(`[snapshot] sample entities: ${sample.join(", ")}`);
+  }
+
+  if (devices.length === 0) {
+    console.warn("[snapshot] no devices to push (after filtering). Check HA entity_filter / available domains.");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${INGEST_URL}?action=device-snapshot`, {
+      method: "POST",
+      headers: { ...(await cloudAuthHeaders()), "Content-Type": "application/json" },
+      body: JSON.stringify({ devices }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.warn(`[snapshot] device-snapshot returned ${res.status} body=${errText.slice(0, 300)} sent_devices=${devices.length}`);
+      return;
+    }
+    const data = await res.json() as { success?: boolean; upserted?: number; pruned?: number };
+    if (data.success) {
+      console.log(`[snapshot] pushed ${devices.length} devices (upserted=${data.upserted ?? 0}, pruned=${data.pruned ?? 0})`);
+    }
+  } catch (err) {
+    console.warn("[snapshot] failed:", err);
+  }
+}
 
 let haVersion = "unknown";
 
@@ -1037,10 +1498,59 @@ async function fetchHAVersion(): Promise<void> {
 
 let cloudWs: import("ws") | null = null;
 let cloudWsConnected = false;
-let cloudWsReconnectDelay = 5_000;
+// Start with a short initial delay so that reconnects after Edge Function
+// isolate recycling (observed every ~3 minutes) happen quickly.
+let cloudWsReconnectDelay = 1_000;
 const CLOUD_WS_RECONNECT_MAX = 60_000;
 let cloudWsHeartbeatTimer: NodeJS.Timeout | null = null;
-let cloudWsAssignment: { device_id?: string; tenant_id?: string; location_id?: string | null } = {};
+let cloudWsReconnectSeq = 0;
+let startServerPromise: Promise<void> | null = null;
+let cloudWsAssignment: {
+  device_id?: string;
+  tenant_id?: string;
+  tenant_name?: string | null;
+  location_id?: string | null;
+  location_name?: string | null;
+  location_integration_id?: string | null;
+} = {};
+
+function loadGatewayAssignmentFromCache(): typeof cloudWsAssignment & { assignment_status?: string } {
+  return (db.prepare(`
+    SELECT device_id, tenant_id, tenant_name, location_id, location_name, location_integration_id, assignment_status
+    FROM gateway_assignment_cache
+    WHERE cache_key = 'primary'
+    LIMIT 1
+  `).get() as (typeof cloudWsAssignment & { assignment_status?: string }) | undefined) || {};
+}
+
+function saveGatewayAssignmentToCache(
+  assignment: typeof cloudWsAssignment,
+  assignmentStatus: "assigned" | "pending_assignment" | "unknown",
+): void {
+  db.prepare(`
+    INSERT INTO gateway_assignment_cache (
+      cache_key, device_id, tenant_id, tenant_name, location_id, location_name, location_integration_id, assignment_status, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(cache_key) DO UPDATE SET
+      device_id = excluded.device_id,
+      tenant_id = excluded.tenant_id,
+      tenant_name = excluded.tenant_name,
+      location_id = excluded.location_id,
+      location_name = excluded.location_name,
+      location_integration_id = excluded.location_integration_id,
+      assignment_status = excluded.assignment_status,
+      updated_at = datetime('now')
+  `).run(
+    'primary',
+    assignment.device_id || null,
+    assignment.tenant_id || null,
+    assignment.tenant_name || null,
+    assignment.location_id || null,
+    assignment.location_name || null,
+    assignment.location_integration_id || null,
+    assignmentStatus,
+  );
+}
 
 function safeWsSend(ws: import("ws") | null, msg: unknown): void {
   if (!ws || ws.readyState !== 1 /* OPEN */) return;
@@ -1076,17 +1586,19 @@ async function connectCloudWebSocket(): Promise<void> {
     return;
   }
 
-  console.log(`[cloud-ws] Connecting to ${GATEWAY_WS_URL} (mac=${mac.slice(0, 4)}…)`);
+  cloudWsReconnectSeq += 1;
+  const currentSeq = cloudWsReconnectSeq;
+  console.log(`[cloud-ws] Connecting to ${GATEWAY_WS_URL} (mac=${mac.slice(0, 4)}…, seq=${currentSeq})`);
   try {
     cloudWs = new WebSocketClient(GATEWAY_WS_URL);
   } catch (err) {
     console.error("[cloud-ws] Constructor failed:", err);
-    scheduleCloudReconnect();
+    scheduleCloudReconnect(0);
     return;
   }
 
   cloudWs.on("open", async () => {
-    console.log("[cloud-ws] TCP/WS open – sending auth frame");
+    console.log(`[cloud-ws] TCP/WS open – sending auth frame (seq=${currentSeq})`);
     safeWsSend(cloudWs, {
       type: "auth",
       mac,
@@ -1096,6 +1608,7 @@ async function connectCloudWebSocket(): Promise<void> {
       ha_version: haVersion,
       local_ip: await getLocalIP(),
       local_time: new Date().toISOString(),
+      reconnect_seq: currentSeq,
     });
   });
 
@@ -1106,20 +1619,32 @@ async function connectCloudWebSocket(): Promise<void> {
     switch (msg?.type) {
       case "auth_ok": {
         cloudWsConnected = true;
+        // After a successful auth, keep the delay short for a while so that
+        // rapid reconnects after isolate recycling stay fast, but cap it at
+        // the normal 5s once the connection is stable.
         cloudWsReconnectDelay = 5_000;
         cloudWsAssignment = {
           device_id: msg.device_id,
           tenant_id: msg.tenant_id,
+          tenant_name: msg.tenant_name,
           location_id: msg.location_id,
+          location_name: msg.location_name,
+          location_integration_id: msg.location_integration_id,
         };
-        currentAssignmentStatus = msg.tenant_id ? "assigned" : "pending_assignment";
+        currentAssignmentStatus = msg.tenant_id && (msg.location_id || msg.location_name || msg.location_integration_id)
+          ? "assigned"
+          : msg.tenant_id
+            ? "pending_assignment"
+            : "unknown";
+        saveGatewayAssignmentToCache(cloudWsAssignment, currentAssignmentStatus);
         markCloudReachable();
-        console.log(`[cloud-ws] Authenticated. device=${msg.device_id} tenant=${msg.tenant_id || "(none)"}`);
+        const seamless = msg.seamless_reconnect === true;
+        console.log(`[cloud-ws] Authenticated. device=${msg.device_id} tenant=${msg.tenant_id || "(none)"}${seamless ? " (seamless recycle)" : ""}`);
         // Sofort einen Heartbeat senden, damit Backend-UI die Werte hat
         await sendCloudHeartbeat();
         // Periodischer Heartbeat
         if (cloudWsHeartbeatTimer) clearInterval(cloudWsHeartbeatTimer);
-        cloudWsHeartbeatTimer = setInterval(sendCloudHeartbeat, 30_000);
+        cloudWsHeartbeatTimer = setInterval(sendCloudHeartbeat, config.heartbeat_interval_seconds * 1000);
         break;
       }
       case "auth_error": {
@@ -1133,6 +1658,15 @@ async function connectCloudWebSocket(): Promise<void> {
         // Server bestätigt Heartbeat
         markCloudReachable();
         break;
+      case "config_update": {
+        // Phase 2: Cloud pushes a fresh remote-config snapshot.
+        const v = Number(msg.version) || 0;
+        applyRemoteConfig(msg.config || {}, v);
+        try {
+          safeWsSend(cloudWs, { type: "config_ack", version: v });
+        } catch { /* ignore */ }
+        break;
+      }
       case "command": {
         const cmdId = String(msg.id || "");
         const cmdType = String(msg.command_type || "");
@@ -1160,7 +1694,7 @@ async function connectCloudWebSocket(): Promise<void> {
       cloudWsHeartbeatTimer = null;
     }
     console.warn(`[cloud-ws] closed (code=${code}, reason=${reason.toString().slice(0, 80) || "n/a"})`);
-    scheduleCloudReconnect();
+    scheduleCloudReconnect(code, reason);
   });
 
   cloudWs.on("error", (err: Error) => {
@@ -1169,10 +1703,13 @@ async function connectCloudWebSocket(): Promise<void> {
   });
 }
 
-function scheduleCloudReconnect(): void {
+function scheduleCloudReconnect(code?: number, reason?: Buffer): void {
   const delay = cloudWsReconnectDelay;
-  cloudWsReconnectDelay = Math.min(cloudWsReconnectDelay * 2, CLOUD_WS_RECONNECT_MAX);
-  console.log(`[cloud-ws] reconnect in ${Math.round(delay / 1000)}s`);
+  // For the very first reconnect after startup we want to be fast; after that
+  // we use exponential backoff capped at CLOUD_WS_RECONNECT_MAX.
+  cloudWsReconnectDelay = Math.min(Math.max(cloudWsReconnectDelay * 2, 1_000), CLOUD_WS_RECONNECT_MAX);
+  const reasonStr = reason ? reason.toString().slice(0, 80) : "n/a";
+  console.log(`[cloud-ws] reconnect in ${Math.round(delay / 1000)}s (code=${code ?? "?"}, reason=${reasonStr})`);
   setTimeout(connectCloudWebSocket, delay);
 }
 
@@ -1209,9 +1746,352 @@ async function handleCloudCommand(cmdType: string, payload: Record<string, unkno
       console.log(`[cloud-ws] UI PIN ${uiPinHash ? "updated" : "cleared"}`);
       return { ok: true };
     }
+    case "discover_devices": {
+      // Phase 3: Cloud bittet uns einen Discovery-Lauf zu fahren.
+      const methods = Array.isArray(payload.methods) ? payload.methods as string[] : ["mdns", "mqtt"];
+      const found = await runDeviceDiscovery(methods, payload.modbus as any);
+      await pushDiscoveriesToCloud(found);
+      return { ok: true, count: found.length, methods };
+    }
+    case "provision_entity": {
+      // Phase 3: Cloud will eine neue Sensor-/Aktor-/Zähler-Integration einrichten.
+      const result = await provisionEntity(payload as any);
+      await reportProvisionStatus(String(payload.entity_id || ""), result);
+      return result;
+    }
+    case "deprovision_entity": {
+      const result = await deprovisionEntity(payload as any);
+      return result;
+    }
+    case "pull_image": {
+      // Phase 4: Cloud schickt Auto-/Remote-Software-Update.
+      const jobId = String(payload.job_id || "");
+      const imageRef = String(payload.image_ref || "");
+      const targetVersion = String(payload.target_version || "");
+      if (!jobId || !imageRef) throw new Error("job_id/image_ref missing");
+      // Fire-and-forget: HA Supervisor restartet uns mitten im Update.
+      runUpdateJob(jobId, imageRef, targetVersion).catch((err) => {
+        console.error("[update] runUpdateJob failed:", err?.message || err);
+        reportUpdateProgress(jobId, "failed", { error: err?.message || String(err) });
+      });
+      return { ok: true, job_id: jobId, accepted: true };
+    }
+    case "provision_wallbox":
+    case "update_wallbox": {
+      const instanceId = String(payload.instance_id || "");
+      if (!instanceId) throw new Error("instance_id missing");
+      const data = await fetchWallboxInstanceAndTemplate(instanceId);
+      if (!data) throw new Error(`wallbox instance ${instanceId} not found`);
+      await getWallboxManager().provision(data.inst, data.tpl);
+      saveLocalIntegrationConfig(`wallbox:${instanceId}`, { instance_id: instanceId });
+      return { ok: true, instance_id: instanceId };
+    }
+    case "remove_wallbox": {
+      const instanceId = String(payload.instance_id || "");
+      await getWallboxManager().remove(instanceId);
+      removeLocalIntegrationConfig(`wallbox:${instanceId}`);
+      return { ok: true };
+    }
+    case "test_wallbox": {
+      const instanceId = String(payload.instance_id || "");
+      const data = await fetchWallboxInstanceAndTemplate(instanceId);
+      if (!data) return { ok: false, error: "instance not found" };
+      try {
+        const bridge = getWallboxManager().get(instanceId);
+        const state = bridge?.getState();
+        return { ok: true, state: state ?? null };
+      } catch (e) {
+        return { ok: false, error: (e as Error).message };
+      }
+    }
     default:
       throw new Error(`Unknown command: ${cmdType}`);
   }
+}
+
+// -------------------------------------------------------------------------
+// Phase 4 helpers – Remote-/Auto-Software-Updates
+// -------------------------------------------------------------------------
+
+function reportUpdateProgress(
+  jobId: string,
+  status: "running" | "success" | "failed",
+  extra: { log?: string; error?: string; installed_version?: string } = {},
+): void {
+  if (!cloudWs || !cloudWsConnected) return;
+  safeWsSend(cloudWs, {
+    type: "update_progress",
+    job_id: jobId,
+    status,
+    log: extra.log,
+    error: extra.error,
+    installed_version: extra.installed_version,
+  });
+}
+
+async function runUpdateJob(jobId: string, imageRef: string, targetVersion: string): Promise<void> {
+  console.log(`[update] job=${jobId} image=${imageRef} version=${targetVersion}`);
+  reportUpdateProgress(jobId, "running", { log: `Starting update to ${targetVersion} (${imageRef})` });
+
+  // 1) Versuche, das HA-Supervisor-Add-on zu updaten (zieht Image automatisch).
+  try {
+    persistPendingUpdateJob(jobId, targetVersion);
+    await callSupervisorAddonCommand("update");
+    reportUpdateProgress(jobId, "running", { log: "Supervisor update dispatched – waiting for restart" });
+    return;
+  } catch (err) {
+    console.warn("[update] Supervisor update failed:", (err as Error).message);
+    reportUpdateProgress(jobId, "failed", { error: (err as Error).message });
+  }
+}
+
+function persistPendingUpdateJob(jobId: string, targetVersion: string): void {
+  try {
+    db.prepare(`CREATE TABLE IF NOT EXISTS pending_update_jobs (
+      job_id TEXT PRIMARY KEY,
+      target_version TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`).run();
+    db.prepare(`INSERT OR REPLACE INTO pending_update_jobs (job_id, target_version) VALUES (?, ?)`)
+      .run(jobId, targetVersion);
+  } catch (err) {
+    console.warn("[update] persist failed:", (err as Error).message);
+  }
+}
+
+function reportPostBootUpdateResult(): void {
+  try {
+    db.prepare(`CREATE TABLE IF NOT EXISTS pending_update_jobs (
+      job_id TEXT PRIMARY KEY,
+      target_version TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`).run();
+    const rows = db.prepare(`SELECT job_id, target_version FROM pending_update_jobs`).all() as Array<{ job_id: string; target_version: string }>;
+    for (const row of rows) {
+      const ok = ADDON_VERSION === row.target_version;
+      const send = () => {
+        if (!cloudWsConnected) { setTimeout(send, 2000); return; }
+        reportUpdateProgress(row.job_id, ok ? "success" : "failed", {
+          installed_version: ADDON_VERSION,
+          log: ok
+            ? `Update applied successfully to ${ADDON_VERSION}`
+            : `Update mismatch: expected ${row.target_version}, running ${ADDON_VERSION}`,
+          error: ok ? undefined : `version mismatch (running ${ADDON_VERSION})`,
+        });
+        try { db.prepare(`DELETE FROM pending_update_jobs WHERE job_id = ?`).run(row.job_id); } catch { /* ignore */ }
+      };
+      send();
+    }
+  } catch (err) {
+    console.warn("[update] post-boot report failed:", (err as Error).message);
+  }
+}
+
+// -------------------------------------------------------------------------
+// Phase 3 helpers – Discovery / Provision
+// -------------------------------------------------------------------------
+
+interface DiscoveredItem {
+  discovery_method: "mdns" | "mqtt" | "modbus_scan";
+  payload: Record<string, unknown>;
+}
+
+async function runDeviceDiscovery(
+  methods: string[],
+  modbus?: { host?: string; port?: number; unit_ids?: number[] },
+): Promise<DiscoveredItem[]> {
+  const results: DiscoveredItem[] = [];
+
+  // mDNS / MQTT discovery: re-use HA's auto-discovered entities. The HA
+  // integration registry already aggregates anything Shelly/Tasmota/ESPHome/
+  // Zeroconf has spotted, so we expose unmapped entities to the cloud.
+  if (methods.includes("mdns") || methods.includes("mqtt")) {
+    try {
+      const states = await fetchHAStatesRaw();
+      for (const s of states) {
+        const eid = String(s.entity_id || "");
+        if (!eid) continue;
+        const integration = guessIntegrationFromEntity(eid, s);
+        if (!integration) continue;
+        // Skip entities that already have an AICONO mapping
+        if (isEntityMapped(eid)) continue;
+        const method = integration === "shelly" ? "mdns" : "mqtt";
+        if (!methods.includes(method)) continue;
+        results.push({
+          discovery_method: method,
+          payload: {
+            ha_entity_id: eid,
+            integration_type: integration,
+            name: s.attributes?.friendly_name || eid,
+            unit: s.attributes?.unit_of_measurement,
+            device_class: s.attributes?.device_class,
+            state: s.state,
+          },
+        });
+      }
+    } catch (err) {
+      console.warn("[discover] HA state fetch failed:", (err as Error).message);
+    }
+  }
+
+  if (methods.includes("modbus_scan") && modbus?.host) {
+    const port = Number(modbus.port || 502);
+    const unitIds = modbus.unit_ids && modbus.unit_ids.length > 0 ? modbus.unit_ids : [1, 2, 3];
+    for (const unit of unitIds) {
+      const reachable = await probeModbusUnit(modbus.host, port, unit);
+      if (reachable) {
+        results.push({
+          discovery_method: "modbus_scan",
+          payload: {
+            host: modbus.host,
+            port,
+            unit_id: unit,
+            integration_type: "modbus_tcp",
+            name: `Modbus ${modbus.host}:${port}/${unit}`,
+          },
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
+async function fetchHAStatesRaw(): Promise<any[]> {
+  // Lazy import to avoid breaking environments where this helper isn't loaded yet.
+  // pollHAStates() already exists in this file – it caches the latest snapshot.
+  // We expose the raw cache via a global accessor populated during normal polling.
+  const cache = (globalThis as any).__lastHaStates;
+  if (Array.isArray(cache)) return cache;
+  return [];
+}
+
+function guessIntegrationFromEntity(entityId: string, state: any): string | null {
+  const eid = entityId.toLowerCase();
+  const platform = String(state?.attributes?.platform || "").toLowerCase();
+  if (platform === "shelly" || eid.includes("shelly")) return "shelly";
+  if (platform === "mqtt" || platform === "tasmota") return "tasmota";
+  if (platform === "esphome") return "esphome";
+  if (platform === "modbus") return "modbus_tcp";
+  return null;
+}
+
+function isEntityMapped(entityId: string): boolean {
+  try {
+    return meterMappings.some((m: any) =>
+      m.ha_entity_id === entityId || m.sensor_uuid === entityId,
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function probeModbusUnit(host: string, port: number, _unit: number): Promise<boolean> {
+  // Lightweight TCP reachability probe – the real protocol scan happens in the
+  // dedicated aicono-ocpp-bridge / modbus worker (Phase 5). Here we only verify
+  // that the device is reachable so the Cloud-UI can offer it as a candidate.
+  return await new Promise((resolve) => {
+    try {
+      // deno-lint-ignore no-explicit-any
+      const net = require("node:net") as any;
+      const sock = net.createConnection({ host, port, timeout: 1500 }, () => {
+        sock.end();
+        resolve(true);
+      });
+      sock.on("error", () => resolve(false));
+      sock.on("timeout", () => { sock.destroy(); resolve(false); });
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+async function pushDiscoveriesToCloud(items: DiscoveredItem[]): Promise<void> {
+  if (items.length === 0) return;
+  try {
+    safeWsSend(cloudWs, {
+      type: "discoveries",
+      device_id: cloudWsAssignment.device_id || null,
+      items: items.map((i) => ({
+        discovery_method: i.discovery_method,
+        discovered_payload: i.payload,
+      })),
+    });
+  } catch (err) {
+    console.warn("[discover] push failed:", (err as Error).message);
+  }
+}
+
+async function provisionEntity(payload: {
+  entity_id: string;
+  integration_type: string;
+  entity_kind: string;
+  ha_entity_id?: string | null;
+  config: Record<string, unknown>;
+}): Promise<{ ok: boolean; error?: string }> {
+  // For HA-managed integrations (shelly via mDNS, MQTT, ESPHome) the entity is
+  // typically already present in HA – we just need to make sure the meter cache
+  // is refreshed so the new sensor flows into the dashboard. For modbus_tcp we
+  // hand off to the local modbus worker (Phase 5 will register a real driver).
+  try {
+    if (payload.integration_type === "modbus_tcp") {
+      // Persist the modbus config locally for the bridge to pick up.
+      saveLocalIntegrationConfig(payload.entity_id, payload.config);
+    }
+    await fetchMeterMappings();
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
+async function deprovisionEntity(payload: { entity_id: string; integration_type: string }) {
+  try {
+    if (payload.integration_type === "modbus_tcp") {
+      removeLocalIntegrationConfig(payload.entity_id);
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+}
+
+function saveLocalIntegrationConfig(entityId: string, config: Record<string, unknown>): void {
+  try {
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS gateway_local_integrations (
+        entity_id TEXT PRIMARY KEY,
+        config_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `).run();
+    db.prepare(`
+      INSERT INTO gateway_local_integrations (entity_id, config_json, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(entity_id) DO UPDATE SET config_json = excluded.config_json, updated_at = excluded.updated_at
+    `).run(entityId, JSON.stringify(config), Date.now());
+  } catch (err) {
+    console.warn("[provision] local persist failed:", (err as Error).message);
+  }
+}
+
+function removeLocalIntegrationConfig(entityId: string): void {
+  try {
+    db.prepare(`DELETE FROM gateway_local_integrations WHERE entity_id = ?`).run(entityId);
+  } catch { /* table may not exist yet */ }
+}
+
+async function reportProvisionStatus(entityId: string, result: { ok: boolean; error?: string }) {
+  if (!entityId) return;
+  try {
+    safeWsSend(cloudWs, {
+      type: "provision_result",
+      device_id: cloudWsAssignment.device_id || null,
+      entity_id: entityId,
+      ok: result.ok,
+      error: result.error || null,
+    });
+  } catch { /* ignore */ }
 }
 
 let cachedHostIPAt = 0;
@@ -1360,16 +2240,9 @@ async function executePendingCommand(command: string, params: Record<string, unk
         // Send a final heartbeat to confirm receipt, then restart via Supervisor API
         setTimeout(async () => {
           try {
-            const addonSlug = process.env.HOSTNAME || "local_aicono_ems_gateway";
-            const res = await fetch(`http://supervisor/addons/${addonSlug}/restart`, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${SUPERVISOR_TOKEN}` },
-            });
-            if (!res.ok) {
-              console.error(`[command] Restart API returned ${res.status}`);
-              // Fallback: exit process (container orchestrator will restart)
-              process.exit(0);
-            }
+            await callSupervisorAddonCommand("restart");
+            // Fallback: exit process (container orchestrator will restart)
+            process.exit(0);
           } catch (err) {
             console.error("[command] Restart via Supervisor failed, forcing exit:", err);
             process.exit(0);
@@ -1380,16 +2253,7 @@ async function executePendingCommand(command: string, params: Record<string, unk
       case "update":
         console.log("[command] Update command received – triggering add-on update via Supervisor...");
         try {
-          const addonSlug = process.env.HOSTNAME || "local_aicono_ems_gateway";
-          const res = await fetch(`http://supervisor/addons/${addonSlug}/update`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${SUPERVISOR_TOKEN}` },
-          });
-          if (res.ok) {
-            console.log("[command] Update triggered successfully");
-          } else {
-            console.error(`[command] Update API returned ${res.status}: ${await res.text()}`);
-          }
+          await callSupervisorAddonCommand("update");
         } catch (err) {
           console.error("[command] Update via Supervisor failed:", err);
         }
@@ -1471,7 +2335,9 @@ function serveStaticFile(filePath: string, res: http.ServerResponse): void {
   }
 }
 
-function startServer(): void {
+function startServer(): Promise<void> {
+  if (startServerPromise) return startServerPromise;
+
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://localhost:8099`);
     const pathname = url.pathname;
@@ -1549,9 +2415,13 @@ function startServer(): void {
     }
 
     // ── Session check for all other /api/* and UI routes ──
+    // Public endpoints (no PIN required):
+    //  - /api/version       → health check
+    //  - /api/status        → Supervisor watchdog (called WITHOUT cookies, must return 200)
+    //  - /api/auth-status   → UI login page needs to know if PIN is configured
+    const PUBLIC_API_PATHS = new Set(["/api/version", "/api/status", "/api/auth-status"]);
     if (uiPinHash && !isSessionValid(req)) {
-      // Allow version endpoint without auth (for health checks)
-      if (pathname !== "/api/version") {
+      if (!PUBLIC_API_PATHS.has(pathname)) {
         res.writeHead(401, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Unauthorized", pin_required: true }));
         return;
@@ -1560,7 +2430,11 @@ function startServer(): void {
 
     // API endpoints
     if (pathname === "/api/status") {
-      const mac = await getHostMAC();
+      // Non-blocking: never await network calls here – Supervisor watchdog
+      // and Ingress healthcheck must get an instant 200 even if Cloud/HA are down.
+      const mac = cachedHostMAC || "";
+      // Refresh MAC in background for next call
+      if (!cachedHostMAC) { getHostMAC().catch(() => {}); }
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
         status: "running",
@@ -1578,16 +2452,21 @@ function startServer(): void {
         credentials_configured: !!(config.gateway_username && config.gateway_password),
         cloud_ws_connected: cloudWsConnected,
         cloud_ws_device_id: cloudWsAssignment.device_id || null,
+        cloud_ws_tenant_id: cloudWsAssignment.tenant_id || config.tenant_id || null,
+        cloud_ws_tenant_name: cloudWsAssignment.tenant_name || null,
         cloud_ws_location_id: cloudWsAssignment.location_id || null,
+        cloud_ws_location_name: cloudWsAssignment.location_name || null,
       }));
       return;
     }
 
     if (pathname === "/api/config") {
       res.writeHead(200, { "Content-Type": "application/json" });
+      const { tenant_id, ...restConfig } = config;
       res.end(JSON.stringify({
-        ...config,
+        ...restConfig,
         gateway_api_key: "[redacted]",
+        tenant_id_legacy: tenant_id || null,
       }));
       return;
     }
@@ -1681,7 +2560,19 @@ function startServer(): void {
       return;
     }
 
-    // ── NEW: Execute HA service (local actuator control) ──
+    // ── Wallbox-Bridges (Modbus-TCP ↔ OCPP) ──
+    if (pathname === "/api/wallboxes") {
+      let wallboxes: any[] = [];
+      try {
+        wallboxes = wallboxManager ? wallboxManager.listDetails() : [];
+      } catch (e) {
+        console.warn("[api] /api/wallboxes failed:", (e as Error).message);
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true, wallboxes }));
+      return;
+    }
+
     if (pathname === "/api/execute" && req.method === "POST") {
       let body = "";
       req.on("data", (chunk) => { body += chunk; });
@@ -1736,10 +2627,35 @@ function startServer(): void {
       const logs = db.prepare(
         `SELECT automation_id, tenant_id, status, error_message, duration_ms, trigger_type, created_at
          FROM automation_exec_log ORDER BY id DESC LIMIT ?`
-      ).all(Math.min(limit, 200));
+      ).all(Math.min(limit, 200)) as Array<{
+        automation_id: string;
+        tenant_id: string;
+        status: string;
+        error_message: string | null;
+        duration_ms: number | null;
+        trigger_type: string | null;
+        created_at: string;
+      }>;
+
+      const automationRows = db.prepare(`SELECT id, data FROM automations_local`).all() as Array<{ id: string; data: string }>;
+      const automationNameById = new Map<string, string>();
+      for (const row of automationRows) {
+        try {
+          const parsed = JSON.parse(row.data) as { name?: string };
+          automationNameById.set(row.id, parsed.name || row.id);
+        } catch {
+          automationNameById.set(row.id, row.id);
+        }
+      }
+
+      const enrichedLogs = logs.map((log) => ({
+        ...log,
+        created_at: normalizeSqliteTimestampToIso(log.created_at) || log.created_at,
+        automation_name: automationNameById.get(log.automation_id) || log.automation_id,
+      }));
 
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ success: true, logs }));
+      res.end(JSON.stringify({ success: true, logs: enrichedLogs }));
       return;
     }
 
@@ -1783,9 +2699,16 @@ function startServer(): void {
     res.end("Not Found");
   });
 
-  server.listen(8099, () => {
-    console.log("[server] AICONO EMS Gateway API + UI listening on port 8099");
+  startServerPromise = new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(8099, () => {
+      server.off("error", reject);
+      console.log("[server] AICONO EMS Gateway API + UI listening on port 8099");
+      resolve();
+    });
   });
+
+  return startServerPromise;
 }
 
 /* ── Main ────────────────────────────────────────────────────────────────────── */
@@ -1794,8 +2717,26 @@ async function main(): Promise<void> {
   console.log("═══════════════════════════════════════════════════════");
   console.log(`  AICONO EMS Gateway v${ADDON_VERSION}`);
   console.log("═══════════════════════════════════════════════════════");
+
+  // PHASE 1 – open port 8099 IMMEDIATELY so Home Assistant Ingress and the
+  // Supervisor start-watchdog (120s timeout on /api/status) get an instant 200.
+  // Anything that can fail (Cloud, HA API, MAC lookup) MUST run afterwards in
+  // the background – never block the boot path.
+  try {
+    await startServer();
+  } catch (err) {
+    console.error("[boot] startServer failed:", err);
+    process.exit(1);
+  }
+
+  // Captive setup hint – no longer hijacks port 8099. The main server already
+  // owns the port; the UI surfaces /setup based on /api/status.
+  if (!config.gateway_username || !config.gateway_password) {
+    console.warn("[boot] Keine Gateway-Credentials konfiguriert – Pairing über UI erforderlich. /api/status meldet credentials_configured=false.");
+  }
+
   console.log(`  Device:     ${config.device_name}`);
-  console.log(`  Tenant:     ${config.tenant_id}`);
+  console.log(`  Tenant:     ${config.tenant_id || "auto via Cloud-Zuordnung"}`);
   console.log(`  Poll:       ${config.poll_interval_seconds}s`);
   console.log(`  Flush:      ${config.flush_interval_seconds}s`);
   console.log(`  Heartbeat:  ${config.heartbeat_interval_seconds}s`);
@@ -1804,7 +2745,7 @@ async function main(): Promise<void> {
 
   compileEntityFilter();
 
-  // Load offline caches before starting server
+  // Load offline caches (synchronous, fast – safe to await)
   const cachedMappings = loadMeterMappingsFromCache();
   if (cachedMappings.length > 0) {
     meterMappings = cachedMappings;
@@ -1815,14 +2756,35 @@ async function main(): Promise<void> {
     latestHAStates = cachedStates;
     console.log(`[offline] Loaded ${cachedStates.length} HA states from cache`);
   }
+  const cachedAssignment = loadGatewayAssignmentFromCache();
+  if (cachedAssignment.location_id || cachedAssignment.location_name || cachedAssignment.tenant_name) {
+    cloudWsAssignment = {
+      device_id: cachedAssignment.device_id,
+      tenant_id: cachedAssignment.tenant_id,
+      tenant_name: cachedAssignment.tenant_name,
+      location_id: cachedAssignment.location_id,
+      location_name: cachedAssignment.location_name,
+      location_integration_id: cachedAssignment.location_integration_id,
+    };
+    currentAssignmentStatus = (cachedAssignment.assignment_status as typeof currentAssignmentStatus) || (cachedAssignment.location_name ? "assigned" : "unknown");
+    console.log(`[offline] Loaded cached gateway assignment: ${cachedAssignment.location_name || cachedAssignment.tenant_name || 'unknown'}`);
+  }
 
-  startServer();
+  const cachedRemote = loadRemoteConfigFromCache();
+  if (cachedRemote) {
+    applyRemoteConfig(cachedRemote.config, cachedRemote.version);
+    console.log(`[offline] Loaded cached remote config (v${cachedRemote.version})`);
+  }
 
-  // Initial setup
-  await checkCloudConnectivity();
-  await fetchHAVersion();
-  await fetchMeterMappings();
-  await syncAutomationsFromCloud();
+  // PHASE 3 – Initial cloud/HA bootstrap runs in background. Failures only log.
+  void (async () => {
+    try { await checkCloudConnectivity(); } catch (e) { console.warn("[boot] cloud check failed:", (e as Error).message); }
+    try { await fetchHAVersion(); } catch (e) { console.warn("[boot] HA version failed:", (e as Error).message); }
+    try { await fetchMeterMappings(); } catch (e) { console.warn("[boot] meter mappings failed:", (e as Error).message); }
+    try { await syncAutomationsFromCloud(); } catch (e) { console.warn("[boot] automation sync failed:", (e as Error).message); }
+    // Warm MAC cache for /api/status
+    try { await getHostMAC(); } catch { /* ignore */ }
+  })();
 
   // Connect HA WebSocket for live sensor updates
   connectHAWebSocket();
@@ -1830,20 +2792,23 @@ async function main(): Promise<void> {
   // Connect persistent WSS to AICONO Cloud (gateway-ws) for heartbeat + commands
   connectCloudWebSocket();
 
+  // Phase 4: report any pending update result after a Supervisor restart
+  setTimeout(() => reportPostBootUpdateResult(), 10_000);
+
   // Polling loop (REST-based, for readings)
-  setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
+  // WICHTIG: initialer Poll sofort ausführen, damit latestHAStates die volle
+  // HA-Entity-Liste enthält BEVOR der erste Device-Snapshot gepusht wird.
+  pollHAStates().catch((e) => console.error("[ha-poll] initial poll failed", e));
+  workerTimers.poll = setInterval(() => pollHAStates(), config.poll_interval_seconds * 1000);
 
   // Flush loop
-  setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
+  workerTimers.flush = setInterval(() => flushBuffer(), config.flush_interval_seconds * 1000);
 
-  // Cloud-Health-Watchdog: prüft alle 60s ob die WS noch lebt; falls nein,
-  // wird der Reconnect bereits durch das `close`-Event getriggert. Wir nutzen
-  // diesen Tick zusätzlich, um HA-Version aktuell zu halten.
-  setInterval(async () => {
+  // Cloud-Health-Watchdog
+  workerTimers.watchdog = setInterval(async () => {
     try {
       await fetchHAVersion();
       if (!cloudWsConnected) {
-        // markCloudUnreachable kümmert sich um den UI-Status
         markCloudUnreachable();
       }
     } catch (err) {
@@ -1852,20 +2817,24 @@ async function main(): Promise<void> {
   }, 60_000);
 
   // Automation evaluation loop
-  setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
+  workerTimers.automation = setInterval(() => evaluateAndExecuteAutomations(), config.automation_eval_seconds * 1000);
 
   // Sync automations from cloud every 5 minutes
-  setInterval(async () => {
+  workerTimers.syncAutomations = setInterval(async () => {
     await syncAutomationsFromCloud();
     await pushExecutionLogs();
   }, 5 * 60 * 1000);
 
   // Refresh meter mappings every 5 minutes
-  setInterval(() => fetchMeterMappings(), 5 * 60 * 1000);
+  workerTimers.meterMappings = setInterval(() => fetchMeterMappings(), 5 * 60 * 1000);
+
+  // Push device inventory snapshot to cloud.
+  setTimeout(() => pushDeviceSnapshot(), 25_000);
+  workerTimers.snapshot = setInterval(() => pushDeviceSnapshot(), 2 * 60 * 1000);
 
   // Auto backup
   if (config.auto_backup_hours > 0) {
-    setInterval(() => sendBackup(), config.auto_backup_hours * 60 * 60 * 1000);
+    workerTimers.backup = setInterval(() => sendBackup(), config.auto_backup_hours * 60 * 60 * 1000);
   }
 
   console.log("[main] All loops started. AICONO EMS Gateway is running.");

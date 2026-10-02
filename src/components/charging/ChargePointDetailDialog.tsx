@@ -12,13 +12,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Wifi, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings } from "lucide-react";
+import { Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Wifi, Camera, Trash2, Edit, Save, X, Clock, MapPin, Search, Shield, Info as InfoIcon, Settings, Eye, EyeOff, RefreshCw, Copy, Lock, Unlock, Gauge, Wrench } from "lucide-react";
+import { DocumentBadge } from "@/components/documents/DocumentBadge";
+import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
 import { format } from "date-fns";
-import { fmtKwh, fmtKw } from "@/lib/formatCharging";
+import { fmtKwh, fmtKw, normalizeConnectorStatus, isChargePointOnline } from "@/lib/formatCharging";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { AccessControlSettings } from "@/components/charging/AccessControlSettings";
+import { AutoRebootSettings } from "@/components/charging/AutoRebootSettings";
+import { PowerLimitScheduler, defaultPowerLimitSchedule, type PowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
+import { getOcppHost } from "@/lib/ocppEnvironment";
+import { downloadSecureStorageObject } from "@/lib/secureStorage";
+const OCPP_HOST = getOcppHost();
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
   available: { label: "Verfügbar", variant: "default", icon: Zap },
@@ -51,9 +59,11 @@ export default function ChargePointDetailDialog({
   onDelete,
 }: Props) {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "" });
+  const [form, setForm] = useState({ name: "", ocpp_id: "", ocpp_password: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connection_protocol: "wss" as "ws" | "wss", auth_required: true });
+  const [showPassword, setShowPassword] = useState(false);
   const [coords, setCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -64,14 +74,18 @@ export default function ChargePointDetailDialog({
     setForm({
       name: cp.name,
       ocpp_id: cp.ocpp_id,
+      ocpp_password: cp.ocpp_password || "",
       address: cp.address || "",
       connector_count: String(cp.connector_count),
       max_power_kw: String(cp.max_power_kw),
       vendor: cp.vendor || "",
       model: cp.model || "",
+      connection_protocol: ((cp as any).connection_protocol === "ws" ? "ws" : "wss"),
+      auth_required: (cp as any).auth_required ?? true,
     });
     setCoords({ lat: cp.latitude, lng: cp.longitude });
-    setPhotoUrl(cp.photo_url || null);
+    setPhotoUrl(cp.photo_storage_path || cp.photo_url || null);
+    setPhotoPreviewUrl(cp.photo_url || null);
     setEditing(true);
   };
 
@@ -83,6 +97,7 @@ export default function ChargePointDetailDialog({
       id: cp.id,
       name: form.name,
       ocpp_id: form.ocpp_id,
+      ocpp_password: form.auth_required && form.ocpp_password ? form.ocpp_password : null,
       address: form.address || null,
       latitude: coords.lat,
       longitude: coords.lng,
@@ -91,8 +106,20 @@ export default function ChargePointDetailDialog({
       vendor: form.vendor || null,
       model: form.model || null,
       photo_url: photoUrl,
+      connection_protocol: form.connection_protocol,
+      auth_required: form.auth_required,
     } as any);
     setEditing(false);
+  };
+
+  const generatePassword = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    let pw = "";
+    const arr = new Uint32Array(24);
+    crypto.getRandomValues(arr);
+    for (let i = 0; i < 24; i++) pw += chars[arr[i] % chars.length];
+    setForm((f) => ({ ...f, ocpp_password: pw }));
+    setShowPassword(true);
   };
 
   const geocodeAddress = async () => {
@@ -124,26 +151,37 @@ export default function ChargePointDetailDialog({
     const file = e.target.files?.[0];
     if (!file || !cp) return;
     setUploading(true);
-    const ext = file.name.split(".").pop();
-    const path = `charge-points/${cp.id}.${ext}`;
-    const { error } = await supabase.storage.from("meter-photos").upload(path, file, { upsert: true });
-    if (error) {
-      toast({ title: "Upload fehlgeschlagen", description: error.message, variant: "destructive" });
-    } else {
-      const { data: signedData } = await supabase.storage.from("meter-photos").createSignedUrl(path, 3600);
-      setPhotoUrl(signedData?.signedUrl || null);
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `charge-points/${cp.id}/${crypto.randomUUID()}.${ext}`;
+
+      const { error } = await supabase.storage
+        .from("meter-photos")
+        .upload(path, file, { contentType: file.type || undefined });
+      if (error) throw error;
+
+      const previewUrl = await downloadSecureStorageObject("meter-photos", path);
+      setPhotoUrl(path);
+      setPhotoPreviewUrl(previewUrl);
+      onUpdate({ id: cp.id, photo_url: path } as any);
+      toast({ title: "Foto hochgeladen", description: "Das Foto wurde gespeichert." });
+    } catch (err: any) {
+      console.error("Charge point photo upload failed:", err);
+      toast({ title: "Upload fehlgeschlagen", description: err?.message ?? "Unbekannter Fehler", variant: "destructive" });
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   };
 
   if (!cp) return null;
 
-  const cfg = statusConfig[cp.status] || statusConfig.offline;
+  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat, undefined, (cp as any).last_ws_pong_at);
+  const cfg = statusConfig[normalizeConnectorStatus(cp.status, cpOnline)] || statusConfig.offline;
   const StatusIcon = cfg.icon;
   const cpSessions = sessions
     .filter((s) => s.charge_point_id === cp.id)
     .slice(0, 5);
-  const currentPhoto = editing ? photoUrl : cp.photo_url;
+  const currentPhoto = editing ? (photoPreviewUrl || (photoUrl?.startsWith("http") ? photoUrl : null)) : cp.photo_url;
   const isInGroup = !!cp.group_id;
 
   return (
@@ -163,18 +201,23 @@ export default function ChargePointDetailDialog({
                 </Badge>
               )}
             </div>
-            <Badge variant={cfg.variant} className="ml-2">
-              <StatusIcon className="h-3 w-3 mr-1" />
-              {cfg.label}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <DocumentBadge scope="charge_point" scopeId={cp.id} label={cp.name} />
+              <Badge variant={cfg.variant} className="ml-2">
+                <StatusIcon className="h-3 w-3 mr-1" />
+                {cfg.label}
+              </Badge>
+            </div>
           </div>
         </DialogHeader>
 
         <Tabs defaultValue="details">
           <TabsList className="w-full">
             <TabsTrigger value="details" className="flex-1 text-xs">Details</TabsTrigger>
-            <TabsTrigger value="access" className="flex-1 gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" />Zugangssteuerung</TabsTrigger>
+            <TabsTrigger value="energy" className="flex-1 gap-1.5 text-xs"><Gauge className="h-3.5 w-3.5" />Energie</TabsTrigger>
+            <TabsTrigger value="access" className="flex-1 gap-1.5 text-xs"><Shield className="h-3.5 w-3.5" />Zugang</TabsTrigger>
             <TabsTrigger value="sessions" className="flex-1 gap-1.5 text-xs"><Clock className="h-3.5 w-3.5" />Ladevorgänge</TabsTrigger>
+            <TabsTrigger value="maintenance" className="flex-1 gap-1.5 text-xs"><Wrench className="h-3.5 w-3.5" />Wartung</TabsTrigger>
           </TabsList>
 
           <TabsContent value="details" className="mt-4 space-y-4">
@@ -207,7 +250,7 @@ export default function ChargePointDetailDialog({
             {connectors.length > 0 && (
               <div className="space-y-2">
                 <p className="text-sm font-medium text-muted-foreground">Anschluss-Status</p>
-                <ConnectorStatusGrid connectors={connectors} wsConnected={cp?.ws_connected ?? false} />
+                <ConnectorStatusGrid connectors={connectors} wsConnected={cpOnline} lastHeartbeat={cp?.last_heartbeat ?? null} />
               </div>
             )}
 
@@ -217,6 +260,73 @@ export default function ChargePointDetailDialog({
                 <div className="grid grid-cols-2 gap-4">
                   <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
                   <div><Label>OCPP-ID</Label><Input value={form.ocpp_id} onChange={(e) => setForm({ ...form, ocpp_id: e.target.value })} /></div>
+                </div>
+                <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
+                  <p className="text-sm font-medium flex items-center gap-2"><Shield className="h-4 w-4" /> Verbindungs-Konfiguration</p>
+                  <div>
+                    <Label className="text-xs">Protokoll</Label>
+                    <div className="grid grid-cols-2 gap-2 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, connection_protocol: "wss" })}
+                        className={`flex items-center gap-2 p-2 border rounded-md text-sm ${form.connection_protocol === "wss" ? "border-primary bg-primary/10" : "border-border"}`}
+                      >
+                        <Lock className="h-4 w-4" /> wss:// (empfohlen)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, connection_protocol: "ws" })}
+                        className={`flex items-center gap-2 p-2 border rounded-md text-sm ${form.connection_protocol === "ws" ? "border-primary bg-primary/10" : "border-border"}`}
+                      >
+                        <Unlock className="h-4 w-4" /> ws:// (unverschlüsselt)
+                      </button>
+                    </div>
+                    {form.connection_protocol === "ws" && (
+                      <p className="text-xs text-destructive mt-1">⚠ Unverschlüsselt – nur für Wallboxen ohne TLS.</p>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-sm">Passwort-geschützt (Basic Auth)</Label>
+                      <p className="text-xs text-muted-foreground">Aus, wenn die Wallbox keine Passwort-Eingabe unterstützt.</p>
+                    </div>
+                    <Switch
+                      checked={form.auth_required}
+                      onCheckedChange={(v) => setForm({ ...form, auth_required: v, ocpp_password: v ? form.ocpp_password : "" })}
+                    />
+                  </div>
+                  {form.auth_required && (
+                    <div>
+                      <Label className="text-xs">OCPP-Passwort (Basic Auth)</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          value={form.ocpp_password}
+                          onChange={(e) => setForm({ ...form, ocpp_password: e.target.value })}
+                          placeholder="z.B. 24-stelliges Zufallspasswort"
+                          className="flex-1 font-mono text-xs"
+                          autoComplete="new-password"
+                        />
+                        <Button type="button" variant="outline" size="icon" onClick={() => setShowPassword((v) => !v)} title={showPassword ? "Verbergen" : "Anzeigen"}>
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                        <Button type="button" variant="outline" size="icon" onClick={generatePassword} title="Sicheres Passwort generieren">
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                        {form.ocpp_password && (
+                          <Button type="button" variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(form.ocpp_password); toast({ title: "Passwort kopiert" }); }} title="Kopieren">
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <Alert className="py-2">
+                    <InfoIcon className="h-3.5 w-3.5" />
+                    <AlertDescription className="text-xs">
+                      Falls die Wallbox ein Server-Zertifikat verlangt: <strong>„Amazon Root CA 1"</strong> oder <strong>„Let's Encrypt R3"</strong> wählen.
+                    </AlertDescription>
+                  </Alert>
                 </div>
                 <div>
                   <Label>Adresse / Standort</Label>
@@ -262,7 +372,7 @@ export default function ChargePointDetailDialog({
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={cancelEdit}><X className="h-4 w-4 mr-1" />Abbrechen</Button>
-                  <Button onClick={saveEdit} disabled={!form.name || !form.ocpp_id}><Save className="h-4 w-4 mr-1" />Speichern</Button>
+                  <Button onClick={saveEdit} disabled={!form.name}><Save className="h-4 w-4 mr-1" />Speichern</Button>
                 </div>
               </div>
             ) : (
@@ -275,7 +385,7 @@ export default function ChargePointDetailDialog({
                   <div><span className="text-muted-foreground">Anschlüsse:</span> {cp.connector_count}</div>
                   <div><span className="text-muted-foreground">Max. Leistung:</span> {fmtKw(cp.max_power_kw)}</div>
                   <div><span className="text-muted-foreground">Firmware:</span> {cp.firmware_version || "—"}</div>
-                  <div><span className="text-muted-foreground">Letzter Heartbeat:</span> {cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm") : "—"}</div>
+                  <div><span className="text-muted-foreground">Letzte OCPP-Nachricht:</span> {cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm") : "—"}</div>
                   <div><span className="text-muted-foreground">WS-Verbindung:</span> {cp.ws_connected ? (
                     <span className="text-emerald-600 dark:text-emerald-400 font-medium">Online{cp.ws_connected_since ? ` seit ${format(new Date(cp.ws_connected_since), "dd.MM. HH:mm")}` : ""}</span>
                   ) : (
@@ -298,13 +408,13 @@ export default function ChargePointDetailDialog({
                     <div className="flex items-start gap-2">
                       <Badge variant="outline" className="text-[10px] mt-0.5 shrink-0">wss://</Badge>
                       <code className="text-xs break-all text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
-                        wss://xnveugycurplszevdxtw.supabase.co/functions/v1/ocpp-ws-proxy/{cp.ocpp_id}
+                        wss://{OCPP_HOST}/{cp.ocpp_id}
                       </code>
                     </div>
                     <div className="flex items-start gap-2">
                       <Badge variant="outline" className="text-[10px] mt-0.5 shrink-0 border-amber-500/50 text-amber-600 dark:text-amber-400">ws://</Badge>
                       <code className="text-xs break-all text-muted-foreground font-mono bg-muted px-2 py-1 rounded">
-                        ws://ocpp.aicono.org/{cp.ocpp_id}
+                        ws://{OCPP_HOST}/{cp.ocpp_id}
                       </code>
                     </div>
                     <p className="text-[11px] text-muted-foreground/70">
@@ -320,6 +430,29 @@ export default function ChargePointDetailDialog({
                   </div>
                 )}
               </div>
+            )}
+          </TabsContent>
+
+          {/* Energy Tab */}
+          <TabsContent value="energy" className="mt-4">
+            {isInGroup ? (
+              <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <InfoIcon className="h-4 w-4 text-muted-foreground" />
+                  Dieser Ladepunkt ist einer Gruppe zugewiesen.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Energiemanagement (Leistungsbegrenzung, Lastmanagement, PV-Überschuss, Günstig-Laden) wird über die Gruppe konfiguriert.
+                </p>
+              </div>
+            ) : (
+              <PowerLimitScheduler
+                value={(cp.power_limit_schedule as PowerLimitSchedule) || defaultPowerLimitSchedule}
+                onChange={(v) => onUpdate({ id: cp.id, power_limit_schedule: v } as any)}
+                onSave={() => toast({ title: "Leistungsbegrenzung gespeichert" })}
+                disabled={!isAdmin}
+                maxPowerKw={cp.max_power_kw}
+              />
             )}
           </TabsContent>
 
@@ -339,7 +472,7 @@ export default function ChargePointDetailDialog({
               <AccessControlSettings
                 entityType="chargepoint"
                 entityId={cp.id}
-                settings={cp.access_settings || { free_charging: false, user_group_restriction: false, max_charging_duration_min: 480 }}
+                settings={cp.access_settings || { free_charging: false, user_group_restriction: false, max_charging_duration_min: 0 }}
                 isAdmin={isAdmin}
                 onSave={(s) => onUpdate({ id: cp.id, access_settings: s } as any)}
               />
@@ -372,6 +505,15 @@ export default function ChargePointDetailDialog({
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          {/* Maintenance Tab */}
+          <TabsContent value="maintenance" className="mt-4">
+            <AutoRebootSettings
+              chargePoint={cp}
+              isAdmin={isAdmin}
+              onSave={(patch) => onUpdate({ id: cp.id, ...patch } as any)}
+            />
           </TabsContent>
         </Tabs>
       </DialogContent>

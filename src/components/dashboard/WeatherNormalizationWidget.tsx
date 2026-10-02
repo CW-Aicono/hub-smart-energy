@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from "recharts";
 import { Tooltip as ShadTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -11,6 +12,9 @@ import { Thermometer, TrendingDown, TrendingUp } from "lucide-react";
 import { useWeatherNormalization } from "@/hooks/useWeatherNormalization";
 import { formatEnergy } from "@/lib/formatEnergy";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useLocationEnergyTypesSet } from "@/hooks/useLocationEnergySources";
+
+
 
 interface WeatherNormalizationWidgetProps {
   locationId: string | null;
@@ -37,11 +41,27 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
   const [selectedQuarter, setSelectedQuarter] = useState(Math.floor(currentMonth / 3));
   const [refTemp, setRefTemp] = useState(15);
 
+  const availableTypesSet = useLocationEnergyTypesSet(locationId);
+  // Für Heizung nutzbare Energieträger (Strom z.B. via Wärmepumpe/Heizstab)
+  const HEATING_CAPABLE = new Set(["gas", "waerme", "oel", "fernwaerme", "pellets", "holz", "strom"]);
   const ENERGY_TYPES = [
     { value: "gas", label: T("energy.gas") },
     { value: "waerme", label: T("energy.waerme") },
+    { value: "oel", label: T("energy.oel") },
+    { value: "fernwaerme", label: T("energy.fernwaerme") },
+    { value: "pellets", label: T("energy.pellets") },
+    { value: "holz", label: T("energy.holz") },
     { value: "strom", label: T("energy.strom") },
-  ];
+  ].filter((e) => HEATING_CAPABLE.has(e.value) && availableTypesSet.has(e.value));
+
+  // Falls die aktuell gewählte Energiequelle nicht mehr verfügbar ist, auf erste verfügbare wechseln
+  useEffect(() => {
+    if (ENERGY_TYPES.length === 0) return;
+    if (!ENERGY_TYPES.some((e) => e.value === energyType)) {
+      setEnergyType(ENERGY_TYPES[0].value);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ENERGY_TYPES.map((e) => e.value).join(","), energyType]);
 
   const PERIOD_OPTIONS = [
     { value: "month", label: T("chart.periodMonth") },
@@ -57,12 +77,15 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
     loading,
     error,
     hasData,
+    totalHotWater,
+    hotWaterSource,
   } = useWeatherNormalization({
     locationId,
     energyType,
     referenceTemperature: refTemp,
     year,
   });
+
 
   const FULL_MONTHS = Array.from({ length: 12 }, (_, i) => T(`month.${i}`));
 
@@ -103,12 +126,37 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
 
   const filteredTotalActual = filteredData.reduce((s, d) => s + d.actualConsumption, 0);
   const filteredTotalNormalized = filteredData.reduce((s, d) => s + d.normalizedConsumption, 0);
+  const filteredTotalHotWater = filteredData.reduce((s, d) => s + (d.hotWaterConsumption || 0), 0);
   const filteredTotalDeviation = filteredTotalActual > 0
     ? Math.round(((filteredTotalNormalized - filteredTotalActual) / filteredTotalActual) * 10000) / 100
     : 0;
 
+  const hotWaterSourceLabel =
+    hotWaterSource === "manual"
+      ? "manuell"
+      : hotWaterSource === "summer-baseline"
+        ? "Sommer-Baseline"
+        : hotWaterSource === "fallback"
+          ? "Fallback 12 %"
+          : "–";
+  const showHotWaterCard = energyType !== "strom" && filteredTotalHotWater > 0;
+
+
   if (loading) {
-    return (
+    type SortKey = "month" | "degreeDays" | "temp" | "actual" | "norm" | "dev";
+  const { sorted: sortedTableData, sort: tableSort, toggle: tableToggle } = useSortableData(filteredData, (r, k) => {
+    switch (k) {
+      case "month": return r.month;
+      case "degreeDays": return r.degreeDays;
+      case "temp": return r.avgTemperature;
+      case "actual": return r.actualConsumption;
+      case "norm": return r.normalizedConsumption;
+      case "dev": return r.deviationPercent;
+      default: return null;
+    }
+  });
+
+  return (
       <Card>
         <CardContent className="p-6">
           <Skeleton className="h-[400px]" />
@@ -116,6 +164,19 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
       </Card>
     );
   }
+
+  type SortKey = "month" | "degreeDays" | "temp" | "actual" | "norm" | "dev";
+  const { sorted: sortedTableData, sort: tableSort, toggle: tableToggle } = useSortableData(filteredData, (r, k) => {
+    switch (k) {
+      case "month": return r.month;
+      case "degreeDays": return r.degreeDays;
+      case "temp": return r.avgTemperature;
+      case "actual": return r.actualConsumption;
+      case "norm": return r.normalizedConsumption;
+      case "dev": return r.deviationPercent;
+      default: return null;
+    }
+  });
 
   return (
     <Card>
@@ -225,11 +286,36 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
         ) : (
           <>
             {/* KPI Cards */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className={`grid ${showHotWaterCard ? "grid-cols-4" : "grid-cols-3"} gap-3 mb-4`}>
               <div className="rounded-lg bg-muted/50 p-3 text-center">
                 <p className="text-xs text-muted-foreground">{T("wn.actual")}</p>
                 <p className="text-lg font-semibold">{formatEnergy(filteredTotalActual)}</p>
               </div>
+              {showHotWaterCard && (
+                <div className="rounded-lg bg-muted/50 p-3 text-center">
+                  <ShadTooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <p className="text-xs text-muted-foreground cursor-help">
+                          Warmwasser (geschätzt)
+                        </p>
+                        <p className="text-lg font-semibold">
+                          {formatEnergy(filteredTotalHotWater)}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          {hotWaterSourceLabel}
+                        </p>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-[280px] text-xs">
+                      Warmwasser-Sockel wird vor der Witterungsbereinigung abgezogen
+                      und danach unverändert wieder addiert (temperaturunabhängig).
+                      Quelle: {hotWaterSourceLabel}. Manuellen Wert im Standort
+                      hinterlegen für höhere Genauigkeit.
+                    </TooltipContent>
+                  </ShadTooltip>
+                </div>
+              )}
               <div className="rounded-lg bg-muted/50 p-3 text-center">
                 <p className="text-xs text-muted-foreground">{T("wn.normalized")}</p>
                 <p className="text-lg font-semibold">{formatEnergy(filteredTotalNormalized)}</p>
@@ -242,6 +328,7 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
                 </p>
               </div>
             </div>
+
 
             <Tabs defaultValue="chart">
               <TabsList className="mb-3">
@@ -270,11 +357,17 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
                         if (payload?.[0]?.payload?.fullMonthLabel) return payload[0].payload.fullMonthLabel;
                         return label;
                       }}
-                      formatter={(value: number, name: string) => [
-                        value.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + yAxisUnit,
-                        name === "actualScaled" ? T("wn.actual") : T("wn.normalized"),
-                      ]}
+                      formatter={(_value: number, name: string, item: any) => {
+                        const raw = name === "actualScaled"
+                          ? item?.payload?.actualConsumption ?? 0
+                          : item?.payload?.normalizedConsumption ?? 0;
+                        return [
+                          formatEnergy(raw),
+                          name === "actualScaled" ? T("wn.actual") : T("wn.normalized"),
+                        ];
+                      }}
                     />
+
                     <Legend formatter={(v) => (v === "actualScaled" ? T("wn.actual") : T("wn.normalized"))} />
                     <Bar dataKey="actualScaled" fill="hsl(var(--chart-1))" radius={[2, 2, 0, 0]} />
                     <Bar dataKey="normalizedScaled" fill="hsl(var(--chart-3))" radius={[2, 2, 0, 0]} />
@@ -287,16 +380,16 @@ const WeatherNormalizationWidget = ({ locationId, onExpand, onCollapse }: Weathe
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{T("wn.monthCol")}</TableHead>
-                        <TableHead className="text-right">{T("wn.degreeDays")}</TableHead>
-                        <TableHead className="text-right">{T("wn.avgTemp")}</TableHead>
-                        <TableHead className="text-right">{T("wn.actualShort")}</TableHead>
-                        <TableHead className="text-right">{T("wn.normalized")}</TableHead>
-                        <TableHead className="text-right">{T("wn.devShort")}</TableHead>
+                        <SortableHead sortKey="month" current={tableSort} onToggle={tableToggle}>{T("wn.monthCol")}</SortableHead>
+                        <SortableHead sortKey="degreeDays" current={tableSort} onToggle={tableToggle} className="text-right">{T("wn.degreeDays")}</SortableHead>
+                        <SortableHead sortKey="temp" current={tableSort} onToggle={tableToggle} className="text-right">{T("wn.avgTemp")}</SortableHead>
+                        <SortableHead sortKey="actual" current={tableSort} onToggle={tableToggle} className="text-right">{T("wn.actualShort")}</SortableHead>
+                        <SortableHead sortKey="norm" current={tableSort} onToggle={tableToggle} className="text-right">{T("wn.normalized")}</SortableHead>
+                        <SortableHead sortKey="dev" current={tableSort} onToggle={tableToggle} className="text-right">{T("wn.devShort")}</SortableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredData.map((row) => (
+                      {sortedTableData.map((row) => (
                         <TableRow key={row.month}>
                           <TableCell className="font-medium">{row.monthLabel}</TableCell>
                           <TableCell className="text-right">{row.degreeDays.toFixed(1)}</TableCell>

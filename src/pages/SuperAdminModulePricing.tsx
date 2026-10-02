@@ -47,7 +47,7 @@ const PriceInput = ({ currentPrice, unit, onSave }: PriceInputProps) => {
 const SuperAdminModulePricing = () => {
   const { user, loading: authLoading } = useAuth();
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
-  const { prices, isLoading, updatePrice, getPrice, getStandardPrice, getIndustryPrice, getIndustryStandardPrice } = useModulePrices();
+  const { prices, isLoading, updatePrice, getPrice, getStandardPrice, getIndustryPrice, getIndustryStandardPrice, getPartnerPrice, getPartnerIndustryPrice } = useModulePrices();
   const { t } = useSATranslation();
   const [sector, setSector] = useState<"kommune" | "industrie">("kommune");
 
@@ -89,10 +89,10 @@ const SuperAdminModulePricing = () => {
               </div>
             </CardHeader>
             <CardContent>
-              {/* Column headers */}
               <div className="flex items-center justify-between gap-4 mb-4 pb-2 border-b">
                 <Label className="text-base flex-1 font-semibold">Modul</Label>
                 <div className="flex gap-4">
+                  <span className="text-sm font-semibold text-muted-foreground w-36 text-center">Partner-Einkauf</span>
                   <span className="text-sm font-semibold text-muted-foreground w-36 text-center">AICONO e.&thinsp;V.</span>
                   <span className="text-sm font-semibold text-muted-foreground w-36 text-center">Standardpreis</span>
                 </div>
@@ -100,12 +100,24 @@ const SuperAdminModulePricing = () => {
               <div className="space-y-4">
                 {editableModules.map((mod) => {
                   const unit = mod.code === "support_billing" ? "€/15Min" : "€/Mo";
+                  const partnerPrice = sector === "kommune" ? getPartnerPrice(mod.code) : getPartnerIndustryPrice(mod.code);
                   const memberPrice = sector === "kommune" ? getPrice(mod.code) : getIndustryPrice(mod.code);
                   const stdPrice = sector === "kommune" ? getStandardPrice(mod.code) : getIndustryStandardPrice(mod.code);
                   return (
                     <div key={mod.code} className="flex items-center justify-between gap-4">
                       <Label className="text-base flex-1">{mod.label}</Label>
                       <div className="flex gap-4">
+                        <PriceInput
+                          currentPrice={partnerPrice}
+                          unit={unit}
+                          onSave={(val) =>
+                            updatePrice.mutate(
+                              sector === "kommune"
+                                ? { moduleCode: mod.code, partnerPriceMonthly: val }
+                                : { moduleCode: mod.code, partnerIndustryPriceMonthly: val }
+                            )
+                          }
+                        />
                         <PriceInput
                           currentPrice={memberPrice}
                           unit={unit}
@@ -133,7 +145,11 @@ const SuperAdminModulePricing = () => {
                   );
                 })}
               </div>
-              <p className="text-xs text-muted-foreground mt-6">{t("module_pricing.hint")}</p>
+              <p className="text-xs text-muted-foreground mt-6">
+                <strong>Partner-Einkauf</strong>: Einstandspreis für Vertriebspartner im Wiederverkaufs-Modell.{" "}
+                <strong>AICONO e.&thinsp;V.</strong>: Vergünstigter Mitgliederpreis.{" "}
+                <strong>Standardpreis</strong>: empfohlener Endkundenpreis (auch Default-Verkaufspreis für Partner).
+              </p>
             </CardContent>
           </Card>
         </div>

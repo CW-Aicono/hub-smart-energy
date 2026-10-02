@@ -6,8 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ChevronDown, ChevronRight, Euro, Plus, Pencil, Trash2, Zap, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useEnergyPrices, EnergyPrice } from "@/hooks/useEnergyPrices";
@@ -43,6 +45,17 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPrice, setEditingPrice] = useState<EnergyPrice | null>(null);
   const { prices, loading, addPrice, updatePrice, deletePrice } = useEnergyPrices(locationId);
+  type SortKey = "energy_type" | "meter" | "price" | "valid_from";
+  const { sorted, sort, toggle } = useSortableData<EnergyPrice, SortKey>(prices, (p, k) => {
+    switch (k) {
+      case "energy_type": return T(ENERGY_TYPE_KEYS[p.energy_type] || `ep.${p.energy_type}`);
+      case "meter": return getMeterName(p.meter_id) || "";
+      case "price": return p.is_dynamic ? Number(p.spot_markup_per_unit) : Number(p.price_per_unit);
+      case "valid_from": return new Date(p.valid_from).getTime();
+      default: return null;
+    }
+  });
+
   const { meters } = useMeters(locationId);
   const { tenant } = useTenant();
   const { currentPrice: currentSpotPrice } = useSpotPrices();
@@ -145,7 +158,7 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
     <>
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CollapsibleTrigger asChild>
               <button className="flex items-center gap-2 text-left group">
                 {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
@@ -161,11 +174,12 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                 </div>
               </button>
             </CollapsibleTrigger>
-            <Button size="sm" onClick={openAddDialog}>
+            <Button size="sm" onClick={openAddDialog} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-1" />
               {T("ep.addPrice")}
             </Button>
           </CardHeader>
+
           <CollapsibleContent>
             <CardContent>
               {loading ? (
@@ -178,19 +192,25 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{T("ep.carrier")}</TableHead>
-                      <TableHead>{T("ep.meter")}</TableHead>
-                      <TableHead>{T("ep.price")}</TableHead>
-                      <TableHead>{T("ep.validFrom")}</TableHead>
+                      <SortableHead label={T("ep.carrier")} sortKey="energy_type" sort={sort} onToggle={toggle} />
+                      <SortableHead label={T("ep.meter")} sortKey="meter" sort={sort} onToggle={toggle} />
+                      <SortableHead label={T("ep.price")} sortKey="price" sort={sort} onToggle={toggle} />
+                      <SortableHead label={T("ep.validFrom")} sortKey="valid_from" sort={sort} onToggle={toggle} />
                       <TableHead className="w-[80px]"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {prices.map((p) => (
+                    {sorted.map((p) => (
                       <TableRow key={p.id}>
                         <TableCell>
                           <div className="flex items-center gap-1.5">
-                            {T(ENERGY_TYPE_KEYS[p.energy_type] || `ep.${p.energy_type}`)}
+                            <button
+                              type="button"
+                              onClick={() => openEditDialog(p)}
+                              className="text-left font-medium hover:underline focus:outline-none focus-visible:underline"
+                            >
+                              {T(ENERGY_TYPE_KEYS[p.energy_type] || `ep.${p.energy_type}`)}
+                            </button>
                             {p.is_dynamic && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5"><Zap className="h-2.5 w-2.5" />{T("ep.dynamic")}</Badge>}
                             {p.direction === "feed_in" && <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5 text-green-600 border-green-300"><ArrowUpFromLine className="h-2.5 w-2.5" />{T("ep.feedIn")}</Badge>}
                           </div>
@@ -213,21 +233,20 @@ export function EnergyPriceManagement({ locationId }: EnergyPriceManagementProps
                                   ({T("ep.currently")} {((currentSpotPrice.price_eur_mwh / 1000) + Number(p.spot_markup_per_unit)).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €/{p.unit})
                                 </span>
                               )}
+                              {p.price_includes_vat !== false && <span className="text-xs text-muted-foreground ml-1">inkl. MwSt.</span>}
                             </span>
                           ) : (
-                            <>{Number(p.price_per_unit).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €/{p.unit}</>
+                            <>{Number(p.price_per_unit).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €/{p.unit}{p.price_includes_vat !== false && <span className="text-xs text-muted-foreground ml-1">inkl. MwSt.</span>}</>
                           )}
                         </TableCell>
                         <TableCell>{new Date(p.valid_from).toLocaleDateString("de-DE")}</TableCell>
                         <TableCell>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(p)}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deletePrice(p.id)}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
+                          <RowActions
+                            items={[
+                              { label: T("common.edit"), icon: Pencil, onClick: () => openEditDialog(p) },
+                              { label: T("common.delete"), icon: Trash2, variant: "destructive", onClick: () => deletePrice(p.id) },
+                            ]}
+                          />
                         </TableCell>
                       </TableRow>
                     ))}

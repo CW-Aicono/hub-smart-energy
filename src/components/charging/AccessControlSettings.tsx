@@ -111,17 +111,21 @@ export function AccessControlSettings({ entityType, entityId, settings, isAdmin,
       <div className="flex items-center justify-between p-4 border rounded-lg">
         <div>
           <p className="font-medium">Maximale Ladedauer</p>
-          <p className="text-sm text-muted-foreground">Ladevorgang nach Zeitlimit automatisch beenden</p>
+          <p className="text-sm text-muted-foreground">Ladevorgang nach Zeitlimit automatisch beenden — <strong>0 = kein Limit</strong></p>
         </div>
         <div className="flex items-center gap-2">
           <Input
             type="number"
+            min={0}
             className="w-20"
             value={access.max_charging_duration_min}
-            onChange={(e) => setAccess({ ...access, max_charging_duration_min: parseInt(e.target.value) || 480 })}
+            onChange={(e) => setAccess({ ...access, max_charging_duration_min: Math.max(0, parseInt(e.target.value) || 0) })}
             disabled={disabled}
           />
           <span className="text-sm text-muted-foreground">min</span>
+          {access.max_charging_duration_min === 0 && (
+            <Badge variant="outline" className="text-xs">Kein Limit</Badge>
+          )}
         </div>
       </div>
 

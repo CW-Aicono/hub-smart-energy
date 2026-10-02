@@ -1,11 +1,14 @@
 import { useState, useMemo, useEffect } from "react";
 import { useMeters, Meter } from "@/hooks/useMeters";
+import { SortableHead as SortableHeadUI } from "@/components/ui/sortable-head";
 import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { useAlertRules, AlertRule } from "@/hooks/useAlertRules";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { useLoxoneSensorsMulti, type LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { GATEWAY_DEFINITIONS } from "@/lib/gatewayRegistry";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,11 +16,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkEditMetersDialog } from "./BulkEditMetersDialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Gauge, Plus, Pencil, Trash2, Archive, ArchiveRestore, Eye, EyeOff, Network,
   ChevronDown, ChevronRight, Thermometer, ToggleLeft, Lightbulb, DoorOpen,
-  Activity, Server, Zap,
+  Activity, Server, Zap, Inbox, ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -28,6 +33,14 @@ import { EditAlertRuleDialog } from "./EditAlertRuleDialog";
 import { MeterTreeView } from "./MeterTreeView";
 import { MeterAggregationWidget } from "./MeterAggregationWidget";
 import { ENERGY_TYPE_LABELS, ENERGY_BADGE_CLASSES } from "@/lib/energyTypeColors";
+import { filterAssignedGatewayDevices } from "@/lib/gatewayDeviceFiltering";
+import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
+import { LocationChargingInfrastructure } from "./LocationChargingInfrastructure";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
+import { getDeviceIconForSensor, getDeviceIconForMeter } from "@/lib/deviceIcons";
+import { energyUnitForMeter } from "@/lib/meterUnits";
+import { useLatestMeterValues } from "@/hooks/useLatestMeterValues";
+import { RowActions } from "@/components/ui/row-actions";
 
 interface MeterManagementProps {
   locationId: string;
@@ -62,43 +75,104 @@ function isSensorOnly(sensor: LoxoneSensor): boolean {
   return !isMeterDevice(sensor) && !isActuator(sensor);
 }
 
-function getSensorIcon(type: string) {
-  const cls = "h-4 w-4";
-  switch (type) {
-    case "temperature": return <Thermometer className={cls} />;
-    case "switch":
-    case "digital":
-    case "button": return <ToggleLeft className={cls} />;
-    case "light": return <Lightbulb className={cls} />;
-    case "blind": return <DoorOpen className={cls} />;
-    case "power": return <Gauge className={cls} />;
-    case "motion": return <Activity className={cls} />;
-    default: return <Server className={cls} />;
-  }
+
+
+
+type DeviceSortKey = "type" | "name" | "room" | "assignedRoom" | "gateway" | "controlType" | "value" | "status";
+
+function parseNumeric(v: unknown): number | null {
+  if (v == null) return null;
+  if (typeof v === "number") return isNaN(v) ? null : v;
+  const s = String(v).trim();
+  if (!s) return null;
+  const cleaned = s.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? null : num;
 }
 
-function getUnitIcon(unit: string) {
-  const cls = "h-4 w-4";
-  const u = (unit || "").toLowerCase();
-  if (u === "°c" || u === "°f" || u === "k") return <Thermometer className={cls} />;
-  if (u === "kwh" || u === "kw" || u === "w" || u === "wh") return <Zap className={cls} />;
-  if (u === "v" || u === "a") return <Activity className={cls} />;
-  return <Gauge className={cls} />;
-}
+// SortableHead — jetzt zentral aus @/components/ui/sortable-head importiert
+
 
 function DeviceTable({
   devices,
   type,
   meters,
+  roomNameById,
   onEditMeter,
   onCreateAndEdit,
+  onArchive,
+  onDelete,
+  showArchived,
+  isAdmin,
+  selectedIds,
+  onToggleId,
+  onToggleAll,
 }: {
   devices: (LoxoneSensor & { _integrationLabel: string; _integrationId: string })[];
-  type: "sensor" | "actuator";
+  type: "meter" | "sensor" | "actuator";
   meters: Meter[];
+  roomNameById: Map<string, string>;
   onEditMeter: (meter: Meter) => void;
   onCreateAndEdit: (device: LoxoneSensor & { _integrationId: string }, deviceType: string) => void;
+  onArchive?: (meter: Meter, archive: boolean) => void;
+  onDelete?: (meter: Meter) => void;
+  showArchived?: boolean;
+  isAdmin?: boolean;
+  selectedIds?: Set<string>;
+  onToggleId?: (meterId: string, checked: boolean) => void;
+  onToggleAll?: (meterIds: string[], checked: boolean) => void;
 }) {
+
+  const [sortKey, setSortKey] = useState<DeviceSortKey | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const handleSort = (k: DeviceSortKey) => {
+    if (sortKey === k) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(k);
+      setSortDir("asc");
+    }
+  };
+
+  const sensorUuidToMeter = new Map<string, Meter>();
+  meters.forEach((m) => { if (m.sensor_uuid) sensorUuidToMeter.set(m.sensor_uuid, m); });
+
+  const getAssignedRoom = (d: LoxoneSensor): string => {
+    const linked = sensorUuidToMeter.get(d.id);
+    if (linked?.room_id) return roomNameById.get(linked.room_id) || "";
+    return "";
+  };
+
+  const sortedDevices = useMemo(() => {
+    if (!sortKey) return devices;
+    const arr = [...devices];
+    const dir = sortDir === "asc" ? 1 : -1;
+    arr.sort((a, b) => {
+      let av: any; let bv: any;
+      switch (sortKey) {
+        case "type": av = a.unit || a.type; bv = b.unit || b.type; break;
+        case "name": av = a.name; bv = b.name; break;
+        case "room": av = a.room || ""; bv = b.room || ""; break;
+        case "assignedRoom": av = getAssignedRoom(a); bv = getAssignedRoom(b); break;
+        case "gateway": av = a._integrationLabel; bv = b._integrationLabel; break;
+        case "controlType": av = a.controlType; bv = b.controlType; break;
+        case "value": {
+          const an = parseNumeric(a.value); const bn = parseNumeric(b.value);
+          if (an != null && bn != null) return (an - bn) * dir;
+          if (an != null) return -1 * dir;
+          if (bn != null) return 1 * dir;
+          av = String(a.value ?? ""); bv = String(b.value ?? "");
+          break;
+        }
+        case "status": av = a.status; bv = b.status; break;
+      }
+      return String(av ?? "").localeCompare(String(bv ?? ""), "de", { sensitivity: "base", numeric: true }) * dir;
+    });
+    return arr;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devices, sortKey, sortDir, roomNameById, meters]);
+
   if (devices.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-4">
@@ -107,32 +181,85 @@ function DeviceTable({
     );
   }
 
-  const sensorUuidToMeter = new Map<string, Meter>();
-  meters.forEach((m) => { if (m.sensor_uuid) sensorUuidToMeter.set(m.sensor_uuid, m); });
-
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[40px]">Typ</TableHead>
-          <TableHead>Name</TableHead>
-          <TableHead>Raum</TableHead>
-          <TableHead>Gateway</TableHead>
-          <TableHead>Steuerungstyp</TableHead>
-          <TableHead className="text-right">Wert</TableHead>
-          <TableHead>Status</TableHead>
+          {isAdmin && onToggleAll && (
+            <TableHead className="w-8">
+              <Checkbox
+                checked={(() => {
+                  const linkedIds = sortedDevices
+                    .map((d) => sensorUuidToMeter.get(d.id)?.id)
+                    .filter((id): id is string => !!id);
+                  return linkedIds.length > 0 && linkedIds.every((id) => selectedIds?.has(id));
+                })()}
+                onCheckedChange={(v) => {
+                  const linkedIds = sortedDevices
+                    .map((d) => sensorUuidToMeter.get(d.id)?.id)
+                    .filter((id): id is string => !!id);
+                  onToggleAll(linkedIds, !!v);
+                }}
+                aria-label="Alle auswählen"
+              />
+            </TableHead>
+          )}
+          <TableHead className="w-[40px]">
+            <SortableHeadUI label="Typ" sortKey="type" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
+          </TableHead>
+          <TableHead>
+            <SortableHeadUI label="Name" sortKey="name" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
+          </TableHead>
+
+          <TableHead>
+            <SortableHeadUI label="Raum (Gateway)" sortKey="room" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
+          </TableHead>
+          <TableHead>
+            <SortableHeadUI label="Zugeordneter Raum" sortKey="assignedRoom" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
+          </TableHead>
+          <TableHead>
+            <SortableHeadUI label="Gateway" sortKey="gateway" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
+          </TableHead>
+          <TableHead>
+            <SortableHeadUI label="Steuerungstyp" sortKey="controlType" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
+          </TableHead>
+          <TableHead className="text-right">
+            <SortableHeadUI label="Wert" sortKey="value" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} align="right" />
+          </TableHead>
+          <TableHead>
+            <SortableHeadUI label="Status" sortKey="status" sort={{ key: sortKey, direction: sortDir }} onToggle={handleSort} />
+          </TableHead>
+          {isAdmin && <TableHead className="w-32" />}
         </TableRow>
       </TableHeader>
       <TableBody>
-        {devices.map((d) => {
+        {sortedDevices.map((d) => {
           const linkedMeter = sensorUuidToMeter.get(d.id);
+          const assignedRoom = linkedMeter?.room_id ? roomNameById.get(linkedMeter.room_id) : null;
           return (
-            <TableRow key={`${d._integrationLabel}-${d.id}`}>
+            <TableRow key={`${d._integrationLabel}-${d.id}`} className={linkedMeter?.is_archived ? "opacity-60" : ""}>
+              {isAdmin && onToggleAll && (
+                <TableCell className="w-8">
+                  {linkedMeter ? (
+                    <Checkbox
+                      checked={selectedIds?.has(linkedMeter.id) ?? false}
+                      onCheckedChange={(v) => onToggleId?.(linkedMeter.id, !!v)}
+                      aria-label={`${d.name} auswählen`}
+                    />
+                  ) : null}
+                </TableCell>
+              )}
               <TableCell>
                 <div className="p-1.5 rounded bg-muted w-fit">
-                  {d.unit ? getUnitIcon(d.unit) : getSensorIcon(d.type)}
+                  {(() => {
+                    const linked = sensorUuidToMeter.get(d.id);
+                    const dbType = ((linked as any)?.device_type as "meter" | "sensor" | "actuator" | undefined) || type;
+                    const Icon = getDeviceIconForSensor(d, dbType);
+                    return <Icon className="h-4 w-4" />;
+                  })()}
                 </div>
               </TableCell>
+
               <TableCell>
                 <button
                   className="font-medium text-left hover:underline text-primary cursor-pointer"
@@ -148,23 +275,104 @@ function DeviceTable({
                 </button>
               </TableCell>
               <TableCell className="text-muted-foreground">{d.room || "–"}</TableCell>
+              <TableCell className="text-muted-foreground">{assignedRoom || "–"}</TableCell>
               <TableCell>
                 <Badge variant="outline" className="text-[10px]">{d._integrationLabel}</Badge>
               </TableCell>
               <TableCell className="text-muted-foreground text-xs">{d.controlType}</TableCell>
               <TableCell className="text-right font-mono text-sm">
-                {d.value}{d.unit ? ` ${d.unit}` : ""}
+                {(() => {
+                  // Prefer the configured meter unit (e.g. m³/h for water) over the raw
+                  // sensor unit label reported by the gateway (which can be a wrong "kW").
+                  let unit = d.unit || "";
+                  if (linkedMeter) {
+                    const flow = linkedMeter.energy_type === "wasser" || linkedMeter.energy_type === "gas";
+                    const configured = (linkedMeter as any).source_unit_power || linkedMeter.unit;
+                    if (flow || (configured && configured !== unit)) {
+                      unit = configured || unit;
+                    }
+                  }
+                  const num = typeof d.rawValue === "number" ? d.rawValue : parseNumeric(d.value);
+                  const displayVal = num != null && Number.isFinite(num)
+                    ? num.toLocaleString("de-DE", { maximumFractionDigits: 2 })
+                    : d.value;
+                  return `${displayVal}${unit ? ` ${unit}` : ""}`;
+                })()}
               </TableCell>
               <TableCell>
                 <Badge variant={d.status === "online" ? "default" : "secondary"} className="text-[10px]">
                   {d.status === "online" ? "Online" : "Offline"}
                 </Badge>
               </TableCell>
+              {isAdmin && (
+                <TableCell>
+                  <RowActions
+                    items={[
+                      {
+                        label: "Archivieren",
+                        icon: Archive,
+                        onClick: () => linkedMeter && onArchive?.(linkedMeter, true),
+                        hidden: !linkedMeter || linkedMeter.is_archived || !onArchive,
+                      },
+                      {
+                        label: "Wiederherstellen",
+                        icon: ArchiveRestore,
+                        onClick: () => linkedMeter && onArchive?.(linkedMeter, false),
+                        hidden: !linkedMeter || !linkedMeter.is_archived || !onArchive,
+                      },
+                      {
+                        label: "Endgültig löschen",
+                        icon: Trash2,
+                        variant: "destructive",
+                        onClick: () => linkedMeter && onDelete?.(linkedMeter),
+                        hidden: !linkedMeter || !linkedMeter.is_archived || !onDelete,
+                      },
+                    ]}
+                  />
+                </TableCell>
+              )}
             </TableRow>
           );
         })}
       </TableBody>
     </Table>
+  );
+}
+
+function BulkToolbar({
+  count,
+  showArchived,
+  onBulkEdit,
+  onArchive,
+  onDelete,
+  onClear,
+}: {
+  count: number;
+  showArchived: boolean;
+  onBulkEdit: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 mb-2">
+      <span className="text-sm font-medium">{count} ausgewählt</span>
+      <div className="ml-auto flex gap-2">
+        <Button size="sm" variant="outline" onClick={onBulkEdit}>
+          <Pencil className="h-4 w-4 mr-1" /> Bearbeiten
+        </Button>
+        <Button size="sm" variant="outline" onClick={onArchive}>
+          {showArchived ? <ArchiveRestore className="h-4 w-4 mr-1" /> : <Archive className="h-4 w-4 mr-1" />}
+          {showArchived ? "Wiederherstellen" : "Archivieren"}
+        </Button>
+        <Button size="sm" variant="destructive" onClick={onDelete}>
+          <Trash2 className="h-4 w-4 mr-1" /> Löschen
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onClear}>
+          Aufheben
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -181,6 +389,38 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const [showArchived, setShowArchived] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [pendingSensorUuid, setPendingSensorUuid] = useState<string | null>(null);
+  const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
+  const [bulkEditType, setBulkEditType] = useState<null | "meters" | "sensors" | "actuators">(null);
+
+
+  // Build map of room_id -> room name for all floors of this location (for "Zugeordneter Raum" column)
+  const { data: roomsData = [] } = useQuery({
+    queryKey: ["meter-management-rooms", locationId],
+    enabled: !!locationId,
+    queryFn: async () => {
+      const { data: floors } = await supabase.from("floors").select("id").eq("location_id", locationId);
+      const floorIds = (floors ?? []).map((f: any) => f.id);
+      if (floorIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("floor_rooms")
+        .select("id, name")
+        .in("floor_id", floorIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
+  const roomNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    (roomsData as any[]).forEach((r) => m.set(r.id, r.name));
+    return m;
+  }, [roomsData]);
+
+
+  // Ladeinfrastruktur – Tab nur einblenden, wenn mindestens ein Ladepunkt
+  // direkt oder über eine Gruppe dieser Liegenschaft zugeordnet ist.
+  const { data: locationChargePoints = [] } = useLocationChargePoints(locationId);
+  const hasChargingInfra = locationChargePoints.length > 0;
 
   // Gateway integrations for sensor/actuator tabs
   const { locationIntegrations, loading: intLoading } = useLocationIntegrations(locationId);
@@ -264,12 +504,115 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
   const archivedMeters = meters.filter((m) => m.is_archived);
 
   // Split meters by device_type for tab filtering
-  const meterTypeMeters = activeMeters.filter((m) => (m as any).device_type === "meter" || !(m as any).device_type);
-  // Exclude meters whose sensor_uuid is already shown in the gateway DeviceTable
+  // Exclude meters whose sensor_uuid is already shown in the gateway DeviceTable (deduplication)
+  const meterTypeMeters = activeMeters.filter(
+    (m) =>
+      ((m as any).device_type === "meter" || !(m as any).device_type) &&
+      !(m.sensor_uuid && gatewayDeviceIds.has(m.sensor_uuid)),
+  );
   const sensorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "sensor" && !(m.sensor_uuid && gatewayDeviceIds.has(m.sensor_uuid)));
   const actuatorTypeMeters = activeMeters.filter((m) => (m as any).device_type === "actuator" && !(m.sensor_uuid && gatewayDeviceIds.has(m.sensor_uuid)));
 
-  const displayedMeters = showArchived ? archivedMeters : meterTypeMeters;
+  // Archivierte, aufgeteilt nach Geräte-Typ
+  const archivedMetersByType = archivedMeters.filter((m) => (m as any).device_type === "meter" || !(m as any).device_type);
+  const archivedSensorsByType = archivedMeters.filter((m) => (m as any).device_type === "sensor");
+  const archivedActuatorsByType = archivedMeters.filter((m) => (m as any).device_type === "actuator");
+
+  const displayedMeters = showArchived ? archivedMetersByType : meterTypeMeters;
+  const displayedSensors = showArchived ? archivedSensorsByType : sensorTypeMeters;
+  const displayedActuators = showArchived ? archivedActuatorsByType : actuatorTypeMeters;
+
+  const { values: latestMeterValues } = useLatestMeterValues(displayedMeters);
+
+  type MMSortKey = "name" | "room" | "energy" | "capture" | "value";
+  const [mmSortKey, setMmSortKey] = useState<MMSortKey | null>(null);
+  const [mmSortDir, setMmSortDir] = useState<"asc" | "desc">("asc");
+  const toggleMmSort = (k: MMSortKey) => {
+    if (mmSortKey === k) setMmSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setMmSortKey(k); setMmSortDir("asc"); }
+  };
+  const sortedDisplayedMeters = useMemo(() => {
+    if (!mmSortKey) return displayedMeters;
+    const dir = mmSortDir === "asc" ? 1 : -1;
+    const arr = [...displayedMeters];
+    arr.sort((a, b) => {
+      let av: any; let bv: any;
+      switch (mmSortKey) {
+        case "name": av = a.name; bv = b.name; break;
+        case "room": av = a.room_id ? roomNameById.get(a.room_id) || "" : ""; bv = b.room_id ? roomNameById.get(b.room_id) || "" : ""; break;
+        case "energy": av = ENERGY_TYPE_LABELS[a.energy_type] || a.energy_type; bv = ENERGY_TYPE_LABELS[b.energy_type] || b.energy_type; break;
+        case "capture": av = a.capture_type || ""; bv = b.capture_type || ""; break;
+        case "value": {
+          const an = latestMeterValues.get(a.id)?.value ?? null;
+          const bn = latestMeterValues.get(b.id)?.value ?? null;
+          if (an != null && bn != null) return (an - bn) * dir;
+          if (an != null) return -1 * dir;
+          if (bn != null) return 1 * dir;
+          return 0;
+        }
+      }
+      return String(av ?? "").localeCompare(String(bv ?? ""), "de", { sensitivity: "base", numeric: true }) * dir;
+    });
+    return arr;
+  }, [displayedMeters, mmSortKey, mmSortDir, latestMeterValues]);
+
+  const confirmDelete = async (m: Meter) => {
+    const ok = await confirmDialog({
+      title: "Zähler endgültig löschen?",
+      description: `Möchten Sie "${m.name}" endgültig löschen? Historische Messwerte bleiben erhalten, sind aber nicht mehr dieser Messstelle zugeordnet.`,
+      confirmLabel: "Endgültig löschen",
+    });
+    if (ok) deleteMeter(m.id);
+  };
+
+  // Gateway-Devices, die der User über den "Gefundene Geräte"-Dialog aktiv
+  // zugeordnet hat (= existieren als meters-Eintrag mit passender sensor_uuid).
+  // Nur diese werden in den Tabs gelistet. Single source of truth:
+  // src/lib/gatewayDeviceFiltering.ts
+  // Nur aktive (nicht archivierte) Meters für die Geräte-Zuordnung verwenden
+  const activeMetersForFilter = useMemo(() => meters.filter((m) => !m.is_archived), [meters]);
+  const archivedMetersForFilter = useMemo(() => meters.filter((m) => m.is_archived), [meters]);
+
+  const assignedMeterDevices = useMemo(
+    () => filterAssignedGatewayDevices(meterDevices, activeMetersForFilter),
+    [meterDevices, activeMetersForFilter],
+  );
+  const assignedActuatorDevices = useMemo(
+    () => filterAssignedGatewayDevices(actuatorDevices, activeMetersForFilter),
+    [actuatorDevices, activeMetersForFilter],
+  );
+  const assignedSensorDevices = useMemo(
+    () => filterAssignedGatewayDevices(sensorDevices, activeMetersForFilter),
+    [sensorDevices, activeMetersForFilter],
+  );
+
+  // Archivierte Gateway-Geräte (für die Archiv-Ansicht)
+  const archivedAssignedMeterDevices = useMemo(
+    () => filterAssignedGatewayDevices(meterDevices, archivedMetersForFilter),
+    [meterDevices, archivedMetersForFilter],
+  );
+  const archivedAssignedActuatorDevices = useMemo(
+    () => filterAssignedGatewayDevices(actuatorDevices, archivedMetersForFilter),
+    [actuatorDevices, archivedMetersForFilter],
+  );
+  const archivedAssignedSensorDevices = useMemo(
+    () => filterAssignedGatewayDevices(sensorDevices, archivedMetersForFilter),
+    [sensorDevices, archivedMetersForFilter],
+  );
+
+  // Anzahl der noch nicht zugeordneten Gateway-Geräte – nur für den Hinweis-
+  // Banner ("X neue Geräte verfügbar"), NICHT für die Listen-Anzeige.
+  const unassignedDevicesCount = useMemo(() => {
+    const assignedIds = new Set(meters.map((m) => m.sensor_uuid).filter(Boolean));
+    return allDevicesWithSource.filter((d) => !assignedIds.has(d.id)).length;
+  }, [allDevicesWithSource, meters]);
+
+  const scrollToIntegrations = () => {
+    const el = document.getElementById("location-integrations");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   // When a new meter is created for a gateway device, watch for it to appear and open edit
   useEffect(() => {
@@ -299,20 +642,39 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
     );
   };
 
+  const toggleSelectId = (id: string, checked: boolean) => {
+    setSelectedMeterIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = (ids: string[], checked: boolean) => {
+    setSelectedMeterIds((prev) => {
+      const next = new Set(prev);
+      if (checked) ids.forEach((id) => next.add(id));
+      else ids.forEach((id) => next.delete(id));
+      return next;
+    });
+  };
+
+
+
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
     <Card>
       <CardHeader>
         <CollapsibleTrigger asChild>
-          <button className="flex items-center gap-2 w-full text-left group">
-            {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+          <button className="flex items-start gap-2 w-full text-left group">
+            {isOpen ? <ChevronDown className="h-4 w-4 mt-1.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 mt-1.5 shrink-0 text-muted-foreground" />}
             <CardTitle className="flex items-center gap-2">
-              <Gauge className="h-5 w-5" />
+              <Gauge className="h-5 w-5 shrink-0" />
               {t("locSec.metersTitle" as any)}
               <HelpTooltip text={t("tooltip.meterManagement" as any)} />
             </CardTitle>
           </button>
         </CollapsibleTrigger>
+
         <CardDescription className="ml-6">
           {t("locSec.metersDesc" as any)}
         </CardDescription>
@@ -321,15 +683,35 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
       <CardContent>
         <Tabs defaultValue="meters">
           <TabsList>
-            <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({meterTypeMeters.length})</TabsTrigger>
-            <TabsTrigger value="sensors">Sensoren ({sensorDevices.length + sensorTypeMeters.length})</TabsTrigger>
-            <TabsTrigger value="actuators">Aktoren ({actuatorDevices.length + actuatorTypeMeters.length})</TabsTrigger>
+            <TabsTrigger value="meters">{t("mm.tabs.meters" as any)} ({meterTypeMeters.length + assignedMeterDevices.length})</TabsTrigger>
+            <TabsTrigger value="sensors">Sensoren ({assignedSensorDevices.length + sensorTypeMeters.length})</TabsTrigger>
+            <TabsTrigger value="actuators">Aktoren ({assignedActuatorDevices.length + actuatorTypeMeters.length})</TabsTrigger>
             <TabsTrigger value="tree" className="gap-1">
               <Network className="h-3.5 w-3.5" />
               {t("mm.tabs.tree" as any)}
             </TabsTrigger>
             <TabsTrigger value="alerts">{t("mm.tabs.alerts" as any)} ({alertRules.length})</TabsTrigger>
+            {hasChargingInfra && (
+              <TabsTrigger value="charging" className="gap-1">
+                <Zap className="h-3.5 w-3.5" />
+                Ladeinfrastruktur ({locationChargePoints.length})
+              </TabsTrigger>
+            )}
           </TabsList>
+
+          {unassignedDevicesCount > 0 && (
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-2">
+              <div className="flex items-center gap-2 text-sm">
+                <Inbox className="h-4 w-4 text-primary" />
+                <span>
+                  <strong>{unassignedDevicesCount}</strong> neue Geräte vom Gateway verfügbar – noch keinem Standort zugeordnet.
+                </span>
+              </div>
+              <Button variant="link" size="sm" className="h-auto p-0 text-primary" onClick={scrollToIntegrations}>
+                Jetzt zuordnen →
+              </Button>
+            </div>
+          )}
 
           <TabsContent value="meters" className="space-y-4">
             <div className="flex items-center justify-between">
@@ -346,6 +728,78 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 </Button>
               )}
             </div>
+            {isAdmin && selectedMeterIds.size > 0 && (
+              <div className="flex items-center gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
+                <span className="font-medium">{selectedMeterIds.size} ausgewählt</span>
+                <div className="flex-1" />
+                {!showArchived && (
+                  <Button size="sm" variant="outline" onClick={() => setBulkEditType("meters")}>
+                    <Pencil className="h-3.5 w-3.5 mr-1" /> Bearbeiten
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    const ids = Array.from(selectedMeterIds);
+                    for (const id of ids) await archiveMeter(id, !showArchived);
+                    setSelectedMeterIds(new Set());
+                  }}
+                >
+                  {showArchived ? <ArchiveRestore className="h-3.5 w-3.5 mr-1" /> : <Archive className="h-3.5 w-3.5 mr-1" />}
+                  {showArchived ? "Wiederherstellen" : "Archivieren"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    // Export selection from BOTH tables: top (virtual/manual) + gateway-linked meters.
+                    const rows = meters.filter((m) => selectedMeterIds.has(m.id));
+                    const header = ["Name", "Raum", "Energieart", "Erfassung", "Wert", "Einheit"];
+                    const csv = [header.join(";")]
+                      .concat(
+                        rows.map((r) => {
+                          const room = r.room_id ? roomNameById.get(r.room_id) || "" : "";
+                          const unit = energyUnitForMeter(r);
+                          const v = latestMeterValues.get(r.id)?.value;
+                          const val = v != null ? v.toLocaleString("de-DE", { maximumFractionDigits: 2 }) : "";
+                          return [r.name, room, r.energy_type ?? "", r.capture_type ?? "", val, unit]
+                            .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+                            .join(";");
+                        }),
+                      )
+                      .join("\n");
+                    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `zaehler-export-${new Date().toISOString().slice(0, 10)}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  CSV-Export
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={async () => {
+                    const ok = await confirmDialog({
+                      title: `${selectedMeterIds.size} Zähler endgültig löschen?`,
+                      description: "Historische Messwerte bleiben erhalten, sind aber nicht mehr zugeordnet.",
+                      confirmLabel: "Endgültig löschen",
+                    });
+                    if (!ok) return;
+                    const { error } = await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
+                    if (error) return;
+                    setSelectedMeterIds(new Set());
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Löschen
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setSelectedMeterIds(new Set())}>Auswahl leeren</Button>
+              </div>
+            )}
             {metersLoading ? (
               <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
             ) : displayedMeters.length === 0 ? (
@@ -353,20 +807,73 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 {showArchived ? t("mm.noArchivedMeters" as any) : t("mm.noMeters" as any)}
               </p>
             ) : (
+              <>
               <Table>
                 <TableHeader>
                   <TableRow>
-                     <TableHead>{t("common.name" as any)}</TableHead>
-                     <TableHead>{t("mm.meterNumber" as any)}</TableHead>
-                     <TableHead>{t("mm.captureType" as any)}</TableHead>
-                     <TableHead>{t("mm.energyType" as any)}</TableHead>
-                     <TableHead>{t("mm.unit" as any)}</TableHead>
+                     {isAdmin && (
+                       <TableHead className="w-8">
+                         <Checkbox
+                           checked={displayedMeters.length > 0 && displayedMeters.every((m) => selectedMeterIds.has(m.id))}
+                           onCheckedChange={(v) => {
+                             if (v) setSelectedMeterIds(new Set(displayedMeters.map((m) => m.id)));
+                             else setSelectedMeterIds(new Set());
+                           }}
+                           aria-label="Alle auswählen"
+                         />
+                       </TableHead>
+                     )}
+                     <TableHead className="w-[40px]">Typ</TableHead>
+                     <TableHead>
+                       <SortableHeadUI label={t("common.name" as any)} sortKey="name" sort={{ key: mmSortKey, direction: mmSortDir }} onToggle={toggleMmSort} />
+                     </TableHead>
+                     <TableHead>
+                       <SortableHeadUI label="Raum" sortKey="room" sort={{ key: mmSortKey, direction: mmSortDir }} onToggle={toggleMmSort} />
+                     </TableHead>
+                     <TableHead>
+                       <SortableHeadUI label={t("mm.energyType" as any)} sortKey="energy" sort={{ key: mmSortKey, direction: mmSortDir }} onToggle={toggleMmSort} />
+                     </TableHead>
+                     <TableHead>
+                       <SortableHeadUI label={t("mm.captureType" as any)} sortKey="capture" sort={{ key: mmSortKey, direction: mmSortDir }} onToggle={toggleMmSort} />
+                     </TableHead>
+                     <TableHead className="text-right">
+                       <SortableHeadUI label="Wert" sortKey="value" sort={{ key: mmSortKey, direction: mmSortDir }} onToggle={toggleMmSort} align="right" />
+                     </TableHead>
                      {isAdmin && <TableHead className="w-32" />}
                    </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {displayedMeters.map((m) => (
+                  {sortedDisplayedMeters.map((m) => {
+                    const Icon = getDeviceIconForMeter(m);
+                    const room = m.room_id ? roomNameById.get(m.room_id) : null;
+                    const latest = latestMeterValues.get(m.id);
+                    const unit = energyUnitForMeter(m);
+                    const valueText = latest?.value != null
+                      ? `${latest.value.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${unit}`
+                      : "—";
+                    return (
                     <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
+                       {isAdmin && (
+                         <TableCell className="w-8">
+                           <Checkbox
+                             checked={selectedMeterIds.has(m.id)}
+                             onCheckedChange={(v) => {
+                               setSelectedMeterIds((prev) => {
+                                 const next = new Set(prev);
+                                 if (v) next.add(m.id);
+                                 else next.delete(m.id);
+                                 return next;
+                               });
+                             }}
+                             aria-label={`${m.name} auswählen`}
+                           />
+                         </TableCell>
+                       )}
+                       <TableCell>
+                         <div className="p-1.5 rounded bg-muted w-fit">
+                           <Icon className="h-4 w-4" />
+                         </div>
+                       </TableCell>
                        <TableCell>
                          <button
                            className="font-medium text-left hover:underline text-primary cursor-pointer"
@@ -375,83 +882,168 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                            {m.name}
                          </button>
                        </TableCell>
-                      <TableCell>{m.meter_number || "–"}</TableCell>
+                       <TableCell className="text-muted-foreground">{room || "–"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={ENERGY_BADGE_CLASSES[m.energy_type] || ""}>{ENERGY_TYPE_LABELS[m.energy_type] || m.energy_type}</Badge>
+                      </TableCell>
                       <TableCell>
                         <Badge variant={m.capture_type === "automatic" ? "default" : m.capture_type === "virtual" ? "outline" : "secondary"}>
                           {m.capture_type === "automatic" ? t("mm.captureAutomatic" as any) : m.capture_type === "virtual" ? t("mm.captureVirtual" as any) : t("mm.captureManual" as any)}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={ENERGY_BADGE_CLASSES[m.energy_type] || ""}>{ENERGY_TYPE_LABELS[m.energy_type] || m.energy_type}</Badge>
-                      </TableCell>
-                      <TableCell>{m.unit}</TableCell>
+                      <TableCell className="text-right font-mono text-sm">{valueText}</TableCell>
                       {isAdmin && (
-                        <TableCell className="flex gap-1">
-                          {!m.is_archived && (
-                            <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {m.is_archived ? (
-                            <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, false)} title="Wiederherstellen">
-                              <ArchiveRestore className="h-4 w-4 text-primary" />
-                            </Button>
-                          ) : (
-                            <Button variant="ghost" size="icon" onClick={() => archiveMeter(m.id, true)} title="Archivieren">
-                              <Archive className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {m.is_archived && (
-                            <Button variant="ghost" size="icon" onClick={() => deleteMeter(m.id)} title="Endgültig löschen">
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
+                        <TableCell>
+                          <RowActions
+                            items={[
+                              { label: "Bearbeiten", icon: Pencil, onClick: () => setEditingMeter(m), hidden: m.is_archived },
+                              { label: "Archivieren", icon: Archive, onClick: () => archiveMeter(m.id, true), hidden: m.is_archived },
+                              { label: "Wiederherstellen", icon: ArchiveRestore, onClick: () => archiveMeter(m.id, false), hidden: !m.is_archived },
+                              { label: "Endgültig löschen", icon: Trash2, variant: "destructive", onClick: () => confirmDelete(m), hidden: !m.is_archived },
+                            ]}
+                          />
                         </TableCell>
                       )}
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
+              </>
             )}
+
+
+            {/* Vom User zugeordnete Gateway-Devices vom Typ "Zähler" */}
+            {(() => {
+              const list = showArchived ? archivedAssignedMeterDevices : assignedMeterDevices;
+              if (list.length === 0) return null;
+              return (
+                <div className="space-y-2 pt-2">
+                  <p className="text-xs text-muted-foreground">
+                    Vom Gateway gelieferte Zähler-Geräte – klicken Sie auf einen Eintrag, um die zugehörige Messstelle zu bearbeiten.
+                  </p>
+                  <DeviceTable
+                    roomNameById={roomNameById}
+                    devices={list}
+                    type="meter"
+                    meters={meters}
+                    onEditMeter={(m) => setEditingMeter(m)}
+                    onCreateAndEdit={(d) => handleCreateAndEdit(d, "meter")}
+                    onArchive={(m, archive) => archiveMeter(m.id, archive)}
+                    onDelete={confirmDelete}
+                    showArchived={showArchived}
+                    isAdmin={isAdmin}
+                    selectedIds={selectedMeterIds}
+                    onToggleId={toggleSelectId}
+                    onToggleAll={toggleSelectAll}
+                  />
+                </div>
+              );
+            })()}
           </TabsContent>
 
           {/* Sensoren Tab */}
           <TabsContent value="sensors" className="space-y-4">
-            {sensorTypeMeters.length > 0 && (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("common.name" as any)}</TableHead>
-                    <TableHead>{t("mm.captureType" as any)}</TableHead>
-                    <TableHead>Notizen</TableHead>
-                    {isAdmin && <TableHead className="w-32" />}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sensorTypeMeters.map((m) => (
-                    <TableRow key={m.id}>
-                      <TableCell>
-                        <button className="font-medium text-left hover:underline text-primary cursor-pointer" onClick={() => setEditingMeter(m)}>
-                          {m.name}
-                        </button>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={m.capture_type === "automatic" ? "default" : "secondary"}>
-                          {m.capture_type === "automatic" ? t("mm.captureAutomatic" as any) : t("mm.captureManual" as any)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{m.notes || "–"}</TableCell>
+            {(archivedSensorsByType.length > 0 || showArchived) && (
+              <div className="flex items-center">
+                <Button variant={showArchived ? "outline" : "ghost"} size="sm" className="gap-1.5 text-xs" onClick={() => setShowArchived(!showArchived)}>
+                  {showArchived ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  {showArchived ? `Aktive anzeigen (${sensorTypeMeters.length})` : `Archiv (${archivedSensorsByType.length})`}
+                </Button>
+              </div>
+            )}
+            {isAdmin && selectedMeterIds.size > 0 && (
+              <BulkToolbar
+                count={selectedMeterIds.size}
+                showArchived={showArchived}
+                onBulkEdit={() => setBulkEditType("sensors")}
+                onArchive={async () => {
+                  for (const id of Array.from(selectedMeterIds)) await archiveMeter(id, !showArchived);
+                  setSelectedMeterIds(new Set());
+                }}
+                onDelete={async () => {
+                  const ok = await confirmDialog({
+                    title: `${selectedMeterIds.size} Sensoren endgültig löschen?`,
+                    description: "Historische Messwerte bleiben erhalten, sind aber nicht mehr zugeordnet.",
+                    confirmLabel: "Endgültig löschen",
+                  });
+                  if (!ok) return;
+                  await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
+                  setSelectedMeterIds(new Set());
+                }}
+                onClear={() => setSelectedMeterIds(new Set())}
+              />
+            )}
+            {displayedSensors.length > 0 && (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
                       {isAdmin && (
-                        <TableCell className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
+                        <TableHead className="w-8">
+                          <Checkbox
+                            checked={displayedSensors.length > 0 && displayedSensors.every((m) => selectedMeterIds.has(m.id))}
+                            onCheckedChange={(v) => {
+                              if (v) setSelectedMeterIds(new Set(displayedSensors.map((m) => m.id)));
+                              else setSelectedMeterIds(new Set());
+                            }}
+                            aria-label="Alle auswählen"
+                          />
+                        </TableHead>
                       )}
+                      <TableHead>{t("common.name" as any)}</TableHead>
+                      <TableHead>{t("mm.captureType" as any)}</TableHead>
+                      <TableHead>Notizen</TableHead>
+                      {isAdmin && <TableHead className="w-32" />}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {displayedSensors.map((m) => (
+                      <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
+                        {isAdmin && (
+                          <TableCell className="w-8">
+                            <Checkbox
+                              checked={selectedMeterIds.has(m.id)}
+                              onCheckedChange={(v) => {
+                                setSelectedMeterIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (v) next.add(m.id);
+                                  else next.delete(m.id);
+                                  return next;
+                                });
+                              }}
+                              aria-label={`${m.name} auswählen`}
+                            />
+                          </TableCell>
+                        )}
+                        <TableCell>
+                          <button className="font-medium text-left hover:underline text-primary cursor-pointer" onClick={() => setEditingMeter(m)}>
+                            {m.name}
+                          </button>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={m.capture_type === "automatic" ? "default" : "secondary"}>
+                            {m.capture_type === "automatic" ? t("mm.captureAutomatic" as any) : t("mm.captureManual" as any)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{m.notes || "–"}</TableCell>
+                        {isAdmin && (
+                          <TableCell>
+                            <RowActions
+                              items={[
+                                { label: "Bearbeiten", icon: Pencil, onClick: () => setEditingMeter(m), hidden: m.is_archived },
+                                { label: "Wiederherstellen", icon: ArchiveRestore, onClick: () => archiveMeter(m.id, false), hidden: !m.is_archived },
+                                { label: "Archivieren", icon: Archive, onClick: () => archiveMeter(m.id, true), hidden: m.is_archived },
+                                { label: "Endgültig löschen", icon: Trash2, variant: "destructive", onClick: () => confirmDelete(m), hidden: !m.is_archived },
+                              ]}
+                            />
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
             )}
             {sensorsLoading || intLoading ? (
               <div className="space-y-2">
@@ -459,50 +1051,136 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : gatewayIntegrations.length === 0 && sensorTypeMeters.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">Keine Sensoren vorhanden.</p>
-            ) : sensorDevices.length > 0 ? (
-              <DeviceTable devices={sensorDevices} type="sensor" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
-            ) : null}
+            ) : (() => {
+              const list = showArchived ? archivedAssignedSensorDevices : assignedSensorDevices;
+              if (gatewayIntegrations.length === 0 && displayedSensors.length === 0 && list.length === 0) {
+                return <p className="text-sm text-muted-foreground py-4">Keine Sensoren vorhanden.</p>;
+              }
+              if (list.length > 0) {
+                return (
+                  <DeviceTable
+                    roomNameById={roomNameById}
+                    devices={list}
+                    type="sensor"
+                    meters={meters}
+                    onEditMeter={(m) => setEditingMeter(m)}
+                    onCreateAndEdit={handleCreateAndEdit}
+                    onArchive={(m, archive) => archiveMeter(m.id, archive)}
+                    onDelete={confirmDelete}
+                    showArchived={showArchived}
+                    isAdmin={isAdmin}
+                    selectedIds={selectedMeterIds}
+                    onToggleId={toggleSelectId}
+                    onToggleAll={toggleSelectAll}
+                  />
+                );
+              }
+              return null;
+            })()}
           </TabsContent>
 
           {/* Aktoren Tab */}
           <TabsContent value="actuators" className="space-y-4">
-            {actuatorTypeMeters.length > 0 && (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("common.name" as any)}</TableHead>
-                    <TableHead>{t("mm.captureType" as any)}</TableHead>
-                    <TableHead>Notizen</TableHead>
-                    {isAdmin && <TableHead className="w-32" />}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {actuatorTypeMeters.map((m) => (
-                    <TableRow key={m.id}>
-                      <TableCell>
-                        <button className="font-medium text-left hover:underline text-primary cursor-pointer" onClick={() => setEditingMeter(m)}>
-                          {m.name}
-                        </button>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={m.capture_type === "automatic" ? "default" : "secondary"}>
-                          {m.capture_type === "automatic" ? t("mm.captureAutomatic" as any) : t("mm.captureManual" as any)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{m.notes || "–"}</TableCell>
+            {(archivedActuatorsByType.length > 0 || showArchived) && (
+              <div className="flex items-center">
+                <Button variant={showArchived ? "outline" : "ghost"} size="sm" className="gap-1.5 text-xs" onClick={() => setShowArchived(!showArchived)}>
+                  {showArchived ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  {showArchived ? `Aktive anzeigen (${actuatorTypeMeters.length})` : `Archiv (${archivedActuatorsByType.length})`}
+                </Button>
+              </div>
+            )}
+            {isAdmin && selectedMeterIds.size > 0 && (
+              <BulkToolbar
+                count={selectedMeterIds.size}
+                showArchived={showArchived}
+                onBulkEdit={() => setBulkEditType("actuators")}
+                onArchive={async () => {
+                  for (const id of Array.from(selectedMeterIds)) await archiveMeter(id, !showArchived);
+                  setSelectedMeterIds(new Set());
+                }}
+                onDelete={async () => {
+                  const ok = await confirmDialog({
+                    title: `${selectedMeterIds.size} Aktoren endgültig löschen?`,
+                    description: "Diese Aktion kann nicht rückgängig gemacht werden.",
+                    confirmLabel: "Endgültig löschen",
+                  });
+                  if (!ok) return;
+                  await supabase.from("meters").delete().in("id", Array.from(selectedMeterIds));
+                  setSelectedMeterIds(new Set());
+                }}
+                onClear={() => setSelectedMeterIds(new Set())}
+              />
+            )}
+            {displayedActuators.length > 0 && (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
                       {isAdmin && (
-                        <TableCell className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => setEditingMeter(m)} title="Bearbeiten">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
+                        <TableHead className="w-8">
+                          <Checkbox
+                            checked={displayedActuators.length > 0 && displayedActuators.every((m) => selectedMeterIds.has(m.id))}
+                            onCheckedChange={(v) => {
+                              if (v) setSelectedMeterIds(new Set(displayedActuators.map((m) => m.id)));
+                              else setSelectedMeterIds(new Set());
+                            }}
+                            aria-label="Alle auswählen"
+                          />
+                        </TableHead>
                       )}
+                      <TableHead>{t("common.name" as any)}</TableHead>
+                      <TableHead>{t("mm.captureType" as any)}</TableHead>
+                      <TableHead>Notizen</TableHead>
+                      {isAdmin && <TableHead className="w-32" />}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {displayedActuators.map((m) => (
+                      <TableRow key={m.id} className={m.is_archived ? "opacity-60" : ""}>
+                        {isAdmin && (
+                          <TableCell className="w-8">
+                            <Checkbox
+                              checked={selectedMeterIds.has(m.id)}
+                              onCheckedChange={(v) => {
+                                setSelectedMeterIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (v) next.add(m.id);
+                                  else next.delete(m.id);
+                                  return next;
+                                });
+                              }}
+                              aria-label={`${m.name} auswählen`}
+                            />
+                          </TableCell>
+                        )}
+                        <TableCell>
+                          <button className="font-medium text-left hover:underline text-primary cursor-pointer" onClick={() => setEditingMeter(m)}>
+                            {m.name}
+                          </button>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={m.capture_type === "automatic" ? "default" : "secondary"}>
+                            {m.capture_type === "automatic" ? t("mm.captureAutomatic" as any) : t("mm.captureManual" as any)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{m.notes || "–"}</TableCell>
+                        {isAdmin && (
+                          <TableCell>
+                            <RowActions
+                              items={[
+                                { label: "Bearbeiten", icon: Pencil, onClick: () => setEditingMeter(m), hidden: m.is_archived },
+                                { label: "Wiederherstellen", icon: ArchiveRestore, onClick: () => archiveMeter(m.id, false), hidden: !m.is_archived },
+                                { label: "Archivieren", icon: Archive, onClick: () => archiveMeter(m.id, true), hidden: m.is_archived },
+                                { label: "Endgültig löschen", icon: Trash2, variant: "destructive", onClick: () => confirmDelete(m), hidden: !m.is_archived },
+                              ]}
+                            />
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
             )}
             {sensorsLoading || intLoading ? (
               <div className="space-y-2">
@@ -510,11 +1188,32 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : gatewayIntegrations.length === 0 && actuatorTypeMeters.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">Keine Aktoren vorhanden.</p>
-            ) : actuatorDevices.length > 0 ? (
-              <DeviceTable devices={actuatorDevices} type="actuator" meters={meters} onEditMeter={(m) => setEditingMeter(m)} onCreateAndEdit={handleCreateAndEdit} />
-            ) : null}
+            ) : (() => {
+              const list = showArchived ? archivedAssignedActuatorDevices : assignedActuatorDevices;
+              if (gatewayIntegrations.length === 0 && displayedActuators.length === 0 && list.length === 0) {
+                return <p className="text-sm text-muted-foreground py-4">Keine Aktoren vorhanden.</p>;
+              }
+              if (list.length > 0) {
+                return (
+                  <DeviceTable
+                    roomNameById={roomNameById}
+                    devices={list}
+                    type="actuator"
+                    meters={meters}
+                    onEditMeter={(m) => setEditingMeter(m)}
+                    onCreateAndEdit={handleCreateAndEdit}
+                    onArchive={(m, archive) => archiveMeter(m.id, archive)}
+                    onDelete={confirmDelete}
+                    showArchived={showArchived}
+                    isAdmin={isAdmin}
+                    selectedIds={selectedMeterIds}
+                    onToggleId={toggleSelectId}
+                    onToggleAll={toggleSelectAll}
+                  />
+                );
+              }
+              return null;
+            })()}
           </TabsContent>
 
           <TabsContent value="tree" className="space-y-4">
@@ -569,13 +1268,13 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
                         />
                       </TableCell>
                       {isAdmin && (
-                        <TableCell className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => setEditingRule(r)} title="Bearbeiten">
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => deleteAlertRule(r.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                        <TableCell>
+                          <RowActions
+                            items={[
+                              { label: "Bearbeiten", icon: Pencil, onClick: () => setEditingRule(r) },
+                              { label: "Löschen", icon: Trash2, variant: "destructive", onClick: () => deleteAlertRule(r.id) },
+                            ]}
+                          />
                         </TableCell>
                       )}
                     </TableRow>
@@ -584,6 +1283,12 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
               </Table>
             )}
           </TabsContent>
+
+          {hasChargingInfra && (
+            <TabsContent value="charging" className="space-y-4">
+              <LocationChargingInfrastructure locationId={locationId} />
+            </TabsContent>
+          )}
         </Tabs>
 
         <AddMeterDialog
@@ -612,6 +1317,14 @@ export const MeterManagement = ({ locationId }: MeterManagementProps) => {
             onSave={async (id, updates) => { await updateAlertRule(id, updates as any); setEditingRule(null); }}
           />
         )}
+        <BulkEditMetersDialog
+          open={!!bulkEditType}
+          onOpenChange={(v) => { if (!v) setBulkEditType(null); }}
+          entityType={bulkEditType ?? "meters"}
+          meters={meters.filter((m) => selectedMeterIds.has(m.id))}
+          locationId={locationId}
+          onDone={() => { setSelectedMeterIds(new Set()); refetch(); }}
+        />
       </CardContent>
       </CollapsibleContent>
     </Card>

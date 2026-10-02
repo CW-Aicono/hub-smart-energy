@@ -1,10 +1,15 @@
 import { useState, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Zap, PlugZap, AlertTriangle, ZapOff, Pencil, Check, X, GripVertical } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Zap, PlugZap, AlertTriangle, ZapOff, Pencil, Check, X, GripVertical, Clock } from "lucide-react";
 import { ChargePointConnector, connectorDisplayName } from "@/hooks/useChargePointConnectors";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { normalizeConnectorStatus } from "@/lib/formatCharging";
+import { formatDistanceToNow } from "date-fns";
+import { de } from "date-fns/locale";
 
 const connectorStatusConfig: Record<string, { label: string; color: string; icon: typeof Zap }> = {
   available: { label: "Verfügbar", color: "bg-emerald-500", icon: Zap },
@@ -14,17 +19,43 @@ const connectorStatusConfig: Record<string, { label: string; color: string; icon
   offline: { label: "Offline", color: "bg-muted-foreground", icon: ZapOff },
 };
 
+/**
+ * Liefert das menschen-lesbare Alter eines Zeitstempels — oder null.
+ * Nicht mehr als "stale" markieren: viele Wallboxen (Compleo, Wallbe)
+ * senden Heartbeats/StatusNotifications nur sehr selten, wenn kein
+ * Fahrzeug angeschlossen ist. Die Verbindungs-Liveness wird statt-
+ * dessen über `last_ws_pong_at` separat angezeigt.
+ */
+function formatAge(ts: string | null | undefined): string | null {
+  if (!ts) return null;
+  return formatDistanceToNow(new Date(ts), { addSuffix: true, locale: de });
+}
+
+/**
+ * Frische des WebSocket-Pongs. Der OCPP-Server pingt alle 30 s — wenn
+ * der letzte Pong < 2 Min alt ist, ist die Wallbox technisch erreichbar.
+ */
+function isPongFresh(lastWsPongAt: string | null | undefined): boolean {
+  if (!lastWsPongAt) return false;
+  const age = Date.now() - new Date(lastWsPongAt).getTime();
+  return Number.isFinite(age) && age >= 0 && age < 2 * 60 * 1000;
+}
+
 interface Props {
   connectors: ChargePointConnector[];
   selectedConnectorId?: number | null;
   onSelectConnector?: (connectorId: number) => void;
   selectable?: boolean;
   wsConnected?: boolean;
+  lastHeartbeat?: string | null;
+  /** Zeitstempel des letzten WebSocket-Pongs — echtes Liveness-Signal. */
+  lastWsPongAt?: string | null;
   editable?: boolean;
   onReorder?: (reordered: ChargePointConnector[]) => void;
 }
 
-export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectConnector, selectable = false, wsConnected = true, editable = false, onReorder }: Props) {
+export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectConnector, selectable = false, wsConnected = true, lastHeartbeat = null, lastWsPongAt = null, editable = false, onReorder }: Props) {
+  const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const dragItem = useRef<number | null>(null);
@@ -41,10 +72,22 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
 
   const saveEdit = async (c: ChargePointConnector) => {
     const trimmed = editName.trim();
-    await supabase
+    const newName = trimmed || null;
+    const { error } = await supabase
       .from("charge_point_connectors")
-      .update({ name: trimmed || null } as any)
+      .update({ name: newName } as any)
       .eq("id", c.id);
+    if (error) {
+      toast({ title: "Speichern fehlgeschlagen", description: error.message, variant: "destructive" });
+      return;
+    }
+    // Cache sofort aktualisieren, damit die Anzeige auch ohne Realtime
+    // (z. B. selfhosted Hetzner) den neuen Namen sofort übernimmt.
+    queryClient.setQueryData<ChargePointConnector[]>(
+      ["charge-point-connectors", c.charge_point_id],
+      (prev) => (prev ?? []).map((x) => (x.id === c.id ? { ...x, name: newName } : x)),
+    );
+    queryClient.invalidateQueries({ queryKey: ["charge-point-connectors", c.charge_point_id] });
     setEditingId(null);
   };
 
@@ -74,73 +117,128 @@ export function ConnectorStatusGrid({ connectors, selectedConnectorId, onSelectC
   };
 
   return (
-    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(connectors.length, 4)}, 1fr)` }}>
-      {connectors.map((c, index) => {
-        const effectiveStatus = !wsConnected ? "offline" : c.status;
-        const cfg = connectorStatusConfig[effectiveStatus] || connectorStatusConfig.offline;
-        const Icon = cfg.icon;
-        const isSelected = selectedConnectorId === c.connector_id;
-        const isEditing = editingId === c.id;
-        const canDrag = editable && onReorder && connectors.length > 1;
+    <TooltipProvider delayDuration={150}>
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(connectors.length, 4)}, 1fr)` }}>
+        {connectors.map((c, index) => {
+          const effectiveStatus = normalizeConnectorStatus(c.status, wsConnected);
+          const cfg = connectorStatusConfig[effectiveStatus] || connectorStatusConfig.offline;
+          const Icon = cfg.icon;
+          const isSelected = selectedConnectorId === c.connector_id;
+          const isEditing = editingId === c.id;
+          const canDrag = editable && onReorder && connectors.length > 1;
+          const pongFresh = isPongFresh(lastWsPongAt);
+          const pongAge = formatAge(lastWsPongAt);
+          const lastActivityTs = (() => {
+            const candidates = [c.last_status_at, lastHeartbeat]
+              .filter(Boolean)
+              .map((ts) => new Date(ts as string).getTime());
+            if (candidates.length === 0) return null;
+            return new Date(Math.max(...candidates)).toISOString();
+          })();
+          const lastActivityLabel = formatAge(lastActivityTs);
 
-        return (
-          <button
-            key={c.id}
-            type="button"
-            disabled={!selectable && !editable}
-            draggable={canDrag ? true : false}
-            onDragStart={() => canDrag && handleDragStart(index)}
-            onDragEnter={() => canDrag && handleDragEnter(index)}
-            onDragEnd={() => canDrag && handleDragEnd()}
-            onDragOver={(e) => canDrag && e.preventDefault()}
-            onClick={() => selectable && onSelectConnector?.(c.connector_id)}
-            className={`
-              border rounded-lg p-3 text-center transition-all relative group
-              ${selectable ? "cursor-pointer hover:border-primary/50" : editable ? "cursor-default" : "cursor-default"}
-              ${isSelected ? "border-primary ring-2 ring-primary/20" : "border-border"}
-              ${canDrag ? "cursor-grab active:cursor-grabbing" : ""}
-            `}
-          >
-            {canDrag && (
-              <div className="absolute top-1 left-1 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors">
-                <GripVertical className="h-3.5 w-3.5" />
+          return (
+            <div
+              key={c.id}
+              role={selectable ? "button" : undefined}
+              tabIndex={selectable ? 0 : -1}
+              aria-disabled={!selectable && !editable}
+              draggable={canDrag ? true : false}
+              onDragStart={() => canDrag && handleDragStart(index)}
+              onDragEnter={() => canDrag && handleDragEnter(index)}
+              onDragEnd={() => canDrag && handleDragEnd()}
+              onDragOver={(e) => canDrag && e.preventDefault()}
+              onClick={() => selectable && onSelectConnector?.(c.connector_id)}
+              onKeyDown={(e) => {
+                if (selectable && (e.key === "Enter" || e.key === " ")) {
+                  e.preventDefault();
+                  onSelectConnector?.(c.connector_id);
+                }
+              }}
+              className={`
+                border rounded-lg p-3 text-center transition-all relative group
+                ${selectable ? "cursor-pointer hover:border-primary/50" : editable ? "cursor-default" : "cursor-default"}
+                ${isSelected ? "border-primary ring-2 ring-primary/20" : "border-border"}
+                ${canDrag ? "cursor-grab active:cursor-grabbing" : ""}
+              `}
+            >
+              {canDrag && (
+                <div className="absolute top-1 left-1 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors">
+                  <GripVertical className="h-3.5 w-3.5" />
+                </div>
+              )}
+              <div className="flex items-center justify-center gap-1.5 mb-1">
+                <span className={`h-2.5 w-2.5 rounded-full ${cfg.color}`} />
+                <Icon className="h-4 w-4 text-muted-foreground" />
               </div>
-            )}
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              <span className={`h-2.5 w-2.5 rounded-full ${cfg.color}`} />
-              <Icon className="h-4 w-4 text-muted-foreground" />
+              {isEditing ? (
+                <div className="flex items-center gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
+                  <Input
+                    className="h-6 text-xs px-1 py-0"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder={`Anschluss ${c.connector_id}`}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveEdit(c);
+                      if (e.key === "Escape") cancelEdit();
+                    }}
+                  />
+                  <button type="button" onClick={() => saveEdit(c)} className="text-primary hover:text-primary/80"><Check className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={cancelEdit} className="text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-1">
+                  <p className="text-xs font-medium">{connectorDisplayName(c)}</p>
+                  {editable && (
+                    <button type="button" onClick={(e) => startEdit(c, e)} className="text-muted-foreground hover:text-foreground">
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              )}
+              <p className="text-[10px] text-muted-foreground">{cfg.label}</p>
+              <p className="text-[10px] text-muted-foreground">{c.connector_type} · {c.max_power_kw} kW</p>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={`mt-1 flex items-center justify-center gap-1 text-[10px] ${
+                      pongFresh ? "text-emerald-600 dark:text-emerald-500" : "text-muted-foreground"
+                    }`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Clock className="h-2.5 w-2.5" />
+                    <span>
+                      {pongFresh
+                        ? `Verbindung aktiv · Ping ${pongAge}`
+                        : lastActivityLabel
+                          ? `Letzte OCPP-Nachricht ${lastActivityLabel}`
+                          : "noch keine Daten"}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs max-w-[260px]">
+                  {lastWsPongAt && (
+                    <>Letzter WebSocket-Pong:<br />{new Date(lastWsPongAt).toLocaleString("de-DE")}<br /></>
+                  )}
+                  {c.last_status_at && (
+                    <>Letzte Statusmeldung:<br />{new Date(c.last_status_at).toLocaleString("de-DE")}<br /></>
+                  )}
+                  {lastHeartbeat && (
+                    <>Letzte OCPP-Nachricht:<br />{new Date(lastHeartbeat).toLocaleString("de-DE")}<br /></>
+                  )}
+                  {!lastWsPongAt && !c.last_status_at && !lastHeartbeat && (
+                    <>Noch keine Daten von der Wallbox empfangen.</>
+                  )}
+                  <div className="mt-2 text-muted-foreground">
+                    Hinweis: Manche Wallboxen (z. B. Compleo) senden OCPP-Nachrichten nur, wenn ein Fahrzeug angeschlossen ist. Die Verbindung wird im Hintergrund alle 30 s per Ping geprüft.
+                  </div>
+                </TooltipContent>
+              </Tooltip>
             </div>
-            {isEditing ? (
-              <div className="flex items-center gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
-                <Input
-                  className="h-6 text-xs px-1 py-0"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  placeholder={`Anschluss ${c.connector_id}`}
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") saveEdit(c);
-                    if (e.key === "Escape") cancelEdit();
-                  }}
-                />
-                <button type="button" onClick={() => saveEdit(c)} className="text-primary hover:text-primary/80"><Check className="h-3.5 w-3.5" /></button>
-                <button type="button" onClick={cancelEdit} className="text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center gap-1">
-                <p className="text-xs font-medium">{connectorDisplayName(c)}</p>
-                {editable && (
-                  <button type="button" onClick={(e) => startEdit(c, e)} className="text-muted-foreground hover:text-foreground">
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            )}
-            <p className="text-[10px] text-muted-foreground">{cfg.label}</p>
-            <p className="text-[10px] text-muted-foreground">{c.connector_type} · {c.max_power_kw} kW</p>
-          </button>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    </TooltipProvider>
   );
 }

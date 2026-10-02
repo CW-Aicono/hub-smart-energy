@@ -1,0 +1,1 @@
+ALTER TABLE public.loxone_template_registry ADD COLUMN IF NOT EXISTS requires_cloud boolean NOT NULL DEFAULT false;

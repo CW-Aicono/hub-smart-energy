@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { useExternalContacts, ExternalContact } from "@/hooks/useExternalContacts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -9,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Plus, Pencil, Trash2, Building2, Phone, Mail, Search } from "lucide-react";
+import { RowActions } from "@/components/ui/row-actions";
 
 const ExternalContactsManager = () => {
   const { contacts, isLoading, createContact, updateContact, deleteContact } = useExternalContacts();
@@ -71,6 +73,18 @@ const ExternalContactsManager = () => {
       c.company?.toLowerCase().includes(q);
   });
 
+  const { sorted, sort, toggle } = useSortableData(filtered, (r, k) => {
+    switch (k) {
+      case "name": return r.name;
+      case "company": return r.company || "";
+      case "email": return r.email || "";
+      case "phone": return r.phone || "";
+      case "notes": return r.notes || "";
+      default: return null;
+    }
+  });
+
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
@@ -115,11 +129,11 @@ const ExternalContactsManager = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Firma</TableHead>
-                <TableHead>E-Mail</TableHead>
-                <TableHead>Telefon</TableHead>
-                <TableHead>Notizen</TableHead>
+                <SortableHead column="name" onSort={toggle} sort={sort}>Name</SortableHead>
+                <SortableHead column="company" onSort={toggle} sort={sort}>Firma</SortableHead>
+                <SortableHead column="email" onSort={toggle} sort={sort}>E-Mail</SortableHead>
+                <SortableHead column="phone" onSort={toggle} sort={sort}>Telefon</SortableHead>
+                <SortableHead column="notes" onSort={toggle} sort={sort}>Notizen</SortableHead>
                 <TableHead className="w-24">Aktionen</TableHead>
               </TableRow>
             </TableHeader>
@@ -131,9 +145,13 @@ const ExternalContactsManager = () => {
                   {search ? "Keine Kontakte gefunden" : "Noch keine externen Kontakte angelegt"}
                 </TableCell></TableRow>
               ) : (
-                filtered.map((c) => (
+                sorted.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="font-medium">{c.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <button type="button" onClick={() => openEdit(c)} className="text-left font-medium hover:underline focus:outline-none focus-visible:underline">
+                        {c.name}
+                      </button>
+                    </TableCell>
                     <TableCell>
                       {c.company && (
                         <span className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -157,32 +175,40 @@ const ExternalContactsManager = () => {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{c.notes}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Kontakt löschen?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Der Kontakt „{c.name}" wird unwiderruflich gelöscht.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => deleteContact.mutate(c.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                Löschen
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
+                      <RowActions
+                        items={[
+                          { label: "Bearbeiten", icon: Pencil, onClick: () => openEdit(c) },
+                          {
+                            label: "Löschen",
+                            icon: Trash2,
+                            variant: "destructive",
+                            render: (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <button type="button" className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent text-destructive focus:text-destructive">
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Löschen
+                                  </button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Kontakt löschen?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Der Kontakt „{c.name}" wird unwiderruflich gelöscht.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => deleteContact.mutate(c.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                      Löschen
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            ),
+                          },
+                        ]}
+                      />
                     </TableCell>
                   </TableRow>
                 ))

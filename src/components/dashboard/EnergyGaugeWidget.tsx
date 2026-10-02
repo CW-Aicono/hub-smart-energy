@@ -113,28 +113,47 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
 
   useEffect(() => {
     if (meterIds.length === 0) return;
-    // Fetch the latest reading per meter to seed gauges before first Realtime event
+    // Ein einziger Sammel-Aufruf statt einer Abfrage pro Zähler.
+    // Rohwert nur, wenn er wirklich frisch ist (≤ 15 Min) — sonst würde ein
+    // Stunden alter Rest-Datensatz als "Jetzt" angezeigt.
     const fetchLatest = async () => {
-      const promises = meterIds.map((id) =>
-        supabase
-          .from("meter_power_readings")
-          .select("meter_id, power_value")
-          .eq("meter_id", id)
-          .order("recorded_at", { ascending: false })
-          .limit(1)
-      );
-      const results = await Promise.all(promises);
+      const freshCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      const today = new Date();
+      const { data } = await supabase.rpc("get_meter_power_gauge_seed" as any, {
+        _meter_ids: meterIds,
+        _fresh_cutoff: freshCutoff,
+        _day_start: startOfDay(today).toISOString(),
+        _day_end: endOfDay(today).toISOString(),
+      });
       const current: Record<string, number> = {};
-      for (const { data } of results) {
-        if (data && data.length > 0) {
-          current[data[0].meter_id] = data[0].power_value;
+      for (const row of (data ?? []) as any[]) {
+        if (row.latest_value != null) current[row.meter_id] = Number(row.latest_value);
+      }
+
+      const missing = meterIds.filter((id) => current[id] === undefined);
+      if (missing.length > 0) {
+        const aggPromises = missing.map((id) =>
+          supabase
+            .from("meter_power_readings_5min")
+            .select("meter_id, power_avg")
+            .eq("meter_id", id)
+            .order("bucket", { ascending: false })
+            .limit(1)
+        );
+        const aggResults = await Promise.all(aggPromises);
+        for (const { data: aggData } of aggResults) {
+          if (aggData && aggData.length > 0 && aggData[0].power_avg != null) {
+            current[aggData[0].meter_id] = Number(aggData[0].power_avg);
+          }
         }
       }
+
       setInitialCurrent(current);
       setInitialCurrentLoaded(true);
     };
     fetchLatest();
   }, [meterIds.join(",")]);
+
 
   // Load initial daily peaks
   const [initialPeaks, setInitialPeaks] = useState<Record<string, number>>({});
@@ -143,25 +162,27 @@ const EnergyGaugeWidget = ({ locationId }: EnergyGaugeWidgetProps) => {
     if (meterIds.length === 0) return;
     const fetchPeaks = async () => {
       const today = new Date();
-      const { data } = await supabase
-        .from("meter_power_readings")
-        .select("meter_id, power_value")
-        .in("meter_id", meterIds)
-        .gte("recorded_at", startOfDay(today).toISOString())
-        .lte("recorded_at", endOfDay(today).toISOString())
-        .order("power_value", { ascending: false });
-      if (!data) return;
       const peaks: Record<string, number> = {};
-      for (const row of data) {
-        if ((peaks[row.meter_id] ?? 0) < row.power_value) {
-          peaks[row.meter_id] = row.power_value;
-        }
+      // Ein Sammel-Aufruf: liefert je Zähler das Maximum aus 5-Min-Aggregat
+      // und Rohwerten (Polling-Ingest-Zähler) in einem Rutsch.
+      const { data } = await supabase.rpc("get_meter_power_gauge_seed" as any, {
+        _meter_ids: meterIds,
+        _fresh_cutoff: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+        _day_start: startOfDay(today).toISOString(),
+        _day_end: endOfDay(today).toISOString(),
+      });
+      for (const row of (data ?? []) as any[]) {
+        const v = Math.abs(Number(row.peak_abs ?? 0));
+        if (v > (peaks[row.meter_id] ?? 0)) peaks[row.meter_id] = v;
       }
+
       setInitialPeaks(peaks);
       setInitialPeaksLoaded(true);
     };
+
     fetchPeaks();
   }, [meterIds.join(",")]);
+
 
   const handleResetPeaks = useCallback(() => {
     resetPeaks();

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { isWorkerEnabled } from "../_shared/workerKillswitch.ts";
 
 const GATEWAY_EDGE_FUNCTIONS: Record<string, string> = {
   shelly_cloud: "shelly-periodic-sync",
@@ -16,6 +17,14 @@ serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  if (!(await isWorkerEnabled("gateway_periodic_sync"))) {
+    console.log("gateway-periodic-sync: paused via worker_controls — skipping");
+    return new Response(JSON.stringify({ success: true, skipped: true, reason: "worker_paused" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

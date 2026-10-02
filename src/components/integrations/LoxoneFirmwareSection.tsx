@@ -8,6 +8,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/hooks/useTranslation";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 import { Download, Loader2, MonitorSmartphone } from "lucide-react";
 
 interface LoxoneFirmwareSectionProps {
@@ -29,7 +30,7 @@ export function LoxoneFirmwareSection({ locationIntegrationId }: LoxoneFirmwareS
   const handleCheckFirmware = async () => {
     setIsChecking(true);
     try {
-      const { data, error } = await supabase.functions.invoke("loxone-api", {
+      const { data, error } = await invokeWithRetry("loxone-api", {
         body: { locationIntegrationId, action: "getVersion" },
       });
       if (error || !data?.success) {
@@ -51,7 +52,7 @@ export function LoxoneFirmwareSection({ locationIntegrationId }: LoxoneFirmwareS
   const handleTriggerUpdate = async () => {
     setIsUpdating(true);
     try {
-      const { data, error } = await supabase.functions.invoke("loxone-api", {
+      const { data, error } = await invokeWithRetry("loxone-api", {
         body: { locationIntegrationId, action: "triggerUpdate", confirmed: true },
       });
       if (error || !data?.success) {

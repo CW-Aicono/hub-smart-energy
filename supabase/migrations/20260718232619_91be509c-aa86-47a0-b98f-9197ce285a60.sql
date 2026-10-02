@@ -1,0 +1,1 @@
+ALTER TABLE public.location_automations ALTER COLUMN loxone_template_bindings DROP NOT NULL;

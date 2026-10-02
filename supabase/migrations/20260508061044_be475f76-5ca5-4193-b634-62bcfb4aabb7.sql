@@ -1,0 +1,2 @@
+CREATE POLICY "Super admins can view all OCPP logs" ON public.ocpp_message_log FOR SELECT TO authenticated USING (has_role(auth.uid(), 'super_admin'));
+CREATE POLICY "Super admins can view all charging sessions" ON public.charging_sessions FOR SELECT TO authenticated USING (has_role(auth.uid(), 'super_admin'));

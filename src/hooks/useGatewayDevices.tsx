@@ -19,7 +19,6 @@ export interface GatewayDevice {
   status: string;
   config: Record<string, unknown>;
   offline_buffer_count: number;
-  api_key_hash: string | null;
   mac_address: string | null;
   gateway_username: string | null;
   created_at: string;
@@ -196,15 +195,19 @@ export function useGatewayDevices(locationIntegrationId?: string, locationId?: s
         const err = await res.json().catch(() => ({ error: "Unknown error" }));
         throw new Error(err.error || `HTTP ${res.status}`);
       }
-      return { ...(await res.json()), _command: command };
+      const payload = await res.json();
+      return { ...payload, _command: command };
     },
     onSuccess: (data) => {
       const cmd = data?._command as string | undefined;
+      const isPendingAck = Boolean((data as { pending_ack?: boolean } | undefined)?.pending_ack);
       const msgKey = cmd === "backup" ? "gatewayDevices.backupSent"
         : cmd === "restart" ? "gatewayDevices.restartSent"
         : cmd === "update" ? "gatewayDevices.updateSent"
         : "gatewayDevices.commandSent";
-      toast.success(t(msgKey as any));
+      toast.success(t(msgKey as any), {
+        description: isPendingAck ? "Gateway verarbeitet den Befehl noch – Bestätigung folgt asynchron." : undefined,
+      });
       queryClient.invalidateQueries({ queryKey: ["gateway-devices"] });
     },
     onError: (error) => {

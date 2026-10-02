@@ -3,12 +3,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useTenant } from "@/hooks/useTenant";
 
+export interface CheapChargingConfig {
+  enabled: boolean;
+  max_price_eur_mwh: number;
+  limit_kw: number;
+  use_fallback_window: boolean;
+  fallback_time_from: string; // "HH:mm"
+  fallback_time_to: string;   // "HH:mm"
+}
+
 export interface ChargePointGroupEnergySettings {
   dynamic_load_management: boolean;
   power_limit_kw: number | null;
   pv_surplus_charging: boolean;
   scheduled_availability: boolean;
-  cheap_charging_mode: boolean;
+  cheap_charging_mode: boolean; // legacy flag (kept for backward compat)
+  cheap_charging?: CheapChargingConfig;
 }
 
 export interface ChargePointGroupAccessSettings {
@@ -22,6 +32,7 @@ export interface ChargePointGroup {
   tenant_id: string;
   name: string;
   description: string | null;
+  location_id: string | null;
   energy_settings: ChargePointGroupEnergySettings;
   access_settings: ChargePointGroupAccessSettings;
   created_at: string;
@@ -33,11 +44,12 @@ export function useChargePointGroups() {
   const { tenant } = useTenant();
 
   const { data: groups = [], isLoading } = useQuery({
-    queryKey: ["charge-point-groups"],
+    queryKey: ["charge-point-groups", tenant?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("charge_point_groups")
         .select("*")
+        .eq("tenant_id", tenant!.id)
         .order("name");
       if (error) throw error;
       return (data ?? []) as unknown as ChargePointGroup[];
@@ -47,7 +59,7 @@ export function useChargePointGroups() {
   });
 
   const createGroup = useMutation({
-    mutationFn: async (group: { name: string; description?: string }) => {
+    mutationFn: async (group: { name: string; description?: string; location_id?: string | null }) => {
       if (!tenant?.id) throw new Error("No tenant");
       const { data, error } = await supabase
         .from("charge_point_groups")

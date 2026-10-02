@@ -1,0 +1,20 @@
+{
+  "name": "ocpp-simulator-server",
+  "version": "1.0.0",
+  "description": "AICONO EMS - OCPP 1.6 Wallbox-Simulator-Service (Hetzner)",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "@types/ws": "^8.5.12",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

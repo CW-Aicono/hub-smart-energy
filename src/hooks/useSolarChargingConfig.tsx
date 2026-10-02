@@ -6,7 +6,8 @@ import { toast } from "sonner";
 export interface SolarChargingConfig {
   id: string;
   tenant_id: string;
-  group_id: string;
+  group_id: string | null;
+  charge_point_id: string | null;
   reference_meter_id: string | null;
   min_charge_power_w: number;
   safety_buffer_w: number;
@@ -42,6 +43,63 @@ export function useSolarChargingConfig(groupId?: string) {
       if (!tenantId) throw new Error("No tenant");
       const payload = { ...values, tenant_id: tenantId };
       
+      if (config?.id) {
+        const { error } = await supabase
+          .from("solar_charging_config")
+          .update(payload as any)
+          .eq("id", config.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("solar_charging_config")
+          .insert(payload as any);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success("PV-Überschussladen-Konfiguration gespeichert");
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (err) => {
+      toast.error("Fehler beim Speichern: " + (err as Error).message);
+    },
+  });
+
+  return { config, isLoading, upsert };
+}
+
+/**
+ * Same as useSolarChargingConfig but scoped to a single charge point
+ * (charge_point_id) instead of a group.
+ */
+export function useChargePointSolarChargingConfig(chargePointId?: string) {
+  const { tenantId } = useTenantQuery();
+  const queryClient = useQueryClient();
+  const queryKey = ["solar-charging-config-cp", tenantId, chargePointId];
+
+  const { data: config, isLoading } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      if (!tenantId || !chargePointId) return null;
+      const { data, error } = await supabase
+        .from("solar_charging_config")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("charge_point_id", chargePointId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as unknown as SolarChargingConfig | null;
+    },
+    enabled: !!tenantId && !!chargePointId,
+  });
+
+  const upsert = useMutation({
+    mutationFn: async (
+      values: Partial<SolarChargingConfig> & { charge_point_id: string }
+    ) => {
+      if (!tenantId) throw new Error("No tenant");
+      const payload = { ...values, tenant_id: tenantId, group_id: null };
+
       if (config?.id) {
         const { error } = await supabase
           .from("solar_charging_config")

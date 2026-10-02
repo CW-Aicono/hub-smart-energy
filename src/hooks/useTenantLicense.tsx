@@ -28,13 +28,13 @@ export function useTenantLicense(tenantId: string | null) {
       if (license) {
         const { error } = await supabase
           .from("tenant_licenses")
-          .update(values)
+          .update(values as any)
           .eq("id", license.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("tenant_licenses")
-          .insert({ tenant_id: tenantId, ...values });
+          .insert({ tenant_id: tenantId, ...values } as any);
         if (error) throw error;
       }
     },

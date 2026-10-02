@@ -1,44 +1,47 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
+import { useTenant } from "@/hooks/useTenant";
 import { useTranslation } from "@/hooks/useTranslation";
 import { DashboardFilterProvider } from "@/hooks/useDashboardFilter";
-
-// Heavy dashboard content is lazy-loaded – not fetched until user is authenticated
-const DashboardContent = lazy(() => import("./DashboardContent"));
+import { isImpersonating } from "@/lib/supportView";
+import { usePartnerAccess } from "@/hooks/usePartnerAccess";
+import { isPartnerHost, isSalesHost } from "@/lib/hostname";
+import { getAreaPreference } from "@/lib/areaPreference";
+import AreaChooser from "@/components/common/AreaChooser";
+import DashboardContent from "./DashboardContent";
 
 const Index = () => {
   const { user, loading, isRecovery } = useAuth();
   const { isSuperAdmin, loading: superAdminLoading } = useSuperAdmin();
+  const { tenant, loading: tenantLoading } = useTenant();
+  const { isPartnerMember, partnerName, loading: partnerLoading } = usePartnerAccess();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [onboardingChecked, setOnboardingChecked] = useState(false);
 
-  // If user is in recovery mode, force them to /set-password
+  // If user is in recovery mode OR must change password (e.g. master-recovery OTP), force /set-password
   useEffect(() => {
-    if (isRecovery && user) {
+    if (!user) return;
+    if (isRecovery || (user as any)?.user_metadata?.must_change_password === true) {
       navigate("/set-password", { replace: true });
     }
   }, [isRecovery, user, navigate]);
 
+
   useEffect(() => {
     if (!user || onboardingChecked) return;
-    const checkOnboarding = async () => {
-      const { data } = await (await import("@/integrations/supabase/client")).supabase
-        .from("user_preferences")
-        .select("onboarding_completed")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      setOnboardingChecked(true);
-      if (data && !(data as any).onboarding_completed) {
-        navigate("/getting-started", { replace: true });
-      }
-    };
-    checkOnboarding();
-  }, [user, onboardingChecked, navigate]);
+    // Onboarding-Status hängt am Tenant, nicht am User:
+    // Der Wizard wird nur einmal pro Mandant gezeigt (vom Erst-Nutzer).
+    if (tenantLoading) return;
+    setOnboardingChecked(true);
+    if (tenant && !(tenant as any).onboarding_completed) {
+      navigate("/getting-started", { replace: true });
+    }
+  }, [user, onboardingChecked, navigate, tenant, tenantLoading]);
 
-  if (loading || superAdminLoading) {
+  if (loading || superAdminLoading || partnerLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>
@@ -48,8 +51,33 @@ const Index = () => {
 
   if (!user) return <Navigate to="/auth" replace />;
 
-  // Super-Admins have no tenant context — redirect them to their dedicated area
-  if (isSuperAdmin) return <Navigate to="/super-admin" replace />;
+  // Sales-Scout-Subdomain (sales.aicono.org) leitet auf die mobile PWA /sales.
+  if (isSalesHost()) return <Navigate to="/sales" replace />;
+
+  // Stufe 2: Partner-Subdomain (partner.aicono.org) zeigt ausschließlich das Partner-Portal.
+  // Auch wenn der eingeloggte User Super-Admin oder Tenant-Admin ist, soll auf dieser
+  // Subdomain das Partner-Portal greifen.
+  if (isPartnerHost()) return <Navigate to="/partner" replace />;
+
+  // Partner-Mitglieder: hat der Nutzer zusätzlich einen eigenen Mandanten,
+  // entscheidet die gespeicherte Präferenz bzw. eine einmalige Auswahl.
+  if (isPartnerMember && !isSuperAdmin) {
+    if (tenantLoading) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <div className="animate-pulse text-muted-foreground">{t("common.loading")}</div>
+        </div>
+      );
+    }
+    if (!tenant) return <Navigate to="/partner" replace />;
+    const pref = getAreaPreference();
+    if (pref === "partner") return <Navigate to="/partner" replace />;
+    if (pref !== "ems") return <AreaChooser partnerName={partnerName} tenantName={tenant.name} />;
+  }
+
+  // Super-Admins have no tenant context — redirect them to their dedicated area,
+  // UNLESS they are actively viewing a tenant via Remote-Support (impersonation).
+  if (isSuperAdmin && !isImpersonating()) return <Navigate to="/super-admin" replace />;
 
   if (!onboardingChecked) {
     return (

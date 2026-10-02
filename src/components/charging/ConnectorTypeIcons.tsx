@@ -23,54 +23,102 @@ const CONNECTOR_ICONS: Record<string, { label: string; path: string; color: stri
   },
 };
 
+// Status-Punkte (kleiner Indikator oben rechts am Stecker-Icon)
+const STATUS_DOT: Record<string, { color: string; label: string }> = {
+  available: { color: "bg-green-500", label: "Verfügbar" },
+  charging: { color: "bg-blue-500", label: "Belegt" },
+  faulted: { color: "bg-red-500", label: "Fehler" },
+  offline: { color: "bg-orange-500", label: "Offline" },
+  unavailable: { color: "bg-yellow-500", label: "Nicht verfügbar" },
+  unconfigured: { color: "bg-purple-500", label: "Nicht konfiguriert" },
+};
+
+interface ConnectorStatusInfo {
+  connectorId: number;
+  status: string;
+}
+
 interface Props {
   connectorType: string;
   connectorCount: number;
+  /** Pro-Stecker-Status. Wenn gesetzt, wird je Icon ein farbiger Status-Punkt eingeblendet. */
+  connectorStatuses?: ConnectorStatusInfo[];
 }
 
-export default function ConnectorTypeIcons({ connectorType, connectorCount }: Props) {
+export default function ConnectorTypeIcons({ connectorType, connectorCount, connectorStatuses }: Props) {
   const types = connectorType ? connectorType.split(",").filter(Boolean) : ["Other"];
 
   // Build list of icons to render
-  const icons: { type: string; config: (typeof CONNECTOR_ICONS)[string] }[] = [];
+  const icons: { type: string; config: (typeof CONNECTOR_ICONS)[string]; connectorId?: number }[] = [];
 
   if (types.length === 1) {
     // Single type: repeat icon for each connector
     const cfg = CONNECTOR_ICONS[types[0]] || CONNECTOR_ICONS.Other;
     for (let i = 0; i < Math.max(1, connectorCount); i++) {
-      icons.push({ type: types[0], config: cfg });
+      icons.push({ type: types[0], config: cfg, connectorId: i + 1 });
     }
   } else {
     // Multiple types: one icon per type
-    for (const t of types) {
-      const cfg = CONNECTOR_ICONS[t] || CONNECTOR_ICONS.Other;
-      icons.push({ type: t, config: cfg });
+    for (let i = 0; i < types.length; i++) {
+      const cfg = CONNECTOR_ICONS[types[i]] || CONNECTOR_ICONS.Other;
+      icons.push({ type: types[i], config: cfg, connectorId: i + 1 });
     }
   }
 
-  const summary = types.length === 1
+  // Map connectorId -> status (falls vorhanden)
+  const statusById = new Map<number, string>();
+  if (connectorStatuses) {
+    const sorted = connectorStatuses.slice().sort((a, b) => a.connectorId - b.connectorId);
+    sorted.forEach((s, idx) => {
+      statusById.set(s.connectorId, s.status);
+      // zusätzlich indexbasiert als Fallback
+      if (!statusById.has(idx + 1)) statusById.set(idx + 1, s.status);
+    });
+  }
+
+  const typeSummary = types.length === 1
     ? `${connectorCount}× ${CONNECTOR_ICONS[types[0]]?.label || types[0]}`
     : types.map((t) => CONNECTOR_ICONS[t]?.label || t).join(" + ");
+
+  const statusSummary = connectorStatuses && connectorStatuses.length > 0
+    ? connectorStatuses
+        .slice()
+        .sort((a, b) => a.connectorId - b.connectorId)
+        .map((s) => `Stecker ${s.connectorId}: ${STATUS_DOT[s.status]?.label ?? s.status}`)
+        .join(" · ")
+    : null;
 
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex items-center gap-0.5">
-            {icons.map((icon, i) => (
-              <svg
-                key={i}
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                className={`h-5 w-5 ${icon.config.color} shrink-0`}
-              >
-                <path d={icon.config.path} />
-              </svg>
-            ))}
+          <div className="flex items-center gap-1">
+            {icons.map((icon, i) => {
+              const status = statusById.get(icon.connectorId ?? i + 1);
+              const dot = status ? STATUS_DOT[status] : null;
+              return (
+                <div key={i} className="relative inline-flex">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className={`h-5 w-5 ${icon.config.color} shrink-0`}
+                  >
+                    <path d={icon.config.path} />
+                  </svg>
+                  {dot && (
+                    <span
+                      className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-1 ring-background ${dot.color}`}
+                      aria-label={dot.label}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </TooltipTrigger>
         <TooltipContent side="top">
-          <p className="text-xs">{summary}</p>
+          <p className="text-xs">{typeSummary}</p>
+          {statusSummary && <p className="text-xs text-muted-foreground mt-0.5">{statusSummary}</p>}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

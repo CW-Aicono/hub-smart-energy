@@ -41,7 +41,7 @@ export function useTenantElectricityTariffs(locationId?: string) {
 
   const updateTariff = useMutation({
     mutationFn: async ({ id, ...values }: { id: string } & Record<string, any>) => {
-      const { error } = await supabase.from("tenant_electricity_tariffs").update(values).eq("id", id);
+      const { error } = await supabase.from("tenant_electricity_tariffs").update(values as any).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {

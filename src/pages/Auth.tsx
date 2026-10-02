@@ -1,42 +1,53 @@
-import { useState, useEffect } from "react";
-import { Navigate, useSearchParams, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, LogOut } from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import aiconoLogo from "@/assets/aicono-logo.png";
+import { usePartnerHostBranding } from "@/hooks/usePartnerHostBranding";
+import { isBoardHost } from "@/lib/hostname";
+import { AUTO_LOGOUT_FLAG_KEY } from "@/hooks/useAutoLogout";
 
 type AuthView = "login" | "forgotPassword";
+
 
 const Auth = () => {
   const { user, loading, signIn } = useAuth();
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
+  const { branding: partnerBranding } = usePartnerHostBranding();
   const [view, setView] = useState<AuthView>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  // If there's an invite token in the URL, redirect to the password-set page
-  const inviteToken = searchParams.get("invite");
+  const [showAutoLogoutNotice, setShowAutoLogoutNotice] = useState(false);
 
   useEffect(() => {
-    // Invite tokens are now handled via the activate-invited-user flow
-    // Users receive a direct password-reset link, so no invite token handling needed here
-    if (inviteToken) {
-      toast({
-        title: "Hinweis",
-        description: "Bitte nutzen Sie den Einladungslink aus Ihrer E-Mail, um Ihr Passwort zu setzen.",
-      });
+    if (typeof window !== "undefined" && localStorage.getItem(AUTO_LOGOUT_FLAG_KEY) === "1") {
+      setShowAutoLogoutNotice(true);
     }
-  }, [inviteToken]);
+  }, []);
+
+  const dismissAutoLogoutNotice = () => {
+    localStorage.removeItem(AUTO_LOGOUT_FLAG_KEY);
+    setShowAutoLogoutNotice(false);
+  };
+
+  const brandLogo = partnerBranding?.logo_url || aiconoLogo;
+  const brandName = partnerBranding?.brand_display_name || partnerBranding?.name || "AICONO";
+  const brandPrimary = partnerBranding?.primary_color || "hsl(220, 60%, 20%)";
+
 
   const authSchema = z.object({
     email: z.string().email(t("auth.invalidCredentials")),
@@ -51,7 +62,14 @@ const Auth = () => {
     );
   }
 
-  if (user) return <Navigate to="/" replace />;
+  if (user) {
+    const params = new URLSearchParams(window.location.search);
+    const redirect = params.get("redirect");
+    // Nur interne Pfade zulassen (Schutz vor Open-Redirect).
+    const fallback = isBoardHost() ? "/board" : "/";
+    const safe = redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : fallback;
+    return <Navigate to={safe} replace />;
+  }
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,8 +78,13 @@ const Auth = () => {
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/set-password`,
+    const { error } = await supabase.functions.invoke("send-auth-email", {
+      body: {
+        type: "password_reset",
+        email,
+        redirectTo: `${window.location.origin}/set-password`,
+        locale: "de",
+      },
     });
     setSubmitting(false);
     if (error) {
@@ -92,15 +115,35 @@ const Auth = () => {
 
   return (
     <div className="flex min-h-screen">
+      <AlertDialog open={showAutoLogoutNotice}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <LogOut className="h-5 w-5" />
+              Sie wurden automatisch abgemeldet
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Aus Sicherheitsgründen wurde Ihre Sitzung nach längerer Inaktivität beendet.
+              Bitte bestätigen Sie diesen Hinweis, um sich erneut anzumelden.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={dismissAutoLogoutNotice}>
+              Verstanden
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Left branding panel */}
-      <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-12" style={{ backgroundColor: 'hsl(220, 60%, 20%)' }}>
+      <div className="hidden lg:flex lg:w-1/2 items-center justify-center p-12" style={{ backgroundColor: brandPrimary }}>
         <div className="max-w-md text-center">
           <div className="flex flex-col items-center gap-6 mb-8">
             <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-8">
-              <img src={aiconoLogo} alt="AICONO" className="h-28 object-contain drop-shadow-lg" />
+              <img src={brandLogo} alt={brandName} className="h-28 object-contain drop-shadow-lg" />
             </div>
           </div>
-          <p className="text-base text-primary-foreground/70 leading-relaxed">
+          <p className="text-base leading-relaxed" style={{ color: 'hsl(0, 0%, 100%, 0.75)' }}>
             Ihr intelligentes B2B-Dashboard für Energiemanagement. Verbrauch analysieren, Kosten optimieren und Nachhaltigkeitsziele erreichen.
           </p>
         </div>
@@ -111,8 +154,9 @@ const Auth = () => {
         <Card className="w-full max-w-md border-0 shadow-lg">
           <CardHeader className="text-center">
             <div className="flex items-center justify-center mb-2 lg:hidden">
-              <img src={aiconoLogo} alt="AICONO" className="h-16 object-contain" />
+              <img src={brandLogo} alt={brandName} className="h-16 object-contain" />
             </div>
+
             <CardTitle className="text-2xl font-display">
               {view === "forgotPassword" ? t("auth.forgotPassword") : t("auth.welcomeBack")}
             </CardTitle>
@@ -136,7 +180,8 @@ const Auth = () => {
                     required
                   />
                 </div>
-                <Button type="submit" style={{ backgroundColor: 'hsl(220, 60%, 20%)' }} className="w-full text-white hover:opacity-90" disabled={submitting}>
+                <Button type="submit" style={{ backgroundColor: brandPrimary }} className="w-full text-white hover:opacity-90" disabled={submitting}>
+
                   {submitting ? t("common.loading") : t("profile.passwordResetViaEmail")}
                 </Button>
                 <div className="text-center">
@@ -165,16 +210,7 @@ const Auth = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password">{t("auth.password")}</Label>
-                    <button
-                      type="button"
-                      onClick={() => setView("forgotPassword")}
-                      className="text-xs text-accent hover:underline font-medium"
-                    >
-                      {t("auth.forgotPassword")}
-                    </button>
-                  </div>
+                  <Label htmlFor="password">{t("auth.password")}</Label>
                   <Input
                     id="password"
                     type="password"
@@ -185,9 +221,18 @@ const Auth = () => {
                     autoComplete="current-password"
                   />
                 </div>
-                <Button type="submit" style={{ backgroundColor: 'hsl(220, 60%, 20%)' }} className="w-full text-white hover:opacity-90" disabled={submitting}>
+                <Button type="submit" style={{ backgroundColor: brandPrimary }} className="w-full text-white hover:opacity-90" disabled={submitting}>
                   {submitting ? t("common.loading") : t("auth.login")}
                 </Button>
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => setView("forgotPassword")}
+                    className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    {t("auth.forgotPassword")}
+                  </button>
+                </div>
               </form>
             )}
           </CardContent>

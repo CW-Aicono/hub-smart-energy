@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Download, Send, CheckCircle2, Loader2, ArrowUpDown, Pencil, Euro, AlertTriangle, Clock, FileCheck, RefreshCw, Receipt } from "lucide-react";
+import { Download, Send, CheckCircle2, Loader2, ArrowUpDown, Pencil, Euro, AlertTriangle, Clock, FileCheck, RefreshCw, Receipt, Search } from "lucide-react";
 import { generateSepaDirectDebitXml, downloadXml } from "@/lib/sepaXml";
 import EditInvoiceContent from "@/components/super-admin/EditInvoiceContent";
 import { toast } from "sonner";
@@ -40,6 +40,7 @@ const SuperAdminBilling = () => {
   const [editStatus, setEditStatus] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("tenant");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [search, setSearch] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [lexwareSummary, setLexwareSummary] = useState<Record<string, { count: number; totalAmount: number; openAmount: number }> | null>(null);
   const queryClient = useQueryClient();
@@ -97,7 +98,18 @@ const SuperAdminBilling = () => {
   };
 
   const sorted = useMemo(() => {
-    const arr = [...invoices];
+    const filtered = search.trim()
+      ? invoices.filter((r: any) => {
+          const q = search.toLowerCase();
+          return (
+            (r.tenants?.name ?? "").toLowerCase().includes(q) ||
+            (r.status ?? "").toLowerCase().includes(q) ||
+            (r.invoice_number ?? "").toLowerCase().includes(q) ||
+            (r.lexware_invoice_number ?? "").toLowerCase().includes(q)
+          );
+        })
+      : invoices;
+    const arr = [...filtered];
     const dir = sortDir === "asc" ? 1 : -1;
     arr.sort((a: any, b: any) => {
       switch (sortKey) {
@@ -117,7 +129,7 @@ const SuperAdminBilling = () => {
       }
     });
     return arr;
-  }, [invoices, sortKey, sortDir]);
+  }, [invoices, sortKey, sortDir, search]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -352,6 +364,17 @@ const SuperAdminBilling = () => {
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Search */}
+          <div className="relative max-w-sm mb-4">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Rechnung suchen (Mandant, Nr., Status)…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-8"
+            />
           </div>
 
           {/* Table */}

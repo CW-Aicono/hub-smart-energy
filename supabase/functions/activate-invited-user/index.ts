@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { resendFrom } from "../_shared/resend-from.ts";
+import { checkInviteConflict } from "../_shared/invite-conflict.ts";
 
 const handler = async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
@@ -91,55 +93,77 @@ const handler = async (req: Request): Promise<Response> => {
 
     // ── MODE 1: Direct invite (new flow – no invitation record needed) ──
     if (body.directInvite) {
-      const { email, name, role, tenantId: overrideTenantId } = body;
+      const { email, name, role, tenantId: overrideTenantId, force, customRoleId } = body;
       if (!email) throw new Error("Missing email");
 
       const effectiveTenantId = overrideTenantId || tenantId;
+      const callerIsSuper = roles.includes("super_admin");
+      const isSuperAdminInvite = role === "super_admin";
 
-      const tempPassword = crypto.randomUUID() + "Aa1!";
-      const { data: newUserData, error: createError } = await supabase.auth.admin.createUser({
+      // Only super_admins may invite super_admins
+      if (isSuperAdminInvite && !callerIsSuper) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Nur Super-Admins dürfen Plattform-Administratoren einladen." }),
+          { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      // ── Uniqueness / cross-tenant guard ──
+      const conflict = await checkInviteConflict({
+        supabase,
         email,
-        password: tempPassword,
-        email_confirm: true,
+        intent: isSuperAdminInvite ? "super_admin_invite" : "tenant_invite",
+        tenantId: effectiveTenantId ?? null,
+        force: !!force,
+        callerIsSuper,
       });
+      if (!conflict.ok) {
+        return new Response(
+          JSON.stringify({ success: false, error: conflict.error }),
+          { status: conflict.status ?? 409, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
 
       let newUserId: string;
 
-      if (createError) {
-        if (createError.message?.toLowerCase().includes("already") || createError.message?.toLowerCase().includes("exists")) {
-          // User already exists – find them and reuse
-          const { data: listData, error: listError } = await supabase.auth.admin.listUsers({
-            filter: `email.eq.${email}`,
-            perPage: 1,
-          });
-          if (listError) throw new Error("Benutzer konnte nicht gefunden werden");
-          const existingUser = listData?.users?.[0];
-          if (!existingUser) throw new Error("Benutzer mit dieser E-Mail konnte nicht gefunden werden.");
-          newUserId = existingUser.id;
-        } else {
-          throw new Error(`Benutzer konnte nicht erstellt werden: ${createError.message}`);
-        }
+      if (conflict.existingUserId) {
+        // Existing user the conflict checker explicitly accepted (same tenant, orphan, or forced override)
+        newUserId = conflict.existingUserId;
       } else {
+        const tempPassword = crypto.randomUUID() + "Aa1!";
+        const { data: newUserData, error: createError } = await supabase.auth.admin.createUser({
+          email,
+          password: tempPassword,
+          email_confirm: true,
+        });
+        if (createError || !newUserData?.user) {
+          throw new Error(`Benutzer konnte nicht erstellt werden: ${createError?.message ?? "unbekannt"}`);
+        }
         newUserId = newUserData.user.id;
-        // Wait for trigger
+        // Wait for handle_new_user trigger
         await new Promise(resolve => setTimeout(resolve, 600));
       }
 
-      // Update profile with tenant + name
+      // Update profile with tenant + name.
+      // Super-admin invites: tenant_id MUST be NULL (Super-Admin/Tenant separation).
+      const profileTenantId = isSuperAdminInvite ? null : (effectiveTenantId || null);
+      // custom_role_id only applies to non-super-admin tenant invites.
+      const profileCustomRoleId = isSuperAdminInvite
+        ? null
+        : (typeof customRoleId === "string" && customRoleId ? customRoleId : null);
       await supabase
         .from("profiles")
         .update({
-          tenant_id: effectiveTenantId || null,
+          tenant_id: profileTenantId,
           contact_person: name || null,
+          custom_role_id: profileCustomRoleId,
         })
         .eq("user_id", newUserId);
 
-      // Set role
-      if (role === "admin") {
-        await supabase
-          .from("user_roles")
-          .update({ role: "admin" })
-          .eq("user_id", newUserId);
+      // Set role: ensure exactly one role row for this user.
+      if (role === "admin" || role === "super_admin" || role === "user") {
+        await supabase.from("user_roles").delete().eq("user_id", newUserId);
+        await supabase.from("user_roles").insert({ user_id: newUserId, role });
       }
 
       // Generate password-reset link
@@ -173,7 +197,7 @@ const handler = async (req: Request): Promise<Response> => {
       const emailSent = await sendInvitationEmail(supabase, email, name, safeInviteUrl, effectiveTenantId, role || "user");
 
       return new Response(
-        JSON.stringify({ success: true, userId: newUserId, emailSent }),
+        JSON.stringify({ success: true, userId: newUserId, emailSent, inviteUrl: safeInviteUrl }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -308,7 +332,7 @@ async function sendInvitationEmail(
     const roleLabel = role === "admin" ? "Administrator" : "Benutzer";
 
     await resend.emails.send({
-      from: `${tenantName} <noreply@mailtest.my-ips.de>`,
+      from: resendFrom(tenantName),
       to: [email],
       subject: `Ihr Konto wurde erstellt – ${tenantName}`,
       html: `<!DOCTYPE html>

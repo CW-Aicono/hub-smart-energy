@@ -15,6 +15,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Attachment {
   id: string;
@@ -33,12 +39,20 @@ const KATEGORIEN: Record<string, string> = {
   sonstiges: "Sonstiges",
 };
 
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|heic|heif|bmp|avif)$/i;
+function isImageAttachment(a: { content_type: string | null; file_name: string }) {
+  if (a.content_type?.startsWith("image/")) return true;
+  return IMAGE_EXT.test(a.file_name || "");
+}
+
+
 export function ProjectAttachments({ projectId }: { projectId: string }) {
   const { user } = useAuth();
   const [items, setItems] = useState<Attachment[]>([]);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<{ url: string; name: string; isImage: boolean; isPdf: boolean } | null>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -52,8 +66,8 @@ export function ProjectAttachments({ projectId }: { projectId: string }) {
     setItems(list);
     setLoading(false);
 
-    // Load signed URLs for image previews
-    const imgs = list.filter((a) => a.content_type?.startsWith("image/"));
+    // Load signed URLs for image previews (fallback: detect by file extension)
+    const imgs = list.filter((a) => isImageAttachment(a));
     const map: Record<string, string> = {};
     await Promise.all(
       imgs.map(async (a) => {
@@ -112,7 +126,10 @@ export function ProjectAttachments({ projectId }: { projectId: string }) {
 
   const openItem = async (a: Attachment) => {
     const { data } = await supabase.storage.from("sales-photos").createSignedUrl(a.file_path, 3600);
-    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+    if (!data?.signedUrl) return;
+    const isImage = isImageAttachment(a);
+    const isPdf = (a.content_type === "application/pdf") || /\.pdf$/i.test(a.file_name);
+    setPreview({ url: data.signedUrl, name: a.file_name, isImage, isPdf });
   };
 
   const updateKategorie = async (id: string, kategorie: string) => {
@@ -192,7 +209,7 @@ export function ProjectAttachments({ projectId }: { projectId: string }) {
         ) : (
           <ul className="space-y-2">
             {items.map((a) => {
-              const isImg = a.content_type?.startsWith("image/");
+              const isImg = isImageAttachment(a);
               return (
                 <li key={a.id} className="flex items-center gap-2 rounded-md border bg-card p-2">
                   <button
@@ -250,6 +267,55 @@ export function ProjectAttachments({ projectId }: { projectId: string }) {
           </ul>
         )}
       </CardContent>
+
+      <Dialog open={!!preview} onOpenChange={(o) => !o && setPreview(null)}>
+        <DialogContent className="max-w-3xl w-[95vw] p-3 sm:p-6 max-h-[90vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="text-sm truncate pr-8">{preview?.name}</DialogTitle>
+          </DialogHeader>
+          {preview?.isImage && (
+            <img
+              src={preview.url}
+              alt={preview.name}
+              className="w-full h-auto rounded max-h-[75vh] object-contain bg-muted"
+            />
+          )}
+          {preview && !preview.isImage && preview.isPdf && (
+            <iframe
+              src={preview.url}
+              title={preview.name}
+              className="w-full h-[75vh] rounded border"
+            />
+          )}
+          {preview && !preview.isImage && !preview.isPdf && (
+            <div className="text-center py-6 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Diese Datei kann nicht in der App angezeigt werden.
+              </p>
+              <a
+                href={preview.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-sm underline"
+              >
+                <ExternalLink className="h-3 w-3" /> Herunterladen
+              </a>
+            </div>
+          )}
+          {preview && (
+            <div className="flex justify-end">
+              <a
+                href={preview.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" /> In neuem Tab öffnen
+              </a>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

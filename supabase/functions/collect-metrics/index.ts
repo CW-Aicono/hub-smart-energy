@@ -49,6 +49,19 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    const { data: emergencySetting } = await supabase
+      .from("system_settings")
+      .select("value")
+      .eq("key", "backend_emergency_mode")
+      .maybeSingle();
+    const emergencyRaw = String((emergencySetting as any)?.value ?? "false").toLowerCase();
+    if (emergencyRaw === "true" || emergencyRaw === "1" || emergencyRaw === "on") {
+      return new Response(JSON.stringify({ success: true, skipped: "backend_emergency_mode" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // 1. Collect DB metrics via SQL function
     const { data: dbMetrics, error: dbErr } = await supabase.rpc(
       "collect_db_metrics"
@@ -62,7 +75,7 @@ Deno.serve(async (req) => {
     // We track how many edge functions are configured as a basic metric
     const { count: edgeFunctionCount } = await supabase
       .from("infrastructure_metrics")
-      .select("id", { count: "exact", head: true })
+      .select("id", { count: "estimated", head: true })
       .eq("metric_type", "edge_function")
       .gte(
         "recorded_at",
@@ -74,19 +87,19 @@ Deno.serve(async (req) => {
       await Promise.all([
         supabase
           .from("tenants")
-          .select("id", { count: "exact", head: true })
+          .select("id", { count: "estimated", head: true })
           .then((r) => r.count ?? 0),
         supabase
           .from("profiles")
-          .select("id", { count: "exact", head: true })
+          .select("id", { count: "estimated", head: true })
           .then((r) => r.count ?? 0),
         supabase
           .from("locations")
-          .select("id", { count: "exact", head: true })
+          .select("id", { count: "estimated", head: true })
           .then((r) => r.count ?? 0),
         supabase
           .from("meters")
-          .select("id", { count: "exact", head: true })
+          .select("id", { count: "estimated", head: true })
           .then((r) => r.count ?? 0),
       ]);
 
@@ -175,8 +188,9 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error("collect-metrics error:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

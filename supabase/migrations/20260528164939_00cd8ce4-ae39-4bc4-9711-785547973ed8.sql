@@ -1,0 +1,1 @@
+ALTER TABLE public.charging_users ADD COLUMN IF NOT EXISTS rfid_label TEXT;

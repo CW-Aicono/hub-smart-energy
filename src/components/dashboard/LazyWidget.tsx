@@ -9,8 +9,8 @@ interface LazyWidgetProps {
 }
 
 const WidgetPlaceholder = ({ minHeight }: { minHeight: number }) => (
-  <Card>
-    <CardContent className="p-4 space-y-3" style={{ minHeight }}>
+  <Card className="h-full">
+    <CardContent className="p-4 space-y-3 h-full" style={{ minHeight }}>
       <Skeleton className="h-5 w-1/3" />
       <Skeleton className="h-[140px] w-full rounded-md" />
     </CardContent>
@@ -61,14 +61,14 @@ export default function LazyWidget({ children, minHeight = 200 }: LazyWidgetProp
 
   if (!visible) {
     return (
-      <div ref={ref} style={{ minHeight }}>
+      <div ref={ref} data-lazy="" className="h-full flex flex-col min-h-0" style={{ minHeight }}>
         <WidgetPlaceholder minHeight={minHeight} />
       </div>
     );
   }
 
   return (
-    <div ref={ref}>
+    <div ref={ref} data-lazy="" className="h-full flex flex-col min-h-0">
       <Suspense fallback={<WidgetPlaceholder minHeight={minHeight} />}>
         {children}
       </Suspense>

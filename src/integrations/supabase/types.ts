@@ -10,10 +10,256 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
+      adhoc_invoice_counter: {
+        Row: {
+          next_number: number
+          tenant_id: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          next_number?: number
+          tenant_id: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          next_number?: number
+          tenant_id?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adhoc_invoice_counter_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      adhoc_payment_rules: {
+        Row: {
+          created_at: string
+          currency: string
+          enabled: boolean
+          id: string
+          max_kwh: number | null
+          max_minutes: number | null
+          min_amount_cents: number
+          name: string
+          preauth_amount_cents: number
+          preauth_expiry_minutes: number
+          priority: number
+          rounding_step_cents: number
+          scope: Database["public"]["Enums"]["adhoc_rule_scope"]
+          scope_id: string | null
+          tariff_id: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          enabled?: boolean
+          id?: string
+          max_kwh?: number | null
+          max_minutes?: number | null
+          min_amount_cents?: number
+          name: string
+          preauth_amount_cents?: number
+          preauth_expiry_minutes?: number
+          priority?: number
+          rounding_step_cents?: number
+          scope: Database["public"]["Enums"]["adhoc_rule_scope"]
+          scope_id?: string | null
+          tariff_id?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          enabled?: boolean
+          id?: string
+          max_kwh?: number | null
+          max_minutes?: number | null
+          min_amount_cents?: number
+          name?: string
+          preauth_amount_cents?: number
+          preauth_expiry_minutes?: number
+          priority?: number
+          rounding_step_cents?: number
+          scope?: Database["public"]["Enums"]["adhoc_rule_scope"]
+          scope_id?: string | null
+          tariff_id?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adhoc_payment_rules_tariff_id_fkey"
+            columns: ["tariff_id"]
+            isOneToOne: false
+            referencedRelation: "charging_tariffs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_rules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      adhoc_payment_sessions: {
+        Row: {
+          captured_amount_cents: number
+          card_brand: string | null
+          card_last4: string | null
+          charge_point_id: string | null
+          charging_session_id: string | null
+          connector_id: number | null
+          created_at: string
+          currency: string
+          customer_address: string | null
+          customer_email: string | null
+          customer_name: string | null
+          duration_minutes: number | null
+          ended_at: string | null
+          energy_kwh: number | null
+          error: Json | null
+          id: string
+          invoice_number: string | null
+          invoice_pdf_path: string | null
+          ocpp_transaction_id: string | null
+          preauth_amount_cents: number
+          provider_id: string | null
+          psp_reference: string | null
+          refunded_amount_cents: number
+          rule_id: string | null
+          started_at: string
+          state: Database["public"]["Enums"]["adhoc_payment_state"]
+          tariff_snapshot: Json
+          tenant_id: string
+          terminal_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          captured_amount_cents?: number
+          card_brand?: string | null
+          card_last4?: string | null
+          charge_point_id?: string | null
+          charging_session_id?: string | null
+          connector_id?: number | null
+          created_at?: string
+          currency?: string
+          customer_address?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          duration_minutes?: number | null
+          ended_at?: string | null
+          energy_kwh?: number | null
+          error?: Json | null
+          id?: string
+          invoice_number?: string | null
+          invoice_pdf_path?: string | null
+          ocpp_transaction_id?: string | null
+          preauth_amount_cents?: number
+          provider_id?: string | null
+          psp_reference?: string | null
+          refunded_amount_cents?: number
+          rule_id?: string | null
+          started_at?: string
+          state?: Database["public"]["Enums"]["adhoc_payment_state"]
+          tariff_snapshot?: Json
+          tenant_id: string
+          terminal_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          captured_amount_cents?: number
+          card_brand?: string | null
+          card_last4?: string | null
+          charge_point_id?: string | null
+          charging_session_id?: string | null
+          connector_id?: number | null
+          created_at?: string
+          currency?: string
+          customer_address?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          duration_minutes?: number | null
+          ended_at?: string | null
+          energy_kwh?: number | null
+          error?: Json | null
+          id?: string
+          invoice_number?: string | null
+          invoice_pdf_path?: string | null
+          ocpp_transaction_id?: string | null
+          preauth_amount_cents?: number
+          provider_id?: string | null
+          psp_reference?: string | null
+          refunded_amount_cents?: number
+          rule_id?: string | null
+          started_at?: string
+          state?: Database["public"]["Enums"]["adhoc_payment_state"]
+          tariff_snapshot?: Json
+          tenant_id?: string
+          terminal_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adhoc_payment_sessions_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_sessions_charging_session_id_fkey"
+            columns: ["charging_session_id"]
+            isOneToOne: false
+            referencedRelation: "charging_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_sessions_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "payment_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_sessions_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "adhoc_payment_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_sessions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adhoc_payment_sessions_terminal_id_fkey"
+            columns: ["terminal_id"]
+            isOneToOne: false
+            referencedRelation: "payment_terminals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       alert_rules: {
         Row: {
           created_at: string
@@ -80,6 +326,127 @@ export type Database = {
           },
           {
             foreignKeyName: "alert_rules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analysis_workspace_shares: {
+        Row: {
+          can_edit: boolean
+          created_at: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          can_edit?: boolean
+          created_at?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          can_edit?: boolean
+          created_at?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_workspace_shares_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analysis_workspace_templates: {
+        Row: {
+          blocks: Json
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          is_system: boolean
+          layout: Json
+          name: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          blocks?: Json
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_system?: boolean
+          layout?: Json
+          name: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          blocks?: Json
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_system?: boolean
+          layout?: Json
+          name?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      analysis_workspaces: {
+        Row: {
+          blocks: Json
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          is_shared: boolean
+          layout: Json
+          name: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          blocks?: Json
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          is_shared?: boolean
+          layout?: Json
+          name: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          blocks?: Json
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          is_shared?: boolean
+          layout?: Json
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_workspaces_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -207,6 +574,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      audit_logs: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          after: Json | null
+          before: Json | null
+          created_at: string
+          entity_id: string | null
+          entity_label: string | null
+          entity_type: string
+          id: string
+          ip_address: unknown
+          metadata: Json | null
+          partner_id: string | null
+          tenant_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_label?: string | null
+          entity_type: string
+          id?: string
+          ip_address?: unknown
+          metadata?: Json | null
+          partner_id?: string | null
+          tenant_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_label?: string | null
+          entity_type?: string
+          id?: string
+          ip_address?: unknown
+          metadata?: Json | null
+          partner_id?: string | null
+          tenant_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
       }
       automation_execution_log: {
         Row: {
@@ -362,6 +786,378 @@ export type Database = {
           },
         ]
       }
+      board_templates: {
+        Row: {
+          code: string
+          created_at: string
+          default_layout: Json
+          description: string | null
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          default_layout: Json
+          description?: string | null
+          id?: string
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          default_layout?: Json
+          description?: string | null
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      board_themes: {
+        Row: {
+          colors_dark: Json
+          colors_light: Json
+          created_at: string
+          id: string
+          is_system: boolean
+          name: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          colors_dark: Json
+          colors_light: Json
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          name: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          colors_dark?: Json
+          colors_light?: Json
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          name?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_themes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      board_user_layouts: {
+        Row: {
+          created_at: string
+          id: string
+          template_code: string
+          tenant_id: string
+          theme_id: string | null
+          theme_mode: string
+          tiles: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          template_code?: string
+          tenant_id: string
+          theme_id?: string | null
+          theme_mode?: string
+          tiles?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          template_code?: string
+          tenant_id?: string
+          theme_id?: string | null
+          theme_mode?: string
+          tiles?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_user_layouts_template_code_fkey"
+            columns: ["template_code"]
+            isOneToOne: false
+            referencedRelation: "board_templates"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "board_user_layouts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_user_layouts_theme_id_fkey"
+            columns: ["theme_id"]
+            isOneToOne: false
+            referencedRelation: "board_themes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bridge_event_log: {
+        Row: {
+          details: Json | null
+          event_type: string
+          id: number
+          link_id: string | null
+          message: string | null
+          occurred_at: string
+          severity: Database["public"]["Enums"]["bridge_event_severity"]
+          tenant_id: string | null
+          worker_id: string | null
+        }
+        Insert: {
+          details?: Json | null
+          event_type: string
+          id?: number
+          link_id?: string | null
+          message?: string | null
+          occurred_at?: string
+          severity?: Database["public"]["Enums"]["bridge_event_severity"]
+          tenant_id?: string | null
+          worker_id?: string | null
+        }
+        Update: {
+          details?: Json | null
+          event_type?: string
+          id?: number
+          link_id?: string | null
+          message?: string | null
+          occurred_at?: string
+          severity?: Database["public"]["Enums"]["bridge_event_severity"]
+          tenant_id?: string | null
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bridge_event_log_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_miniserver_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_event_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_event_log_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bridge_miniserver_links: {
+        Row: {
+          connection_kind: Database["public"]["Enums"]["bridge_connection_kind"]
+          created_at: string
+          credentials_encrypted: string | null
+          enabled: boolean
+          endpoint: string | null
+          firmware: string | null
+          id: string
+          last_connected_at: string | null
+          last_event_at: string | null
+          location_id: string | null
+          miniserver_generation: number
+          miniserver_serial: string
+          notes: string | null
+          subscribed_uuids: Json
+          tenant_id: string | null
+          updated_at: string
+          worker_id: string
+        }
+        Insert: {
+          connection_kind?: Database["public"]["Enums"]["bridge_connection_kind"]
+          created_at?: string
+          credentials_encrypted?: string | null
+          enabled?: boolean
+          endpoint?: string | null
+          firmware?: string | null
+          id?: string
+          last_connected_at?: string | null
+          last_event_at?: string | null
+          location_id?: string | null
+          miniserver_generation?: number
+          miniserver_serial: string
+          notes?: string | null
+          subscribed_uuids?: Json
+          tenant_id?: string | null
+          updated_at?: string
+          worker_id: string
+        }
+        Update: {
+          connection_kind?: Database["public"]["Enums"]["bridge_connection_kind"]
+          created_at?: string
+          credentials_encrypted?: string | null
+          enabled?: boolean
+          endpoint?: string | null
+          firmware?: string | null
+          id?: string
+          last_connected_at?: string | null
+          last_event_at?: string | null
+          location_id?: string | null
+          miniserver_generation?: number
+          miniserver_serial?: string
+          notes?: string | null
+          subscribed_uuids?: Json
+          tenant_id?: string | null
+          updated_at?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bridge_miniserver_links_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_miniserver_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_miniserver_links_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bridge_raw_samples: {
+        Row: {
+          id: number
+          link_id: string | null
+          miniserver_serial: string
+          processed_at: string | null
+          received_at: string
+          tenant_id: string | null
+          uuid: string
+          value: number
+          worker_id: string | null
+        }
+        Insert: {
+          id?: number
+          link_id?: string | null
+          miniserver_serial: string
+          processed_at?: string | null
+          received_at?: string
+          tenant_id?: string | null
+          uuid: string
+          value: number
+          worker_id?: string | null
+        }
+        Update: {
+          id?: number
+          link_id?: string | null
+          miniserver_serial?: string
+          processed_at?: string | null
+          received_at?: string
+          tenant_id?: string | null
+          uuid?: string
+          value?: number
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bridge_raw_samples_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_miniserver_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_raw_samples_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bridge_raw_samples_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "bridge_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bridge_workers: {
+        Row: {
+          created_at: string
+          description: string | null
+          enabled: boolean
+          host: string | null
+          id: string
+          last_error: string | null
+          last_heartbeat_at: string | null
+          name: string
+          status: Database["public"]["Enums"]["bridge_worker_status"]
+          updated_at: string
+          version: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          host?: string | null
+          id?: string
+          last_error?: string | null
+          last_heartbeat_at?: string | null
+          name: string
+          status?: Database["public"]["Enums"]["bridge_worker_status"]
+          updated_at?: string
+          version?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          host?: string | null
+          id?: string
+          last_error?: string | null
+          last_heartbeat_at?: string | null
+          name?: string
+          status?: Database["public"]["Enums"]["bridge_worker_status"]
+          updated_at?: string
+          version?: string | null
+        }
+        Relationships: []
+      }
       brighthub_settings: {
         Row: {
           api_key: string
@@ -425,6 +1221,53 @@ export type Database = {
           },
         ]
       }
+      charge_point_active_profile: {
+        Row: {
+          applied_at: string
+          charge_point_id: string
+          connector_id: number
+          current_limit_a: number | null
+          current_limit_w: number | null
+          expires_at: string | null
+          id: string
+          metadata: Json | null
+          profile_purpose: string
+          source: string
+        }
+        Insert: {
+          applied_at?: string
+          charge_point_id: string
+          connector_id?: number
+          current_limit_a?: number | null
+          current_limit_w?: number | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          profile_purpose?: string
+          source: string
+        }
+        Update: {
+          applied_at?: string
+          charge_point_id?: string
+          connector_id?: number
+          current_limit_a?: number | null
+          current_limit_w?: number | null
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          profile_purpose?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_active_profile_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_point_allowed_user_groups: {
         Row: {
           charge_point_id: string
@@ -457,6 +1300,50 @@ export type Database = {
             columns: ["user_group_id"]
             isOneToOne: false
             referencedRelation: "charging_user_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charge_point_capabilities: {
+        Row: {
+          charge_point_id: string
+          created_at: string
+          last_probed_at: string
+          max_sample_length: number | null
+          min_sample_interval: number | null
+          raw_config: Json
+          supported_measurands: string[]
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          charge_point_id: string
+          created_at?: string
+          last_probed_at?: string
+          max_sample_length?: number | null
+          min_sample_interval?: number | null
+          raw_config?: Json
+          supported_measurands?: string[]
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          charge_point_id?: string
+          created_at?: string
+          last_probed_at?: string
+          max_sample_length?: number | null
+          min_sample_interval?: number | null
+          raw_config?: Json
+          supported_measurands?: string[]
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_capabilities_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: true
+            referencedRelation: "charge_points"
             referencedColumns: ["id"]
           },
         ]
@@ -514,6 +1401,57 @@ export type Database = {
           },
         ]
       }
+      charge_point_economics: {
+        Row: {
+          capex_cents: number
+          charge_point_id: string
+          commissioned_on: string | null
+          created_at: string
+          electricity_cost_eur_per_kwh: number
+          notes: string | null
+          opex_monthly_cents: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          capex_cents?: number
+          charge_point_id: string
+          commissioned_on?: string | null
+          created_at?: string
+          electricity_cost_eur_per_kwh?: number
+          notes?: string | null
+          opex_monthly_cents?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          capex_cents?: number
+          charge_point_id?: string
+          commissioned_on?: string | null
+          created_at?: string
+          electricity_cost_eur_per_kwh?: number
+          notes?: string | null
+          opex_monthly_cents?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_economics_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: true
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_economics_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charge_point_group_allowed_user_groups: {
         Row: {
           created_at: string
@@ -557,6 +1495,7 @@ export type Database = {
           description: string | null
           energy_settings: Json
           id: string
+          location_id: string | null
           name: string
           tenant_id: string
           updated_at: string
@@ -567,6 +1506,7 @@ export type Database = {
           description?: string | null
           energy_settings?: Json
           id?: string
+          location_id?: string | null
           name: string
           tenant_id: string
           updated_at?: string
@@ -577,34 +1517,146 @@ export type Database = {
           description?: string | null
           energy_settings?: Json
           id?: string
+          location_id?: string | null
           name?: string
           tenant_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_groups_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charge_point_terminals: {
+        Row: {
+          charge_point_id: string
+          connector_id: number | null
+          created_at: string
+          id: string
+          is_primary: boolean
+          tenant_id: string
+          terminal_id: string
+          updated_at: string
+        }
+        Insert: {
+          charge_point_id: string
+          connector_id?: number | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          tenant_id: string
+          terminal_id: string
+          updated_at?: string
+        }
+        Update: {
+          charge_point_id?: string
+          connector_id?: number | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean
+          tenant_id?: string
+          terminal_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_terminals_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_terminals_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_point_terminals_terminal_id_fkey"
+            columns: ["terminal_id"]
+            isOneToOne: false
+            referencedRelation: "payment_terminals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charge_point_uptime_snapshots: {
+        Row: {
+          charge_point_id: string
+          id: number
+          is_online: boolean
+          recorded_at: string
+        }
+        Insert: {
+          charge_point_id: string
+          id?: number
+          is_online: boolean
+          recorded_at?: string
+        }
+        Update: {
+          charge_point_id?: string
+          id?: number
+          is_online?: boolean
+          recorded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charge_point_uptime_snapshots_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       charge_points: {
         Row: {
           access_settings: Json
           address: string | null
+          auth_required: boolean
+          auto_reboot_enabled: boolean
+          auto_reboot_last_run_at: string | null
+          auto_reboot_skip_if_charging: boolean
+          auto_reboot_time: string
+          auto_reboot_type: string
+          certificate_required: boolean
+          certificate_type: string | null
+          cheap_charging_schedule: Json | null
+          connection_protocol: string
           connector_count: number
           connector_type: string
           created_at: string
+          eichrecht_enabled: boolean
+          energy_settings: Json
           firmware_version: string | null
           group_id: string | null
           id: string
           last_heartbeat: string | null
+          last_ws_pong_at: string | null
           latitude: number | null
+          linked_meter_id: string | null
           location_id: string | null
           longitude: number | null
           max_power_kw: number
+          meter_format: string
+          meter_public_key: string | null
           model: string | null
           name: string
-          ocpp_id: string
+          ocpp_id: string | null
           ocpp_password: string | null
           photo_url: string | null
           power_limit_schedule: Json | null
+          rfid_read_mode: string
           status: string
+          supports_change_configuration: boolean | null
+          supports_charging_profile: boolean | null
           tenant_id: string
           updated_at: string
           vendor: string | null
@@ -614,24 +1666,43 @@ export type Database = {
         Insert: {
           access_settings?: Json
           address?: string | null
+          auth_required?: boolean
+          auto_reboot_enabled?: boolean
+          auto_reboot_last_run_at?: string | null
+          auto_reboot_skip_if_charging?: boolean
+          auto_reboot_time?: string
+          auto_reboot_type?: string
+          certificate_required?: boolean
+          certificate_type?: string | null
+          cheap_charging_schedule?: Json | null
+          connection_protocol?: string
           connector_count?: number
           connector_type?: string
           created_at?: string
+          eichrecht_enabled?: boolean
+          energy_settings?: Json
           firmware_version?: string | null
           group_id?: string | null
           id?: string
           last_heartbeat?: string | null
+          last_ws_pong_at?: string | null
           latitude?: number | null
+          linked_meter_id?: string | null
           location_id?: string | null
           longitude?: number | null
           max_power_kw?: number
+          meter_format?: string
+          meter_public_key?: string | null
           model?: string | null
           name: string
-          ocpp_id: string
+          ocpp_id?: string | null
           ocpp_password?: string | null
           photo_url?: string | null
           power_limit_schedule?: Json | null
+          rfid_read_mode?: string
           status?: string
+          supports_change_configuration?: boolean | null
+          supports_charging_profile?: boolean | null
           tenant_id: string
           updated_at?: string
           vendor?: string | null
@@ -641,24 +1712,43 @@ export type Database = {
         Update: {
           access_settings?: Json
           address?: string | null
+          auth_required?: boolean
+          auto_reboot_enabled?: boolean
+          auto_reboot_last_run_at?: string | null
+          auto_reboot_skip_if_charging?: boolean
+          auto_reboot_time?: string
+          auto_reboot_type?: string
+          certificate_required?: boolean
+          certificate_type?: string | null
+          cheap_charging_schedule?: Json | null
+          connection_protocol?: string
           connector_count?: number
           connector_type?: string
           created_at?: string
+          eichrecht_enabled?: boolean
+          energy_settings?: Json
           firmware_version?: string | null
           group_id?: string | null
           id?: string
           last_heartbeat?: string | null
+          last_ws_pong_at?: string | null
           latitude?: number | null
+          linked_meter_id?: string | null
           location_id?: string | null
           longitude?: number | null
           max_power_kw?: number
+          meter_format?: string
+          meter_public_key?: string | null
           model?: string | null
           name?: string
-          ocpp_id?: string
+          ocpp_id?: string | null
           ocpp_password?: string | null
           photo_url?: string | null
           power_limit_schedule?: Json | null
+          rfid_read_mode?: string
           status?: string
+          supports_change_configuration?: boolean | null
+          supports_charging_profile?: boolean | null
           tenant_id?: string
           updated_at?: string
           vendor?: string | null
@@ -671,6 +1761,13 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "charge_point_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charge_points_linked_meter_id_fkey"
+            columns: ["linked_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
             referencedColumns: ["id"]
           },
           {
@@ -727,6 +1824,147 @@ export type Database = {
           vendor?: string
         }
         Relationships: []
+      }
+      charging_access_log: {
+        Row: {
+          charge_point_id: string | null
+          charge_point_ocpp_id: string | null
+          created_at: string
+          id: string
+          id_tag: string | null
+          metadata: Json | null
+          reason: string | null
+          result: string
+          tenant_id: string
+        }
+        Insert: {
+          charge_point_id?: string | null
+          charge_point_ocpp_id?: string | null
+          created_at?: string
+          id?: string
+          id_tag?: string | null
+          metadata?: Json | null
+          reason?: string | null
+          result: string
+          tenant_id: string
+        }
+        Update: {
+          charge_point_id?: string | null
+          charge_point_ocpp_id?: string | null
+          created_at?: string
+          id?: string
+          id_tag?: string | null
+          metadata?: Json | null
+          reason?: string | null
+          result?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_access_log_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charging_billing_group_members: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_billing_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "charging_billing_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_billing_group_members_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_billing_group_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "charging_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_billing_group_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "charging_users_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charging_billing_groups: {
+        Row: {
+          billing_address: string | null
+          billing_email: string | null
+          company_name: string | null
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          billing_address?: string | null
+          billing_email?: string | null
+          company_name?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          billing_address?: string | null
+          billing_email?: string | null
+          company_name?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_billing_groups_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       charging_invoice_counter: {
         Row: {
@@ -851,8 +2089,11 @@ export type Database = {
       }
       charging_invoices: {
         Row: {
+          billing_group_id: string | null
           created_at: string
           currency: string
+          email_send_count: number
+          email_sent_at: string | null
           id: string
           idle_fee_amount: number
           invoice_date: string
@@ -873,8 +2114,11 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          billing_group_id?: string | null
           created_at?: string
           currency?: string
+          email_send_count?: number
+          email_sent_at?: string | null
           id?: string
           idle_fee_amount?: number
           invoice_date?: string
@@ -895,8 +2139,11 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          billing_group_id?: string | null
           created_at?: string
           currency?: string
+          email_send_count?: number
+          email_sent_at?: string | null
           id?: string
           idle_fee_amount?: number
           invoice_date?: string
@@ -917,6 +2164,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "charging_invoices_billing_group_id_fkey"
+            columns: ["billing_group_id"]
+            isOneToOne: false
+            referencedRelation: "charging_billing_groups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "charging_invoices_session_id_fkey"
             columns: ["session_id"]
@@ -954,6 +2208,135 @@ export type Database = {
           },
         ]
       }
+      charging_report_schedules: {
+        Row: {
+          config: Json
+          created_at: string
+          created_by: string
+          format: string
+          frequency: string
+          id: string
+          is_active: boolean
+          last_error: string | null
+          last_sent_at: string | null
+          name: string
+          next_run_at: string | null
+          recipients: string[]
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          created_by: string
+          format?: string
+          frequency: string
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_sent_at?: string | null
+          name: string
+          next_run_at?: string | null
+          recipients?: string[]
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          created_by?: string
+          format?: string
+          frequency?: string
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_sent_at?: string | null
+          name?: string
+          next_run_at?: string | null
+          recipients?: string[]
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_report_schedules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      charging_session_meter_records: {
+        Row: {
+          charge_point_id: string | null
+          context: string
+          created_at: string
+          id: string
+          meter_format: string
+          public_key_fingerprint: string | null
+          raw_payload: string
+          reading_wh: number | null
+          sampled_at: string
+          session_id: string
+          signed_value: string | null
+          tenant_id: string
+          verification_status: string
+        }
+        Insert: {
+          charge_point_id?: string | null
+          context?: string
+          created_at?: string
+          id?: string
+          meter_format?: string
+          public_key_fingerprint?: string | null
+          raw_payload: string
+          reading_wh?: number | null
+          sampled_at: string
+          session_id: string
+          signed_value?: string | null
+          tenant_id: string
+          verification_status?: string
+        }
+        Update: {
+          charge_point_id?: string | null
+          context?: string
+          created_at?: string
+          id?: string
+          meter_format?: string
+          public_key_fingerprint?: string | null
+          raw_payload?: string
+          reading_wh?: number | null
+          sampled_at?: string
+          session_id?: string
+          signed_value?: string | null
+          tenant_id?: string
+          verification_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_session_meter_records_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_session_meter_records_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "charging_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_session_meter_records_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charging_sessions: {
         Row: {
           charge_point_id: string | null
@@ -964,6 +2347,10 @@ export type Database = {
           id_tag: string | null
           meter_start: number | null
           meter_stop: number | null
+          ocmf_finalized_at: string | null
+          ocmf_payload: string | null
+          ocmf_public_key_fingerprint: string | null
+          ocmf_status: string | null
           start_time: string
           status: string
           stop_reason: string | null
@@ -980,6 +2367,10 @@ export type Database = {
           id_tag?: string | null
           meter_start?: number | null
           meter_stop?: number | null
+          ocmf_finalized_at?: string | null
+          ocmf_payload?: string | null
+          ocmf_public_key_fingerprint?: string | null
+          ocmf_status?: string | null
           start_time?: string
           status?: string
           stop_reason?: string | null
@@ -996,6 +2387,10 @@ export type Database = {
           id_tag?: string | null
           meter_start?: number | null
           meter_stop?: number | null
+          ocmf_finalized_at?: string | null
+          ocmf_payload?: string | null
+          ocmf_public_key_fingerprint?: string | null
+          ocmf_status?: string | null
           start_time?: string
           status?: string
           stop_reason?: string | null
@@ -1029,7 +2424,9 @@ export type Database = {
           idle_fee_grace_minutes: number
           idle_fee_per_minute: number
           is_active: boolean
+          is_default: boolean
           name: string
+          price_includes_vat: boolean | null
           price_per_kwh: number
           tax_rate_percent: number
           tenant_id: string
@@ -1043,7 +2440,9 @@ export type Database = {
           idle_fee_grace_minutes?: number
           idle_fee_per_minute?: number
           is_active?: boolean
+          is_default?: boolean
           name: string
+          price_includes_vat?: boolean | null
           price_per_kwh?: number
           tax_rate_percent?: number
           tenant_id: string
@@ -1057,7 +2456,9 @@ export type Database = {
           idle_fee_grace_minutes?: number
           idle_fee_per_minute?: number
           is_active?: boolean
+          is_default?: boolean
           name?: string
+          price_includes_vat?: boolean | null
           price_per_kwh?: number
           tax_rate_percent?: number
           tenant_id?: string
@@ -1080,6 +2481,7 @@ export type Database = {
           id: string
           is_app_user: boolean
           name: string
+          status: string
           tariff_id: string | null
           tenant_id: string
           updated_at: string
@@ -1090,6 +2492,7 @@ export type Database = {
           id?: string
           is_app_user?: boolean
           name: string
+          status?: string
           tariff_id?: string | null
           tenant_id: string
           updated_at?: string
@@ -1100,6 +2503,7 @@ export type Database = {
           id?: string
           is_app_user?: boolean
           name?: string
+          status?: string
           tariff_id?: string | null
           tenant_id?: string
           updated_at?: string
@@ -1121,6 +2525,58 @@ export type Database = {
           },
         ]
       }
+      charging_user_rfid_tags: {
+        Row: {
+          created_at: string
+          id: string
+          label: string | null
+          tag: string
+          tenant_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          tag: string
+          tenant_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          tag?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charging_user_rfid_tags_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_user_rfid_tags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "charging_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charging_user_rfid_tags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "charging_users_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       charging_users: {
         Row: {
           app_tag: string | null
@@ -1132,6 +2588,7 @@ export type Database = {
           name: string
           notes: string | null
           phone: string | null
+          rfid_label: string | null
           rfid_tag: string | null
           status: string
           tariff_id: string | null
@@ -1148,6 +2605,7 @@ export type Database = {
           name: string
           notes?: string | null
           phone?: string | null
+          rfid_label?: string | null
           rfid_tag?: string | null
           status?: string
           tariff_id?: string | null
@@ -1164,6 +2622,7 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string | null
+          rfid_label?: string | null
           rfid_tag?: string | null
           status?: string
           tariff_id?: string | null
@@ -1247,6 +2706,778 @@ export type Database = {
           },
         ]
       }
+      community_allocation_runs: {
+        Row: {
+          community_id: string
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          period_end: string
+          period_start: string
+          started_at: string
+          status: string
+          strategy: string
+          tenant_id: string
+          total_allocated_kwh: number | null
+          total_generated_kwh: number | null
+          total_surplus_kwh: number | null
+        }
+        Insert: {
+          community_id: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          period_end: string
+          period_start: string
+          started_at?: string
+          status?: string
+          strategy?: string
+          tenant_id: string
+          total_allocated_kwh?: number | null
+          total_generated_kwh?: number | null
+          total_surplus_kwh?: number | null
+        }
+        Update: {
+          community_id?: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          period_end?: string
+          period_start?: string
+          started_at?: string
+          status?: string
+          strategy?: string
+          tenant_id?: string
+          total_allocated_kwh?: number | null
+          total_generated_kwh?: number | null
+          total_surplus_kwh?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_allocation_runs_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_allocations_15min: {
+        Row: {
+          allocated_kwh: number
+          community_id: string
+          created_at: string
+          id: string
+          member_id: string
+          run_id: string | null
+          strategy: string
+          surplus_to_grid_kwh: number
+          tenant_id: string
+          ts_start: string
+        }
+        Insert: {
+          allocated_kwh?: number
+          community_id: string
+          created_at?: string
+          id?: string
+          member_id: string
+          run_id?: string | null
+          strategy?: string
+          surplus_to_grid_kwh?: number
+          tenant_id: string
+          ts_start: string
+        }
+        Update: {
+          allocated_kwh?: number
+          community_id?: string
+          created_at?: string
+          id?: string
+          member_id?: string
+          run_id?: string | null
+          strategy?: string
+          surplus_to_grid_kwh?: number
+          tenant_id?: string
+          ts_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_allocations_15min_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_allocations_15min_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "community_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_allocations_15min_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "community_allocation_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_assets: {
+        Row: {
+          asset_type: string
+          building_type: string | null
+          capacity_kw: number
+          community_id: string
+          created_at: string
+          id: string
+          imsys_requested_at: string | null
+          imsys_status: string | null
+          location_id: string | null
+          meter_id: string | null
+          not_commercial: boolean | null
+          operator_legal_form: string | null
+          renewable_confirmed: boolean | null
+          renewable_proof_url: string | null
+          share_model: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          asset_type?: string
+          building_type?: string | null
+          capacity_kw?: number
+          community_id: string
+          created_at?: string
+          id?: string
+          imsys_requested_at?: string | null
+          imsys_status?: string | null
+          location_id?: string | null
+          meter_id?: string | null
+          not_commercial?: boolean | null
+          operator_legal_form?: string | null
+          renewable_confirmed?: boolean | null
+          renewable_proof_url?: string | null
+          share_model?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          asset_type?: string
+          building_type?: string | null
+          capacity_kw?: number
+          community_id?: string
+          created_at?: string
+          id?: string
+          imsys_requested_at?: string | null
+          imsys_status?: string | null
+          location_id?: string | null
+          meter_id?: string | null
+          not_commercial?: boolean | null
+          operator_legal_form?: string | null
+          renewable_confirmed?: boolean | null
+          renewable_proof_url?: string | null
+          share_model?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_assets_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_contract_templates: {
+        Row: {
+          body_markdown: string
+          community_id: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          placeholders: Json
+          template_kind: string
+          tenant_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          body_markdown: string
+          community_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          placeholders?: Json
+          template_kind?: string
+          tenant_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          body_markdown?: string
+          community_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          placeholders?: Json
+          template_kind?: string
+          tenant_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_contract_templates_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_join_requests: {
+        Row: {
+          address: string | null
+          city: string | null
+          community_id: string
+          created_at: string
+          created_member_id: string | null
+          email: string
+          id: string
+          listing_id: string | null
+          message: string | null
+          name: string
+          phone: string | null
+          plz: string | null
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source_ip: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          community_id: string
+          created_at?: string
+          created_member_id?: string | null
+          email: string
+          id?: string
+          listing_id?: string | null
+          message?: string | null
+          name: string
+          phone?: string | null
+          plz?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_ip?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          community_id?: string
+          created_at?: string
+          created_member_id?: string | null
+          email?: string
+          id?: string
+          listing_id?: string | null
+          message?: string | null
+          name?: string
+          phone?: string | null
+          plz?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source_ip?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_join_requests_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_join_requests_created_member_id_fkey"
+            columns: ["created_member_id"]
+            isOneToOne: false
+            referencedRelation: "community_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_join_requests_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "community_marketplace_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_marketplace_listings: {
+        Row: {
+          community_id: string
+          contact_email: string | null
+          created_at: string
+          feed_in_ct_kwh: number | null
+          hero_image_url: string | null
+          id: string
+          is_public: boolean
+          long_description: string | null
+          max_members: number | null
+          price_ct_kwh: number | null
+          region_city: string | null
+          region_plz: string | null
+          short_description: string | null
+          slug: string
+          tenant_id: string
+          title: string
+          updated_at: string
+          view_count: number
+        }
+        Insert: {
+          community_id: string
+          contact_email?: string | null
+          created_at?: string
+          feed_in_ct_kwh?: number | null
+          hero_image_url?: string | null
+          id?: string
+          is_public?: boolean
+          long_description?: string | null
+          max_members?: number | null
+          price_ct_kwh?: number | null
+          region_city?: string | null
+          region_plz?: string | null
+          short_description?: string | null
+          slug: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+          view_count?: number
+        }
+        Update: {
+          community_id?: string
+          contact_email?: string | null
+          created_at?: string
+          feed_in_ct_kwh?: number | null
+          hero_image_url?: string | null
+          id?: string
+          is_public?: boolean
+          long_description?: string | null
+          max_members?: number | null
+          price_ct_kwh?: number | null
+          region_city?: string | null
+          region_plz?: string | null
+          short_description?: string | null
+          slug?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_marketplace_listings_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_member_invoices: {
+        Row: {
+          allocated_kwh: number
+          community_id: string
+          created_at: string
+          currency: string
+          feed_in_credit_ct: number
+          feed_in_kwh: number
+          id: string
+          internal_amount_ct: number
+          invoice_number: string | null
+          issued_at: string | null
+          line_items: Json
+          member_id: string
+          paid_at: string | null
+          pdf_path: string | null
+          period_end: string
+          period_start: string
+          status: string
+          tenant_id: string
+          total_ct: number
+          updated_at: string
+        }
+        Insert: {
+          allocated_kwh?: number
+          community_id: string
+          created_at?: string
+          currency?: string
+          feed_in_credit_ct?: number
+          feed_in_kwh?: number
+          id?: string
+          internal_amount_ct?: number
+          invoice_number?: string | null
+          issued_at?: string | null
+          line_items?: Json
+          member_id: string
+          paid_at?: string | null
+          pdf_path?: string | null
+          period_end: string
+          period_start: string
+          status?: string
+          tenant_id: string
+          total_ct?: number
+          updated_at?: string
+        }
+        Update: {
+          allocated_kwh?: number
+          community_id?: string
+          created_at?: string
+          currency?: string
+          feed_in_credit_ct?: number
+          feed_in_kwh?: number
+          id?: string
+          internal_amount_ct?: number
+          invoice_number?: string | null
+          issued_at?: string | null
+          line_items?: Json
+          member_id?: string
+          paid_at?: string | null
+          pdf_path?: string | null
+          period_end?: string
+          period_start?: string
+          status?: string
+          tenant_id?: string
+          total_ct?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_member_invoices_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_member_invoices_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "community_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_member_readings_15min: {
+        Row: {
+          community_id: string
+          created_at: string
+          direction: string
+          id: string
+          import_id: string | null
+          kwh: number
+          member_id: string
+          source: string
+          tenant_id: string
+          ts_start: string
+        }
+        Insert: {
+          community_id: string
+          created_at?: string
+          direction: string
+          id?: string
+          import_id?: string | null
+          kwh: number
+          member_id: string
+          source?: string
+          tenant_id: string
+          ts_start: string
+        }
+        Update: {
+          community_id?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          import_id?: string | null
+          kwh?: number
+          member_id?: string
+          source?: string
+          tenant_id?: string
+          ts_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_member_readings_15min_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_member_readings_15min_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "smart_meter_mscons_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_member_readings_15min_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "community_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_member_signatures: {
+        Row: {
+          body_hash: string
+          community_id: string
+          created_at: string
+          id: string
+          member_id: string
+          signed_at: string
+          signed_body: string
+          signer_ip: string | null
+          signer_name: string
+          template_id: string
+          template_version: number
+          tenant_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          body_hash: string
+          community_id: string
+          created_at?: string
+          id?: string
+          member_id: string
+          signed_at?: string
+          signed_body: string
+          signer_ip?: string | null
+          signer_name: string
+          template_id: string
+          template_version: number
+          tenant_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          body_hash?: string
+          community_id?: string
+          created_at?: string
+          id?: string
+          member_id?: string
+          signed_at?: string
+          signed_body?: string
+          signer_ip?: string | null
+          signer_name?: string
+          template_id?: string
+          template_version?: number
+          tenant_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_member_signatures_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_member_signatures_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "community_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_member_signatures_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "community_contract_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_members: {
+        Row: {
+          activated_at: string | null
+          annual_balance_eur: number | null
+          annual_revenue_eur: number | null
+          community_id: string
+          created_at: string
+          customer_class: string | null
+          display_name: string | null
+          email: string | null
+          employees: number | null
+          id: string
+          imsys_installed_at: string | null
+          imsys_requested_at: string | null
+          imsys_status: string | null
+          invited_at: string | null
+          joined_at: string | null
+          last_invite_sent_at: string | null
+          left_at: string | null
+          malo_id: string | null
+          melo_id: string | null
+          member_no: string | null
+          metering_type: string | null
+          pre_contract_info_sent_at: string | null
+          rest_supplier_confirmed_at: string | null
+          rest_supplier_contract_no: string | null
+          rest_supplier_name: string | null
+          role: string
+          share_kw: number
+          status: string
+          suspended_at: string | null
+          tenant_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          activated_at?: string | null
+          annual_balance_eur?: number | null
+          annual_revenue_eur?: number | null
+          community_id: string
+          created_at?: string
+          customer_class?: string | null
+          display_name?: string | null
+          email?: string | null
+          employees?: number | null
+          id?: string
+          imsys_installed_at?: string | null
+          imsys_requested_at?: string | null
+          imsys_status?: string | null
+          invited_at?: string | null
+          joined_at?: string | null
+          last_invite_sent_at?: string | null
+          left_at?: string | null
+          malo_id?: string | null
+          melo_id?: string | null
+          member_no?: string | null
+          metering_type?: string | null
+          pre_contract_info_sent_at?: string | null
+          rest_supplier_confirmed_at?: string | null
+          rest_supplier_contract_no?: string | null
+          rest_supplier_name?: string | null
+          role?: string
+          share_kw?: number
+          status?: string
+          suspended_at?: string | null
+          tenant_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          activated_at?: string | null
+          annual_balance_eur?: number | null
+          annual_revenue_eur?: number | null
+          community_id?: string
+          created_at?: string
+          customer_class?: string | null
+          display_name?: string | null
+          email?: string | null
+          employees?: number | null
+          id?: string
+          imsys_installed_at?: string | null
+          imsys_requested_at?: string | null
+          imsys_status?: string | null
+          invited_at?: string | null
+          joined_at?: string | null
+          last_invite_sent_at?: string | null
+          left_at?: string | null
+          malo_id?: string | null
+          melo_id?: string | null
+          member_no?: string | null
+          metering_type?: string | null
+          pre_contract_info_sent_at?: string | null
+          rest_supplier_confirmed_at?: string | null
+          rest_supplier_contract_no?: string | null
+          rest_supplier_name?: string | null
+          role?: string
+          share_kw?: number
+          status?: string
+          suspended_at?: string | null
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_members_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_tariffs: {
+        Row: {
+          community_id: string
+          created_at: string
+          feed_in_ct_kwh: number
+          id: string
+          price_ct_kwh: number
+          price_includes_vat: boolean | null
+          tenant_id: string
+          updated_at: string
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          community_id: string
+          created_at?: string
+          feed_in_ct_kwh?: number
+          id?: string
+          price_ct_kwh?: number
+          price_includes_vat?: boolean | null
+          tenant_id: string
+          updated_at?: string
+          valid_from: string
+          valid_to?: string | null
+        }
+        Update: {
+          community_id?: string
+          created_at?: string
+          feed_in_ct_kwh?: number
+          id?: string
+          price_ct_kwh?: number
+          price_includes_vat?: boolean | null
+          tenant_id?: string
+          updated_at?: string
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_tariffs_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       copilot_analyses: {
         Row: {
           analysis_type: string
@@ -1312,6 +3543,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      copilot_analytics_queries: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          is_pinned: boolean
+          location_id: string | null
+          model_used: string | null
+          period_end: string | null
+          period_start: string | null
+          prompt: string
+          result_json: Json | null
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          is_pinned?: boolean
+          location_id?: string | null
+          model_used?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          prompt: string
+          result_json?: Json | null
+          status?: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          is_pinned?: boolean
+          location_id?: string | null
+          model_used?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          prompt?: string
+          result_json?: Json | null
+          status?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
       }
       copilot_projects: {
         Row: {
@@ -1385,6 +3670,235 @@ export type Database = {
           },
           {
             foreignKeyName: "copilot_projects_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copilot_prompt_presets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_default: boolean
+          label: string
+          prompt: string
+          sort_order: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean
+          label: string
+          prompt: string
+          sort_order?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean
+          label?: string
+          prompt?: string
+          sort_order?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copilot_prompt_presets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cp_firmware_artifacts: {
+        Row: {
+          created_at: string
+          eichrecht_approval_ref: string | null
+          file_format: string
+          file_size: number | null
+          id: string
+          is_eichrecht_certified: boolean
+          model: string
+          release_notes: string | null
+          sha256: string | null
+          storage_path: string
+          updated_at: string
+          uploaded_by: string | null
+          vendor: string
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          eichrecht_approval_ref?: string | null
+          file_format?: string
+          file_size?: number | null
+          id?: string
+          is_eichrecht_certified?: boolean
+          model: string
+          release_notes?: string | null
+          sha256?: string | null
+          storage_path: string
+          updated_at?: string
+          uploaded_by?: string | null
+          vendor: string
+          version: string
+        }
+        Update: {
+          created_at?: string
+          eichrecht_approval_ref?: string | null
+          file_format?: string
+          file_size?: number | null
+          id?: string
+          is_eichrecht_certified?: boolean
+          model?: string
+          release_notes?: string | null
+          sha256?: string | null
+          storage_path?: string
+          updated_at?: string
+          uploaded_by?: string | null
+          vendor?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      cp_firmware_jobs: {
+        Row: {
+          artifact_id: string | null
+          charge_point_id: string
+          created_at: string
+          download_url: string | null
+          error_code: string | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          last_status_at: string | null
+          retries: number | null
+          retrieve_date: string
+          retry_interval: number | null
+          status: string
+          tenant_id: string
+          triggered_by: string | null
+          updated_at: string
+          url_expires_at: string | null
+        }
+        Insert: {
+          artifact_id?: string | null
+          charge_point_id: string
+          created_at?: string
+          download_url?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          last_status_at?: string | null
+          retries?: number | null
+          retrieve_date: string
+          retry_interval?: number | null
+          status?: string
+          tenant_id: string
+          triggered_by?: string | null
+          updated_at?: string
+          url_expires_at?: string | null
+        }
+        Update: {
+          artifact_id?: string | null
+          charge_point_id?: string
+          created_at?: string
+          download_url?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          last_status_at?: string | null
+          retries?: number | null
+          retrieve_date?: string
+          retry_interval?: number | null
+          status?: string
+          tenant_id?: string
+          triggered_by?: string | null
+          updated_at?: string
+          url_expires_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cp_firmware_jobs_artifact_id_fkey"
+            columns: ["artifact_id"]
+            isOneToOne: false
+            referencedRelation: "cp_firmware_artifacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cp_firmware_jobs_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cp_firmware_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cp_firmware_status_events: {
+        Row: {
+          charge_point_id: string
+          id: string
+          job_id: string | null
+          raw_payload: Json | null
+          received_at: string
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          charge_point_id: string
+          id?: string
+          job_id?: string | null
+          raw_payload?: Json | null
+          received_at?: string
+          status: string
+          tenant_id: string
+        }
+        Update: {
+          charge_point_id?: string
+          id?: string
+          job_id?: string | null
+          raw_payload?: Json | null
+          received_at?: string
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cp_firmware_status_events_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cp_firmware_status_events_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "cp_firmware_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cp_firmware_status_events_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1554,14 +4068,16 @@ export type Database = {
       }
       device_catalog: {
         Row: {
+          artikelnummer: string | null
           benoetigt_klassen: string[]
           beschreibung: string | null
           bild_url: string | null
           created_at: string
           datasheet_url: string | null
+          ean: string | null
           einheit: string
           ek_preis: number
-          geraete_klasse: Database["public"]["Enums"]["device_class"]
+          geraete_klasse: Database["public"]["Enums"]["device_class"] | null
           hersteller: string
           id: string
           installations_pauschale: number
@@ -1569,19 +4085,23 @@ export type Database = {
           kompatibilitaet: Json
           kompatible_klassen: string[]
           modell: string
+          owner_scope: string
+          partner_id: string | null
           tech_specs: Json
           updated_at: string
           vk_preis: number
         }
         Insert: {
+          artikelnummer?: string | null
           benoetigt_klassen?: string[]
           beschreibung?: string | null
           bild_url?: string | null
           created_at?: string
           datasheet_url?: string | null
+          ean?: string | null
           einheit?: string
           ek_preis?: number
-          geraete_klasse?: Database["public"]["Enums"]["device_class"]
+          geraete_klasse?: Database["public"]["Enums"]["device_class"] | null
           hersteller: string
           id?: string
           installations_pauschale?: number
@@ -1589,19 +4109,23 @@ export type Database = {
           kompatibilitaet?: Json
           kompatible_klassen?: string[]
           modell: string
+          owner_scope?: string
+          partner_id?: string | null
           tech_specs?: Json
           updated_at?: string
           vk_preis?: number
         }
         Update: {
+          artikelnummer?: string | null
           benoetigt_klassen?: string[]
           beschreibung?: string | null
           bild_url?: string | null
           created_at?: string
           datasheet_url?: string | null
+          ean?: string | null
           einheit?: string
           ek_preis?: number
-          geraete_klasse?: Database["public"]["Enums"]["device_class"]
+          geraete_klasse?: Database["public"]["Enums"]["device_class"] | null
           hersteller?: string
           id?: string
           installations_pauschale?: number
@@ -1609,11 +4133,69 @@ export type Database = {
           kompatibilitaet?: Json
           kompatible_klassen?: string[]
           modell?: string
+          owner_scope?: string
+          partner_id?: string | null
           tech_specs?: Json
           updated_at?: string
           vk_preis?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "device_catalog_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      device_catalog_partner_pricing: {
+        Row: {
+          created_at: string
+          device_catalog_id: string
+          ek_preis: number | null
+          id: string
+          installations_pauschale: number | null
+          partner_id: string
+          updated_at: string
+          vk_preis: number | null
+        }
+        Insert: {
+          created_at?: string
+          device_catalog_id: string
+          ek_preis?: number | null
+          id?: string
+          installations_pauschale?: number | null
+          partner_id: string
+          updated_at?: string
+          vk_preis?: number | null
+        }
+        Update: {
+          created_at?: string
+          device_catalog_id?: string
+          ek_preis?: number | null
+          id?: string
+          installations_pauschale?: number | null
+          partner_id?: string
+          updated_at?: string
+          vk_preis?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "device_catalog_partner_pricing_device_catalog_id_fkey"
+            columns: ["device_catalog_id"]
+            isOneToOne: false
+            referencedRelation: "device_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "device_catalog_partner_pricing_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       device_compatibility: {
         Row: {
@@ -1621,6 +4203,8 @@ export type Database = {
           created_at: string
           id: string
           notiz: string | null
+          owner_scope: string
+          partner_id: string | null
           prio: number
           relation_type: string
           source_device_id: string
@@ -1632,6 +4216,8 @@ export type Database = {
           created_at?: string
           id?: string
           notiz?: string | null
+          owner_scope?: string
+          partner_id?: string | null
           prio?: number
           relation_type: string
           source_device_id: string
@@ -1643,6 +4229,8 @@ export type Database = {
           created_at?: string
           id?: string
           notiz?: string | null
+          owner_scope?: string
+          partner_id?: string | null
           prio?: number
           relation_type?: string
           source_device_id?: string
@@ -1650,6 +4238,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "device_compatibility_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "device_compatibility_source_device_id_fkey"
             columns: ["source_device_id"]
@@ -1675,6 +4270,8 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          owner_scope: string
+          partner_id: string | null
           prio: number
           updated_at: string
         }
@@ -1686,6 +4283,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          owner_scope?: string
+          partner_id?: string | null
           prio?: number
           updated_at?: string
         }
@@ -1697,6 +4296,8 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          owner_scope?: string
+          partner_id?: string | null
           prio?: number
           updated_at?: string
         }
@@ -1708,7 +4309,376 @@ export type Database = {
             referencedRelation: "device_catalog"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "device_selection_rules_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      dlm_control_log: {
+        Row: {
+          applied_profiles: Json
+          available_kw: number | null
+          executed_at: string
+          id: number
+          location_id: string
+          measured_kw: number | null
+          reason: string | null
+          tenant_id: string
+        }
+        Insert: {
+          applied_profiles?: Json
+          available_kw?: number | null
+          executed_at?: string
+          id?: number
+          location_id: string
+          measured_kw?: number | null
+          reason?: string | null
+          tenant_id: string
+        }
+        Update: {
+          applied_profiles?: Json
+          available_kw?: number | null
+          executed_at?: string
+          id?: number
+          location_id?: string
+          measured_kw?: number | null
+          reason?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      document_access_rules: {
+        Row: {
+          can_delete: boolean
+          can_download: boolean
+          can_edit: boolean
+          can_view: boolean
+          category_id: string | null
+          created_at: string
+          custom_role_id: string | null
+          document_id: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"] | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          can_delete?: boolean
+          can_download?: boolean
+          can_edit?: boolean
+          can_view?: boolean
+          category_id?: string | null
+          created_at?: string
+          custom_role_id?: string | null
+          document_id?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"] | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          can_delete?: boolean
+          can_download?: boolean
+          can_edit?: boolean
+          can_view?: boolean
+          category_id?: string | null
+          created_at?: string
+          custom_role_id?: string | null
+          document_id?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"] | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_access_rules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "document_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_access_rules_custom_role_id_fkey"
+            columns: ["custom_role_id"]
+            isOneToOne: false
+            referencedRelation: "custom_roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_access_rules_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_access_rules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_categories: {
+        Row: {
+          color: string | null
+          created_at: string
+          icon: string | null
+          id: string
+          is_system: boolean
+          name: string
+          slug: string
+          sort_order: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_system?: boolean
+          name: string
+          slug: string
+          sort_order?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          icon?: string | null
+          id?: string
+          is_system?: boolean
+          name?: string
+          slug?: string
+          sort_order?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_categories_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_links: {
+        Row: {
+          created_at: string
+          document_id: string
+          id: string
+          location_id: string | null
+          scope: Database["public"]["Enums"]["document_scope"]
+          scope_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          id?: string
+          location_id?: string | null
+          scope: Database["public"]["Enums"]["document_scope"]
+          scope_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          id?: string
+          location_id?: string | null
+          scope?: Database["public"]["Enums"]["document_scope"]
+          scope_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_links_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_links_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_versions: {
+        Row: {
+          created_at: string
+          document_id: string
+          file_hash: string | null
+          file_size_bytes: number | null
+          filename: string
+          id: string
+          mime_type: string | null
+          notes: string | null
+          storage_path: string
+          uploaded_by: string | null
+          version_no: number
+        }
+        Insert: {
+          created_at?: string
+          document_id: string
+          file_hash?: string | null
+          file_size_bytes?: number | null
+          filename: string
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          storage_path: string
+          uploaded_by?: string | null
+          version_no: number
+        }
+        Update: {
+          created_at?: string
+          document_id?: string
+          file_hash?: string | null
+          file_size_bytes?: number | null
+          filename?: string
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          storage_path?: string
+          uploaded_by?: string | null
+          version_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_versions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          category_id: string | null
+          created_at: string
+          created_by: string | null
+          current_version_id: string | null
+          description: string | null
+          id: string
+          latest_version_no: number
+          tags: string[]
+          tenant_id: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          valid_from: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_version_id?: string | null
+          description?: string | null
+          id?: string
+          latest_version_no?: number
+          tags?: string[]
+          tenant_id: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_version_id?: string | null
+          description?: string | null
+          id?: string
+          latest_version_no?: number
+          tags?: string[]
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "document_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_current_version_fk"
+            columns: ["current_version_id"]
+            isOneToOne: false
+            referencedRelation: "document_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_send_audit: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          metadata: Json
+          recipient: string
+          resend_message_id: string | null
+          status: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          metadata?: Json
+          recipient: string
+          resend_message_id?: string | null
+          status: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          metadata?: Json
+          recipient?: string
+          resend_message_id?: string | null
+          status?: string
+          type?: string
+        }
+        Relationships: []
       }
       email_templates: {
         Row: {
@@ -1793,6 +4763,60 @@ export type Database = {
         }
         Relationships: []
       }
+      energy_communities: {
+        Row: {
+          balancing_zone: string | null
+          contract_template_id: string | null
+          created_at: string
+          data_quality_threshold_pct: number
+          grid_operator: string | null
+          id: string
+          name: string
+          pilot_acknowledged_at: string | null
+          region_plz: string[]
+          settings: Json
+          slug: string
+          status: string
+          tenant_id: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          balancing_zone?: string | null
+          contract_template_id?: string | null
+          created_at?: string
+          data_quality_threshold_pct?: number
+          grid_operator?: string | null
+          id?: string
+          name: string
+          pilot_acknowledged_at?: string | null
+          region_plz?: string[]
+          settings?: Json
+          slug: string
+          status?: string
+          tenant_id: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          balancing_zone?: string | null
+          contract_template_id?: string | null
+          created_at?: string
+          data_quality_threshold_pct?: number
+          grid_operator?: string | null
+          id?: string
+          name?: string
+          pilot_acknowledged_at?: string | null
+          region_plz?: string[]
+          settings?: Json
+          slug?: string
+          status?: string
+          tenant_id?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       energy_measures: {
         Row: {
           category: string
@@ -1869,6 +4893,7 @@ export type Database = {
           is_dynamic: boolean
           location_id: string
           meter_id: string | null
+          price_includes_vat: boolean | null
           price_per_unit: number
           spot_markup_per_unit: number
           tenant_id: string
@@ -1886,6 +4911,7 @@ export type Database = {
           is_dynamic?: boolean
           location_id: string
           meter_id?: string | null
+          price_includes_vat?: boolean | null
           price_per_unit?: number
           spot_markup_per_unit?: number
           tenant_id: string
@@ -1903,6 +4929,7 @@ export type Database = {
           is_dynamic?: boolean
           location_id?: string
           meter_id?: string | null
+          price_includes_vat?: boolean | null
           price_per_unit?: number
           spot_markup_per_unit?: number
           tenant_id?: string
@@ -2020,16 +5047,62 @@ export type Database = {
           },
         ]
       }
+      energy_report_drafts: {
+        Row: {
+          created_at: string
+          id: string
+          profile_code: string | null
+          report_year: number
+          tenant_id: string
+          texts: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          profile_code?: string | null
+          report_year: number
+          tenant_id: string
+          texts?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          profile_code?: string | null
+          report_year?: number
+          tenant_id?: string
+          texts?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "energy_report_drafts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       energy_storages: {
         Row: {
           capacity_kwh: number
           created_at: string
+          current_soc_pct: number | null
           efficiency_pct: number
+          gateway_device_id: string | null
           id: string
           location_id: string | null
           max_charge_kw: number
           max_discharge_kw: number
           name: string
+          power_meter_id: string | null
+          soc_sensor_uuid: string | null
+          soc_updated_at: string | null
           status: string
           tenant_id: string
           updated_at: string
@@ -2037,12 +5110,17 @@ export type Database = {
         Insert: {
           capacity_kwh?: number
           created_at?: string
+          current_soc_pct?: number | null
           efficiency_pct?: number
+          gateway_device_id?: string | null
           id?: string
           location_id?: string | null
           max_charge_kw?: number
           max_discharge_kw?: number
           name: string
+          power_meter_id?: string | null
+          soc_sensor_uuid?: string | null
+          soc_updated_at?: string | null
           status?: string
           tenant_id: string
           updated_at?: string
@@ -2050,22 +5128,41 @@ export type Database = {
         Update: {
           capacity_kwh?: number
           created_at?: string
+          current_soc_pct?: number | null
           efficiency_pct?: number
+          gateway_device_id?: string | null
           id?: string
           location_id?: string | null
           max_charge_kw?: number
           max_discharge_kw?: number
           name?: string
+          power_meter_id?: string | null
+          soc_sensor_uuid?: string | null
+          soc_updated_at?: string | null
           status?: string
           tenant_id?: string
           updated_at?: string
         }
         Relationships: [
           {
+            foreignKeyName: "energy_storages_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "energy_storages_location_id_fkey"
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "energy_storages_power_meter_id_fkey"
+            columns: ["power_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
             referencedColumns: ["id"]
           },
           {
@@ -2354,6 +5451,7 @@ export type Database = {
           model_3d_rotation: number | null
           model_3d_url: string | null
           name: string
+          sort_order: number
           updated_at: string
         }
         Insert: {
@@ -2368,6 +5466,7 @@ export type Database = {
           model_3d_rotation?: number | null
           model_3d_url?: string | null
           name: string
+          sort_order?: number
           updated_at?: string
         }
         Update: {
@@ -2382,6 +5481,7 @@ export type Database = {
           model_3d_rotation?: number | null
           model_3d_url?: string | null
           name?: string
+          sort_order?: number
           updated_at?: string
         }
         Relationships: [
@@ -2517,10 +5617,253 @@ export type Database = {
           },
         ]
       }
+      gateway_device_config: {
+        Row: {
+          config: Json
+          created_at: string
+          gateway_device_id: string
+          tenant_id: string | null
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          gateway_device_id: string
+          tenant_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          gateway_device_id?: string
+          tenant_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_device_config_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: true
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_device_config_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gateway_device_discoveries: {
+        Row: {
+          created_at: string
+          discovered_payload: Json
+          discovery_method: string
+          expires_at: string
+          gateway_device_id: string
+          id: string
+          is_provisioned: boolean
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          discovered_payload?: Json
+          discovery_method: string
+          expires_at?: string
+          gateway_device_id: string
+          id?: string
+          is_provisioned?: boolean
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          discovered_payload?: Json
+          discovery_method?: string
+          expires_at?: string
+          gateway_device_id?: string
+          id?: string
+          is_provisioned?: boolean
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_device_discoveries_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gateway_device_entities: {
+        Row: {
+          actuator_uuid: string | null
+          config_json: Json
+          created_at: string
+          created_by: string | null
+          discovery_method: string | null
+          entity_kind: string
+          entity_label: string
+          gateway_device_id: string
+          ha_entity_id: string | null
+          id: string
+          integration_type: string
+          last_error: string | null
+          last_synced_at: string | null
+          meter_id: string | null
+          provision_status: string
+          sensor_uuid: string | null
+          tenant_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          actuator_uuid?: string | null
+          config_json?: Json
+          created_at?: string
+          created_by?: string | null
+          discovery_method?: string | null
+          entity_kind?: string
+          entity_label: string
+          gateway_device_id: string
+          ha_entity_id?: string | null
+          id?: string
+          integration_type: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          meter_id?: string | null
+          provision_status?: string
+          sensor_uuid?: string | null
+          tenant_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          actuator_uuid?: string | null
+          config_json?: Json
+          created_at?: string
+          created_by?: string | null
+          discovery_method?: string | null
+          entity_kind?: string
+          entity_label?: string
+          gateway_device_id?: string
+          ha_entity_id?: string | null
+          id?: string
+          integration_type?: string
+          last_error?: string | null
+          last_synced_at?: string | null
+          meter_id?: string | null
+          provision_status?: string
+          sensor_uuid?: string | null
+          tenant_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_device_entities_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_device_entities_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gateway_device_inventory: {
+        Row: {
+          category: string
+          created_at: string
+          device_class: string | null
+          domain: string
+          entity_id: string
+          friendly_name: string | null
+          gateway_device_id: string
+          id: string
+          last_seen_at: string
+          last_state_at: string | null
+          location_integration_id: string | null
+          state: string | null
+          tenant_id: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          device_class?: string | null
+          domain: string
+          entity_id: string
+          friendly_name?: string | null
+          gateway_device_id: string
+          id?: string
+          last_seen_at?: string
+          last_state_at?: string | null
+          location_integration_id?: string | null
+          state?: string | null
+          tenant_id: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          device_class?: string | null
+          domain?: string
+          entity_id?: string
+          friendly_name?: string | null
+          gateway_device_id?: string
+          id?: string
+          last_seen_at?: string
+          last_state_at?: string | null
+          location_integration_id?: string | null
+          state?: string | null
+          tenant_id?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_device_inventory_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_device_inventory_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_device_inventory_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gateway_devices: {
         Row: {
           addon_version: string | null
-          api_key_hash: string | null
+          auto_update_enabled: boolean
           config: Json
           created_at: string
           device_name: string
@@ -2530,6 +5873,9 @@ export type Database = {
           ha_version: string | null
           id: string
           last_heartbeat_at: string | null
+          last_update_attempt_at: string | null
+          last_update_check_at: string | null
+          last_update_error: string | null
           last_ws_ping_at: string | null
           latest_available_version: string | null
           local_ip: string | null
@@ -2540,12 +5886,13 @@ export type Database = {
           offline_buffer_count: number
           status: string
           tenant_id: string | null
+          update_channel: string
           updated_at: string
           ws_connected_since: string | null
         }
         Insert: {
           addon_version?: string | null
-          api_key_hash?: string | null
+          auto_update_enabled?: boolean
           config?: Json
           created_at?: string
           device_name: string
@@ -2555,6 +5902,9 @@ export type Database = {
           ha_version?: string | null
           id?: string
           last_heartbeat_at?: string | null
+          last_update_attempt_at?: string | null
+          last_update_check_at?: string | null
+          last_update_error?: string | null
           last_ws_ping_at?: string | null
           latest_available_version?: string | null
           local_ip?: string | null
@@ -2565,12 +5915,13 @@ export type Database = {
           offline_buffer_count?: number
           status?: string
           tenant_id?: string | null
+          update_channel?: string
           updated_at?: string
           ws_connected_since?: string | null
         }
         Update: {
           addon_version?: string | null
-          api_key_hash?: string | null
+          auto_update_enabled?: boolean
           config?: Json
           created_at?: string
           device_name?: string
@@ -2580,6 +5931,9 @@ export type Database = {
           ha_version?: string | null
           id?: string
           last_heartbeat_at?: string | null
+          last_update_attempt_at?: string | null
+          last_update_check_at?: string | null
+          last_update_error?: string | null
           last_ws_ping_at?: string | null
           latest_available_version?: string | null
           local_ip?: string | null
@@ -2590,6 +5944,7 @@ export type Database = {
           offline_buffer_count?: number
           status?: string
           tenant_id?: string | null
+          update_channel?: string
           updated_at?: string
           ws_connected_since?: string | null
         }
@@ -2610,6 +5965,404 @@ export type Database = {
           },
           {
             foreignKeyName: "gateway_devices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gateway_pairing_tokens: {
+        Row: {
+          bound_device_id: string | null
+          bound_to_mac: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          label: string | null
+          location_id: string | null
+          tenant_id: string
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          bound_device_id?: string | null
+          bound_to_mac?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          label?: string | null
+          location_id?: string | null
+          tenant_id: string
+          token: string
+          used_at?: string | null
+        }
+        Update: {
+          bound_device_id?: string | null
+          bound_to_mac?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          label?: string | null
+          location_id?: string | null
+          tenant_id?: string
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_pairing_tokens_bound_device_id_fkey"
+            columns: ["bound_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_pairing_tokens_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gateway_refresh_locks: {
+        Row: {
+          location_integration_id: string
+          locked_at: string
+          locked_by: string | null
+        }
+        Insert: {
+          location_integration_id: string
+          locked_at?: string
+          locked_by?: string | null
+        }
+        Update: {
+          location_integration_id?: string
+          locked_at?: string
+          locked_by?: string | null
+        }
+        Relationships: []
+      }
+      gateway_release_channels: {
+        Row: {
+          channel: string
+          created_at: string
+          created_by: string | null
+          id: string
+          image_ref: string
+          is_latest: boolean
+          release_notes: string | null
+          released_at: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          image_ref: string
+          is_latest?: boolean
+          release_notes?: string | null
+          released_at?: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          image_ref?: string
+          is_latest?: boolean
+          release_notes?: string | null
+          released_at?: string
+          updated_at?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      gateway_sensor_snapshots: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          expires_at: string | null
+          fetched_at: string
+          location_id: string | null
+          location_integration_id: string
+          sensors: Json
+          source: string | null
+          status: string
+          system_messages: Json
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string | null
+          fetched_at?: string
+          location_id?: string | null
+          location_integration_id: string
+          sensors?: Json
+          source?: string | null
+          status?: string
+          system_messages?: Json
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string | null
+          fetched_at?: string
+          location_id?: string | null
+          location_integration_id?: string
+          sensors?: Json
+          source?: string | null
+          status?: string
+          system_messages?: Json
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      gateway_update_jobs: {
+        Row: {
+          channel: string
+          created_at: string
+          created_by: string | null
+          dispatched_at: string | null
+          error_message: string | null
+          finished_at: string | null
+          gateway_device_id: string
+          id: string
+          image_ref: string
+          log_excerpt: string | null
+          started_at: string | null
+          status: string
+          target_version: string
+          tenant_id: string | null
+          triggered_by: string
+          updated_at: string
+        }
+        Insert: {
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          dispatched_at?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          gateway_device_id: string
+          id?: string
+          image_ref: string
+          log_excerpt?: string | null
+          started_at?: string | null
+          status?: string
+          target_version: string
+          tenant_id?: string | null
+          triggered_by?: string
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          dispatched_at?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          gateway_device_id?: string
+          id?: string
+          image_ref?: string
+          log_excerpt?: string | null
+          started_at?: string | null
+          status?: string
+          target_version?: string
+          tenant_id?: string | null
+          triggered_by?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_update_jobs_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gateway_update_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gateway_ws_session_log: {
+        Row: {
+          disconnect_code: number | null
+          disconnect_reason: string | null
+          ended_at: string | null
+          events_received: number
+          gateway_device_id: string
+          id: string
+          reconnect_count: number
+          seamless_recycle_count: number
+          started_at: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          disconnect_code?: number | null
+          disconnect_reason?: string | null
+          ended_at?: string | null
+          events_received?: number
+          gateway_device_id: string
+          id?: string
+          reconnect_count?: number
+          seamless_recycle_count?: number
+          started_at?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          disconnect_code?: number | null
+          disconnect_reason?: string | null
+          ended_at?: string | null
+          events_received?: number
+          gateway_device_id?: string
+          id?: string
+          reconnect_count?: number
+          seamless_recycle_count?: number
+          started_at?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gateway_ws_session_log_gateway_device_id_fkey"
+            columns: ["gateway_device_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grid_curtailment_events: {
+        Row: {
+          applied_at: string | null
+          applied_result: Json | null
+          connection_id: string
+          created_at: string
+          curtailment_percent: number
+          id: string
+          payload: Json
+          received_at: string
+          source: string
+          tenant_id: string
+          valid_from: string
+          valid_until: string
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_result?: Json | null
+          connection_id: string
+          created_at?: string
+          curtailment_percent: number
+          id?: string
+          payload?: Json
+          received_at?: string
+          source?: string
+          tenant_id: string
+          valid_from: string
+          valid_until: string
+        }
+        Update: {
+          applied_at?: string | null
+          applied_result?: Json | null
+          connection_id?: string
+          created_at?: string
+          curtailment_percent?: number
+          id?: string
+          payload?: Json
+          received_at?: string
+          source?: string
+          tenant_id?: string
+          valid_from?: string
+          valid_until?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grid_curtailment_events_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "grid_operator_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grid_curtailment_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grid_operator_connections: {
+        Row: {
+          active: boolean
+          connection_id: string | null
+          created_at: string
+          dso_name: string
+          id: string
+          location_id: string
+          module: string
+          notes: string | null
+          tenant_id: string
+          updated_at: string
+          webhook_secret: string
+        }
+        Insert: {
+          active?: boolean
+          connection_id?: string | null
+          created_at?: string
+          dso_name: string
+          id?: string
+          location_id: string
+          module?: string
+          notes?: string | null
+          tenant_id: string
+          updated_at?: string
+          webhook_secret?: string
+        }
+        Update: {
+          active?: boolean
+          connection_id?: string | null
+          created_at?: string
+          dso_name?: string
+          id?: string
+          location_id?: string
+          module?: string
+          notes?: string | null
+          tenant_id?: string
+          updated_at?: string
+          webhook_secret?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grid_operator_connections_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grid_operator_connections_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -2897,15 +6650,21 @@ export type Database = {
           created_at: string
           description: string | null
           estimated_savings_kwh: number | null
+          execution_mode: string
           id: string
           is_active: boolean
           last_executed_at: string | null
           location_id: string
           location_integration_id: string
           logic_operator: string
+          loxone_template_bindings: Json | null
+          loxone_template_instance_id: string | null
+          loxone_template_key: string | null
           name: string
           notify_email: string | null
           notify_on_error: boolean
+          owner_gateway_device_id: string | null
+          owner_lease_until: string | null
           scene_id: string | null
           schedule: Json | null
           scope_floor_id: string | null
@@ -2929,15 +6688,21 @@ export type Database = {
           created_at?: string
           description?: string | null
           estimated_savings_kwh?: number | null
+          execution_mode?: string
           id?: string
           is_active?: boolean
           last_executed_at?: string | null
           location_id: string
           location_integration_id: string
           logic_operator?: string
+          loxone_template_bindings?: Json | null
+          loxone_template_instance_id?: string | null
+          loxone_template_key?: string | null
           name: string
           notify_email?: string | null
           notify_on_error?: boolean
+          owner_gateway_device_id?: string | null
+          owner_lease_until?: string | null
           scene_id?: string | null
           schedule?: Json | null
           scope_floor_id?: string | null
@@ -2961,15 +6726,21 @@ export type Database = {
           created_at?: string
           description?: string | null
           estimated_savings_kwh?: number | null
+          execution_mode?: string
           id?: string
           is_active?: boolean
           last_executed_at?: string | null
           location_id?: string
           location_integration_id?: string
           logic_operator?: string
+          loxone_template_bindings?: Json | null
+          loxone_template_instance_id?: string | null
+          loxone_template_key?: string | null
           name?: string
           notify_email?: string | null
           notify_on_error?: boolean
+          owner_gateway_device_id?: string | null
+          owner_lease_until?: string | null
           scene_id?: string | null
           schedule?: Json | null
           scope_floor_id?: string | null
@@ -3014,6 +6785,129 @@ export type Database = {
             columns: ["scope_room_id"]
             isOneToOne: false
             referencedRelation: "floor_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      location_dlm_config: {
+        Row: {
+          control_interval_s: number
+          created_at: string
+          fallback_kw_per_cp: number
+          grid_limit_kw: number
+          id: string
+          is_active: boolean
+          location_id: string
+          min_charge_kw: number
+          priority_order: Json
+          reference_meter_id: string | null
+          safety_buffer_kw: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          control_interval_s?: number
+          created_at?: string
+          fallback_kw_per_cp?: number
+          grid_limit_kw: number
+          id?: string
+          is_active?: boolean
+          location_id: string
+          min_charge_kw?: number
+          priority_order?: Json
+          reference_meter_id?: string | null
+          safety_buffer_kw?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          control_interval_s?: number
+          created_at?: string
+          fallback_kw_per_cp?: number
+          grid_limit_kw?: number
+          id?: string
+          is_active?: boolean
+          location_id?: string
+          min_charge_kw?: number
+          priority_order?: Json
+          reference_meter_id?: string | null
+          safety_buffer_kw?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_dlm_config_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_dlm_config_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      location_dlm_devices: {
+        Row: {
+          created_at: string
+          device_kind: Database["public"]["Enums"]["dlm_device_kind"]
+          device_ref_id: string
+          display_name: string | null
+          id: string
+          location_id: string
+          max_power_kw: number
+          min_power_kw: number
+          notes: string | null
+          priority: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          device_kind: Database["public"]["Enums"]["dlm_device_kind"]
+          device_ref_id: string
+          display_name?: string | null
+          id?: string
+          location_id: string
+          max_power_kw?: number
+          min_power_kw?: number
+          notes?: string | null
+          priority?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          device_kind?: Database["public"]["Enums"]["dlm_device_kind"]
+          device_ref_id?: string
+          display_name?: string | null
+          id?: string
+          location_id?: string
+          max_power_kw?: number
+          min_power_kw?: number
+          notes?: string | null
+          priority?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_dlm_devices_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_dlm_devices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -3070,33 +6964,39 @@ export type Database = {
         Row: {
           config: Json | null
           created_at: string
+          custom_name: string | null
           id: string
           integration_id: string
           is_enabled: boolean | null
           last_sync_at: string | null
           location_id: string
+          loxone_remote_connect_ws_enabled: boolean
           sync_status: string | null
           updated_at: string
         }
         Insert: {
           config?: Json | null
           created_at?: string
+          custom_name?: string | null
           id?: string
           integration_id: string
           is_enabled?: boolean | null
           last_sync_at?: string | null
           location_id: string
+          loxone_remote_connect_ws_enabled?: boolean
           sync_status?: string | null
           updated_at?: string
         }
         Update: {
           config?: Json | null
           created_at?: string
+          custom_name?: string | null
           id?: string
           integration_id?: string
           is_enabled?: boolean | null
           last_sync_at?: string | null
           location_id?: string
+          loxone_remote_connect_ws_enabled?: boolean
           sync_status?: string | null
           updated_at?: string
         }
@@ -3117,6 +7017,63 @@ export type Database = {
           },
         ]
       }
+      location_loxone_templates: {
+        Row: {
+          created_at: string
+          discovered_at: string
+          id: string
+          installed_version: string
+          instance_id: string
+          last_seen_at: string
+          location_id: string
+          template_key: string
+          tenant_id: string
+          updated_at: string
+          vi_bindings: Json
+        }
+        Insert: {
+          created_at?: string
+          discovered_at?: string
+          id?: string
+          installed_version: string
+          instance_id: string
+          last_seen_at?: string
+          location_id: string
+          template_key: string
+          tenant_id: string
+          updated_at?: string
+          vi_bindings?: Json
+        }
+        Update: {
+          created_at?: string
+          discovered_at?: string
+          id?: string
+          installed_version?: string
+          instance_id?: string
+          last_seen_at?: string
+          location_id?: string
+          template_key?: string
+          tenant_id?: string
+          updated_at?: string
+          vi_bindings?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_loxone_templates_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_loxone_templates_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       locations: {
         Row: {
           address: string | null
@@ -3129,8 +7086,16 @@ export type Database = {
           created_at: string
           description: string | null
           energy_sources: string[] | null
+          federal_state: string | null
+          grid_limit_kw: number | null
           gross_floor_area: number | null
           heating_type: string | null
+          hot_water_energy_type: string | null
+          hot_water_gas_kwh_year: number | null
+          hot_water_gas_share_pct: number | null
+          hot_water_kwh_year: number | null
+          hot_water_share_pct: number | null
+          hot_water_via_gas: boolean
           id: string
           is_archived: boolean
           is_main_location: boolean
@@ -3160,8 +7125,16 @@ export type Database = {
           created_at?: string
           description?: string | null
           energy_sources?: string[] | null
+          federal_state?: string | null
+          grid_limit_kw?: number | null
           gross_floor_area?: number | null
           heating_type?: string | null
+          hot_water_energy_type?: string | null
+          hot_water_gas_kwh_year?: number | null
+          hot_water_gas_share_pct?: number | null
+          hot_water_kwh_year?: number | null
+          hot_water_share_pct?: number | null
+          hot_water_via_gas?: boolean
           id?: string
           is_archived?: boolean
           is_main_location?: boolean
@@ -3191,8 +7164,16 @@ export type Database = {
           created_at?: string
           description?: string | null
           energy_sources?: string[] | null
+          federal_state?: string | null
+          grid_limit_kw?: number | null
           gross_floor_area?: number | null
           heating_type?: string | null
+          hot_water_energy_type?: string | null
+          hot_water_gas_kwh_year?: number | null
+          hot_water_gas_share_pct?: number | null
+          hot_water_kwh_year?: number | null
+          hot_water_share_pct?: number | null
+          hot_water_via_gas?: boolean
           id?: string
           is_archived?: boolean
           is_main_location?: boolean
@@ -3228,12 +7209,591 @@ export type Database = {
           },
         ]
       }
+      loxone_pending_writes: {
+        Row: {
+          acked_at: string | null
+          attempts: number
+          created_at: string
+          error_message: string | null
+          expires_at: string
+          id: string
+          instance: number
+          location_integration_id: string
+          max_attempts: number
+          parameter: string
+          priority: number
+          requested_at: string
+          sent_at: string | null
+          source: string
+          status: string
+          target_uuid: string | null
+          template_key: string
+          tenant_id: string
+          updated_at: string
+          value_bool: boolean | null
+          value_num: number | null
+        }
+        Insert: {
+          acked_at?: string | null
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string
+          id?: string
+          instance?: number
+          location_integration_id: string
+          max_attempts?: number
+          parameter: string
+          priority?: number
+          requested_at?: string
+          sent_at?: string | null
+          source?: string
+          status?: string
+          target_uuid?: string | null
+          template_key: string
+          tenant_id: string
+          updated_at?: string
+          value_bool?: boolean | null
+          value_num?: number | null
+        }
+        Update: {
+          acked_at?: string | null
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string
+          id?: string
+          instance?: number
+          location_integration_id?: string
+          max_attempts?: number
+          parameter?: string
+          priority?: number
+          requested_at?: string
+          sent_at?: string | null
+          source?: string
+          status?: string
+          target_uuid?: string | null
+          template_key?: string
+          tenant_id?: string
+          updated_at?: string
+          value_bool?: boolean | null
+          value_num?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loxone_pending_writes_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loxone_snippet_manual_images: {
+        Row: {
+          caption: string | null
+          created_at: string
+          id: string
+          section: string
+          sort_order: number
+          storage_path: string
+          template_key: string
+          updated_at: string
+          updated_by: string | null
+          width: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          section: string
+          sort_order?: number
+          storage_path: string
+          template_key: string
+          updated_at?: string
+          updated_by?: string | null
+          width?: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          section?: string
+          sort_order?: number
+          storage_path?: string
+          template_key?: string
+          updated_at?: string
+          updated_by?: string | null
+          width?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loxone_snippet_manual_images_template_key_fkey"
+            columns: ["template_key"]
+            isOneToOne: false
+            referencedRelation: "loxone_snippet_manuals"
+            referencedColumns: ["template_key"]
+          },
+        ]
+      }
+      loxone_snippet_manuals: {
+        Row: {
+          purpose_md: string
+          template_key: string
+          test_md: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+          wiring_md: string
+        }
+        Insert: {
+          purpose_md?: string
+          template_key: string
+          test_md?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+          wiring_md?: string
+        }
+        Update: {
+          purpose_md?: string
+          template_key?: string
+          test_md?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+          wiring_md?: string
+        }
+        Relationships: []
+      }
+      loxone_template_registry: {
+        Row: {
+          category: string
+          changelog: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          min_miniserver_fw: string | null
+          parameters: Json
+          requires_cloud: boolean
+          snippet_url: string | null
+          template_key: string
+          title: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          category: string
+          changelog?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          min_miniserver_fw?: string | null
+          parameters?: Json
+          requires_cloud?: boolean
+          snippet_url?: string | null
+          template_key: string
+          title: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          category?: string
+          changelog?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          min_miniserver_fw?: string | null
+          parameters?: Json
+          requires_cloud?: boolean
+          snippet_url?: string | null
+          template_key?: string
+          title?: string
+          updated_at?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      loxone_ws_session_log: {
+        Row: {
+          created_at: string
+          disconnect_reason: string | null
+          ended_at: string | null
+          events_received: number
+          id: string
+          location_integration_id: string
+          reconnect_count: number
+          started_at: string
+          tenant_id: string
+          updated_at: string
+          worker_host: string | null
+        }
+        Insert: {
+          created_at?: string
+          disconnect_reason?: string | null
+          ended_at?: string | null
+          events_received?: number
+          id?: string
+          location_integration_id: string
+          reconnect_count?: number
+          started_at?: string
+          tenant_id: string
+          updated_at?: string
+          worker_host?: string | null
+        }
+        Update: {
+          created_at?: string
+          disconnect_reason?: string | null
+          ended_at?: string | null
+          events_received?: number
+          id?: string
+          location_integration_id?: string
+          reconnect_count?: number
+          started_at?: string
+          tenant_id?: string
+          updated_at?: string
+          worker_host?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loxone_ws_session_log_location_integration_id_fkey"
+            columns: ["location_integration_id"]
+            isOneToOne: false
+            referencedRelation: "location_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loxone_ws_session_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      master_recovery_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          ip_address: string | null
+          success: boolean
+          target_email: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          ip_address?: string | null
+          success: boolean
+          target_email: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          ip_address?: string | null
+          success?: boolean
+          target_email?: string
+        }
+        Relationships: []
+      }
+      meter_cumulative_readings: {
+        Row: {
+          created_at: string
+          id: string
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+          source: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+          source?: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kwh_total?: number
+          meter_id?: string
+          reading_at?: string
+          source?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_cumulative_readings_bridge: {
+        Row: {
+          created_at: string
+          id: string
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+          source: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+          source?: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kwh_total?: number
+          meter_id?: string
+          reading_at?: string
+          source?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_cumulative_readings_bridge_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_cumulative_readings_bridge_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_daily_totals_mv: {
+        Row: {
+          bucket_start: string
+          consumption_kwh: number
+          coverage_ratio: number
+          created_at: string
+          energy_type: string
+          export_kwh: number
+          id: string
+          meter_id: string
+          samples_count: number
+          source: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          bucket_start: string
+          consumption_kwh?: number
+          coverage_ratio?: number
+          created_at?: string
+          energy_type: string
+          export_kwh?: number
+          id?: string
+          meter_id: string
+          samples_count?: number
+          source?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          bucket_start?: string
+          consumption_kwh?: number
+          coverage_ratio?: number
+          created_at?: string
+          energy_type?: string
+          export_kwh?: number
+          id?: string
+          meter_id?: string
+          samples_count?: number
+          source?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_daily_totals_mv_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_daily_totals_mv_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_daily_totals_mv_repair_backup_20260617: {
+        Row: {
+          backed_up_at: string | null
+          bucket_start: string | null
+          consumption_kwh: number | null
+          coverage_ratio: number | null
+          created_at: string | null
+          energy_type: string | null
+          export_kwh: number | null
+          id: string | null
+          meter_id: string | null
+          samples_count: number | null
+          source: string | null
+          tenant_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          bucket_start?: string | null
+          consumption_kwh?: number | null
+          coverage_ratio?: number | null
+          created_at?: string | null
+          energy_type?: string | null
+          export_kwh?: number | null
+          id?: string | null
+          meter_id?: string | null
+          samples_count?: number | null
+          source?: string | null
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          bucket_start?: string | null
+          consumption_kwh?: number | null
+          coverage_ratio?: number | null
+          created_at?: string | null
+          energy_type?: string | null
+          export_kwh?: number | null
+          id?: string | null
+          meter_id?: string | null
+          samples_count?: number | null
+          source?: string | null
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      meter_loxone_daily_snapshots: {
+        Row: {
+          created_at: string
+          energy_today_kwh: number | null
+          energy_total_kwh: number | null
+          id: string
+          meter_id: string
+          snapshot_date: string
+          source: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          energy_today_kwh?: number | null
+          energy_total_kwh?: number | null
+          id?: string
+          meter_id: string
+          snapshot_date: string
+          source?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          energy_today_kwh?: number | null
+          energy_total_kwh?: number | null
+          id?: string
+          meter_id?: string
+          snapshot_date?: string
+          source?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_loxone_daily_snapshots_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_monthly_totals: {
+        Row: {
+          bucket_start: string
+          consumption_kwh: number
+          coverage_ratio: number
+          created_at: string
+          days_count: number
+          energy_type: string
+          export_kwh: number
+          id: string
+          meter_id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          bucket_start: string
+          consumption_kwh?: number
+          coverage_ratio?: number
+          created_at?: string
+          days_count?: number
+          energy_type: string
+          export_kwh?: number
+          id?: string
+          meter_id: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          bucket_start?: string
+          consumption_kwh?: number
+          coverage_ratio?: number
+          created_at?: string
+          days_count?: number
+          energy_type?: string
+          export_kwh?: number
+          id?: string
+          meter_id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_monthly_totals_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_monthly_totals_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meter_period_totals: {
         Row: {
           created_at: string | null
           energy_type: string
           id: string
-          meter_id: string
+          meter_id: string | null
           period_start: string
           period_type: string
           source: string
@@ -3245,7 +7805,7 @@ export type Database = {
           created_at?: string | null
           energy_type: string
           id?: string
-          meter_id: string
+          meter_id?: string | null
           period_start: string
           period_type: string
           source?: string
@@ -3257,7 +7817,7 @@ export type Database = {
           created_at?: string | null
           energy_type?: string
           id?: string
-          meter_id?: string
+          meter_id?: string | null
           period_start?: string
           period_type?: string
           source?: string
@@ -3282,12 +7842,60 @@ export type Database = {
           },
         ]
       }
+      meter_period_totals_loxone_repair_backup_20260617: {
+        Row: {
+          backup_action: string
+          backup_at: string
+          backup_id: string
+          created_at: string | null
+          energy_type: string | null
+          id: string | null
+          meter_id: string | null
+          period_start: string | null
+          period_type: string | null
+          source: string | null
+          tenant_id: string | null
+          total_value: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          backup_action: string
+          backup_at?: string
+          backup_id?: string
+          created_at?: string | null
+          energy_type?: string | null
+          id?: string | null
+          meter_id?: string | null
+          period_start?: string | null
+          period_type?: string | null
+          source?: string | null
+          tenant_id?: string | null
+          total_value?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          backup_action?: string
+          backup_at?: string
+          backup_id?: string
+          created_at?: string | null
+          energy_type?: string | null
+          id?: string | null
+          meter_id?: string | null
+          period_start?: string | null
+          period_type?: string | null
+          source?: string | null
+          tenant_id?: string | null
+          total_value?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       meter_power_readings: {
         Row: {
           created_at: string | null
           energy_type: string
           id: string
-          meter_id: string
+          meter_id: string | null
           power_value: number
           recorded_at: string
           tenant_id: string
@@ -3296,7 +7904,7 @@ export type Database = {
           created_at?: string | null
           energy_type: string
           id?: string
-          meter_id: string
+          meter_id?: string | null
           power_value: number
           recorded_at?: string
           tenant_id: string
@@ -3305,7 +7913,7 @@ export type Database = {
           created_at?: string | null
           energy_type?: string
           id?: string
-          meter_id?: string
+          meter_id?: string | null
           power_value?: number
           recorded_at?: string
           tenant_id?: string
@@ -3333,10 +7941,12 @@ export type Database = {
           created_at: string
           energy_type: string
           id: string
-          meter_id: string
+          meter_id: string | null
           power_avg: number
           power_max: number
+          resolution_minutes: number
           sample_count: number
+          source: string | null
           tenant_id: string
         }
         Insert: {
@@ -3344,10 +7954,12 @@ export type Database = {
           created_at?: string
           energy_type: string
           id?: string
-          meter_id: string
+          meter_id?: string | null
           power_avg: number
           power_max: number
+          resolution_minutes?: number
           sample_count?: number
+          source?: string | null
           tenant_id: string
         }
         Update: {
@@ -3355,10 +7967,119 @@ export type Database = {
           created_at?: string
           energy_type?: string
           id?: string
-          meter_id?: string
+          meter_id?: string | null
           power_avg?: number
           power_max?: number
+          resolution_minutes?: number
           sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_power_readings_5min_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_power_readings_5min_bridge: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_power_readings_5min_bridge_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_power_readings_5min_bridge_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meter_power_readings_5min_legacy: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
           tenant_id?: string
         }
         Relationships: [
@@ -3378,13 +8099,592 @@ export type Database = {
           },
         ]
       }
+      meter_power_readings_5min_p_202602: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202603: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202604: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202605: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202606: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202607: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202608: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202609: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202610: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202611: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202612: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_202701: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_5min_p_default: {
+        Row: {
+          bucket: string
+          created_at: string
+          energy_type: string
+          id: string
+          meter_id: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
+          sample_count: number
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          energy_type: string
+          id?: string
+          meter_id?: string | null
+          power_avg: number
+          power_max: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          energy_type?: string
+          id?: string
+          meter_id?: string | null
+          power_avg?: number
+          power_max?: number
+          resolution_minutes?: number
+          sample_count?: number
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      meter_power_readings_hourly: {
+        Row: {
+          bucket: string
+          energy_type: string | null
+          meter_id: string
+          power_avg: number | null
+          power_max: number | null
+          sample_count: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          bucket: string
+          energy_type?: string | null
+          meter_id: string
+          power_avg?: number | null
+          power_max?: number | null
+          sample_count?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          bucket?: string
+          energy_type?: string | null
+          meter_id?: string
+          power_avg?: number | null
+          power_max?: number | null
+          sample_count?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       meter_readings: {
         Row: {
           capture_method: string
           created_at: string
           created_by: string | null
           id: string
-          meter_id: string
+          meter_id: string | null
           notes: string | null
           reading_date: string
           tenant_id: string
@@ -3396,7 +8696,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
-          meter_id: string
+          meter_id?: string | null
           notes?: string | null
           reading_date?: string
           tenant_id: string
@@ -3408,7 +8708,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
-          meter_id?: string
+          meter_id?: string | null
           notes?: string | null
           reading_date?: string
           tenant_id?: string
@@ -3470,6 +8770,69 @@ export type Database = {
           },
         ]
       }
+      meter_weekly_totals: {
+        Row: {
+          bucket_start: string
+          consumption_kwh: number
+          coverage_ratio: number
+          created_at: string
+          days_count: number
+          energy_type: string
+          export_kwh: number
+          id: string
+          iso_week: number
+          iso_year: number
+          meter_id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          bucket_start: string
+          consumption_kwh?: number
+          coverage_ratio?: number
+          created_at?: string
+          days_count?: number
+          energy_type: string
+          export_kwh?: number
+          id?: string
+          iso_week: number
+          iso_year: number
+          meter_id: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          bucket_start?: string
+          consumption_kwh?: number
+          coverage_ratio?: number
+          created_at?: string
+          days_count?: number
+          energy_type?: string
+          export_kwh?: number
+          id?: string
+          iso_week?: number
+          iso_year?: number
+          meter_id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meter_weekly_totals_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meter_weekly_totals_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meters: {
         Row: {
           brennwert: number | null
@@ -3481,32 +8844,57 @@ export type Database = {
           discovery_source: string | null
           energy_type: string
           floor_id: string | null
+          flow_direction_convention: string
           gas_type: string | null
           id: string
           installation_date: string | null
           is_archived: boolean
           is_bidirectional: boolean
           is_main_meter: boolean
+          is_pulse_meter: boolean
           location_id: string
           location_integration_id: string | null
+          malo_id: string | null
           medium: string | null
+          melo_id: string | null
           meter_function: string
           meter_number: string | null
+          meter_offset_kwh: number
+          meter_offset_note: string | null
+          meter_offset_reason: string | null
+          meter_offset_set_at: string | null
           meter_operator: string | null
           name: string
           notes: string | null
+          obis_code: string | null
           parent_meter_id: string | null
           photo_url: string | null
           position_3d_x: number | null
           position_3d_y: number | null
           position_3d_z: number | null
+          power_state_key: string | null
+          power_state_set_at: string | null
+          power_state_set_by: string | null
+          power_state_uuid: string | null
+          replaces_meter_id: string | null
           room_id: string | null
           sensor_uuid: string | null
+          setup_validated_at: string | null
+          setup_validated_by: string | null
+          setup_validated_by_email: string | null
+          sim_bidirectional: boolean | null
+          sim_default_value: number | null
+          sim_max: number | null
+          sim_min: number | null
+          sim_step: number | null
+          sim_unit: string | null
+          smgw_id: string | null
           source_unit_energy: string | null
           source_unit_power: string | null
           tenant_id: string
           unit: string
           updated_at: string
+          volume_per_pulse: number | null
           zustandszahl: number | null
         }
         Insert: {
@@ -3519,32 +8907,57 @@ export type Database = {
           discovery_source?: string | null
           energy_type?: string
           floor_id?: string | null
+          flow_direction_convention?: string
           gas_type?: string | null
           id?: string
           installation_date?: string | null
           is_archived?: boolean
           is_bidirectional?: boolean
           is_main_meter?: boolean
+          is_pulse_meter?: boolean
           location_id: string
           location_integration_id?: string | null
+          malo_id?: string | null
           medium?: string | null
+          melo_id?: string | null
           meter_function?: string
           meter_number?: string | null
+          meter_offset_kwh?: number
+          meter_offset_note?: string | null
+          meter_offset_reason?: string | null
+          meter_offset_set_at?: string | null
           meter_operator?: string | null
           name: string
           notes?: string | null
+          obis_code?: string | null
           parent_meter_id?: string | null
           photo_url?: string | null
           position_3d_x?: number | null
           position_3d_y?: number | null
           position_3d_z?: number | null
+          power_state_key?: string | null
+          power_state_set_at?: string | null
+          power_state_set_by?: string | null
+          power_state_uuid?: string | null
+          replaces_meter_id?: string | null
           room_id?: string | null
           sensor_uuid?: string | null
+          setup_validated_at?: string | null
+          setup_validated_by?: string | null
+          setup_validated_by_email?: string | null
+          sim_bidirectional?: boolean | null
+          sim_default_value?: number | null
+          sim_max?: number | null
+          sim_min?: number | null
+          sim_step?: number | null
+          sim_unit?: string | null
+          smgw_id?: string | null
           source_unit_energy?: string | null
           source_unit_power?: string | null
           tenant_id: string
           unit?: string
           updated_at?: string
+          volume_per_pulse?: number | null
           zustandszahl?: number | null
         }
         Update: {
@@ -3557,32 +8970,57 @@ export type Database = {
           discovery_source?: string | null
           energy_type?: string
           floor_id?: string | null
+          flow_direction_convention?: string
           gas_type?: string | null
           id?: string
           installation_date?: string | null
           is_archived?: boolean
           is_bidirectional?: boolean
           is_main_meter?: boolean
+          is_pulse_meter?: boolean
           location_id?: string
           location_integration_id?: string | null
+          malo_id?: string | null
           medium?: string | null
+          melo_id?: string | null
           meter_function?: string
           meter_number?: string | null
+          meter_offset_kwh?: number
+          meter_offset_note?: string | null
+          meter_offset_reason?: string | null
+          meter_offset_set_at?: string | null
           meter_operator?: string | null
           name?: string
           notes?: string | null
+          obis_code?: string | null
           parent_meter_id?: string | null
           photo_url?: string | null
           position_3d_x?: number | null
           position_3d_y?: number | null
           position_3d_z?: number | null
+          power_state_key?: string | null
+          power_state_set_at?: string | null
+          power_state_set_by?: string | null
+          power_state_uuid?: string | null
+          replaces_meter_id?: string | null
           room_id?: string | null
           sensor_uuid?: string | null
+          setup_validated_at?: string | null
+          setup_validated_by?: string | null
+          setup_validated_by_email?: string | null
+          sim_bidirectional?: boolean | null
+          sim_default_value?: number | null
+          sim_max?: number | null
+          sim_min?: number | null
+          sim_step?: number | null
+          sim_unit?: string | null
+          smgw_id?: string | null
           source_unit_energy?: string | null
           source_unit_power?: string | null
           tenant_id?: string
           unit?: string
           updated_at?: string
+          volume_per_pulse?: number | null
           zustandszahl?: number | null
         }
         Relationships: [
@@ -3610,6 +9048,13 @@ export type Database = {
           {
             foreignKeyName: "meters_parent_meter_id_fkey"
             columns: ["parent_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meters_replaces_meter_id_fkey"
+            columns: ["replaces_meter_id"]
             isOneToOne: false
             referencedRelation: "meters"
             referencedColumns: ["id"]
@@ -3696,6 +9141,8 @@ export type Database = {
           industry_price_monthly: number
           industry_standard_price: number
           module_code: string
+          partner_industry_price_monthly: number
+          partner_price_monthly: number
           price_monthly: number
           standard_price: number
           updated_at: string
@@ -3706,6 +9153,8 @@ export type Database = {
           industry_price_monthly?: number
           industry_standard_price?: number
           module_code: string
+          partner_industry_price_monthly?: number
+          partner_price_monthly?: number
           price_monthly?: number
           standard_price?: number
           updated_at?: string
@@ -3716,8 +9165,111 @@ export type Database = {
           industry_price_monthly?: number
           industry_standard_price?: number
           module_code?: string
+          partner_industry_price_monthly?: number
+          partner_price_monthly?: number
           price_monthly?: number
           standard_price?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      monitoring_alert_events: {
+        Row: {
+          archived_at: string | null
+          comparator: string
+          created_at: string
+          id: string
+          message: string | null
+          metric_category: string
+          metric_name: string
+          metric_value: number
+          resolved_at: string | null
+          resolved_value: number | null
+          rule_id: string | null
+          severity: string
+          threshold: number
+          triggered_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          comparator: string
+          created_at?: string
+          id?: string
+          message?: string | null
+          metric_category: string
+          metric_name: string
+          metric_value: number
+          resolved_at?: string | null
+          resolved_value?: number | null
+          rule_id?: string | null
+          severity: string
+          threshold: number
+          triggered_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          comparator?: string
+          created_at?: string
+          id?: string
+          message?: string | null
+          metric_category?: string
+          metric_name?: string
+          metric_value?: number
+          resolved_at?: string | null
+          resolved_value?: number | null
+          rule_id?: string | null
+          severity?: string
+          threshold?: number
+          triggered_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monitoring_alert_events_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "monitoring_alert_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monitoring_alert_rules: {
+        Row: {
+          comparator: string
+          created_at: string
+          created_by: string | null
+          enabled: boolean
+          id: string
+          metric_category: string
+          metric_name: string
+          notify_email: string | null
+          severity: string
+          threshold: number
+          updated_at: string
+        }
+        Insert: {
+          comparator: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          id?: string
+          metric_category: string
+          metric_name: string
+          notify_email?: string | null
+          severity?: string
+          threshold: number
+          updated_at?: string
+        }
+        Update: {
+          comparator?: string
+          created_at?: string
+          created_by?: string | null
+          enabled?: boolean
+          id?: string
+          metric_category?: string
+          metric_name?: string
+          notify_email?: string | null
+          severity?: string
+          threshold?: number
           updated_at?: string
         }
         Relationships: []
@@ -3841,6 +9393,161 @@ export type Database = {
           },
         ]
       }
+      node_metrics: {
+        Row: {
+          cpu_percent: number | null
+          disk_percent: number | null
+          id: string
+          load_avg_1m: number | null
+          mem_percent: number | null
+          metadata: Json
+          node_name: string
+          recorded_at: string
+          uptime_seconds: number | null
+        }
+        Insert: {
+          cpu_percent?: number | null
+          disk_percent?: number | null
+          id?: string
+          load_avg_1m?: number | null
+          mem_percent?: number | null
+          metadata?: Json
+          node_name: string
+          recorded_at?: string
+          uptime_seconds?: number | null
+        }
+        Update: {
+          cpu_percent?: number | null
+          disk_percent?: number | null
+          id?: string
+          load_avg_1m?: number | null
+          mem_percent?: number | null
+          metadata?: Json
+          node_name?: string
+          recorded_at?: string
+          uptime_seconds?: number | null
+        }
+        Relationships: []
+      }
+      ocpi_endpoints: {
+        Row: {
+          base_url: string
+          country_code: string
+          created_at: string
+          id: string
+          last_registered_at: string | null
+          notes: string | null
+          party_id: string
+          role: Database["public"]["Enums"]["ocpi_role"]
+          status: string
+          tenant_id: string
+          token_a: string | null
+          token_b: string | null
+          token_c: string | null
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          base_url: string
+          country_code: string
+          created_at?: string
+          id?: string
+          last_registered_at?: string | null
+          notes?: string | null
+          party_id: string
+          role: Database["public"]["Enums"]["ocpi_role"]
+          status?: string
+          tenant_id: string
+          token_a?: string | null
+          token_b?: string | null
+          token_c?: string | null
+          updated_at?: string
+          version?: string
+        }
+        Update: {
+          base_url?: string
+          country_code?: string
+          created_at?: string
+          id?: string
+          last_registered_at?: string | null
+          notes?: string | null
+          party_id?: string
+          role?: Database["public"]["Enums"]["ocpi_role"]
+          status?: string
+          tenant_id?: string
+          token_a?: string | null
+          token_b?: string | null
+          token_c?: string | null
+          updated_at?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ocpi_endpoints_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ocpi_tokens: {
+        Row: {
+          contract_id: string | null
+          created_at: string
+          endpoint_id: string | null
+          id: string
+          issuer: string | null
+          last_updated: string
+          tenant_id: string
+          token_type: string
+          uid: string
+          valid: boolean
+          whitelist: string
+        }
+        Insert: {
+          contract_id?: string | null
+          created_at?: string
+          endpoint_id?: string | null
+          id?: string
+          issuer?: string | null
+          last_updated?: string
+          tenant_id: string
+          token_type?: string
+          uid: string
+          valid?: boolean
+          whitelist?: string
+        }
+        Update: {
+          contract_id?: string | null
+          created_at?: string
+          endpoint_id?: string | null
+          id?: string
+          issuer?: string | null
+          last_updated?: string
+          tenant_id?: string
+          token_type?: string
+          uid?: string
+          valid?: boolean
+          whitelist?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ocpi_tokens_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "ocpi_endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ocpi_tokens_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ocpp_integration_guides: {
         Row: {
           charger_model_id: string | null
@@ -3893,6 +9600,8 @@ export type Database = {
           id: string
           message_type: string | null
           raw_message: Json
+          response_at: string | null
+          response_message: Json | null
         }
         Insert: {
           charge_point_id: string
@@ -3901,6 +9610,8 @@ export type Database = {
           id?: string
           message_type?: string | null
           raw_message: Json
+          response_at?: string | null
+          response_message?: Json | null
         }
         Update: {
           charge_point_id?: string
@@ -3909,8 +9620,800 @@ export type Database = {
           id?: string
           message_type?: string | null
           raw_message?: Json
+          response_at?: string | null
+          response_message?: Json | null
         }
         Relationships: []
+      }
+      ocpp_meter_samples: {
+        Row: {
+          charge_point_id: string
+          connector_id: number
+          context: string | null
+          created_at: string
+          id: string
+          measurand: string
+          phase: string | null
+          sampled_at: string
+          tenant_id: string
+          transaction_id: number | null
+          unit: string | null
+          value: number
+        }
+        Insert: {
+          charge_point_id: string
+          connector_id?: number
+          context?: string | null
+          created_at?: string
+          id?: string
+          measurand: string
+          phase?: string | null
+          sampled_at: string
+          tenant_id: string
+          transaction_id?: number | null
+          unit?: string | null
+          value: number
+        }
+        Update: {
+          charge_point_id?: string
+          connector_id?: number
+          context?: string | null
+          created_at?: string
+          id?: string
+          measurand?: string
+          phase?: string | null
+          sampled_at?: string
+          tenant_id?: string
+          transaction_id?: number | null
+          unit?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ocpp_meter_samples_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_members: {
+        Row: {
+          can_create_tenant: boolean
+          can_manage_branding: boolean
+          can_manage_members: boolean
+          can_manage_sales_catalog: boolean
+          can_manage_tenants: boolean
+          can_use_sales_scout: boolean
+          can_view_billing: boolean
+          can_view_reporting: boolean
+          created_at: string
+          id: string
+          partner_id: string
+          partner_role: Database["public"]["Enums"]["partner_member_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_create_tenant?: boolean
+          can_manage_branding?: boolean
+          can_manage_members?: boolean
+          can_manage_sales_catalog?: boolean
+          can_manage_tenants?: boolean
+          can_use_sales_scout?: boolean
+          can_view_billing?: boolean
+          can_view_reporting?: boolean
+          created_at?: string
+          id?: string
+          partner_id: string
+          partner_role?: Database["public"]["Enums"]["partner_member_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_create_tenant?: boolean
+          can_manage_branding?: boolean
+          can_manage_members?: boolean
+          can_manage_sales_catalog?: boolean
+          can_manage_tenants?: boolean
+          can_use_sales_scout?: boolean
+          can_view_billing?: boolean
+          can_view_reporting?: boolean
+          created_at?: string
+          id?: string
+          partner_id?: string
+          partner_role?: Database["public"]["Enums"]["partner_member_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_members_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_module_prices: {
+        Row: {
+          created_at: string
+          id: string
+          module_code: string
+          partner_id: string
+          sale_price_industry_monthly: number | null
+          sale_price_monthly: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          module_code: string
+          partner_id: string
+          sale_price_industry_monthly?: number | null
+          sale_price_monthly?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          module_code?: string
+          partner_id?: string
+          sale_price_industry_monthly?: number | null
+          sale_price_monthly?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_module_prices_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partners: {
+        Row: {
+          accent_color: string | null
+          ai_analysis_mode: string
+          billing_address: Json
+          billing_mode: string
+          brand_display_name: string | null
+          commission_pct: number
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          custom_domain: string | null
+          id: string
+          is_active: boolean
+          logo_url: string | null
+          name: string
+          notes: string | null
+          primary_color: string | null
+          secondary_color: string | null
+          slug: string
+          subdomain: string | null
+          support_email: string | null
+          updated_at: string
+          white_label_enabled: boolean
+        }
+        Insert: {
+          accent_color?: string | null
+          ai_analysis_mode?: string
+          billing_address?: Json
+          billing_mode?: string
+          brand_display_name?: string | null
+          commission_pct?: number
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          custom_domain?: string | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name: string
+          notes?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          slug: string
+          subdomain?: string | null
+          support_email?: string | null
+          updated_at?: string
+          white_label_enabled?: boolean
+        }
+        Update: {
+          accent_color?: string | null
+          ai_analysis_mode?: string
+          billing_address?: Json
+          billing_mode?: string
+          brand_display_name?: string | null
+          commission_pct?: number
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          custom_domain?: string | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name?: string
+          notes?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          slug?: string
+          subdomain?: string | null
+          support_email?: string | null
+          updated_at?: string
+          white_label_enabled?: boolean
+        }
+        Relationships: []
+      }
+      payment_events: {
+        Row: {
+          direction: Database["public"]["Enums"]["payment_event_direction"]
+          event_type: string
+          id: string
+          payload: Json
+          provider_event_id: string | null
+          provider_id: string | null
+          received_at: string
+          session_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          direction: Database["public"]["Enums"]["payment_event_direction"]
+          event_type: string
+          id?: string
+          payload?: Json
+          provider_event_id?: string | null
+          provider_id?: string | null
+          received_at?: string
+          session_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          direction?: Database["public"]["Enums"]["payment_event_direction"]
+          event_type?: string
+          id?: string
+          payload?: Json
+          provider_event_id?: string | null
+          provider_id?: string | null
+          received_at?: string
+          session_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_events_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "payment_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "adhoc_payment_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_providers: {
+        Row: {
+          base_url: string | null
+          config: Json
+          country_code: string | null
+          created_at: string
+          credentials_secret_ref: string | null
+          display_name: string
+          environment: Database["public"]["Enums"]["payment_provider_env"]
+          id: string
+          is_active: boolean
+          last_error: string | null
+          last_verified_at: string | null
+          party_id: string | null
+          provider_type: Database["public"]["Enums"]["payment_provider_type"]
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          base_url?: string | null
+          config?: Json
+          country_code?: string | null
+          created_at?: string
+          credentials_secret_ref?: string | null
+          display_name: string
+          environment?: Database["public"]["Enums"]["payment_provider_env"]
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_verified_at?: string | null
+          party_id?: string | null
+          provider_type: Database["public"]["Enums"]["payment_provider_type"]
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          base_url?: string | null
+          config?: Json
+          country_code?: string | null
+          created_at?: string
+          credentials_secret_ref?: string | null
+          display_name?: string
+          environment?: Database["public"]["Enums"]["payment_provider_env"]
+          id?: string
+          is_active?: boolean
+          last_error?: string | null
+          last_verified_at?: string | null
+          party_id?: string | null
+          provider_type?: Database["public"]["Enums"]["payment_provider_type"]
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_providers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_terminals: {
+        Row: {
+          brand_profile: Json
+          charge_point_id: string | null
+          connector_id: number | null
+          created_at: string
+          firmware: string | null
+          id: string
+          last_seen_at: string | null
+          location_id: string | null
+          notes: string | null
+          provider_id: string
+          status: Database["public"]["Enums"]["payment_terminal_status"]
+          tenant_id: string
+          terminal_model: string | null
+          terminal_serial: string
+          updated_at: string
+        }
+        Insert: {
+          brand_profile?: Json
+          charge_point_id?: string | null
+          connector_id?: number | null
+          created_at?: string
+          firmware?: string | null
+          id?: string
+          last_seen_at?: string | null
+          location_id?: string | null
+          notes?: string | null
+          provider_id: string
+          status?: Database["public"]["Enums"]["payment_terminal_status"]
+          tenant_id: string
+          terminal_model?: string | null
+          terminal_serial: string
+          updated_at?: string
+        }
+        Update: {
+          brand_profile?: Json
+          charge_point_id?: string | null
+          connector_id?: number | null
+          created_at?: string
+          firmware?: string | null
+          id?: string
+          last_seen_at?: string | null
+          location_id?: string | null
+          notes?: string | null
+          provider_id?: string
+          status?: Database["public"]["Enums"]["payment_terminal_status"]
+          tenant_id?: string
+          terminal_model?: string | null
+          terminal_serial?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_terminals_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_terminals_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_terminals_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "payment_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_terminals_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      peak_shaving_configs: {
+        Row: {
+          active: boolean
+          billing_cycle: string
+          created_at: string
+          hysteresis_pct: number
+          id: string
+          location_id: string
+          mode: string
+          network_tariff_eur_per_kw_year: number
+          notes: string | null
+          peak_limit_kw: number
+          report_enabled: boolean
+          report_recipients: string[]
+          reserve_soc_pct: number
+          storage_id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          billing_cycle?: string
+          created_at?: string
+          hysteresis_pct?: number
+          id?: string
+          location_id: string
+          mode?: string
+          network_tariff_eur_per_kw_year?: number
+          notes?: string | null
+          peak_limit_kw: number
+          report_enabled?: boolean
+          report_recipients?: string[]
+          reserve_soc_pct?: number
+          storage_id: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          billing_cycle?: string
+          created_at?: string
+          hysteresis_pct?: number
+          id?: string
+          location_id?: string
+          mode?: string
+          network_tariff_eur_per_kw_year?: number
+          notes?: string | null
+          peak_limit_kw?: number
+          report_enabled?: boolean
+          report_recipients?: string[]
+          reserve_soc_pct?: number
+          storage_id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "peak_shaving_configs_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_configs_storage_id_fkey"
+            columns: ["storage_id"]
+            isOneToOne: false
+            referencedRelation: "energy_storages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_configs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      peak_shaving_dispatch_log: {
+        Row: {
+          action: string
+          calendar_id: string | null
+          config_id: string
+          created_at: string
+          error_message: string | null
+          event_id: string | null
+          gateway_command_id: string | null
+          id: string
+          metadata: Json
+          reason: string | null
+          storage_id: string
+          success: boolean | null
+          target_power_kw: number
+          tenant_id: string
+        }
+        Insert: {
+          action: string
+          calendar_id?: string | null
+          config_id: string
+          created_at?: string
+          error_message?: string | null
+          event_id?: string | null
+          gateway_command_id?: string | null
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          storage_id: string
+          success?: boolean | null
+          target_power_kw: number
+          tenant_id: string
+        }
+        Update: {
+          action?: string
+          calendar_id?: string | null
+          config_id?: string
+          created_at?: string
+          error_message?: string | null
+          event_id?: string | null
+          gateway_command_id?: string | null
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          storage_id?: string
+          success?: boolean | null
+          target_power_kw?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "peak_shaving_dispatch_log_calendar_id_fkey"
+            columns: ["calendar_id"]
+            isOneToOne: false
+            referencedRelation: "peak_shaving_event_calendar"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_dispatch_log_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "peak_shaving_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_dispatch_log_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "peak_shaving_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_dispatch_log_gateway_command_id_fkey"
+            columns: ["gateway_command_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_commands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_dispatch_log_storage_id_fkey"
+            columns: ["storage_id"]
+            isOneToOne: false
+            referencedRelation: "energy_storages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_dispatch_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      peak_shaving_event_calendar: {
+        Row: {
+          config_id: string
+          created_at: string
+          end_at: string
+          event_name: string
+          expected_peak_kw: number | null
+          id: string
+          notes: string | null
+          pre_charge_completed_at: string | null
+          pre_charge_lead_hours: number
+          pre_charge_started_at: string | null
+          pre_charge_target_soc_pct: number
+          start_at: string
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          config_id: string
+          created_at?: string
+          end_at: string
+          event_name: string
+          expected_peak_kw?: number | null
+          id?: string
+          notes?: string | null
+          pre_charge_completed_at?: string | null
+          pre_charge_lead_hours?: number
+          pre_charge_started_at?: string | null
+          pre_charge_target_soc_pct?: number
+          start_at: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          config_id?: string
+          created_at?: string
+          end_at?: string
+          event_name?: string
+          expected_peak_kw?: number | null
+          id?: string
+          notes?: string | null
+          pre_charge_completed_at?: string | null
+          pre_charge_lead_hours?: number
+          pre_charge_started_at?: string | null
+          pre_charge_target_soc_pct?: number
+          start_at?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "peak_shaving_event_calendar_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "peak_shaving_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_event_calendar_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      peak_shaving_events: {
+        Row: {
+          config_id: string
+          created_at: string
+          ended_at: string | null
+          eur_saved: number
+          id: string
+          kwh_discharged: number
+          metadata: Json
+          peak_kw_actual: number | null
+          peak_kw_without_shaving: number | null
+          started_at: string
+          tenant_id: string
+          trigger_reason: string | null
+        }
+        Insert: {
+          config_id: string
+          created_at?: string
+          ended_at?: string | null
+          eur_saved?: number
+          id?: string
+          kwh_discharged?: number
+          metadata?: Json
+          peak_kw_actual?: number | null
+          peak_kw_without_shaving?: number | null
+          started_at?: string
+          tenant_id: string
+          trigger_reason?: string | null
+        }
+        Update: {
+          config_id?: string
+          created_at?: string
+          ended_at?: string | null
+          eur_saved?: number
+          id?: string
+          kwh_discharged?: number
+          metadata?: Json
+          peak_kw_actual?: number | null
+          peak_kw_without_shaving?: number | null
+          started_at?: string
+          tenant_id?: string
+          trigger_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "peak_shaving_events_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "peak_shaving_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      peak_shaving_monthly_summary: {
+        Row: {
+          baseline_peak_kw: number
+          config_id: string
+          created_at: string
+          event_count: number
+          id: string
+          max_peak_kw: number
+          month: number
+          tenant_id: string
+          total_eur_saved: number
+          total_kwh_discharged: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          baseline_peak_kw?: number
+          config_id: string
+          created_at?: string
+          event_count?: number
+          id?: string
+          max_peak_kw?: number
+          month: number
+          tenant_id: string
+          total_eur_saved?: number
+          total_kwh_discharged?: number
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          baseline_peak_kw?: number
+          config_id?: string
+          created_at?: string
+          event_count?: number
+          id?: string
+          max_peak_kw?: number
+          month?: number
+          tenant_id?: string
+          total_eur_saved?: number
+          total_kwh_discharged?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "peak_shaving_monthly_summary_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "peak_shaving_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "peak_shaving_monthly_summary_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pending_ocpp_commands: {
         Row: {
@@ -3975,6 +10478,33 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_metrics: {
+        Row: {
+          created_at: string
+          dimension: string | null
+          id: string
+          metric_key: string
+          metric_value: number
+          recorded_at: string
+        }
+        Insert: {
+          created_at?: string
+          dimension?: string | null
+          id?: string
+          metric_key: string
+          metric_value: number
+          recorded_at?: string
+        }
+        Update: {
+          created_at?: string
+          dimension?: string | null
+          id?: string
+          metric_key?: string
+          metric_value?: number
+          recorded_at?: string
+        }
+        Relationships: []
+      }
       platform_settings: {
         Row: {
           created_at: string
@@ -4034,6 +10564,591 @@ export type Database = {
           },
         ]
       }
+      ppa_consumption_meters: {
+        Row: {
+          contract_id: string
+          created_at: string
+          meter_id: string
+          role: string
+          tenant_id: string
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          meter_id: string
+          role?: string
+          tenant_id: string
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          meter_id?: string
+          role?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_consumption_meters_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_consumption_meters_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_contracts: {
+        Row: {
+          auto_renewal: boolean
+          contract_end: string
+          contract_start: string
+          contracted_volume_kwh_pa: number | null
+          created_at: string
+          created_by: string | null
+          energy_source: string
+          goo_registry: string | null
+          goo_required: boolean
+          id: string
+          mieterstrom_settings_id: string | null
+          notes: string | null
+          notice_period_days: number
+          offtaker_market_id: string | null
+          offtaker_name: string
+          plant_capacity_kw: number | null
+          plant_description: string | null
+          plant_id: string | null
+          ppa_type: string
+          price_eur_per_kwh: number | null
+          price_formula: Json | null
+          price_model: string
+          producer_market_id: string | null
+          producer_name: string
+          reference_number: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          auto_renewal?: boolean
+          contract_end: string
+          contract_start: string
+          contracted_volume_kwh_pa?: number | null
+          created_at?: string
+          created_by?: string | null
+          energy_source?: string
+          goo_registry?: string | null
+          goo_required?: boolean
+          id?: string
+          mieterstrom_settings_id?: string | null
+          notes?: string | null
+          notice_period_days?: number
+          offtaker_market_id?: string | null
+          offtaker_name: string
+          plant_capacity_kw?: number | null
+          plant_description?: string | null
+          plant_id?: string | null
+          ppa_type: string
+          price_eur_per_kwh?: number | null
+          price_formula?: Json | null
+          price_model: string
+          producer_market_id?: string | null
+          producer_name: string
+          reference_number?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          auto_renewal?: boolean
+          contract_end?: string
+          contract_start?: string
+          contracted_volume_kwh_pa?: number | null
+          created_at?: string
+          created_by?: string | null
+          energy_source?: string
+          goo_registry?: string | null
+          goo_required?: boolean
+          id?: string
+          mieterstrom_settings_id?: string | null
+          notes?: string | null
+          notice_period_days?: number
+          offtaker_market_id?: string | null
+          offtaker_name?: string
+          plant_capacity_kw?: number | null
+          plant_description?: string | null
+          plant_id?: string | null
+          ppa_type?: string
+          price_eur_per_kwh?: number | null
+          price_formula?: Json | null
+          price_model?: string
+          producer_market_id?: string | null
+          producer_name?: string
+          reference_number?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_contracts_mieterstrom_settings_id_fkey"
+            columns: ["mieterstrom_settings_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_electricity_settings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_contracts_plant_id_fkey"
+            columns: ["plant_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_contracts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_documents: {
+        Row: {
+          contract_id: string
+          created_at: string
+          doc_type: string
+          file_hash: string | null
+          file_size_bytes: number | null
+          filename: string
+          id: string
+          mime_type: string | null
+          storage_path: string
+          tenant_id: string
+          uploaded_by: string | null
+          valid_from: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          doc_type: string
+          file_hash?: string | null
+          file_size_bytes?: number | null
+          filename: string
+          id?: string
+          mime_type?: string | null
+          storage_path: string
+          tenant_id: string
+          uploaded_by?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          doc_type?: string
+          file_hash?: string | null
+          file_size_bytes?: number | null
+          filename?: string
+          id?: string
+          mime_type?: string | null
+          storage_path?: string
+          tenant_id?: string
+          uploaded_by?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_documents_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_goo_certificates: {
+        Row: {
+          certificate_number: string
+          contract_id: string
+          counterparty: string | null
+          created_at: string
+          energy_source: string
+          generation_period_end: string
+          generation_period_start: string
+          id: string
+          issued_at: string | null
+          notes: string | null
+          redeemed_at: string | null
+          registry: string
+          status: string
+          tenant_id: string
+          transferred_at: string | null
+          updated_at: string
+          volume_kwh: number
+        }
+        Insert: {
+          certificate_number: string
+          contract_id: string
+          counterparty?: string | null
+          created_at?: string
+          energy_source?: string
+          generation_period_end: string
+          generation_period_start: string
+          id?: string
+          issued_at?: string | null
+          notes?: string | null
+          redeemed_at?: string | null
+          registry?: string
+          status?: string
+          tenant_id: string
+          transferred_at?: string | null
+          updated_at?: string
+          volume_kwh: number
+        }
+        Update: {
+          certificate_number?: string
+          contract_id?: string
+          counterparty?: string | null
+          created_at?: string
+          energy_source?: string
+          generation_period_end?: string
+          generation_period_start?: string
+          id?: string
+          issued_at?: string | null
+          notes?: string | null
+          redeemed_at?: string | null
+          registry?: string
+          status?: string
+          tenant_id?: string
+          transferred_at?: string | null
+          updated_at?: string
+          volume_kwh?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_goo_certificates_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_offsite_config: {
+        Row: {
+          balancing_group_id: string | null
+          balancing_responsible_party: string | null
+          contract_id: string
+          created_at: string
+          delivery_type: string
+          id: string
+          imbalance_responsibility: string
+          intermediary_market_id: string | null
+          intermediary_name: string | null
+          mscons_receiver_id: string | null
+          mscons_sender_id: string | null
+          plant_grid_level: string | null
+          plant_location: string | null
+          plant_tso_area: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          balancing_group_id?: string | null
+          balancing_responsible_party?: string | null
+          contract_id: string
+          created_at?: string
+          delivery_type: string
+          id?: string
+          imbalance_responsibility?: string
+          intermediary_market_id?: string | null
+          intermediary_name?: string | null
+          mscons_receiver_id?: string | null
+          mscons_sender_id?: string | null
+          plant_grid_level?: string | null
+          plant_location?: string | null
+          plant_tso_area?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          balancing_group_id?: string | null
+          balancing_responsible_party?: string | null
+          contract_id?: string
+          created_at?: string
+          delivery_type?: string
+          id?: string
+          imbalance_responsibility?: string
+          intermediary_market_id?: string | null
+          intermediary_name?: string | null
+          mscons_receiver_id?: string | null
+          mscons_sender_id?: string | null
+          plant_grid_level?: string | null
+          plant_location?: string | null
+          plant_tso_area?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_offsite_config_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: true
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_onsite_config: {
+        Row: {
+          building_id: string | null
+          contract_id: string
+          created_at: string
+          generation_meter_id: string | null
+          id: string
+          self_consumption_target_pct: number | null
+          supply_model: string
+          surplus_community_id: string | null
+          surplus_handling: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          building_id?: string | null
+          contract_id: string
+          created_at?: string
+          generation_meter_id?: string | null
+          id?: string
+          self_consumption_target_pct?: number | null
+          supply_model: string
+          surplus_community_id?: string | null
+          surplus_handling?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          building_id?: string | null
+          contract_id?: string
+          created_at?: string
+          generation_meter_id?: string | null
+          id?: string
+          self_consumption_target_pct?: number | null
+          supply_model?: string
+          surplus_community_id?: string | null
+          surplus_handling?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_onsite_config_building_id_fkey"
+            columns: ["building_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_onsite_config_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: true
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_onsite_config_generation_meter_id_fkey"
+            columns: ["generation_meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ppa_onsite_config_surplus_community_id_fkey"
+            columns: ["surplus_community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_settlement_periods: {
+        Row: {
+          actual_consumed_kwh: number | null
+          actual_produced_kwh: number | null
+          applicable_price_eur_per_kwh: number | null
+          contract_id: string
+          contracted_kwh: number | null
+          created_at: string
+          data_source: string
+          deviation_kwh: number | null
+          id: string
+          notes: string | null
+          period_end: string
+          period_start: string
+          settlement_amount_eur: number | null
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          actual_consumed_kwh?: number | null
+          actual_produced_kwh?: number | null
+          applicable_price_eur_per_kwh?: number | null
+          contract_id: string
+          contracted_kwh?: number | null
+          created_at?: string
+          data_source?: string
+          deviation_kwh?: number | null
+          id?: string
+          notes?: string | null
+          period_end: string
+          period_start: string
+          settlement_amount_eur?: number | null
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          actual_consumed_kwh?: number | null
+          actual_produced_kwh?: number | null
+          applicable_price_eur_per_kwh?: number | null
+          contract_id?: string
+          contracted_kwh?: number | null
+          created_at?: string
+          data_source?: string
+          deviation_kwh?: number | null
+          id?: string
+          notes?: string | null
+          period_end?: string
+          period_start?: string
+          settlement_amount_eur?: number | null
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_settlement_periods_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_settlements: {
+        Row: {
+          applied_avg_price_eur_kwh: number | null
+          avg_spot_price_eur_kwh: number | null
+          breakdown: Json | null
+          computed_at: string
+          consumed_kwh: number
+          contract_id: string
+          created_at: string
+          currency: string
+          delivered_kwh: number
+          error: string | null
+          id: string
+          period_end: string
+          period_start: string
+          status: string
+          tenant_id: string
+          total_amount_eur: number
+          updated_at: string
+        }
+        Insert: {
+          applied_avg_price_eur_kwh?: number | null
+          avg_spot_price_eur_kwh?: number | null
+          breakdown?: Json | null
+          computed_at?: string
+          consumed_kwh?: number
+          contract_id: string
+          created_at?: string
+          currency?: string
+          delivered_kwh?: number
+          error?: string | null
+          id?: string
+          period_end: string
+          period_start: string
+          status?: string
+          tenant_id: string
+          total_amount_eur?: number
+          updated_at?: string
+        }
+        Update: {
+          applied_avg_price_eur_kwh?: number | null
+          avg_spot_price_eur_kwh?: number | null
+          breakdown?: Json | null
+          computed_at?: string
+          consumed_kwh?: number
+          contract_id?: string
+          created_at?: string
+          currency?: string
+          delivered_kwh?: number
+          error?: string | null
+          id?: string
+          period_end?: string
+          period_start?: string
+          status?: string
+          tenant_id?: string
+          total_amount_eur?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_settlements_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ppa_status_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          contract_id: string
+          id: string
+          new_status: string
+          old_status: string | null
+          reason: string | null
+          tenant_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          contract_id: string
+          id?: string
+          new_status: string
+          old_status?: string | null
+          reason?: string | null
+          tenant_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          contract_id?: string
+          id?: string
+          new_status?: string
+          old_status?: string | null
+          reason?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ppa_status_history_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "ppa_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           company_name: string | null
@@ -4088,6 +11203,33 @@ export type Database = {
           },
         ]
       }
+      public_charge_status_links: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          tenant_id: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          tenant_id: string
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          tenant_id?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pv_actual_hourly: {
         Row: {
           actual_kwh: number
@@ -4096,7 +11238,7 @@ export type Database = {
           hour_start: string
           id: string
           location_id: string
-          meter_id: string
+          meter_id: string | null
           sample_count: number
           source: string
           tenant_id: string
@@ -4109,7 +11251,7 @@ export type Database = {
           hour_start: string
           id?: string
           location_id: string
-          meter_id: string
+          meter_id?: string | null
           sample_count?: number
           source?: string
           tenant_id: string
@@ -4122,7 +11264,7 @@ export type Database = {
           hour_start?: string
           id?: string
           location_id?: string
-          meter_id?: string
+          meter_id?: string | null
           sample_count?: number
           source?: string
           tenant_id?: string
@@ -4374,6 +11516,304 @@ export type Database = {
           },
         ]
       }
+      roadmap_item_history: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          field: string
+          id: string
+          item_id: string
+          new_value: string | null
+          old_value: string | null
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          field: string
+          id?: string
+          item_id: string
+          new_value?: string | null
+          old_value?: string | null
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          field?: string
+          id?: string
+          item_id?: string
+          new_value?: string | null
+          old_value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_item_history_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roadmap_items: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          effort: number
+          id: string
+          impact: number
+          owner: string | null
+          plan_ref: string | null
+          rank: number
+          risk: number
+          status: string
+          tenant_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          effort?: number
+          id?: string
+          impact?: number
+          owner?: string | null
+          plan_ref?: string | null
+          rank?: number
+          risk?: number
+          status?: string
+          tenant_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          effort?: number
+          id?: string
+          impact?: number
+          owner?: string | null
+          plan_ref?: string | null
+          rank?: number
+          risk?: number
+          status?: string
+          tenant_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roaming_partners: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          endpoint_url: string | null
+          id: string
+          last_sync_at: string | null
+          name: string
+          notes: string | null
+          party_id: string | null
+          protocol: string
+          role: string
+          status: string
+          tenant_id: string
+          token: string | null
+          updated_at: string
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          endpoint_url?: string | null
+          id?: string
+          last_sync_at?: string | null
+          name: string
+          notes?: string | null
+          party_id?: string | null
+          protocol?: string
+          role?: string
+          status?: string
+          tenant_id: string
+          token?: string | null
+          updated_at?: string
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          endpoint_url?: string | null
+          id?: string
+          last_sync_at?: string | null
+          name?: string
+          notes?: string | null
+          party_id?: string | null
+          protocol?: string
+          role?: string
+          status?: string
+          tenant_id?: string
+          token?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roaming_partners_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roaming_sessions: {
+        Row: {
+          charge_point_id: string | null
+          cost_amount: number | null
+          created_at: string
+          currency: string | null
+          direction: string
+          ended_at: string | null
+          energy_kwh: number | null
+          external_session_id: string | null
+          external_user_ref: string | null
+          id: string
+          partner_id: string | null
+          started_at: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          charge_point_id?: string | null
+          cost_amount?: number | null
+          created_at?: string
+          currency?: string | null
+          direction: string
+          ended_at?: string | null
+          energy_kwh?: number | null
+          external_session_id?: string | null
+          external_user_ref?: string | null
+          id?: string
+          partner_id?: string | null
+          started_at?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          charge_point_id?: string | null
+          cost_amount?: number | null
+          created_at?: string
+          currency?: string | null
+          direction?: string
+          ended_at?: string | null
+          energy_kwh?: number | null
+          external_session_id?: string | null
+          external_user_ref?: string | null
+          id?: string
+          partner_id?: string | null
+          started_at?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roaming_sessions_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roaming_sessions_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "roaming_partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roaming_sessions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roaming_settings: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          default_guest_tariff_id: string | null
+          enabled: boolean
+          id: string
+          notes: string | null
+          our_token: string | null
+          party_id: string | null
+          protocol: string
+          role: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          default_guest_tariff_id?: string | null
+          enabled?: boolean
+          id?: string
+          notes?: string | null
+          our_token?: string | null
+          party_id?: string | null
+          protocol?: string
+          role?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          default_guest_tariff_id?: string | null
+          enabled?: boolean
+          id?: string
+          notes?: string | null
+          our_token?: string | null
+          party_id?: string | null
+          protocol?: string
+          role?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roaming_settings_default_guest_tariff_id_fkey"
+            columns: ["default_guest_tariff_id"]
+            isOneToOne: false
+            referencedRelation: "charging_tariffs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roaming_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_permissions: {
         Row: {
           created_at: string
@@ -4453,6 +11893,153 @@ export type Database = {
           },
           {
             foreignKeyName: "sales_distributions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "sales_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_floors: {
+        Row: {
+          area_sqm: number | null
+          created_at: string
+          description: string | null
+          floor_number: number
+          id: string
+          name: string
+          sales_location_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          area_sqm?: number | null
+          created_at?: string
+          description?: string | null
+          floor_number?: number
+          id?: string
+          name: string
+          sales_location_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          area_sqm?: number | null
+          created_at?: string
+          description?: string | null
+          floor_number?: number
+          id?: string
+          name?: string
+          sales_location_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_floors_sales_location_id_fkey"
+            columns: ["sales_location_id"]
+            isOneToOne: false
+            referencedRelation: "sales_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_location_energy_sources: {
+        Row: {
+          created_at: string
+          custom_name: string | null
+          energy_type: string
+          id: string
+          sales_location_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          custom_name?: string | null
+          energy_type: string
+          id?: string
+          sales_location_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          custom_name?: string | null
+          energy_type?: string
+          id?: string
+          sales_location_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_location_energy_sources_sales_location_id_fkey"
+            columns: ["sales_location_id"]
+            isOneToOne: false
+            referencedRelation: "sales_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_locations: {
+        Row: {
+          adresse: string | null
+          construction_year: number | null
+          created_at: string
+          federal_state: string | null
+          grid_limit_kw: number | null
+          heating_type: string | null
+          hot_water_energy_type: string | null
+          id: string
+          is_main: boolean
+          name: string
+          net_floor_area: number | null
+          notizen: string | null
+          project_id: string
+          renovation_year: number | null
+          sort_order: number
+          updated_at: string
+          usage_type: string | null
+        }
+        Insert: {
+          adresse?: string | null
+          construction_year?: number | null
+          created_at?: string
+          federal_state?: string | null
+          grid_limit_kw?: number | null
+          heating_type?: string | null
+          hot_water_energy_type?: string | null
+          id?: string
+          is_main?: boolean
+          name: string
+          net_floor_area?: number | null
+          notizen?: string | null
+          project_id: string
+          renovation_year?: number | null
+          sort_order?: number
+          updated_at?: string
+          usage_type?: string | null
+        }
+        Update: {
+          adresse?: string | null
+          construction_year?: number | null
+          created_at?: string
+          federal_state?: string | null
+          grid_limit_kw?: number | null
+          heating_type?: string | null
+          hot_water_energy_type?: string | null
+          id?: string
+          is_main?: boolean
+          name?: string
+          net_floor_area?: number | null
+          notizen?: string | null
+          project_id?: string
+          renovation_year?: number | null
+          sort_order?: number
+          updated_at?: string
+          usage_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_locations_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "sales_projects"
@@ -4583,6 +12170,7 @@ export type Database = {
           kunde_typ: string
           notizen: string | null
           partner_id: string
+          partner_org_id: string | null
           public_token: string
           status: string
           updated_at: string
@@ -4600,6 +12188,7 @@ export type Database = {
           kunde_typ?: string
           notizen?: string | null
           partner_id: string
+          partner_org_id?: string | null
           public_token?: string
           status?: string
           updated_at?: string
@@ -4617,6 +12206,7 @@ export type Database = {
           kunde_typ?: string
           notizen?: string | null
           partner_id?: string
+          partner_org_id?: string | null
           public_token?: string
           status?: string
           updated_at?: string
@@ -4627,6 +12217,13 @@ export type Database = {
             columns: ["converted_tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_projects_partner_org_id_fkey"
+            columns: ["partner_org_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
@@ -4861,8 +12458,554 @@ export type Database = {
           },
         ]
       }
+      sales_rooms: {
+        Row: {
+          created_at: string
+          depth: number | null
+          id: string
+          name: string
+          sales_floor_id: string
+          sort_order: number
+          updated_at: string
+          wall_height: number | null
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          depth?: number | null
+          id?: string
+          name: string
+          sales_floor_id: string
+          sort_order?: number
+          updated_at?: string
+          wall_height?: number | null
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          depth?: number | null
+          id?: string
+          name?: string
+          sales_floor_id?: string
+          sort_order?: number
+          updated_at?: string
+          wall_height?: number | null
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_rooms_sales_floor_id_fkey"
+            columns: ["sales_floor_id"]
+            isOneToOne: false
+            referencedRelation: "sales_floors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sensor_readings_5min: {
+        Row: {
+          bucket: string
+          created_at: string
+          id: string
+          meter_id: string
+          sample_count: number
+          tenant_id: string
+          unit: string | null
+          updated_at: string
+          value_avg: number
+          value_last: number
+          value_max: number
+          value_min: number
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          id?: string
+          meter_id: string
+          sample_count?: number
+          tenant_id: string
+          unit?: string | null
+          updated_at?: string
+          value_avg: number
+          value_last: number
+          value_max: number
+          value_min: number
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          id?: string
+          meter_id?: string
+          sample_count?: number
+          tenant_id?: string
+          unit?: string | null
+          updated_at?: string
+          value_avg?: number
+          value_last?: number
+          value_max?: number
+          value_min?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sensor_readings_5min_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sensor_readings_daily: {
+        Row: {
+          bucket: string
+          id: string
+          meter_id: string
+          sample_count: number
+          tenant_id: string
+          unit: string | null
+          updated_at: string
+          value_last: number
+          value_max: number
+          value_min: number
+          value_twavg: number
+        }
+        Insert: {
+          bucket: string
+          id?: string
+          meter_id: string
+          sample_count?: number
+          tenant_id: string
+          unit?: string | null
+          updated_at?: string
+          value_last: number
+          value_max: number
+          value_min: number
+          value_twavg: number
+        }
+        Update: {
+          bucket?: string
+          id?: string
+          meter_id?: string
+          sample_count?: number
+          tenant_id?: string
+          unit?: string | null
+          updated_at?: string
+          value_last?: number
+          value_max?: number
+          value_min?: number
+          value_twavg?: number
+        }
+        Relationships: []
+      }
+      sensor_readings_hourly: {
+        Row: {
+          bucket: string
+          id: string
+          meter_id: string
+          sample_count: number
+          tenant_id: string
+          unit: string | null
+          updated_at: string
+          value_last: number
+          value_max: number
+          value_min: number
+          value_twavg: number
+        }
+        Insert: {
+          bucket: string
+          id?: string
+          meter_id: string
+          sample_count?: number
+          tenant_id: string
+          unit?: string | null
+          updated_at?: string
+          value_last: number
+          value_max: number
+          value_min: number
+          value_twavg: number
+        }
+        Update: {
+          bucket?: string
+          id?: string
+          meter_id?: string
+          sample_count?: number
+          tenant_id?: string
+          unit?: string | null
+          updated_at?: string
+          value_last?: number
+          value_max?: number
+          value_min?: number
+          value_twavg?: number
+        }
+        Relationships: []
+      }
+      sensor_readings_monthly: {
+        Row: {
+          bucket: string
+          id: string
+          meter_id: string
+          sample_count: number
+          tenant_id: string
+          unit: string | null
+          updated_at: string
+          value_last: number
+          value_max: number
+          value_min: number
+          value_twavg: number
+        }
+        Insert: {
+          bucket: string
+          id?: string
+          meter_id: string
+          sample_count?: number
+          tenant_id: string
+          unit?: string | null
+          updated_at?: string
+          value_last: number
+          value_max: number
+          value_min: number
+          value_twavg: number
+        }
+        Update: {
+          bucket?: string
+          id?: string
+          meter_id?: string
+          sample_count?: number
+          tenant_id?: string
+          unit?: string | null
+          updated_at?: string
+          value_last?: number
+          value_max?: number
+          value_min?: number
+          value_twavg?: number
+        }
+        Relationships: []
+      }
+      sensor_readings_raw: {
+        Row: {
+          created_at: string
+          id: string
+          meter_id: string
+          recorded_at: string
+          sensor_uuid: string | null
+          tenant_id: string
+          unit: string | null
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          meter_id: string
+          recorded_at?: string
+          sensor_uuid?: string | null
+          tenant_id: string
+          unit?: string | null
+          value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          meter_id?: string
+          recorded_at?: string
+          sensor_uuid?: string | null
+          tenant_id?: string
+          unit?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sensor_readings_raw_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      simulation_meter_state: {
+        Row: {
+          current_value: number
+          meter_id: string
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          current_value?: number
+          meter_id: string
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          current_value?: number
+          meter_id?: string
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulation_meter_state_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: true
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "simulation_meter_state_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      simulator_instances: {
+        Row: {
+          charge_point_id: string | null
+          created_at: string
+          created_by: string | null
+          external_id: string | null
+          id: string
+          id_tag: string | null
+          last_error: string | null
+          model: string
+          ocpp_id: string
+          power_kw: number
+          protocol: string
+          server_host: string
+          started_at: string
+          status: string
+          stopped_at: string | null
+          tenant_id: string
+          updated_at: string
+          vendor: string
+        }
+        Insert: {
+          charge_point_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_id?: string | null
+          id?: string
+          id_tag?: string | null
+          last_error?: string | null
+          model?: string
+          ocpp_id: string
+          power_kw?: number
+          protocol?: string
+          server_host?: string
+          started_at?: string
+          status?: string
+          stopped_at?: string | null
+          tenant_id: string
+          updated_at?: string
+          vendor?: string
+        }
+        Update: {
+          charge_point_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_id?: string | null
+          id?: string
+          id_tag?: string | null
+          last_error?: string | null
+          model?: string
+          ocpp_id?: string
+          power_kw?: number
+          protocol?: string
+          server_host?: string
+          started_at?: string
+          status?: string
+          stopped_at?: string | null
+          tenant_id?: string
+          updated_at?: string
+          vendor?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simulator_instances_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "simulator_instances_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      smart_meter_consents: {
+        Row: {
+          consent_scope: string
+          consent_text_version: string | null
+          created_at: string
+          granted_at: string
+          granted_by: string | null
+          granted_by_email: string | null
+          id: string
+          location_id: string | null
+          meta: Json
+          meter_id: string | null
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          consent_scope: string
+          consent_text_version?: string | null
+          created_at?: string
+          granted_at?: string
+          granted_by?: string | null
+          granted_by_email?: string | null
+          id?: string
+          location_id?: string | null
+          meta?: Json
+          meter_id?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          consent_scope?: string
+          consent_text_version?: string | null
+          created_at?: string
+          granted_at?: string
+          granted_by?: string | null
+          granted_by_email?: string | null
+          id?: string
+          location_id?: string | null
+          meta?: Json
+          meter_id?: string | null
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "smart_meter_consents_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smart_meter_consents_meter_id_fkey"
+            columns: ["meter_id"]
+            isOneToOne: false
+            referencedRelation: "meters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smart_meter_consents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      smart_meter_mscons_imports: {
+        Row: {
+          community_id: string | null
+          created_at: string
+          error_message: string | null
+          error_segments: Json
+          file_hash: string
+          file_name: string
+          file_size_bytes: number | null
+          id: string
+          imported_at: string | null
+          location_id: string | null
+          meta: Json
+          parsed_intervals: number
+          parser_version: string | null
+          rows_imported: number
+          rows_skipped: number
+          status: string
+          tenant_id: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          community_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          error_segments?: Json
+          file_hash: string
+          file_name: string
+          file_size_bytes?: number | null
+          id?: string
+          imported_at?: string | null
+          location_id?: string | null
+          meta?: Json
+          parsed_intervals?: number
+          parser_version?: string | null
+          rows_imported?: number
+          rows_skipped?: number
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          community_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          error_segments?: Json
+          file_hash?: string
+          file_name?: string
+          file_size_bytes?: number | null
+          id?: string
+          imported_at?: string | null
+          location_id?: string | null
+          meta?: Json
+          parsed_intervals?: number
+          parser_version?: string | null
+          rows_imported?: number
+          rows_skipped?: number
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "smart_meter_mscons_imports_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "energy_communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smart_meter_mscons_imports_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smart_meter_mscons_imports_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       solar_charging_config: {
         Row: {
+          charge_point_id: string | null
           created_at: string
           group_id: string | null
           id: string
@@ -4875,6 +13018,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          charge_point_id?: string | null
           created_at?: string
           group_id?: string | null
           id?: string
@@ -4887,6 +13031,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          charge_point_id?: string | null
           created_at?: string
           group_id?: string | null
           id?: string
@@ -4899,6 +13044,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "solar_charging_config_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "solar_charging_config_group_id_fkey"
             columns: ["group_id"]
@@ -5003,6 +13155,101 @@ export type Database = {
         }
         Relationships: []
       }
+      steuve_devices: {
+        Row: {
+          active: boolean
+          connection_id: string
+          created_at: string
+          device_ref_id: string
+          device_type: string
+          id: string
+          min_power_kw: number
+          priority: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          connection_id: string
+          created_at?: string
+          device_ref_id: string
+          device_type?: string
+          id?: string
+          min_power_kw?: number
+          priority?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          connection_id?: string
+          created_at?: string
+          device_ref_id?: string
+          device_type?: string
+          id?: string
+          min_power_kw?: number
+          priority?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "steuve_devices_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "grid_operator_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "steuve_devices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      storage_soc_readings: {
+        Row: {
+          created_at: string
+          id: string
+          recorded_at: string
+          sensor_uuid: string
+          soc_pct: number
+          source: string
+          storage_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          recorded_at?: string
+          sensor_uuid: string
+          soc_pct: number
+          source?: string
+          storage_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          recorded_at?: string
+          sensor_uuid?: string
+          soc_pct?: number
+          source?: string
+          storage_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storage_soc_readings_storage_id_fkey"
+            columns: ["storage_id"]
+            isOneToOne: false
+            referencedRelation: "energy_storages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_sessions: {
         Row: {
           created_at: string
@@ -5010,6 +13257,7 @@ export type Database = {
           ended_at: string | null
           expires_at: string
           id: string
+          impersonated_user_id: string | null
           is_manual: boolean
           notes: string | null
           reason: string | null
@@ -5023,6 +13271,7 @@ export type Database = {
           ended_at?: string | null
           expires_at?: string
           id?: string
+          impersonated_user_id?: string | null
           is_manual?: boolean
           notes?: string | null
           reason?: string | null
@@ -5036,6 +13285,7 @@ export type Database = {
           ended_at?: string | null
           expires_at?: string
           id?: string
+          impersonated_user_id?: string | null
           is_manual?: boolean
           notes?: string | null
           reason?: string | null
@@ -5175,10 +13425,65 @@ export type Database = {
           },
         ]
       }
+      task_templates: {
+        Row: {
+          checklist: Json
+          created_at: string
+          created_by: string | null
+          default_due_offset_days: number | null
+          description: string | null
+          id: string
+          name: string
+          priority: string
+          recurrence_rule: string | null
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          checklist?: Json
+          created_at?: string
+          created_by?: string | null
+          default_due_offset_days?: number | null
+          description?: string | null
+          id?: string
+          name: string
+          priority?: string
+          recurrence_rule?: string | null
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          checklist?: Json
+          created_at?: string
+          created_by?: string | null
+          default_due_offset_days?: number | null
+          description?: string | null
+          id?: string
+          name?: string
+          priority?: string
+          recurrence_rule?: string | null
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_templates_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
+          archived_at: string | null
           assigned_to: string | null
           assigned_to_name: string | null
+          checklist: Json
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -5189,7 +13494,10 @@ export type Database = {
           external_contact_name: string | null
           external_contact_phone: string | null
           id: string
+          ignored_at: string | null
           priority: string
+          recurrence_parent_id: string | null
+          recurrence_rule: string | null
           source_id: string | null
           source_label: string | null
           source_type: string
@@ -5199,8 +13507,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           assigned_to?: string | null
           assigned_to_name?: string | null
+          checklist?: Json
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -5211,7 +13521,10 @@ export type Database = {
           external_contact_name?: string | null
           external_contact_phone?: string | null
           id?: string
+          ignored_at?: string | null
           priority?: string
+          recurrence_parent_id?: string | null
+          recurrence_rule?: string | null
           source_id?: string | null
           source_label?: string | null
           source_type?: string
@@ -5221,8 +13534,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           assigned_to?: string | null
           assigned_to_name?: string | null
+          checklist?: Json
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -5233,7 +13548,10 @@ export type Database = {
           external_contact_name?: string | null
           external_contact_phone?: string | null
           id?: string
+          ignored_at?: string | null
           priority?: string
+          recurrence_parent_id?: string | null
+          recurrence_rule?: string | null
           source_id?: string | null
           source_label?: string | null
           source_type?: string
@@ -5243,6 +13561,50 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      tenant_api_keys: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          key_hash: string
+          key_prefix: string
+          label: string
+          last_used_at: string | null
+          revoked_at: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key_hash: string
+          key_prefix: string
+          label?: string
+          last_used_at?: string | null
+          revoked_at?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key_hash?: string
+          key_prefix?: string
+          label?: string
+          last_used_at?: string | null
+          revoked_at?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_api_keys_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tenant_bundles: {
         Row: {
@@ -5804,6 +14166,241 @@ export type Database = {
           },
         ]
       }
+      tenant_partner_transfers: {
+        Row: {
+          created_at: string
+          from_partner_id: string | null
+          from_support_owner: string | null
+          id: string
+          performed_by: string | null
+          reason: string
+          tenant_id: string
+          to_partner_id: string | null
+          to_support_owner: string | null
+        }
+        Insert: {
+          created_at?: string
+          from_partner_id?: string | null
+          from_support_owner?: string | null
+          id?: string
+          performed_by?: string | null
+          reason: string
+          tenant_id: string
+          to_partner_id?: string | null
+          to_support_owner?: string | null
+        }
+        Update: {
+          created_at?: string
+          from_partner_id?: string | null
+          from_support_owner?: string | null
+          id?: string
+          performed_by?: string | null
+          reason?: string
+          tenant_id?: string
+          to_partner_id?: string | null
+          to_support_owner?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_partner_transfers_from_partner_id_fkey"
+            columns: ["from_partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_partner_transfers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_partner_transfers_to_partner_id_fkey"
+            columns: ["to_partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_savings_baselines: {
+        Row: {
+          baseline_hdd: number | null
+          baseline_kwh_normalized: number
+          baseline_kwh_raw: number
+          baseline_source: Database["public"]["Enums"]["savings_baseline_source"]
+          calculation_details: Json
+          contract_id: string
+          coverage_months: number
+          created_at: string
+          data_quality: string
+          energy_type: string
+          id: string
+          override_reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          baseline_hdd?: number | null
+          baseline_kwh_normalized?: number
+          baseline_kwh_raw?: number
+          baseline_source?: Database["public"]["Enums"]["savings_baseline_source"]
+          calculation_details?: Json
+          contract_id: string
+          coverage_months?: number
+          created_at?: string
+          data_quality?: string
+          energy_type: string
+          id?: string
+          override_reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          baseline_hdd?: number | null
+          baseline_kwh_normalized?: number
+          baseline_kwh_raw?: number
+          baseline_source?: Database["public"]["Enums"]["savings_baseline_source"]
+          calculation_details?: Json
+          contract_id?: string
+          coverage_months?: number
+          created_at?: string
+          data_quality?: string
+          energy_type?: string
+          id?: string
+          override_reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_savings_baselines_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_savings_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_savings_contracts: {
+        Row: {
+          aicono_share_pct: number
+          baseline_year: number
+          created_at: string
+          created_by: string | null
+          fixed_price_eur_per_kwh: Json
+          id: string
+          notes: string | null
+          partner_share_pct_of_aicono: number
+          price_basis: Database["public"]["Enums"]["savings_price_basis"]
+          start_year: number
+          status: Database["public"]["Enums"]["savings_contract_status"]
+          tenant_id: string
+          updated_at: string
+          weather_normalize: boolean
+        }
+        Insert: {
+          aicono_share_pct?: number
+          baseline_year: number
+          created_at?: string
+          created_by?: string | null
+          fixed_price_eur_per_kwh?: Json
+          id?: string
+          notes?: string | null
+          partner_share_pct_of_aicono?: number
+          price_basis?: Database["public"]["Enums"]["savings_price_basis"]
+          start_year: number
+          status?: Database["public"]["Enums"]["savings_contract_status"]
+          tenant_id: string
+          updated_at?: string
+          weather_normalize?: boolean
+        }
+        Update: {
+          aicono_share_pct?: number
+          baseline_year?: number
+          created_at?: string
+          created_by?: string | null
+          fixed_price_eur_per_kwh?: Json
+          id?: string
+          notes?: string | null
+          partner_share_pct_of_aicono?: number
+          price_basis?: Database["public"]["Enums"]["savings_price_basis"]
+          start_year?: number
+          status?: Database["public"]["Enums"]["savings_contract_status"]
+          tenant_id?: string
+          updated_at?: string
+          weather_normalize?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_savings_contracts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_savings_settlements: {
+        Row: {
+          aicono_amount_eur: number
+          approved_at: string | null
+          approved_by: string | null
+          contract_id: string
+          created_at: string
+          id: string
+          invoice_ref: string | null
+          notes: string | null
+          partner_amount_eur: number
+          per_energy_type: Json
+          period_year: number
+          status: Database["public"]["Enums"]["savings_settlement_status"]
+          tenant_retained_eur: number
+          total_savings_eur: number
+          updated_at: string
+        }
+        Insert: {
+          aicono_amount_eur?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          contract_id: string
+          created_at?: string
+          id?: string
+          invoice_ref?: string | null
+          notes?: string | null
+          partner_amount_eur?: number
+          per_energy_type?: Json
+          period_year: number
+          status?: Database["public"]["Enums"]["savings_settlement_status"]
+          tenant_retained_eur?: number
+          total_savings_eur?: number
+          updated_at?: string
+        }
+        Update: {
+          aicono_amount_eur?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          contract_id?: string
+          created_at?: string
+          id?: string
+          invoice_ref?: string | null
+          notes?: string | null
+          partner_amount_eur?: number
+          per_energy_type?: Json
+          period_year?: number
+          status?: Database["public"]["Enums"]["savings_settlement_status"]
+          tenant_retained_eur?: number
+          total_savings_eur?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_savings_settlements_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_savings_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_self_tariffs: {
         Row: {
           base_fee_monthly: number
@@ -5851,15 +14448,47 @@ export type Database = {
           },
         ]
       }
+      tenant_support_users: {
+        Row: {
+          auth_user_id: string
+          created_at: string
+          support_email: string
+          tenant_id: string
+        }
+        Insert: {
+          auth_user_id: string
+          created_at?: string
+          support_email: string
+          tenant_id: string
+        }
+        Update: {
+          auth_user_id?: string
+          created_at?: string
+          support_email?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_support_users_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenants: {
         Row: {
           address: string | null
+          auto_logout_enabled: boolean
+          auto_logout_minutes: number
           branding: Json
           city: string | null
           contact_email: string | null
           contact_person: string | null
           contact_phone: string | null
           created_at: string
+          deleted_at: string | null
           house_number: string | null
           id: string
           is_aicono_member: boolean
@@ -5867,6 +14496,8 @@ export type Database = {
           lexware_contact_id: string | null
           logo_url: string | null
           name: string
+          onboarding_completed: boolean
+          partner_id: string | null
           payment_method: string
           postal_code: string | null
           remote_support_enabled: boolean
@@ -5877,21 +14508,33 @@ export type Database = {
           sepa_iban: string | null
           sepa_mandate_date: string | null
           sepa_mandate_ref: string | null
+          show_empty_widgets: boolean
           show_manual_meters: boolean
           slug: string
+          status: string
           street: string | null
+          support_owner: string
           support_price_per_15min: number
+          suspended_at: string | null
+          suspended_reason: string | null
+          task_auto_archive_days: number
+          task_auto_delete_days: number
+          task_protect_external: boolean
+          tenant_type: string
           updated_at: string
           week_start_day: number
         }
         Insert: {
           address?: string | null
+          auto_logout_enabled?: boolean
+          auto_logout_minutes?: number
           branding?: Json
           city?: string | null
           contact_email?: string | null
           contact_person?: string | null
           contact_phone?: string | null
           created_at?: string
+          deleted_at?: string | null
           house_number?: string | null
           id?: string
           is_aicono_member?: boolean
@@ -5899,6 +14542,8 @@ export type Database = {
           lexware_contact_id?: string | null
           logo_url?: string | null
           name: string
+          onboarding_completed?: boolean
+          partner_id?: string | null
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
@@ -5909,21 +14554,33 @@ export type Database = {
           sepa_iban?: string | null
           sepa_mandate_date?: string | null
           sepa_mandate_ref?: string | null
+          show_empty_widgets?: boolean
           show_manual_meters?: boolean
           slug: string
+          status?: string
           street?: string | null
+          support_owner?: string
           support_price_per_15min?: number
+          suspended_at?: string | null
+          suspended_reason?: string | null
+          task_auto_archive_days?: number
+          task_auto_delete_days?: number
+          task_protect_external?: boolean
+          tenant_type?: string
           updated_at?: string
           week_start_day?: number
         }
         Update: {
           address?: string | null
+          auto_logout_enabled?: boolean
+          auto_logout_minutes?: number
           branding?: Json
           city?: string | null
           contact_email?: string | null
           contact_person?: string | null
           contact_phone?: string | null
           created_at?: string
+          deleted_at?: string | null
           house_number?: string | null
           id?: string
           is_aicono_member?: boolean
@@ -5931,6 +14588,8 @@ export type Database = {
           lexware_contact_id?: string | null
           logo_url?: string | null
           name?: string
+          onboarding_completed?: boolean
+          partner_id?: string | null
           payment_method?: string
           postal_code?: string | null
           remote_support_enabled?: boolean
@@ -5941,14 +14600,31 @@ export type Database = {
           sepa_iban?: string | null
           sepa_mandate_date?: string | null
           sepa_mandate_ref?: string | null
+          show_empty_widgets?: boolean
           show_manual_meters?: boolean
           slug?: string
+          status?: string
           street?: string | null
+          support_owner?: string
           support_price_per_15min?: number
+          suspended_at?: string | null
+          suspended_reason?: string | null
+          task_auto_archive_days?: number
+          task_auto_delete_days?: number
+          task_protect_external?: boolean
+          tenant_type?: string
           updated_at?: string
           week_start_day?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tenants_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_invitations: {
         Row: {
@@ -6056,6 +14732,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_role_audit_log: {
+        Row: {
+          id: string
+          new_role: Database["public"]["Enums"]["app_role"] | null
+          old_role: Database["public"]["Enums"]["app_role"] | null
+          operation: string
+          performed_at: string
+          performed_by: string | null
+          performed_by_email: string | null
+          target_user_id: string
+        }
+        Insert: {
+          id?: string
+          new_role?: Database["public"]["Enums"]["app_role"] | null
+          old_role?: Database["public"]["Enums"]["app_role"] | null
+          operation: string
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_email?: string | null
+          target_user_id: string
+        }
+        Update: {
+          id?: string
+          new_role?: Database["public"]["Enums"]["app_role"] | null
+          old_role?: Database["public"]["Enums"]["app_role"] | null
+          operation?: string
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_email?: string | null
+          target_user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -6083,7 +14792,10 @@ export type Database = {
           id: string
           operator: string
           sort_order: number
-          source_meter_id: string
+          source_all_charge_points: boolean
+          source_charge_point_group_id: string | null
+          source_charge_point_id: string | null
+          source_meter_id: string | null
           virtual_meter_id: string
         }
         Insert: {
@@ -6091,7 +14803,10 @@ export type Database = {
           id?: string
           operator?: string
           sort_order?: number
-          source_meter_id: string
+          source_all_charge_points?: boolean
+          source_charge_point_group_id?: string | null
+          source_charge_point_id?: string | null
+          source_meter_id?: string | null
           virtual_meter_id: string
         }
         Update: {
@@ -6099,10 +14814,27 @@ export type Database = {
           id?: string
           operator?: string
           sort_order?: number
-          source_meter_id?: string
+          source_all_charge_points?: boolean
+          source_charge_point_group_id?: string | null
+          source_charge_point_id?: string | null
+          source_meter_id?: string | null
           virtual_meter_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "virtual_meter_sources_source_charge_point_group_id_fkey"
+            columns: ["source_charge_point_group_id"]
+            isOneToOne: false
+            referencedRelation: "charge_point_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "virtual_meter_sources_source_charge_point_id_fkey"
+            columns: ["source_charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "virtual_meter_sources_source_meter_id_fkey"
             columns: ["source_meter_id"]
@@ -6118,6 +14850,155 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      wallbox_modbus_instances: {
+        Row: {
+          charge_point_id: string | null
+          created_at: string
+          created_by: string | null
+          gateway_id: string | null
+          id: string
+          label: string | null
+          last_error: string | null
+          last_seen_at: string | null
+          location_id: string | null
+          modbus_host: string
+          modbus_port: number
+          provision_status: string
+          template_id: string
+          tenant_id: string
+          unit_id: number
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          charge_point_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          gateway_id?: string | null
+          id?: string
+          label?: string | null
+          last_error?: string | null
+          last_seen_at?: string | null
+          location_id?: string | null
+          modbus_host: string
+          modbus_port?: number
+          provision_status?: string
+          template_id: string
+          tenant_id: string
+          unit_id?: number
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          charge_point_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          gateway_id?: string | null
+          id?: string
+          label?: string | null
+          last_error?: string | null
+          last_seen_at?: string | null
+          location_id?: string | null
+          modbus_host?: string
+          modbus_port?: number
+          provision_status?: string
+          template_id?: string
+          tenant_id?: string
+          unit_id?: number
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallbox_modbus_instances_charge_point_id_fkey"
+            columns: ["charge_point_id"]
+            isOneToOne: false
+            referencedRelation: "charge_points"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wallbox_modbus_instances_gateway_id_fkey"
+            columns: ["gateway_id"]
+            isOneToOne: false
+            referencedRelation: "gateway_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wallbox_modbus_instances_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wallbox_modbus_instances_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "wallbox_modbus_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wallbox_modbus_templates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          default_port: number
+          default_unit_id: number
+          firmware_max: string | null
+          firmware_min: string | null
+          id: string
+          is_active: boolean
+          model: string
+          notes: string | null
+          poll_intervals: Json
+          read_map: Json
+          status_map: Json
+          updated_at: string
+          vendor: string
+          version: number
+          write_map: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          default_port?: number
+          default_unit_id?: number
+          firmware_max?: string | null
+          firmware_min?: string | null
+          id?: string
+          is_active?: boolean
+          model: string
+          notes?: string | null
+          poll_intervals?: Json
+          read_map?: Json
+          status_map?: Json
+          updated_at?: string
+          vendor: string
+          version?: number
+          write_map?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          default_port?: number
+          default_unit_id?: number
+          firmware_max?: string | null
+          firmware_min?: string | null
+          id?: string
+          is_active?: boolean
+          model?: string
+          notes?: string | null
+          poll_intervals?: Json
+          read_map?: Json
+          status_map?: Json
+          updated_at?: string
+          vendor?: string
+          version?: number
+          write_map?: Json
+        }
+        Relationships: []
       }
       weather_degree_days: {
         Row: {
@@ -6173,6 +15054,39 @@ export type Database = {
           },
         ]
       }
+      worker_controls: {
+        Row: {
+          description: string | null
+          display_name: string
+          enabled: boolean
+          note: string | null
+          paused_at: string | null
+          paused_by: string | null
+          updated_at: string
+          worker_key: string
+        }
+        Insert: {
+          description?: string | null
+          display_name: string
+          enabled?: boolean
+          note?: string | null
+          paused_at?: string | null
+          paused_by?: string | null
+          updated_at?: string
+          worker_key: string
+        }
+        Update: {
+          description?: string | null
+          display_name?: string
+          enabled?: boolean
+          note?: string | null
+          paused_at?: string | null
+          paused_by?: string | null
+          updated_at?: string
+          worker_key?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       charging_users_public: {
@@ -6220,20 +15134,175 @@ export type Database = {
           },
         ]
       }
+      meter_data_quality_v: {
+        Row: {
+          day: string | null
+          delta_kwh: number | null
+          delta_pct: number | null
+          five_min_bezug_kwh: number | null
+          five_min_coverage_ratio: number | null
+          five_min_einspeisung_kwh: number | null
+          five_min_kwh: number | null
+          five_min_last_bucket: string | null
+          five_min_sample_count: number | null
+          loxone_kwh: number | null
+          loxone_source: string | null
+          loxone_updated_at: string | null
+          meter_id: string | null
+          status: string | null
+          tenant_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      admin_top_disk_readers: {
+        Args: { limit_n?: number }
+        Returns: {
+          calls: number
+          mean_ms: number
+          query: string
+          read_ratio: number
+          rolname: string
+          shared_blks_hit: number
+          shared_blks_read: number
+          total_ms: number
+        }[]
+      }
       aggregate_pv_actual_hourly: {
         Args: { p_from?: string; p_to?: string }
         Returns: number
+      }
+      aggregate_sensor_readings_5min: {
+        Args: { _max_rows?: number; _since?: string; _until?: string }
+        Returns: Json
+      }
+      aicono_fleet_stats_24h: {
+        Args: never
+        Returns: {
+          events_24h: number
+          gateway_device_id: string
+          last_disconnect_at: string
+          last_disconnect_code: number
+          last_disconnect_reason: string
+          reconnects_24h: number
+          seamless_recycles_24h: number
+          sessions_24h: number
+        }[]
+      }
+      backfill_meter_power_hourly: {
+        Args: { p_days?: number }
+        Returns: number
+      }
+      bootstrap_cron_settings: {
+        Args: { p_key: string; p_url: string }
+        Returns: undefined
       }
       bootstrap_user_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      bridge_event_log_cleanup: { Args: never; Returns: undefined }
+      can_access_document: {
+        Args: { _action?: string; _doc_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_access_sales_project: {
+        Args: { _project_id: string }
+        Returns: boolean
+      }
+      cleanup_bridge_raw_samples: { Args: never; Returns: undefined }
+      cleanup_charge_point_uptime_snapshots: { Args: never; Returns: number }
+      cleanup_cron_job_history: { Args: never; Returns: number }
       cleanup_expired_backups: { Args: never; Returns: number }
+      cleanup_loxone_pending_writes: { Args: never; Returns: number }
+      cleanup_meter_power_readings_5min: {
+        Args: {
+          p_batch_size?: number
+          p_max_batches?: number
+          p_retention_days?: number
+        }
+        Returns: number
+      }
+      cleanup_old_audit_logs: { Args: never; Returns: number }
       cleanup_old_infra_metrics: { Args: never; Returns: number }
+      cleanup_old_node_metrics: { Args: never; Returns: number }
       cleanup_old_ocpp_logs: { Args: never; Returns: number }
+      cleanup_pg_net_responses: { Args: never; Returns: number }
+      cleanup_sensor_readings_5min: { Args: never; Returns: undefined }
+      cleanup_sensor_readings_daily: { Args: never; Returns: number }
+      cleanup_sensor_readings_hourly: { Args: never; Returns: number }
+      cleanup_sensor_readings_raw: { Args: never; Returns: undefined }
+      cleanup_stale_integration_errors: { Args: never; Returns: number }
+      close_orphan_gateway_ws_sessions: { Args: never; Returns: number }
+      close_orphan_loxone_ws_sessions: {
+        Args: { _location_integration_id: string; _tenant_id: string }
+        Returns: number
+      }
       collect_db_metrics: { Args: never; Returns: Json }
+      community_data_quality: {
+        Args: { p_community_id: string }
+        Returns: {
+          active_run_at: string
+          assets_total: number
+          coverage_pct: number
+          last_reading_at: string
+          members_total: number
+          members_with_recent_data: number
+        }[]
+      }
+      community_marketplace_increment_view: {
+        Args: { p_slug: string }
+        Returns: undefined
+      }
+      community_marketplace_public_detail: {
+        Args: { p_slug: string }
+        Returns: {
+          community_id: string
+          contact_email: string
+          created_at: string
+          current_members: number
+          feed_in_ct_kwh: number
+          hero_image_url: string
+          long_description: string
+          max_members: number
+          price_ct_kwh: number
+          region_city: string
+          region_plz: string
+          short_description: string
+          slug: string
+          title: string
+          total_capacity_kw: number
+        }[]
+      }
+      community_marketplace_public_listings: {
+        Args: { p_plz?: string }
+        Returns: {
+          created_at: string
+          current_members: number
+          feed_in_ct_kwh: number
+          hero_image_url: string
+          max_members: number
+          price_ct_kwh: number
+          region_city: string
+          region_plz: string
+          short_description: string
+          slug: string
+          title: string
+          total_capacity_kw: number
+        }[]
+      }
+      compact_meter_power_readings_15min: {
+        Args: {
+          p_max_batches?: number
+          p_max_groups?: number
+          p_retention_days?: number
+        }
+        Returns: {
+          groups_written: number
+          rows_removed: number
+        }[]
+      }
       compact_power_readings_day: {
         Args: { p_day?: string }
         Returns: {
@@ -6245,11 +15314,93 @@ export type Database = {
         Args: { p_day?: string }
         Returns: number
       }
+      cron_schedule_collisions: {
+        Args: never
+        Returns: {
+          job_count: number
+          jobs: string
+          schedule: string
+        }[]
+      }
+      diagnose_meter_daily_values: {
+        Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
+        Returns: {
+          archived_kwh: number
+          archived_source: string
+          day: string
+          five_min_kwh: number
+          live_kwh: number
+          meter_id: string
+          status: string
+        }[]
+      }
+      email_exists_anywhere: {
+        Args: { _email: string }
+        Returns: {
+          context: string
+          exists_flag: boolean
+        }[]
+      }
       ensure_at_least_one_admin: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      ensure_bridge_miniserver_link: {
+        Args: {
+          p_connection_kind?: Database["public"]["Enums"]["bridge_connection_kind"]
+          p_location_id: string
+          p_serial: string
+          p_tenant_id: string
+        }
+        Returns: string
+      }
+      ensure_meter_power_5min_partitions: {
+        Args: { p_months_ahead?: number }
+        Returns: number
+      }
+      evaluate_monitoring_rules: { Args: never; Returns: number }
+      find_duplicate_meters: {
+        Args: never
+        Returns: {
+          duplicate_count: number
+          location_integration_id: string
+          meter_ids: string[]
+          sensor_uuid_key: string
+          tenant_id: string
+        }[]
+      }
       get_auth_user_email: { Args: never; Returns: string }
+      get_charge_point_daily_uptime: {
+        Args: { p_charge_point_id: string; p_days?: number }
+        Returns: {
+          day: string
+          online: number
+          total: number
+        }[]
+      }
+      get_charge_point_uptime_pct: {
+        Args: { p_charge_point_id: string; p_days?: number }
+        Returns: number
+      }
+      get_location_main_meter: {
+        Args: { p_location_id: string }
+        Returns: string
+      }
+      get_meter_daily_status: {
+        Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
+        Returns: {
+          day: string
+          delta_kwh: number
+          delta_pct: number
+          five_min_coverage_ratio: number
+          five_min_kwh: number
+          five_min_last_bucket: string
+          loxone_kwh: number
+          loxone_source: string
+          meter_id: string
+          status: string
+        }[]
+      }
       get_meter_daily_totals: {
         Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
         Returns: {
@@ -6267,6 +15418,24 @@ export type Database = {
           meter_id: string
         }[]
       }
+      get_meter_daily_totals_split_with_fallback: {
+        Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
+        Returns: {
+          bezug: number
+          day: string
+          einspeisung: number
+          meter_id: string
+          source: string
+        }[]
+      }
+      get_meter_daily_totals_with_fallback: {
+        Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
+        Returns: {
+          day: string
+          meter_id: string
+          total_value: number
+        }[]
+      }
       get_meter_period_sums: {
         Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
         Returns: {
@@ -6274,12 +15443,63 @@ export type Database = {
           total_value: number
         }[]
       }
+      get_meter_period_sums_with_fallback: {
+        Args: { p_from_date: string; p_meter_ids: string[]; p_to_date: string }
+        Returns: {
+          meter_id: string
+          total_value: number
+        }[]
+      }
+      get_meter_power_gauge_seed: {
+        Args: {
+          _day_end: string
+          _day_start: string
+          _fresh_cutoff: string
+          _meter_ids: string[]
+        }
+        Returns: {
+          latest_at: string
+          latest_value: number
+          meter_id: string
+          peak_abs: number
+        }[]
+      }
+      get_meter_totals_auto: {
+        Args: { p_from: string; p_meter_ids: string[]; p_to: string }
+        Returns: {
+          bucket_start: string
+          consumption_kwh: number
+          coverage_ratio: number
+          export_kwh: number
+          granularity: string
+          meter_id: string
+        }[]
+      }
+      get_partner_branding_for_tenant: {
+        Args: { _tenant_id: string }
+        Returns: Json
+      }
       get_power_readings_5min: {
         Args: { p_end: string; p_meter_ids: string[]; p_start: string }
         Returns: {
           bucket: string
           meter_id: string
           power_avg: number
+        }[]
+      }
+      get_power_series_auto: {
+        Args: {
+          p_end: string
+          p_max_points?: number
+          p_meter_ids: string[]
+          p_start: string
+        }
+        Returns: {
+          bucket: string
+          meter_id: string
+          power_avg: number
+          power_max: number
+          resolution_minutes: number
         }[]
       }
       get_pv_actual_daily_sums: {
@@ -6354,7 +15574,29 @@ export type Database = {
           estimated_kwh: number
         }[]
       }
+      get_sensor_readings_5min_multi: {
+        Args: {
+          _from: string
+          _limit_per_meter?: number
+          _meter_ids: string[]
+          _to: string
+        }
+        Returns: {
+          bucket: string
+          meter_id: string
+          value_avg: number
+          value_max: number
+          value_min: number
+        }[]
+      }
+      get_tenant_status: { Args: { _tenant_id: string }; Returns: string }
+      get_user_email: { Args: never; Returns: string }
+      get_user_partner_id: { Args: never; Returns: string }
       get_user_tenant_id: { Args: never; Returns: string }
+      guarded_cleanup_bridge_raw_samples: { Args: never; Returns: undefined }
+      guarded_cleanup_sensor_readings_raw: { Args: never; Returns: undefined }
+      guarded_rollup_meter_power_hourly: { Args: never; Returns: undefined }
+      guarded_rollup_sensor_hourly: { Args: never; Returns: undefined }
       has_location_access: {
         Args: { _location_id: string; _user_id: string }
         Returns: boolean
@@ -6370,14 +15612,170 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_app_tenant_user: { Args: { _user_id: string }; Returns: boolean }
+      is_document_category_in_tenant: {
+        Args: { _category_id: string; _tenant_id: string }
+        Returns: boolean
+      }
       is_own_profile: { Args: { profile_user_id: string }; Returns: boolean }
+      is_partner_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_partner_member:
+        | { Args: { _user_id: string }; Returns: boolean }
+        | { Args: { _partner_id: string; _user_id: string }; Returns: boolean }
+      is_support_user: { Args: { _user_id: string }; Returns: boolean }
+      is_tenant_member: {
+        Args: { _tenant_id: string; _user_id: string }
+        Returns: boolean
+      }
+      latest_meter_cumulative: {
+        Args: { _meter_ids: string[] }
+        Returns: {
+          kwh_total: number
+          meter_id: string
+          reading_at: string
+        }[]
+      }
+      merge_duplicate_meter: {
+        Args: {
+          _actor_user_id?: string
+          _duplicate_id: string
+          _master_id: string
+        }
+        Returns: Json
+      }
+      next_adhoc_invoice_number: {
+        Args: { _tenant_id: string }
+        Returns: string
+      }
       next_charging_invoice_number: {
         Args: { p_tenant_id: string; p_year: number }
         Returns: string
       }
+      normalize_rfid_tag: {
+        Args: { _mode: string; _raw: string }
+        Returns: string
+      }
+      partner_has_tenant_access: {
+        Args: { _tenant_id: string; _user_id: string }
+        Returns: boolean
+      }
+      partner_member_can: {
+        Args: { _permission: string; _user_id: string }
+        Returns: boolean
+      }
+      partner_reporting_growth: {
+        Args: { _partner_id: string }
+        Returns: {
+          month_start: string
+          mrr_eur: number
+          tenants_total: number
+        }[]
+      }
+      partner_reporting_modules: {
+        Args: { _partner_id: string }
+        Returns: {
+          module_code: string
+          tenants_count: number
+        }[]
+      }
+      partner_reporting_overview: {
+        Args: { _partner_id: string }
+        Returns: Json
+      }
+      purge_meter_power_readings_retention: { Args: never; Returns: undefined }
+      refresh_meter_daily_totals: {
+        Args: {
+          p_from: string
+          p_meter_ids?: string[]
+          p_tenant_id?: string
+          p_to: string
+        }
+        Returns: number
+      }
+      refresh_meter_monthly_totals: {
+        Args: {
+          p_from: string
+          p_meter_ids?: string[]
+          p_tenant_id?: string
+          p_to: string
+        }
+        Returns: number
+      }
+      refresh_meter_period_totals_5min: {
+        Args: { p_from?: string; p_to?: string }
+        Returns: number
+      }
+      refresh_meter_weekly_totals: {
+        Args: {
+          p_from: string
+          p_meter_ids?: string[]
+          p_tenant_id?: string
+          p_to: string
+        }
+        Returns: number
+      }
+      release_gateway_refresh_lock: {
+        Args: { p_integration_id: string; p_owner: string }
+        Returns: undefined
+      }
+      resolve_partner_branding_by_host: {
+        Args: { _host: string }
+        Returns: Json
+      }
+      rollup_meter_power_hourly: {
+        Args: { p_lookback_hours?: number }
+        Returns: number
+      }
+      rollup_sensor_daily: { Args: { lookback_days?: number }; Returns: number }
+      rollup_sensor_hourly: {
+        Args: { lookback_hours?: number }
+        Returns: number
+      }
+      rollup_sensor_monthly: {
+        Args: { lookback_months?: number }
+        Returns: number
+      }
+      run_ems_cron_bundle: { Args: never; Returns: undefined }
+      run_meter_power_hourly_backfill_guarded: { Args: never; Returns: number }
+      snapshot_charge_point_uptime: { Args: never; Returns: number }
+      touch_location_integration_sync: {
+        Args: { _id: string; _min_interval_seconds?: number; _status: string }
+        Returns: undefined
+      }
+      try_acquire_gateway_refresh_lock: {
+        Args: {
+          p_integration_id: string
+          p_owner: string
+          p_ttl_seconds?: number
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      app_role: "admin" | "user" | "super_admin" | "sales_partner"
+      adhoc_payment_state:
+        | "created"
+        | "preauth_pending"
+        | "preauth_ok"
+        | "preauth_failed"
+        | "charging"
+        | "capture_pending"
+        | "captured"
+        | "partially_refunded"
+        | "refunded"
+        | "cancelled"
+        | "failed"
+      adhoc_rule_scope: "tenant" | "group" | "charge_point"
+      app_role:
+        | "admin"
+        | "user"
+        | "super_admin"
+        | "sales_partner"
+        | "community_member"
+        | "partner_admin"
+        | "partner_user"
+      bridge_connection_kind: "lan" | "cloud_dns" | "remote_connect"
+      bridge_event_severity: "debug" | "info" | "warn" | "error"
+      bridge_worker_status: "online" | "degraded" | "offline" | "disabled"
       device_class:
         | "meter"
         | "gateway"
@@ -6388,6 +15786,19 @@ export type Database = {
         | "cable"
         | "accessory"
         | "misc"
+      dlm_device_kind:
+        | "charge_point"
+        | "heat_pump"
+        | "battery"
+        | "generic_actuator"
+      document_scope:
+        | "tenant"
+        | "location"
+        | "meter"
+        | "charge_point"
+        | "gateway_device"
+        | "energy_storage"
+        | "energy_supplier_invoice"
       energy_type: "strom" | "gas" | "waerme" | "wasser"
       location_type: "einzelgebaeude" | "gebaeudekomplex" | "sonstiges"
       location_usage_type:
@@ -6400,6 +15811,29 @@ export type Database = {
         | "sonstiges"
         | "gewerbe"
         | "privat"
+      ocpi_role: "CPO" | "EMSP" | "HUB"
+      partner_member_role: "partner_admin" | "partner_user"
+      payment_event_direction: "inbound" | "outbound"
+      payment_provider_env: "sandbox" | "production"
+      payment_provider_type: "ccv" | "nayax" | "payter" | "adyen" | "other"
+      payment_terminal_status:
+        | "unknown"
+        | "online"
+        | "offline"
+        | "disabled"
+        | "error"
+      savings_baseline_source:
+        | "auto_from_meters"
+        | "manual_override"
+        | "invoice_based"
+      savings_contract_status: "draft" | "active" | "paused" | "terminated"
+      savings_price_basis: "current_year_avg" | "contract_fixed"
+      savings_settlement_status:
+        | "draft"
+        | "approved"
+        | "invoiced"
+        | "paid"
+        | "void"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -6415,12 +15849,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -6444,11 +15878,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -6469,11 +15903,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -6494,11 +15928,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -6511,11 +15945,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -6527,7 +15961,32 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user", "super_admin", "sales_partner"],
+      adhoc_payment_state: [
+        "created",
+        "preauth_pending",
+        "preauth_ok",
+        "preauth_failed",
+        "charging",
+        "capture_pending",
+        "captured",
+        "partially_refunded",
+        "refunded",
+        "cancelled",
+        "failed",
+      ],
+      adhoc_rule_scope: ["tenant", "group", "charge_point"],
+      app_role: [
+        "admin",
+        "user",
+        "super_admin",
+        "sales_partner",
+        "community_member",
+        "partner_admin",
+        "partner_user",
+      ],
+      bridge_connection_kind: ["lan", "cloud_dns", "remote_connect"],
+      bridge_event_severity: ["debug", "info", "warn", "error"],
+      bridge_worker_status: ["online", "degraded", "offline", "disabled"],
       device_class: [
         "meter",
         "gateway",
@@ -6538,6 +15997,21 @@ export const Constants = {
         "cable",
         "accessory",
         "misc",
+      ],
+      dlm_device_kind: [
+        "charge_point",
+        "heat_pump",
+        "battery",
+        "generic_actuator",
+      ],
+      document_scope: [
+        "tenant",
+        "location",
+        "meter",
+        "charge_point",
+        "gateway_device",
+        "energy_storage",
+        "energy_supplier_invoice",
       ],
       energy_type: ["strom", "gas", "waerme", "wasser"],
       location_type: ["einzelgebaeude", "gebaeudekomplex", "sonstiges"],
@@ -6551,6 +16025,32 @@ export const Constants = {
         "sonstiges",
         "gewerbe",
         "privat",
+      ],
+      ocpi_role: ["CPO", "EMSP", "HUB"],
+      partner_member_role: ["partner_admin", "partner_user"],
+      payment_event_direction: ["inbound", "outbound"],
+      payment_provider_env: ["sandbox", "production"],
+      payment_provider_type: ["ccv", "nayax", "payter", "adyen", "other"],
+      payment_terminal_status: [
+        "unknown",
+        "online",
+        "offline",
+        "disabled",
+        "error",
+      ],
+      savings_baseline_source: [
+        "auto_from_meters",
+        "manual_override",
+        "invoice_based",
+      ],
+      savings_contract_status: ["draft", "active", "paused", "terminated"],
+      savings_price_basis: ["current_year_avg", "contract_fixed"],
+      savings_settlement_status: [
+        "draft",
+        "approved",
+        "invoiced",
+        "paid",
+        "void",
       ],
     },
   },

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Über AICONO Hub</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --navy: #0A1F44;
+      --teal: #14B8A6;
+      --bg: #F8FAFC;
+      --text: #0A1F44;
+      --muted: #475569;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Montserrat', 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    header {
+      background: linear-gradient(135deg, var(--navy), #0F766E);
+      color: #fff;
+      padding: 32px 24px;
+      text-align: center;
+    }
+    header h1 { margin: 0; font-size: 28px; letter-spacing: 2px; }
+    header p { margin: 8px 0 0; color: #5EEAD4; letter-spacing: 3px; font-size: 12px; }
+    main { max-width: 760px; margin: 0 auto; padding: 32px 24px 64px; }
+    h2 { color: var(--navy); margin-top: 32px; border-bottom: 2px solid var(--teal); padding-bottom: 6px; }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px 24px;
+      box-shadow: 0 2px 10px rgba(10,31,68,0.06);
+      margin: 16px 0;
+    }
+    code { background: #E2E8F0; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+    a { color: var(--teal); }
+    footer { text-align: center; padding: 24px; color: var(--muted); font-size: 12px; }
+    ul { padding-left: 20px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AICONO HUB</h1>
+    <p>SMART ENERGY HUB</p>
+  </header>
+  <main>
+    <h2>Über dieses Gerät</h2>
+    <div class="card">
+      <p><strong>Produkt:</strong> AICONO Smart Energy Hub</p>
+      <p><strong>Hersteller:</strong> AICONO GmbH</p>
+      <p><strong>Support:</strong> <a href="mailto:support@aicono.org">support@aicono.org</a></p>
+    </div>
+
+    <h2>Open-Source-Lizenzen</h2>
+    <div class="card">
+      <p>
+        Dieses Produkt nutzt Open-Source-Software. Wir bedanken uns ausdrücklich
+        bei den jeweiligen Projekten und veröffentlichen die folgenden
+        Lizenzhinweise gemäß der Lizenzbedingungen:
+      </p>
+      <ul>
+        <li>
+          <strong>Home Assistant Operating System &amp; Home Assistant Core</strong>
+          – © Home Assistant Contributors. Lizenz: Apache 2.0.<br />
+          Quelle: <a href="https://github.com/home-assistant/operating-system">github.com/home-assistant/operating-system</a>
+        </li>
+        <li>
+          <strong>Linux Kernel</strong> – © Linus Torvalds &amp; Contributors. Lizenz: GPLv2.
+        </li>
+        <li>
+          <strong>BusyBox, Alpine-Komponenten, systemd</strong> – jeweilige GPL-/LGPL-Lizenzen.
+        </li>
+        <li>
+          <strong>kiosk-mode</strong> – © NemesisRE. Lizenz: MIT.
+        </li>
+      </ul>
+      <p>
+        Die vollständigen Lizenztexte sind auf dem Gerät unter
+        <code>/usr/share/licenses/</code> verfügbar und können auf Anfrage
+        zugesandt werden.
+      </p>
+    </div>
+
+    <h2>Erweiterte Einstellungen</h2>
+    <div class="card">
+      <p>
+        Diese Plattform basiert auf einer angepassten Home-Assistant-Distribution.
+        Erfahrene Nutzer können die zugrundeliegende Konfiguration über direkte
+        URLs erreichen:
+      </p>
+      <ul>
+        <li>Einstellungen: <code>/config/dashboard</code></li>
+        <li>Add-ons: <code>/hassio/dashboard</code></li>
+        <li>Entwicklerwerkzeuge: <code>/developer-tools/state</code></li>
+        <li>Logbuch: <code>/logbook</code></li>
+        <li>Verlauf: <code>/history</code></li>
+      </ul>
+      <p>
+        Diese Bereiche sind ausschließlich für die Einrichtung, Wartung und
+        Fehlerbehebung vorgesehen.
+      </p>
+    </div>
+  </main>
+  <footer>
+    © AICONO GmbH · Smart Energy Hub
+  </footer>
+</body>
+</html>

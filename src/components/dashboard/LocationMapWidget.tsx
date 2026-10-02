@@ -26,17 +26,18 @@ const LocationMapWidget = ({ locationId }: LocationMapWidgetProps) => {
   };
 
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-0">
+    <Card className="overflow-hidden h-full min-h-[350px] flex flex-col">
+      <CardContent className="p-0 flex-1 min-h-[350px]">
         {loading ? (
-          <div className="h-[350px] bg-muted/50 animate-pulse" />
+          <div className="h-full min-h-[350px] bg-muted/50 animate-pulse" />
         ) : (
-          <div className="h-[350px] overflow-hidden">
-            <LocationsMap 
-              locations={mapLocations} 
+          <div className="h-full min-h-[350px] overflow-hidden">
+            <LocationsMap
+              locations={mapLocations}
               onLocationClick={handleLocationClick}
-              className="h-full rounded-b-lg border-0"
+              className="h-full min-h-[350px] rounded-b-lg border-0"
               errorLocationIds={errorLocationIds}
+              showZoomControls={false}
             />
           </div>
         )}

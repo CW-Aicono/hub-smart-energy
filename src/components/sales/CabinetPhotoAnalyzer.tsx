@@ -61,7 +61,7 @@ export function CabinetPhotoAnalyzer({ distributionId, fotoUrl, kiAnalyse, onUpd
     const path = `${userRes.user.id}/${distributionId}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage
       .from("sales-photos")
-      .upload(path, file, { upsert: true, contentType: file.type });
+      .upload(path, file, { upsert: false, contentType: file.type });
     if (error) {
       toast.error("Upload fehlgeschlagen", { description: error.message });
       setUploading(false);

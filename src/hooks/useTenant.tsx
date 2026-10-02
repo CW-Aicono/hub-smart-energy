@@ -2,6 +2,9 @@ import { useState, useEffect, createContext, useContext, useCallback } from "rea
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useDemoMode } from "@/contexts/DemoMode";
+import { onImpersonationChanged } from "@/lib/supportView";
+import { downloadSecureStorageObject } from "@/lib/secureStorage";
+
 
 interface TenantBranding {
   primary_color: string;
@@ -15,6 +18,8 @@ interface TenantReportSettings {
   show_logo: boolean;
 }
 
+export type TenantType = "gewerbe_industrie" | "kommune" | "privat" | "sonstige";
+
 export interface Tenant {
   id: string;
   name: string;
@@ -27,11 +32,15 @@ export interface Tenant {
   contact_person: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  tenant_type: TenantType;
   branding: TenantBranding;
   logo_url: string | null;
   report_settings: TenantReportSettings;
   week_start_day: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   show_manual_meters: boolean;
+  show_empty_widgets: boolean;
+  auto_logout_enabled: boolean;
+  auto_logout_minutes: 10 | 20 | 30 | 60 | 120;
   created_at: string;
   updated_at: string;
 }
@@ -45,6 +54,10 @@ interface TenantContextType {
 }
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
+
+export function useTenantOptional() {
+  return useContext(TenantContext) ?? null;
+}
 
 const DEFAULT_BRANDING: TenantBranding = {
   primary_color: "#1a365d",
@@ -124,11 +137,15 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         contact_person: "Max Mustermann",
         contact_email: "info@stadtwerke-musterstadt.de",
         contact_phone: "+49 89 12345678",
+        tenant_type: "kommune",
         branding: DEFAULT_BRANDING,
         logo_url: null,
         report_settings: { footer_text: "Stadtwerke Musterstadt GmbH", show_logo: true },
         week_start_day: 1,
         show_manual_meters: false,
+        show_empty_widgets: false,
+        auto_logout_enabled: true,
+        auto_logout_minutes: 30,
         created_at: "2025-01-01T00:00:00Z",
         updated_at: "2025-01-01T00:00:00Z",
       };
@@ -162,12 +179,14 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
         return;
       }
+      const targetTenantId = profile.tenant_id;
 
       const { data, error: fetchError } = await supabase
         .from("tenants")
         .select("*")
-        .eq("id", profile.tenant_id)
+        .eq("id", targetTenantId)
         .single();
+
 
       if (fetchError) {
         // User might not have a tenant yet
@@ -177,26 +196,50 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           setError(fetchError.message);
         }
       } else if (data) {
-        // Resolve signed URL for logo if stored as a path
         let resolvedLogoUrl = data.logo_url;
         if (resolvedLogoUrl && !resolvedLogoUrl.startsWith('http')) {
-          const { data: signedData } = await supabase.storage
-            .from('tenant-assets')
-            .createSignedUrl(resolvedLogoUrl, 3600);
-          resolvedLogoUrl = signedData?.signedUrl ?? null;
+          resolvedLogoUrl = await downloadSecureStorageObject('tenant-assets', resolvedLogoUrl);
+        }
+
+        let branding = (data.branding as unknown as TenantBranding) || DEFAULT_BRANDING;
+
+        // Stage 7: Partner White-Label overrides tenant branding (if enabled)
+        try {
+          const { data: pb } = await supabase.rpc("get_partner_branding_for_tenant", {
+            _tenant_id: targetTenantId,
+          });
+          const partnerBranding = pb as any;
+          if (partnerBranding && partnerBranding.white_label_enabled) {
+            branding = {
+              primary_color: partnerBranding.primary_color || branding.primary_color,
+              secondary_color: partnerBranding.secondary_color || branding.secondary_color,
+              accent_color: partnerBranding.accent_color || branding.accent_color,
+              font_family: branding.font_family,
+            };
+            if (partnerBranding.logo_url) {
+              resolvedLogoUrl = partnerBranding.logo_url;
+            }
+          }
+        } catch {
+          // ignore — fall back to tenant branding
         }
 
         const tenantData: Tenant = {
           ...data,
-          branding: (data.branding as unknown as TenantBranding) || DEFAULT_BRANDING,
+          tenant_type: ((data as any).tenant_type as TenantType) ?? "kommune",
+          branding,
           report_settings: (data.report_settings as unknown as TenantReportSettings) || { footer_text: "", show_logo: true },
           week_start_day: (data.week_start_day as 0 | 1 | 2 | 3 | 4 | 5 | 6) ?? 1,
           show_manual_meters: data.show_manual_meters ?? false,
+          show_empty_widgets: (data as any).show_empty_widgets ?? false,
+          auto_logout_enabled: (data as any).auto_logout_enabled ?? true,
+          auto_logout_minutes: (((data as any).auto_logout_minutes ?? 30) as 10 | 20 | 30 | 60 | 120),
           logo_url: resolvedLogoUrl,
         };
         setTenant(tenantData);
         applyBrandingToCSS(tenantData.branding);
       }
+
     } catch (err) {
       setError("Failed to fetch tenant");
     } finally {
@@ -207,6 +250,12 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchTenant();
   }, [fetchTenant]);
+
+  // Re-fetch when a super-admin enters/exits the Remote-Support view.
+  useEffect(() => {
+    return onImpersonationChanged(() => { fetchTenant(); });
+  }, [fetchTenant]);
+
 
   const updateBranding = async (branding: Partial<TenantBranding>) => {
     if (!tenant) return { error: new Error("No tenant") };

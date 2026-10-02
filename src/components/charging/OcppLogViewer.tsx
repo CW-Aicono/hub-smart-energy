@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useOcppLogs, OcppLogEntry } from "@/hooks/useOcppLogs";
 import { useChargePoints } from "@/hooks/useChargePoints";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,26 +6,80 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, ChevronDown, ChevronRight, ArrowDownUp, Pause, Play, Wifi, WifiOff } from "lucide-react";
+import { RefreshCw, ChevronDown, ChevronRight, ArrowDownUp, Pause, Play, Wifi, WifiOff, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 
 interface OcppLogViewerProps {
   chargePointId?: string;
+  /**
+   * Optionale OCPP-ID des Ladepunkts. Im Super-Admin gibt es keinen Mandanten,
+   * daher liefert `useChargePoints` dort nichts — die zweite ID muss dann von
+   * außen mitgegeben werden.
+   */
+  ocppId?: string | null;
   showCpColumn?: boolean;
 }
 
-const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerProps) => {
-  const { logs, loading, paused, setPaused, refetch } = useOcppLogs(chargePointId);
-  const { chargePoints } = useChargePoints();
+const OcppLogViewer = ({ chargePointId, ocppId, showCpColumn = false }: OcppLogViewerProps) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterText, setFilterText] = useState("");
   const [directionFilter, setDirectionFilter] = useState<"all" | "incoming" | "outgoing" | "error">("all");
   const [messageTypeFilter, setMessageTypeFilter] = useState<string>("all");
+  const { chargePoints } = useChargePoints();
+  // Manche Frames (z. B. ausgehende Reset-Befehle + nachfolgende BootNotification)
+  // werden vom OCPP-Server mit der OCPP-ID statt der UUID geloggt. Daher beide
+  // IDs abfragen, damit nichts im Log fehlt.
+  const logIds = React.useMemo(() => {
+    if (!chargePointId) return undefined;
+    const cp = chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId);
+    const list = [chargePointId];
+    if (cp?.id && !list.includes(cp.id)) list.push(cp.id);
+    if (cp?.ocpp_id && !list.includes(cp.ocpp_id)) list.push(cp.ocpp_id);
+    if (ocppId && !list.includes(ocppId)) list.push(ocppId);
+    return list;
+    // Nur auf die tatsächlich relevanten ID-Werte hören, nicht auf das gesamte
+    // chargePoints-Array — sonst löst jedes Realtime-Update einen Reload aus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chargePointId, ocppId, chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId)?.id, chargePoints.find((c) => c.id === chargePointId || c.ocpp_id === chargePointId)?.ocpp_id]);
 
-  // Collect unique message types for the dropdown
+  const { logs, latestAt, loading, paused, setPaused, refetch } = useOcppLogs(logIds, messageTypeFilter);
+
+  // Warnhinweis nur, wenn insgesamt (über alle Nachrichtentypen) seit >15 Minuten
+  // nichts mehr ankommt. Ein aktiver Typfilter darf keinen Fehlalarm auslösen.
+  const staleMinutes = React.useMemo(() => {
+    if (loading || !latestAt) return null;
+    const newest = new Date(latestAt).getTime();
+    if (!newest) return null;
+    return Math.floor((Date.now() - newest) / 60000);
+  }, [latestAt, loading]);
+
+  // Alter des neuesten Eintrags im aktuell gefilterten Typ (nur Info, keine Warnung).
+  const filteredNewestAt = React.useMemo(() => {
+    if (logs.length === 0) return null;
+    const newest = logs.reduce(
+      (max, l) => Math.max(max, new Date(l.created_at).getTime()),
+      0,
+    );
+    return newest ? new Date(newest) : null;
+  }, [logs]);
+
+  // Standard OCPP 1.6 message types + types found in current logs
+  const STANDARD_OCPP_TYPES = [
+    "Authorize", "BootNotification", "CALLERROR", "CALLRESULT",
+    "ChangeAvailability", "ChangeConfiguration", "ClearCache",
+    "DataTransfer", "DiagnosticsStatusNotification", "FirmwareStatusNotification",
+    "GetConfiguration", "Heartbeat", "MeterValues", "RemoteStartTransaction",
+    "RemoteStopTransaction", "Reset", "StartTransaction", "StatusNotification",
+    "StopTransaction", "TriggerMessage", "UnlockConnector",
+  ];
+  // Einmal gesehene Typen merken, damit die Auswahlliste bei aktivem Filter
+  // nicht auf den gefilterten Typ zusammenschrumpft.
+  const seenTypesRef = React.useRef<Set<string>>(new Set());
+  logs.forEach((l) => { if (l.message_type) seenTypesRef.current.add(l.message_type); });
   const messageTypes = Array.from(
-    new Set(logs.map((l) => l.message_type).filter(Boolean) as string[])
+    new Set([...STANDARD_OCPP_TYPES, ...seenTypesRef.current])
   ).sort();
 
   // Detect Preparing→Available timeout (no StartTransaction in between)
@@ -74,6 +128,18 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
     return true;
   });
 
+  type LogSortKey = "time" | "direction" | "cp" | "type";
+  const { sorted: sortedLogs, sort, toggle } = useSortableData<any, LogSortKey>(filtered, (l, k) => {
+    switch (k) {
+      case "time": return new Date(l.created_at);
+      case "direction": return l.direction || "";
+      case "cp": return chargePoints.find((c: any) => c.id === l.charge_point_id || c.ocpp_id === l.charge_point_id)?.ocpp_id || l.charge_point_id;
+      case "type": return l.message_type || "";
+      default: return null;
+    }
+  }, { key: "time", direction: "desc" });
+
+
   const extractVendorErrorCode = (log: OcppLogEntry): string | null => {
     try {
       const raw = JSON.stringify(log.raw_message);
@@ -106,7 +172,8 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
         <div className="flex items-center gap-3">
           <CardTitle className="text-base">OCPP-Nachrichtenlog</CardTitle>
           {chargePointId && (() => {
-            const cp = chargePoints.find(c => c.ocpp_id === chargePointId);
+            // chargePointId is the UUID (cp.id), since logs store the UUID in charge_point_id
+            const cp = chargePoints.find(c => c.id === chargePointId || c.ocpp_id === chargePointId);
             if (!cp) return null;
             return cp.ws_connected ? (
               <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-xs gap-1">
@@ -163,8 +230,24 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
         </div>
       </CardHeader>
       <CardContent>
-        {loading ? (
+        {staleMinutes !== null && staleMinutes >= 15 && (
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-medium">
+                Seit {staleMinutes.toLocaleString("de-DE")} Minuten keine neue OCPP-Nachricht.
+              </p>
+              <p className="mt-1">
+                Die Wallbox ist verbunden, es kommen aber keine Log-Einträge an. Vermutlich ist das
+                Frame-Logging deaktiviert (Schalter <code>OCPP_FRAME_LOGGING_ENABLED</code> auf dem OCPP-Server
+                oder der Notfallmodus im Backend).
+              </p>
+            </div>
+          </div>
+        )}
+        {loading && logs.length === 0 ? (
           <p className="text-sm text-muted-foreground">Lade Logs...</p>
+
         ) : filtered.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <ArrowDownUp className="h-8 w-8 mx-auto mb-2 opacity-40" />
@@ -177,17 +260,16 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8"></TableHead>
-                  <TableHead className="w-40">Zeitstempel</TableHead>
-                  <TableHead className="w-24">Richtung</TableHead>
-                  {showCpColumn && <TableHead>Ladepunkt</TableHead>}
-                  <TableHead>Nachrichtentyp</TableHead>
+                  <SortableHead label="Zeitstempel" sortKey="time" sort={sort} onToggle={toggle} />
+                  <SortableHead label="Richtung" sortKey="direction" sort={sort} onToggle={toggle} />
+                  {showCpColumn && <SortableHead label="Ladepunkt" sortKey="cp" sort={sort} onToggle={toggle} />}
+                  <SortableHead label="Nachrichtentyp" sortKey="type" sort={sort} onToggle={toggle} />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((log) => (
-                  <>
+                {sortedLogs.map((log) => (
+                  <React.Fragment key={log.id}>
                     <TableRow
-                      key={log.id}
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
                     >
@@ -202,13 +284,17 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
                         <TableCell className="font-mono text-xs">
                           <span className="flex items-center gap-1.5">
                             {(() => {
-                              const cp = chargePoints.find(c => c.ocpp_id === log.charge_point_id);
+                              // log.charge_point_id is now the UUID; match by id, fall back to ocpp_id
+                              const cp = chargePoints.find(c => c.id === log.charge_point_id || c.ocpp_id === log.charge_point_id);
                               const connected = cp?.ws_connected;
                               return connected
                                 ? <Wifi className="h-3 w-3 text-emerald-500 shrink-0" />
                                 : <WifiOff className="h-3 w-3 text-muted-foreground shrink-0" />;
                             })()}
-                            {log.charge_point_id}
+                            {(() => {
+                              const cp = chargePoints.find(c => c.id === log.charge_point_id || c.ocpp_id === log.charge_point_id);
+                              return cp?.ocpp_id ?? log.charge_point_id;
+                            })()}
                           </span>
                         </TableCell>
                       )}
@@ -231,7 +317,7 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
                       </TableCell>
                     </TableRow>
                     {expandedId === log.id && (
-                      <TableRow key={`${log.id}-detail`}>
+                      <TableRow>
                         <TableCell colSpan={showCpColumn ? 5 : 4} className="bg-muted/30 p-0">
                           <pre className="text-xs font-mono p-4 overflow-x-auto whitespace-pre-wrap break-all max-h-64">
                             {JSON.stringify(log.raw_message, null, 2)}
@@ -239,13 +325,18 @@ const OcppLogViewer = ({ chargePointId, showCpColumn = false }: OcppLogViewerPro
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
           </div>
         )}
         <div className="mt-2 text-xs text-muted-foreground text-right">
+          {messageTypeFilter !== "all" && filteredNewestAt && (
+            <span className="mr-2">
+              Letzter Eintrag dieses Typs: {format(filteredNewestAt, "dd.MM.yy HH:mm:ss")} ·
+            </span>
+          )}
           {filtered.length} Nachricht{filtered.length !== 1 ? "en" : ""}
           {filtered.length !== logs.length && ` (${logs.length} gesamt)`}
         </div>

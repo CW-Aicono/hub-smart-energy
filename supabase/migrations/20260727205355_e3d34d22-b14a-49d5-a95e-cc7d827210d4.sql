@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.ensure_bridge_miniserver_link(TEXT, UUID, UUID, public.bridge_connection_kind) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.ensure_bridge_miniserver_link(TEXT, UUID, UUID, public.bridge_connection_kind) TO service_role;

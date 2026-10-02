@@ -23,18 +23,24 @@ export interface EnergyPrice {
   spot_markup_per_unit: number;
   meter_id: string | null;
   direction: EnergyPriceDirection;
+  price_includes_vat: boolean;
 }
 
 export function useEnergyPrices(locationId?: string) {
   const { user } = useAuth();
-  const { ready, insert: tenantInsert } = useTenantQuery();
+  const { ready, tenantId, insert: tenantInsert } = useTenantQuery();
   const [prices, setPrices] = useState<EnergyPrice[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchPrices = useCallback(async () => {
-    if (!user) return;
+    if (!user || !tenantId) return;
     setLoading(true);
-    let query = supabase.from("energy_prices").select("*").order("energy_type").order("valid_from", { ascending: false });
+    let query = supabase
+      .from("energy_prices")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .order("energy_type")
+      .order("valid_from", { ascending: false });
     if (locationId) {
       query = query.eq("location_id", locationId);
     }
@@ -45,7 +51,7 @@ export function useEnergyPrices(locationId?: string) {
       setPrices((data ?? []) as EnergyPrice[]);
     }
     setLoading(false);
-  }, [user, locationId]);
+  }, [user, tenantId, locationId]);
 
   useEffect(() => {
     fetchPrices();

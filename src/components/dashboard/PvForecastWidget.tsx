@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sun, CloudSun, Sparkles, ChevronLeft, ChevronRight, CloudOff } from "lucide-react";
+import PeriodPickerLabel from "./PeriodPickerLabel";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
@@ -106,6 +107,9 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
   const { t, language } = useTranslation();
   const T = (key: string) => t(key as any);
   const dateLocale = dfLocaleMap[language] || de;
+  const numberLocale = ({ de: "de-DE", en: "en-US", es: "es-ES", nl: "nl-NL" } as Record<string, string>)[language] || "de-DE";
+  const fmtNum = (v: number, digits = 0) =>
+    v.toLocaleString(numberLocale, { minimumFractionDigits: digits, maximumFractionDigits: digits });
   const cwPrefix = T("chart.cwPrefix");
   const tenantId = tenant?.id ?? null;
   const { forecast, isLoading, error } = usePvForecast(locationId);
@@ -122,8 +126,8 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
 
   const refDate = useMemo(() => addDays(new Date(), offset), [offset]);
   const refDateStr = toLocalDateStr(refDate);
-  const canGoForward = offset < 0;
   const isDay = selectedPeriod === "day";
+  const canGoForward = isDay ? offset < 1 : offset < 0;
   const isToday = offset === 0 && isDay;
   const fromDateStr = format(rangeStart, "yyyy-MM-dd");
   const toDateStr = format(rangeEnd, "yyyy-MM-dd");
@@ -336,17 +340,34 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
       const meterIds = await resolvePvMeterIds();
       if (meterIds.length === 0) return 0;
 
+      // "Jetzt": frischer Rohwert (≤ 15 Min), sonst jüngster 5-Min-Bucket.
+      const freshCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
       let totalKw = 0;
       for (const meterId of meterIds) {
         const { data } = await supabase
           .from("meter_power_readings")
           .select("power_value")
           .eq("meter_id", meterId)
+          .gte("recorded_at", freshCutoff)
           .order("recorded_at", { ascending: false })
           .limit(1);
-        if (data && data.length > 0) totalKw += Math.abs(data[0].power_value);
+        if (data && data.length > 0) {
+          totalKw += Math.abs(data[0].power_value);
+          continue;
+        }
+        const { data: agg } = await supabase
+          .from("meter_power_readings_5min")
+          .select("power_avg")
+          .eq("meter_id", meterId)
+          .gte("bucket", new Date(Date.now() - 60 * 60 * 1000).toISOString())
+          .order("bucket", { ascending: false })
+          .limit(1);
+        if (agg && agg.length > 0 && agg[0].power_avg != null) {
+          totalKw += Math.abs(Number(agg[0].power_avg));
+        }
       }
       return totalKw;
+
     },
     enabled: isToday,
     // Realtime invalidation pushes new PV power readings instantly; 5-min fallback poll.
@@ -477,7 +498,7 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOffset((value) => value - 1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-xs text-muted-foreground min-w-[180px] text-center">{periodLabel}</span>
+            <PeriodPickerLabel period={selectedPeriod} label={periodLabel} refDate={refDate} className="min-w-[180px]" />
             <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((value) => value + 1)}>
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -494,38 +515,21 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
           )}
           <div>
             <p className="text-xs text-muted-foreground">{T("dashboard.pvForecast")}</p>
-            <p className="text-xl font-bold text-energy-strom">{forecastDayTotal > 0 ? `${forecastDayTotal.toFixed(0)} kWh` : "–"}</p>
-            {delta != null && <p className="text-xs text-muted-foreground">Δ {delta > 0 ? "+" : ""}{delta}%</p>}
+            <p className="text-xl font-bold text-energy-strom">{forecastDayTotal > 0 ? `${fmtNum(forecastDayTotal, 0)} kWh` : "–"}</p>
+            {delta != null && <p className="text-xs text-muted-foreground">Δ {delta > 0 ? "+" : ""}{fmtNum(delta, 1)}%</p>}
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{isDay ? (isToday ? T("pv.todayActual") : T("pv.dateActual").replace("{date}", format(refDate, "d. MMM", { locale: dateLocale }))) : T("pv.periodActual").replace("{period}", T(PERIOD_LABEL_KEYS[selectedPeriod]))}</p>
-            <p className="text-xl font-bold text-pv-actual">{hasActualTotal ? `${actualTotalKwh.toFixed(1)} kWh` : "–"}</p>
+            <p className="text-xl font-bold text-pv-actual">{hasActualTotal ? `${fmtNum(actualTotalKwh, 1)} kWh` : "–"}</p>
             {isDay && actualReadingsEstimated && hasActualTotal && (
               <p className="text-xs text-muted-foreground">{T("pv.estimatedFromDailyTotal")}</p>
             )}
           </div>
         </div>
 
-        {isToday && (weatherSource || dwdReference) && (
-          <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {weatherSource && (
-                <>
-                  <Badge variant="outline">Quelle: {weatherSource.provider}</Badge>
-                  <Badge variant="outline">Modell: {weatherSource.model}</Badge>
-                  <Badge variant="outline">TZ: {weatherSource.response_timezone}</Badge>
-                </>
-              )}
-              {typeof summary.ai_correction_factor === "number" && summary.ai_correction_factor !== 1 && (
-                <Badge variant="outline">KI-Faktor: {summary.ai_correction_factor.toFixed(2)}</Badge>
-              )}
-            </div>
-
-            {weatherSource && (
-              <p className="text-xs text-muted-foreground">
-                {weatherSource.profile} · {weatherSource.requested_coordinates.latitude.toFixed(4)}, {weatherSource.requested_coordinates.longitude.toFixed(4)} · {weatherSource.hourly_variables.join(", ")}
-              </p>
-            )}
+        {isToday && typeof summary.ai_correction_factor === "number" && summary.ai_correction_factor !== 1 && (
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline">KI-Faktor: {fmtNum(summary.ai_correction_factor, 2)}</Badge>
           </div>
         )}
 
@@ -534,10 +538,10 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={chartData} margin={{ left: -10, right: 0 }}>
                 <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 10 }} width={35} />
+                <YAxis tick={{ fontSize: 10 }} width={35} tickFormatter={(v: number) => fmtNum(v, 0)} />
                 <Tooltip
                   formatter={(value: number, name: string) => [
-                    `${value.toFixed(2)} kWh`,
+                    `${fmtNum(value, 2)} kWh`,
                     name === "forecast" ? T("dashboard.pvForecast") : actualSeriesLabel,
                   ]}
                 />
@@ -550,10 +554,10 @@ const PvForecastWidget = ({ locationId }: PvForecastWidgetProps) => {
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={multiDayChart} margin={{ left: -10, right: 0 }}>
                 <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 10 }} width={35} />
+                <YAxis tick={{ fontSize: 10 }} width={35} tickFormatter={(v: number) => fmtNum(v, 0)} />
                 <Tooltip
                   formatter={(value: number, name: string) => [
-                    `${value.toFixed(1)} kWh`,
+                    `${fmtNum(value, 1)} kWh`,
                     name === "forecast" ? T("dashboard.pvForecast") : T("pv.actualGeneration"),
                   ]}
                 />

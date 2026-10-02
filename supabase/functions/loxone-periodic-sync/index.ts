@@ -1,12 +1,31 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { isWorkerEnabled } from "../_shared/workerKillswitch.ts";
+// isWorkerPrimary wird hier nicht mehr benötigt — der HTTP-Pull läuft immer im
+// konfigurierten Intervall; `loxone-api` entscheidet pro Aufruf, ob Live-Werte
+// geschrieben werden.
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  if (!(await isWorkerEnabled("loxone_periodic_sync"))) {
+    console.log("loxone-periodic-sync: paused via worker_controls — skipping");
+    return new Response(JSON.stringify({ success: true, skipped: true, reason: "worker_paused" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+
+  // Hybrid-Strategie (Phase 6.4): WS-Bridge liefert Live-Power, dieser Sync
+  // liefert alle 15 Min driftfreie Zählerstände (Today/Month/Year/Total) direkt
+  // vom Miniserver per HTTP. WS-Power-Events überschreiben den 15-Min-Power-
+  // Snapshot innerhalb von Sekunden — kein Konflikt.
+
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -33,9 +52,31 @@ serve(async (req) => {
   console.log("loxone-periodic-sync: Starting sync for all active Loxone integrations...");
 
   try {
+    // Feature-Flag: globaler Kill-Switch für die Intervall-Drosselung
+    let respectPollInterval = true;
+    let masterFloorMin = 0; // 0 = deaktiviert
+    try {
+      const { data: settingsRows } = await supabase
+        .from("system_settings")
+        .select("key, value")
+        .in("key", ["loxone_respect_poll_interval", "loxone_master_poll_floor_minutes"]);
+      for (const row of (settingsRows || []) as Array<{ key: string; value: string }>) {
+        if (row.key === "loxone_respect_poll_interval" && String(row.value).toLowerCase() === "false") {
+          respectPollInterval = false;
+        }
+        if (row.key === "loxone_master_poll_floor_minutes") {
+          const n = Number(row.value);
+          if (Number.isFinite(n) && n >= 1 && n <= 60) masterFloorMin = Math.floor(n);
+        }
+      }
+    } catch (_) {
+      // Tabelle/Schlüssel fehlt → Defaults
+    }
+
+
     const { data: locationIntegrations, error } = await supabase
       .from("location_integrations")
-      .select("id, location_id, integration:integrations(type)")
+      .select("id, location_id, config, last_sync_at, integration:integrations(type)")
       .eq("is_enabled", true);
 
     if (error) {
@@ -50,7 +91,7 @@ serve(async (req) => {
       (li: any) => li.integration?.type === "loxone" || li.integration?.type === "loxone_miniserver"
     );
 
-    console.log(`Found ${loxoneIntegrations.length} active Loxone integrations`);
+    console.log(`Found ${loxoneIntegrations.length} active Loxone integrations (respectPollInterval=${respectPollInterval})`);
 
     if (loxoneIntegrations.length === 0) {
       return new Response(
@@ -59,13 +100,65 @@ serve(async (req) => {
       );
     }
 
-    const results: Array<{ id: string; success: boolean; error?: string }> = [];
+    const results: Array<{ id: string; success: boolean; error?: string; skipped?: boolean }> = [];
+    let skippedCount = 0;
+    const nowMs = Date.now();
+    const TOLERANCE_MS = 15_000; // 15 s Toleranz, damit Cron-Ticks nicht knapp daneben liegen
+
+    // HTTP-Poll läuft immer im konfigurierten Intervall (typ. 15 Min), unabhängig vom
+    // Worker-Status. Die Live-Werte werden in `loxone-api` via `isWorkerPrimary()`
+    // ohnehin übersprungen, solange der WS-Worker frisch heartbeatet. Vorteil des
+    // konstanten Intervalls: bei Worker-Ausfall greift der Fallback innerhalb einer
+    // HTTP-Runde (≤ 15 Min), passend zur Stale-Schwelle (Default 900 s).
 
     for (const li of loxoneIntegrations) {
       const integrationId = li.id;
       const locationId = (li as any).location_id;
       const integrationType = (li.integration as any)?.type || "loxone";
+
+      // ── Wall-Clock-Alignment: Pollen exakt an Uhrzeit-Rastern (00:00, 00:05, 00:10 …) ──
+      // Vorteil ggü. „elapsed seit last_sync_at": die Sync-Dauer driftet das Raster NIE.
+      // Solange ein Sync < intervalMin dauert, ist der Takt mathematisch lückenfrei.
+      if (respectPollInterval) {
+        const cfg = ((li as any).config as Record<string, any> | null) || {};
+        const rawInterval = Number(cfg.poll_interval_minutes);
+        const configuredMin = Number.isFinite(rawInterval) && rawInterval >= 5 && rawInterval <= 60
+          ? Math.floor(rawInterval)
+          : Number.isFinite(rawInterval) && rawInterval > 0 && rawInterval < 5
+            ? 5
+            : 15;
+        // Master-Floor (Hard Floor): überschreibt kürzere Tenant-Intervalle
+        const intervalMin = masterFloorMin > 0 ? Math.max(configuredMin, masterFloorMin) : configuredMin;
+        const intervalMs = intervalMin * 60_000;
+
+        const lastSyncIso = (li as any).last_sync_at as string | null;
+        if (lastSyncIso) {
+          const lastMs = new Date(lastSyncIso).getTime();
+          // Bucket = wall-clock-Slot, in den der Zeitpunkt fällt
+          const currentBucket = Math.floor(nowMs / intervalMs);
+          const lastBucket = Math.floor(lastMs / intervalMs);
+          if (currentBucket === lastBucket) {
+            const remainingSec = Math.ceil(((currentBucket + 1) * intervalMs - nowMs) / 1000);
+            console.log(`Skipping integration ${integrationId} – same wall-clock bucket, next slot in ${remainingSec}s (interval=${intervalMin}min)`);
+            results.push({ id: integrationId, success: true, skipped: true });
+            skippedCount++;
+            continue;
+          }
+        }
+      }
+
+
+
       console.log(`Syncing integration: ${integrationId}`);
+
+      // IO-Optimierung: Wir nutzen ausschließlich die throttled RPC
+      // `touch_location_integration_sync` (Default 60s Throttle, schreibt sofort
+      // bei Statuswechsel). Die früheren direkten UPDATEs (start + reset) sind
+      // entfernt — Quelle der vorherigen ~2,37 Mio. Updates auf 11 Zeilen.
+      await supabase.rpc("touch_location_integration_sync", {
+        _id: integrationId,
+        _status: "syncing",
+      });
 
       try {
         const response = await fetch(
@@ -84,6 +177,14 @@ serve(async (req) => {
         );
 
         const data = await response.json();
+        if (!response.ok || !data.success) {
+          console.error(`[loxone-periodic-sync] HTTP ${response.status} for integration ${integrationId}: ${data?.error || response.statusText}`);
+        }
+
+        // (kein zweites Direkt-Update mehr — loxone-api ruft am Ende die
+        // throttled RPC mit Status "success" auf, das genügt.)
+
+
 
         if (data.success) {
           const sensors = data.sensors || [];
@@ -212,14 +313,18 @@ serve(async (req) => {
               const controlType = sensor.controlType || sensor.type || "";
 
               // Check if an unresolved error already exists for this sensor
-              // Check if an unresolved OR ignored error already exists for this sensor
+              // Check if an unresolved OR ignored error already exists for this sensor.
+              // IO-Optimierung: Match jetzt zusätzlich auf error_type, damit Duplikate
+              // verschiedener Fehlerarten pro Sensor sicher vermieden werden.
               const { data: existing } = await supabase
                 .from("integration_errors")
                 .select("id")
                 .eq("location_integration_id", integrationId)
+                .eq("error_type", "data")
                 .eq("sensor_name", sensorName)
                 .or("is_resolved.eq.false,is_ignored.eq.true")
                 .maybeSingle();
+
 
               if (!existing) {
                 const { data: errRow } = await supabase.from("integration_errors").insert({
@@ -387,11 +492,11 @@ serve(async (req) => {
       }
     }
 
-    const successCount = results.filter((r) => r.success).length;
-    console.log(`loxone-periodic-sync: Completed. ${successCount}/${results.length} integrations synced successfully.`);
+    const successCount = results.filter((r) => r.success && !r.skipped).length;
+    console.log(`loxone-periodic-sync: Completed. ${successCount}/${results.length} synced, ${skippedCount} skipped (poll interval).`);
 
     return new Response(
-      JSON.stringify({ success: true, synced: successCount, total: results.length, results }),
+      JSON.stringify({ success: true, synced: successCount, skipped: skippedCount, total: results.length, results }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

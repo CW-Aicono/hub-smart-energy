@@ -25,11 +25,14 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
 const round1 = (value: number) => Math.round(value * 10) / 10;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-const fetchWithRetry = async (url: string, retries = 3, delayMs = 1500): Promise<Response> => {
+const fetchWithRetry = async (url: string, retries = 3, delayMs = 1500, timeoutMs = 15000): Promise<Response> => {
   let lastError: Error | null = null;
   for (let attempt = 1; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
       if (res.ok) return res;
       const status = res.status;
       console.warn(`Fetch attempt ${attempt}/${retries} failed (HTTP ${status}) for ${url.substring(0, 120)}...`);
@@ -37,8 +40,10 @@ const fetchWithRetry = async (url: string, retries = 3, delayMs = 1500): Promise
       if (attempt < retries) await new Promise((r) => setTimeout(r, delayMs * attempt));
       else return res;
     } catch (err) {
+      clearTimeout(timer);
       lastError = err instanceof Error ? err : new Error(String(err));
-      console.warn(`Fetch attempt ${attempt}/${retries} network error for ${url.substring(0, 120)}: ${lastError.message}`);
+      const aborted = (err as any)?.name === "AbortError";
+      console.warn(`Fetch attempt ${attempt}/${retries} ${aborted ? `timeout after ${timeoutMs}ms` : "network error"} for ${url.substring(0, 120)}: ${lastError.message}`);
       if (attempt < retries) await new Promise((r) => setTimeout(r, delayMs * attempt));
     }
   }
@@ -111,35 +116,62 @@ const integrateDailyEnergyFromRawRows = (rows: Array<{ power_value: number; reco
 };
 
 const fetchRawMeterDailyHistory = async (
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   meterId: string,
   days = 30,
 ) => {
   const fromIso = new Date(Date.now() - (days + 1) * 24 * 60 * 60 * 1000).toISOString();
   const toIso = new Date().toISOString();
   const rows: Array<{ power_value: number; recorded_at: string }> = [];
-  let offset = 0;
-
+  // Primärquelle: 5-Min-Aggregat. Die Rohtabelle `meter_power_readings` wird
+  // für Worker-Zähler nur noch sporadisch befüllt; einzelne Restzeilen würden
+  // die Tagesintegration massiv verfälschen.
+  let aggOffset = 0;
   while (true) {
     const { data, error } = await supabase
-      .from("meter_power_readings")
-      .select("power_value, recorded_at")
+      .from("meter_power_readings_5min")
+      .select("power_avg, bucket")
       .eq("meter_id", meterId)
-      .gte("recorded_at", fromIso)
-      .lt("recorded_at", toIso)
-      .order("recorded_at", { ascending: true })
-      .range(offset, offset + RAW_READING_PAGE_SIZE - 1);
-
+      .gte("bucket", fromIso)
+      .lt("bucket", toIso)
+      .order("bucket", { ascending: true })
+      .range(aggOffset, aggOffset + RAW_READING_PAGE_SIZE - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
-
-    rows.push(...data);
+    for (const r of data as any[]) {
+      if (r.power_avg == null) continue;
+      rows.push({ power_value: Number(r.power_avg), recorded_at: r.bucket });
+    }
     if (data.length < RAW_READING_PAGE_SIZE) break;
-    offset += RAW_READING_PAGE_SIZE;
+    aggOffset += RAW_READING_PAGE_SIZE;
   }
+
+  // Fallback: Zähler ohne Aggregat-Buckets (reiner Polling-Ingest).
+  if (rows.length === 0) {
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("meter_power_readings")
+        .select("power_value, recorded_at")
+        .eq("meter_id", meterId)
+        .gte("recorded_at", fromIso)
+        .lt("recorded_at", toIso)
+        .order("recorded_at", { ascending: true })
+        .range(offset, offset + RAW_READING_PAGE_SIZE - 1);
+
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+
+      rows.push(...data);
+      if (data.length < RAW_READING_PAGE_SIZE) break;
+      offset += RAW_READING_PAGE_SIZE;
+    }
+  }
+
 
   const todayKey = toLocalDateKey(new Date().toISOString());
   return integrateDailyEnergyFromRawRows(rows).filter((entry) => entry.day < todayKey);
+
 };
 
 const getDisplayValue = (entry: { ai_adjusted_kwh: number | null; estimated_kwh: number }) => (
@@ -509,7 +541,10 @@ serve(async (req) => {
             .map((e) => `${e.timestamp}: ${e.estimated_kwh} kWh (GTI/POA ${e.poa_w_m2} W/m², DHI ${e.dhi_w_m2} W/m², Tmod ${e.cell_temp_c}°C, Tamb ${e.temperature_2m}°C)`)
             .join("\n");
 
+          const aiController = new AbortController();
+          const aiTimer = setTimeout(() => aiController.abort(), 20000);
           const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            signal: aiController.signal,
             method: "POST",
             headers: {
               Authorization: `Bearer ${LOVABLE_API_KEY}`,
@@ -548,7 +583,8 @@ serve(async (req) => {
               ],
               tool_choice: { type: "function", function: { name: "pv_calibration" } },
             }),
-          });
+          }).finally(() => clearTimeout(aiTimer));
+
 
           if (aiRes.ok) {
             const aiData = await aiRes.json();

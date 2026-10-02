@@ -47,13 +47,13 @@ const USER_SCOPED_TABLES = new Set([
   "dashboard_widgets", "user_preferences", "user_location_access",
 ]);
 
-async function getTenantUserIds(admin: ReturnType<typeof createClient>, tenantId: string): Promise<string[]> {
+async function getTenantUserIds(admin: any, tenantId: string): Promise<string[]> {
   const { data } = await admin.from("profiles").select("user_id").eq("tenant_id", tenantId);
   return (data || []).map((p: { user_id: string }) => p.user_id);
 }
 
 async function backupTable(
-  admin: ReturnType<typeof createClient>,
+  admin: any,
   table: string,
   tenantId: string,
   userIds: string[],
@@ -84,7 +84,7 @@ async function backupTable(
 }
 
 async function getStorageFiles(
-  admin: ReturnType<typeof createClient>,
+  admin: any,
   tenantId: string,
 ): Promise<Record<string, string[]>> {
   const buckets = ["meter-photos", "tenant-assets", "floor-plans", "floor-3d-models"];
@@ -142,16 +142,42 @@ Deno.serve(async (req) => {
 
     const tenantId = profile.tenant_id;
 
-    // --- LIST action ---
+    // --- LIST action: only real tenant backups (excludes 'gateway' state dumps) ---
     if (action === "list") {
       const { data: snapshots } = await admin
         .from("backup_snapshots")
         .select("id, created_at, created_by, backup_type, status, tables_count, rows_count, size_bytes, expires_at, error_message")
         .eq("tenant_id", tenantId)
+        .in("backup_type", ["manual", "scheduled", "pre-restore"])
         .order("created_at", { ascending: false })
         .limit(50);
 
       return new Response(JSON.stringify({ snapshots: snapshots || [] }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
+    // --- LIST gateway state dumps (separate tab in UI) ---
+    if (action === "list-gateway-dumps") {
+      const { data: snapshots } = await admin
+        .from("backup_snapshots")
+        .select("id, created_at, backup_type, status, size_bytes, expires_at, data")
+        .eq("tenant_id", tenantId)
+        .eq("backup_type", "gateway")
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      const slim = (snapshots || []).map((s: any) => ({
+        id: s.id,
+        created_at: s.created_at,
+        backup_type: s.backup_type,
+        status: s.status,
+        size_bytes: s.size_bytes,
+        expires_at: s.expires_at,
+        device_name: s.data?.device_name ?? null,
+      }));
+
+      return new Response(JSON.stringify({ snapshots: slim }), {
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }

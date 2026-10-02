@@ -27,6 +27,13 @@ export interface GatewayDefinition {
   edgeFunctionName: string;
   configFields: GatewayConfigField[];
   setupInstructions?: GatewaySetupInstructions;
+  /**
+   * Gateway speichert Messreihen lokal und unterstützt die Aktion
+   * `backfillRange` ({ locationIntegrationId, from, to, meterIds }).
+   * Wird vom `gap-backfill-scheduler` genutzt, um Datenlücken nach einem
+   * Backend-Ausfall aus dem Gerätespeicher nachzuholen.
+   */
+  supportsBackfill?: boolean;
 }
 
 export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
@@ -36,6 +43,7 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
     icon: "server",
     description: "Loxone Miniserver über Cloud DNS",
     edgeFunctionName: "loxone-api",
+    supportsBackfill: true,
     configFields: [
       { name: "serial_number", label: "Seriennummer", placeholder: "504F94A0XXXX", type: "text", description: "Seriennummer des Loxone Miniservers", required: true },
       { name: "username", label: "Benutzername", placeholder: "admin", type: "text", required: true },
@@ -229,6 +237,72 @@ export const GATEWAY_DEFINITIONS: Record<string, GatewayDefinition> = {
       { name: "site_id", label: "Site ID", placeholder: "site-uuid", type: "text", description: "Site/Building ID aus dem EcoStruxure Energy Hub Portal", required: true },
     ],
   },
+  smart_meter_imsys: {
+    type: "smart_meter_imsys",
+    label: "Smart-Meter / iMSys",
+    icon: "activity",
+    description:
+      "Intelligentes Messsystem (iMSys) nach MsbG. Phase 1: manueller MSCONS-Import vom Messstellenbetreiber (15-Min-Lastgänge). Spätere Phasen: GWA-API, HAN-lokal, CLS-Push.",
+    edgeFunctionName: "smart-meter-mscons-import",
+    configFields: [
+      {
+        name: "transport",
+        label: "Anbindungsart",
+        placeholder: "mscons_import",
+        type: "text",
+        description:
+          "Phase 1 unterstützt 'mscons_import' (manueller EDIFACT-Upload). 'gwa_api', 'han_local' und 'cls_tunnel' folgen in Phase 2/3.",
+        required: true,
+      },
+      {
+        name: "msb_name",
+        label: "Messstellenbetreiber (MSB)",
+        placeholder: "z.B. Discovergy, Westnetz, EWE NETZ",
+        type: "text",
+        description: "Name des zuständigen Messstellenbetreibers",
+        required: true,
+      },
+      {
+        name: "msb_market_partner_id",
+        label: "Marktpartner-ID (BDEW)",
+        placeholder: "9900000000000",
+        type: "text",
+        description: "13-stellige BDEW-Codenummer des MSB (für MSCONS/EDIFACT)",
+        required: false,
+      },
+      {
+        name: "smgw_id",
+        label: "SMGW-ID (optional)",
+        placeholder: "EHAG0123456789",
+        type: "text",
+        description: "Eindeutige ID des Smart-Meter-Gateways (auf dem Gerät bzw. Lieferschein)",
+        required: false,
+      },
+      {
+        name: "read_interval_minutes",
+        label: "Auflösung (Minuten)",
+        placeholder: "15",
+        type: "text",
+        description: "Üblich 15 Minuten (RLM/iMSys-Standard). Wertebereich 1–60.",
+        required: false,
+      },
+      {
+        name: "usage_purposes",
+        label: "Verwendungszwecke",
+        placeholder: "metering,mieterstrom,energy_sharing,dynamic_tariff,grid_control",
+        type: "text",
+        description:
+          "Kommagetrennte Liste der geplanten Nutzungsarten – steuert UI-Filter und Abrechnungsmodule, keine harte Kopplung.",
+        required: false,
+      },
+    ],
+    setupInstructions: {
+      serverField: "__supabase_host__",
+      port: "443",
+      pathTemplate: "functions/v1/smart-meter-mscons-import?tenant_id={tenant_id}",
+      authMethod: "Manueller MSCONS-Upload (Phase 1) – §50 MsbG-Einwilligung erforderlich",
+    },
+  },
 };
 
 /** Get ordered list of gateway types for dropdowns */
@@ -244,4 +318,19 @@ export function getGatewayDefinition(type: string): GatewayDefinition | undefine
 /** Get the edge function name for a given integration type */
 export function getEdgeFunctionName(integrationType: string): string {
   return GATEWAY_DEFINITIONS[integrationType]?.edgeFunctionName || "loxone-api";
+}
+
+/**
+ * Kann dieses Gateway Messreihen aus seinem lokalen Speicher nachliefern?
+ * Gateways ohne lokalen Speicher werden vom Lückenfüller übersprungen.
+ */
+export function gatewaySupportsBackfill(integrationType: string): boolean {
+  return GATEWAY_DEFINITIONS[integrationType]?.supportsBackfill === true;
+}
+
+/** Integrationstypen mit lokalem Messreihenspeicher */
+export function getBackfillCapableTypes(): string[] {
+  return Object.values(GATEWAY_DEFINITIONS)
+    .filter((d) => d.supportsBackfill)
+    .map((d) => d.type);
 }

@@ -1,0 +1,53 @@
+import type { WebSocket } from "ws";
+
+export interface PendingCall {
+  commandId: string;
+  createdAt: number;
+  /** OCPP action name (e.g. SetChargingProfile) — used for capability fallback handling */
+  command?: string;
+  /** Charge-point primary key — needed when reacting to CALLERROR */
+  chargePointPk?: string;
+  /** Optional in-process resolver (used by configurationProbe). */
+  resolveProbe?: (ok: boolean, payload: unknown) => void;
+}
+
+
+export interface Session {
+  sessionId: string;
+  chargePointId: string;
+  chargePointPk: string; // PK aus charge_points.id
+  tenantId: string;
+  socket: WebSocket;
+  openedAt: number;
+  lastIncomingAt: number;
+  lastOutgoingAt: number;
+  pendingCalls: Map<string, PendingCall>;
+  /** Aus BootNotification gemeldete Identität — für Kompatibilitäts-Checks. */
+  vendor?: string | null;
+  model?: string | null;
+  firmwareVersion?: string | null;
+}
+
+const sessions = new Map<string, Session>(); // key = chargePointId
+
+export function registerSession(s: Session) {
+  // Falls bereits eine Session existiert → schließen, neue gewinnt
+  const existing = sessions.get(s.chargePointId);
+  if (existing && existing.sessionId !== s.sessionId) {
+    try { existing.socket.close(1000, "Replaced by new connection"); } catch { /* ignore */ }
+  }
+  sessions.set(s.chargePointId, s);
+}
+
+export function getSession(chargePointId: string): Session | undefined {
+  return sessions.get(chargePointId);
+}
+
+export function removeSession(chargePointId: string, sessionId: string) {
+  const cur = sessions.get(chargePointId);
+  if (cur && cur.sessionId === sessionId) sessions.delete(chargePointId);
+}
+
+export function listSessions(): Session[] {
+  return Array.from(sessions.values());
+}

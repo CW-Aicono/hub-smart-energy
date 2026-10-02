@@ -210,30 +210,30 @@ const WeatherWidget = ({ locationId }: WeatherWidgetProps) => {
   const WeatherIcon = WEATHER_CODE_KEYS[weather.weatherCode]?.icon || Cloud;
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="h-full flex flex-col">
+      <CardHeader className="p-4 pb-2">
         <CardTitle className="flex items-center gap-2">
           <Cloud className="h-5 w-5" />
           {t("weather.title")}
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
+      <CardContent className="flex-1 px-4 pb-4 pt-0">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <MapPin className="h-4 w-4" />
-              <span>{mainLocation.name}</span>
+              <span className="truncate">{mainLocation.name}</span>
               {mainLocation.city && <span>• {mainLocation.city}</span>}
             </div>
-            <div className="flex items-center gap-4">
-              <WeatherIcon className="h-12 w-12 text-primary" />
+            <div className="flex items-center gap-3">
+              <WeatherIcon className="h-10 w-10 text-primary" />
               <div>
-                <div className="text-4xl font-bold">{weather.temperature}°C</div>
+                <div className="text-3xl font-bold">{weather.temperature}°C</div>
                 <div className="text-sm text-muted-foreground">{T(weather.description)}</div>
               </div>
             </div>
           </div>
-          <div className="space-y-2 text-sm text-muted-foreground">
+          <div className="shrink-0 space-y-2 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Droplets className="h-4 w-4" />
               <span>{weather.humidity}%</span>

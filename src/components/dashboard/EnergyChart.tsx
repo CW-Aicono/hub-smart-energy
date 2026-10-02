@@ -1,12 +1,15 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTranslation } from "@/hooks/useTranslation";
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import PeriodPickerLabel from "./PeriodPickerLabel";
 import { useEnergyData } from "@/hooks/useEnergyData";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocations } from "@/hooks/useLocations";
@@ -14,7 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ENERGY_CHART_COLORS, ENERGY_TYPE_LABELS } from "@/lib/energyTypeColors";
 import { cn } from "@/lib/utils";
-import { gasM3ToKWh } from "@/lib/formatEnergy";
+import { resolveMeterEnergyKWh } from "@/lib/formatEnergy";
 import {
   format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   startOfQuarter, endOfQuarter, startOfYear, endOfYear,
@@ -75,15 +78,18 @@ function getPeriodLabel(period: ChartPeriod, ref: Date, locale: Locale, cwPrefix
 
 function getUnitForPeriod(period: ChartPeriod, energyType: string): string {
   if (period === "day") {
-    if (energyType === "wasser") return "Liter";
+    if (energyType === "wasser") return "m³/h";
     return "kW";
   }
   if (energyType === "wasser") return "m³";
   return "kWh";
 }
 
-function getChartUnitLabel(period: ChartPeriod): string {
-  return period === "day" ? "kW" : "kWh";
+function getChartUnitLabel(period: ChartPeriod, visibleTypes: readonly string[] = []): string {
+  const units = Array.from(new Set(visibleTypes.map((t) => getUnitForPeriod(period, t))));
+  if (units.length === 0) return period === "day" ? "kW" : "kWh";
+  if (units.length === 1) return units[0];
+  return units.join(" / ");
 }
 
 interface EnergyChartProps {
@@ -137,7 +143,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const visibleEnergyKeys = useMemo(() => ENERGY_KEYS.filter(k => allowedTypes.has(k)), [allowedTypes]);
 
   // DB-based daily totals for non-day periods
-  const [dailyTotals, setDailyTotals] = useState<Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>>([]);
+  const [dailyTotals, setDailyTotals] = useState<Array<{ meter_id: string; day: string; bezug: number; einspeisung: number; source: string }>>([]);
   const [dailyTotalsLoading, setDailyTotalsLoading] = useState(false);
 
   // Map "all" to "year" for this chart
@@ -147,8 +153,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
   const subtitle = selectedLocation ? T("chart.dataFor").replace("{name}", selectedLocation.name) : T("chart.allLocations");
 
   const meterMap = useMemo(() => {
-    const map: Record<string, { energy_type: string; capture_type: string; location_id: string; is_main_meter: boolean; unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
-    meters.forEach((m) => { map[m.id] = { energy_type: m.energy_type, capture_type: m.capture_type, location_id: m.location_id, is_main_meter: m.is_main_meter, unit: m.unit, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null }; });
+    const map: Record<string, { energy_type: string; capture_type: string; location_id: string; is_main_meter: boolean; unit: string; source_unit_energy: string | null; source_unit_power: string | null; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
+    meters.forEach((m) => { map[m.id] = { energy_type: m.energy_type, capture_type: m.capture_type, location_id: m.location_id, is_main_meter: m.is_main_meter, unit: m.unit, source_unit_energy: (m as any).source_unit_energy ?? null, source_unit_power: (m as any).source_unit_power ?? null, gas_type: m.gas_type ?? null, brennwert: m.brennwert ?? null, zustandszahl: m.zustandszahl ?? null }; });
     return map;
   }, [meters]);
 
@@ -176,6 +182,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         .filter(m => !locationId || m.location_id === locationId)
         .map(m => m.id);
 
+      console.info("[energy-chart:effect-fired]", { metersLen: meters.length, mainMeterIdsLen: mainMeterIds.length });
+
       if (mainMeterIds.length === 0) {
         if (!stale) { setPowerReadings([]); setPowerLoading(false); }
         return;
@@ -183,45 +191,20 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
       const isToday = offset === 0 && new Date().toDateString() === getRefDate("day", 0).toDateString();
 
-      let allData: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
-
-      const pageSize = 1000;
-      let from = 0;
-      let hasMore = true;
-      let aggError: unknown = null;
-      const aggregatedRows: Array<{ meter_id: string; power_avg: number; bucket: string }> = [];
-
-      while (hasMore && !stale) {
-        const { data: pageData, error: pageError } = await supabase
-          .rpc("get_power_readings_5min", {
-            p_meter_ids: mainMeterIds,
-            p_start: rangeStart.toISOString(),
-            p_end: rangeEnd.toISOString(),
-          })
-          .range(from, from + pageSize - 1);
-
-        if (pageError) { aggError = pageError; break; }
-        if (!pageData || pageData.length === 0) { hasMore = false; break; }
-
-        aggregatedRows.push(...(pageData as Array<{ meter_id: string; power_avg: number; bucket: string }>));
-        hasMore = pageData.length === pageSize;
-        from += pageSize;
-      }
+      // Zoom-aware server-side aggregation: resolution is chosen by the
+      // requested window (5 min for day views) and the point count is capped
+      // server-side, so no client-side pagination is needed.
+      const series = await fetchPowerSeriesAuto(mainMeterIds, rangeStart, rangeEnd, 900);
 
       if (stale) return;
 
-      if (!aggError && aggregatedRows.length > 0) {
-        allData = aggregatedRows.map((r) => ({
+      const allData: Array<{ meter_id: string; power_value: number; recorded_at: string }> =
+        series.map((r) => ({
           meter_id: r.meter_id,
           power_value: r.power_avg,
           recorded_at: r.bucket,
         }));
 
-        // Raw data supplement removed: aggregated 5-min buckets only
-        // This eliminates Loxone boundary spikes at :00 and :30 marks
-      } else {
-        console.warn("get_power_readings_5min returned no data or error:", aggError);
-      }
 
       if (!stale) {
         setPowerReadings(allData);
@@ -265,7 +248,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
       const fromDate = format(rangeStart, "yyyy-MM-dd");
       const toDate = format(rangeEnd, "yyyy-MM-dd");
 
-      const { data, error } = await supabase.rpc("get_meter_daily_totals_split" as any, {
+      const { data, error } = await supabase.rpc("get_meter_daily_totals_split_with_fallback" as any, {
         p_meter_ids: mainMeterIds,
         p_from_date: fromDate,
         p_to_date: toDate,
@@ -273,80 +256,11 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
       if (stale) return;
 
-      let results = (data ?? []) as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>;
+      let results = (data ?? []) as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number; source: string }>;
 
       if (error) {
         console.error("Error fetching daily totals:", error);
         results = [];
-      }
-
-      const todayDate = new Date();
-      const effectiveEnd = new Date(Math.min(rangeEnd.getTime(), todayDate.getTime()));
-      const daysInRange = eachDayOfInterval({ start: rangeStart, end: effectiveEnd });
-      const daysWithData = new Set(
-        results.map(r => {
-          const dayStr = typeof r.day === "string" ? r.day.split("T")[0] : format(new Date(r.day), "yyyy-MM-dd");
-          return dayStr;
-        })
-      );
-      const missingDays = daysInRange
-        .map(d => format(d, "yyyy-MM-dd"))
-        .filter(d => !daysWithData.has(d));
-
-      if (missingDays.length > 0 && !stale) {
-        try {
-          const missingStart = startOfDay(new Date(missingDays[0])).toISOString();
-          const missingEnd = endOfDay(new Date(missingDays[missingDays.length - 1])).toISOString();
-
-          let allPowerData: Array<{ meter_id: string; power_avg: number; bucket: string }> = [];
-          let from = 0;
-          const pageSize = 1000;
-          let hasMore = true;
-          while (hasMore && !stale) {
-            const { data: pageData, error: pageError } = await supabase
-              .rpc("get_power_readings_5min", {
-                p_meter_ids: mainMeterIds,
-                p_start: missingStart,
-                p_end: missingEnd,
-              })
-              .range(from, from + pageSize - 1);
-            if (pageError || !pageData || pageData.length === 0) {
-              hasMore = false;
-            } else {
-              allPowerData.push(...(pageData as Array<{ meter_id: string; power_avg: number; bucket: string }>));
-              hasMore = pageData.length === pageSize;
-              from += pageSize;
-            }
-          }
-
-          if (!stale && allPowerData.length > 0) {
-            const missingSet = new Set(missingDays);
-            const dayMeterSplit = new Map<string, Map<string, { bezug: number; einspeisung: number }>>();
-            for (const row of allPowerData) {
-              const dayStr = format(new Date(row.bucket), "yyyy-MM-dd");
-              if (!missingSet.has(dayStr)) continue;
-              if (!dayMeterSplit.has(dayStr)) dayMeterSplit.set(dayStr, new Map());
-              const meterMap = dayMeterSplit.get(dayStr)!;
-              if (!meterMap.has(row.meter_id)) meterMap.set(row.meter_id, { bezug: 0, einspeisung: 0 });
-              const entry = meterMap.get(row.meter_id)!;
-              const kwh = row.power_avg * 5.0 / 60.0;
-              if (row.power_avg >= 0) {
-                entry.bezug += kwh;
-              } else {
-                entry.einspeisung += Math.abs(kwh);
-              }
-            }
-            for (const [dayStr, meterMap] of dayMeterSplit) {
-              for (const [meterId, split] of meterMap) {
-                if (split.bezug !== 0 || split.einspeisung !== 0) {
-                  results.push({ meter_id: meterId, day: dayStr, bezug: split.bezug, einspeisung: split.einspeisung });
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.warn("Error computing missing days from power readings:", e);
-        }
       }
 
       if (!stale) {
@@ -363,9 +277,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
     const convertGas = (meterId: string, value: number): number => {
       const info = meterMap[meterId];
-      if (info?.energy_type === "gas" && info.unit === "m³") {
-        return gasM3ToKWh(value, info.gas_type, info.brennwert, info.zustandszahl);
-      }
+      if (info?.energy_type === "gas") return resolveMeterEnergyKWh(info, value);
       return value;
     };
 
@@ -376,9 +288,28 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     };
 
     // Helper: build a map of date -> energy bucket from DB daily totals
-    // Also tracks bezug/einspeisung split for bidirectional meters
-    const buildDailyBucketsFromDB = (): Map<string, EnergyBucket & Record<string, number>> => {
-      const map = new Map<string, EnergyBucket & Record<string, number>>();
+    // Also tracks bezug/einspeisung split for bidirectional meters and
+    // marks the day as a "gap" if NO verified daily total (source='archived')
+    // exists for that day across all queried meters – i.e. the value would
+    // otherwise be silently substituted from the 5-min fallback.
+    const buildDailyBucketsFromDB = (): Map<string, EnergyBucket & Record<string, number | boolean>> => {
+      const map = new Map<string, EnergyBucket & Record<string, number | boolean>>();
+      // First pass: track per (date, energy_type) whether at least one
+      // 'archived' (verified Loxone daily total) row exists.
+      const hasArchived = new Map<string, Set<string>>(); // dateStr -> Set<energy_type>
+      for (const row of dailyTotals) {
+        const info = meterMap[row.meter_id];
+        if (!info) continue;
+        const dayStr = typeof row.day === "string" ? row.day.split("T")[0] : format(new Date(row.day), "yyyy-MM-dd");
+        // Verified sources: archived Loxone day totals, live Loxone totalDay for today,
+        // CSV-verified repairs, manual readings, MSCONS imports. Only the 5-min
+        // estimate ('today_running') counts as a gap.
+        if (row.source !== "today_running") {
+          if (!hasArchived.has(dayStr)) hasArchived.set(dayStr, new Set());
+          hasArchived.get(dayStr)!.add(info.energy_type);
+        }
+      }
+
       for (const row of dailyTotals) {
         const info = meterMap[row.meter_id];
         if (!info) continue;
@@ -389,12 +320,17 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const converted = convertGas(row.meter_id, netValue);
         addToEnergyBucket(bucket, info.energy_type, converted);
 
+        // Mark gap flag per energy_type if no archived value exists for this day+type
+        const isGap = !(hasArchived.get(dayStr)?.has(info.energy_type));
+        (bucket as any)[`__gap_${info.energy_type}`] = isGap;
+        (bucket as any)[`__source_${info.energy_type}`] = row.source;
+
         // For non-day bar charts: use pre-split bezug/einspeisung
         if (period !== "day") {
           const bezugKey = `${info.energy_type}_bezug`;
           const einspeisungKey = `${info.energy_type}_einspeisung`;
-          bucket[bezugKey] = (bucket[bezugKey] ?? 0) + convertGas(row.meter_id, row.bezug);
-          bucket[einspeisungKey] = (bucket[einspeisungKey] ?? 0) + convertGas(row.meter_id, row.einspeisung);
+          bucket[bezugKey] = ((bucket[bezugKey] as number) ?? 0) + convertGas(row.meter_id, row.bezug);
+          bucket[einspeisungKey] = ((bucket[einspeisungKey] as number) ?? 0) + convertGas(row.meter_id, row.einspeisung);
         }
       }
       return map;
@@ -408,8 +344,8 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         if (!info || !info.is_main_meter) continue;
         if (locationId && info.location_id !== locationId) continue;
         if (pt.totalDay != null) {
-          const converted = info.energy_type === "gas" && info.unit === "m³"
-            ? gasM3ToKWh(pt.totalDay, info.gas_type, info.brennwert, info.zustandszahl)
+          const converted = info.energy_type === "gas"
+            ? resolveMeterEnergyKWh(info, pt.totalDay)
             : pt.totalDay;
           addToEnergyBucket(bucket, info.energy_type, converted);
         }
@@ -439,64 +375,131 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         } as DayBucket;
       });
 
-      // Track which indices actually received a real reading
+      // Track which indices actually received a real reading (per energy type, post-sum)
       const realIndices: Record<string, Set<number>> = { strom: new Set(), gas: new Set(), waerme: new Set(), wasser: new Set() };
 
-      // Accumulate per meter_id per bucket to correctly average multiple readings
-      // from the same meter in the same 5-min slot (e.g. sync jitter producing 2 readings),
-      // then SUM the per-meter averages across all meters into the bucket.
-      // Structure: bucketAccum[idx][meter_id] = { sum, count, energy_type }
-      const bucketAccum: Record<number, Record<string, { sum: number; count: number; et: string }>> = {};
+      // Step 1: Build a per-meter time series of 288 slots.
+      // Multiple raw readings inside the same 5-min slot are averaged.
+      // Structure: meterSeries[meter_id] = { et, values: (number|null)[288] }
+      const meterSeries: Record<string, { et: string; values: (number | null)[]; counts: number[] }> = {};
 
-      // Use power readings from DB for automatic main meters
       powerReadings.forEach((pr) => {
         const info = meterMap[pr.meter_id];
         if (!info) return;
         const d = new Date(pr.recorded_at);
         const idx = Math.min(d.getHours() * 12 + Math.floor(d.getMinutes() / 5), 287);
         const et = info.energy_type || "strom";
-        if (!bucketAccum[idx]) bucketAccum[idx] = {};
-        if (!bucketAccum[idx][pr.meter_id]) bucketAccum[idx][pr.meter_id] = { sum: 0, count: 0, et };
-        bucketAccum[idx][pr.meter_id].sum += pr.power_value;
-        bucketAccum[idx][pr.meter_id].count += 1;
+        if (!meterSeries[pr.meter_id]) {
+          meterSeries[pr.meter_id] = {
+            et,
+            values: Array.from({ length: 288 }, () => null),
+            counts: Array.from({ length: 288 }, () => 0),
+          };
+        }
+        const s = meterSeries[pr.meter_id];
+        const cur = s.values[idx];
+        const cnt = s.counts[idx];
+        s.values[idx] = cur == null ? pr.power_value : (cur * cnt + pr.power_value) / (cnt + 1);
+        s.counts[idx] = cnt + 1;
       });
 
-      // For each bucket: average readings per meter, then sum across meters per energy type
-      for (const [idxStr, meterMap2] of Object.entries(bucketAccum)) {
-        const idx = Number(idxStr);
-        for (const [, accum] of Object.entries(meterMap2)) {
-          const et = accum.et as EnergyKey;
-          if (ENERGY_KEYS.includes(et)) {
-            buckets[idx][et] += accum.sum / accum.count;
-            realIndices[et]?.add(idx);
+      // Step 2: Per meter, forward-fill (step function) up to MAX_FILL_SLOTS = 36 (= 3 h)
+      // beyond each real reading. Larger gaps remain null = real data outage.
+      // This makes the SUM across meters stable when meters poll at 15-min intervals
+      // but at different sub-minutes within the window.
+      //
+      // "Real" vs. "forward-filled" wird zeitbasiert bewertet: pro Meter wird der
+      // tatsächliche Poll-Abstand (Median der Slot-Abstände zwischen echten Messungen)
+      // geschätzt. Forward-Fill innerhalb von (pollSlots + Toleranz=1 Slot) gilt
+      // weiterhin als "real", damit die durchgezogene Linie auch bei 15-Min-Poll
+      // entsteht. Erst echte Datenausfälle (länger als Poll-Intervall + Toleranz)
+      // werden als gestrichelte Lücke dargestellt.
+      const MAX_FILL_SLOTS = 36; // 3 hours; covers 15-min polling + safety margin
+      const TOLERANCE_SLOTS = 1; // = 5 Min Toleranz
+      const filledFlag: Record<string, boolean[]> = {}; // per meter: was this slot real (false) or forward-filled-but-treated-as-gap (true)?
+      for (const [mid, s] of Object.entries(meterSeries)) {
+        // Für Wasser/Gas KEIN Step-Forward-Fill (würde Rechteck-/Plateau-Optik
+        // erzeugen). Stattdessen linear zwischen zwei echten Messpunkten
+        // interpolieren — visuell identisch zur Monotone-Spline im Custom-Widget,
+        // aber jeder Slot trägt einen konkreten Wert, damit der Chart-Tooltip
+        // beim Hover an *jeder* Position einen Wert zeigt (nicht nur an den
+        // Original-Messpunkten). Alle interpolierten Slots werden als Gap
+        // geflaggt, sodass sie nicht als "echt" gezählt werden.
+        if (s.et === "wasser" || s.et === "gas") {
+          const flags = Array.from({ length: 288 }, () => false);
+          const realIdxWG: number[] = [];
+          for (let i = 0; i < 288; i++) if (s.values[i] != null) realIdxWG.push(i);
+          if (realIdxWG.length >= 2) {
+            for (let k = 0; k < realIdxWG.length - 1; k++) {
+              const a = realIdxWG[k];
+              const b = realIdxWG[k + 1];
+              const va = s.values[a] as number;
+              const vb = s.values[b] as number;
+              const span = b - a;
+              if (span <= 1) continue;
+              for (let i = a + 1; i < b; i++) {
+                s.values[i] = va + ((vb - va) * (i - a)) / span;
+                flags[i] = true;
+              }
+            }
           }
+          filledFlag[mid] = flags;
+          continue;
+        }
+
+        // Geschätzten Poll-Abstand bestimmen: Median der Slot-Abstände zwischen
+        // aufeinanderfolgenden echten Messungen. Fallback: 1 Slot (5 Min).
+        const realIdx: number[] = [];
+        for (let i = 0; i < 288; i++) if (s.values[i] != null) realIdx.push(i);
+        let pollSlots = 1;
+        if (realIdx.length >= 2) {
+          const diffs: number[] = [];
+          for (let k = 1; k < realIdx.length; k++) diffs.push(realIdx[k] - realIdx[k - 1]);
+          diffs.sort((a, b) => a - b);
+          const med = diffs[Math.floor(diffs.length / 2)];
+          pollSlots = Math.max(1, Math.min(12, med)); // cap auf 60 Min (12 Slots)
+        }
+        const realWindow = pollSlots + TOLERANCE_SLOTS;
+
+        const flags = Array.from({ length: 288 }, () => false);
+        let lastVal: number | null = null;
+        let slotsSinceReal = 0;
+        for (let i = 0; i < 288; i++) {
+          if (s.values[i] != null) {
+            lastVal = s.values[i];
+            slotsSinceReal = 0;
+          } else if (lastVal != null && slotsSinceReal < MAX_FILL_SLOTS) {
+            s.values[i] = lastVal;
+            // Innerhalb des Poll-Fensters zählt der Slot weiterhin als "real",
+            // damit die durchgezogene Linie nicht ausfranst.
+            flags[i] = slotsSinceReal >= realWindow;
+            slotsSinceReal++;
+          } else {
+            slotsSinceReal++;
+          }
+        }
+        filledFlag[mid] = flags;
+      }
+
+      // Step 3: Sum per-meter series into per-bucket per-energy-type totals.
+      // A bucket counts as "real" for an energy type if at least one contributing
+      // meter has a real (non-forward-filled) reading at that slot.
+      for (let i = 0; i < 288; i++) {
+        for (const [mid, s] of Object.entries(meterSeries)) {
+          const v = s.values[i];
+          if (v == null) continue;
+          const et = s.et as EnergyKey;
+          if (!ENERGY_KEYS.includes(et)) continue;
+          // Gas: Durchfluss (m³/h) → Leistung (kW) über Brennwert/Zustandszahl,
+          // damit die Tagesansicht durchgängig in kW beschriftet werden kann.
+          buckets[i][et] += et === "gas" ? convertGas(mid, v) : v;
+          if (!filledFlag[mid][i]) realIndices[et]?.add(i);
         }
       }
 
       // Manual meters are excluded from day view – no meaningful daily granularity
 
-      // Interpolate small gaps (≤ 12 slots = 1 hour) and mark them as gap (not real)
-      for (const key of ENERGY_KEYS) {
-        const points: Array<{ idx: number; val: number }> = [];
-        buckets.forEach((b, i) => {
-          const v = getEnergyValue(b, key);
-          if (v > 0) points.push({ idx: i, val: v });
-        });
-        for (let p = 0; p < points.length - 1; p++) {
-          const start = points[p];
-          const end = points[p + 1];
-          const gap = end.idx - start.idx;
-          if (gap > 1 && gap <= 12) {
-            for (let g = 1; g < gap; g++) {
-              const t = g / gap;
-              setEnergyValue(buckets[start.idx + g], key, start.val + (end.val - start.val) * t);
-              // gap-interpolated: do NOT add to realIndices
-            }
-          }
-        }
-      }
-
-      // Populate real_* fields: only set where we have an actual data point
+      // Populate real_* fields: mark slots where at least one meter had a real reading
       buckets.forEach((b, i) => {
         for (const key of ENERGY_KEYS) {
           if (realIndices[key]?.has(i)) {
@@ -557,7 +560,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const bucket: any = { label: format(d, "EEEEEE", { locale: dateLocale }), ...emptyBucket() };
         const dbBucket = dbDailyMap.get(dateStr);
         if (dbBucket) {
-          for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+          for (const key of ENERGY_KEYS) {
+            addToEnergyBucket(bucket, key, (dbBucket as any)[key]);
+            if ((dbBucket as any)[`__gap_${key}`]) bucket[`__gap_${key}`] = true;
+          }
           addSplitFields(bucket, dbBucket);
         }
         manualFiltered.forEach((r) => {
@@ -565,6 +571,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         });
         if (dateStr === todayStr && !dbBucket) {
           addLiveTodayToBucket(bucket);
+          for (const key of ENERGY_KEYS) bucket[`__gap_${key}`] = true;
         }
         return bucket;
       });
@@ -579,7 +586,10 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const bucket: any = { label: format(d, "d."), ...emptyBucket() };
         const dbBucket = dbDailyMap.get(dateStr);
         if (dbBucket) {
-          for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+          for (const key of ENERGY_KEYS) {
+            addToEnergyBucket(bucket, key, (dbBucket as any)[key]);
+            if ((dbBucket as any)[`__gap_${key}`]) bucket[`__gap_${key}`] = true;
+          }
           addSplitFields(bucket, dbBucket);
         }
         manualFiltered.forEach((r) => {
@@ -587,6 +597,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         });
         if (dateStr === todayStr && !dbBucket) {
           addLiveTodayToBucket(bucket);
+          for (const key of ENERGY_KEYS) bucket[`__gap_${key}`] = true;
         }
         return bucket;
       });
@@ -604,7 +615,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
         const bucket = weekMap.get(wk)!;
         const dbBucket = dbDailyMap.get(dateStr);
         if (dbBucket) {
-          for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, dbBucket[key]);
+          for (const key of ENERGY_KEYS) addToEnergyBucket(bucket, key, (dbBucket as any)[key]);
           addSplitFields(bucket, dbBucket);
         }
         if (dateStr === todayStr && !dbBucket) {
@@ -626,7 +637,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     const dbDailyMap = buildDailyBucketsFromDB();
     for (const [dateStr, dbBucket] of dbDailyMap.entries()) {
       const monthIdx = new Date(dateStr).getMonth();
-      for (const key of ENERGY_KEYS) addToEnergyBucket(buckets[monthIdx], key, dbBucket[key]);
+      for (const key of ENERGY_KEYS) addToEnergyBucket(buckets[monthIdx], key, (dbBucket as any)[key]);
       addSplitFields(buckets[monthIdx], dbBucket);
     }
     if (!dbDailyMap.has(todayStr)) {
@@ -677,12 +688,23 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
     });
   }, [chartData, hiddenKeys]);
 
+  // Temp diag
+  useEffect(() => {
+    if (period === "day") {
+      const sample = (filteredChartData as any[]).filter((b, i) => (b.strom || b.gas || b.wasser || b.waerme) && i < 288).slice(0, 3);
+      console.info("[energy-chart:chartdata]", {
+        period, len: filteredChartData.length, visibleEnergyKeys, allowedTypes: Array.from(allowedTypes), sample,
+        b103: filteredChartData[103], b50: filteredChartData[50], hasData, powerReadingsLen: powerReadings.length,
+      });
+    }
+  }, [filteredChartData, period, visibleEnergyKeys, allowedTypes, hasData, powerReadings.length]);
+
   if (loading || powerLoading || dailyTotalsLoading) return <Card><CardContent className="p-6"><Skeleton className="h-[300px]" /></CardContent></Card>;
 
-  const unitLabel = getChartUnitLabel(period);
+  const visibleKeys = ENERGY_KEYS.filter((k) => !hiddenKeys.has(k));
+  const unitLabel = getChartUnitLabel(period, visibleKeys.filter((k) => allowedTypes.has(k)));
   const isLineChart = period === "day";
 
-  const visibleKeys = ENERGY_KEYS.filter((k) => !hiddenKeys.has(k));
 
   const handleLegendClick = (e: any) => {
     // dataKey can be "strom", "real_strom", "__gap_strom" — normalise to base key
@@ -714,7 +736,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
 
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="font-display text-lg">
@@ -737,21 +759,22 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOffset((o) => o - 1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-xs text-muted-foreground min-w-[160px] text-center">{periodLabel}</span>
+            <PeriodPickerLabel period={period} label={periodLabel} refDate={refDate} className="min-w-[160px]" />
             <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((o) => o + 1)}>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-1 min-h-0 flex-col">
         {!hasData ? (
-          <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">
+          <div className="flex min-h-[300px] flex-1 items-center justify-center text-muted-foreground text-sm">
             {t("chart.noData" as any)}
           </div>
         ) : (
           <>
-            <ResponsiveContainer width="100%" height={300}>
+            <div className="min-h-[300px] flex-1 min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
               {isLineChart ? (
                 <LineChart data={filteredChartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
@@ -770,19 +793,41 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                     const hidden = hiddenKeys.has(key);
                     const displayName = T(`energy.${key}`);
                     return (
-                      <React.Fragment key={key}>
-                        <Line type="monotone" dataKey={key} name={`__gap_${key}`} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 1.5} strokeDasharray="4 4" dot={false} connectNulls={false} legendType="none" tooltipType="none" />
-                        <Line type="monotone" dataKey={hidden ? key : `real_${key}`} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={false} legendType="line" />
-                      </React.Fragment>
+                      <Line key={key} type="monotone" dataKey={key} name={displayName} stroke={ENERGY_CHART_COLORS[key]} strokeWidth={hidden ? 0 : 2.5} dot={false} connectNulls={key === "wasser" || key === "gas"} legendType="line" />
                     );
                   })}
                 </LineChart>
               ) : (
                 <BarChart data={filteredChartData} barGap={2} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+                  <defs>
+                    {ENERGY_KEYS.map((key) => (
+                      <pattern
+                        key={`pat-${key}`}
+                        id={`gap-pattern-${key}`}
+                        patternUnits="userSpaceOnUse"
+                        width="6"
+                        height="6"
+                        patternTransform="rotate(45)"
+                      >
+                        <rect width="6" height="6" fill={ENERGY_CHART_COLORS[key]} fillOpacity="0.18" />
+                        <line x1="0" y1="0" x2="0" y2="6" stroke={ENERGY_CHART_COLORS[key]} strokeWidth="2" />
+                      </pattern>
+                    ))}
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
                   <XAxis dataKey="label" tick={tickStyle} tickLine={false} axisLine={false} />
                   <YAxis width={50} tick={tickStyle} tickLine={false} axisLine={false} domain={visibleKeys.length === 0 ? [0, 1] : ['auto', 'auto']} />
-                  <Tooltip contentStyle={tooltipStyle} formatter={tooltipFormatter} />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(value: number, name: string, item: any) => {
+                      const [labelText, _] = tooltipFormatter(value, name);
+                      const payload = item?.payload ?? {};
+                      const energyKey = ENERGY_KEYS.find(k => T(`energy.${k}`) === name || name.startsWith(T(`energy.${k}`)));
+                      const isGap = energyKey ? payload[`__gap_${energyKey}`] === true : false;
+                      const suffix = isGap ? " ⚠ Tageswert fehlt (nur 5-Min-Schätzung)" : "";
+                      return [labelText + suffix, name];
+                    }}
+                  />
                   {visibleEnergyKeys.map((key) => {
                     if (bidirectionalTypes.has(key)) {
                       return (
@@ -792,12 +837,15 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
                         </React.Fragment>
                       );
                     }
-                    return <Bar key={key} dataKey={key} name={T(`energy.${key}`)} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />;
+                    return (
+                      <Bar key={key} dataKey={key} name={T(`energy.${key}`)} fill={ENERGY_CHART_COLORS[key]} radius={[3, 3, 0, 0]} hide={hiddenKeys.has(key)} />
+                    );
                   })}
                 </BarChart>
               )}
             </ResponsiveContainer>
-            <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+            </div>
+            <div className="flex shrink-0 items-center justify-center gap-2 mt-3 flex-wrap pb-1">
               {visibleEnergyKeys.flatMap((key) => {
                 if (bidirectionalTypes.has(key)) {
                   return [

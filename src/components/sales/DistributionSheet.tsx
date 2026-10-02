@@ -37,6 +37,9 @@ interface Props {
 export function DistributionSheet({ open, onOpenChange, projektId, editing, onSaved }: Props) {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ name: "", typ: "NSHV", standort: "", notizen: "" });
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [fotoUrl, setFotoUrl] = useState<string | null>(null);
+  const [kiAnalyse, setKiAnalyse] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -46,8 +49,24 @@ export function DistributionSheet({ open, onOpenChange, projektId, editing, onSa
         standort: editing?.standort ?? "",
         notizen: editing?.notizen ?? "",
       });
+      setCurrentId(editing?.id ?? null);
+      setFotoUrl(editing?.foto_url ?? null);
+      setKiAnalyse((editing?.ki_analyse as Record<string, unknown>) ?? null);
     }
   }, [open, editing]);
+
+  const refetch = async (id: string) => {
+    const { data } = await supabase
+      .from("sales_distributions")
+      .select("foto_url, ki_analyse")
+      .eq("id", id)
+      .maybeSingle();
+    if (data) {
+      setFotoUrl(data.foto_url ?? null);
+      setKiAnalyse((data.ki_analyse as Record<string, unknown>) ?? null);
+    }
+    onSaved();
+  };
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -55,7 +74,7 @@ export function DistributionSheet({ open, onOpenChange, projektId, editing, onSa
       return;
     }
     setLoading(true);
-    if (editing) {
+    if (currentId) {
       const { error } = await supabase
         .from("sales_distributions")
         .update({
@@ -64,37 +83,42 @@ export function DistributionSheet({ open, onOpenChange, projektId, editing, onSa
           standort: form.standort.trim() || null,
           notizen: form.notizen.trim() || null,
         })
-        .eq("id", editing.id);
+        .eq("id", currentId);
       setLoading(false);
       if (error) {
         toast.error("Speichern fehlgeschlagen", { description: error.message });
         return;
       }
       toast.success("Verteilung aktualisiert");
+      onSaved();
     } else {
-      const { error } = await supabase.from("sales_distributions").insert({
-        project_id: projektId,
-        name: form.name.trim(),
-        typ: form.typ,
-        standort: form.standort.trim() || null,
-        notizen: form.notizen.trim() || null,
-      });
+      const { data, error } = await supabase
+        .from("sales_distributions")
+        .insert({
+          project_id: projektId,
+          name: form.name.trim(),
+          typ: form.typ,
+          standort: form.standort.trim() || null,
+          notizen: form.notizen.trim() || null,
+        })
+        .select("id")
+        .single();
       setLoading(false);
-      if (error) {
-        toast.error("Speichern fehlgeschlagen", { description: error.message });
+      if (error || !data) {
+        toast.error("Speichern fehlgeschlagen", { description: error?.message });
         return;
       }
-      toast.success("Verteilung angelegt");
+      setCurrentId(data.id);
+      toast.success("Verteilung angelegt – jetzt optional Foto hinzufügen");
+      onSaved();
     }
-    onSaved();
-    onOpenChange(false);
   };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[80vh] sm:h-auto sm:max-w-lg sm:mx-auto rounded-t-xl overflow-y-auto">
+      <SheetContent side="bottom" className="h-[90vh] sm:h-[90vh] sm:max-h-[90vh] sm:max-w-lg sm:mx-auto rounded-t-xl overflow-y-auto overscroll-contain">
         <SheetHeader>
-          <SheetTitle>{editing ? "Verteilung bearbeiten" : "Neue Verteilung"}</SheetTitle>
+          <SheetTitle>{currentId ? "Verteilung bearbeiten" : "Neue Verteilung"}</SheetTitle>
           <SheetDescription>NSHV (Hauptverteilung) oder UV (Unterverteilung).</SheetDescription>
         </SheetHeader>
         <div className="space-y-4 mt-4">
@@ -142,7 +166,7 @@ export function DistributionSheet({ open, onOpenChange, projektId, editing, onSa
           </div>
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
-              Abbrechen
+              {currentId ? "Schließen" : "Abbrechen"}
             </Button>
             <Button className="flex-1" onClick={handleSave} disabled={loading}>
               {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -150,16 +174,18 @@ export function DistributionSheet({ open, onOpenChange, projektId, editing, onSa
             </Button>
           </div>
 
-          {editing && (
-            <>
-              <Separator className="my-2" />
-              <CabinetPhotoAnalyzer
-                distributionId={editing.id}
-                fotoUrl={editing.foto_url ?? null}
-                kiAnalyse={(editing.ki_analyse as never) ?? null}
-                onUpdated={onSaved}
-              />
-            </>
+          <Separator className="my-2" />
+          {currentId ? (
+            <CabinetPhotoAnalyzer
+              distributionId={currentId}
+              fotoUrl={fotoUrl}
+              kiAnalyse={kiAnalyse as never}
+              onUpdated={() => refetch(currentId)}
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-3 rounded-md border border-dashed">
+              Erst speichern, dann kannst du ein Foto der Verteilung hinzufügen und per KI auswerten lassen.
+            </p>
           )}
         </div>
       </SheetContent>

@@ -86,7 +86,12 @@ export function WidgetPreview({ name, chartType, color, config, previewPeriod }:
         {chartType === "energyflow" && (
           <DashboardFilterProvider>
             <Suspense fallback={<div className="h-48 flex items-center justify-center text-muted-foreground text-sm">Laden…</div>}>
-              <EnergyFlowMonitor nodes={flowNodes} connections={flowConns} />
+              <EnergyFlowMonitor
+                nodes={flowNodes}
+                connections={flowConns}
+                locationId={config.energy_flow_location_id}
+                gatewayDeviceIds={config.energy_flow_gateway_device_ids || []}
+              />
             </Suspense>
           </DashboardFilterProvider>
         )}

@@ -36,8 +36,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil, MapPin, LocateFixed, Loader2, AlertTriangle } from "lucide-react";
+import { Pencil, MapPin, LocateFixed, Loader2, AlertTriangle, Wand2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FEDERAL_STATES, detectFederalStateFromPostalCode } from "@/lib/federalStates";
 
 // ENERGY_SOURCES constant removed — now using LocationEnergySourcesEditor
 
@@ -74,7 +75,14 @@ const locationSchema = z.object({
   net_floor_area: z.coerce.number().min(0).optional().or(z.literal("")),
   gross_floor_area: z.coerce.number().min(0).optional().or(z.literal("")),
   heating_type: z.string().trim().max(100).optional(),
+  grid_limit_kw: z.coerce.number().min(0).max(10000).optional().or(z.literal("")),
+  federal_state: z.string().trim().max(2).optional().or(z.literal("")),
+  hot_water_energy_type: z.string().trim().optional().or(z.literal("")),
+  hot_water_kwh_year: z.coerce.number().min(0).optional().or(z.literal("")),
+  hot_water_share_pct: z.coerce.number().min(0).max(100).optional().or(z.literal("")),
+
 });
+
 
 type LocationFormData = z.infer<typeof locationSchema>;
 
@@ -115,8 +123,15 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       net_floor_area: location.net_floor_area ?? "",
       gross_floor_area: location.gross_floor_area ?? "",
       heating_type: location.heating_type || "",
+      grid_limit_kw: (location as any).grid_limit_kw ?? "",
+      federal_state: (location as any).federal_state ?? "",
+      hot_water_energy_type: (location as any).hot_water_energy_type ?? "",
+      hot_water_kwh_year: (location as any).hot_water_kwh_year ?? "",
+      hot_water_share_pct: (location as any).hot_water_share_pct ?? "",
+
     },
   });
+
 
   const watchedIsMain = form.watch("is_main_location");
   const currentMainLocation = locations.find(loc => loc.is_main_location && loc.id !== location.id);
@@ -143,9 +158,16 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       net_floor_area: location.net_floor_area ?? "",
       gross_floor_area: location.gross_floor_area ?? "",
       heating_type: location.heating_type || "",
+      grid_limit_kw: (location as any).grid_limit_kw ?? "",
+      federal_state: (location as any).federal_state ?? "",
+      hot_water_energy_type: (location as any).hot_water_energy_type ?? "",
+      hot_water_kwh_year: (location as any).hot_water_kwh_year ?? "",
+      hot_water_share_pct: (location as any).hot_water_share_pct ?? "",
+
     });
     setOpen(true);
   };
+
 
   const onSubmit = async (data: LocationFormData) => {
     const { energy_sources: energySourceItems, ...rest } = data;
@@ -170,7 +192,20 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
       net_floor_area: typeof rest.net_floor_area === "number" ? rest.net_floor_area : null,
       gross_floor_area: typeof rest.gross_floor_area === "number" ? rest.gross_floor_area : null,
       heating_type: rest.heating_type || null,
-    };
+      grid_limit_kw: typeof rest.grid_limit_kw === "number" ? rest.grid_limit_kw : null,
+      federal_state: rest.federal_state ? rest.federal_state : null,
+      hot_water_energy_type: rest.hot_water_energy_type ? rest.hot_water_energy_type : null,
+      hot_water_kwh_year:
+        rest.hot_water_energy_type && typeof rest.hot_water_kwh_year === "number"
+          ? rest.hot_water_kwh_year
+          : null,
+      hot_water_share_pct:
+        rest.hot_water_energy_type && typeof rest.hot_water_share_pct === "number"
+          ? rest.hot_water_share_pct
+          : null,
+
+    } as any;
+
 
     const { error } = await updateLocation(location.id, updates);
 
@@ -329,6 +364,46 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
                     )}
                   />
                 </div>
+                <FormField control={form.control} name="federal_state" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bundesland</FormLabel>
+                    <div className="flex gap-2">
+                      <Select value={field.value || ""} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder="Bundesland auswählen (optional)" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {FEDERAL_STATES.map((s) => (
+                            <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        title="Aus Postleitzahl ermitteln"
+                        onClick={() => {
+                          const plz = form.getValues("postal_code");
+                          const detected = detectFederalStateFromPostalCode(plz);
+                          if (detected) {
+                            field.onChange(detected);
+                          } else {
+                            toast({ title: "Keine Erkennung möglich", description: "Bitte PLZ prüfen oder manuell auswählen.", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        <Wand2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <FormDescription>
+                      Bestimmt die rechtliche Grundlage und Vorlage für den kommunalen Energiebericht (z.B. NKlimaG, EWärmeG).
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )} />
               </div>
 
               {/* Contact */}
@@ -428,16 +503,148 @@ export function EditLocationDialog({ location, onSuccess, trigger }: EditLocatio
                     </FormItem>
                   )} />
                 </div>
-                <FormField control={form.control} name="heating_type" render={({ field }) => (
+                <FormField control={form.control} name="heating_type" render={({ field }) => {
+                  const energySources = form.watch("energy_sources") || [];
+                  const options = [
+                    ...energySources
+                      .map((s: any) => (s.custom_name || s.energy_type || "").trim())
+                      .filter((v: string) => v.length > 0),
+                    "Keine Heizung",
+                  ];
+                  // Deduplicate while preserving order
+                  const uniqueOptions = Array.from(new Set(options));
+                  const currentValue = field.value || "";
+                  const showFallback = currentValue && !uniqueOptions.includes(currentValue);
+                  return (
+                    <FormItem>
+                      <FormLabel>{t("building.heatingType" as any)}</FormLabel>
+                      <Select value={currentValue} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Bitte auswählen" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {showFallback && (
+                            <SelectItem value={currentValue}>{currentValue}</SelectItem>
+                          )}
+                          {uniqueOptions.map((opt) => (
+                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>Auswahl basiert auf den hinterlegten Energiequellen dieser Liegenschaft.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }} />
+
+                {/* Warmwasserbereitung */}
+                <div className="space-y-4">
+                  <h5 className="text-sm font-medium">Warmwasserbereitung</h5>
+                  <FormField
+                    control={form.control}
+                    name="hot_water_energy_type"
+                    render={({ field }) => {
+                      const energySources = form.watch("energy_sources") || [];
+                      // WW-Quelle darf aus jeder hinterlegten Energiequelle gewählt werden.
+                      const sourceOptions = energySources
+                        .map((s: any) => ({
+                          value: (s.energy_type || "").trim().toLowerCase(),
+                          label: (s.custom_name || s.energy_type || "").trim(),
+                        }))
+                        .filter((o) => o.value.length > 0 && o.label.length > 0);
+                      const seen = new Set<string>();
+                      const uniqueOptions = sourceOptions.filter((o) => {
+                        if (seen.has(o.value)) return false;
+                        seen.add(o.value);
+                        return true;
+                      });
+                      const NONE_VALUE = "__none__";
+                      const currentValue = (field.value as string) || "";
+                      return (
+                        <FormItem>
+                          <FormLabel>Warmwasser über</FormLabel>
+                          <Select
+                            value={currentValue ? currentValue : NONE_VALUE}
+                            onValueChange={(v) => field.onChange(v === NONE_VALUE ? "" : v)}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value={NONE_VALUE}>Nicht konfiguriert (kein Sockelabzug)</SelectItem>
+                              {uniqueOptions.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>
+                            Legt fest, über welche Energiequelle das Trinkwarmwasser bereitet wird.
+                            Der Sockel wird bei der Witterungsbereinigung nur beim gewählten Träger abgezogen.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+                  {(form.watch("hot_water_energy_type") as string) && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <FormField control={form.control} name="hot_water_kwh_year" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>WW-Jahresverbrauch (kWh)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="any" min={0} placeholder="z.B. 3500" {...field} value={(field.value as any) ?? ""} />
+                          </FormControl>
+                          <FormDescription>Genauer Wert falls bekannt.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="hot_water_share_pct" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Anteil am Verbrauch der WW-Quelle (%)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.1" min={0} max={100} placeholder="z.B. 15" {...field} value={(field.value as any) ?? ""} />
+                          </FormControl>
+                          <FormDescription>
+                            Wird nur genutzt, wenn kein kWh-Wert gesetzt ist.
+                            Bleibt beides leer, wird automatisch die Sommer-Baseline verwendet.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* DLM Hardlimit (Hausanschluss) */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium">Lastmanagement (DLM)</h4>
+                <FormField control={form.control} name="grid_limit_kw" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("building.heatingType" as any)}</FormLabel>
-                    <FormControl><Input placeholder="z.B. Gas-Brennwert, Fernwärme" {...field} /></FormControl>
+                    <FormLabel>Maximale Bezugsleistung am Hausanschluss (kW)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.1"
+                        placeholder="z.B. 35"
+                        {...field}
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">
+                      Hardlimit: alle Ladepunkte an diesem Standort werden bei Überschreitung automatisch gedrosselt.
+                      Voraussetzung: ein Hauptzähler ist diesem Standort zugeordnet. Leer lassen = kein Limit.
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )} />
               </div>
 
-              {/* Coordinates */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-medium">{t("locations.coordinates")}</h4>

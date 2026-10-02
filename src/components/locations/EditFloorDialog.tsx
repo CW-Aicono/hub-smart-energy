@@ -74,6 +74,7 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
           return;
         }
         floorPlanUrl = url;
+        toast.success(T("fl.floorPlanUploaded"));
       }
 
       setUploadLabel(T("fl.savingData"));
@@ -178,9 +179,32 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
           <div className="space-y-2">
             <Label htmlFor="edit-floorPlan">{T("fl.floorPlanChange")}</Label>
             {floor.floor_plan_url && (
-              <p className="text-sm text-muted-foreground">
-                {T("fl.floorPlanExists")}
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">
+                  {T("fl.floorPlanExists")}
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  disabled={loading}
+                  onClick={async () => {
+                    setLoading(true);
+                    const { error } = await updateFloor(floor.id, { floor_plan_url: null });
+                    setLoading(false);
+                    if (error) {
+                      toast.error(T("fl.updateError"));
+                    } else {
+                      toast.success(T("floor.updated"));
+                      setFloorPlanFile(null);
+                      onSuccess?.();
+                    }
+                  }}
+                >
+                  Grundriss entfernen
+                </Button>
+              </div>
             )}
             <Input
               id="edit-floorPlan"
@@ -189,6 +213,7 @@ export function EditFloorDialog({ floor, locationId, onSuccess }: EditFloorDialo
               onChange={(e) => setFloorPlanFile(e.target.files?.[0] || null)}
             />
           </div>
+
 
           <div className="space-y-2">
             <Label htmlFor="edit-model3d">{T("fl.model3dEdit")}</Label>

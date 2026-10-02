@@ -1,46 +1,124 @@
 import { useState } from "react";
 import { Meter } from "@/hooks/useMeters";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Minus, Trash2, Calculator } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Plus, Minus, Trash2, Calculator, PlugZap, Users, MapPin, Gauge } from "lucide-react";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 
+/**
+ * Eine Quelle für einen virtuellen Zähler. Genau eines der vier
+ * `source_*`-Felder ist gesetzt — Spiegel des DB-CHECK-Constraints.
+ */
 export interface VirtualMeterSource {
-  source_meter_id: string;
   operator: "+" | "-";
+  source_meter_id?: string | null;
+  source_charge_point_id?: string | null;
+  source_charge_point_group_id?: string | null;
+  source_all_charge_points?: boolean;
+}
+
+export interface ChargePointOption {
+  id: string;
+  name: string;
+}
+export interface ChargePointGroupOption {
+  id: string;
+  name: string;
 }
 
 interface VirtualMeterFormulaBuilderProps {
   sources: VirtualMeterSource[];
   onSourcesChange: (sources: VirtualMeterSource[]) => void;
   availableMeters: Meter[];
+  availableChargePoints?: ChargePointOption[];
+  availableChargePointGroups?: ChargePointGroupOption[];
 }
+
+const ALL_CP_VALUE = "__all_charge_points__";
+
+type ParsedValue =
+  | { kind: "meter"; id: string }
+  | { kind: "cp"; id: string }
+  | { kind: "cpg"; id: string }
+  | { kind: "all" };
+
+const encode = (p: ParsedValue): string => {
+  if (p.kind === "all") return ALL_CP_VALUE;
+  return `${p.kind}:${p.id}`;
+};
+const decode = (s: string): ParsedValue | null => {
+  if (!s) return null;
+  if (s === ALL_CP_VALUE) return { kind: "all" };
+  const [kind, ...rest] = s.split(":");
+  const id = rest.join(":");
+  if (!id) return null;
+  if (kind === "meter" || kind === "cp" || kind === "cpg") return { kind, id };
+  return null;
+};
+
+const sourceKey = (s: VirtualMeterSource): string => {
+  if (s.source_meter_id) return encode({ kind: "meter", id: s.source_meter_id });
+  if (s.source_charge_point_id) return encode({ kind: "cp", id: s.source_charge_point_id });
+  if (s.source_charge_point_group_id) return encode({ kind: "cpg", id: s.source_charge_point_group_id });
+  if (s.source_all_charge_points) return ALL_CP_VALUE;
+  return "";
+};
+
+const buildSource = (parsed: ParsedValue, operator: "+" | "-"): VirtualMeterSource => {
+  switch (parsed.kind) {
+    case "meter":
+      return { operator, source_meter_id: parsed.id };
+    case "cp":
+      return { operator, source_charge_point_id: parsed.id };
+    case "cpg":
+      return { operator, source_charge_point_group_id: parsed.id };
+    case "all":
+      return { operator, source_all_charge_points: true };
+  }
+};
 
 export const VirtualMeterFormulaBuilder = ({
   sources,
   onSourcesChange,
   availableMeters,
+  availableChargePoints = [],
+  availableChargePointGroups = [],
 }: VirtualMeterFormulaBuilderProps) => {
-  const [addingMeterId, setAddingMeterId] = useState("");
+  const [pendingValue, setPendingValue] = useState("");
   const { t } = useTranslation();
 
-  const usedMeterIds = new Set(sources.map((s) => s.source_meter_id));
+  const usedKeys = new Set(sources.map(sourceKey));
+
   const selectableMeters = availableMeters.filter(
-    (m) => !m.is_archived && m.capture_type !== "virtual" && !usedMeterIds.has(m.id)
+    (m) => !m.is_archived && m.capture_type !== "virtual" && !usedKeys.has(encode({ kind: "meter", id: m.id })),
   );
+  const selectableCps = availableChargePoints.filter((c) => !usedKeys.has(encode({ kind: "cp", id: c.id })));
+  const selectableCpGroups = availableChargePointGroups.filter(
+    (g) => !usedKeys.has(encode({ kind: "cpg", id: g.id })),
+  );
+  const allCpBlockUsed = usedKeys.has(ALL_CP_VALUE);
+
+  const totalSelectable =
+    selectableMeters.length + selectableCps.length + selectableCpGroups.length + (allCpBlockUsed ? 0 : 1);
 
   const addSource = (operator: "+" | "-") => {
-    if (!addingMeterId) return;
-    onSourcesChange([...sources, { source_meter_id: addingMeterId, operator }]);
-    setAddingMeterId("");
+    const parsed = decode(pendingValue);
+    if (!parsed) return;
+    onSourcesChange([...sources, buildSource(parsed, operator)]);
+    setPendingValue("");
   };
 
-  const removeSource = (index: number) => {
-    onSourcesChange(sources.filter((_, i) => i !== index));
-  };
+  const removeSource = (index: number) => onSourcesChange(sources.filter((_, i) => i !== index));
 
   const toggleOperator = (index: number) => {
     const updated = [...sources];
@@ -48,18 +126,55 @@ export const VirtualMeterFormulaBuilder = ({
     onSourcesChange(updated);
   };
 
-  const getMeterName = (id: string) => availableMeters.find((m) => m.id === id)?.name || "Unbekannt";
-  const getMeterType = (id: string) => {
-    const meter = availableMeters.find((m) => m.id === id);
-    if (!meter) return "";
-    const types: Record<string, string> = { strom: "Strom", gas: "Gas", waerme: "Wärme", wasser: "Wasser" };
-    return types[meter.energy_type] || meter.energy_type;
+  const describeSource = (
+    s: VirtualMeterSource,
+  ): { icon: JSX.Element; label: string; sub: string } => {
+    if (s.source_meter_id) {
+      const m = availableMeters.find((x) => x.id === s.source_meter_id);
+      const types: Record<string, string> = {
+        strom: "Strom",
+        gas: "Gas",
+        waerme: "Wärme",
+        wasser: "Wasser",
+      };
+      return {
+        icon: <Gauge className="h-3.5 w-3.5" />,
+        label: m?.name ?? "Unbekannter Zähler",
+        sub: m ? types[m.energy_type] ?? m.energy_type : "",
+      };
+    }
+    if (s.source_charge_point_id) {
+      const cp = availableChargePoints.find((x) => x.id === s.source_charge_point_id);
+      return {
+        icon: <PlugZap className="h-3.5 w-3.5" />,
+        label: cp?.name ?? "Unbekannter Ladepunkt",
+        sub: "Ladepunkt",
+      };
+    }
+    if (s.source_charge_point_group_id) {
+      const g = availableChargePointGroups.find((x) => x.id === s.source_charge_point_group_id);
+      return {
+        icon: <Users className="h-3.5 w-3.5" />,
+        label: g?.name ?? "Unbekannte Gruppe",
+        sub: "Ladepunkt-Gruppe",
+      };
+    }
+    return {
+      icon: <MapPin className="h-3.5 w-3.5" />,
+      label: "Alle Ladepunkte dieser Liegenschaft",
+      sub: "dynamisch aufgelöst",
+    };
   };
 
-  // Build formula preview: Source1 − Source2 − Source3 = Virtueller Zähler
-  const formulaPreview = sources.length > 0
-    ? sources.map((s, i) => `${i === 0 && s.operator === "+" ? "" : s.operator === "+" ? " + " : " − "}${getMeterName(s.source_meter_id)}`).join("") + " = Virtueller Zähler"
-    : "Noch keine Quellzähler ausgewählt";
+  const formulaPreview =
+    sources.length > 0
+      ? sources
+          .map((s, i) => {
+            const { label } = describeSource(s);
+            return `${i === 0 && s.operator === "+" ? "" : s.operator === "+" ? " + " : " − "}${label}`;
+          })
+          .join("") + " = Virtueller Zähler"
+      : "Noch keine Quellen ausgewählt";
 
   return (
     <div className="space-y-3 rounded-md border p-3 bg-muted/30">
@@ -69,58 +184,93 @@ export const VirtualMeterFormulaBuilder = ({
         <HelpTooltip text={t("tooltip.virtualMeterFormula" as any)} iconSize={12} />
       </div>
 
-      {/* Current sources */}
       {sources.length > 0 && (
         <div className="space-y-2">
-          {sources.map((source, index) => (
-            <div key={index} className="flex items-center gap-2 rounded-md border bg-background p-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 w-7 p-0 shrink-0"
-                onClick={() => toggleOperator(index)}
-                title={source.operator === "+" ? "Addieren → Subtrahieren" : "Subtrahieren → Addieren"}
-              >
-                {source.operator === "+" ? (
-                  <Plus className="h-3.5 w-3.5 text-green-600" />
-                ) : (
-                  <Minus className="h-3.5 w-3.5 text-red-500" />
-                )}
-              </Button>
-              <div className="flex-1 min-w-0">
-                <span className="text-sm font-medium truncate block">{getMeterName(source.source_meter_id)}</span>
-                <span className="text-xs text-muted-foreground">{getMeterType(source.source_meter_id)}</span>
+          {sources.map((source, index) => {
+            const { icon, label, sub } = describeSource(source);
+            return (
+              <div key={index} className="flex items-center gap-2 rounded-md border bg-background p-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 w-7 p-0 shrink-0"
+                  onClick={() => toggleOperator(index)}
+                  title={source.operator === "+" ? "Addieren → Subtrahieren" : "Subtrahieren → Addieren"}
+                >
+                  {source.operator === "+" ? (
+                    <Plus className="h-3.5 w-3.5 text-green-600" />
+                  ) : (
+                    <Minus className="h-3.5 w-3.5 text-red-500" />
+                  )}
+                </Button>
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium truncate flex items-center gap-1.5">
+                    <span className="text-muted-foreground">{icon}</span>
+                    {label}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{sub}</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => removeSource(index)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 shrink-0 text-muted-foreground hover:text-destructive"
-                onClick={() => removeSource(index)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* Add new source */}
-      {selectableMeters.length > 0 && (
+      {totalSelectable > 0 && (
         <div className="flex items-end gap-2">
           <div className="flex-1">
-            <Label className="text-xs text-muted-foreground">Quellzähler hinzufügen</Label>
-            <Select value={addingMeterId} onValueChange={setAddingMeterId}>
+            <Label className="text-xs text-muted-foreground">Quelle hinzufügen</Label>
+            <Select value={pendingValue} onValueChange={setPendingValue}>
               <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Zähler auswählen" />
+                <SelectValue placeholder="Zähler, Ladepunkt oder Gruppe auswählen" />
               </SelectTrigger>
               <SelectContent>
-                {selectableMeters.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.name}
-                  </SelectItem>
-                ))}
+                {selectableMeters.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Zähler</SelectLabel>
+                    {selectableMeters.map((m) => (
+                      <SelectItem key={`meter-${m.id}`} value={encode({ kind: "meter", id: m.id })}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {selectableCps.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Ladepunkte</SelectLabel>
+                    {selectableCps.map((c) => (
+                      <SelectItem key={`cp-${c.id}`} value={encode({ kind: "cp", id: c.id })}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {selectableCpGroups.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Ladepunkt-Gruppen</SelectLabel>
+                    {selectableCpGroups.map((g) => (
+                      <SelectItem key={`cpg-${g.id}`} value={encode({ kind: "cpg", id: g.id })}>
+                        {g.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {!allCpBlockUsed && (availableChargePoints.length > 0 || availableChargePointGroups.length > 0) && (
+                  <SelectGroup>
+                    <SelectLabel>Sammelauswahl</SelectLabel>
+                    <SelectItem value={ALL_CP_VALUE}>Alle Ladepunkte dieser Liegenschaft</SelectItem>
+                  </SelectGroup>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -129,7 +279,7 @@ export const VirtualMeterFormulaBuilder = ({
             variant="outline"
             size="sm"
             className="gap-1"
-            disabled={!addingMeterId}
+            disabled={!pendingValue}
             onClick={() => addSource("+")}
           >
             <Plus className="h-3.5 w-3.5" /> Add.
@@ -139,7 +289,7 @@ export const VirtualMeterFormulaBuilder = ({
             variant="outline"
             size="sm"
             className="gap-1"
-            disabled={!addingMeterId}
+            disabled={!pendingValue}
             onClick={() => addSource("-")}
           >
             <Minus className="h-3.5 w-3.5" /> Sub.
@@ -147,13 +297,12 @@ export const VirtualMeterFormulaBuilder = ({
         </div>
       )}
 
-      {selectableMeters.length === 0 && sources.length === 0 && (
+      {totalSelectable === 0 && sources.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          Keine geeigneten Quellzähler vorhanden. Erstellen Sie zuerst manuelle oder automatische Zähler.
+          Keine geeigneten Quellen vorhanden. Legen Sie zuerst Zähler oder Ladepunkte für diese Liegenschaft an.
         </p>
       )}
 
-      {/* Formula preview */}
       {sources.length > 0 && (
         <div className="rounded-md bg-background border p-2">
           <p className="text-xs text-muted-foreground mb-1">Vorschau:</p>
@@ -161,9 +310,9 @@ export const VirtualMeterFormulaBuilder = ({
         </div>
       )}
 
-      {sources.length < 2 && sources.length > 0 && (
-        <p className="text-xs text-amber-600 flex items-center gap-1">
-          ⚠ Mindestens zwei Quellzähler erforderlich.
+      {sources.length === 1 && (
+        <p className="text-xs text-muted-foreground">
+          Hinweis: Ein virtueller Zähler funktioniert auch mit einer einzelnen Quelle (z.B. „Alle Ladepunkte" als Wallbox-Summenzähler).
         </p>
       )}
     </div>

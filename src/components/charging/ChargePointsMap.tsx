@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { normalizeConnectorStatus } from "@/lib/formatCharging";
 import { PlugZap, Zap, ZapOff, AlertTriangle, WifiOff, LocateFixed, Loader2, Navigation, Move, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -53,6 +54,8 @@ interface ChargePointsMapProps {
   showLocateButton?: boolean;
   showEditPositionButton?: boolean;
   externalUserPos?: [number, number] | null;
+  editMode?: boolean;
+  onEditModeChange?: (v: boolean) => void;
 }
 
 const statusVariantMap: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -132,12 +135,18 @@ function BoundsTracker({ points, onVisiblePointsChange }: { points: ChargePointF
   return null;
 }
 
-export default function ChargePointsMap({ chargePoints, onChargePointClick, onVisiblePointsChange, onPositionChange, className, showLocateButton = false, showEditPositionButton = false, externalUserPos }: ChargePointsMapProps) {
+export default function ChargePointsMap({ chargePoints, onChargePointClick, onVisiblePointsChange, onPositionChange, className, showLocateButton = false, showEditPositionButton = false, externalUserPos, editMode: editModeProp, onEditModeChange }: ChargePointsMapProps) {
   const { t } = useTranslation();
   const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
   const [userPos, setUserPos] = useState<[number, number] | null>(externalUserPos || null);
   const [locating, setLocating] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [editModeInternal, setEditModeInternal] = useState(false);
+  const editMode = editModeProp ?? editModeInternal;
+  const setEditMode = (updater: boolean | ((v: boolean) => boolean)) => {
+    const next = typeof updater === "function" ? (updater as (v: boolean) => boolean)(editMode) : updater;
+    if (onEditModeChange) onEditModeChange(next);
+    else setEditModeInternal(next);
+  };
 
   // Sync external user position
   useEffect(() => {
@@ -213,14 +222,15 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
           </>
         )}
         {validPoints.map((cp) => {
-          const statusKey = `chargePointStatus.${cp.status}` as any;
-          const statusLabel = t(statusKey) || cp.status;
-          const cfgVariant = statusVariantMap[cp.status] || statusVariantMap.offline;
+          const s = normalizeConnectorStatus(cp.status, (cp as any).ws_connected !== false);
+          const statusKey = `chargePointStatus.${s}` as any;
+          const statusLabel = s === "charging" ? t("chargingStats.occupied" as any) : (t(statusKey) || s);
+          const cfgVariant = statusVariantMap[s] || statusVariantMap.offline;
           return (
             <Marker
               key={cp.id}
               position={[cp.latitude!, cp.longitude!]}
-              icon={createColoredIcon(statusColors[cp.status] || statusColors.offline)}
+              icon={createColoredIcon(statusColors[s] || statusColors.offline)}
               draggable={editMode}
               eventHandlers={{
                 click: () => { if (!editMode) onChargePointClick?.(cp); },
@@ -290,18 +300,13 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
         </div>
       )}
 
-      {/* Map control buttons */}
-      <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
-        {showEditPositionButton && (
+      {/* Place-charge-points button (top-right, labelled) — only when uncontrolled */}
+      {showEditPositionButton && editModeProp === undefined && (
+        <div className="absolute top-3 right-3 z-[1000]">
           <Button
-            size={editMode ? "default" : "icon"}
-            variant={editMode ? "default" : "secondary"}
-            className={cn(
-              "shadow-lg backdrop-blur-sm border",
-              editMode
-                ? "rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-                : "h-10 w-10 rounded-full bg-background/95"
-            )}
+            size="sm"
+            variant="default"
+            className="shadow-lg rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
             onClick={() => setEditMode((v) => !v)}
           >
             {editMode ? (
@@ -310,10 +315,17 @@ export default function ChargePointsMap({ chargePoints, onChargePointClick, onVi
                 Fertig
               </>
             ) : (
-              <Move className="h-5 w-5" />
+              <>
+                <Move className="h-4 w-4" />
+                Ladepunkte platzieren
+              </>
             )}
           </Button>
-        )}
+        </div>
+      )}
+
+      {/* Map control buttons */}
+      <div className="absolute bottom-3 right-3 z-[1000] flex flex-col gap-2">
         {showLocateButton && (
           <Button
             size="icon"

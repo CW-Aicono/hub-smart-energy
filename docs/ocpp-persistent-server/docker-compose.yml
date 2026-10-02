@@ -1,0 +1,35 @@
+services:
+  ocpp:
+    build: .
+    container_name: ocpp-server
+    restart: always
+    env_file: .env
+    expose:
+      - "8080"
+    networks:
+      - ocppnet
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ocpp-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - OCPP_DOMAIN=${OCPP_DOMAIN}
+    depends_on:
+      - ocpp
+    networks:
+      - ocppnet
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  ocppnet:

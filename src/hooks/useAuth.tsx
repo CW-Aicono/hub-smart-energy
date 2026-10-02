@@ -82,13 +82,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password,
       options: { emailRedirectTo: redirectUrl },
     });
+    // Send branded confirmation mail via Resend (Supabase auto_confirm = true, so no default mail goes out)
+    if (!error && data?.user) {
+      try {
+        await supabase.functions.invoke("send-auth-email", {
+          body: { type: "signup_confirm", email, redirectTo: redirectUrl, locale: "de" },
+        });
+      } catch (e) {
+        console.error("[useAuth] send-auth-email signup_confirm failed", e);
+      }
+    }
     return { error: error as Error | null, data: data ? { user: data.user } : null };
   };
 
   const signOut = async () => {
     if (isDemo) return;
     clearRecovery();
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("[useAuth] signOut error", e);
+    }
+    // Hard-Navigation: stellt sicher, dass alle Provider/React-Query-Caches
+    // (insb. user-roles, tenant) komplett zurückgesetzt werden und die
+    // Sidebar nicht kurzzeitig "Benutzer" statt "Administrator" zeigt.
+    window.location.href = "/auth";
   };
 
   return (

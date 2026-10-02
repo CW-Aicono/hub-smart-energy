@@ -1,0 +1,15 @@
+<?xml version="1.0" standalone='no'?>
+<!--
+  Avahi-Service-Datei für AICONO Hub.
+  Erlaubt das Erreichen des Hubs im LAN unter http://aicono.local:8099/setup
+  während der Erstinstallation und später als Admin-Web-UI.
+-->
+<service-group>
+  <name replace-wildcards="yes">AICONO Hub (%h)</name>
+  <service>
+    <type>_http._tcp</type>
+    <port>8099</port>
+    <txt-record>path=/setup</txt-record>
+    <txt-record>vendor=AICONO</txt-record>
+  </service>
+</service-group>

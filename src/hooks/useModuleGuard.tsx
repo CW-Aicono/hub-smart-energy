@@ -19,8 +19,18 @@ const ROUTE_MODULE_MAP: Record<string, string> = {
   "/tasks": "task_management",
   "/settings/branding": "integrations",
   "/arbitrage": "arbitrage_trading",
+  "/peak-shaving": "peak_shaving",
   "/tenant-electricity": "tenant_electricity",
   "/energy-report": "energy_report",
+  "/savings-share": "gain_sharing",
+  "/energy-sharing": "energy_sharing",
+  "/ppa": "ppa_onsite|ppa_offsite",
+  "/ppa/onsite": "ppa_onsite",
+  "/ppa/offsite": "ppa_offsite",
+  "/super-admin/savings-share": "gain_sharing",
+  "/documents": "documentation",
+  "/charging/transactions": "adhoc_payment",
+  "/analytics-studio": "analytics_studio",
 };
 
 /**
@@ -37,8 +47,17 @@ const NAV_MODULE_MAP: Record<string, string> = {
   "/network": "network_infra",
   "/tasks": "task_management",
   "/arbitrage": "arbitrage_trading",
+  "/peak-shaving": "peak_shaving",
   "/tenant-electricity": "tenant_electricity",
   "/energy-report": "energy_report",
+  "/savings-share": "gain_sharing",
+  "/energy-sharing": "energy_sharing",
+  "/ppa": "ppa_onsite|ppa_offsite",
+  "/ppa/onsite": "ppa_onsite",
+  "/ppa/offsite": "ppa_offsite",
+  "/documents": "documentation",
+  "/charging/transactions": "adhoc_payment",
+  "/analytics-studio": "analytics_studio",
 };
 
 export function useModuleGuard() {
@@ -46,20 +65,28 @@ export function useModuleGuard() {
   const { tenant } = useTenant();
   const { modules, isLoading, isModuleEnabled } = useTenantModules(isDemo ? null : (tenant?.id ?? null));
 
+  // Strict mode: if the tenant has any module records, treat absence as "disabled" (opt-in).
+  // Permissive mode: if no records exist at all, default to enabled (legacy/unconfigured tenants).
+  const strictMode = modules.length > 0;
+
   const checkModule = (code: string): boolean => {
     if (isDemo) return true;
     if (isLoading || !tenant) return true;
+    // Support OR-combined codes separated by "|" (route visible if ANY is enabled)
+    if (code.includes("|")) {
+      return code.split("|").some((c) => checkModule(c));
+    }
     const mod = modules.find((m) => m.module_code === code);
-    return mod ? mod.is_enabled : true;
+    if (mod) return mod.is_enabled;
+    return !strictMode;
   };
 
   const isRouteAllowed = (path: string): boolean => {
     if (isDemo) return true;
     if (isLoading || !tenant) return true;
-    
+
     const moduleCode = ROUTE_MODULE_MAP[path];
     if (!moduleCode) {
-      // Check prefix match (e.g. /locations/:id)
       const matchedRoute = Object.keys(ROUTE_MODULE_MAP).find(
         (route) => path.startsWith(route + "/")
       );
@@ -82,8 +109,10 @@ export function useModuleGuard() {
   const locationsFullEnabled = useMemo(() => {
     if (isLoading || !tenant) return true;
     const mod = modules.find((m) => m.module_code === "locations");
-    return mod ? mod.is_enabled : true;
-  }, [modules, isLoading, tenant]);
+    if (mod) return mod.is_enabled;
+    return !strictMode;
+  }, [modules, isLoading, tenant, strictMode]);
 
   return { isRouteAllowed, isNavItemVisible, isLoading, isModuleEnabled: checkModule, locationsFullEnabled };
 }
+

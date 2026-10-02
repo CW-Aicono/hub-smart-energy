@@ -42,10 +42,10 @@ export function useAlertRules(locationId?: string) {
   const [loading, setLoading] = useState(true);
 
   const fetchAlertRules = useCallback(async () => {
-    if (!user) return;
+    if (!user || !tenantId) return;
     setLoading(true);
 
-    let query = supabase.from("alert_rules").select("*").order("name");
+    let query = supabase.from("alert_rules").select("*").eq("tenant_id", tenantId).order("name");
     if (locationId) query = query.eq("location_id", locationId);
 
     const { data, error } = await query;
@@ -56,7 +56,7 @@ export function useAlertRules(locationId?: string) {
       setAlertRules((data ?? []) as AlertRule[]);
     }
     setLoading(false);
-  }, [user, locationId]);
+  }, [user, tenantId, locationId]);
 
   useEffect(() => {
     fetchAlertRules();

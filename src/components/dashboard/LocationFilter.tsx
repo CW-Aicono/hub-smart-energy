@@ -4,8 +4,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { useIntegrationErrors } from "@/hooks/useIntegrationErrors";
+import { useLocationStatus } from "@/hooks/useLocationStatus";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 interface LocationFilterProps {
   selectedLocationId: string | null;
@@ -20,7 +21,31 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
   const T = (key: string) => t(key as any);
   const { locationsFullEnabled } = useModuleGuard();
   const { errorLocationIds } = useIntegrationErrors();
-  const hasAnyErrors = errorLocationIds.size > 0;
+  const locationIds = useMemo(() => locations.map((l) => l.id), [locations]);
+  const { locationStatuses } = useLocationStatus(locationIds);
+
+  // Offline (red): integration is technically offline.
+  // Data error (yellow): integration is online but reports missing/invalid data.
+  const offlineLocationIds = useMemo(() => {
+    const set = new Set<string>();
+    locationStatuses.forEach((status, id) => {
+      if (status.totalIntegrations > 0 && (!status.isOnline || status.hasSyncError)) {
+        set.add(id);
+      }
+    });
+    return set;
+  }, [locationStatuses]);
+
+  const dataErrorLocationIds = useMemo(() => {
+    const set = new Set<string>();
+    errorLocationIds.forEach((id) => {
+      if (!offlineLocationIds.has(id)) set.add(id);
+    });
+    return set;
+  }, [errorLocationIds, offlineLocationIds]);
+
+  const hasAnyOffline = offlineLocationIds.size > 0;
+  const hasAnyDataError = dataErrorLocationIds.size > 0;
 
   const mainLocation = locations.find((loc) => loc.is_main_location) || locations[0];
 
@@ -70,8 +95,10 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
       <SelectContent className="w-[250px] bg-popover z-50">
         <SelectItem value={ALL_LOCATIONS_VALUE}>
           <span className="flex items-center gap-2">
-            {hasAnyErrors ? (
+            {hasAnyOffline ? (
               <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+            ) : hasAnyDataError ? (
+              <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-500" />
             ) : (
               <MapPin className="h-4 w-4 shrink-0" />
             )}
@@ -82,8 +109,10 @@ export function LocationFilter({ selectedLocationId, onLocationChange }: Locatio
         {sortedLocations.map((location) => (
           <SelectItem key={location.id} value={location.id}>
             <span className="flex items-center gap-2 w-full">
-              {errorLocationIds.has(location.id) ? (
+              {offlineLocationIds.has(location.id) ? (
                 <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+              ) : dataErrorLocationIds.has(location.id) ? (
+                <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-500" />
               ) : (
                 <Building2 className="h-4 w-4 shrink-0" />
               )}

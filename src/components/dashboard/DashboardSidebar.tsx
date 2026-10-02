@@ -1,5 +1,9 @@
 import { useState, useEffect, useMemo, Fragment, useCallback } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { AreaSwitcher } from "@/components/common/AreaSwitcher";
+import { useAreaAccess } from "@/hooks/useAreaAccess";
+import { setAreaPreference } from "@/lib/areaPreference";
+import { Briefcase } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -8,7 +12,7 @@ import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { useDemoMode, useDemoPath } from "@/contexts/DemoMode";
 import { Button } from "@/components/ui/button";
 import { MobileHeader } from "@/components/dashboard/MobileSidebar";
-import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText, Sparkles, Sun } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText, Sparkles, Sun, Share2, FileSignature, Euro, BarChart3, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -44,6 +48,8 @@ const DashboardSidebar = () => {
   const { isAdmin } = useUserRole();
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { canSwitch: canSwitchArea } = useAreaAccess();
   const { isNavItemVisible } = useModuleGuard();
   const isDemo = useDemoMode();
   const demoPath = useDemoPath();
@@ -118,6 +124,16 @@ const DashboardSidebar = () => {
     if (currentPath.startsWith("/charging")) {
       setOpenMenus((prev) => prev.includes("/charging/points") ? prev : [...prev, "/charging/points"]);
     }
+    if (
+      currentPath === "/arbitrage" ||
+      currentPath === "/peak-shaving" ||
+      currentPath.startsWith("/ppa") ||
+      currentPath === "/tenant-electricity" ||
+      currentPath === "/savings-share" ||
+      currentPath.startsWith("/energy-sharing")
+    ) {
+      setOpenMenus((prev) => prev.includes("/trading") ? prev : [...prev, "/trading"]);
+    }
   }, [currentPath]);
 
   const toggleMenu = (to: string) => {
@@ -136,6 +152,7 @@ const DashboardSidebar = () => {
       children: [
         { to: "/live-values", icon: Activity, labelKey: "nav.liveValues" as TranslationKey },
         { to: "/meters", icon: Gauge, labelKey: "nav.meters" as TranslationKey },
+        { to: "/analytics-studio", icon: BarChart3, labelKey: "nav.analyticsStudio" as TranslationKey },
         { to: "/energy-data", icon: Download, labelKey: "nav.exports" as TranslationKey },
         { to: "/energy-report", icon: FileText, labelKey: "nav.energyReport" as TranslationKey },
       ]
@@ -146,15 +163,30 @@ const DashboardSidebar = () => {
       labelKey: "nav.charging" as TranslationKey,
       children: [
         { to: "/charging/points", icon: PlugZap, labelKey: "nav.chargingPoints" as TranslationKey },
+        { to: "/charging/users", icon: Users, labelKey: "nav.chargingUsers" as TranslationKey },
         { to: "/charging/billing", icon: Receipt, labelKey: "nav.chargingBilling" as TranslationKey },
-        { to: "/charging/app", icon: Smartphone, labelKey: "nav.chargingApp" as TranslationKey },
-        { to: "/charging/ocpp-integration", icon: BookOpen, labelKey: "nav.ocppIntegration" as TranslationKey },
+        { to: "/charging/reporting", icon: BarChart3, labelKey: "nav.chargingReporting" as TranslationKey },
+        { to: "/charging/settings", icon: Settings, labelKey: "nav.chargingSettings" as TranslationKey },
       ]
     },
     { to: "/automation", icon: Cpu, labelKey: "nav.multiLocationAutomation" as TranslationKey },
-    { to: "/arbitrage", icon: TrendingUp, labelKey: "nav.arbitrageTrading" as TranslationKey },
+    {
+      to: "/trading",
+      icon: TrendingUp,
+      labelKey: "nav.trading" as TranslationKey,
+      children: [
+        { to: "/arbitrage", icon: TrendingUp, labelKey: "nav.arbitrageTrading" as TranslationKey },
+        { to: "/peak-shaving", icon: Activity, labelKey: "Peak-Shaving" as TranslationKey },
+        { to: "/ppa", icon: FileSignature, labelKey: "nav.ppa" as TranslationKey },
+        { to: "/tenant-electricity", icon: Home, labelKey: "nav.tenantElectricity" as TranslationKey },
+        { to: "/savings-share", icon: Euro, labelKey: "Gain-Sharing" as TranslationKey },
+        { to: "/energy-sharing", icon: Share2, labelKey: "nav.energySharing" as TranslationKey },
+      ],
+    },
     { to: "/copilot", icon: Sparkles, labelKey: "nav.copilot" as TranslationKey },
-    { to: "/tenant-electricity", icon: Home, labelKey: "nav.tenantElectricity" as TranslationKey },
+    
+    
+    
     { to: "/network", icon: Network, labelKey: "nav.networkInfrastructure" as TranslationKey },
     { to: "/tasks", icon: ListChecks, labelKey: "nav.tasks" as TranslationKey },
     ...(isAdmin ? [
@@ -175,6 +207,7 @@ const DashboardSidebar = () => {
           { to: "/settings/branding", icon: Palette, labelKey: "nav.branding" as TranslationKey },
           { to: "/settings/email-templates", icon: Mail, labelKey: "nav.emailTemplates" as TranslationKey },
           { to: "/integrations", icon: Plug, labelKey: "nav.integrations" as TranslationKey },
+          { to: "/documents", icon: FileText, labelKey: "nav.documentation" as TranslationKey },
         ]
       },
     ] : []),
@@ -357,6 +390,13 @@ const DashboardSidebar = () => {
         </Button>
       </div>
 
+      {/* Bereichs-Umschalter (nur für Partner mit eigenem Mandanten) */}
+      {!collapsed && canSwitchArea && (
+        <div className="px-4 pt-3">
+          <AreaSwitcher current="ems" className="w-full justify-between" />
+        </div>
+      )}
+
       {/* Nav - scrollable */}
       <nav className={cn(
         "flex-1 space-y-1 overflow-y-auto scrollbar-hide",
@@ -415,6 +455,18 @@ const DashboardSidebar = () => {
                 {t("nav.myProfile")}
               </NavLink>
             </DropdownMenuItem>
+            {canSwitchArea && (
+              <DropdownMenuItem
+                onClick={() => {
+                  setAreaPreference("partner");
+                  navigate("/partner");
+                }}
+                className="cursor-pointer"
+              >
+                <Briefcase className="h-4 w-4 mr-2" />
+                Zum Partner-Portal
+              </DropdownMenuItem>
+            )}
             {!isDemo && (
               <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
                 <LogOut className="h-4 w-4 mr-2" />

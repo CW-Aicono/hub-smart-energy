@@ -1,0 +1,1 @@
+ALTER TABLE public.charge_points ADD COLUMN IF NOT EXISTS last_ws_pong_at TIMESTAMPTZ;

@@ -13,9 +13,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sparkles, TrendingUp, Landmark, FolderKanban, History, Loader2, Sun, Battery, Flame, Zap, Shield, ArrowRight, Search, Leaf, Clock, BarChart3, AlertTriangle, Lightbulb, Info } from "lucide-react";
 import { useDemoMode } from "@/contexts/DemoMode";
+import { AnalyticsTab } from "@/components/copilot/AnalyticsTab";
 
 const TECH_ICONS: Record<string, typeof Sun> = {
   pv: Sun, battery: Battery, heat_pump: Flame, load_management: Zap, ev_charging: Zap, insulation: Shield,
@@ -66,7 +68,7 @@ const Copilot = () => {
   const [budgetLimit, setBudgetLimit] = useState("");
   const [result, setResult] = useState<CopilotAnalysisResult | null>(null);
   const [savingsResult, setSavingsResult] = useState<SavingsPotentialResult | null>(null);
-  const [topTab, setTopTab] = useState("savings");
+  const [topTab, setTopTab] = useState("analytics");
   const [investorTab, setInvestorTab] = useState("analysis");
   const [savingsPeriod, setSavingsPeriod] = useState("30");
   const [savingsTab, setSavingsTab] = useState("analysis");
@@ -111,6 +113,18 @@ const Copilot = () => {
     setSavingsTab("analysis");
   };
 
+    type RoiSortKey = "name" | "investment" | "funding" | "savings" | "roi";
+  const { sorted: sortedRoi, sort: roiSort, toggle: roiToggle } = useSortableData(result?.roi_scenarios || [], (r, k) => {
+    switch (k) {
+      case "name": return r.name;
+      case "investment": return r.total_investment_eur;
+      case "funding": return r.total_funding_eur;
+      case "savings": return r.annual_savings_eur;
+      case "roi": return r.roi_years;
+      default: return null;
+    }
+  });
+
   const handleAddProject = (rec: any, analysisId: string) => {
     createProject.mutate({
       analysis_id: analysisId, location_id: selectedLocationId || null, title: rec.title,
@@ -152,7 +166,11 @@ const Copilot = () => {
 
         {/* ── Top-level tabs ── */}
         <Tabs value={topTab} onValueChange={setTopTab}>
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsList className="grid w-full grid-cols-3 max-w-2xl">
+            <TabsTrigger value="analytics" className="gap-1.5">
+              <BarChart3 className="h-4 w-4" />
+              Analytics
+            </TabsTrigger>
             <TabsTrigger value="savings" className="gap-1.5">
               <Leaf className="h-4 w-4" />
               Einsparpotentiale
@@ -162,6 +180,15 @@ const Copilot = () => {
               Investitionsberater
             </TabsTrigger>
           </TabsList>
+
+          {/* ════════════════════════════════════════════════════
+              TAB 0: Analytics (KI-gestützte Ad-hoc-Analysen)
+             ════════════════════════════════════════════════════ */}
+          <TabsContent value="analytics" className="mt-6">
+            <AnalyticsTab />
+          </TabsContent>
+
+
 
           {/* ════════════════════════════════════════════════════
               TAB 1: Einsparpotentiale
@@ -496,11 +523,11 @@ const Copilot = () => {
                           <Card>
                             <Table>
                               <TableHeader><TableRow>
-                                <TableHead>Szenario</TableHead><TableHead className="text-right">Investition</TableHead>
-                                <TableHead className="text-right">Förderung</TableHead><TableHead className="text-right">Einsparung/Jahr</TableHead><TableHead className="text-right">ROI</TableHead>
+                                <SortableHead sortKey="name" current={roiSort} onToggle={roiToggle}>Szenario</SortableHead><SortableHead sortKey="investment" current={roiSort} onToggle={roiToggle} className="text-right">Investition</SortableHead>
+                                <SortableHead sortKey="funding" current={roiSort} onToggle={roiToggle} className="text-right">Förderung</SortableHead><SortableHead sortKey="savings" current={roiSort} onToggle={roiToggle} className="text-right">Einsparung/Jahr</SortableHead><SortableHead sortKey="roi" current={roiSort} onToggle={roiToggle} className="text-right">ROI</SortableHead>
                               </TableRow></TableHeader>
                               <TableBody>
-                                {result.roi_scenarios.map((sc, i) => (
+                                {sortedRoi.map((sc, i) => (
                                   <TableRow key={i}>
                                     <TableCell className="font-medium">{sc.name}</TableCell>
                                     <TableCell className="text-right">{formatEur(sc.total_investment_eur)}</TableCell>

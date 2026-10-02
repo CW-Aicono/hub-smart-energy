@@ -1,0 +1,2 @@
+ALTER TABLE public.meters ADD COLUMN IF NOT EXISTS flow_direction_convention text NOT NULL DEFAULT 'negative_delivery' CHECK (flow_direction_convention IN ('negative_delivery','positive_delivery'));
+COMMENT ON COLUMN public.meters.flow_direction_convention IS 'Vorzeichenkonvention der Rohwerte: negative_delivery = neg. Wert bedeutet Lieferung/vom Gerät weg, pos. Wert bedeutet Bezug/zum Gerät hin. positive_delivery = umgekehrt (z.B. bei manchen PV-Meter-Kanälen).';

@@ -3,7 +3,6 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import { useChargerModels, ChargerModel } from "@/hooks/useChargerModels";
-import { SuperAdminWrapper } from "@/components/super-admin/SuperAdminWrapper";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,17 +12,21 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Edit, Trash2, PlugZap } from "lucide-react";
+import { Plus, Edit, Trash2, PlugZap, Search } from "lucide-react";
 import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
-import OcppLogViewer from "@/components/charging/OcppLogViewer";
+
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
 const PROTOCOLS = [
   { value: "ocpp1.6", label: "OCPP 1.6 JSON" },
   { value: "ocpp2.0.1", label: "OCPP 2.0.1" },
+  { value: "modbus", label: "Modbus TCP" },
   { value: "proprietary", label: "Proprietär" },
 ];
+
+type SortKey = "vendor" | "model" | "type" | "power" | "protocol" | "status";
 
 const emptyForm = { vendor: "", model: "", protocol: "ocpp1.6", notes: "", is_active: true };
 
@@ -37,14 +40,38 @@ const SuperAdminOcppIntegrations = () => {
   const [form, setForm] = useState(emptyForm);
   const [filterVendor, setFilterVendor] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  const filtered = chargerModels
+    .filter(m => !filterType || m.charging_type === filterType)
+    .filter(m => !filterVendor || m.vendor === filterVendor)
+    .filter(m => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        m.vendor.toLowerCase().includes(q) ||
+        m.model.toLowerCase().includes(q) ||
+        (m.protocol ?? "").toLowerCase().includes(q) ||
+        (m.notes ?? "").toLowerCase().includes(q)
+      );
+    });
+
+  const { sorted, sort, toggle } = useSortableData<ChargerModel, SortKey>(filtered, (r, k) => {
+    switch (k) {
+      case "vendor": return r.vendor;
+      case "model": return r.model;
+      case "type": return r.charging_type ?? "";
+      case "power": return r.power_kw ?? 0;
+      case "protocol": return r.protocol;
+      case "status": return r.is_active ? 1 : 0;
+      default: return null;
+    }
+  }, { key: "vendor", direction: "asc" });
 
   if (loading) return null;
   if (!user) return <Navigate to="/auth" replace />;
 
   const vendors = [...new Set(chargerModels.map(m => m.vendor))].sort();
-  const filtered = chargerModels
-    .filter(m => !filterType || m.charging_type === filterType)
-    .filter(m => !filterVendor || m.vendor === filterVendor);
   const acCount = chargerModels.filter(m => m.charging_type === 'AC').length;
   const dcCount = chargerModels.filter(m => m.charging_type === 'DC').length;
 
@@ -152,12 +179,18 @@ const SuperAdminOcppIntegrations = () => {
           <Tabs defaultValue="models">
             <TabsList>
               <TabsTrigger value="models">Ladestationsmodelle</TabsTrigger>
-              <TabsTrigger value="ocpp-log">OCPP-Nachrichtenlog</TabsTrigger>
             </TabsList>
 
             <TabsContent value="models" className="mt-6 space-y-4">
-              {/* Vendor filter */}
-              {/* Type filter */}
+              <div className="relative max-w-sm">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Modell suchen (Hersteller, Modell, Protokoll)…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
               <div className="flex gap-2 flex-wrap">
                 <Badge variant={filterType === null ? "default" : "outline"} className="cursor-pointer" onClick={() => setFilterType(null)}>
                   Alle ({chargerModels.length})
@@ -170,7 +203,6 @@ const SuperAdminOcppIntegrations = () => {
                 </Badge>
               </div>
 
-              {/* Vendor filter */}
               {vendors.length > 0 && (
                 <div className="flex gap-2 flex-wrap">
                   <Badge
@@ -206,24 +238,24 @@ const SuperAdminOcppIntegrations = () => {
                 <CardContent>
                   {isLoading ? (
                     <p style={{ color: `hsl(var(--sa-muted-foreground))` }}>Laden...</p>
-                  ) : filtered.length === 0 ? (
+                  ) : sorted.length === 0 ? (
                     <p style={{ color: `hsl(var(--sa-muted-foreground))` }}>Keine Modelle vorhanden.</p>
                   ) : (
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Hersteller</TableHead>
-                          <TableHead>Modell</TableHead>
-                          <TableHead>Typ</TableHead>
-                          <TableHead>Leistung</TableHead>
-                          <TableHead>Protokoll</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Hinweise</TableHead>
-                          <TableHead className="w-24">Aktionen</TableHead>
+                          <SortableHead label="Hersteller" sortKey="vendor" sort={sort} onToggle={toggle} />
+                          <SortableHead label="Modell" sortKey="model" sort={sort} onToggle={toggle} />
+                          <SortableHead label="Typ" sortKey="type" sort={sort} onToggle={toggle} />
+                          <SortableHead label="Leistung" sortKey="power" sort={sort} onToggle={toggle} />
+                          <SortableHead label="Protokoll" sortKey="protocol" sort={sort} onToggle={toggle} />
+                          <SortableHead label="Status" sortKey="status" sort={sort} onToggle={toggle} />
+                          <TableCell>Hinweise</TableCell>
+                          <TableCell className="w-24">Aktionen</TableCell>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filtered.map((m) => (
+                        {sorted.map((m) => (
                           <TableRow key={m.id}>
                             <TableCell className="font-medium">{m.vendor}</TableCell>
                             <TableCell>{m.model}</TableCell>
@@ -260,13 +292,8 @@ const SuperAdminOcppIntegrations = () => {
                 </CardContent>
               </Card>
             </TabsContent>
-
-            <TabsContent value="ocpp-log" className="mt-6">
-              <OcppLogViewer showCpColumn />
-            </TabsContent>
           </Tabs>
 
-          {/* Edit Dialog */}
           <Dialog open={!!editModel} onOpenChange={(open) => { if (!open) setEditModel(null); }}>
             <DialogContent>
               <DialogHeader><DialogTitle>Modell bearbeiten</DialogTitle></DialogHeader>

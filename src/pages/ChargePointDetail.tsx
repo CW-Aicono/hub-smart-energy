@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate, Navigate } from "react-router-dom";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,6 +10,8 @@ import { useChargingSessions, useIdTagResolver } from "@/hooks/useChargingSessio
 import { useTenant } from "@/hooks/useTenant";
 import { useTasks } from "@/hooks/useTasks";
 import { useChargePointGroups } from "@/hooks/useChargePointGroups";
+import { useLocations } from "@/hooks/useLocations";
+import { useMeters } from "@/hooks/useMeters";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,21 +21,31 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AutoRebootSettings } from "@/components/charging/AutoRebootSettings";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   ArrowLeft, Zap, PlugZap, AlertTriangle, ZapOff, WifiOff, Camera,
   Trash2, Save, X, MapPin, Search, MoreHorizontal, RefreshCw, Play,
   Square, Unlock, Power, Wrench, CheckCircle, Clock, BarChart3, Info, Settings,
-  Shield, Bell, BatteryCharging, Users, Calendar, Timer, Gauge, ExternalLink
+  Shield, Bell, BatteryCharging, Users, Calendar, Timer, Gauge, ExternalLink,
+  Eye, EyeOff, Copy, Activity, Radio
 } from "lucide-react";
+import { useOcppLiveData, useOcppCapabilities } from "@/hooks/useOcppLiveData";
+import { LiveDataPanel } from "@/components/charging/LiveDataPanel";
+import { UtilizationHeatmap } from "@/components/charging/UtilizationHeatmap";
+import { RoiCard } from "@/components/charging/RoiCard";
+import { useChargingTariffs } from "@/hooks/useChargingTariffs";
 import { format, subDays, isAfter } from "date-fns";
 import { de } from "date-fns/locale";
-import { fmtKwh, fmtKw, fmtNum } from "@/lib/formatCharging";
+import { fmtKwh, fmtKw, fmtNum, normalizeConnectorStatus, isChargePointOnline } from "@/lib/formatCharging";
+import { mapOcppRejectMessage } from "@/lib/ocppErrorMessages";
 import { supabase } from "@/integrations/supabase/client";
 import { useOcppMeterValue } from "@/hooks/useOcppMeterValue";
 import { useChargePointConnectors } from "@/hooks/useChargePointConnectors";
 import { ConnectorStatusGrid } from "@/components/charging/ConnectorStatusGrid";
+import { useChargePointStability } from "@/hooks/useChargePointStability";
+import { useChargePointDailyUptime } from "@/hooks/useChargePointDailyUptime";
 import OcppLogViewer from "@/components/charging/OcppLogViewer";
 import ChargePointQrCode from "@/components/charging/ChargePointQrCode";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -41,6 +54,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 import { PowerLimitScheduler, PowerLimitSchedule, defaultPowerLimitSchedule } from "@/components/charging/PowerLimitScheduler";
+import SingleChargePointMap from "@/components/charging/SingleChargePointMap";
+import { AccessControlSettings, AccessSettings } from "@/components/charging/AccessControlSettings";
+import ChargePointSolarChargingConfig from "@/components/charging/ChargePointSolarChargingConfig";
+import ModbusInstancePanel from "@/components/charging/ModbusInstancePanel";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EichrechtTab } from "@/components/charging/EichrechtTab";
+import { ChargePointEichrechtForm } from "@/components/charging/ChargePointEichrechtForm";
+import { ChargePointFirmwareCard } from "@/components/charging/ChargePointFirmwareCard";
+import { ShieldCheck } from "lucide-react";
+import { downloadSecureStorageObject } from "@/lib/secureStorage";
+
 
 const STATUS_KEYS: Record<string, { labelKey: string; color: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Zap }> = {
   available: { labelKey: "cpd.available", color: "hsl(var(--primary))", variant: "default", icon: Zap },
@@ -59,13 +83,28 @@ const ChargePointDetail = () => {
   const { tenant } = useTenant();
   const { chargePoints, updateChargePoint, deleteChargePoint } = useChargePoints();
   const { groups, assignChargePointToGroup } = useChargePointGroups();
+  const { meters } = useMeters();
+  const { locations } = useLocations();
   const { createTask } = useTasks();
   const { sessions } = useChargingSessions(id);
+  const { tariffs } = useChargingTariffs();
+  const defaultSalePrice = useMemo(() => {
+    const t = (tariffs ?? []).find((x: any) => x.is_default) ?? (tariffs ?? [])[0];
+    return Number(t?.price_per_kwh ?? 0.5);
+  }, [tariffs]);
   const resolveTag = useIdTagResolver();
   const { vendors: knownVendors, getModelsForVendor } = useChargerModels();
 
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: "", ocpp_id: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2" });
+  const [form, setForm] = useState({ name: "", ocpp_id: "", ocpp_password: "", address: "", connector_count: "1", max_power_kw: "22", vendor: "", model: "", connector_type: "Type2", rfid_read_mode: "raw", location_id: "__none__" });
+  const [showPassword, setShowPassword] = useState(false);
+  const generatePassword = () => {
+    const bytes = new Uint8Array(18);
+    crypto.getRandomValues(bytes);
+    const pw = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, "").slice(0, 24);
+    setForm((f) => ({ ...f, ocpp_password: pw }));
+    setShowPassword(true);
+  };
   const CONNECTOR_OPTIONS = [
     { value: "Type2", label: "Typ 2" },
     { value: "CCS", label: "CCS" },
@@ -83,10 +122,13 @@ const ChargePointDetail = () => {
   };
   const [coords, setCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState("7");
+  const [ocmfSessionId, setOcmfSessionId] = useState<string | null>(null);
   const [remoteLoading, setRemoteLoading] = useState<string | null>(null);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [powerLimit, setPowerLimit] = useState<PowerLimitSchedule | null>(null);
   const [savingPowerLimit, setSavingPowerLimit] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -95,9 +137,61 @@ const ChargePointDetail = () => {
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
 
   const cp = chargePoints.find((c) => c.id === id);
+  const currentPhotoUrl = photoPreviewUrl || cp?.photo_url || null;
+  const liveData = useOcppLiveData(cp?.id);
+  const { capabilities: ocppCapabilities, loading: capsLoading } = useOcppCapabilities(cp?.id);
+  const probeTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const path = cp?.photo_storage_path || cp?.photo_url || null;
+
+    if (!path) {
+      setPhotoPreviewUrl(null);
+      return;
+    }
+
+    if (path.startsWith("blob:") || /^https?:\/\//i.test(path)) {
+      setPhotoPreviewUrl(path);
+      return;
+    }
+
+    downloadSecureStorageObject("meter-photos", path).then((url) => {
+      if (!cancelled) setPhotoPreviewUrl(url);
+    });
+
+    return () => { cancelled = true; };
+  }, [cp?.id, cp?.photo_storage_path, cp?.photo_url]);
+
   const cpGroup = cp?.group_id ? groups.find((g) => g.id === cp.group_id) ?? null : null;
   const ocppMeter = useOcppMeterValue(cp?.ocpp_id);
   const { connectors, reorderConnectors } = useChargePointConnectors(cp?.id);
+  const queryClient = useQueryClient();
+  type CpEnergyShape = {
+    dynamic_load_management?: boolean;
+    pv_surplus_charging?: boolean;
+    cheap_charging_mode?: boolean;
+    dlm?: {
+      enabled: boolean;
+      limit_kw: number | null;
+      reference_meter_id: string | null;
+    };
+    cheap_charging?: {
+      enabled: boolean;
+      max_price_eur_mwh: number;
+      limit_kw: number;
+      use_fallback_window: boolean;
+      fallback_time_from: string;
+      fallback_time_to: string;
+    };
+  };
+  const [energyOverlay, setEnergyOverlay] = useState<CpEnergyShape | null>(null);
+  const dbEnergyForEffect = (cp as any)?.energy_settings as CpEnergyShape | undefined;
+  useEffect(() => {
+    if (energyOverlay && JSON.stringify(dbEnergyForEffect ?? {}) === JSON.stringify(energyOverlay)) {
+      setEnergyOverlay(null);
+    }
+  }, [dbEnergyForEffect, energyOverlay]);
 
   // Sync powerLimit state from cp when cp loads or changes
   const cpPowerLimit = (cp as any)?.power_limit_schedule as PowerLimitSchedule | null | undefined;
@@ -151,8 +245,8 @@ const ChargePointDetail = () => {
         if (data && data.length > 0) return;
         const statusLabel = currStatus === "faulted" ? "Störung (Faulted)" : "Verbindung getrennt (Offline)";
         const detail = cp.last_heartbeat
-          ? `Letzter Heartbeat: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm", { locale: de })}`
-          : "Kein Heartbeat empfangen";
+          ? `Letzte OCPP-Nachricht: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm", { locale: de })}`
+          : "Keine OCPP-Nachricht empfangen";
         createTask.mutate({
           title: `Störung an Ladesäule: ${cp.name}`,
           description: `Status: ${statusLabel}\n${detail}\nOCPP-ID: ${cp.ocpp_id}${cp.address ? `\nStandort: ${cp.address}` : ""}`,
@@ -165,6 +259,32 @@ const ChargePointDetail = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cp?.status, cp?.id, tenant?.id]);
 
+  // Auto-Probe: wenn noch keine Capabilities ermittelt wurden, einmalig
+  // GetConfiguration anstoßen, sobald die Wallbox online ist.
+  // Ausnahme: ältere wallbe BF-01.04.x (Smart Charge Control) trennt nach
+  // GetConfiguration die WebSocket-Verbindung — Auto-Probe deshalb sperren.
+  useEffect(() => {
+    if (!cp?.ocpp_id || capsLoading || probeTriggeredRef.current) return;
+    if (ocppCapabilities) return;
+    const online = isChargePointOnline((cp as any).ws_connected, cp.last_heartbeat, undefined, (cp as any).last_ws_pong_at);
+    if (!online) return;
+    const vendor = String((cp as any).vendor ?? "").trim().toLowerCase();
+    const model = String((cp as any).model ?? "").trim().toLowerCase();
+    const fw = String((cp as any).firmware_version ?? "").trim().toLowerCase();
+    const isLegacyWallbe =
+      vendor === "wallbe" && (fw.startsWith("bf-01.04") || model.includes("smart charge control"));
+    if (isLegacyWallbe) {
+      probeTriggeredRef.current = true; // dauerhaft unterdrücken
+      return;
+    }
+    probeTriggeredRef.current = true;
+    callOcppCommand("GetConfiguration", { chargePointId: cp.ocpp_id }).catch(() => {
+      probeTriggeredRef.current = false;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cp?.ocpp_id, cp?.last_heartbeat, capsLoading, ocppCapabilities]);
+
+
   // Stats calculations
   const periodDays = parseInt(statsPeriod);
   const cutoff = subDays(new Date(), periodDays);
@@ -175,61 +295,73 @@ const ChargePointDetail = () => {
     ? (periodSessions.filter((s) => s.status === "completed" || s.energy_kwh > 0).length / sessionCount * 100)
     : 0;
 
-  // Uptime: based on current status (simple real-time snapshot)
-  const uptimePercent = useMemo(() => {
-    if (!cp) return 0;
-    return cp.status === "available" || cp.status === "charging" ? 100 : 0;
-  }, [cp?.status]);
+  // Stabilitätsbewertung: rollierende 30-Tage-Statistik aus charge_point_uptime_snapshots.
+  // null = noch nie verbunden (keine Snapshots).
+  const { data: uptimePercent = null } = useChargePointStability(cp?.id, 30);
 
-  // Daily chart data – real data only
+  // Reale Tages-Online-Quote aus 5-Min-Snapshots (charge_point_uptime_snapshots).
+  const { data: dailyUptime } = useChargePointDailyUptime(cp?.id, periodDays);
+
+  // Daily chart data – kombiniert reale Online-Snapshots mit Ladezeit aus Sessions.
   const chartData = useMemo(() => {
-    const today = format(new Date(), "yyyy-MM-dd");
-    const days: { day: string; date: string; available: number; charging: number; error: number }[] = [];
+    const days: { day: string; date: string; available: number; charging: number; error: number; noData: number }[] = [];
     for (let i = periodDays - 1; i >= 0; i--) {
       const d = subDays(new Date(), i);
       const dayLabel = format(d, "EEE", { locale: de });
       const dateLabel = format(d, "d. MMM", { locale: de });
       const dateStr = format(d, "yyyy-MM-dd");
-      const isToday = dateStr === today;
 
+      const uptimeBucket = dailyUptime?.find((u) => u.date === dateStr);
+      const hasSnapshots = !!uptimeBucket && uptimeBucket.total > 0;
+
+      if (!hasSnapshots) {
+        // Keine Snapshots → grauer "no data" Balken statt fälschlich grün.
+        days.push({ day: dayLabel, date: dateLabel, available: 0, charging: 0, error: 0, noData: 100 });
+        continue;
+      }
+
+      const onlinePct = (uptimeBucket!.online / uptimeBucket!.total) * 100;
+      const offlinePct = 100 - onlinePct;
+
+      // Charging-Anteil aus Sessions (in Minuten des Tages, capped auf onlinePct).
       const daySessions = periodSessions.filter(
-        (s) => format(new Date(s.start_time), "yyyy-MM-dd") === dateStr
+        (s) => format(new Date(s.start_time), "yyyy-MM-dd") === dateStr,
       );
-
-      const hoursInDay = isToday ? new Date().getHours() + (new Date().getMinutes() / 60) : 24;
-
-      const chargingHours = Math.min(hoursInDay, daySessions.reduce((sum, s) => {
+      const minutesInDay = 24 * 60;
+      const chargingMinutes = daySessions.reduce((sum, s) => {
         const start = new Date(s.start_time);
         const end = s.stop_time ? new Date(s.stop_time) : new Date();
         const dayStart = new Date(dateStr + "T00:00:00");
-        const dayEnd = isToday ? new Date() : new Date(dateStr + "T23:59:59.999");
+        const dayEnd = new Date(dateStr + "T23:59:59.999");
         const effectiveStart = start < dayStart ? dayStart : start;
         const effectiveEnd = end > dayEnd ? dayEnd : end;
         if (effectiveEnd <= effectiveStart) return sum;
-        return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 3600000;
-      }, 0));
+        return sum + (effectiveEnd.getTime() - effectiveStart.getTime()) / 60000;
+      }, 0);
+      const chargingPct = Math.min(onlinePct, (chargingMinutes / minutesInDay) * 100);
+      const availablePct = Math.max(0, onlinePct - chargingPct);
 
-      // Approximate: project current status onto all days (no historic status log)
-      const errorHours = cp && (cp.status === "faulted" || cp.status === "offline") ? hoursInDay : 0;
-
-      const availableHours = Math.max(0, hoursInDay - chargingHours - errorHours);
       days.push({
         day: dayLabel,
         date: dateLabel,
-        available: hoursInDay > 0 ? (availableHours / hoursInDay) * 100 : 0,
-        charging: hoursInDay > 0 ? (chargingHours / hoursInDay) * 100 : 0,
-        error: hoursInDay > 0 ? (errorHours / hoursInDay) * 100 : 0,
+        available: availablePct,
+        charging: chargingPct,
+        error: offlinePct,
+        noData: 0,
       });
     }
     return days;
-  }, [periodSessions, periodDays, cp?.status]);
+  }, [periodSessions, periodDays, dailyUptime]);
 
   if (authLoading) return null;
   if (!user) return <Navigate to="/auth" replace />;
   if (!cp && chargePoints.length > 0) return <Navigate to="/charging/points" replace />;
   if (!cp) return null;
 
-  const cfg = STATUS_KEYS[cp.status] || STATUS_KEYS.offline;
+  // Status-Lookup case-insensitiv (DB liefert "Available" mit Großbuchstabe direkt von OCPP)
+  const cpOnline = isChargePointOnline(cp.ws_connected, cp.last_heartbeat, undefined, (cp as any).last_ws_pong_at);
+  const normalizedStatus = normalizeConnectorStatus(cp.status, cpOnline);
+  const cfg = STATUS_KEYS[normalizedStatus] || STATUS_KEYS.offline;
   const StatusIcon = cfg.icon;
 
   // Warnings
@@ -237,7 +369,7 @@ const ChargePointDetail = () => {
   if (cp.status === "offline") {
     warnings.push({
       message: "Verbindung zur Ladestation getrennt",
-      detail: cp.last_heartbeat ? `Letzter Heartbeat: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm")}` : "Kein Heartbeat empfangen",
+      detail: cp.last_heartbeat ? `Letzte OCPP-Nachricht: ${format(new Date(cp.last_heartbeat), "dd.MM.yyyy HH:mm")}` : "Keine OCPP-Nachricht empfangen",
       time: cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yyyy") : "—",
     });
   }
@@ -253,15 +385,18 @@ const ChargePointDetail = () => {
     setForm({
       name: cp.name,
       ocpp_id: cp.ocpp_id,
+      ocpp_password: cp.ocpp_password || "",
       address: cp.address || "",
       connector_count: String(cp.connector_count),
       max_power_kw: String(cp.max_power_kw),
       vendor: cp.vendor || "",
       model: cp.model || "",
       connector_type: cp.connector_type || "Type2",
+      rfid_read_mode: (cp as any).rfid_read_mode || "raw",
+      location_id: cp.location_id ?? "__none__",
     });
     setCoords({ lat: cp.latitude, lng: cp.longitude });
-    setPhotoUrl(cp.photo_url || null);
+    setPhotoUrl(cp.photo_storage_path || cp.photo_url || null);
     setEditing(true);
   };
 
@@ -270,6 +405,7 @@ const ChargePointDetail = () => {
       id: cp.id,
       name: form.name,
       ocpp_id: form.ocpp_id,
+      ocpp_password: form.ocpp_password ? form.ocpp_password : null,
       address: form.address || null,
       latitude: coords.lat,
       longitude: coords.lng,
@@ -278,6 +414,8 @@ const ChargePointDetail = () => {
       vendor: form.vendor || null,
       model: form.model || null,
       connector_type: form.connector_type || "Type2",
+      rfid_read_mode: form.rfid_read_mode || "raw",
+      location_id: form.location_id && form.location_id !== "__none__" ? form.location_id : null,
       photo_url: photoUrl,
     } as any);
     setEditing(false);
@@ -304,18 +442,70 @@ const ChargePointDetail = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    const ext = file.name.split(".").pop();
-    const path = `charge-points/${cp.id}.${ext}`;
-    const { error } = await supabase.storage.from("meter-photos").upload(path, file, { upsert: true });
-    if (error) {
-      toast({ title: "Upload fehlgeschlagen", description: error.message, variant: "destructive" });
-    } else {
-      const { data: signedData } = await supabase.storage.from("meter-photos").createSignedUrl(path, 3600);
-      setPhotoUrl(signedData?.signedUrl || null);
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `charge-points/${cp.id}/${crypto.randomUUID()}.${ext}`;
+
+      const { error } = await supabase.storage
+        .from("meter-photos")
+        .upload(path, file, { contentType: file.type || undefined });
+      if (error) throw error;
+
+      setPhotoUrl(path);
+      const previewUrl = await downloadSecureStorageObject("meter-photos", path);
+      setPhotoPreviewUrl(previewUrl);
+      updateChargePoint.mutate({ id: cp.id, photo_url: path } as any);
+      toast({ title: "Foto hochgeladen", description: "Das Foto wurde gespeichert." });
+    } catch (err: any) {
+      console.error("Charge point photo upload failed:", err);
+      toast({ title: "Upload fehlgeschlagen", description: err?.message ?? "Unbekannter Fehler", variant: "destructive" });
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   };
 
+  // Energy settings (Lastmanagement, PV-Überschuss-Switch, Günstig-Laden) on charge point
+  const dbEnergy = (cp as any)?.energy_settings as CpEnergyShape | undefined;
+  const cpEnergy: CpEnergyShape | undefined = energyOverlay ?? dbEnergy;
+
+  const saveEnergySettings = async (patch: Partial<CpEnergyShape>) => {
+    if (!cp) return;
+    const base = cpEnergy ?? {};
+    const next: CpEnergyShape = { ...base, ...patch };
+    // 1) Optimistic UI
+    setEnergyOverlay(next);
+    // 2) Patch React Query cache so other consumers also see the change immediately
+    queryClient.setQueryData<any[]>(["charge-points"], (old) =>
+      old ? old.map((row) => (row.id === cp.id ? { ...row, energy_settings: next } : row)) : old
+    );
+    // 3) Persist
+    const { error } = await supabase
+      .from("charge_points")
+      .update({ energy_settings: next as any })
+      .eq("id", cp.id);
+    if (error) {
+      // Roll back overlay on error
+      setEnergyOverlay(null);
+      queryClient.invalidateQueries({ queryKey: ["charge-points"] });
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Energieeinstellungen gespeichert" });
+    }
+  };
+
+
+  const saveAccessSettings = async (next: AccessSettings) => {
+    if (!cp) return;
+    const { error } = await supabase
+      .from("charge_points")
+      .update({ access_settings: next as any })
+      .eq("id", cp.id);
+    if (error) {
+      toast({ title: "Fehler", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Zugangseinstellungen gespeichert" });
+    }
+  };
 
 
   const callOcppCommand = async (endpoint: string, body: Record<string, unknown>) => {
@@ -336,17 +526,17 @@ const ChargePointDetail = () => {
     return res.json();
   };
 
-  const remoteAction = async (action: string) => {
+  const remoteAction = async (action: string, opts?: { resetType?: "Soft" | "Hard" }) => {
     if (!cp) return;
     setRemoteLoading(action);
     try {
       let result: any;
       switch (action) {
         case "Ladestation neu starten":
-          result = await callOcppCommand("Reset", { chargePointId: cp.ocpp_id, type: "Soft" });
+          result = await callOcppCommand("Reset", { chargePointId: cp.ocpp_id, type: opts?.resetType ?? "Soft" });
           break;
         case "Ladevorgang starten":
-          result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "ADMIN", connectorId: selectedConnectorId });
+          result = await callOcppCommand("RemoteStartTransaction", { chargePointId: cp.ocpp_id, idTag: "APPBACKEND00", connectorId: selectedConnectorId });
           break;
         case "Ladevorgang stoppen": {
           const activeSession = sessions.find((s) => s.status === "active" && s.transaction_id);
@@ -363,6 +553,22 @@ const ChargePointDetail = () => {
         case "Auf inaktiv setzen":
           result = await callOcppCommand("ChangeAvailability", { chargePointId: cp.ocpp_id, connectorId: 0, type: "Inoperative" });
           break;
+        case "Messgrößen prüfen":
+          result = await callOcppCommand("GetConfiguration", { chargePointId: cp.ocpp_id });
+          break;
+        case "Live-Daten aktivieren":
+          result = await callOcppCommand("ChangeConfiguration", {
+            chargePointId: cp.ocpp_id,
+            key: "MeterValuesSampledData",
+            value: "Energy.Active.Import.Register,Power.Active.Import,Voltage,Current.Import",
+          });
+          // zusätzlich Intervall auf 30s setzen (best-effort, kein Hard-Fail)
+          await callOcppCommand("ChangeConfiguration", {
+            chargePointId: cp.ocpp_id,
+            key: "MeterValueSampleInterval",
+            value: "30",
+          }).catch(() => undefined);
+          break;
         default:
           toast({ title: "Nicht unterstützt", description: action, variant: "destructive" });
           return;
@@ -370,7 +576,8 @@ const ChargePointDetail = () => {
       if (result?.status === "Accepted") {
         toast({ title: "Fernbefehl gesendet", description: `${action} wird ausgeführt…` });
       } else {
-        toast({ title: "Fehler", description: result?.message || "Befehl abgelehnt", variant: "destructive" });
+        const friendly = mapOcppRejectMessage(action, result?.message, result?.errorCode);
+        toast({ title: "Befehl abgelehnt", description: friendly, variant: "destructive" });
       }
     } catch (e: any) {
       toast({ title: "Fehler", description: e.message, variant: "destructive" });
@@ -482,7 +689,11 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
               <TabsTrigger value="details">{t("cpd.tabDetails" as any)}</TabsTrigger>
               <TabsTrigger value="energy">{t("cpd.tabEnergy" as any)}</TabsTrigger>
               <TabsTrigger value="access">{t("cpd.tabAccess" as any)}</TabsTrigger>
+              <TabsTrigger value="utilization" className="gap-1.5"><BarChart3 className="h-3.5 w-3.5" />Auslastung &amp; ROI</TabsTrigger>
+              <TabsTrigger value="maintenance" className="gap-1.5"><Wrench className="h-3.5 w-3.5" />Wartung</TabsTrigger>
+              <TabsTrigger value="eichrecht" className="gap-1.5"><ShieldCheck className="h-3.5 w-3.5" />Eichrecht</TabsTrigger>
             </TabsList>
+
 
             <TabsContent value="overview" className="space-y-6 mt-6">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -491,12 +702,17 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                   {/* Stability score */}
                   <Card>
                     <CardContent className="p-6 flex items-center gap-4">
-                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${uptimePercent > 80 ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${uptimePercent == null ? "bg-muted text-muted-foreground" : uptimePercent > 80 ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
                         <CheckCircle className="h-5 w-5" />
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">{t("cpd.stabilityScore" as any)}</p>
-                        <p className="text-2xl font-bold">{fmtNum(uptimePercent, 2)} %</p>
+                        <p className="text-2xl font-bold">{uptimePercent == null ? "—" : `${fmtNum(uptimePercent, 2)} %`}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {uptimePercent == null
+                            ? "Noch keine Verbindungsdaten – Statistik startet, sobald die Wallbox erstmals verbunden war."
+                            : "Online-Anteil der letzten 30 Tage (5-Minuten-Snapshots)"}
+                        </p>
                       </div>
                     </CardContent>
                   </Card>
@@ -543,7 +759,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         </div>
                         <div className="border rounded-lg p-3">
                           <p className="text-xs text-muted-foreground">{t("cpd.uptime" as any)}</p>
-                          <p className="text-xl font-bold">{fmtNum(uptimePercent, 2)} %</p>
+                          <p className="text-xl font-bold">{uptimePercent == null ? "—" : `${fmtNum(uptimePercent, 2)} %`}</p>
                         </div>
                       </div>
 
@@ -554,19 +770,27 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                             <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                             <YAxis hide />
                             <Tooltip
-                              formatter={(value: number, name: string) => [
-                                `${value.toFixed(1)} %`,
-                                name === "available" ? t("cpd.available" as any) : name === "charging" ? t("cpd.occupied" as any) : t("cpd.error" as any),
-                              ]}
+                              formatter={(value: number, name: string) => {
+                                const label =
+                                  name === "available" ? t("cpd.available" as any)
+                                  : name === "charging" ? t("cpd.occupied" as any)
+                                  : name === "error" ? "Offline"
+                                  : "Keine Daten";
+                                return [`${value.toFixed(1)} %`, label];
+                              }}
                             />
                             <Legend
                               formatter={(value: string) =>
-                                value === "available" ? t("cpd.available" as any) : value === "charging" ? t("cpd.occupied" as any) : t("cpd.error" as any)
+                                value === "available" ? t("cpd.available" as any)
+                                : value === "charging" ? t("cpd.occupied" as any)
+                                : value === "error" ? "Offline"
+                                : "Keine Daten"
                               }
                             />
-                            <Bar dataKey="available" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="charging" stackId="a" fill="hsl(var(--chart-4))" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="error" stackId="a" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="available" stackId="a" fill="hsl(152, 55%, 42%)" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="charging" stackId="a" fill="hsl(210, 90%, 55%)" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="error" stackId="a" fill="hsl(30, 95%, 55%)" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="noData" stackId="a" fill="hsl(var(--muted))" radius={[4, 4, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -593,7 +817,31 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       </CardContent>
                     </Card>
                   )}
+
+                  {/* Standortkarte – read-only Anzeige (Bearbeiten erfolgt im Bearbeiten-Dialog) */}
+                  <Card>
+                    <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-primary" />
+                        Standort auf Karte
+                      </CardTitle>
+                      {cp.latitude && cp.longitude && (
+                        <span className="text-xs font-mono text-muted-foreground hidden sm:inline">
+                          {cp.latitude.toFixed(5)}, {cp.longitude.toFixed(5)}
+                        </span>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      <SingleChargePointMap
+                        latitude={cp.latitude}
+                        longitude={cp.longitude}
+                        onPositionChange={() => {}}
+                        readOnly
+                      />
+                    </CardContent>
+                  </Card>
                 </div>
+
 
                 {/* Right sidebar */}
                 <div className="space-y-6">
@@ -612,7 +860,9 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           selectedConnectorId={selectedConnectorId}
                           onSelectConnector={setSelectedConnectorId}
                           selectable={isAdmin}
-                          wsConnected={cp?.ws_connected ?? false}
+                          wsConnected={cpOnline}
+                          lastHeartbeat={cp?.last_heartbeat ?? null}
+                          lastWsPongAt={(cp as any)?.last_ws_pong_at ?? null}
                           editable={isAdmin}
                           onReorder={isAdmin ? reorderConnectors : undefined}
                         />
@@ -647,7 +897,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-1">
-                        <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Ladestation neu starten")}>
+                        <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => setResetDialogOpen(true)}>
                           <RefreshCw className="h-4 w-4" /> {t("cpd.restart" as any)}
                         </Button>
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Ladevorgang starten")}>
@@ -662,16 +912,51 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Auf inaktiv setzen")}>
                           <Power className="h-4 w-4" /> {t("cpd.setInactive" as any)}
                         </Button>
+                        <Separator className="my-1" />
+                        <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Messgrößen prüfen")} disabled={remoteLoading === "Messgrößen prüfen"}>
+                          <Radio className="h-4 w-4" /> Messgrößen prüfen
+                        </Button>
+                        <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Live-Daten aktivieren")} disabled={remoteLoading === "Live-Daten aktivieren"}>
+                          <Activity className="h-4 w-4" /> Live-Daten aktivieren
+                        </Button>
                       </CardContent>
                     </Card>
                   )}
+
+                  <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Ladestation neu starten</AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                          <div className="space-y-3 text-sm">
+                            <p><strong>Soft Reset</strong> (empfohlen): Die Ladestation beendet laufende Ladevorgänge sauber und startet nur die Software neu. Dauert ca. 10–30 s.</p>
+                            <p><strong>Hard Reset</strong>: Power-Cycle der gesamten Hardware. Laufende Ladevorgänge werden <strong>abrupt abgebrochen</strong>. Nur verwenden, wenn die Box nicht mehr reagiert.</p>
+                          </div>
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                        <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => { setResetDialogOpen(false); remoteAction("Ladestation neu starten", { resetType: "Hard" }); }}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Hard Reset
+                        </AlertDialogAction>
+                        <AlertDialogAction
+                          onClick={() => { setResetDialogOpen(false); remoteAction("Ladestation neu starten", { resetType: "Soft" }); }}
+                        >
+                          Soft Reset (empfohlen)
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
 
                   {/* Photo */}
                   <Card>
                     <CardContent className="p-0">
                       <div className="relative w-full aspect-video bg-muted rounded-t-lg overflow-hidden flex items-center justify-center">
-                        {cp.photo_url ? (
-                          <img src={cp.photo_url} alt={cp.name} className="object-cover w-full h-full" />
+                        {currentPhotoUrl ? (
+                          <img src={currentPhotoUrl} alt={cp.name} className="object-cover w-full h-full" />
                         ) : (
                           <div className="text-muted-foreground flex flex-col items-center gap-2">
                             <Camera className="h-8 w-8" />
@@ -732,9 +1017,15 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         )}
                         <Separator />
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Letzter Heartbeat:</span>
+                          <span className="text-muted-foreground">Letzte OCPP-Nachricht:</span>
                           <span className="font-medium">{cp.last_heartbeat ? format(new Date(cp.last_heartbeat), "dd.MM.yy HH:mm") : "—"}</span>
                         </div>
+                        {(cp as any).last_ws_pong_at && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Letzter Verbindungs-Ping:</span>
+                            <span className="font-medium">{format(new Date((cp as any).last_ws_pong_at), "dd.MM.yy HH:mm:ss")}</span>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -762,6 +1053,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           <TableHead>RFID</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Grund</TableHead>
+                          <TableHead>Beleg</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -801,6 +1093,11 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                               <TableCell className="text-sm text-muted-foreground">
                                 {s.stop_reason ? (reasonMap[s.stop_reason] || s.stop_reason) : "—"}
                               </TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="sm" onClick={() => setOcmfSessionId(s.id)}>
+                                  <ShieldCheck className="mr-1 h-3.5 w-3.5" /> OCMF
+                                </Button>
+                              </TableCell>
                             </TableRow>
                           );
                         })}
@@ -813,7 +1110,7 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
 
             {/* OCPP Log tab */}
             <TabsContent value="ocpp-log" className="mt-6">
-              <OcppLogViewer chargePointId={cp.ocpp_id} />
+              <OcppLogViewer chargePointId={cp.id} />
             </TabsContent>
 
             {/* Details tab */}
@@ -833,6 +1130,47 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         <div><Label>OCPP-ID</Label><Input value={form.ocpp_id} onChange={(e) => setForm({ ...form, ocpp_id: e.target.value })} /></div>
                       </div>
                       <div>
+                        <Label className="flex items-center gap-1">
+                          <Shield className="h-3.5 w-3.5" /> OCPP-Passwort (Basic Auth)
+                        </Label>
+                        <div className="flex gap-2">
+                          <Input
+                            type={showPassword ? "text" : "password"}
+                            value={form.ocpp_password}
+                            onChange={(e) => setForm({ ...form, ocpp_password: e.target.value })}
+                            placeholder="z.B. 24-stelliges Zufallspasswort"
+                            className="flex-1 font-mono"
+                            autoComplete="new-password"
+                          />
+                          <Button type="button" variant="outline" size="icon" onClick={() => setShowPassword((v) => !v)} title={showPassword ? "Verbergen" : "Anzeigen"}>
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                          <Button type="button" variant="outline" size="icon" onClick={generatePassword} title="Sicheres Passwort generieren">
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                          {form.ocpp_password && (
+                            <Button type="button" variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(form.ocpp_password); toast({ title: "Passwort kopiert" }); }} title="Kopieren">
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Wird vom Ladepunkt im <code>Authorization: Basic</code>-Header beim WebSocket-Handshake gesendet. Leer lassen nur bei Test-Servern ohne Auth.
+                        </p>
+                      </div>
+                      <div>
+                        <Label>Liegenschaft <span className="text-xs text-muted-foreground font-normal">— optional, direkte Zuordnung</span></Label>
+                        <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
+                          <SelectTrigger><SelectValue placeholder="Keine / via Gruppe" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Keine / via Gruppe</SelectItem>
+                            {locations.map((loc) => (
+                              <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
                         <Label>Adresse / Standort</Label>
                         <div className="flex gap-2">
                           <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="z.B. Musterstraße 1, 12345 Berlin" className="flex-1" />
@@ -845,6 +1183,26 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                             <MapPin className="h-3 w-3" /> {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
                           </p>
                         )}
+                        <div className="mt-3">
+                          <SingleChargePointMap
+                            latitude={coords.lat}
+                            longitude={coords.lng}
+                            alwaysEditable
+                            currentName={form.name}
+                            otherPoints={chargePoints
+                              .filter((c) => c.id !== id && c.latitude != null && c.longitude != null)
+                              .map((c) => ({
+                                id: c.id,
+                                name: c.name,
+                                latitude: c.latitude as number,
+                                longitude: c.longitude as number,
+                              }))}
+                            onPositionChange={(lat, lng) => setCoords({ lat, lng })}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Marker per Drag &amp; Drop verschieben. Änderungen werden mit „Speichern" übernommen.
+                          </p>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div><Label>Anschlüsse</Label><Input type="number" min="1" value={form.connector_count} onChange={(e) => setForm({ ...form, connector_count: e.target.value })} /></div>
@@ -892,13 +1250,30 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                           ) : (
                             <Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder={form.vendor ? "Kein hinterlegtes Modell" : "Erst Hersteller wählen"} />
                           )}
-                        </div>
+                      </div>
+                      <div>
+                        <Label>RFID-Lesemodus</Label>
+                        <Select value={form.rfid_read_mode} onValueChange={(v) => setForm({ ...form, rfid_read_mode: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="raw">Original (z.B. 432503FC → 432503FC)</SelectItem>
+                            <SelectItem value="nibble_swap">Hex-Stellen je Byte tauschen (z.B. 432503FC → 345230CF)</SelectItem>
+                            <SelectItem value="byte_reversed">Byte-Reihenfolge umdrehen (z.B. 432503FC → FC032543)</SelectItem>
+                            <SelectItem value="byte_reversed_nibble_swap">Beides kombiniert (z.B. 432503FC → CF305234)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Wie diese Wallbox RFID-Tags ausliest. Beispiel zeigt, wie der Roh-Tag <code>432503FC</code> in den hinterlegten Tag umgerechnet wird. Falsche Auswahl führt zu „Tag unbekannt" – im Zweifel verschiedene Modi testen.
+                          <br />
+                          <span className="opacity-70">Hinweis: Manche Hersteller (z.B. Wallbe) bezeichnen das Tauschen der Hex-Stellen je Byte selbst als „BYTE_REVERSED". Maßgeblich ist hier das Beispiel.</span>
+                        </p>
+                      </div>
                       </div>
                       {/* Photo upload */}
                       <div>
                         <Label>Foto</Label>
                         <div className="flex items-center gap-3 mt-1">
-                          {photoUrl && <img src={photoUrl} alt="Vorschau" className="h-16 w-16 rounded object-cover" />}
+                          {currentPhotoUrl && <img src={currentPhotoUrl} alt="Vorschau" className="h-16 w-16 rounded object-cover" />}
                           <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
                             {uploading ? "Lädt…" : "Foto hochladen"}
                           </Button>
@@ -924,9 +1299,26 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       <div><span className="text-muted-foreground">Firmware:</span></div><div className="font-medium">{cp.firmware_version || "—"}</div>
                     </div>
                   )}
+                  {!editing && (
+                    <div className="mt-6 pt-4 border-t">
+                      <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                        <Activity className="h-4 w-4 text-primary" /> Live-Daten
+                      </h3>
+                      <div className="max-w-xl">
+                        <LiveDataPanel live={liveData} />
+                        {ocppCapabilities?.supported_measurands?.length ? (
+                          <p className="text-xs text-muted-foreground mt-3">
+                            Unterstützte Messgrößen: {ocppCapabilities.supported_measurands.join(", ")}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
+              <ModbusInstancePanel chargePointId={cp.id} canEdit={!!isAdmin} />
             </TabsContent>
+
 
             {/* Energy Management tab */}
             <TabsContent value="energy" className="mt-6 space-y-6">
@@ -1017,31 +1409,248 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between p-4 border rounded-lg opacity-60">
-                        <div>
-                          <p className="font-medium">Dynamisches Lastmanagement</p>
-                          <p className="text-sm text-muted-foreground">Leistung automatisch an verfügbare Kapazität anpassen</p>
+                      {/* Dynamisches Lastmanagement (Soft-Limit) */}
+                      <div className="p-4 border rounded-lg space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">Dynamisches Lastmanagement (Soft-Limit)</p>
+                            <p className="text-sm text-muted-foreground">
+                              Drosselt diesen Ladepunkt, sobald der Referenzzähler das Limit überschreitet.
+                            </p>
+                          </div>
+                          <Switch
+                            checked={cpEnergy?.dlm?.enabled ?? cpEnergy?.dynamic_load_management ?? false}
+                            onCheckedChange={(v) => {
+                              const prev = cpEnergy?.dlm ?? { enabled: false, limit_kw: null, reference_meter_id: null };
+                              saveEnergySettings({
+                                dynamic_load_management: v,
+                                dlm: { ...prev, enabled: v },
+                              });
+                            }}
+                            disabled={!isAdmin}
+                          />
                         </div>
-                        <Switch disabled />
+                        {(cpEnergy?.dlm?.enabled ?? cpEnergy?.dynamic_load_management) && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Limit (kW)</Label>
+                              <Input
+                                type="number"
+                                min={0}
+                                step="0.1"
+                                placeholder="z.B. 22"
+                                value={cpEnergy?.dlm?.limit_kw ?? ""}
+                                onChange={(e) => {
+                                  const prev = cpEnergy?.dlm ?? { enabled: true, limit_kw: null, reference_meter_id: null };
+                                  saveEnergySettings({
+                                    dlm: { ...prev, limit_kw: e.target.value === "" ? null : Number(e.target.value) },
+                                  });
+                                }}
+                                disabled={!isAdmin}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Referenzzähler</Label>
+                              <Select
+                                value={cpEnergy?.dlm?.reference_meter_id ?? ""}
+                                onValueChange={(v) => {
+                                  const prev = cpEnergy?.dlm ?? { enabled: true, limit_kw: null, reference_meter_id: null };
+                                  saveEnergySettings({
+                                    dlm: { ...prev, reference_meter_id: v || null },
+                                  });
+                                }}
+                                disabled={!isAdmin}
+                              >
+                                <SelectTrigger><SelectValue placeholder="Zähler wählen…" /></SelectTrigger>
+                                <SelectContent>
+                                  {meters.map((m: any) => (
+                                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <p className="text-xs text-muted-foreground md:col-span-2 flex items-center gap-1">
+                              <Info className="h-3 w-3" /> Der Referenzzähler misst die Last des Stromkreises, an dem der Ladepunkt hängt (z. B. Unterverteilung). Hardlimit am Hausanschluss wird zusätzlich am Standort konfiguriert.
+                            </p>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg border-primary/30 bg-primary/5">
-                        <div>
-                          <p className="font-medium">PV-Überschussladen</p>
-                          <p className="text-sm text-muted-foreground">Laden priorisiert mit eigenem Solarstrom – Konfiguration über Ladepunkt-Gruppen</p>
+
+                      {/* PV-Überschussladen */}
+                      <div className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">PV-Überschussladen</p>
+                            <p className="text-sm text-muted-foreground">
+                              Laden priorisiert mit eigenem Solarstrom
+                            </p>
+                          </div>
+                          <Switch
+                            checked={cpEnergy?.pv_surplus_charging ?? false}
+                            onCheckedChange={(v) => saveEnergySettings({ pv_surplus_charging: v })}
+                            disabled={!isAdmin}
+                          />
                         </div>
-                        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate("/charging/points")}>
-                          <Zap className="h-3.5 w-3.5" /> Zur Gruppe
-                        </Button>
+                        {cpEnergy?.pv_surplus_charging && (
+                          <ChargePointSolarChargingConfig
+                            chargePointId={cp.id}
+                            locationId={cp.location_id}
+                            isAdmin={isAdmin}
+                            pvSurplusEnabled={true}
+                          />
+                        )}
                       </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg opacity-60">
-                        <div>
-                          <p className="font-medium">Günstig-Laden-Modus</p>
-                          <p className="text-sm text-muted-foreground">Laden automatisch in Niedrigtarifzeiten verschieben</p>
+
+                      {/* Günstig-Laden */}
+                      <div className="border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">Günstig-Laden-Modus</p>
+                            <p className="text-sm text-muted-foreground">
+                              Laden automatisch in Niedrigtarifzeiten verschieben
+                            </p>
+                          </div>
+                          <Switch
+                            checked={cpEnergy?.cheap_charging?.enabled ?? cpEnergy?.cheap_charging_mode ?? false}
+                            onCheckedChange={(v) => {
+                              const prev = cpEnergy?.cheap_charging ?? {
+                                max_price_eur_mwh: 60,
+                                limit_kw: 11,
+                                use_fallback_window: true,
+                                fallback_time_from: "22:00",
+                                fallback_time_to: "06:00",
+                                enabled: false,
+                              };
+                              saveEnergySettings({
+                                cheap_charging_mode: v,
+                                cheap_charging: { ...prev, enabled: v },
+                              });
+                            }}
+                            disabled={!isAdmin}
+                          />
                         </div>
-                        <Switch disabled />
+
+                        {(cpEnergy?.cheap_charging?.enabled ?? cpEnergy?.cheap_charging_mode) && (
+                          <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Max. Preis (€/MWh)</Label>
+                              <Input
+                                type="number"
+                                value={cpEnergy?.cheap_charging?.max_price_eur_mwh ?? 60}
+                                onChange={(e) => {
+                                  const prev = cpEnergy?.cheap_charging ?? {
+                                    enabled: true,
+                                    limit_kw: 11,
+                                    use_fallback_window: true,
+                                    fallback_time_from: "22:00",
+                                    fallback_time_to: "06:00",
+                                    max_price_eur_mwh: 60,
+                                  };
+                                  saveEnergySettings({
+                                    cheap_charging: { ...prev, max_price_eur_mwh: Number(e.target.value) },
+                                  });
+                                }}
+                                className="h-8 text-sm"
+                                disabled={!isAdmin}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Lade-Limit (kW)</Label>
+                              <Input
+                                type="number"
+                                value={cpEnergy?.cheap_charging?.limit_kw ?? 11}
+                                onChange={(e) => {
+                                  const prev = cpEnergy?.cheap_charging ?? {
+                                    enabled: true,
+                                    max_price_eur_mwh: 60,
+                                    use_fallback_window: true,
+                                    fallback_time_from: "22:00",
+                                    fallback_time_to: "06:00",
+                                    limit_kw: 11,
+                                  };
+                                  saveEnergySettings({
+                                    cheap_charging: { ...prev, limit_kw: Number(e.target.value) },
+                                  });
+                                }}
+                                className="h-8 text-sm"
+                                disabled={!isAdmin}
+                              />
+                            </div>
+                            <div className="col-span-2 flex items-center gap-2 pt-1">
+                              <Switch
+                                checked={cpEnergy?.cheap_charging?.use_fallback_window ?? true}
+                                onCheckedChange={(v) => {
+                                  const prev = cpEnergy?.cheap_charging ?? {
+                                    enabled: true,
+                                    max_price_eur_mwh: 60,
+                                    limit_kw: 11,
+                                    fallback_time_from: "22:00",
+                                    fallback_time_to: "06:00",
+                                    use_fallback_window: true,
+                                  };
+                                  saveEnergySettings({
+                                    cheap_charging: { ...prev, use_fallback_window: v },
+                                  });
+                                }}
+                                disabled={!isAdmin}
+                              />
+                              <Label className="text-xs">Fallback-Zeitfenster nutzen, wenn keine Spotpreise verfügbar</Label>
+                            </div>
+                            {(cpEnergy?.cheap_charging?.use_fallback_window ?? true) && (
+                              <>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Von</Label>
+                                  <Input
+                                    type="time"
+                                    value={cpEnergy?.cheap_charging?.fallback_time_from ?? "22:00"}
+                                    onChange={(e) => {
+                                      const prev = cpEnergy?.cheap_charging ?? {
+                                        enabled: true,
+                                        max_price_eur_mwh: 60,
+                                        limit_kw: 11,
+                                        use_fallback_window: true,
+                                        fallback_time_to: "06:00",
+                                        fallback_time_from: "22:00",
+                                      };
+                                      saveEnergySettings({
+                                        cheap_charging: { ...prev, fallback_time_from: e.target.value },
+                                      });
+                                    }}
+                                    className="h-8 text-sm"
+                                    disabled={!isAdmin}
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Bis</Label>
+                                  <Input
+                                    type="time"
+                                    value={cpEnergy?.cheap_charging?.fallback_time_to ?? "06:00"}
+                                    onChange={(e) => {
+                                      const prev = cpEnergy?.cheap_charging ?? {
+                                        enabled: true,
+                                        max_price_eur_mwh: 60,
+                                        limit_kw: 11,
+                                        use_fallback_window: true,
+                                        fallback_time_from: "22:00",
+                                        fallback_time_to: "06:00",
+                                      };
+                                      saveEnergySettings({
+                                        cheap_charging: { ...prev, fallback_time_to: e.target.value },
+                                      });
+                                    }}
+                                    className="h-8 text-sm"
+                                    disabled={!isAdmin}
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
+
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Info className="h-3 w-3" /> Diese Funktionen sind über Ladepunkt-Gruppen konfigurierbar oder werden in einem späteren Update als Einzelkonfiguration verfügbar.
+                        <Info className="h-3 w-3" />
+                        Diese Einstellungen gelten nur für diesen Ladepunkt.
                       </p>
                     </CardContent>
                   </Card>
@@ -1094,33 +1703,17 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">Freies Laden erlauben</p>
-                          <p className="text-sm text-muted-foreground">Laden ohne RFID-Karte oder App-Autorisierung ermöglichen</p>
-                        </div>
-                        <Switch disabled />
-                      </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">Nutzergruppen-Beschränkung</p>
-                          <p className="text-sm text-muted-foreground">Nur bestimmte Nutzergruppen für diesen Ladepunkt zulassen</p>
-                        </div>
-                        <Switch disabled />
-                      </div>
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <p className="font-medium">Maximale Ladedauer</p>
-                          <p className="text-sm text-muted-foreground">Ladevorgang nach Zeitlimit automatisch beenden</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Input type="number" className="w-20" defaultValue="480" disabled />
-                          <span className="text-sm text-muted-foreground">min</span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Info className="h-3 w-3" /> Diese Funktionen werden in einem zukünftigen Update verfügbar. Alternativ können Sie eine Gruppe erstellen und die Einstellungen dort verwalten.
-                      </p>
+                      <AccessControlSettings
+                        entityType="chargepoint"
+                        entityId={cp.id}
+                        settings={{
+                          free_charging: (cp as any).access_settings?.free_charging ?? false,
+                          user_group_restriction: (cp as any).access_settings?.user_group_restriction ?? false,
+                          max_charging_duration_min: (cp as any).access_settings?.max_charging_duration_min ?? 480,
+                        }}
+                        isAdmin={isAdmin}
+                        onSave={saveAccessSettings}
+                      />
                     </CardContent>
                   </Card>
 
@@ -1138,9 +1731,51 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                 </>
               )}
             </TabsContent>
+
+            <TabsContent value="utilization" className="mt-6 space-y-6">
+              <UtilizationHeatmap sessions={sessions ?? []} />
+              <RoiCard
+                chargePointId={cp.id}
+                sessions={(sessions ?? []).map((s) => ({ start_time: s.start_time, energy_kwh: s.energy_kwh }))}
+                defaultSalePriceEurPerKwh={defaultSalePrice}
+              />
+            </TabsContent>
+
+            <TabsContent value="maintenance" className="mt-6 space-y-6">
+              <AutoRebootSettings
+                chargePoint={cp}
+                isAdmin={!!isAdmin}
+                onSave={(patch) => updateChargePoint.mutate({ id: cp.id, ...patch } as any)}
+              />
+              <ChargePointFirmwareCard
+                chargePointId={cp.id}
+                vendor={cp.vendor ?? null}
+                model={cp.model ?? null}
+                currentFirmwareVersion={(cp as any).firmware_version ?? null}
+              />
+            </TabsContent>
+
+
+            <TabsContent value="eichrecht" className="mt-6 space-y-4">
+              <ChargePointEichrechtForm chargePointId={cp.id} />
+              <p className="text-xs text-muted-foreground">
+                Belege je Ladevorgang können Sie im Tab &quot;Ladevorgänge&quot; über die Schaltfläche &quot;OCMF&quot; herunterladen oder als
+                Endkunden-Link teilen.
+              </p>
+            </TabsContent>
           </Tabs>
+
         </div>
       </main>
+
+      <Dialog open={!!ocmfSessionId} onOpenChange={(o) => !o && setOcmfSessionId(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Eichrechtskonformer Beleg</DialogTitle>
+          </DialogHeader>
+          {ocmfSessionId && <EichrechtTab sessionId={ocmfSessionId} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

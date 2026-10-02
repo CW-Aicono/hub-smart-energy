@@ -127,9 +127,8 @@ https://github.com/CW-Aicono/ha-addons
 ### 6.1 Konfigurationswerte
 
 ```yaml
-supabase_url: "https://xnveugycurplszevdxtw.supabase.co"
-gateway_api_key: "gw_abc123..."
-tenant_id: "550e8400-e29b-41d4-a716-446655440000"
+gateway_username: "buero-pi"
+gateway_password: "your-secure-password"
 device_name: "rpi-buero-eg"
 poll_interval_seconds: 30
 flush_interval_seconds: 5
@@ -141,9 +140,8 @@ auto_backup_hours: 24
 
 | Schlüssel | Beschreibung |
 |---|---|
-| **supabase_url** | Cloud-Backend-URL |
-| **gateway_api_key** | Gateway-API-Schlüssel (aus der App, oder per-device Key – siehe Abschnitt 11) |
-| **tenant_id** | Mandanten-ID (aus der App) |
+| **gateway_username** | Benutzername für die Gateway-Authentifizierung (wird in AICONO vergeben) |
+| **gateway_password** | Passwort für die Gateway-Authentifizierung (wird in AICONO vergeben) |
 | **device_name** | Eindeutiger Name für diesen Gateway |
 | **poll_interval_seconds** | Sensor-Abfrageintervall |
 | **flush_interval_seconds** | Cloud-Sendeintervall |
@@ -152,11 +150,11 @@ auto_backup_hours: 24
 | **offline_buffer_max_mb** | Max. Offline-Puffergröße |
 | **auto_backup_hours** | Backup-Intervall |
 
-### 6.2 API Key und Tenant ID finden
+### 6.2 Zugangsdaten finden
 
 1. Anmelden unter: [https://hub-smart-energy.lovable.app](https://hub-smart-energy.lovable.app)
 2. **Einstellungen** → **Integrationen** → **Gateway-Geräte**
-3. Dort findest du **Gateway API Key** und **Tenant ID**
+3. Dort findest du **Benutzername** und **Passwort** für das Gateway
 
 ### 6.3 Add-on starten
 
@@ -344,10 +342,10 @@ Im Multi-Tenant-Betrieb sollte jeder Raspberry Pi einen **eigenen API-Key** habe
 
 ### Add-on startet nicht
 
-1. Logs prüfen: **Add-ons** → **EMS Gateway Hub** → **Protokoll**
+1. Logs prüfen: **Add-ons** → **AICONO EMS Gateway** → **Protokoll**
 2. Häufige Ursachen:
-   - Cloud URL oder Gateway API Key nicht eingetragen
-   - Ungültige Tenant ID
+   - Cloud-URL oder Gateway-Benutzername/Passwort nicht eingetragen
+   - Add-on wurde noch nicht in AICONO zugeordnet (MAC + Benutzername + Passwort in der Integration hinterlegen)
 
 ### Keine Sensordaten
 
@@ -366,7 +364,7 @@ Im Multi-Tenant-Betrieb sollte jeder Raspberry Pi einen **eigenen API-Key** habe
 
 1. Internetverbindung prüfen: `ping google.com`
 2. Cloud-URL Erreichbarkeit prüfen
-3. API Key Gültigkeit in der App prüfen
+3. Gateway-Zugangsdaten in der AICONO-Integration prüfen (Benutzername/Passwort)
 
 ### SSH-Zugang
 

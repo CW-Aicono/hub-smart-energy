@@ -8,14 +8,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Copy, PlugZap, BookOpen, Search, ExternalLink, Server, Shield, AlertTriangle } from "lucide-react";
+import { Copy, PlugZap, BookOpen, Search, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 
-const OCPP_WS_URL_SHORT = "wss://ocpp.aicono.org";
-const OCPP_WS_URL_LONG = `${import.meta.env.VITE_SUPABASE_URL?.replace("https://", "wss://")}/functions/v1/ocpp-ws-proxy`;
-const OCPP_WS_URL = OCPP_WS_URL_SHORT;
+// OCPP-Domain wird automatisch passend zur Umgebung gewählt:
+//  - Live-Domains (ems-pro.aicono.org / aicono.org) → cp.aicono.org
+//  - Test/Staging/Lovable-Preview                    → ocpp.aicono.org
+import { getOcppHost, getOcppWssUrl, getOcppWsUrl, getOcppEnvironmentLabel } from "@/lib/ocppEnvironment";
+const OCPP_HOST = getOcppHost();
+const OCPP_WSS_URL = getOcppWssUrl();
+const OCPP_WS_URL = getOcppWsUrl();
+const OCPP_ENV_LABEL = getOcppEnvironmentLabel();
 
 const DIFFICULTY_COLORS: Record<string, string> = {
   easy: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
@@ -23,10 +28,11 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   hard: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
 };
 
-const OcppIntegration = () => {
+export function OcppIntegrationContent() {
   const { t } = useTranslation();
   const { guides, isLoading: guidesLoading, vendors: guideVendors } = useOcppGuides();
   const { chargerModels, isLoading: modelsLoading } = useChargerModels();
+
 
   const [selectedVendor, setSelectedVendor] = useState<string>("all");
   const [selectedModel, setSelectedModel] = useState<string>("all");
@@ -101,111 +107,58 @@ const OcppIntegration = () => {
   };
 
   return (
-    <AppLayout>
-      <div className="space-y-4 max-w-6xl mx-auto">
+    <div className="space-y-4 w-full min-w-0 overflow-x-hidden">
         <div>
           <h1 className="text-xl font-bold tracking-tight">{t("ocppIntegration.title" as any)}</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{t("ocppIntegration.subtitle" as any)}</p>
         </div>
 
-        {/* OCPP Backend URL Card */}
-        <Card className="border-primary/20 bg-primary/5">
-          <CardContent className="pt-4 pb-4">
+
+        {/* OCPP Server URL (wss:// + ws://) */}
+        <Card className="border-primary/20 bg-primary/5 overflow-hidden">
+          <CardContent className="pt-4 pb-4 space-y-3">
             <div className="flex items-start gap-2">
               <Server className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0 space-y-2">
-                <p className="text-xs font-medium">{t("ocppIntegration.backendUrl" as any)}</p>
-
-                {/* Short URL (if configured) */}
-                {OCPP_WS_URL_SHORT && (
-                  <div>
-                    <p className="text-[11px] font-medium text-primary mb-0.5">{t("ocppIntegration.shortUrl" as any)}</p>
-                    <div className="flex items-center gap-1.5">
-                      <code className="text-xs bg-background border rounded px-2 py-1.5 break-all select-all flex-1 font-semibold">
-                        {OCPP_WS_URL_SHORT}/{"<OCPP_ID>"}
-                      </code>
-                      <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={() => copyUrl(OCPP_WS_URL_SHORT)}>
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Long URL */}
-                <div>
-                  {OCPP_WS_URL_SHORT && (
-                    <p className="text-[11px] text-muted-foreground mb-0.5">{t("ocppIntegration.fullUrl" as any)}</p>
-                  )}
-                  <div className="flex items-center gap-1.5">
-                    <code className="text-[11px] bg-background border rounded px-2 py-1.5 break-all select-all flex-1 text-muted-foreground">
-                      {OCPP_WS_URL_LONG}/{"<OCPP_ID>"}
-                    </code>
-                    <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={() => copyUrl(OCPP_WS_URL_LONG)}>
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-xs font-medium">OCPP-Server-URL</p>
+                  <Badge variant={OCPP_ENV_LABEL === "Live" ? "default" : "secondary"} className="text-[10px] py-0 h-4">
+                    {OCPP_ENV_LABEL}-Umgebung · {OCPP_HOST}
+                  </Badge>
                 </div>
-
-                {/* Port info */}
-                <div className="p-2 bg-background border rounded-md">
-                  <p className="text-[11px] font-medium mb-1">Port-Konfiguration</p>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
-                    <div className="flex items-center gap-1.5">
-                      <code className="font-semibold text-primary">wss://</code>
-                      <span className="text-muted-foreground">→ Port</span>
-                      <code className="font-bold">443</code>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <code className="font-semibold text-destructive">ws://</code>
-                      <span className="text-muted-foreground">→ Port</span>
-                      <code className="font-bold">80</code>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Für verschlüsselte Verbindungen (wss://) muss Port <strong>443</strong> verwendet werden. Port 80 gilt nur für unverschlüsseltes ws:// und sollte vermieden werden.
-                  </p>
-                </div>
-
                 <p className="text-[11px] text-muted-foreground">
-                  {t("ocppIntegration.backendUrlHint" as any)}
+                  Persistenter OCPP-Server. Verwende <code>wss://</code> für moderne Wallboxen mit TLS,
+                  <code> ws://</code> für ältere Ladepunkte ohne TLS.
                 </p>
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* ws:// Cloud-Proxy für ältere Ladepunkte */}
-        <Card className="border-yellow-500/20 bg-yellow-500/5">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-start gap-2">
-              <Shield className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0 space-y-2">
-                <p className="text-xs font-medium">ws:// für ältere Ladepunkte (ohne TLS)</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Ältere Wallboxen ohne TLS-Unterstützung können sich über ws:// (unverschlüsselt) verbinden.
-                  Der Cloud-Proxy leitet die Verbindung automatisch verschlüsselt (wss://) an das Backend weiter.
+            <div className="space-y-2">
+              <div>
+                <p className="text-[11px] font-medium mb-0.5">
+                  wss:// (verschlüsselt, Standard-Port 443) — empfohlen
                 </p>
-
-                <div>
-                  <p className="text-[11px] font-medium mb-0.5">Verbindungs-URL für ältere Wallboxen:</p>
-                  <div className="flex items-center gap-1.5">
-                    <code className="text-xs bg-background border rounded px-2 py-1.5 break-all select-all flex-1 font-semibold">
-                      ws://ocpp.aicono.org/{"<OCPP_ID>"}
-                    </code>
-                    <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={() => {
-                      navigator.clipboard.writeText("ws://ocpp.aicono.org/{OCPP_ID}");
-                      toast({ title: t("common.copied" as any) || "Kopiert!" });
-                    }}>
-                      <Copy className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+                <div className="flex items-center gap-1.5">
+                  <code className="text-xs bg-background border rounded px-2 py-1.5 break-all select-all flex-1 font-semibold">
+                    {OCPP_WSS_URL}/{"<OCPP_ID>"}
+                  </code>
+                  <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={() => copyUrl(OCPP_WSS_URL)}>
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
+              </div>
 
-                <div className="flex items-start gap-1.5 text-yellow-700 dark:text-yellow-400">
-                  <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-                  <p className="text-[11px]">
-                    Die Strecke Wallbox → Cloud ist unverschlüsselt (ws://). Die Strecke Cloud-Proxy → Backend ist verschlüsselt (wss://). Dieses Vorgehen entspricht dem Branchenstandard für ältere Ladepunkte.
-                  </p>
+              <div>
+                <p className="text-[11px] font-medium mb-0.5">
+                  ws:// (unverschlüsselt, Standard-Port 80) — für ältere Ladepunkte
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <code className="text-xs bg-background border rounded px-2 py-1.5 break-all select-all flex-1 font-semibold">
+                    {OCPP_WS_URL}/{"<OCPP_ID>"}
+                  </code>
+                  <Button variant="outline" size="icon" className="shrink-0 h-8 w-8" onClick={() => copyUrl(OCPP_WS_URL)}>
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
               </div>
             </div>
@@ -251,7 +204,7 @@ const OcppIntegration = () => {
 
         {/* Results */}
         {isLoading ? (
-          <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2.5 min-w-0 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
               <Skeleton key={i} className="h-24 rounded-lg" />
             ))}
@@ -264,16 +217,16 @@ const OcppIntegration = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-2.5 min-w-0 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredItems.map((item) => (
               <Card
                 key={item.id}
-                className={`cursor-pointer transition-all hover:shadow-md ${expandedGuide === item.id ? "ring-2 ring-primary" : ""}`}
+                className={`min-w-0 overflow-hidden cursor-pointer transition-all hover:shadow-md ${expandedGuide === item.id ? "ring-2 ring-primary" : ""}`}
                 onClick={() => setExpandedGuide(expandedGuide === item.id ? null : item.id)}
               >
                 <CardHeader className="p-3 pb-1.5">
                   <div className="flex items-start justify-between gap-1.5">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-[11px] text-muted-foreground font-medium">{item.vendor}</p>
                       <CardTitle className="text-sm mt-0.5 truncate">{item.model}</CardTitle>
                     </div>
@@ -285,7 +238,7 @@ const OcppIntegration = () => {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="p-3 pt-0">
+                <CardContent className="p-3 pt-0 min-w-0 overflow-hidden">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                       OCPP {item.protocol || "1.6"}
@@ -304,10 +257,10 @@ const OcppIntegration = () => {
 
                   {/* Expanded guide content */}
                   {expandedGuide === item.id && item.guide && (
-                    <div className="mt-3 pt-3 border-t" onClick={(e) => e.stopPropagation()}>
-                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <div className="mt-3 pt-3 border-t min-w-0 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                      <div className="prose prose-sm dark:prose-invert max-w-none overflow-hidden break-words">
                         <div
-                          className="text-xs leading-relaxed whitespace-pre-wrap"
+                          className="text-xs leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
                           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.guide.content_md) }}
                         />
                       </div>
@@ -315,11 +268,11 @@ const OcppIntegration = () => {
                   )}
 
                   {expandedGuide === item.id && !item.guide && (
-                    <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
+                    <div className="mt-3 pt-3 border-t min-w-0 overflow-hidden text-xs text-muted-foreground break-words [overflow-wrap:anywhere]">
                       <p>{t("ocppIntegration.noGuideAvailable" as any)}</p>
-                      <div className="mt-2 p-2 bg-muted rounded-md">
+                      <div className="mt-2 p-2 bg-muted rounded-md min-w-0 overflow-hidden">
                         <p className="font-medium text-foreground mb-1 text-xs">{t("ocppIntegration.generalSteps" as any)}</p>
-                        <ol className="list-decimal list-inside space-y-0.5 text-[11px]">
+                        <ol className="list-decimal list-inside space-y-0.5 text-[11px] break-words [overflow-wrap:anywhere]">
                           <li>{t("ocppIntegration.step1" as any)}</li>
                           <li>{t("ocppIntegration.step2" as any)}</li>
                           <li>{t("ocppIntegration.step3" as any)}</li>
@@ -334,8 +287,17 @@ const OcppIntegration = () => {
           </div>
         )}
       </div>
-    </AppLayout>
   );
-};
+}
+
+const OcppIntegration = () => (
+  <AppLayout>
+    <div className="p-4 md:p-8">
+      <OcppIntegrationContent />
+    </div>
+  </AppLayout>
+);
+
 
 export default OcppIntegration;
+

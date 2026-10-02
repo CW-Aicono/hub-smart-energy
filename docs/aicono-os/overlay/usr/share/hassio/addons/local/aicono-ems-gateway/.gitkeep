@@ -1,0 +1,4 @@
+# Alle Add-on-Quellen werden zur Build-Zeit aus dem Schwester-Repo
+# CW-Aicono/ha-addons in dieses Verzeichnis geclont (siehe
+# `.github/workflows/build-image.yml`, Step "Add-on Quellcode aus
+# ha-addons clonen"). Bitte hier KEINE Add-on-Dateien einchecken.

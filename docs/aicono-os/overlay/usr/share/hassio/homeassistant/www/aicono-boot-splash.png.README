@@ -1,0 +1,16 @@
+AICONO Boot-Splash – Phase 3
+================================
+
+Diese Datei ist ein Platzhalter. Für den finalen Build wird hier ein
+PNG (1920x1080, schwarzer Hintergrund, AICONO Logo zentriert,
+Teal-Akzent) erwartet, das von Plymouth/HAOS als Boot-Splash genutzt
+wird.
+
+Pfad im Image:
+  /usr/share/hassio/homeassistant/www/aicono-boot-splash.png
+
+Einbindung in HAOS:
+HAOS nutzt Plymouth für den Boot-Splash. Da wir HAOS nicht
+rekompilieren, wird der Splash über ein systemd-Service-Hook auf
+firstboot durch unser Logo ersetzt – siehe
+  overlay/etc/firstboot.d/install-boot-splash.sh

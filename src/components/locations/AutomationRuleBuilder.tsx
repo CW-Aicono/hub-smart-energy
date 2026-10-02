@@ -36,16 +36,20 @@ import {
   Building2,
   Timer,
   AlarmClock,
+  Puzzle,
+  Cloud,
 } from "lucide-react";
 import { LoxoneSensor } from "@/hooks/useLoxoneSensors";
 import { getResolvedDeviceType } from "@/lib/deviceClassification";
+import { isCloudRequiredTemplate } from "@/lib/loxone/snippetsCatalog";
+import { isCloudOnlyIntegration, isDeviceAllowedForExecutionMode } from "@/lib/gatewayExecution";
 import { toast } from "sonner";
 
 // ── Types ──
 
 export interface AutomationCondition {
   id: string;
-  type: "sensor_value" | "time" | "weekday" | "status" | "time_point" | "time_switch";
+  type: "sensor_value" | "time" | "weekday" | "status" | "time_point" | "time_switch" | "power_headroom";
   connector?: "AND" | "OR";
   sensor_uuid?: string;
   sensor_name?: string;
@@ -66,6 +70,7 @@ export interface AutomationCondition {
   gateway_id?: string;
 }
 
+
 export interface AutomationAction {
   id: string;
   actuator_uuid: string;
@@ -79,6 +84,16 @@ export interface AutomationAction {
   gateway_id?: string;
 }
 
+export type AutomationExecutionMode = "cloud" | "loxone_local" | "hybrid";
+
+export interface InstalledLoxoneTemplate {
+  template_key: string;
+  instance_id: string | null;
+  installed_version: string | null;
+  title: string;
+  parameters: Array<{ name: string; key?: string; type: string; description?: string }>;
+}
+
 export interface AutomationRuleData {
   name: string;
   description: string;
@@ -86,6 +101,13 @@ export interface AutomationRuleData {
   actions: AutomationAction[];
   logic_operator: "AND" | "OR";
   is_active: boolean;
+  execution_mode: AutomationExecutionMode;
+  /** Loxone-Template-Bindung (nur bei execution_mode != "cloud") */
+  loxone_template_key?: string | null;
+  loxone_template_instance_id?: string | null;
+  loxone_template_bindings?: Record<string, string | number | boolean> | null;
+  /** MLA: Ziel-Standorte für standortübergreifende Automation */
+  target_location_ids?: string[];
 }
 
 /** Gateway option for MLA mode – each gateway has its own sensor list */
@@ -95,6 +117,16 @@ export interface GatewayOption {
   locationName: string;    // location name
   sensors: LoxoneSensor[]; // sensors for this specific gateway
   isOnline: boolean;
+  /** Integration type (e.g. "loxone_miniserver", "shelly_cloud") – used
+   *  to hide cloud-only gateways when execution_mode != "cloud". */
+  integrationType?: string;
+}
+
+/** MLA-Modus: Auswählbare Ziel-Standorte für eine Cross-Location-Automation */
+export interface CrossLocationTarget {
+  locationId: string;
+  locationIntegrationId: string;
+  locationName: string;
 }
 
 interface AutomationRuleBuilderProps {
@@ -109,6 +141,15 @@ interface AutomationRuleBuilderProps {
   gatewayOptions?: GatewayOption[];
   /** Authoritative device_type map from meters table (sensor_uuid -> "meter"|"sensor"|"actuator") */
   deviceTypeMap?: Map<string, string>;
+  /** Installierte AICO_-Templates in dieser Location (für execution_mode != "cloud") */
+  installedTemplates?: InstalledLoxoneTemplate[];
+  /** MLA: Verfügbare Ziel-Standorte mit Loxone-Miniserver */
+  crossLocationTargets?: CrossLocationTarget[];
+  /**
+   * MLA: Map `${template_key}::${instance_id ?? ""}` → Set<locationId>,
+   * um pro Standort zu markieren, ob der gewählte Baustein installiert ist.
+   */
+  templateAvailability?: Map<string, Set<string>>;
 }
 
 // ── Helpers ──
@@ -155,7 +196,9 @@ const CONDITION_TYPES = [
   { value: "time_switch", label: "Zeitschaltuhr", icon: Timer, desc: "Zu mehreren Zeitpunkten auslösen" },
   { value: "weekday", label: "Wochentage", icon: CalendarDays, desc: "Nur an bestimmten Wochentagen aktiv" },
   { value: "status", label: "Aktor-Status", icon: ToggleLeft, desc: "Wenn ein anderer Aktor einen bestimmten Zustand hat" },
+  { value: "power_headroom", label: "Hausanschluss-Reserve", icon: Zap, desc: "Wenn die freie Leistung am Hausanschluss über/unter einem Wert (kW) liegt" },
 ];
+
 
 function getSensorIcon(type: string) {
   switch (type) {
@@ -218,6 +261,7 @@ function ConditionCard({
   onRemove,
   gatewayOptions,
   deviceTypeMap,
+  executionMode,
 }: {
   condition: AutomationCondition;
   sensors: LoxoneSensor[];
@@ -225,19 +269,32 @@ function ConditionCard({
   onRemove: () => void;
   gatewayOptions?: GatewayOption[];
   deviceTypeMap?: Map<string, string>;
+  executionMode: AutomationExecutionMode;
 }) {
   const condType = CONDITION_TYPES.find((t) => t.value === condition.type);
   const CondIcon = condType?.icon || Zap;
 
-  const isMLA = !!gatewayOptions && gatewayOptions.length > 0;
+  // Filter gateway options for local/hybrid modes: cloud-only integrations are forbidden.
+  const allowedGatewayOptions = useMemo(() => {
+    if (!gatewayOptions) return undefined;
+    if (executionMode === "cloud") return gatewayOptions;
+    return gatewayOptions.filter((gw) => !isCloudOnlyIntegration(gw.integrationType));
+  }, [gatewayOptions, executionMode]);
+
+  const isMLA = !!allowedGatewayOptions && allowedGatewayOptions.length > 0;
 
   // In MLA mode, filter sensors by selected gateway
   // All devices for this gateway (unfiltered, used by status condition for actuator selection)
   const effectiveSensors = useMemo(() => {
-    if (!isMLA || !condition.gateway_id) return isMLA ? [] : sensors;
-    const gw = gatewayOptions!.find((g) => g.id === condition.gateway_id);
-    return gw?.sensors || [];
-  }, [isMLA, condition.gateway_id, gatewayOptions, sensors]);
+    if (isMLA) {
+      if (!condition.gateway_id) return [];
+      const gw = allowedGatewayOptions!.find((g) => g.id === condition.gateway_id);
+      return gw?.sensors || [];
+    }
+    // Non-MLA: filter merged sensor list by execution mode (drop cloud-only devices in local/hybrid).
+    if (executionMode === "cloud") return sensors;
+    return sensors.filter((s) => isDeviceAllowedForExecutionMode(s._integrationType, executionMode));
+  }, [isMLA, condition.gateway_id, allowedGatewayOptions, sensors, executionMode]);
 
   // Only sensors & meters for sensor_value condition dropdowns (use deviceTypeMap if available)
   const sensorOnlyDevices = useMemo(() => {
@@ -269,7 +326,7 @@ function ConditionCard({
             {/* MLA: Gateway selector first */}
             {isMLA && (
               <GatewaySelector
-                gatewayOptions={gatewayOptions!}
+                gatewayOptions={allowedGatewayOptions!}
                 selectedGatewayId={condition.gateway_id}
                 onSelect={handleGatewayChange}
               />
@@ -439,7 +496,7 @@ function ConditionCard({
             {/* MLA: Gateway selector first */}
             {isMLA && (
               <GatewaySelector
-                gatewayOptions={gatewayOptions!}
+                gatewayOptions={allowedGatewayOptions!}
                 selectedGatewayId={condition.gateway_id}
                 onSelect={handleGatewayChange}
               />
@@ -483,10 +540,49 @@ function ConditionCard({
             </div>
           </div>
         )}
+
+        {condition.type === "power_headroom" && (
+          <div className="space-y-3">
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              Freie Leistung am Hausanschluss (Budget minus aktuelle Last). Basis:
+              letzter DLM-Regelkreis-Zyklus (max. 10 Min. alt).
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Operator</Label>
+                <Select
+                  value={condition.operator || "<"}
+                  onValueChange={(val) => onUpdate({ ...condition, operator: val as AutomationCondition["operator"] })}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {OPERATORS.map((op) => (
+                      <SelectItem key={op.value} value={op.value} className="text-xs">{op.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Reserve (kW)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  className="h-9 text-xs"
+                  value={condition.value ?? ""}
+                  onChange={(e) => onUpdate({ ...condition, value: e.target.value ? parseFloat(e.target.value) : undefined })}
+                  placeholder="z.B. 5"
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
+
 
 function ActionCard({
   action,
@@ -495,6 +591,7 @@ function ActionCard({
   onRemove,
   gatewayOptions,
   deviceTypeMap,
+  executionMode,
 }: {
   action: AutomationAction;
   sensors: LoxoneSensor[];
@@ -502,17 +599,37 @@ function ActionCard({
   onRemove: () => void;
   gatewayOptions?: GatewayOption[];
   deviceTypeMap?: Map<string, string>;
+  executionMode: AutomationExecutionMode;
 }) {
-  const isMLA = !!gatewayOptions && gatewayOptions.length > 0;
+  const allowedGatewayOptions = useMemo(() => {
+    if (!gatewayOptions) return undefined;
+    if (executionMode === "cloud") return gatewayOptions;
+    return gatewayOptions.filter((gw) => !isCloudOnlyIntegration(gw.integrationType));
+  }, [gatewayOptions, executionMode]);
+
+  const isMLA = !!allowedGatewayOptions && allowedGatewayOptions.length > 0;
 
   // In MLA mode, filter actuators by selected gateway
   const effectiveSensors = useMemo(() => {
-    if (!isMLA || !action.gateway_id) return isMLA ? [] : sensors;
-    const gw = gatewayOptions!.find((g) => g.id === action.gateway_id);
-    return gw?.sensors || [];
-  }, [isMLA, action.gateway_id, gatewayOptions, sensors]);
+    if (isMLA) {
+      if (!action.gateway_id) return [];
+      const gw = allowedGatewayOptions!.find((g) => g.id === action.gateway_id);
+      return gw?.sensors || [];
+    }
+    if (executionMode === "cloud") return sensors;
+    return sensors.filter((s) => isDeviceAllowedForExecutionMode(s._integrationType, executionMode));
+  }, [isMLA, action.gateway_id, allowedGatewayOptions, sensors, executionMode]);
 
-  const actuators = effectiveSensors.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
+  const actuators = useMemo(() => {
+    const list = effectiveSensors.filter((s) => getResolvedDeviceType(s, deviceTypeMap) === "actuator");
+    // Deduplicate by id to prevent duplicate SelectItems (causes "Name ()Name ()" display bug)
+    const seen = new Set<string>();
+    return list.filter((s) => {
+      if (seen.has(s.id)) return false;
+      seen.add(s.id);
+      return true;
+    });
+  }, [effectiveSensors, deviceTypeMap]);
   const selected = actuators.find((s) => s.id === action.actuator_uuid);
   const SIcon = selected ? getSensorIcon(selected.type) : Server;
 
@@ -539,7 +656,7 @@ function ActionCard({
         {/* MLA: Gateway selector first */}
         {isMLA && (
           <GatewaySelector
-            gatewayOptions={gatewayOptions!}
+            gatewayOptions={allowedGatewayOptions!}
             selectedGatewayId={action.gateway_id}
             onSelect={handleGatewayChange}
           />
@@ -571,7 +688,11 @@ function ActionCard({
           <div className="space-y-1">
             <Label className="text-xs">Aktion</Label>
             {(() => {
-              const isMeterControl = action.control_type === "Meter" || action.control_type === "EFM" || action.control_type === "EnergyManager2";
+              // Resolve effective device type (respects user's manual classification override)
+              const resolvedType = selected ? getResolvedDeviceType(selected, deviceTypeMap) : undefined;
+              const isMeterControl =
+                resolvedType !== "actuator" &&
+                (action.control_type === "Meter" || action.control_type === "EFM" || action.control_type === "EnergyManager2");
               const availableActions = isMeterControl ? METER_ACTION_TYPES : ACTION_TYPES;
               return (
                 <Select
@@ -622,6 +743,9 @@ export function AutomationRuleBuilder({
   isEdit,
   gatewayOptions,
   deviceTypeMap,
+  installedTemplates,
+  crossLocationTargets,
+  templateAvailability,
 }: AutomationRuleBuilderProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -629,8 +753,15 @@ export function AutomationRuleBuilder({
   const [actions, setActions] = useState<AutomationAction[]>([]);
   const [logicOp, setLogicOp] = useState<"AND" | "OR">("AND");
   const [isActive, setIsActive] = useState(true);
+  const [executionMode, setExecutionMode] = useState<AutomationExecutionMode>("cloud");
+  const [templateKey, setTemplateKey] = useState<string>("");
+  const [templateInstance, setTemplateInstance] = useState<string>("");
+  const [templateParams, setTemplateParams] = useState<Record<string, string>>({});
+  const [targetLocationIds, setTargetLocationIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [addConditionOpen, setAddConditionOpen] = useState(false);
+
+  const isMlaMode = !!crossLocationTargets && crossLocationTargets.length > 0;
 
   // Init from initialData
   useEffect(() => {
@@ -640,6 +771,7 @@ export function AutomationRuleBuilder({
       setDescription(initialData.description || "");
       setLogicOp(initialData.logic_operator || "AND");
       setIsActive(initialData.is_active !== undefined ? initialData.is_active : true);
+      setExecutionMode((initialData.execution_mode as AutomationExecutionMode) || "cloud");
 
       if (initialData.conditions && initialData.conditions.length > 0) {
         setConditions(initialData.conditions);
@@ -662,6 +794,21 @@ export function AutomationRuleBuilder({
       } else {
         setActions([]);
       }
+
+      setTemplateKey((initialData.loxone_template_key as string) || "");
+      setTemplateInstance((initialData.loxone_template_instance_id as string) || "");
+      const rawBindings = (initialData.loxone_template_bindings as Record<string, unknown> | null | undefined) ?? null;
+      if (rawBindings && typeof rawBindings === "object") {
+        const stringified: Record<string, string> = {};
+        for (const [k, v] of Object.entries(rawBindings)) {
+          stringified[k] = v === null || v === undefined ? "" : String(v);
+        }
+        setTemplateParams(stringified);
+      } else {
+        setTemplateParams({});
+      }
+
+      setTargetLocationIds(Array.isArray(initialData.target_location_ids) ? initialData.target_location_ids : []);
     } else {
       setName("");
       setDescription("");
@@ -669,6 +816,11 @@ export function AutomationRuleBuilder({
       setActions([]);
       setLogicOp("AND");
       setIsActive(true);
+      setExecutionMode("cloud");
+      setTemplateKey("");
+      setTemplateInstance("");
+      setTemplateParams({});
+      setTargetLocationIds(isMlaMode ? (crossLocationTargets?.map((t) => t.locationId) ?? []) : []);
     }
     setAddConditionOpen(false);
   }, [open, initialData]);
@@ -681,9 +833,12 @@ export function AutomationRuleBuilder({
     if (type === "time_point") { base.time_point = "08:00"; }
     if (type === "time_switch") { base.time_points = ["08:00", "18:00"]; }
     if (type === "status") { base.expected_status = "on"; }
+    if (type === "power_headroom") { base.operator = "<"; base.value = 5; }
     setConditions((prev) => [...prev, base]);
     setAddConditionOpen(false);
   };
+
+
 
   const updateCondition = (id: string, updated: AutomationCondition) => {
     setConditions((prev) => prev.map((c) => (c.id === id ? updated : c)));
@@ -708,14 +863,156 @@ export function AutomationRuleBuilder({
     setActions((prev) => prev.filter((a) => a.id !== id));
   };
 
+  const isTemplateMode = executionMode !== "cloud" && !!templateKey;
+  const selectedInstalledTemplate = installedTemplates?.find(
+    (t) => t.template_key === templateKey && (t.instance_id ?? "") === (templateInstance ?? ""),
+  );
+  const templateRequiresCloud = isCloudRequiredTemplate(templateKey);
+
+  // Auto-Korrektur: Cloud-abhängige Bausteine dürfen nicht "loxone_local" laufen
+  useEffect(() => {
+    if (templateRequiresCloud && executionMode === "loxone_local") {
+      setExecutionMode("hybrid");
+    }
+  }, [templateRequiresCloud, executionMode]);
+
+  // Auto-Bereinigung: Wenn Ausführungsort auf lokal/hybrid wechselt,
+  // aus Bedingungen und Aktionen alle Geräte entfernen, die auf
+  // cloud-only Integrationen (z. B. Shelly Cloud) verweisen.
+  const isRefIncompatible = (integrationType: string | undefined) =>
+    executionMode !== "cloud" && isCloudOnlyIntegration(integrationType);
+
+  useEffect(() => {
+    if (executionMode === "cloud") return;
+    // Build id -> integrationType lookup from both flat sensors and MLA gateway options.
+    const typeById = new Map<string, string | undefined>();
+    for (const s of sensors) if (s._integrationType) typeById.set(s.id, s._integrationType);
+    if (gatewayOptions) {
+      for (const gw of gatewayOptions) {
+        for (const s of gw.sensors) typeById.set(s.id, gw.integrationType);
+      }
+    }
+    const cloudOnlyGwIds = new Set(
+      (gatewayOptions ?? []).filter((gw) => isCloudOnlyIntegration(gw.integrationType)).map((gw) => gw.id),
+    );
+
+    let condChanged = false;
+    const nextConditions = conditions.map((c) => {
+      const cloned = { ...c };
+      let touched = false;
+      if (cloned.sensor_uuid && isRefIncompatible(typeById.get(cloned.sensor_uuid))) {
+        cloned.sensor_uuid = ""; cloned.sensor_name = ""; cloned.unit = ""; touched = true;
+      }
+      if (cloned.actuator_uuid && isRefIncompatible(typeById.get(cloned.actuator_uuid))) {
+        cloned.actuator_uuid = ""; cloned.actuator_name = ""; touched = true;
+      }
+      if (cloned.gateway_id && cloudOnlyGwIds.has(cloned.gateway_id)) {
+        cloned.gateway_id = ""; cloned.sensor_uuid = ""; cloned.sensor_name = "";
+        cloned.actuator_uuid = ""; cloned.actuator_name = ""; touched = true;
+      }
+      if (touched) condChanged = true;
+      return cloned;
+    });
+    if (condChanged) setConditions(nextConditions);
+
+    let actChanged = false;
+    const nextActions = actions.map((a) => {
+      const cloned = { ...a };
+      let touched = false;
+      if (cloned.actuator_uuid && isRefIncompatible(typeById.get(cloned.actuator_uuid))) {
+        cloned.actuator_uuid = ""; cloned.actuator_name = ""; cloned.control_type = ""; touched = true;
+      }
+      if (cloned.gateway_id && cloudOnlyGwIds.has(cloned.gateway_id)) {
+        cloned.gateway_id = ""; cloned.actuator_uuid = ""; cloned.actuator_name = ""; cloned.control_type = ""; touched = true;
+      }
+      if (touched) actChanged = true;
+      return cloned;
+    });
+    if (actChanged) setActions(nextActions);
+
+    if (condChanged || actChanged) {
+      toast.warning("Cloud-Geräte sind bei lokaler/hybrider Ausführung nicht verfügbar und wurden entfernt.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [executionMode]);
+
+  // Hinweis-Text: gibt es überhaupt cloud-only Geräte, die aktuell unterdrückt werden?
+  const hasHiddenCloudDevices = useMemo(() => {
+    if (executionMode === "cloud") return false;
+    if (gatewayOptions) return gatewayOptions.some((gw) => isCloudOnlyIntegration(gw.integrationType));
+    return sensors.some((s) => isCloudOnlyIntegration(s._integrationType));
+  }, [executionMode, gatewayOptions, sensors]);
+
+
+
+
   const handleSave = async () => {
     if (!name.trim()) { toast.error("Name ist erforderlich"); return; }
-    if (actions.length === 0) { toast.error("Mindestens eine Aktion ist erforderlich"); return; }
-    if (actions.some((a) => !a.actuator_uuid)) { toast.error("Alle Aktionen benötigen einen Aktor"); return; }
+
+    if (executionMode !== "cloud") {
+      const hasInstalled = (installedTemplates?.length ?? 0) > 0;
+      if (hasInstalled) {
+        if (!templateKey) { toast.error("Bitte ein installiertes Loxone-Template auswählen"); return; }
+        if (!selectedInstalledTemplate) { toast.error("Ausgewähltes Template ist in dieser Location nicht (mehr) installiert"); return; }
+      }
+    }
+
+    if (!isTemplateMode) {
+      if (actions.length === 0) { toast.error("Mindestens eine Aktion ist erforderlich"); return; }
+      if (actions.some((a) => !a.actuator_uuid)) { toast.error("Alle Aktionen benötigen einen Aktor"); return; }
+    }
+
+    // MLA-Ziel-Standorte: Nur Standorte behalten, auf denen der Baustein tatsächlich installiert ist
+    let effectiveTargetIds = targetLocationIds;
+    if (isMlaMode) {
+      if (targetLocationIds.length === 0) { toast.error("Bitte mindestens einen Ziel-Standort auswählen"); return; }
+      if (isTemplateMode && templateAvailability) {
+        const availSet = templateAvailability.get(`${templateKey}::${templateInstance ?? ""}`) ?? new Set<string>();
+        effectiveTargetIds = targetLocationIds.filter((id) => availSet.has(id));
+        const skipped = targetLocationIds.length - effectiveTargetIds.length;
+        if (effectiveTargetIds.length === 0) {
+          toast.error("Keiner der ausgewählten Standorte hat diesen Baustein installiert");
+          return;
+        }
+        if (skipped > 0) {
+          toast.warning(`${skipped} Standort(e) übersprungen – Baustein dort nicht installiert`);
+        }
+      }
+    }
+
+    // Parameter-Werte in typisierte Bindings umwandeln
+    let bindings: Record<string, string | number | boolean> | null = null;
+    if (isTemplateMode && selectedInstalledTemplate) {
+      bindings = {};
+      for (const p of selectedInstalledTemplate.parameters) {
+        const paramName = p.name ?? p.key;
+        if (!paramName) continue;
+        const raw = templateParams[paramName];
+        if (raw === undefined || raw === "") continue;
+        if (p.type === "Digital") {
+          bindings[paramName] = raw === "1" || raw === "true";
+        } else {
+          const num = Number(raw);
+          bindings[paramName] = Number.isFinite(num) ? num : raw;
+        }
+      }
+    }
 
     setSaving(true);
     try {
-      await onSave({ name, description, conditions, actions, logic_operator: logicOp, is_active: isActive });
+      await onSave({
+        name,
+        description,
+        conditions,
+        actions,
+        logic_operator: logicOp,
+        is_active: isActive,
+        execution_mode: executionMode,
+        loxone_template_key: isTemplateMode ? templateKey : null,
+        loxone_template_instance_id: isTemplateMode ? (templateInstance || null) : null,
+        loxone_template_bindings: bindings,
+        target_location_ids: isMlaMode ? effectiveTargetIds : undefined,
+      });
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Fehler beim Speichern");
@@ -758,9 +1055,208 @@ export function AutomationRuleBuilder({
                 <Label className="text-xs">Beschreibung</Label>
                 <Textarea placeholder="Was macht diese Automation?" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
               </div>
+              <div className="space-y-2">
+                <Label className="text-xs flex items-center gap-1">
+                  <Server className="h-3 w-3" />
+                  Ausführungsort
+                </Label>
+                <Select value={executionMode} onValueChange={(v) => setExecutionMode(v as AutomationExecutionMode)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cloud">
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-medium">Cloud</span>
+                        <span className="text-[10px] text-muted-foreground">Ausführung durch AICONO EMS (Standard)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="loxone_local" disabled={templateRequiresCloud}>
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-medium">Gateway lokal</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {templateRequiresCloud
+                            ? "Nicht verfügbar – dieser Baustein benötigt Cloud-Werte"
+                            : "Regel läuft ausschließlich auf dem Gateway (Miniserver / AICONO Gateway)"}
+                        </span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="hybrid">
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-medium">Hybrid</span>
+                        <span className="text-[10px] text-muted-foreground">Gateway lokal, Cloud als Fallback</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                {templateRequiresCloud && (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-[11px] text-amber-900 dark:text-amber-200">
+                    <Cloud className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    <span>
+                      Dieser Baustein wird von der Cloud mit Werten versorgt (z. B. Arbitrage-Fahrplan,
+                      CO₂-Fenster). „Gateway lokal" ist nicht möglich – bei Internet-Ausfall pausiert die
+                      Aktualisierung und das Gateway behält den zuletzt empfangenen Wert.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {executionMode !== "cloud" && (
+                <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                  <div className="flex items-center gap-2">
+                    <Puzzle className="h-4 w-4 text-primary" />
+                    <h4 className="text-sm font-semibold">Loxone-Template</h4>
+                  </div>
+                  {(installedTemplates?.length ?? 0) === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {isMlaMode
+                        ? "Auf keinem der Standorte wurden AICO_-Bausteine erkannt. Öffnen Sie eine Liegenschaft mit Loxone-Miniserver → Karte 'Integrationen' → Puzzle-Icon 🧩, um Bausteine zu scannen. Sobald mindestens ein Standort einen Baustein installiert hat, erscheint dieser hier."
+                        : "Auf diesem Miniserver wurden noch keine AICO_-Bausteine erkannt. Der AICONO-Support spielt die Bausteine zentral über das Loxone Multiplikator-Projekt ein. Danach kann in der Miniserver-Kachel unter 'Integrationen' per Puzzle-Icon 🧩 ein Scan ausgelöst werden."}
+                    </p>
+                  ) : (
+                    <>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Installiertes Template *</Label>
+                        <Select
+                          value={templateKey && templateInstance ? `${templateKey}::${templateInstance}` : ""}
+                          onValueChange={(v) => {
+                            const [k, i] = v.split("::");
+                            setTemplateKey(k || "");
+                            setTemplateInstance(i || "");
+                            setTemplateParams({});
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Template auswählen…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {installedTemplates!.map((t) => (
+                              <SelectItem
+                                key={`${t.template_key}::${t.instance_id ?? ""}`}
+                                value={`${t.template_key}::${t.instance_id ?? ""}`}
+                              >
+                                <div className="flex flex-col text-left">
+                                  <span className="text-sm flex items-center gap-1.5">
+                                    {t.title}
+                                    {isCloudRequiredTemplate(t.template_key) && (
+                                      <Cloud className="h-3 w-3 text-amber-600 dark:text-amber-400" aria-label="Cloud erforderlich" />
+                                    )}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground">
+                                    {t.template_key}
+                                    {t.instance_id ? ` · Instanz ${t.instance_id}` : ""}
+                                    {t.installed_version ? ` · v${t.installed_version}` : ""}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {selectedInstalledTemplate && selectedInstalledTemplate.parameters.length > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-xs text-muted-foreground">Parameter</Label>
+                          <div className="space-y-2">
+                            {selectedInstalledTemplate.parameters.map((p) => {
+                              const paramName = p.name ?? p.key;
+                              if (!paramName) return null;
+                              return (
+                              <div key={paramName} className="grid grid-cols-[1fr_auto] items-center gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium truncate">{paramName}</p>
+                                  {p.description && (
+                                    <p className="text-[10px] text-muted-foreground truncate">{p.description}</p>
+                                  )}
+                                </div>
+                                {p.type === "Digital" ? (
+                                  <Switch
+                                    checked={templateParams[paramName] === "1" || templateParams[paramName] === "true"}
+                                    onCheckedChange={(v) =>
+                                      setTemplateParams((prev) => ({ ...prev, [paramName]: v ? "1" : "0" }))
+                                    }
+                                  />
+                                ) : (
+                                  <Input
+                                    type="number"
+                                    className="h-8 w-32 text-xs"
+                                    value={templateParams[paramName] ?? ""}
+                                    onChange={(e) =>
+                                      setTemplateParams((prev) => ({ ...prev, [paramName]: e.target.value }))
+                                    }
+                                  />
+                                )}
+                              </div>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            Werte werden bei „Speichern" per Push an den Miniserver übertragen.
+                            Bedingungen/Aktionen unten sind optional (nur Hybrid-Modus).
+                          </p>
+                        </div>
+                      )}
+
+                      {isMlaMode && crossLocationTargets && (
+                        <div className="space-y-2 pt-2 border-t border-primary/20">
+                          <Label className="text-xs flex items-center gap-1">
+                            <Building2 className="h-3 w-3" />
+                            Ziel-Standorte
+                          </Label>
+                          <div className="space-y-1.5 max-h-56 overflow-y-auto rounded-md border p-2 bg-background">
+                            {crossLocationTargets.map((tgt) => {
+                              const availSet = templateAvailability?.get(`${templateKey}::${templateInstance ?? ""}`);
+                              const isInstalled = !templateKey || !availSet || availSet.has(tgt.locationId);
+                              const isChecked = targetLocationIds.includes(tgt.locationId);
+                              return (
+                                <label
+                                  key={tgt.locationId}
+                                  className={`flex items-center gap-2 text-xs cursor-pointer rounded px-1.5 py-1 hover:bg-muted/50 ${
+                                    !isInstalled ? "opacity-60" : ""
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    disabled={!isInstalled}
+                                    onChange={(e) => {
+                                      setTargetLocationIds((prev) =>
+                                        e.target.checked
+                                          ? [...prev, tgt.locationId]
+                                          : prev.filter((id) => id !== tgt.locationId),
+                                      );
+                                    }}
+                                    className="h-3.5 w-3.5"
+                                  />
+                                  <span className="flex-1 truncate">{tgt.locationName}</span>
+                                  {isInstalled ? (
+                                    <Badge variant="outline" className="text-[9px] border-emerald-500/40 text-emerald-700 dark:text-emerald-400">
+                                      installiert
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-700 dark:text-amber-400">
+                                      Baustein fehlt
+                                    </Badge>
+                                  )}
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            Die Werte werden beim Speichern an alle ausgewählten Miniserver gepusht.
+                            Standorte ohne Baustein können später über die Standort-Detailseite
+                            per Puzzle-Icon 🧩 nachinstalliert werden.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             <Separator />
+
 
             {/* ── Conditions (WENN) ── */}
             <div className="space-y-3">
@@ -823,6 +1319,7 @@ export function AutomationRuleBuilder({
                     onRemove={() => removeCondition(cond.id)}
                     gatewayOptions={gatewayOptions}
                     deviceTypeMap={deviceTypeMap}
+                    executionMode={executionMode}
                   />
                 </div>
               ))}
@@ -897,6 +1394,7 @@ export function AutomationRuleBuilder({
                   onRemove={() => removeAction(action.id)}
                   gatewayOptions={gatewayOptions}
                   deviceTypeMap={deviceTypeMap}
+                  executionMode={executionMode}
                 />
               ))}
 

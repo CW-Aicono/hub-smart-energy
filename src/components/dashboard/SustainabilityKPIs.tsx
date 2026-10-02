@@ -9,7 +9,7 @@ import { HelpTooltip } from "@/components/ui/help-tooltip";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatEnergy } from "@/lib/formatEnergy";
-import { gasM3ToKWh } from "@/lib/formatEnergy";
+import { gasM3ToKWh, resolveMeterEnergyKWh } from "@/lib/formatEnergy";
 import { startOfDay, startOfWeek, startOfMonth, startOfQuarter, startOfYear, endOfWeek, endOfMonth, endOfQuarter, endOfYear, format } from "date-fns";
 import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
@@ -52,13 +52,15 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
 
   // Build meter metadata map
   const meterMap = useMemo(() => {
-    const map: Record<string, { energy_type: string; is_main_meter: boolean; capture_type: string; unit: string; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
+    const map: Record<string, { energy_type: string; is_main_meter: boolean; capture_type: string; unit: string; source_unit_energy: string | null; source_unit_power: string | null; gas_type: string | null; brennwert: number | null; zustandszahl: number | null }> = {};
     meters.forEach((m) => {
       map[m.id] = {
         energy_type: m.energy_type,
         is_main_meter: m.is_main_meter,
         capture_type: m.capture_type,
         unit: m.unit,
+        source_unit_energy: (m as any).source_unit_energy ?? null,
+        source_unit_power: (m as any).source_unit_power ?? null,
         gas_type: m.gas_type ?? null,
         brennwert: m.brennwert ?? null,
         zustandszahl: m.zustandszahl ?? null,
@@ -68,9 +70,9 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
   }, [meters]);
 
   /** Convert a raw value to Wh (base unit for formatEnergy) */
-  const toWh = (value: number, energyType: string, unit: string, gasType: string | null, brennwert: number | null, zustandszahl: number | null): number => {
-    if (energyType === "gas" && unit === "m³") {
-      return gasM3ToKWh(value, gasType, brennwert, zustandszahl) * 1000;
+  const toWh = (value: number, energyType: string, meter: any): number => {
+    if (energyType === "gas") {
+      return resolveMeterEnergyKWh({ ...meter, energy_type: "gas" }, value) * 1000;
     }
     if (energyType === "wasser") {
       return value;
@@ -128,7 +130,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
       if (energyType === "wasser") {
         (totals as any)[energyType] += rawVal;
       } else {
-        (totals as any)[energyType] += toWh(rawVal, energyType, m.unit, m.gas_type ?? null, m.brennwert ?? null, m.zustandszahl ?? null);
+        (totals as any)[energyType] += toWh(rawVal, energyType, m);
       }
     });
 
@@ -142,7 +144,7 @@ const SustainabilityKPIs = ({ locationId }: SustainabilityKPIsProps) => {
         if (energyType === "wasser") {
           (totals as any)[energyType] += r.value;
         } else {
-          (totals as any)[energyType] += toWh(r.value, energyType, meta.unit, meta.gas_type, meta.brennwert, meta.zustandszahl);
+          (totals as any)[energyType] += toWh(r.value, energyType, meta);
         }
       }
     });

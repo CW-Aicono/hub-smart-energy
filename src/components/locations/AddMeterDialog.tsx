@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocationIntegrations, LocationIntegration } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,13 +9,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { deriveEnergyUnit } from "@/lib/sensorUnits";
+import { SourceUnitPicker } from "./SourceUnitPicker";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { AlertCircle } from "lucide-react";
 import { VirtualMeterFormulaBuilder, VirtualMeterSource } from "./VirtualMeterFormulaBuilder";
+import { MeterOffsetSection } from "./MeterOffsetSection";
+import type { MeterOffsetReason } from "@/lib/meterOffset";
+import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
+import { useChargePointGroups } from "@/hooks/useChargePointGroups";
+import { SIMULATION_PRESETS } from "@/lib/simulationMeterPresets";
+import { FlaskConical } from "lucide-react";
 
 interface AddMeterDialogProps {
   locationId: string;
@@ -34,13 +43,18 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
   const { t } = useTranslation();
   const T = (key: string) => t(key as any);
   const { locationIntegrations, loading: integrationsLoading } = useLocationIntegrations(locationId);
+  const { data: locationChargePoints = [] } = useLocationChargePoints(locationId);
+  const { groups: allCpGroups = [] } = useChargePointGroups();
+  const locationCpGroups = allCpGroups.filter((g) => g.location_id === locationId);
   const [name, setName] = useState("");
   const [meterNumber, setMeterNumber] = useState("");
   const [energyType, setEnergyType] = useState("strom");
   const [unit, setUnit] = useState("kWh");
   const [medium, setMedium] = useState("");
   const [notes, setNotes] = useState("");
-  const [captureType, setCaptureType] = useState<"manual" | "automatic" | "virtual">("manual");
+  const [captureType, setCaptureType] = useState<"manual" | "automatic" | "virtual" | "simulation">("manual");
+  const [simPresetId, setSimPresetId] = useState<string>("kw-bidi");
+  const [simDeviceType, setSimDeviceType] = useState<"meter" | "sensor">("meter");
   const [selectedIntegration, setSelectedIntegration] = useState("");
   const [sensors, setSensors] = useState<SensorOption[]>([]);
   const [sensorsLoading, setSensorsLoading] = useState(false);
@@ -54,6 +68,9 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
   const [zustandszahl, setZustandszahl] = useState("0,9636");
   const [brennwert, setBrenwert] = useState("");
   const [sourceUnit, setSourceUnit] = useState("kW");
+  const [offsetValue, setOffsetValue] = useState("");
+  const [offsetReason, setOffsetReason] = useState<MeterOffsetReason | "">("");
+  const [offsetNote, setOffsetNote] = useState("");
 
   const activeMeters = meters.filter((m) => !m.is_archived);
 
@@ -64,7 +81,10 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     else setUnit("kWh");
   }, [energyType]);
 
-  const unitOptions = energyType === "gas" ? ["m³", "kWh"] : null;
+  const unitOptions =
+    energyType === "gas" ? ["m³", "m³/h", "kWh"] :
+    energyType === "wasser" ? ["m³", "m³/h"] :
+    null;
 
   const enabledIntegrations = locationIntegrations.filter((li) => li.is_enabled);
 
@@ -84,7 +104,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
       try {
         const integrationType = li.integration?.type || "";
         const edgeFunction = getEdgeFunctionName(integrationType);
-        const { data, error } = await supabase.functions.invoke(edgeFunction, {
+        const { data, error } = await invokeWithRetry(edgeFunction, {
           body: {
             locationIntegrationId: li.id,
             action: "getSensors",
@@ -94,7 +114,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
         if (error || !data?.sensors) {
           // Fallback: try structure action for Loxone-type integrations
           if (integrationType === "loxone_miniserver") {
-            const { data: structData, error: structErr } = await supabase.functions.invoke(edgeFunction, {
+            const { data: structData, error: structErr } = await invokeWithRetry(edgeFunction, {
               body: { action: "structure", config: li.config },
             });
             if (!structErr && structData?.controls) {
@@ -138,25 +158,50 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     if (!name.trim()) return;
     const parsedZustandszahl = zustandszahl ? parseFloat(zustandszahl.replace(",", ".")) : undefined;
     const parsedBrennwert = brennwert ? parseFloat(brennwert.replace(",", ".")) : undefined;
+    const simPreset = SIMULATION_PRESETS.find((p) => p.id === simPresetId) ?? SIMULATION_PRESETS[0];
+    const isSimulation = captureType === "simulation";
     await addMeter(
       {
         name: name.trim(),
         location_id: locationId,
         meter_number: meterNumber || undefined,
         energy_type: energyType,
-        unit,
+        unit: isSimulation ? simPreset.unit || unit : unit,
         medium: medium || undefined,
         notes: notes || undefined,
         capture_type: captureType,
         location_integration_id: captureType === "automatic" && selectedIntegration ? selectedIntegration : undefined,
         sensor_uuid: captureType === "automatic" && selectedSensor ? selectedSensor : undefined,
-        ...(energyType === "gas" ? { gas_type: gasType, zustandszahl: parsedZustandszahl, brennwert: parsedBrennwert || undefined } : {}),
-        ...(captureType === "automatic" ? { source_unit_power: sourceUnit, source_unit_energy: sourceUnit === "m³" ? "m³" : sourceUnit === "kW" ? "kWh" : "Wh" } : {}),
-        is_bidirectional: isBidirectional,
+        ...(energyType === "gas" && !isSimulation ? { gas_type: gasType, zustandszahl: parsedZustandszahl, brennwert: parsedBrennwert || undefined } : {}),
+        ...(captureType === "automatic" ? { source_unit_power: sourceUnit, source_unit_energy: deriveEnergyUnit(sourceUnit) } : {}),
+        is_bidirectional: isSimulation ? simPreset.bidirectional : isBidirectional,
+        ...(isSimulation
+          ? {
+              device_type: simDeviceType,
+              sim_min: simPreset.min,
+              sim_max: simPreset.max,
+              sim_step: simPreset.step,
+              sim_unit: simPreset.unit,
+              sim_default_value: 0,
+              sim_bidirectional: simPreset.bidirectional,
+            }
+          : {}),
+        ...(() => {
+          if (isSimulation) return { meter_offset_kwh: 0 };
+          const parsed = offsetValue.trim() ? parseFloat(offsetValue.replace(",", ".")) : 0;
+          const finalOffset = Number.isFinite(parsed) ? parsed : 0;
+          if (finalOffset === 0) return { meter_offset_kwh: 0 };
+          return {
+            meter_offset_kwh: finalOffset,
+            meter_offset_reason: offsetReason || null,
+            meter_offset_note: offsetNote.trim() || null,
+            meter_offset_set_at: new Date().toISOString(),
+          };
+        })(),
       } as any,
       parentMeterId && parentMeterId !== "none" ? parentMeterId : null,
-      isMainMeter,
-      meterFunction,
+      isSimulation ? false : isMainMeter,
+      isSimulation ? "consumption" : meterFunction,
       captureType === "virtual" ? virtualSources : undefined,
     );
     resetAndClose();
@@ -182,6 +227,11 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
     setZustandszahl("0,9636");
     setBrenwert("");
     setSourceUnit("kW");
+    setOffsetValue("");
+    setOffsetReason("");
+    setOffsetNote("");
+    setSimPresetId("kw-bidi");
+    setSimDeviceType("meter");
     onOpenChange(false);
   };
 
@@ -197,7 +247,7 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
             <Label className="mb-2 block">Erfassungsart *</Label>
             <RadioGroup
               value={captureType}
-              onValueChange={(v) => setCaptureType(v as "manual" | "automatic" | "virtual")}
+              onValueChange={(v) => setCaptureType(v as any)}
               className="flex flex-wrap gap-x-6 gap-y-2"
             >
               <div className="flex items-center gap-2">
@@ -218,8 +268,68 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
                   Virtueller Zähler
                 </Label>
               </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="simulation" id="capture-simulation" />
+                <Label htmlFor="capture-simulation" className="cursor-pointer font-normal flex items-center gap-1">
+                  <FlaskConical className="h-3.5 w-3.5 text-amber-600" />
+                  Testzähler (Simulation)
+                </Label>
+              </div>
             </RadioGroup>
           </div>
+
+          {/* Simulation: configuration */}
+          {captureType === "simulation" && (
+            <div className="space-y-3 rounded-md border border-amber-500/40 p-3 bg-amber-50/40 dark:bg-amber-950/20">
+              <div className="flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200">
+                <FlaskConical className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  Werte werden <strong>nicht gespeichert</strong> und nicht in Graphen dargestellt.
+                  Nutzbar als Referenzzähler für Lastmanagement und als Eingang für Automationen.
+                </span>
+              </div>
+              <div>
+                <Label>Wertebereich / Einheit *</Label>
+                <Select value={simPresetId} onValueChange={(v) => {
+                  setSimPresetId(v);
+                  const preset = SIMULATION_PRESETS.find((p) => p.id === v);
+                  if (preset) setSimDeviceType(preset.suggestedDeviceType);
+                }}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SIMULATION_PRESETS.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(() => {
+                  const p = SIMULATION_PRESETS.find((x) => x.id === simPresetId);
+                  return p?.hint ? <p className="text-xs text-muted-foreground mt-1">{p.hint}</p> : null;
+                })()}
+              </div>
+              <div>
+                <Label>Nutzbar als *</Label>
+                <RadioGroup
+                  value={simDeviceType}
+                  onValueChange={(v) => setSimDeviceType(v as "meter" | "sensor")}
+                  className="flex flex-wrap gap-x-6 gap-y-1 mt-1"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="meter" id="sim-dt-meter" />
+                    <Label htmlFor="sim-dt-meter" className="cursor-pointer font-normal text-sm">
+                      Zähler (Lastmanagement, DLM-Referenz)
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="sensor" id="sim-dt-sensor" />
+                    <Label htmlFor="sim-dt-sensor" className="cursor-pointer font-normal text-sm">
+                      Sensor (Automationen)
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            </div>
+          )}
 
           {/* Virtual: Formula builder */}
           {captureType === "virtual" && (
@@ -227,6 +337,8 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
               sources={virtualSources}
               onSourcesChange={setVirtualSources}
               availableMeters={activeMeters}
+              availableChargePoints={locationChargePoints.map((cp) => ({ id: cp.id, name: cp.name }))}
+              availableChargePointGroups={locationCpGroups.map((g) => ({ id: g.id, name: g.name }))}
             />
           )}
 
@@ -285,15 +397,9 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
               {selectedIntegration && (
                 <div className="space-y-3 pt-2 border-t">
                   <p className="text-xs font-medium text-muted-foreground">Einheit des Gateways</p>
-                  <Select value={sourceUnit} onValueChange={setSourceUnit}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="kW">kW / kWh</SelectItem>
-                      <SelectItem value="W">W / Wh</SelectItem>
-                      <SelectItem value="m³">m³</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">Welche Einheiten liefert Ihr Gateway? In der Loxone Config unter den Ausgängen des Zählers sichtbar.</p>
+                  <SourceUnitPicker value={sourceUnit} onChange={setSourceUnit} compact />
+
+                  <p className="text-xs text-muted-foreground">Welche Einheit liefert Ihr Gateway für dieses Gerät? Bei Loxone in der Loxone Config unter den Ausgängen des Zählers sichtbar; bei Sensoren (z. B. Shelly H&T) z. B. °C für Temperatur oder % für Luftfeuchte.</p>
                 </div>
               )}
             </div>
@@ -368,42 +474,55 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
               </div>
             </div>
           )}
-          {/* Hierarchy */}
-          <div className="space-y-3 rounded-md border p-3 bg-muted/30">
-            <div className="flex items-center justify-between">
-              <Label>Hauptzähler (Netzübergabepunkt)</Label>
-              <Switch checked={isMainMeter} onCheckedChange={setIsMainMeter} />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label>Bidirektionaler Zähler (Bezug & Einspeisung)</Label>
-              <Switch checked={isBidirectional} onCheckedChange={setIsBidirectional} />
-            </div>
-            <div>
-              <Label>Zählerfunktion</Label>
-              <Select value={meterFunction} onValueChange={setMeterFunction}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="consumption">Verbrauch</SelectItem>
-                  <SelectItem value="generation">Erzeugung (z.B. PV)</SelectItem>
-                  <SelectItem value="technical">Technisch (z.B. Wärmepumpe)</SelectItem>
-                  <SelectItem value="bidirectional">Bidirektional (Bezug & Einspeisung)</SelectItem>
-                  <SelectItem value="submeter">Unterzähler</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Übergeordneter Zähler</Label>
-              <Select value={parentMeterId} onValueChange={setParentMeterId}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Kein (Hauptzähler)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Kein übergeordneter Zähler</SelectItem>
-                  {activeMeters.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          {/* Hierarchy + Offset – nicht für Testzähler */}
+          {captureType !== "simulation" && (
+            <>
+              <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <Label>Hauptzähler (Netzübergabepunkt)</Label>
+                  <Switch checked={isMainMeter} onCheckedChange={setIsMainMeter} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label>Bidirektionaler Zähler (Bezug & Einspeisung)</Label>
+                  <Switch checked={isBidirectional} onCheckedChange={setIsBidirectional} />
+                </div>
+                <div>
+                  <Label>Zählerfunktion</Label>
+                  <Select value={meterFunction} onValueChange={setMeterFunction}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="consumption">Verbrauch</SelectItem>
+                      <SelectItem value="generation">Erzeugung (z.B. PV)</SelectItem>
+                      <SelectItem value="technical">Technisch (z.B. Wärmepumpe)</SelectItem>
+                      <SelectItem value="bidirectional">Bidirektional (Bezug & Einspeisung)</SelectItem>
+                      <SelectItem value="submeter">Unterzähler</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Übergeordneter Zähler</Label>
+                  <Select value={parentMeterId} onValueChange={setParentMeterId}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Kein (Hauptzähler)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Kein übergeordneter Zähler</SelectItem>
+                      {activeMeters.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <MeterOffsetSection
+                value={offsetValue}
+                onValueChange={setOffsetValue}
+                reason={offsetReason}
+                onReasonChange={setOffsetReason}
+                note={offsetNote}
+                onNoteChange={setOffsetNote}
+                unit={unit || "kWh"}
+              />
+            </>
+          )}
           <div>
             <Label>Notizen</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
@@ -416,7 +535,15 @@ export const AddMeterDialog = ({ locationId, open, onOpenChange }: AddMeterDialo
             disabled={
               !name.trim() ||
               (captureType === "automatic" && (!selectedIntegration || !selectedSensor)) ||
-              (captureType === "virtual" && virtualSources.length < 2)
+              (captureType === "virtual" &&
+                (virtualSources.length === 0 ||
+                  (virtualSources.length < 2 &&
+                    !virtualSources.some(
+                      (s) =>
+                        s.source_charge_point_id ||
+                        s.source_charge_point_group_id ||
+                        s.source_all_charge_points,
+                    ))))
             }
           >
             Anlegen

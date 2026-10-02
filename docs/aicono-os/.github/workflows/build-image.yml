@@ -1,0 +1,101 @@
+name: Build AICONO Hub OS
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      haos_version:
+        description: "HAOS Release-Tag (z.B. 13.2). Leer = latest"
+        required: false
+        default: ""
+
+permissions:
+  contents: write   # Release-Upload
+
+jobs:
+  build:
+    name: ${{ matrix.variant }} (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: hub-mini-industrial
+            arch: x86_64
+            haos_asset: haos_generic-x86-64
+          - variant: hub-arm
+            arch: aarch64
+            haos_asset: haos_rpi5-64
+          - variant: hub-home-yellow
+            arch: aarch64
+            haos_asset: haos_yellow
+          - variant: hub-home-green
+            arch: aarch64
+            haos_asset: haos_green
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve HAOS Version
+        id: haos
+        run: |
+          if [ -n "${{ github.event.inputs.haos_version }}" ]; then
+            VERSION="${{ github.event.inputs.haos_version }}"
+          else
+            VERSION=$(curl -fsSL https://api.github.com/repos/home-assistant/operating-system/releases/latest \
+              | jq -r .tag_name)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "url=https://github.com/home-assistant/operating-system/releases/download/${VERSION}/${{ matrix.haos_asset }}-${VERSION}.img.xz" >> "$GITHUB_OUTPUT"
+
+      - name: Tools installieren
+        run: sudo apt-get update -y && sudo apt-get install -y xz-utils kpartx qemu-utils libguestfs-tools
+
+      - name: Add-on Quellcode aus ha-addons clonen
+        env:
+          GH_TOKEN: ${{ secrets.HA_ADDONS_PUSH_TOKEN }}
+        run: |
+          git clone --depth 1 https://x-access-token:${GH_TOKEN}@github.com/CW-Aicono/ha-addons.git /tmp/addons
+          mkdir -p overlay/usr/share/hassio/addons/local
+          cp -r /tmp/addons/aicono-ems-gateway overlay/usr/share/hassio/addons/local/
+
+      - name: HAOS Base Image laden
+        run: |
+          mkdir -p build && cd build
+          curl -fsSL -o base.img.xz "${{ steps.haos.outputs.url }}"
+          unxz base.img.xz
+          ls -lh base.img
+
+      - name: Add-on + Overlay injizieren
+        run: sudo bash scripts/inject-addon.sh build/base.img overlay/
+
+      - name: Image komprimieren
+        run: |
+          cd build
+          OUT="aicono-os-${{ matrix.variant }}-${{ matrix.arch }}-${{ steps.haos.outputs.version }}.img.xz"
+          xz -T0 -9 -c base.img > "$OUT"
+          sha256sum "$OUT" > "$OUT.sha256"
+          ls -lh
+
+      - name: Upload als Workflow-Artefakt
+        uses: actions/upload-artifact@v4
+        with:
+          name: aicono-os-${{ matrix.variant }}-${{ matrix.arch }}
+          path: build/aicono-os-*
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: GitHub Release publizieren
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/*.img.xz
+            artifacts/*.sha256
+          generate_release_notes: true

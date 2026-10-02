@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS idx_meter_power_readings_created_at ON public.meter_power_readings (created_at DESC);

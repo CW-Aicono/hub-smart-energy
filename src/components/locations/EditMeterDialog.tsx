@@ -1,22 +1,32 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { getEdgeFunctionName } from "@/lib/gatewayRegistry";
+import { invokeWithRetry } from "@/lib/invokeWithRetry";
 import { Meter, MeterInsert } from "@/hooks/useMeters";
 import { useMeters } from "@/hooks/useMeters";
 import { useLocationIntegrations } from "@/hooks/useIntegrations";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { deriveEnergyUnit } from "@/lib/sensorUnits";
+import { SourceUnitPicker } from "./SourceUnitPicker";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle, Layers, DoorOpen, Upload, Loader2, ImageIcon } from "lucide-react";
+import { AlertCircle, Layers, DoorOpen, Upload, Loader2, ImageIcon, ShieldCheck, Flag } from "lucide-react";
 import { toast } from "sonner";
 import { VirtualMeterFormulaBuilder, VirtualMeterSource } from "./VirtualMeterFormulaBuilder";
+import { MeterOffsetSection } from "./MeterOffsetSection";
+import { ReplaceDeviceDialog } from "./ReplaceDeviceDialog";
+import type { MeterOffsetReason } from "@/lib/meterOffset";
+import { ArrowRightLeft } from "lucide-react";
+import { useLocationChargePoints } from "@/hooks/useLocationChargePoints";
+import { useChargePointGroups } from "@/hooks/useChargePointGroups";
 
 interface Floor {
   id: string;
@@ -46,6 +56,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const { t } = useTranslation();
   const T = (key: string) => t(key as any);
   const { meters: allMeters } = useMeters(meter.location_id);
+  const { data: locationChargePoints = [] } = useLocationChargePoints(meter.location_id);
+  const { groups: allCpGroups = [] } = useChargePointGroups();
+  const locationCpGroups = allCpGroups.filter((g) => g.location_id === meter.location_id);
   const [name, setName] = useState(meter.name);
   const [deviceType, setDeviceType] = useState((meter as any).device_type || "meter");
   const [meterNumber, setMeterNumber] = useState(meter.meter_number || "");
@@ -63,6 +76,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [isMainMeter, setIsMainMeter] = useState(meter.is_main_meter);
   const [isBidirectional, setIsBidirectional] = useState((meter as any).is_bidirectional ?? false);
   const [meterFunction, setMeterFunction] = useState(meter.meter_function || "consumption");
+  const [flowConvention, setFlowConvention] = useState<"negative_delivery" | "positive_delivery">(
+    ((meter as any).flow_direction_convention as "negative_delivery" | "positive_delivery") || "negative_delivery",
+  );
   const [selectedFloorId, setSelectedFloorId] = useState(meter.floor_id || "");
   const [selectedRoomId, setSelectedRoomId] = useState(meter.room_id || "");
   const [installationDate, setInstallationDate] = useState(meter.installation_date || "");
@@ -74,9 +90,58 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
   const [zustandszahl, setZustandszahl] = useState((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
   const [brennwertVal, setBrennwertVal] = useState((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
   const [sourceUnit, setSourceUnit] = useState((meter as any).source_unit_power || "kW");
+  const [isPulseMeter, setIsPulseMeter] = useState<boolean>((meter as any).is_pulse_meter === true);
+  const [volumePerPulse, setVolumePerPulse] = useState(
+    (meter as any).volume_per_pulse != null ? String((meter as any).volume_per_pulse).replace(".", ",") : ""
+  );
+  const [offsetValue, setOffsetValue] = useState(
+    (meter as any).meter_offset_kwh != null && Number((meter as any).meter_offset_kwh) !== 0
+      ? String((meter as any).meter_offset_kwh).replace(".", ",")
+      : ""
+  );
+  const [offsetReason, setOffsetReason] = useState<MeterOffsetReason | "">(
+    ((meter as any).meter_offset_reason as MeterOffsetReason) || ""
+  );
+  const [offsetNote, setOffsetNote] = useState((meter as any).meter_offset_note || "");
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [floors, setFloors] = useState<Floor[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [validatedAt, setValidatedAt] = useState<string | null>((meter as any).setup_validated_at ?? null);
+  const [validatedByEmail, setValidatedByEmail] = useState<string | null>((meter as any).setup_validated_by_email ?? null);
+  const [validating, setValidating] = useState(false);
+  const [confirmValidateOpen, setConfirmValidateOpen] = useState(false);
+
+  const handleValidateSetup = async () => {
+    setValidating(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      const userEmail = userData.user?.email ?? "unbekannt";
+      if (!userId) {
+        toast.error("Nicht angemeldet");
+        return;
+      }
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from("meters")
+        .update({
+          setup_validated_at: now,
+          setup_validated_by: userId,
+          setup_validated_by_email: userEmail,
+        } as any)
+        .eq("id", meter.id);
+      if (error) throw error;
+      setValidatedAt(now);
+      setValidatedByEmail(userEmail);
+      toast.success("Messwert validiert");
+    } catch (e: any) {
+      toast.error(e?.message || "Validierung fehlgeschlagen");
+    } finally {
+      setValidating(false);
+      setConfirmValidateOpen(false);
+    }
+  };
   // Available parents: all active meters except self and descendants
   const availableParents = allMeters.filter((m) => !m.is_archived && m.id !== meter.id);
 
@@ -100,6 +165,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setIsMainMeter(meter.is_main_meter);
     setIsBidirectional((meter as any).is_bidirectional ?? false);
     setMeterFunction(meter.meter_function || "consumption");
+    setFlowConvention(
+      ((meter as any).flow_direction_convention as "negative_delivery" | "positive_delivery") || "negative_delivery",
+    );
     setSelectedFloorId(meter.floor_id || "");
     setSelectedRoomId(meter.room_id || "");
     setInstallationDate(meter.installation_date || "");
@@ -109,15 +177,26 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     setZustandszahl((meter as any).zustandszahl != null ? String((meter as any).zustandszahl).replace(".", ",") : "0,9636");
     setBrennwertVal((meter as any).brennwert != null ? String((meter as any).brennwert).replace(".", ",") : "");
     setSourceUnit((meter as any).source_unit_power || "kW");
+    setIsPulseMeter((meter as any).is_pulse_meter === true);
+    setVolumePerPulse((meter as any).volume_per_pulse != null ? String((meter as any).volume_per_pulse).replace(".", ",") : "");
+    setOffsetValue(
+      (meter as any).meter_offset_kwh != null && Number((meter as any).meter_offset_kwh) !== 0
+        ? String((meter as any).meter_offset_kwh).replace(".", ",")
+        : ""
+    );
+    setOffsetReason(((meter as any).meter_offset_reason as MeterOffsetReason) || "");
+    setOffsetNote((meter as any).meter_offset_note || "");
     // Load virtual sources
     if (meter.capture_type === "virtual") {
       supabase
         .from("virtual_meter_sources")
-        .select("source_meter_id, operator")
+        .select(
+          "source_meter_id, source_charge_point_id, source_charge_point_group_id, source_all_charge_points, operator",
+        )
         .eq("virtual_meter_id", meter.id)
         .order("sort_order")
         .then(({ data }) => {
-          setVirtualSources((data as VirtualMeterSource[]) || []);
+          setVirtualSources((data as unknown as VirtualMeterSource[]) || []);
         });
     } else {
       setVirtualSources([]);
@@ -130,9 +209,13 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     // Only auto-set if user actively changed the energy type (not on initial render)
     if (energyType === initialEnergyTypeRef.current) return;
     initialEnergyTypeRef.current = energyType;
-    if (energyType === "gas") setUnit("m³");
-    else if (energyType === "wasser") setUnit("m³");
-    else setUnit("kWh");
+    if (energyType === "gas") {
+      if (!["m³", "m³/h", "kWh"].includes(unit)) setUnit("m³");
+    } else if (energyType === "wasser") {
+      if (!["m³", "m³/h"].includes(unit)) setUnit("m³");
+    } else {
+      setUnit("kWh");
+    }
   }, [energyType]);
 
   // Fetch floors for the location
@@ -189,13 +272,13 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       try {
         const integrationType = li.integration?.type || "";
         const edgeFunction = getEdgeFunctionName(integrationType);
-        const { data, error } = await supabase.functions.invoke(edgeFunction, {
+        const { data, error } = await invokeWithRetry(edgeFunction, {
           body: { locationIntegrationId: li.id, action: "getSensors" },
         });
         if (error || !data?.sensors) {
           // Fallback: try structure action for Loxone-type integrations
           if (integrationType === "loxone_miniserver") {
-            const { data: structData, error: structErr } = await supabase.functions.invoke(edgeFunction, {
+            const { data: structData, error: structErr } = await invokeWithRetry(edgeFunction, {
               body: { action: "structure", config: li.config },
             });
             if (!structErr && structData?.controls) {
@@ -225,22 +308,32 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
     fetchSensors();
   }, [selectedIntegration, captureType]);
 
+  const [photoFullscreen, setPhotoFullscreen] = useState(false);
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingPhoto(true);
     try {
-      const fileName = `${meter.id}-${Date.now()}.${file.name.split(".").pop()}`;
-      const { data, error } = await supabase.storage.from("meter-photos").upload(fileName, file, { upsert: true });
+      const ext = file.name.split(".").pop() || "jpg";
+      // Path MUST start with `${meter.id}/` to satisfy meter-photos RLS policy
+      const filePath = `${meter.id}/${Date.now()}.${ext}`;
+      const { data, error } = await supabase.storage
+        .from("meter-photos")
+        .upload(filePath, file, { upsert: true, contentType: file.type });
       if (error) throw error;
-      const { data: urlData, error: urlError } = await supabase.storage.from("meter-photos").createSignedUrl(data.path, 3600);
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from("meter-photos")
+        .createSignedUrl(data.path, 3600);
       if (urlError) throw urlError;
-      setPhotoUrl(`${urlData.signedUrl}`);
+      setPhotoUrl(urlData.signedUrl);
       toast.success("Foto hochgeladen");
-    } catch {
-      toast.error("Foto-Upload fehlgeschlagen");
+    } catch (err) {
+      console.error("[EditMeterDialog] photo upload failed", err);
+      toast.error(`Foto-Upload fehlgeschlagen: ${(err as Error).message ?? "Unbekannter Fehler"}`);
     }
     setUploadingPhoto(false);
+    e.target.value = "";
   };
 
   const handleSubmit = async () => {
@@ -261,6 +354,7 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       is_main_meter: isMainMeter,
       is_bidirectional: isBidirectional,
       meter_function: meterFunction,
+      flow_direction_convention: flowConvention,
       floor_id: selectedFloorId || null,
       room_id: selectedRoomId || null,
       installation_date: installationDate || undefined,
@@ -271,8 +365,26 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
         zustandszahl: zustandszahl ? parseFloat(zustandszahl.replace(",", ".")) : null,
         brennwert: brennwertVal ? parseFloat(brennwertVal.replace(",", ".")) : null,
       } : { gas_type: null, zustandszahl: null, brennwert: null }),
+      is_pulse_meter: deviceType === "meter" && (energyType === "gas" || energyType === "wasser") ? isPulseMeter : false,
+      volume_per_pulse:
+        deviceType === "meter" && (energyType === "gas" || energyType === "wasser") && isPulseMeter && volumePerPulse.trim()
+          ? parseFloat(volumePerPulse.replace(",", "."))
+          : null,
       source_unit_power: captureType === "automatic" ? sourceUnit : null,
-      source_unit_energy: captureType === "automatic" ? (sourceUnit === "m³" ? "m³" : sourceUnit === "kW" ? "kWh" : "Wh") : null,
+      source_unit_energy: captureType === "automatic" ? deriveEnergyUnit(sourceUnit) : null,
+      ...(deviceType === "meter" ? (() => {
+        const parsed = offsetValue.trim() ? parseFloat(offsetValue.replace(",", ".")) : 0;
+        const finalOffset = Number.isFinite(parsed) ? parsed : 0;
+        return {
+          meter_offset_kwh: finalOffset,
+          meter_offset_reason: finalOffset !== 0 ? (offsetReason || null) : null,
+          meter_offset_note: finalOffset !== 0 ? (offsetNote.trim() || null) : null,
+          meter_offset_set_at:
+            finalOffset !== 0 && Number(meter.meter_offset_kwh ?? 0) !== finalOffset
+              ? new Date().toISOString()
+              : ((meter as any).meter_offset_set_at ?? null),
+        };
+      })() : {}),
     } as any);
 
     // Update virtual sources
@@ -281,7 +393,10 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
       if (virtualSources.length > 0) {
         const rows = virtualSources.map((s, i) => ({
           virtual_meter_id: meter.id,
-          source_meter_id: s.source_meter_id,
+          source_meter_id: s.source_meter_id ?? null,
+          source_charge_point_id: s.source_charge_point_id ?? null,
+          source_charge_point_group_id: s.source_charge_point_group_id ?? null,
+          source_all_charge_points: s.source_all_charge_points ?? false,
           operator: s.operator,
           sort_order: i,
         }));
@@ -303,6 +418,67 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
           <DialogTitle>Gerät bearbeiten – {meter.name}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 overflow-y-auto flex-1 pr-2">
+          {/* Setup validation */}
+          <div className={`rounded-md border p-3 ${validatedAt ? "bg-emerald-500/10 border-emerald-500/30" : "bg-muted/30"}`}>
+            {validatedAt ? (
+              <div className="flex items-start gap-2">
+                <ShieldCheck className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium">Einrichtung validiert</p>
+                  <p className="text-muted-foreground">
+                    Messwert wurde am{" "}
+                    {new Date(validatedAt).toLocaleString("de-DE", {
+                      day: "2-digit", month: "2-digit", year: "numeric",
+                      hour: "2-digit", minute: "2-digit",
+                    })}{" "}
+                    von {validatedByEmail ?? "unbekannt"} geprüft und validiert.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-sm text-muted-foreground">
+                  Einrichtung dieses Geräts noch nicht validiert.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => setConfirmValidateOpen(true)}
+                  disabled={validating}
+                >
+                  {validating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Flag className="h-4 w-4" />}
+                  Einrichtung validieren
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <AlertDialog open={confirmValidateOpen} onOpenChange={setConfirmValidateOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Einrichtung validieren?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Hiermit bestätigst du, dass die Einrichtung dieses Geräts geprüft wurde.
+                  Datum, Uhrzeit und dein Benutzername werden dauerhaft gespeichert und können nicht mehr geändert werden.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={validating}>Abbrechen</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(e) => { e.preventDefault(); handleValidateSetup(); }}
+                  disabled={validating}
+                >
+                  {validating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Bestätigen
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+
+
           {/* Device type selector */}
           <div>
             <Label className="mb-2 block">Gerätetyp *</Label>
@@ -344,6 +520,8 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               sources={virtualSources}
               onSourcesChange={setVirtualSources}
               availableMeters={allMeters.filter((m) => !m.is_archived && m.id !== meter.id)}
+              availableChargePoints={locationChargePoints.map((cp) => ({ id: cp.id, name: cp.name }))}
+              availableChargePointGroups={locationCpGroups.map((g) => ({ id: g.id, name: g.name }))}
             />
           )}
 
@@ -394,15 +572,9 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               {selectedIntegration && (
                 <div className="space-y-3 pt-2 border-t">
                   <p className="text-xs font-medium text-muted-foreground">Einheit des Gateways</p>
-                  <Select value={sourceUnit} onValueChange={setSourceUnit}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="kW">kW / kWh</SelectItem>
-                      <SelectItem value="W">W / Wh</SelectItem>
-                      <SelectItem value="m³">m³</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">Welche Einheiten liefert Ihr Gateway? In der Loxone Config unter den Ausgängen des Zählers sichtbar.</p>
+                  <SourceUnitPicker value={sourceUnit} onChange={setSourceUnit} compact />
+
+                  <p className="text-xs text-muted-foreground">Welche Einheit liefert Ihr Gateway für dieses Gerät? Bei Loxone in der Loxone Config unter den Ausgängen des Zählers sichtbar; bei Sensoren (z. B. Shelly H&T) z. B. °C für Temperatur oder % für Luftfeuchte.</p>
                 </div>
               )}
             </div>
@@ -439,7 +611,16 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="m³">m³</SelectItem>
+                      <SelectItem value="m³/h">m³/h</SelectItem>
                       <SelectItem value="kWh">kWh</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : energyType === "wasser" ? (
+                  <Select value={unit} onValueChange={setUnit}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="m³">m³</SelectItem>
+                      <SelectItem value="m³/h">m³/h</SelectItem>
                     </SelectContent>
                   </Select>
                 ) : (
@@ -452,6 +633,37 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
             <Label>Medium</Label>
             <Input value={medium} onChange={(e) => setMedium(e.target.value)} />
           </div>
+          {/* Impulszähler (Gas/Wasser) */}
+          {deviceType === "meter" && (energyType === "gas" || energyType === "wasser") && (
+            <div className="space-y-3 rounded-md border p-3 bg-muted/30">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Label>Impulszähler (Reedkontakt)</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Der Momentanwert des Miniservers wird ignoriert; der Verlauf wird aus der Zählerstandsdifferenz berechnet.
+                  </p>
+                </div>
+                <Switch checked={isPulseMeter} onCheckedChange={setIsPulseMeter} />
+              </div>
+              {isPulseMeter && (
+                <>
+                  <div>
+                    <Label>Volumen je Impuls (m³)</Label>
+                    <Input
+                      value={volumePerPulse}
+                      onChange={(e) => setVolumePerPulse(e.target.value)}
+                      placeholder="0,1"
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-0.5">z. B. 10 Impulse = 1 m³ → 0,1</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Wichtig: Am Miniserver muss der Zählerstand (Gesamt) als State zugeordnet sein — nur daraus entsteht der Verlauf.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
           {/* Gas-specific fields */}
           {deviceType === "meter" && energyType === "gas" && unit === "m³" && (
             <div className="space-y-3 rounded-md border p-3 bg-muted/30">
@@ -528,6 +740,20 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
                 <Switch checked={isBidirectional} onCheckedChange={setIsBidirectional} />
               </div>
               <div>
+                <Label>Flussrichtungserkennung</Label>
+                <Select value={flowConvention} onValueChange={(v) => setFlowConvention(v as "negative_delivery" | "positive_delivery")}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="negative_delivery">Lieferung = negativer Wert / Bezug = positiver Wert (Standard)</SelectItem>
+                    <SelectItem value="positive_delivery">Lieferung = positiver Wert / Bezug = negativer Wert</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Bestimmt, wie das Vorzeichen des Rohwerts im Flussdiagramm interpretiert wird
+                  (analog zur Einstellung „Leistung/Durchfluss Richtung" in der Loxone Config).
+                </p>
+              </div>
+              <div>
                 <Label>Zählerfunktion</Label>
                 <Select value={meterFunction} onValueChange={setMeterFunction}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
@@ -554,17 +780,35 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               </div>
             </div>
           )}
+          {/* Offset / Anfangsbestand - only for meters */}
+          {deviceType === "meter" && (
+            <MeterOffsetSection
+              value={offsetValue}
+              onValueChange={setOffsetValue}
+              reason={offsetReason}
+              onReasonChange={setOffsetReason}
+              note={offsetNote}
+              onNoteChange={setOffsetNote}
+              unit={unit || "kWh"}
+            />
+          )}
           {/* Photo, Installation Date, Operator */}
           <div className="space-y-3 rounded-md border p-3 bg-muted/30">
             <p className="text-sm font-medium text-muted-foreground">Zusatzinformationen</p>
             <div>
               <Label>Foto</Label>
-              {photoUrl && (
-                <div className="mt-1 mb-2 rounded-lg overflow-hidden border">
-                  <img src={photoUrl} alt="Zählerfoto" className="w-full h-32 object-cover" />
-                </div>
-              )}
-              <div className="flex gap-2 mt-1">
+              <div className="flex items-center gap-3 mt-1">
+
+                {photoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setPhotoFullscreen(true)}
+                    className="rounded-md overflow-hidden border h-16 w-16 shrink-0 hover:ring-2 hover:ring-primary transition"
+                    title="Foto vergrößern"
+                  >
+                    <img src={photoUrl} alt="Zählerfoto" className="h-full w-full object-cover" />
+                  </button>
+                )}
                 <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto}>
                   {uploadingPhoto ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   {photoUrl ? "Foto ändern" : "Foto hochladen"}
@@ -584,21 +828,47 @@ export const EditMeterDialog = ({ meter, open, onOpenChange, onSave }: EditMeter
               <Input value={meterOperator} onChange={(e) => setMeterOperator(e.target.value)} placeholder="z.B. Netzbetreiber GmbH" className="mt-1" />
             </div>
           </div>
+          {photoFullscreen && photoUrl && (
+            <div
+              className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
+              onClick={() => setPhotoFullscreen(false)}
+            >
+              <img src={photoUrl} alt="Zählerfoto" className="max-w-[95vw] max-h-[95vh] object-contain" />
+            </div>
+          )}
           <div>
             <Label>Notizen</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
+        <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
           <Button
-            onClick={handleSubmit}
-            disabled={!name.trim() || saving || (captureType === "automatic" && (!selectedIntegration || !selectedSensor))}
+            type="button"
+            variant="outline"
+            onClick={() => setReplaceOpen(true)}
+            className="gap-1.5 sm:mr-auto"
+            title="Defektes Gerät gegen ein neues tauschen"
           >
-            {saving ? "Speichern…" : "Speichern"}
+            <ArrowRightLeft className="h-4 w-4" />
+            Gerät tauschen
           </Button>
+          <div className="flex gap-2 sm:ml-auto">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={!name.trim() || saving || (captureType === "automatic" && (!selectedIntegration || !selectedSensor))}
+            >
+              {saving ? "Speichern…" : "Speichern"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
+      <ReplaceDeviceDialog
+        meter={meter}
+        open={replaceOpen}
+        onOpenChange={setReplaceOpen}
+        onReplaced={() => onOpenChange(false)}
+      />
     </Dialog>
   );
 };

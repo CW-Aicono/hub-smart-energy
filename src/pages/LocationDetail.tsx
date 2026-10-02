@@ -15,20 +15,25 @@ import { MeterManagement } from "@/components/locations/MeterManagement";
 import { BrightHubSettings } from "@/components/settings/BrightHubSettings";
 import { EnergyPriceManagement } from "@/components/locations/EnergyPriceManagement";
 import { PvForecastSection } from "@/components/locations/PvForecastSection";
+import { DynamicDlmCard } from "@/components/charging/DynamicDlmCard";
+import { GridComplianceCard } from "@/components/charging/GridComplianceCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EditLocationDialog } from "@/components/locations/EditLocationDialog";
-import { ArrowLeft, Building2, MapPin, Mail, Phone, User, Star, Layers, ChevronDown, ChevronRight, Cpu, Pencil, Calendar, Ruler, Flame } from "lucide-react";
+import { ArrowLeft, Building2, MapPin, Mail, Phone, User, Star, Layers, ChevronDown, ChevronRight, Cpu, Pencil, Calendar, Ruler, Flame, FileText } from "lucide-react";
+import { DocumentBadge } from "@/components/documents/DocumentBadge";
+import { DocumentsPanel } from "@/components/documents/DocumentsPanel";
+import { LoxoneTemplatesCard } from "@/components/locations/LoxoneTemplatesCard";
 
 const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetchFloors, t }: { locationId: string; isAdmin: boolean; floors: any[]; floorsLoading: boolean; refetchFloors: () => void; t: (key: any) => string }) => {
   const [isOpen, setIsOpen] = useState(false);
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CollapsibleTrigger asChild>
             <button className="flex items-center gap-2 text-left group">
               {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
@@ -40,6 +45,7 @@ const FloorsCollapsible = ({ locationId, isAdmin, floors, floorsLoading, refetch
           </CollapsibleTrigger>
           {isAdmin && <AddFloorDialog locationId={locationId} onSuccess={refetchFloors} />}
         </CardHeader>
+
         <CollapsibleContent><CardContent><FloorList floors={floors} loading={floorsLoading} locationId={locationId} onRefresh={refetchFloors} /></CardContent></CollapsibleContent>
       </Card>
     </Collapsible>
@@ -112,6 +118,7 @@ const LocationDetail = () => {
                 </p>
               </div>
             </div>
+            <DocumentBadge scope="location" scopeId={location.id} label={location.name} variant="inline" />
           </div>
         </header>
 
@@ -210,9 +217,23 @@ const LocationDetail = () => {
           <MeterManagement locationId={location.id} />
           <EnergyPriceManagement locationId={location.id} />
           {location.latitude && location.longitude && <PvForecastSection locationId={location.id} />}
+          {isModuleEnabled("ev_charging") && <DynamicDlmCard locationId={location.id} />}
+          {isModuleEnabled("ev_charging") && <GridComplianceCard locationId={location.id} />}
           {isModuleEnabled("automation_building") && <LocationAutomation locationId={location.id} />}
           {isModuleEnabled("integrations") && <LocationIntegrationsList locationId={location.id} />}
+          {isModuleEnabled("integrations") && <LoxoneTemplatesCard locationId={location.id} />}
           {isModuleEnabled("brighthub_api") && <BrightHubSettings locationId={location.id} />}
+          {isModuleEnabled("documentation") && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" /> Dokumente</CardTitle>
+                <CardDescription>Standortbezogene Dokumente – sichtbar je nach Zugriffsregeln.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DocumentsPanel scope="location" scopeId={location.id} label={location.name} />
+              </CardContent>
+            </Card>
+          )}
         </div>
       </main>
     </div>

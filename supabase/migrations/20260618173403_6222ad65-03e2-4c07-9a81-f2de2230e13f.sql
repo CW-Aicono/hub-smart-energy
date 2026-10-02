@@ -1,0 +1,1 @@
+GRANT SELECT ON public.loxone_ws_session_log TO authenticated; GRANT ALL ON public.loxone_ws_session_log TO service_role;

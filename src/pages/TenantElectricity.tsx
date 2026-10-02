@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Home, Users, Receipt, Settings, Plus, Trash2, FileText, Sun, Plug2, Archive, ArchiveRestore, X, Smartphone, ExternalLink, Copy, Check, Link, QrCode } from "lucide-react";
+import { Home, Users, Receipt, Settings, Plus, Trash2, FileText, Sun, Plug2, Archive, ArchiveRestore, X, Smartphone, ExternalLink, Copy, Check, Link, QrCode, Edit } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useTenantElectricityTenants } from "@/hooks/useTenantElectricityTenants";
@@ -22,8 +23,17 @@ import { useMeters } from "@/hooks/useMeters";
 import { format } from "date-fns";
 import { useEffect, useRef } from "react";
 import QRCode from "qrcode";
+import { RowActions } from "@/components/ui/row-actions";
 
 const T = (t: (k: any) => string, key: string) => t(key as any);
+
+/** Deutsches Zahlenformat für Eurobeträge (2 Nachkommastellen) */
+const fmtEur = (n: number) =>
+  Number(n).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Deutsches Zahlenformat für kWh-Werte (1 Nachkommastelle) */
+const fmtKwh = (n: number) =>
+  Number(n).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 const TenantElectricity = () => {
   const { t } = useTranslation();
@@ -85,7 +95,7 @@ function OverviewTab() {
       </Card>
       <Card>
         <CardHeader className="pb-2"><CardDescription>{T(t, "te.revenue")}</CardDescription></CardHeader>
-        <CardContent><div className="text-2xl font-bold">{totalRevenue.toFixed(2)} €</div></CardContent>
+        <CardContent><div className="text-2xl font-bold">{fmtEur(totalRevenue)} €</div></CardContent>
       </Card>
     </div>
   );
@@ -171,6 +181,19 @@ function TenantsTab() {
   };
 
   const displayedTenants = showArchived ? archivedTenants : activeTenants;
+  type SortKey = "name" | "unit" | "email" | "move_in" | "move_out" | "status";
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(displayedTenants, (te, k) => {
+    switch (k) {
+      case "name": return te.name;
+      case "unit": return te.unit_label || "";
+      case "email": return te.email || "";
+      case "move_in": return te.move_in_date || "";
+      case "move_out": return te.move_out_date || "";
+      case "status": return te.status;
+      default: return null;
+    }
+  });
+
 
   const MeterSelector = ({ selectedIds, isEdit, locationId }: { selectedIds: string[]; isEdit: boolean; locationId: string }) => {
     const filteredMeters = locationId ? meters.filter((m) => m.location_id === locationId) : [];
@@ -275,9 +298,9 @@ function TenantsTab() {
       </Dialog>
 
       <Table>
-        <TableHeader><TableRow><TableHead>{t("common.name" as any)}</TableHead><TableHead>{T(t, "te.unitLabel")}</TableHead><TableHead>{t("common.email" as any)}</TableHead><TableHead>{T(t, "te.meters")}</TableHead><TableHead>{T(t, "te.moveIn")}</TableHead>{showArchived && <TableHead>{T(t, "te.moveOut")}</TableHead>}<TableHead>{t("common.status" as any)}</TableHead><TableHead></TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><SortableHead label={t("common.name" as any)} sortKey="name" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.unitLabel")} sortKey="unit" sort={sort} onToggle={toggle} /><SortableHead label={t("common.email" as any)} sortKey="email" sort={sort} onToggle={toggle} /><TableHead>{T(t, "te.meters")}</TableHead><SortableHead label={T(t, "te.moveIn")} sortKey="move_in" sort={sort} onToggle={toggle} />{showArchived && <SortableHead label={T(t, "te.moveOut")} sortKey="move_out" sort={sort} onToggle={toggle} />}TEMP_STATUS_HEAD<TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {displayedTenants.map((te) => (
+          {sorted.map((te) => (
             <TableRow key={te.id} className={te.status === "archived" ? "opacity-60" : ""}>
               <TableCell className="font-medium"><button className="hover:underline text-left cursor-pointer text-primary" onClick={() => openEdit(te)}>{te.name}</button></TableCell>
               <TableCell>{te.unit_label || "–"}</TableCell>
@@ -301,33 +324,48 @@ function TenantsTab() {
                 </Badge>
               </TableCell>
               <TableCell>
-                <div className="flex items-center gap-1">
-                  {te.status === "active" ? (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" title={T(t, "te.archive")}>
-                          <Archive className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>{T(t, "te.archiveTenant")}</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            <strong>{te.name}</strong> {te.unit_label ? `(${te.unit_label})` : ""} {T(t, "te.archiveTenantDesc")}
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>{t("common.cancel" as any)}</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => archiveTenant.mutate(te.id)}>{T(t, "te.archive")}</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  ) : (
-                    <Button variant="ghost" size="icon" onClick={() => handleReactivate(te.id)} title={T(t, "te.statusActive")}>
-                      <ArchiveRestore className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
+                <RowActions
+                  items={[
+                    { label: t("common.edit"), icon: Edit, onClick: () => openEdit(te), hidden: te.status !== "active" },
+                    {
+                      label: T(t, "te.archive"),
+                      icon: Archive,
+                      hidden: te.status !== "active",
+                      render: (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button
+                              type="button"
+                              className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Archive className="h-4 w-4 mr-2" />
+                              {T(t, "te.archive")}
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>{T(t, "te.archiveTenant")}</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                <strong>{te.name}</strong> {te.unit_label ? `(${te.unit_label})` : ""} {T(t, "te.archiveTenantDesc")}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>{t("common.cancel" as any)}</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => archiveTenant.mutate(te.id)}>{T(t, "te.archive")}</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      ),
+                    },
+                    {
+                      label: T(t, "te.statusActive"),
+                      icon: ArchiveRestore,
+                      onClick: () => handleReactivate(te.id),
+                      hidden: te.status === "active",
+                    },
+                  ]}
+                />
               </TableCell>
             </TableRow>
           ))}
@@ -348,6 +386,20 @@ function TenantsTab() {
 function TariffsTab() {
   const { t } = useTranslation();
   const { tariffs, createTariff, updateTariff, deleteTariff } = useTenantElectricityTariffs();
+  type SortKey = "name" | "location" | "local" | "grid" | "base_fee" | "valid_from" | "valid_until";
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(tariffs, (tariff, k) => {
+    switch (k) {
+      case "name": return tariff.name;
+      case "location": return tariff.locations?.name || "";
+      case "local": return Number(tariff.price_per_kwh_local);
+      case "grid": return Number(tariff.price_per_kwh_grid);
+      case "base_fee": return Number(tariff.base_fee_monthly);
+      case "valid_from": return tariff.valid_from;
+      case "valid_until": return tariff.valid_until || "9999-12-31";
+      default: return null;
+    }
+  });
+
   const { locations } = useLocations();
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -399,10 +451,11 @@ function TariffsTab() {
                 </Select>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <div><Label>{T(t, "te.localElectricity")}</Label><Input type="number" step="0.01" value={form.price_per_kwh_local} onChange={(e) => setForm({ ...form, price_per_kwh_local: Number(e.target.value) })} /></div>
-                <div><Label>{T(t, "te.gridElectricity")}</Label><Input type="number" step="0.01" value={form.price_per_kwh_grid} onChange={(e) => setForm({ ...form, price_per_kwh_grid: Number(e.target.value) })} /></div>
-                <div><Label>{T(t, "te.baseFeeMonthly")}</Label><Input type="number" step="0.5" value={form.base_fee_monthly} onChange={(e) => setForm({ ...form, base_fee_monthly: Number(e.target.value) })} /></div>
+                <div><Label>{T(t, "te.localElectricity")} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={form.price_per_kwh_local} onChange={(e) => setForm({ ...form, price_per_kwh_local: Number(e.target.value) })} /></div>
+                <div><Label>{T(t, "te.gridElectricity")} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={form.price_per_kwh_grid} onChange={(e) => setForm({ ...form, price_per_kwh_grid: Number(e.target.value) })} /></div>
+                <div><Label>{T(t, "te.baseFeeMonthly")} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.5" value={form.base_fee_monthly} onChange={(e) => setForm({ ...form, base_fee_monthly: Number(e.target.value) })} /></div>
               </div>
+              <p className="text-xs text-muted-foreground">Alle Preisangaben verstehen sich inklusive der gesetzlichen Mehrwertsteuer.</p>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>{T(t, "te.validFrom")}</Label><Input type="date" value={form.valid_from} onChange={(e) => setForm({ ...form, valid_from: e.target.value })} /></div>
                 <div><Label>{T(t, "te.validUntilOpt")}</Label><Input type="date" value={form.valid_until} onChange={(e) => setForm({ ...form, valid_until: e.target.value })} /></div>
@@ -426,10 +479,11 @@ function TariffsTab() {
               </Select>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div><Label>{T(t, "te.localElectricity")}</Label><Input type="number" step="0.01" value={editForm.price_per_kwh_local} onChange={(e) => setEditForm({ ...editForm, price_per_kwh_local: Number(e.target.value) })} /></div>
-              <div><Label>{T(t, "te.gridElectricity")}</Label><Input type="number" step="0.01" value={editForm.price_per_kwh_grid} onChange={(e) => setEditForm({ ...editForm, price_per_kwh_grid: Number(e.target.value) })} /></div>
-              <div><Label>{T(t, "te.baseFeeMonthly")}</Label><Input type="number" step="0.5" value={editForm.base_fee_monthly} onChange={(e) => setEditForm({ ...editForm, base_fee_monthly: Number(e.target.value) })} /></div>
+              <div><Label>{T(t, "te.localElectricity")} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={editForm.price_per_kwh_local} onChange={(e) => setEditForm({ ...editForm, price_per_kwh_local: Number(e.target.value) })} /></div>
+              <div><Label>{T(t, "te.gridElectricity")} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.01" value={editForm.price_per_kwh_grid} onChange={(e) => setEditForm({ ...editForm, price_per_kwh_grid: Number(e.target.value) })} /></div>
+              <div><Label>{T(t, "te.baseFeeMonthly")} <span className="text-xs text-muted-foreground">(inkl. MwSt.)</span></Label><Input type="number" step="0.5" value={editForm.base_fee_monthly} onChange={(e) => setEditForm({ ...editForm, base_fee_monthly: Number(e.target.value) })} /></div>
             </div>
+            <p className="text-xs text-muted-foreground">Alle Preisangaben verstehen sich inklusive der gesetzlichen Mehrwertsteuer.</p>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>{T(t, "te.validFrom")}</Label><Input type="date" value={editForm.valid_from} onChange={(e) => setEditForm({ ...editForm, valid_from: e.target.value })} /></div>
               <div><Label>{T(t, "te.validUntilOpt")}</Label><Input type="date" value={editForm.valid_until} onChange={(e) => setEditForm({ ...editForm, valid_until: e.target.value })} /></div>
@@ -444,18 +498,25 @@ function TariffsTab() {
       </Card>
 
       <Table>
-        <TableHeader><TableRow><TableHead>{t("common.name" as any)}</TableHead><TableHead>{t("common.location" as any)}</TableHead><TableHead>{T(t, "te.local")}</TableHead><TableHead>{T(t, "te.grid")}</TableHead><TableHead>{T(t, "te.baseFee")}</TableHead><TableHead>{T(t, "te.validFrom")}</TableHead><TableHead>{T(t, "te.validUntilOpt")}</TableHead><TableHead></TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><SortableHead label={t("common.name" as any)} sortKey="name" sort={sort} onToggle={toggle} /><SortableHead label={t("common.location" as any)} sortKey="location" sort={sort} onToggle={toggle} /><SortableHead label={<>{T(t, "te.local")} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></>} sortKey="local" sort={sort} onToggle={toggle} /><SortableHead label={<>{T(t, "te.grid")} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></>} sortKey="grid" sort={sort} onToggle={toggle} /><SortableHead label={<>{T(t, "te.baseFee")} <span className="text-xs text-muted-foreground font-normal">(inkl. MwSt.)</span></>} sortKey="base_fee" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.validFrom")} sortKey="valid_from" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.validUntilOpt")} sortKey="valid_until" sort={sort} onToggle={toggle} /><TableHead></TableHead></TableRow></TableHeader>
         <TableBody>
-          {tariffs.map((tariff: any) => (
+          {sorted.map((tariff: any) => (
             <TableRow key={tariff.id}>
               <TableCell className="font-medium"><button className="hover:underline text-left cursor-pointer text-primary" onClick={() => openEdit(tariff)}>{tariff.name}</button></TableCell>
               <TableCell>{tariff.locations?.name || "–"}</TableCell>
-              <TableCell>{Number(tariff.price_per_kwh_local).toFixed(2)}</TableCell>
-              <TableCell>{Number(tariff.price_per_kwh_grid).toFixed(2)}</TableCell>
-              <TableCell>{Number(tariff.base_fee_monthly).toFixed(2)} €</TableCell>
+              <TableCell>{fmtEur(tariff.price_per_kwh_local)}</TableCell>
+              <TableCell>{fmtEur(tariff.price_per_kwh_grid)}</TableCell>
+              <TableCell>{fmtEur(tariff.base_fee_monthly)} €</TableCell>
               <TableCell>{format(new Date(tariff.valid_from), "dd.MM.yyyy")}</TableCell>
               <TableCell>{tariff.valid_until ? format(new Date(tariff.valid_until), "dd.MM.yyyy") : T(t, "te.unlimited")}</TableCell>
-              <TableCell><Button variant="ghost" size="icon" onClick={() => deleteTariff.mutate(tariff.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
+              <TableCell>
+                <RowActions
+                  items={[
+                    { label: t("common.edit"), icon: Edit, onClick: () => openEdit(tariff) },
+                    { label: t("common.delete"), icon: Trash2, variant: "destructive", onClick: () => deleteTariff.mutate(tariff.id) },
+                  ]}
+                />
+              </TableCell>
             </TableRow>
           ))}
           {tariffs.length === 0 && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">{T(t, "te.noTariffsYet")}</TableCell></TableRow>}
@@ -469,6 +530,20 @@ function TariffsTab() {
 function InvoicesTab() {
   const { t } = useTranslation();
   const { invoices, createInvoice, updateInvoice } = useTenantElectricityInvoices();
+  type SortKey = "tenant" | "period" | "local" | "grid" | "total" | "amount" | "status";
+  const { sorted, sort, toggle } = useSortableData<any, SortKey>(invoices, (inv, k) => {
+    switch (k) {
+      case "tenant": return (inv as any).tenant_electricity_tenants?.name || "";
+      case "period": return inv.period_start;
+      case "local": return Number(inv.local_kwh);
+      case "grid": return Number(inv.grid_kwh);
+      case "total": return Number(inv.total_kwh);
+      case "amount": return Number(inv.total_amount);
+      case "status": return inv.status;
+      default: return null;
+    }
+  });
+
   const { activeTenants } = useTenantElectricityTenants();
   const { tariffs, getActiveTariffForLocation } = useTenantElectricityTariffs();
   const [open, setOpen] = useState(false);
@@ -522,10 +597,10 @@ function InvoicesTab() {
                 <Card className="p-3 bg-muted/50">
                   <p className="text-sm font-medium mb-1">{T(t, "te.preview").replace("{name}", activeTariff.name)}</p>
                   <div className="text-xs space-y-1">
-                    <p>{T(t, "te.localCalc")}: {form.local_kwh} kWh × {Number(activeTariff.price_per_kwh_local).toFixed(2)} € = {localAmount.toFixed(2)} €</p>
-                    <p>{T(t, "te.gridCalc")}: {form.grid_kwh} kWh × {Number(activeTariff.price_per_kwh_grid).toFixed(2)} € = {gridAmount.toFixed(2)} €</p>
-                    <p>{T(t, "te.baseFee")}: {baseFee.toFixed(2)} €</p>
-                    <p className="font-bold pt-1 border-t">{T(t, "te.total")}: {totalAmount.toFixed(2)} €</p>
+                    <p>{T(t, "te.localCalc")}: {fmtKwh(form.local_kwh)} kWh × {fmtEur(activeTariff.price_per_kwh_local)} € = {fmtEur(localAmount)} €</p>
+                    <p>{T(t, "te.gridCalc")}: {fmtKwh(form.grid_kwh)} kWh × {fmtEur(activeTariff.price_per_kwh_grid)} € = {fmtEur(gridAmount)} €</p>
+                    <p>{T(t, "te.baseFee")}: {fmtEur(baseFee)} €</p>
+                    <p className="font-bold pt-1 border-t">{T(t, "te.total")}: {fmtEur(totalAmount)} €</p>
                   </div>
                 </Card>
               )}
@@ -536,16 +611,16 @@ function InvoicesTab() {
       </div>
 
       <Table>
-        <TableHeader><TableRow><TableHead>{T(t, "te.tenant")}</TableHead><TableHead>{T(t, "te.period")}</TableHead><TableHead>{T(t, "te.localCalc")}</TableHead><TableHead>{T(t, "te.gridCalc")}</TableHead><TableHead>{T(t, "te.total")}</TableHead><TableHead>{T(t, "te.amount")}</TableHead><TableHead>{t("common.status" as any)}</TableHead></TableRow></TableHeader>
+        <TableHeader><TableRow><SortableHead label={T(t, "te.tenant")} sortKey="tenant" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.period")} sortKey="period" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.localCalc")} sortKey="local" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.gridCalc")} sortKey="grid" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.total")} sortKey="total" sort={sort} onToggle={toggle} /><SortableHead label={T(t, "te.amount")} sortKey="amount" sort={sort} onToggle={toggle} />TEMP_STATUS_HEAD</TableRow></TableHeader>
         <TableBody>
-          {invoices.map((inv) => (
+          {sorted.map((inv) => (
             <TableRow key={inv.id}>
               <TableCell className="font-medium">{(inv as any).tenant_electricity_tenants?.name || "–"} {(inv as any).tenant_electricity_tenants?.unit_label ? `(${(inv as any).tenant_electricity_tenants.unit_label})` : ""}</TableCell>
               <TableCell>{format(new Date(inv.period_start), "dd.MM.")} – {format(new Date(inv.period_end), "dd.MM.yyyy")}</TableCell>
-              <TableCell>{Number(inv.local_kwh).toFixed(1)} kWh</TableCell>
-              <TableCell>{Number(inv.grid_kwh).toFixed(1)} kWh</TableCell>
-              <TableCell>{Number(inv.total_kwh).toFixed(1)} kWh</TableCell>
-              <TableCell className="font-medium">{Number(inv.total_amount).toFixed(2)} €</TableCell>
+              <TableCell>{fmtKwh(Number(inv.local_kwh))} kWh</TableCell>
+              <TableCell>{fmtKwh(Number(inv.grid_kwh))} kWh</TableCell>
+              <TableCell>{fmtKwh(Number(inv.total_kwh))} kWh</TableCell>
+              <TableCell className="font-medium">{fmtEur(Number(inv.total_amount))} €</TableCell>
               <TableCell>
                 <Badge
                   variant={inv.status === "paid" ? "default" : inv.status === "issued" ? "secondary" : "outline"}

@@ -684,6 +684,7 @@
         automations: [],
         logs: [],
         devices: null,
+        wallboxes: null,
         deviceTab: 'meters',
         deviceSearch: '',
         error: '',
@@ -693,6 +694,7 @@
       var pageLabels = {
         dashboard: '📊 Dashboard',
         devices: '🔧 Geräte',
+        wallboxes: '🚗 Wallboxen',
         control: '🔌 Steuerung',
         automations: '🤖 Automationen',
         logs: '🧾 Logs',
@@ -796,6 +798,7 @@
         if (!value) return '–';
         try {
           return new Date(value).toLocaleString('de-DE', {
+            timeZone: 'Europe/Berlin',
             day: '2-digit', month: '2-digit', year: 'numeric',
             hour: '2-digit', minute: '2-digit', second: '2-digit'
           });
@@ -808,6 +811,7 @@
         if (!value) return '–';
         try {
           return new Date(value).toLocaleString('de-DE', {
+            timeZone: 'Europe/Berlin',
             day: '2-digit', month: '2-digit',
             hour: '2-digit', minute: '2-digit'
           });
@@ -843,6 +847,17 @@
           ? '<span class="badge badge-active">✓ Zugangsdaten gesetzt</span>'
           : '<span class="badge badge-error">✗ Bitte Benutzername & Passwort in der Add-on-Konfiguration setzen</span>';
 
+        var onboardingCard =
+          '<div class="panel" style="margin-bottom:18px">' +
+            '<div class="section-title">🧭 Einfache Einrichtung</div>' +
+            '<div style="display:grid;gap:8px;color:var(--text-secondary);font-size:0.9rem">' +
+              '<div><strong>1.</strong> Im Add-on Benutzername und Passwort eintragen</div>' +
+              '<div><strong>2.</strong> Add-on speichern und starten</div>' +
+              '<div><strong>3.</strong> MAC-Adresse unten kopieren oder in AICONO automatisch übernehmen</div>' +
+              '<div><strong>4.</strong> Gateway in AICONO einer Liegenschaft zuordnen</div>' +
+            '</div>' +
+          '</div>';
+
         var identityCard =
           '<div class="panel" style="margin-bottom:18px">' +
             '<div class="section-title">🔑 Gateway-Identität</div>' +
@@ -863,6 +878,11 @@
                 '<div class="card-sub">' + credBadge + '</div>' +
               '</div>' +
               '<div>' +
+                '<div class="card-label">Tenant-ID</div>' +
+                '<div style="font-size:1rem;font-weight:700;margin-top:4px">' + escapeHtml(s.cloud_ws_tenant_id || 'Automatisch via Cloud') + '</div>' +
+                '<div class="card-sub">Nur für Legacy-/Support-Fälle relevant; normalerweise keine manuelle Eingabe nötig.</div>' +
+              '</div>' +
+              '<div>' +
                 '<div class="card-label">Status</div>' +
                 '<div style="margin-top:6px">' + assignmentBadge + '</div>' +
                 '<div class="card-sub">' +
@@ -875,14 +895,17 @@
           '</div>';
 
         var wsConnected = !!s.cloud_ws_connected;
+        var tenantName = s.cloud_ws_tenant_name || 'Noch nicht zugeordnet';
+        var locationName = s.cloud_ws_location_name || (assignment === 'assigned' ? 'Liegenschaft wird geladen…' : 'Noch nicht zugeordnet');
         var wsSub = wsConnected
           ? (s.cloud_ws_device_id ? 'Device: ' + String(s.cloud_ws_device_id).slice(0, 8) + '…' : 'Push-Kanal aktiv')
           : 'Versuche Verbindung zur AICONO Cloud…';
 
-        return identityCard +
+        return onboardingCard + identityCard +
           '<div class="grid">' +
             card('Status', '<span class="status-dot ' + (s.status === 'running' ? 'online' : 'offline') + '"></span> ' + (s.status === 'running' ? 'Online' : 'Offline'), 'Uptime: ' + escapeHtml(formatUptime(s.uptime_seconds))) +
             card('Cloud-WebSocket', '<span class="status-dot ' + (wsConnected ? 'online' : 'offline') + '"></span> ' + (wsConnected ? 'Push aktiv' : 'Getrennt'), wsSub) +
+            card('Zugeordnete Liegenschaft', escapeHtml(locationName), 'Mandant: ' + tenantName) +
             card('Home Assistant', '<span class="status-dot ' + (s.ha_ws_connected ? 'online' : 'offline') + '"></span> ' + (s.ha_ws_connected ? 'Verbunden' : 'Getrennt'), 'HA-API ' + (s.cloud_reachable ? '+ Cloud erreichbar' : '– Cloud offline')) +
             card('Messwert-Puffer', escapeHtml(s.buffer_count || 0), 'Readings im lokalen Speicher') +
             card('Zähler-Mappings', escapeHtml(s.meter_mappings || 0), 'Aktive Zuordnungen') +
@@ -1153,13 +1176,23 @@
         }
 
         return renderTable([
-          'Zeit', 'Status', 'Trigger', 'Dauer', 'Fehler'
+          'Zeit (lokal)', 'Status', 'Trigger', 'Hinweis', 'Dauer', 'Fehler'
         ], state.logs.map(function (item) {
           var statusClass = item.status === 'success' ? 'badge-success' : (item.status === 'error' ? 'badge-error' : 'badge-warn');
+          var hint = item.trigger_type === 'heartbeat'
+            ? 'Heartbeat / Lebenszeichen des Gateways'
+            : item.trigger_type === 'scheduled'
+              ? 'Geplante Automation'
+              : item.trigger_type === 'manual'
+                ? 'Manuell ausgelöste Aktion'
+                : item.automation_name
+                  ? 'Automation: ' + item.automation_name
+                  : 'Systemeintrag';
           return [
             escapeHtml(formatTime(item.created_at)),
             '<span class="badge ' + statusClass + '">' + escapeHtml(item.status || 'unbekannt') + '</span>',
             escapeHtml(item.trigger_type || '–'),
+            escapeHtml(hint),
             escapeHtml(item.duration_ms != null ? item.duration_ms + ' ms' : '–'),
             escapeHtml(item.error_message || '–')
           ];
@@ -1171,12 +1204,20 @@
           return '<div class="empty-state"><div class="icon">⚙️</div><p>Konfiguration wird geladen…</p></div>';
         }
 
+        var keyLabels = {
+          cloud_url: 'Cloud-URL',
+          tenant_id_legacy: 'Tenant-ID (Legacy)',
+          gateway_username: 'Gateway-Benutzername',
+          gateway_password: 'Gateway-Passwort',
+          device_name: 'Gerätename'
+        };
+
         var entries = Object.keys(state.config).sort().map(function (key) {
           var value = state.config[key];
           if (value && typeof value === 'object') value = JSON.stringify(value);
           return '' +
             '<li>' +
-              '<span class="config-key">' + escapeHtml(key.replace(/_/g, ' ')) + '</span>' +
+              '<span class="config-key">' + escapeHtml(keyLabels[key] || key.replace(/_/g, ' ')) + '</span>' +
               '<span class="config-val">' + escapeHtml(value == null ? '–' : value) + '</span>' +
             '</li>';
         }).join('');
@@ -1184,6 +1225,7 @@
         return '' +
           '<div class="panel">' +
             '<div class="section-title">Lokale Gateway-Konfiguration</div>' +
+            '<p class="muted" style="margin-bottom:14px">Für das aktuelle Onboarding sind Benutzername, Passwort und die automatisch erkannte MAC-Adresse entscheidend. Die Tenant-ID wird nur noch für Legacy-/Support-Fälle angezeigt.</p>' +
             '<ul class="config-list">' + entries + '</ul>' +
           '</div>';
       }
@@ -1200,9 +1242,70 @@
           '</div>';
       }
 
+      function renderWallboxes() {
+        if (!state.wallboxes) {
+          return '<div class="empty-state"><div class="icon">⏳</div><p>Lade Wallboxen…</p></div>';
+        }
+        var list = state.wallboxes;
+        if (!list.length) {
+          return '<div class="empty-state"><div class="icon">🚗</div>' +
+            '<p>Keine Wallboxen aktiv</p>' +
+            '<p class="muted">Lege in AICONO unter „Ladepunkte" eine Modbus-Wallbox an. Das Gateway baut die Verbindung dann automatisch auf.</p>' +
+            '</div>';
+        }
+
+        function statusBadge(ocpp, modbus, ws) {
+          if (!modbus) return '<span class="badge badge-error">⚠️ Modbus offline</span>';
+          if (!ws) return '<span class="badge badge-warn">🟡 Cloud getrennt</span>';
+          if (ocpp === 'Charging') return '<span class="badge badge-active">⚡ Lädt</span>';
+          if (ocpp === 'Available') return '<span class="badge badge-success">🟢 Bereit</span>';
+          if (ocpp === 'Preparing' || ocpp === 'Finishing') return '<span class="badge badge-warn">🟡 ' + escapeHtml(ocpp) + '</span>';
+          if (ocpp === 'Faulted' || ocpp === 'Unavailable') return '<span class="badge badge-error">🔴 ' + escapeHtml(ocpp) + '</span>';
+          return '<span class="badge badge-inactive">' + escapeHtml(ocpp || '–') + '</span>';
+        }
+
+        function fmtNum(v, digits) {
+          if (v == null || v === '' || isNaN(Number(v))) return '–';
+          return Number(v).toLocaleString('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+        }
+
+        var cards = list.map(function (w) {
+          var st = w.state || {};
+          var powerKw = st.power_total_w != null ? Number(st.power_total_w) / 1000 : null;
+          var currents = [st.current_l1_a, st.current_l2_a, st.current_l3_a]
+            .map(function (c) { return c != null ? fmtNum(c, 1) + ' A' : '–'; })
+            .join(' / ');
+          return '' +
+            '<div class="panel" style="margin-bottom:14px">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">' +
+                '<div>' +
+                  '<div class="section-title" style="margin:0">🚗 ' + escapeHtml(w.vendor || '') + ' ' + escapeHtml(w.model || '') + '</div>' +
+                  '<div class="muted" style="font-size:0.8rem">OCPP-ID: <code>' + escapeHtml(w.ocpp_id) + '</code></div>' +
+                '</div>' +
+                '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+                  statusBadge(w.ocpp_status, w.modbus_connected, w.ocpp_connected) +
+                  (w.transaction_id ? '<span class="badge badge-blue">Tx #' + escapeHtml(w.transaction_id) + '</span>' : '') +
+                '</div>' +
+              '</div>' +
+              '<div class="grid">' +
+                card('Leistung', powerKw != null ? fmtNum(powerKw, 2) + ' kW' : '–', 'Aktuelle Ladeleistung') +
+                card('Energie gesamt', st.energy_total_kwh != null ? fmtNum(st.energy_total_kwh, 2) + ' kWh' : '–', 'Zählerstand') +
+                card('Stromstärke L1/L2/L3', currents, 'Pro Phase') +
+                card('Sollstrom', st.set_current_a != null ? fmtNum(st.set_current_a, 0) + ' A' : '–', 'Vorgabe an Wallbox') +
+                card('Modbus', w.modbus_host + ':' + w.modbus_port + ' (Unit ' + w.unit_id + ')', w.modbus_connected ? '🟢 verbunden' : '🔴 getrennt') +
+                card('Cloud (OCPP)', w.ocpp_connected ? '🟢 verbunden' : '🔴 getrennt', 'WebSocket zur AICONO Cloud') +
+              '</div>' +
+            '</div>';
+        }).join('');
+
+        var hint = '<div class="muted" style="margin-bottom:10px;font-size:0.85rem">Live-Daten aller im Gateway aktiven Wallboxen. Aktualisierung alle 10 Sekunden.</div>';
+        return hint + cards;
+      }
+
       function pageContent() {
         switch (state.page) {
           case 'devices': return renderDevices();
+          case 'wallboxes': return renderWallboxes();
           case 'control': return renderControl();
           case 'automations': return renderAutomations();
           case 'logs': return renderLogs();
@@ -1336,6 +1439,11 @@
         state.devices = payload && payload.devices ? payload.devices : { meters: [], sensors: [], actuators: [] };
       }
 
+      async function loadWallboxes() {
+        var payload = await fetchJson('/api/wallboxes');
+        state.wallboxes = payload && payload.wallboxes ? payload.wallboxes : [];
+      }
+
       async function loadActuators() {
         var payload = await fetchJson('/api/actuators');
         state.actuators = payload && payload.actuators ? payload.actuators : [];
@@ -1387,6 +1495,7 @@
           }
 
           if (state.page === 'devices') await loadDevices();
+          if (state.page === 'wallboxes') await loadWallboxes();
           if (state.page === 'control') await loadActuators();
           if (state.page === 'automations') await loadAutomations();
           if (state.page === 'logs') await loadLogs();

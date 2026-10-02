@@ -8,7 +8,7 @@ import {
   LayoutDashboard, LogOut, Building2, BarChart3, Receipt, HeadsetIcon,
   ChevronDown, ChevronRight, PanelLeftClose, PanelLeft, Users, ShieldCheck, Shield, Euro,
   Sun, Moon, Monitor, Globe, Palette, Check, Server, PlugZap, Settings, Activity,
-  Cpu, ListChecks, Briefcase,
+  Cpu, ListChecks, Briefcase, Plug, Upload, LayoutDashboard as BoardIcon, Puzzle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -28,8 +28,8 @@ const SA_SIDEBAR_KEY = "sa-sidebar-collapsed";
 const LANGUAGE_LABELS: Record<SALanguage, string> = {
   de: "Deutsch",
   en: "English",
-  fr: "Français",
-  pl: "Polski",
+  es: "Español",
+  nl: "Nederlands",
 };
 
 const PRESET_COLORS: Record<SAColorPreset, string> = {
@@ -87,7 +87,15 @@ export default function SuperAdminSidebar() {
 
   const navItems = [
     { to: "/super-admin", icon: LayoutDashboard, label: t("nav.dashboard") },
-    { to: "/super-admin/tenants", icon: Building2, label: t("nav.tenants") },
+    {
+      to: "/super-admin/tenants",
+      icon: Building2,
+      label: "Kunden",
+      children: [
+        { to: "/super-admin/tenants", icon: Building2, label: "Kunden" },
+        { to: "/super-admin/partners", icon: Briefcase, label: "Partner" },
+      ],
+    },
     { to: "/super-admin/statistics", icon: BarChart3, label: t("nav.statistics") },
     {
       to: "/super-admin/billing",
@@ -96,6 +104,7 @@ export default function SuperAdminSidebar() {
       children: [
         { to: "/super-admin/billing", icon: Receipt, label: t("nav.billing") },
         { to: "/super-admin/licenses", icon: Euro, label: t("nav.active_licenses") },
+        { to: "/super-admin/savings-share", icon: Euro, label: "Gain-Sharing" },
       ],
     },
     {
@@ -116,13 +125,19 @@ export default function SuperAdminSidebar() {
         { to: "/super-admin/roles", icon: ShieldCheck, label: t("nav.roles_permissions") },
       ],
     },
+    { to: "/super-admin/board", icon: BoardIcon, label: "C-Level Dashboard" },
+    { to: "/super-admin/roadmap", icon: ListChecks, label: "Roadmap" },
     {
       to: "/super-admin/ocpp",
       icon: Server,
       label: t("nav.ocpp_backend"),
       children: [
+        { to: "/super-admin/ocpp/onboarding", icon: Plug, label: "Ladepunkte" },
         { to: "/super-admin/ocpp/integrations", icon: PlugZap, label: t("nav.ocpp_integrations") },
         { to: "/super-admin/ocpp/control", icon: Server, label: "OCPP Control" },
+        { to: "/super-admin/ocpp/firmware", icon: Upload, label: "Firmware-Katalog" },
+        { to: "/super-admin/ocpp/simulators", icon: Plug, label: "Wallbox-Simulator" },
+        { to: "/super-admin/wallbox-templates", icon: PlugZap, label: "Wallbox-Templates" },
       ],
     },
     {
@@ -134,6 +149,9 @@ export default function SuperAdminSidebar() {
         { to: "/super-admin/sales/rules", icon: ListChecks, label: "Auswahl-Regeln" },
       ],
     },
+    { to: "/super-admin/loxone-templates", icon: Puzzle, label: "Loxone-Templates" },
+    { to: "/super-admin/gateways", icon: Cpu, label: "Gateway-Flotte" },
+    
     { to: "/super-admin/monitoring", icon: Activity, label: t("nav.monitoring") },
     { to: "/super-admin/support", icon: HeadsetIcon, label: t("nav.support") },
     { to: "/super-admin/settings", icon: Settings, label: t("nav.settings") },
@@ -155,6 +173,9 @@ export default function SuperAdminSidebar() {
     }
     if (location.pathname.startsWith("/super-admin/sales")) {
       setOpenMenus((prev) => prev.includes("/super-admin/sales") ? prev : [...prev, "/super-admin/sales"]);
+    }
+    if (location.pathname.startsWith("/super-admin/tenants") || location.pathname.startsWith("/super-admin/partners")) {
+      setOpenMenus((prev) => prev.includes("/super-admin/tenants") ? prev : [...prev, "/super-admin/tenants"]);
     }
   }, [location.pathname]);
 

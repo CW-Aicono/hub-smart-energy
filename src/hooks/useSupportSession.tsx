@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useTenant } from "@/hooks/useTenant";
+import { useTenantOptional } from "@/hooks/useTenant";
 
 interface SupportSession {
   id: string;
@@ -12,7 +12,7 @@ interface SupportSession {
 }
 
 export function useSupportSession() {
-  const { tenant } = useTenant();
+  const tenant = useTenantOptional()?.tenant ?? null;
   const queryClient = useQueryClient();
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
 

@@ -60,7 +60,7 @@ async function callBrightHub(
 
 /** Fetch a map of energy_type -> current price_per_unit for a location */
 async function fetchEnergyPriceMap(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   locationId: string,
   tenantId: string
 ): Promise<Map<string, number>> {

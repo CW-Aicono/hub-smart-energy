@@ -13,7 +13,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 
 interface AutomationCondition {
   id: string;
-  type: "sensor_value" | "time" | "weekday" | "status" | "time_point" | "time_switch";
+  type: "sensor_value" | "time" | "weekday" | "status" | "time_point" | "time_switch" | "power_headroom";
   sensor_uuid?: string;
   operator?: string;
   value?: number;
@@ -26,6 +26,7 @@ interface AutomationCondition {
   expected_status?: string;
   gateway_id?: string;
 }
+
 
 interface AutomationAction {
   actuator_uuid: string;
@@ -48,7 +49,9 @@ interface SensorValue {
 
 interface SensorProvider {
   getSensorValue(sensorUuid: string, gatewayId?: string): Promise<SensorValue | null>;
+  getPowerHeadroomKw?(locationId: string): Promise<number | null>;
 }
+
 
 const DEBOUNCE_MINUTES = 5;
 
@@ -123,8 +126,10 @@ async function evaluateCondition(
   condition: AutomationCondition,
   timeParts: TimeParts,
   sensorProvider: SensorProvider,
+  locationId?: string,
 ): Promise<boolean> {
   switch (condition.type) {
+
     case "time": {
       if (condition.time_from && condition.time_to) {
         return isTimeInRange(timeParts.timeStr, condition.time_from, condition.time_to);
@@ -181,10 +186,30 @@ async function evaluateCondition(
         return false;
       }
     }
+    case "power_headroom": {
+      if (!locationId || !sensorProvider.getPowerHeadroomKw) return false;
+      try {
+        const headroom = await sensorProvider.getPowerHeadroomKw(locationId);
+        if (headroom == null || !isFinite(headroom)) return false;
+        const threshold = condition.value ?? 0;
+        switch (condition.operator) {
+          case ">": return headroom > threshold;
+          case "<": return headroom < threshold;
+          case "=": return Math.abs(headroom - threshold) < 0.001;
+          case ">=": return headroom >= threshold;
+          case "<=": return headroom <= threshold;
+          default: return false;
+        }
+      } catch (e) {
+        console.error(`[evaluator] Power headroom fetch error for location ${locationId}:`, e);
+        return false;
+      }
+    }
     default:
       return false;
   }
 }
+
 
 function resolveActions(auto: Record<string, unknown>): AutomationAction[] {
   const actions = auto.actions as AutomationAction[] | undefined;
@@ -196,6 +221,22 @@ function resolveActions(auto: Record<string, unknown>): AutomationAction[] {
     action_type: (auto.action_value as string) || (auto.action_type as string) || "pulse",
     action_value: auto.action_value as string | undefined,
   }];
+}
+
+function hasForeignGatewayReference(
+  auto: Record<string, unknown>,
+  conditions: AutomationCondition[],
+  actions: AutomationAction[],
+): boolean {
+  const integrationId = auto.location_integration_id as string | null | undefined;
+  if (!integrationId) return false;
+
+  const conditionMismatch = conditions.some((condition) =>
+    condition.gateway_id && condition.gateway_id !== integrationId
+  );
+  if (conditionMismatch) return true;
+
+  return actions.some((action) => action.gateway_id && action.gateway_id !== integrationId);
 }
 
 // ── Shared payload builder (from automation-core/executor.ts) ────────────────
@@ -245,7 +286,7 @@ function buildActionPayload(
 
 class CloudSensorProvider implements SensorProvider {
   constructor(
-    private supabase: ReturnType<typeof createClient>,
+    private supabase: any,
     private supabaseUrl: string,
     private supabaseKey: string,
     private defaultGatewayId?: string,
@@ -285,7 +326,30 @@ class CloudSensorProvider implements SensorProvider {
     }
     return null;
   }
+
+  /**
+   * Reads current Hausanschluss headroom in kW from the latest dlm_control_log entry.
+   * headroom_kw = available_kw - measured_kw (>= 0 means free capacity).
+   * Returns null if no recent (< 10 min) log entry exists.
+   */
+  async getPowerHeadroomKw(locationId: string): Promise<number | null> {
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data, error } = await this.supabase
+      .from("dlm_control_log")
+      .select("measured_kw, available_kw, executed_at")
+      .eq("location_id", locationId)
+      .gte("executed_at", tenMinAgo)
+      .order("executed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    const measured = Number(data.measured_kw);
+    const available = Number(data.available_kw);
+    if (!isFinite(measured) || !isFinite(available)) return null;
+    return available - measured;
+  }
 }
+
 
 // ── Main handler ─────────────────────────────────────────────────────────────
 
@@ -302,23 +366,6 @@ Deno.serve(async (req) => {
   console.log("automation-scheduler: Starting evaluation...");
 
   try {
-    // 0. Load online gateway devices (heartbeat < 5 min) to skip locally-managed automations
-    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const { data: onlineGateways } = await supabase
-      .from("gateway_devices")
-      .select("location_integration_id")
-      .eq("status", "online")
-      .gte("last_heartbeat_at", fiveMinAgo);
-
-    const localGatewayIntegrationIds = new Set<string>(
-      (onlineGateways || [])
-        .map((g: any) => g.location_integration_id)
-        .filter(Boolean)
-    );
-    if (localGatewayIntegrationIds.size > 0) {
-      console.log(`Found ${localGatewayIntegrationIds.size} online local gateways – their automations will be skipped.`);
-    }
-
     // 1. Load all active automations with location timezone
     const { data: automations, error } = await supabase
       .from("location_automations")
@@ -348,24 +395,48 @@ Deno.serve(async (req) => {
     let skippedLocalCount = 0;
     let errorCount = 0;
 
+    const LEASE_SECONDS = 90;
+    const nowMs = Date.now();
+
     for (const auto of automations) {
       const automationId = auto.id;
       const tenantId = auto.tenant_id;
       const timezone = (auto as any).locations?.timezone || "Europe/Berlin";
       const conditions: AutomationCondition[] = Array.isArray(auto.conditions) ? auto.conditions : [];
       const logicOperator: string = auto.logic_operator || "AND";
+      const execMode: string = (auto as any).execution_mode || "cloud";
 
       if (conditions.length === 0) continue;
 
-      // Skip if a local gateway is online for this automation's integration
-      if (auto.location_integration_id && localGatewayIntegrationIds.has(auto.location_integration_id)) {
+      // Enforce execution_mode semantics:
+      //  - loxone_local: cloud MUST NEVER fire (gateway is source of truth).
+      //  - hybrid: cloud fires ONLY when local lease has expired (fallback).
+      //  - cloud: cloud always evaluates (subject to debounce).
+      if (execMode === "loxone_local") {
         skippedLocalCount++;
         continue;
       }
+      if (execMode === "hybrid") {
+        const leaseUntil = (auto as any).owner_lease_until
+          ? new Date((auto as any).owner_lease_until).getTime()
+          : 0;
+        if (leaseUntil > nowMs) {
+          skippedLocalCount++;
+          continue;
+        }
+      }
+
 
       // Debounce check using shared logic
       if (!isDebounceExpired(auto.last_executed_at)) {
         skippedCount++;
+        continue;
+      }
+
+      const actions = resolveActions(auto as any);
+      if (hasForeignGatewayReference(auto as any, conditions, actions)) {
+        skippedCount++;
+        console.warn(`Automation "${auto.name}" (${automationId}) skipped: foreign gateway_id reference outside assigned location_integration_id.`);
         continue;
       }
 
@@ -375,7 +446,7 @@ Deno.serve(async (req) => {
 
       const conditionResults: boolean[] = [];
       for (const condition of conditions) {
-        const result = await evaluateCondition(condition, timeParts, sensorProvider);
+        const result = await evaluateCondition(condition, timeParts, sensorProvider, auto.location_id);
         conditionResults.push(result);
       }
 
@@ -391,15 +462,16 @@ Deno.serve(async (req) => {
       const startTime = Date.now();
 
       try {
-        const actions = resolveActions(auto as any);
-
         for (const action of actions) {
           const gatewayId = (action as any).gateway_id || auto.location_integration_id;
           const { data: liData } = await supabase
             .from("location_integrations")
-            .select("*, integration:integrations(type)")
+            .select("id, location_id, integration:integrations(type)")
             .eq("id", gatewayId)
             .maybeSingle();
+          if (!liData || liData.location_id !== auto.location_id) {
+            throw new Error("Automation verweist auf eine Integration außerhalb der zugeordneten Location");
+          }
           const intType = (liData as any)?.integration?.type || "";
           const edgeFn = getEdgeFunction(intType);
 
@@ -434,8 +506,17 @@ Deno.serve(async (req) => {
 
         await supabase
           .from("location_automations")
-          .update({ last_executed_at: new Date().toISOString() })
+          .update({
+            last_executed_at: new Date().toISOString(),
+            ...(execMode === "hybrid"
+              ? {
+                  owner_gateway_device_id: null,
+                  owner_lease_until: new Date(Date.now() + LEASE_SECONDS * 1000).toISOString(),
+                }
+              : {}),
+          })
           .eq("id", automationId);
+
 
         executedCount++;
         console.log(`Automation "${auto.name}" executed successfully in ${durationMs}ms`);

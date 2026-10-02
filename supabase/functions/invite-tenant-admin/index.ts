@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { resendFrom } from "../_shared/resend-from.ts";
+import { checkInviteConflict } from "../_shared/invite-conflict.ts";
 
 const handler = async (req: Request): Promise<Response> => {
   const corsHeaders = getCorsHeaders(req);
@@ -28,11 +30,9 @@ const handler = async (req: Request): Promise<Response> => {
       .eq("user_id", callingUser.id);
 
     const roles = (callerRoles || []).map((r: { role: string }) => r.role);
-    if (!roles.includes("super_admin") && !roles.includes("admin")) {
-      throw new Error("Insufficient permissions");
-    }
+    const isElevated = roles.includes("super_admin") || roles.includes("admin");
 
-    const { tenantId, adminEmail, adminName, role, redirectTo } = await req.json();
+    const { tenantId, adminEmail, adminName, role, redirectTo, force } = await req.json();
 
     // Input validation (BSI CON.8 H1)
     if (!tenantId || typeof tenantId !== "string") throw new Error("Invalid tenantId");
@@ -41,6 +41,21 @@ const handler = async (req: Request): Promise<Response> => {
     if (adminName && typeof adminName !== "string") throw new Error("Invalid adminName");
     if (role && !["admin", "user"].includes(role)) throw new Error("Invalid role");
     const assignedRole = role === "user" ? "user" : "admin";
+
+    // Allow partner_admins to invite admins for tenants that belong to their own partner
+    if (!isElevated) {
+      const { data: partnerOk } = await supabase.rpc("partner_has_tenant_access", {
+        _user_id: callingUser.id,
+        _tenant_id: tenantId,
+      });
+      const { data: isPartnerAdmin } = await supabase.rpc("is_partner_admin", {
+        _user_id: callingUser.id,
+      });
+      if (!partnerOk || !isPartnerAdmin) {
+        throw new Error("Insufficient permissions");
+      }
+    }
+
 
     // Get tenant info for branding
     const { data: tenant } = await supabase
@@ -56,33 +71,38 @@ const handler = async (req: Request): Promise<Response> => {
     const primaryColor = branding.primaryColor || "#1a365d";
     const accentColor = branding.accentColor || "#2d8a6e";
 
-    // Create auth user or find existing one
-    const tempPassword = crypto.randomUUID() + "Aa1!";
-    let newUserId: string;
-
-    const { data: newUserData, error: createError } = await supabase.auth.admin.createUser({
+    // ── Uniqueness / cross-tenant guard ──
+    const callerIsSuper = roles.includes("super_admin");
+    const conflict = await checkInviteConflict({
+      supabase,
       email: adminEmail,
-      password: tempPassword,
-      email_confirm: true,
+      intent: "tenant_invite",
+      tenantId,
+      force: !!force,
+      callerIsSuper,
     });
+    if (!conflict.ok) {
+      return new Response(
+        JSON.stringify({ success: false, error: conflict.error }),
+        { status: conflict.status ?? 409, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
 
-    if (createError) {
-      if (createError.message?.includes("already")) {
-        // User already exists in auth – find them and reassign to new tenant
-        const { data: listData, error: listError } = await supabase.auth.admin.listUsers({
-          filter: `email.eq.${adminEmail}`,
-          perPage: 1,
-        });
-        if (listError) throw new Error("Benutzer konnte nicht gefunden werden");
-        const existingUser = listData?.users?.[0];
-        if (!existingUser) throw new Error("Benutzer mit dieser E-Mail konnte nicht gefunden werden.");
-        newUserId = existingUser.id;
-      } else {
-        throw new Error(`Benutzer konnte nicht erstellt werden: ${createError.message}`);
-      }
+    let newUserId: string;
+    if (conflict.existingUserId) {
+      newUserId = conflict.existingUserId;
     } else {
+      const tempPassword = crypto.randomUUID() + "Aa1!";
+      const { data: newUserData, error: createError } = await supabase.auth.admin.createUser({
+        email: adminEmail,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: { must_change_password: true },
+      });
+      if (createError || !newUserData?.user) {
+        throw new Error(`Benutzer konnte nicht erstellt werden: ${createError?.message ?? "unbekannt"}`);
+      }
       newUserId = newUserData.user.id;
-      // Wait briefly for handle_new_user trigger
       await new Promise(resolve => setTimeout(resolve, 600));
     }
 
@@ -95,11 +115,9 @@ const handler = async (req: Request): Promise<Response> => {
       })
       .eq("user_id", newUserId);
 
-    // Set role (upsert to handle existing role)
-    await supabase
-      .from("user_roles")
-      .update({ role: assignedRole })
-      .eq("user_id", newUserId);
+    // Set role: ensure exactly one role row for this user.
+    await supabase.from("user_roles").delete().eq("user_id", newUserId);
+    await supabase.from("user_roles").insert({ user_id: newUserId, role: assignedRole });
 
     // Generate password-reset link (user sets their own password)
     const appUrl = redirectTo || `https://hub-smart-energy.lovable.app/set-password`;
@@ -120,8 +138,16 @@ const handler = async (req: Request): Promise<Response> => {
     if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY not configured");
 
     const resend = new Resend(RESEND_API_KEY);
-    await resend.emails.send({
-      from: `${tenantName} <noreply@mailtest.my-ips.de>`,
+    const fromAddress = resendFrom(tenantName);
+    console.log("[invite-tenant-admin] Sending email", {
+      to: adminEmail,
+      from: fromAddress,
+      tenantId,
+      userId: newUserId,
+    });
+
+    const emailResponse = await resend.emails.send({
+      from: fromAddress,
       to: [adminEmail],
       subject: `Ihr Administrator-Konto bei ${tenantName}`,
       html: `<!DOCTYPE html>
@@ -150,8 +176,50 @@ const handler = async (req: Request): Promise<Response> => {
 </html>`,
     });
 
+    if (emailResponse.error) {
+      console.error("[invite-tenant-admin] Resend error", {
+        to: adminEmail,
+        from: fromAddress,
+        error: emailResponse.error,
+      });
+      throw new Error(
+        `E-Mail konnte nicht versendet werden: ${emailResponse.error.message || JSON.stringify(emailResponse.error)}`
+      );
+    }
+
+    console.log("[invite-tenant-admin] Resend success", {
+      to: adminEmail,
+      messageId: emailResponse.data?.id,
+    });
+
+    // Record invitation entry so the UI can list pending/expired invites and re-send them.
+    // Remove any prior pending invitation for this email+tenant first to avoid duplicates.
+    const emailLower = adminEmail.toLowerCase();
+    const { error: deletePrevError } = await supabase
+      .from("user_invitations")
+      .delete()
+      .eq("tenant_id", tenantId)
+      .ilike("email", emailLower)
+      .is("accepted_at", null);
+    if (deletePrevError) {
+      console.warn("[invite-tenant-admin] Could not clean previous invitations", deletePrevError);
+    }
+
+    const { error: invitationError } = await supabase
+      .from("user_invitations")
+      .insert({
+        tenant_id: tenantId,
+        email: emailLower,
+        role: assignedRole,
+        invited_by: callingUser.id,
+      });
+    if (invitationError) {
+      // Do not fail the whole flow – the user is already created and email sent.
+      console.error("[invite-tenant-admin] Could not record invitation", invitationError);
+    }
+
     return new Response(
-      JSON.stringify({ success: true, userId: newUserId }),
+      JSON.stringify({ success: true, userId: newUserId, emailId: emailResponse.data?.id ?? null }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: unknown) {

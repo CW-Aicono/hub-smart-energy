@@ -4,8 +4,10 @@ import { useAuth } from "@/hooks/useAuth";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Network, Wifi, Router, Activity, Cable } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Network, Wifi, Router, Activity, Cable, Info } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { DEMO_NETWORK_DEVICES, type NetworkDevice } from "@/data/networkDemoData";
 import NetworkOverview from "@/components/network/NetworkOverview";
@@ -48,12 +50,23 @@ const NetworkInfrastructure = () => {
       <main className="flex-1 p-3 md:p-6 overflow-auto">
         <div className="max-w-7xl mx-auto space-y-6">
           <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2 flex-wrap">
               <Network className="h-6 w-6" />
               {t("network.title" as any)}
+              <Badge variant="secondary" className="ml-1">Beta</Badge>
             </h1>
             <p className="text-muted-foreground mt-1">{t("network.subtitle" as any)}</p>
           </div>
+
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertTitle>Beta – Beispieldaten</AlertTitle>
+            <AlertDescription>
+              Diese Seite zeigt aktuell Beispieldaten zur Vorschau. Die Anbindung an echte Netzwerk-Geräte (Gateways, Access Points, Switches) folgt in einem späteren Release.
+            </AlertDescription>
+          </Alert>
+
+
 
           <div className="grid gap-4 md:grid-cols-4">
             <StatCard icon={<Router className="h-5 w-5 text-primary" />} label={t("network.gateways" as any)} value={String(gwCount)} />

@@ -1,0 +1,427 @@
+#!/usr/bin/env bash
+# Spielt alle neuen Migrations aus supabase/migrations/ gegen den self-hosted Postgres.
+# Bereits applyte Migrations werden in der Tabelle _deploy_migrations getrackt und uebersprungen.
+# Eine fehlschlagende Migration bricht ab und gibt Exit-Code 1 zurueck.
+set -euo pipefail
+
+REPO_ROOT="${REPO_ROOT:-/opt/hub-smart-energy}"
+MIG_DIR="${REPO_ROOT}/supabase/migrations"
+DB_CONTAINER="${DB_CONTAINER:-supabase-db}"
+DB_USER="${DB_USER:-supabase_admin}"
+DB_NAME="${DB_NAME:-postgres}"
+
+log() { printf '[migrations %s] %s\n' "$(date +%H:%M:%S)" "$*"; }
+
+psql_exec() {
+  docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 "$@"
+}
+
+# Filtert Postgres "command tags" raus (ALTER TABLE / GRANT / COPY 0 / setval-Tabellen / leere
+# Trennlinien) und behaelt nur informative Zeilen (ERROR, NOTICE, HINT, DETAIL, CONTEXT, QUERY,
+# LINE, plus alles, was nicht ein bekannter command tag ist). Damit wird der Deploy-Log um
+# Faktor 10-50 kuerzer ohne Verlust von Diagnose-Info. `|| true` macht den Pipe robust gegen
+# leeren Output (sonst wuerde grep mit Exit 1 unter `set -o pipefail` das Script kippen).
+filter_psql_noise() {
+  grep -vE '^(ALTER|CREATE|DROP|GRANT|REVOKE|COMMENT|COPY|SET|CALL|TRUNCATE|INSERT|UPDATE|DELETE|VALUES|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|REINDEX|VACUUM|ANALYZE|CLUSTER|LOCK|LISTEN|NOTIFY|SELECT|FETCH|MOVE|CLOSE|DECLARE|PREPARE|EXECUTE|DEALLOCATE|EXPLAIN|REASSIGN|SECURITY|REFRESH|IMPORT|LOAD|CHECKPOINT|DISCARD|SHOW|RESET) ?[A-Z0-9_-]*$|^[[:space:]]*setval[[:space:]]*$|^[[:space:]]*-+[[:space:]]*$|^[[:space:]]*[0-9]+[[:space:]]*$|^\([0-9]+ rows?\)$|^[[:space:]]*$' || true
+}
+
+if [ ! -d "$MIG_DIR" ]; then
+  log "Kein Migrations-Verzeichnis unter $MIG_DIR - skipping."
+  exit 0
+fi
+
+log "Stelle Tracking-Tabelle _deploy_migrations sicher"
+psql_exec <<'SQL' 2>&1 | filter_psql_noise
+CREATE TABLE IF NOT EXISTS public._deploy_migrations (
+  filename   TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+SQL
+
+# Alle Migrations-Dateien sortiert einlesen.
+# Wichtig: erst in ein Array einlesen, nicht direkt via `while read < <(find ...)` iterieren —
+# sonst konsumiert `docker exec -i` innerhalb der Schleife den Pipe-stdin und die Iteration bricht
+# nach der ersten Datei ab.
+migration_files=()
+while IFS= read -r -d '' file; do
+  migration_files+=("$file")
+done < <(find "$MIG_DIR" -maxdepth 1 -type f -name '*.sql' -print0 | sort -z)
+
+# Bootstrap: auf einem bestehenden Server, wo bereits alle Migrations appliziert sind,
+# einmalig mit BOOTSTRAP=1 aufrufen. Markiert alle vorhandenen .sql als applied, ohne sie auszufuehren.
+if [ "${BOOTSTRAP:-0}" = "1" ]; then
+  log "BOOTSTRAP-Modus: markiere ${#migration_files[@]} bestehende Migrations als applied (ohne Ausfuehrung)"
+  {
+    echo "BEGIN;"
+    for file in "${migration_files[@]}"; do
+      filename="$(basename "$file")"
+      escaped="$(printf '%s' "$filename" | sed "s/'/''/g")"
+      echo "INSERT INTO public._deploy_migrations (filename) VALUES ('$escaped') ON CONFLICT DO NOTHING;"
+    done
+    echo "COMMIT;"
+  } | docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 > /dev/null
+  log "Bootstrap fertig."
+  exit 0
+fi
+
+applied_count=0
+skipped_count=0
+autoheal_count=0
+
+# Preflight fuer den historischen Berliner-Tagesrefresh vom 31.07.:
+# Diese noch offene Migration ruft refresh_meter_period_totals_5min sofort auf.
+# Auf Installationen, die bereits auf die partitionierte 5-Minuten-Tabelle
+# gewechselt sind, kann der beim Swap verlorene FK alte meter_id-Waisen enthalten.
+# Eine spaetere Reparaturmigration wird sonst nie erreicht. Wir erhalten die
+# Messhistorie und loesen ausschliesslich die nicht mehr gueltige Zuordnung.
+BERLIN_REFRESH_MIGRATION="20260731225555_538403e6-b3a4-4968-97b3-ba59b9e46cdf.sql"
+DESTRUCTIVE_ORPHAN_REPAIR="20260801065203_b0157b2a-69bd-4424-b380-2d2a4c3fa497.sql"
+berlin_refresh_applied="$(psql_exec -At -c "SELECT 1 FROM public._deploy_migrations WHERE filename = '$BERLIN_REFRESH_MIGRATION'")"
+if [ "$berlin_refresh_applied" != "1" ]; then
+  log "Preflight: pruefe verwaiste Messstellen-Zuordnungen vor Berliner Tagesrefresh"
+  psql_exec <<'SQL' > /dev/null
+DO $replica_identity$
+DECLARE
+  v_relation regclass;
+BEGIN
+  FOR v_relation IN
+    SELECT relid
+    FROM pg_partition_tree('public.meter_power_readings_5min'::regclass)
+  LOOP
+    EXECUTE format('ALTER TABLE %s REPLICA IDENTITY FULL', v_relation);
+  END LOOP;
+END
+$replica_identity$;
+SQL
+  log "Preflight: Replica Identity auf Parent und allen Leaf-Partitionen sichergestellt"
+  orphan_count="$(psql_exec -At -c "
+    SELECT COUNT(*)
+    FROM public.meter_power_readings_5min m5
+    WHERE m5.meter_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM public.meters m WHERE m.id = m5.meter_id)
+  ")"
+  log "Preflight: $orphan_count verwaiste Zuordnungen in meter_power_readings_5min"
+  if [ "$orphan_count" -gt 0 ]; then
+    psql_exec -c "
+      UPDATE public.meter_power_readings_5min m5
+      SET meter_id = NULL
+      WHERE m5.meter_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM public.meters m WHERE m.id = m5.meter_id)
+    " > /dev/null
+    log "Preflight: Historie erhalten und verwaiste meter_id auf NULL gesetzt"
+  fi
+
+  remaining_orphans="$(psql_exec -At -c "
+    SELECT COUNT(*)
+    FROM public.meter_power_readings_5min m5
+    WHERE m5.meter_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM public.meters m WHERE m.id = m5.meter_id)
+  ")"
+  if [ "$remaining_orphans" -ne 0 ]; then
+    log "FEHLER: Nach Preflight verbleiben $remaining_orphans verwaiste Zuordnungen. Deploy wird sicher abgebrochen."
+    exit 1
+  fi
+
+  # Die alte Folgemigration loescht per NOT EXISTS auch Zeilen mit meter_id=NULL.
+  # Sie wird durch eine neue, nicht loeschende Haertungsmigration ersetzt und
+  # deshalb auf self-hosted Installationen bewusst als erledigt markiert.
+  psql_exec -c "
+    INSERT INTO public._deploy_migrations (filename)
+    VALUES ('$DESTRUCTIVE_ORPHAN_REPAIR')
+    ON CONFLICT DO NOTHING
+  " > /dev/null
+  log "Preflight: destruktive Alt-Reparatur uebersprungen; sichere Folgemigration uebernimmt"
+fi
+
+# Tiefen-Counter fuer rekursives AUTOHEAL: wenn eine Heal-Migration selbst auf ein fehlendes
+# Objekt stoesst, wird AUTOHEAL erneut aufgerufen. Limit verhindert Endlos-Schleifen bei
+# zirkulaeren Referenzen (real unwahrscheinlich, aber Sicherheitsnetz).
+AUTOHEAL_DEPTH=0
+AUTOHEAL_MAX_DEPTH=5
+
+# mark_applied <file>
+mark_applied() {
+  local f="$1"
+  local fn escaped
+  fn="$(basename "$f")"
+  escaped="$(printf '%s' "$fn" | sed "s/'/''/g")"
+  psql_exec -c "INSERT INTO public._deploy_migrations (filename) VALUES ('$escaped') ON CONFLICT DO NOTHING" > /dev/null
+}
+
+# Versucht, ein fehlendes public.<table> oder public.<function> zu heilen, indem die frueheste
+# Migration gesucht wird, die es erzeugt (CREATE TABLE / CREATE FUNCTION / CREATE TYPE).
+# Nutzt nur Migrations, die als "already applied" markiert sind — der Bootstrap-Stand kann
+# Tabellen als applied markiert haben, ohne sie tatsaechlich erstellt zu haben.
+autoheal_missing_object() {
+  local object_name="$1"
+  local grep_pattern="$2"
+
+  if [ "$AUTOHEAL_DEPTH" -ge "$AUTOHEAL_MAX_DEPTH" ]; then
+    log "AUTOHEAL: max Tiefe ($AUTOHEAL_MAX_DEPTH) erreicht, gebe '$object_name' auf."
+    return 1
+  fi
+
+  local found
+  found="$(grep -l -E "$grep_pattern" "$MIG_DIR"/*.sql 2>/dev/null | sort | head -1)"
+
+  if [ -z "$found" ]; then
+    log "AUTOHEAL: keine CREATE-Migration fuer '$object_name' gefunden."
+    return 1
+  fi
+
+  log "AUTOHEAL[$AUTOHEAL_DEPTH]: fuehre $(basename "$found") aus, um '$object_name' zu erstellen"
+  # Rekursiv via run_migration_with_autoheal: wenn die Heal-Migration selbst auf ein fehlendes
+  # Objekt stoesst (z.B. Tabelle X braucht Tabelle Y), wird AUTOHEAL erneut aufgerufen.
+  # --single-transaction (in run_migration_with_autoheal) sorgt dafuer, dass Teilarbeit nicht
+  # ueberlebt, falls die Heal-Migration scheitert.
+  AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH + 1))
+  if ! run_migration_with_autoheal "$found"; then
+    AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
+    log "AUTOHEAL: CREATE-Migration fuer '$object_name' ist selbst fehlgeschlagen."
+    return 1
+  fi
+  AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
+
+  mark_applied "$found"
+  autoheal_count=$((autoheal_count + 1))
+  log "AUTOHEAL: '$object_name' erstellt."
+  return 0
+}
+
+# Detect ob eine Migration sicher in einer Transaktion laufen kann. Postgres erlaubt
+# manche DDL-Statements nicht innerhalb von BEGIN/COMMIT — vor allem ALTER TYPE ... ADD VALUE
+# (enum-Erweiterung). Solche Migrations muessen ohne --single-transaction laufen und sind
+# darauf angewiesen, idempotent geschrieben zu sein.
+migration_is_tx_safe() {
+  ! grep -qE "ALTER TYPE.*ADD VALUE" "$1"
+}
+
+# Heilt einen fehlenden enum-Wert: sucht eine Migration, die ALTER TYPE X ADD VALUE 'Y'
+# enthaelt, und fuehrt sie aus. Pattern wird via run_migration_with_autoheal rekursiv,
+# der dank migration_is_tx_safe in dem Fall non-tx laeuft.
+autoheal_missing_enum_value() {
+  local enum_name="$1"
+  local enum_value="$2"
+
+  if [ "$AUTOHEAL_DEPTH" -ge "$AUTOHEAL_MAX_DEPTH" ]; then
+    log "AUTOHEAL: max Tiefe ($AUTOHEAL_MAX_DEPTH) erreicht, gebe '$enum_name=$enum_value' auf."
+    return 1
+  fi
+
+  local found="" f
+  for f in "$MIG_DIR"/*.sql; do
+    if grep -qE "ALTER TYPE (public\.)?${enum_name}[[:space:]]+ADD VALUE" "$f" 2>/dev/null \
+       && grep -qE "'${enum_value}'" "$f" 2>/dev/null; then
+      found="$f"
+      break
+    fi
+  done
+
+  if [ -z "$found" ]; then
+    log "AUTOHEAL: keine ADD-VALUE-Migration fuer Enum '$enum_name=$enum_value' gefunden."
+    return 1
+  fi
+
+  log "AUTOHEAL[$AUTOHEAL_DEPTH]: fuehre $(basename "$found") aus, um '$enum_name=$enum_value' hinzuzufuegen"
+  AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH + 1))
+  if ! run_migration_with_autoheal "$found"; then
+    AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
+    log "AUTOHEAL: ADD-VALUE-Migration fuer '$enum_name=$enum_value' ist selbst fehlgeschlagen."
+    return 1
+  fi
+  AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
+
+  mark_applied "$found"
+  autoheal_count=$((autoheal_count + 1))
+  log "AUTOHEAL: '$enum_name=$enum_value' hinzugefuegt."
+  return 0
+}
+
+# Heilt eine fehlende Spalte: sucht eine Migration, die BEIDE Patterns enthaelt
+# (Tabellenname + ADD COLUMN spalte). Notwendig weil eine Spalte typischerweise
+# nicht durch CREATE TABLE, sondern durch ein nachtraegliches ALTER TABLE entsteht.
+autoheal_missing_column() {
+  local rel="$1"
+  local col="$2"
+
+  if [ "$AUTOHEAL_DEPTH" -ge "$AUTOHEAL_MAX_DEPTH" ]; then
+    log "AUTOHEAL: max Tiefe ($AUTOHEAL_MAX_DEPTH) erreicht, gebe '$rel.$col' auf."
+    return 1
+  fi
+
+  # File muss BEIDE Patterns enthalten. Per-Datei-Check, weil kein einzelner regex-Match
+  # ueber Zeilen hinweg garantiert ist, dass ADD COLUMN sich auf die richtige Tabelle bezieht.
+  local found="" f
+  for f in "$MIG_DIR"/*.sql; do
+    if grep -qE "ADD COLUMN (IF NOT EXISTS )?\"?${col}\"?[[:space:]]" "$f" 2>/dev/null \
+       && grep -qE "${rel}" "$f" 2>/dev/null; then
+      found="$f"
+      break
+    fi
+  done
+
+  if [ -z "$found" ]; then
+    log "AUTOHEAL: keine ADD-COLUMN-Migration fuer '$rel.$col' gefunden."
+    return 1
+  fi
+
+  log "AUTOHEAL[$AUTOHEAL_DEPTH]: fuehre $(basename "$found") aus, um '$rel.$col' hinzuzufuegen"
+  AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH + 1))
+  if ! run_migration_with_autoheal "$found"; then
+    AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
+    log "AUTOHEAL: ADD-COLUMN-Migration fuer '$rel.$col' ist selbst fehlgeschlagen."
+    return 1
+  fi
+  AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
+
+  mark_applied "$found"
+  autoheal_count=$((autoheal_count + 1))
+  log "AUTOHEAL: '$rel.$col' hinzugefuegt."
+  return 0
+}
+
+# Versucht eine Migration bis zu 5x mit Auto-Heal dazwischen.
+run_migration_with_autoheal() {
+  local file="$1"
+  local attempt=0
+  local err tmp
+
+  # Migrations mit ALTER TYPE ... ADD VALUE koennen nicht in einer Tx laufen — Postgres
+  # weigert sich. Sie muessen idempotent geschrieben sein, damit ein Retry nach partial
+  # state noch funktioniert.
+  local tx_flag="--single-transaction"
+  if ! migration_is_tx_safe "$file"; then
+    tx_flag=""
+    log "Hinweis: $(basename "$file") laeuft non-tx (enthaelt ALTER TYPE ADD VALUE)"
+  fi
+
+  while [ $attempt -lt 5 ]; do
+    attempt=$((attempt + 1))
+    tmp="$(mktemp)"
+    # --single-transaction: jede Migration ist atomic. Wenn z.B. Statement 5 von 10 scheitert,
+    # rollen 1-4 mit zurueck, AUTOHEAL erstellt das fehlende Objekt, der Retry startet von 1
+    # auf einer sauberen Basis. Ohne -1 wuerden 1-4 committed bleiben, der Retry stiesse auf
+    # "already exists" und die Migration waere nicht mehr heilbar.
+    if docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 $tx_flag < "$file" > "$tmp" 2>&1; then
+      filter_psql_noise < "$tmp"
+      rm -f "$tmp"
+      return 0
+    fi
+
+    err="$(cat "$tmp")"
+    rm -f "$tmp"
+    # err bleibt unfiltered fuer das error-pattern-matching unten; gefilterte Variante geht raus
+    printf '%s\n' "$err" | filter_psql_noise
+
+    # Fall 1: Tabelle fehlt
+    local missing_table
+    missing_table="$(echo "$err" | grep -oE 'relation "public\.[a-zA-Z_][a-zA-Z0-9_]*" does not exist' | head -1 | sed -E 's/relation "public\.([^"]+)" does not exist/\1/')"
+    if [ -n "$missing_table" ]; then
+      if autoheal_missing_object "public.$missing_table" "CREATE TABLE (IF NOT EXISTS )?public\.${missing_table}[[:space:](]"; then
+        continue
+      fi
+    fi
+
+    # Fall 2: Funktion fehlt
+    local missing_func
+    missing_func="$(echo "$err" | grep -oE 'function public\.[a-zA-Z_][a-zA-Z0-9_]*\(' | head -1 | sed -E 's/function public\.([a-zA-Z_][a-zA-Z0-9_]*)\(/\1/')"
+    if [ -n "$missing_func" ] && echo "$err" | grep -qE 'does not exist'; then
+      if autoheal_missing_object "public.$missing_func" "CREATE (OR REPLACE )?FUNCTION public\.${missing_func}\("; then
+        continue
+      fi
+    fi
+
+    # Fall 3: Type fehlt
+    local missing_type
+    missing_type="$(echo "$err" | grep -oE 'type "public\.[a-zA-Z_][a-zA-Z0-9_]*" does not exist' | head -1 | sed -E 's/type "public\.([^"]+)" does not exist/\1/')"
+    if [ -n "$missing_type" ]; then
+      if autoheal_missing_object "public.$missing_type (type)" "CREATE TYPE public\.${missing_type}[[:space:](]"; then
+        continue
+      fi
+    fi
+
+    # Fall 4: Spalte fehlt – Pattern: 'column "X" of relation "Y" does not exist'
+    if echo "$err" | grep -qE 'column "[^"]+" of relation "[^"]+" does not exist'; then
+      local missing_col missing_rel
+      missing_col="$(echo "$err" | grep -oE 'column "[a-zA-Z_][a-zA-Z0-9_]*" of relation' | head -1 | sed -E 's/column "([^"]+)" of relation/\1/')"
+      missing_rel="$(echo "$err" | grep -oE 'of relation "[a-zA-Z_][a-zA-Z0-9_]*"' | head -1 | sed -E 's/of relation "([^"]+)"/\1/')"
+      if [ -n "$missing_col" ] && [ -n "$missing_rel" ]; then
+        if autoheal_missing_column "$missing_rel" "$missing_col"; then
+          continue
+        fi
+      fi
+    fi
+
+    # Fall 4b: nackte Spalten-Fehlermeldung – Pattern: 'column "X" does not exist'
+    # Tritt z.B. in EXISTS-Subqueries oder RLS-Policies auf, wo Postgres die Tabelle
+    # nicht im Fehlertext nennt. Wir versuchen alle Migrations nach passendem ADD COLUMN.
+    if echo "$err" | grep -qE 'column "[a-zA-Z_][a-zA-Z0-9_]*" does not exist' \
+       && ! echo "$err" | grep -qE 'column "[^"]+" of relation'; then
+      local bare_col
+      bare_col="$(echo "$err" | grep -oE 'column "[a-zA-Z_][a-zA-Z0-9_]*" does not exist' | head -1 | sed -E 's/column "([^"]+)" does not exist/\1/')"
+      if [ -n "$bare_col" ]; then
+        # Suche eine Migration, die ADD COLUMN <col> enthaelt (irgendeine Tabelle).
+        local found_bare="" f
+        for f in "$MIG_DIR"/*.sql; do
+          if grep -qE "ADD COLUMN (IF NOT EXISTS )?\"?${bare_col}\"?[[:space:]]" "$f" 2>/dev/null; then
+            found_bare="$f"
+            break
+          fi
+        done
+        if [ -n "$found_bare" ] && [ "$AUTOHEAL_DEPTH" -lt "$AUTOHEAL_MAX_DEPTH" ]; then
+          log "AUTOHEAL[$AUTOHEAL_DEPTH]: fuehre $(basename "$found_bare") aus, um Spalte '$bare_col' hinzuzufuegen"
+          AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH + 1))
+          if run_migration_with_autoheal "$found_bare"; then
+            AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
+            mark_applied "$found_bare"
+            autoheal_count=$((autoheal_count + 1))
+            continue
+          fi
+          AUTOHEAL_DEPTH=$((AUTOHEAL_DEPTH - 1))
+        fi
+      fi
+    fi
+
+    # Fall 5: enum-Wert fehlt – Pattern: 'invalid input value for enum X: "Y"'
+    # Tritt z.B. auf, wenn eine Trigger-Funktion einen enum-Wert referenziert, dessen
+    # ALTER-TYPE-ADD-VALUE-Migration auf prod nie ausgefuehrt wurde (Bootstrap-Drift).
+    if echo "$err" | grep -qE 'invalid input value for enum'; then
+      local missing_enum missing_value
+      missing_enum="$(echo "$err" | grep -oE 'invalid input value for enum (public\.)?[a-zA-Z_][a-zA-Z0-9_]*' | head -1 | sed -E 's/invalid input value for enum (public\.)?([a-zA-Z_][a-zA-Z0-9_]*)/\2/')"
+      missing_value="$(echo "$err" | grep -oE ': "[^"]+"' | head -1 | sed -E 's/: "([^"]+)"/\1/')"
+      if [ -n "$missing_enum" ] && [ -n "$missing_value" ]; then
+        if autoheal_missing_enum_value "$missing_enum" "$missing_value"; then
+          continue
+        fi
+      fi
+    fi
+
+    # Kein bekanntes Pattern -> echter Fehler, abbrechen
+    return 1
+  done
+
+  log "AUTOHEAL: Max 5 Versuche fuer $(basename "$file") erreicht."
+  return 1
+}
+
+for file in "${migration_files[@]}"; do
+  filename="$(basename "$file")"
+  escaped="$(printf '%s' "$filename" | sed "s/'/''/g")"
+
+  already="$(psql_exec -At -c "SELECT 1 FROM public._deploy_migrations WHERE filename = '$escaped'")"
+  if [ "$already" = "1" ]; then
+    skipped_count=$((skipped_count + 1))
+    continue
+  fi
+
+  log "Apply: $filename"
+  if ! run_migration_with_autoheal "$file"; then
+    log "FEHLER bei Migration $filename (kein Auto-Heal moeglich)."
+    exit 1
+  fi
+
+  mark_applied "$file"
+  applied_count=$((applied_count + 1))
+done
+
+log "Fertig: $applied_count neue, $skipped_count bereits appliziert, $autoheal_count per Auto-Heal geheilt."

@@ -10,6 +10,7 @@ import { useMeterReadings } from "@/hooks/useMeterReadings";
 import { useFloorSensorPositions } from "@/hooks/useFloorSensorPositions";
 import { ENERGY_CARD_CLASSES, ENERGY_ICON_CLASSES } from "@/lib/energyTypeColors";
 import { supabase } from "@/integrations/supabase/client";
+import { withFloorPlanCacheBuster } from "@/lib/floorPlanUrl";
 import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
 
 const FloorPlan3DViewer = lazy(() => import("@/components/locations/FloorPlan3DViewer").then(m => ({ default: m.FloorPlan3DViewer })));
@@ -106,7 +107,7 @@ const FloorPlanDashboardWidget = ({ locationId, onExpand, onCollapse }: FloorPla
             name: f.name,
             location_id: f.location_id,
             location_name: loc?.name || "",
-            floor_plan_url: f.floor_plan_url,
+            floor_plan_url: withFloorPlanCacheBuster(f.floor_plan_url, f.updated_at),
             floor_number: f.floor_number,
             model_3d_url: f.model_3d_url,
             model_3d_mtl_url: f.model_3d_mtl_url,
@@ -239,7 +240,7 @@ const FloorPlanDashboardWidget = ({ locationId, onExpand, onCollapse }: FloorPla
           )}
         </div>
       </div>
-      <CardContent className="relative flex-1 p-0 min-h-0 overflow-hidden" style={{ minHeight: 400, height: 400 }}>
+      <CardContent className="relative flex-1 p-0 min-h-0 overflow-hidden" style={{ minHeight: 400 }}>
         {selectedFloor && viewMode === "2d" && selectedFloor.floor_plan_url ? (
           <div className="relative w-full h-full">
             <TransformWrapper ref={transformRef} initialScale={1} minScale={0.5} maxScale={4} centerOnInit wheel={{ disabled: true }} pinch={{ disabled: true }}>
@@ -310,11 +311,11 @@ const FloorPlanDashboardWidget = ({ locationId, onExpand, onCollapse }: FloorPla
             </TransformWrapper>
           </div>
         ) : selectedFloor && viewMode === "3d" ? (
-          <div style={{ width: "100%", height: 400 }}>
+          <div style={{ width: "100%", height: "100%", minHeight: 400 }}>
             <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
               <FloorPlan3DViewer
                 key={selectedFloor.id}
-                floor={{ id: selectedFloor.id, location_id: selectedFloor.location_id, name: selectedFloor.name, floor_number: selectedFloor.floor_number, floor_plan_url: selectedFloor.floor_plan_url, description: null, area_sqm: null, model_3d_url: selectedFloor.model_3d_url, model_3d_mtl_url: selectedFloor.model_3d_mtl_url, model_3d_rotation: selectedFloor.model_3d_rotation, created_at: "", updated_at: "" }}
+                floor={{ id: selectedFloor.id, location_id: selectedFloor.location_id, name: selectedFloor.name, floor_number: selectedFloor.floor_number, floor_plan_url: selectedFloor.floor_plan_url, description: null, area_sqm: null, model_3d_url: selectedFloor.model_3d_url, model_3d_mtl_url: selectedFloor.model_3d_mtl_url, model_3d_rotation: selectedFloor.model_3d_rotation, sort_order: 0, created_at: "", updated_at: "" }}
                 locationId={selectedFloor.location_id}
                 sensors={sensorValues}
                 isAdmin={false}

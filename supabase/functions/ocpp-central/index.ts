@@ -339,17 +339,56 @@ async function isUserInAllowedGroups(
     const { data } = await query;
     userGroupId = data?.group_id ?? null;
   } else {
+    // 1) Legacy rfid_tag column auf charging_users
     const { data } = await supabase
       .from("charging_users")
       .select("group_id")
       .eq("tenant_id", tenantId)
       .ilike("rfid_tag", idTag)
-      .single();
+      .maybeSingle();
     userGroupId = data?.group_id ?? null;
+
+    // 2) Neue Multi-Tag-Tabelle
+    if (!userGroupId) {
+      const { data: tagRow } = await supabase
+        .from("charging_user_rfid_tags")
+        .select("user:charging_users!inner(group_id)")
+        .eq("tenant_id", tenantId)
+        .ilike("tag", idTag)
+        .maybeSingle();
+      userGroupId = (tagRow as any)?.user?.group_id ?? null;
+    }
   }
+
 
   if (!userGroupId) return false;
   return allowedGroupIds.includes(userGroupId);
+}
+
+async function logAccessAttempt(
+  supabase: ReturnType<typeof createSupabase>,
+  tenantId: string | null,
+  chargePointId: string | null,
+  chargePointOcppId: string,
+  idTag: string | null | undefined,
+  result: string,
+  reason: string,
+  metadata?: Record<string, unknown>
+) {
+  if (!tenantId) return;
+  try {
+    await supabase.from("charging_access_log").insert({
+      tenant_id: tenantId,
+      charge_point_id: chargePointId,
+      charge_point_ocpp_id: chargePointOcppId,
+      id_tag: idTag ?? null,
+      result,
+      reason,
+      metadata: metadata ?? null,
+    });
+  } catch (e) {
+    console.error("[ocpp-central] failed to log access attempt:", (e as Error).message);
+  }
 }
 
 async function validateIdTag(
@@ -365,16 +404,25 @@ async function validateIdTag(
     .eq("ocpp_id", chargePointId)
     .single();
 
-  if (!cp) return "Invalid";
+  if (!cp) {
+    await logAccessAttempt(supabase, null, null, chargePointId, idTag, "Invalid", "Unknown charge point");
+    return "Invalid";
+  }
 
   // Get effective access settings
   const accessSettings = await getEffectiveAccessSettings(supabase, cp.id, cp.group_id);
 
   // Free charging = accept anyone
-  if (accessSettings.free_charging) return "Accepted";
+  if (accessSettings.free_charging) {
+    await logAccessAttempt(supabase, cp.tenant_id, cp.id, chargePointId, idTag, "Accepted", "Free charging enabled");
+    return "Accepted";
+  }
 
   // No tag and not free charging = reject
-  if (!idTag) return "Invalid";
+  if (!idTag) {
+    await logAccessAttempt(supabase, cp.tenant_id, cp.id, chargePointId, idTag, "Invalid", "Missing idTag, free charging disabled");
+    return "Invalid";
+  }
 
   // Basic tag validation (user exists and is active)
   let userId: string | null = null;
@@ -384,32 +432,81 @@ async function validateIdTag(
       ? supabase.from("charging_users").select("id, status, group_id").eq("tenant_id", cp.tenant_id).eq("auth_user_id", idTag.substring(4)).single()
       : supabase.from("charging_users").select("id, status, group_id").eq("tenant_id", cp.tenant_id).eq("app_tag", idTag).single();
     const { data: appUser } = await query;
-    if (!appUser) return "Invalid";
-    if (appUser.status !== "active") return "Blocked";
+    if (!appUser) {
+      await logAccessAttempt(supabase, cp.tenant_id, cp.id, chargePointId, idTag, "Invalid", "App tag not found");
+      return "Invalid";
+    }
+    if (appUser.status !== "active") {
+      await logAccessAttempt(supabase, cp.tenant_id, cp.id, chargePointId, idTag, "Blocked", `User status: ${appUser.status}`);
+      return "Blocked";
+    }
     userId = appUser.id;
   } else {
-    const { data: user } = await supabase
+    // 1) Legacy rfid_tag column
+    let { data: user } = await supabase
       .from("charging_users")
       .select("id, status, group_id")
       .eq("tenant_id", cp.tenant_id)
       .ilike("rfid_tag", idTag)
-      .single();
+      .maybeSingle();
+
+    // 2) Neue Multi-Tag-Tabelle
+    if (!user) {
+      const { data: tagRow } = await supabase
+        .from("charging_user_rfid_tags")
+        .select("user:charging_users!inner(id, status, group_id)")
+        .eq("tenant_id", cp.tenant_id)
+        .ilike("tag", idTag)
+        .maybeSingle();
+      user = (tagRow as any)?.user ?? null;
+    }
+
     if (!user) {
       console.log(`[ocpp-central] RFID tag not found: "${idTag}" in tenant ${cp.tenant_id}`);
+      await logAccessAttempt(supabase, cp.tenant_id, cp.id, chargePointId, idTag, "Invalid", "RFID tag not found");
       return "Invalid";
     }
-    if (user.status !== "active") return "Blocked";
+    if (user.status !== "active") {
+      await logAccessAttempt(supabase, cp.tenant_id, cp.id, chargePointId, idTag, "Blocked", `User status: ${user.status}`);
+      return "Blocked";
+    }
     userId = user.id;
   }
+
+  // Group status check: if user belongs to a blocked/archived group, reject
+  // Re-fetch group_id for both branches via charging_users.
+  if (userId) {
+    const { data: u2 } = await supabase
+      .from("charging_users")
+      .select("group_id")
+      .eq("id", userId)
+      .maybeSingle();
+    if (u2?.group_id) {
+      const { data: grp } = await supabase
+        .from("charging_user_groups")
+        .select("status")
+        .eq("id", u2.group_id)
+        .maybeSingle();
+      if (grp && grp.status !== "active") {
+        await logAccessAttempt(supabase, cp.tenant_id, cp.id, chargePointId, idTag, "Blocked", `User group status: ${grp.status}`);
+        return "Blocked";
+      }
+    }
+  }
+
 
   // User group restriction check
   if (accessSettings.user_group_restriction) {
     const allowed = await isUserInAllowedGroups(
       supabase, cp.tenant_id, idTag, accessSettings.source, accessSettings.sourceId
     );
-    if (!allowed) return "Blocked";
+    if (!allowed) {
+      await logAccessAttempt(supabase, cp.tenant_id, cp.id, chargePointId, idTag, "Blocked", "User group not in allowed list", { source: accessSettings.source });
+      return "Blocked";
+    }
   }
 
+  await logAccessAttempt(supabase, cp.tenant_id, cp.id, chargePointId, idTag, "Accepted", "All checks passed");
   return "Accepted";
 }
 
@@ -576,9 +673,13 @@ async function handleRemoteCommand(
         .maybeSingle();
 
       if (!cp) return { status: "Rejected", message: "Charge point not found" };
-      if (cp.status !== "available" && cp.status !== "unavailable") return { status: "Rejected", message: "Charge point not available" };
+      // Normalize status to lowercase: gateways may report "Available" or "available"
+      const cpStatus = (cp.status ?? "").toLowerCase();
+      if (cpStatus !== "available" && cpStatus !== "unavailable") {
+        return { status: "Rejected", message: `Charge point not ready (current status: ${cp.status || "unknown"})` };
+      }
 
-      const idTag = (body.idTag as string) || "APP_USER";
+      const idTag = (body.idTag as string) || "APPBACKEND00";
       const connectorId = (body.connectorId as number) || 1;
 
       // Queue command for WebSocket proxy to pick up
@@ -623,11 +724,11 @@ async function handleRemoteCommand(
       return { status: "Accepted" };
     }
     case "Reset": {
-      await supabase
-        .from("charge_points")
-        .update({ status: "offline" })
-        .eq("ocpp_id", chargePointOcppId);
-
+      // Status NICHT auf "offline" setzen: das führt dazu, dass die UI die
+      // Wallbox dauerhaft als offline anzeigt, obwohl die WS-Verbindung
+      // (ws_connected) nach dem Reboot wieder steht. Der reale Status
+      // wird durch die nächste StatusNotification (connectorId=0) und
+      // die Heartbeats korrekt wiederhergestellt.
       await supabase
         .from("pending_ocpp_commands")
         .insert({
@@ -673,6 +774,32 @@ async function handleRemoteCommand(
           .eq("ocpp_id", chargePointOcppId);
       }
 
+      return { status: "Accepted" };
+    }
+    case "GetConfiguration": {
+      const keys = body.keys as string[] | undefined;
+      await supabase
+        .from("pending_ocpp_commands")
+        .insert({
+          charge_point_ocpp_id: chargePointOcppId,
+          command: "GetConfiguration",
+          payload: keys && keys.length > 0 ? { key: keys } : {},
+          status: "pending",
+        });
+      return { status: "Accepted" };
+    }
+    case "ChangeConfiguration": {
+      const key = body.key as string;
+      const value = body.value;
+      if (!key) return { status: "Rejected", message: "key required" };
+      await supabase
+        .from("pending_ocpp_commands")
+        .insert({
+          charge_point_ocpp_id: chargePointOcppId,
+          command: "ChangeConfiguration",
+          payload: { key, value: String(value ?? "") },
+          status: "pending",
+        });
       return { status: "Accepted" };
     }
     default:
@@ -824,8 +951,9 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

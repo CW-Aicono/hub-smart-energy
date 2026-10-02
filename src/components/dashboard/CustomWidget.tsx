@@ -2,12 +2,16 @@ import { useMemo, useState, useCallback, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { CustomWidgetDefinition, ChartType } from "@/hooks/useCustomWidgetDefinitions";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
+
 import { useDashboardFilter, TimePeriod } from "@/hooks/useDashboardFilter";
+import { useWeekStartDay } from "@/hooks/useWeekStartDay";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart3, LineChart, Gauge, Activity, Table2, GitBranch, ChevronLeft, ChevronRight } from "lucide-react";
+import PeriodPickerLabel from "./PeriodPickerLabel";
 import {
   format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   startOfQuarter, endOfQuarter, startOfYear, endOfYear,
@@ -63,23 +67,23 @@ function getDayBucketLabel(date: Date): string {
   return formatTimeLabel(date.getHours(), roundedMinutes);
 }
 
+import { powerUnitForMeter, energyUnitForMeter, type MeterLike } from "@/lib/meterUnits";
+
 function normalizePowerUnit(unit?: string | null, energyType?: string | null, fallback?: string | null): string {
-  if (unit === "Wh") return "W";
-  if (unit === "kWh") return "kW";
-  if (unit === "m³") return "m³/h";
-  if (unit) return unit;
-  if (energyType === "gas" || energyType === "wasser") return "m³/h";
-  if (fallback === "kWh") return "kW";
-  return fallback || "kW";
+  return powerUnitForMeter(
+    { unit: unit ?? undefined, energy_type: energyType ?? undefined },
+    fallback ?? "kW",
+  );
 }
 
 /** Compute date range from the dashboard time period and offset */
-function getDateRange(period: TimePeriod, offset: number): { from: Date; to: Date } {
+type WeekStart = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+function getDateRange(period: TimePeriod, offset: number, weekStartsOn: WeekStart = 1): { from: Date; to: Date } {
   const now = new Date();
   let base: Date;
   switch (period) {
     case "day": base = addDays(now, offset); return { from: startOfDay(base), to: endOfDay(base) };
-    case "week": base = addWeeks(now, offset); return { from: startOfWeek(base, { weekStartsOn: 1 }), to: endOfWeek(base, { weekStartsOn: 1 }) };
+    case "week": base = addWeeks(now, offset); return { from: startOfWeek(base, { weekStartsOn }), to: endOfWeek(base, { weekStartsOn }) };
     case "month": base = addMonths(now, offset); return { from: startOfMonth(base), to: endOfMonth(base) };
     case "quarter": base = addQuarters(now, offset); return { from: startOfQuarter(base), to: endOfQuarter(base) };
     case "year": base = addYears(now, offset); return { from: startOfYear(base), to: endOfYear(base) };
@@ -174,7 +178,8 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
   const activeChartType: ChartType =
     config.chart_type_per_period?.[selectedPeriod] ?? definition.chart_type;
 
-  const { from, to } = useMemo(() => getDateRange(selectedPeriod, offset), [selectedPeriod, offset]);
+  const weekStartsOn = useWeekStartDay();
+  const { from, to } = useMemo(() => getDateRange(selectedPeriod, offset, weekStartsOn), [selectedPeriod, offset, weekStartsOn]);
   const periodLabel = useMemo(() => getPeriodLabel(selectedPeriod, offset), [selectedPeriod, offset]);
   const canGoForward = offset < 0;
 
@@ -184,31 +189,128 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
       if (!config.meter_ids.length) return {};
       const { data } = await supabase
         .from("meters")
-        .select("id, name, unit, source_unit_power, energy_type")
+        .select("id, name, unit, source_unit_power, energy_type, device_type")
         .in("id", config.meter_ids);
       return Object.fromEntries((data ?? []).map((m) => [m.id, m]));
     },
     enabled: config.meter_ids.length > 0,
   });
 
-  const displayUnit = useMemo(() => {
-    if (selectedPeriod !== "day") return config.unit;
-    const primaryMeter = config.meter_ids.map((meterId) => meterDetails[meterId]).find(Boolean) as
-      | { unit?: string | null; source_unit_power?: string | null; energy_type?: string | null }
-      | undefined;
+  // Sensor meters (temperature, humidity, boolean actuators, etc.) don't feed
+  // meter_power_readings. Their history lives in sensor_readings_* tables.
+  const SENSOR_UNITS = new Set(["°c", "°C", "°f", "%", "v", "a", "hz", "ppm", "lux", "bar", "pa", "hpa", "bool", "on/off", "an/aus", "rh"]);
+  const isSensorMeter = (m: any): boolean => {
+    if (!m) return false;
+    if (m.device_type === "sensor" || m.device_type === "actuator") return true;
+    const u = ((m.unit ?? m.source_unit_power) ?? "").toString().trim().toLowerCase();
+    return SENSOR_UNITS.has(u);
+  };
+  const sensorMeterIds = useMemo(
+    () => config.meter_ids.filter((id) => isSensorMeter(meterDetails[id])),
+    [config.meter_ids, meterDetails],
+  );
+  const powerMeterIds = useMemo(
+    () => config.meter_ids.filter((id) => !isSensorMeter(meterDetails[id])),
+    [config.meter_ids, meterDetails],
+  );
 
-    return normalizePowerUnit(
-      primaryMeter?.source_unit_power ?? primaryMeter?.unit,
-      primaryMeter?.energy_type,
-      config.unit,
-    );
+  const displayUnit = useMemo(() => {
+    const primaryMeter = config.meter_ids.map((meterId) => meterDetails[meterId]).find(Boolean) as
+      | MeterLike
+      | undefined;
+    if (!primaryMeter) return config.unit;
+    // For sensor meters, keep the raw unit (°C, %, bool …) instead of forcing kW/kWh.
+    if (isSensorMeter(primaryMeter)) {
+      return (primaryMeter as any).unit || (primaryMeter as any).source_unit_power || config.unit;
+    }
+    return selectedPeriod === "day"
+      ? powerUnitForMeter(primaryMeter, config.unit)
+      : energyUnitForMeter(primaryMeter, config.unit);
   }, [config.meter_ids, config.unit, meterDetails, selectedPeriod]);
 
   // Fetch data: 5-min readings for "day", daily totals otherwise
   const { data: chartData = [], isLoading } = useQuery({
-    queryKey: ["custom-widget-data", definition.id, config.meter_ids, locationId, selectedPeriod, from.toISOString(), to.toISOString()],
+    queryKey: ["custom-widget-data", definition.id, config.meter_ids, sensorMeterIds, locationId, selectedPeriod, from.toISOString(), to.toISOString()],
     queryFn: async () => {
       if (!config.meter_ids.length) return [];
+
+      // ---- Sensor rows (°C, %, bool, …) ---------------------------------
+      // Loaded independently and merged into the shared row array so that
+      // mixed dashboards (power + sensor) render both in one chart.
+      const sensorRowsByLabel: Record<string, Record<string, number[]>> = {};
+      const addSensor = (label: string, meterId: string, value: number) => {
+        (sensorRowsByLabel[label] ??= {})[meterId] ??= [];
+        sensorRowsByLabel[label][meterId].push(value);
+      };
+      if (sensorMeterIds.length > 0) {
+        if (selectedPeriod === "day") {
+          // Ein Sammel-Aufruf (RPC mit LATERAL je Zähler): behält den
+          // Index-Only-Scan pro Zähler, spart aber N HTTP-Roundtrips.
+          const { data: agg } = await supabase.rpc("get_sensor_readings_5min_multi" as any, {
+            _meter_ids: sensorMeterIds,
+            _from: from.toISOString(),
+            _to: to.toISOString(),
+            _limit_per_meter: 2000,
+          });
+          for (const r of ((agg ?? []) as any[])) {
+            addSensor(getDayBucketLabel(new Date(r.bucket)), r.meter_id, Number(r.value_avg));
+          }
+
+
+          // Recent raw to cover the last few minutes
+          const recentCutoff = new Date(Math.max(Date.now() - 15 * 60_000, from.getTime()));
+          const { data: raw } = await supabase
+            .from("sensor_readings_raw")
+            .select("meter_id, recorded_at, value")
+            .in("meter_id", sensorMeterIds)
+            .gte("recorded_at", recentCutoff.toISOString())
+            .lte("recorded_at", to.toISOString())
+            .order("recorded_at", { ascending: true })
+            .limit(3000);
+          for (const r of raw ?? []) {
+            addSensor(getDayBucketLabel(new Date(r.recorded_at)), r.meter_id, Number(r.value));
+          }
+        } else {
+          const useDaily = selectedPeriod === "month" || selectedPeriod === "year" || selectedPeriod === "all";
+          if (useDaily) {
+            const { data: agg } = await (supabase as any)
+              .from("sensor_readings_daily")
+              .select("meter_id, bucket, value_twavg")
+              .in("meter_id", sensorMeterIds)
+              .gte("bucket", from.toISOString().slice(0, 10))
+              .lte("bucket", to.toISOString().slice(0, 10))
+              .order("bucket", { ascending: true })
+              .limit(5000);
+            for (const r of agg ?? []) {
+              addSensor(formatLabel(new Date(r.bucket), selectedPeriod), r.meter_id, Number(r.value_twavg));
+            }
+          } else {
+            const { data: agg } = await (supabase as any)
+              .from("sensor_readings_hourly")
+              .select("meter_id, bucket, value_twavg")
+              .in("meter_id", sensorMeterIds)
+              .gte("bucket", from.toISOString())
+              .lte("bucket", to.toISOString())
+              .order("bucket", { ascending: true })
+              .limit(10000);
+            for (const r of agg ?? []) {
+              addSensor(formatLabel(new Date(r.bucket), selectedPeriod), r.meter_id, Number(r.value_twavg));
+            }
+          }
+        }
+      }
+
+      const mergeSensorInto = (rows: any[]) => {
+        for (const row of rows) {
+          const bucket = sensorRowsByLabel[row.name];
+          if (!bucket) continue;
+          for (const mid of sensorMeterIds) {
+            const vals = bucket[mid];
+            if (vals?.length) row[mid] = vals.reduce((s, v) => s + v, 0) / vals.length;
+          }
+        }
+        return rows;
+      };
 
       if (selectedPeriod === "day") {
         const timeline = buildDayTimeline();
@@ -217,26 +319,14 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         );
 
         const aggregatedRows: Array<{ meter_id: string; power_avg: number; bucket: string }> = [];
-        const pageSize = 1000;
-        let pageFrom = 0;
-        let hasMore = true;
-
-        while (hasMore) {
-          const { data, error } = await supabase
-            .rpc("get_power_readings_5min", {
-              p_meter_ids: config.meter_ids,
-              p_start: from.toISOString(),
-              p_end: to.toISOString(),
-            })
-            .range(pageFrom, pageFrom + pageSize - 1);
-
-          if (error) throw error;
-          if (!data || data.length === 0) break;
-
-          aggregatedRows.push(...(data as Array<{ meter_id: string; power_avg: number; bucket: string }>));
-          hasMore = data.length === pageSize;
-          pageFrom += pageSize;
+        if (powerMeterIds.length > 0) {
+          const series = await fetchPowerSeriesAuto(powerMeterIds, from, to, 900);
+          aggregatedRows.push(
+            ...series.map((r) => ({ meter_id: r.meter_id, power_avg: r.power_avg, bucket: r.bucket })),
+          );
         }
+
+
 
         let mergedRows = aggregatedRows.map((row) => ({
           meter_id: row.meter_id,
@@ -246,40 +336,67 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
 
         // Recent raw data: fetch last 15 minutes to cover gap between
         // last compaction run and now (the RPC already handles on-the-fly
-        // aggregation, but may miss the very latest readings still being written)
-        const recentCutoff = new Date(Date.now() - 15 * 60 * 1000);
-        const recentPages: Array<{ meter_id: string; power_value: number; recorded_at: string }> = [];
-        let recentFrom = 0;
-        const recentPageSize = 1000;
-        let recentHasMore = true;
-
-        while (recentHasMore) {
+        // aggregation, but may miss the very latest readings still being written).
+        // IMPORTANT: clamp the cutoff to the start of the selected day, otherwise
+        // shortly after midnight (e.g. 00:09 local) the "last 15 min" reaches into
+        // YESTERDAY and those rows would get bucketed into today's 23:xx slots,
+        // producing a phantom flat line across the whole new day.
+        const recentCutoff = new Date(
+          Math.max(Date.now() - 15 * 60 * 1000, from.getTime()),
+        );
+        if (powerMeterIds.length > 0) {
           const { data: recentRaw, error: recentError } = await supabase
             .from("meter_power_readings")
             .select("meter_id, power_value, recorded_at")
-            .in("meter_id", config.meter_ids)
+            .in("meter_id", powerMeterIds)
             .gte("recorded_at", recentCutoff.toISOString())
             .lte("recorded_at", to.toISOString())
             .order("recorded_at", { ascending: true })
-            .range(recentFrom, recentFrom + recentPageSize - 1);
-
+            .limit(2000);
           if (recentError) throw recentError;
-          if (!recentRaw || recentRaw.length === 0) break;
-          recentPages.push(...recentRaw);
-          recentHasMore = recentRaw.length === recentPageSize;
-          recentFrom += recentPageSize;
+
+          let recentRows = (recentRaw ?? []).map((row) => ({
+            meter_id: row.meter_id,
+            value: row.power_value,
+            recorded_at: row.recorded_at,
+          }));
+
+          // Fallback: worker-only meters without raw rows → 5-min buckets.
+          const covered = new Set(recentRows.map((r) => r.meter_id));
+          const missing = powerMeterIds.filter((id) => !covered.has(id));
+          if (missing.length > 0) {
+            const { data: agg5m } = await supabase
+              .from("meter_power_readings_5min")
+              .select("meter_id, power_avg, bucket")
+              .in("meter_id", missing)
+              .gte("bucket", recentCutoff.toISOString())
+              .lte("bucket", to.toISOString())
+              .order("bucket", { ascending: true })
+              .limit(2000);
+            for (const row of agg5m ?? []) {
+              if (row.power_avg == null) continue;
+              recentRows.push({
+                meter_id: row.meter_id,
+                value: Number(row.power_avg),
+                recorded_at: row.bucket as string,
+              });
+            }
+          }
+
+          if (recentRows.length) {
+            // Nur für Zähler, die tatsächlich frische Punkte liefern, das
+            // Aggregat im Top-up-Fenster ersetzen — sonst würden Zähler ohne
+            // Rohdaten ihre Aggregatwerte der letzten Minuten verlieren.
+            const topUpMeters = new Set(recentRows.map((r) => r.meter_id));
+            mergedRows = mergedRows.filter(
+              (row) =>
+                !topUpMeters.has(row.meter_id) || new Date(row.recorded_at) < recentCutoff,
+            );
+            mergedRows.push(...recentRows);
+          }
+
         }
 
-        if (recentPages.length) {
-          mergedRows = mergedRows.filter((row) => new Date(row.recorded_at) < recentCutoff);
-          mergedRows.push(
-            ...recentPages.map((row) => ({
-              meter_id: row.meter_id,
-              value: row.power_value,
-              recorded_at: row.recorded_at,
-            })),
-          );
-        }
 
         for (const row of mergedRows) {
           const label = getDayBucketLabel(new Date(row.recorded_at));
@@ -288,7 +405,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
           valuesByBucket[label][row.meter_id].push(row.value);
         }
 
-        return timeline.map((label) => {
+        const rows = timeline.map((label) => {
           const entry: Record<string, string | number | null> = { name: label };
           for (const meterId of config.meter_ids) {
             const bucketValues = valuesByBucket[label][meterId];
@@ -298,17 +415,53 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
           }
           return entry;
         });
+
+        // Linear zwischen echten Messpunkten interpolieren, damit der Tooltip
+        // an jeder Hover-Position (auch zwischen zwei 15-Min-Polls) einen Wert
+        // zeigt. Visuell identisch zur bisherigen Monotone-Spline mit
+        // connectNulls, aber jeder Slot trägt jetzt einen konkreten Wert.
+        for (const meterId of powerMeterIds) {
+          const realIdx: number[] = [];
+          for (let i = 0; i < rows.length; i++) {
+            if (rows[i][meterId] != null) realIdx.push(i);
+          }
+          for (let k = 0; k < realIdx.length - 1; k++) {
+            const a = realIdx[k];
+            const b = realIdx[k + 1];
+            const va = rows[a][meterId] as number;
+            const vb = rows[b][meterId] as number;
+            const span = b - a;
+            if (span <= 1) continue;
+            for (let i = a + 1; i < b; i++) {
+              rows[i][meterId] = va + ((vb - va) * (i - a)) / span;
+            }
+          }
+        }
+
+        return mergeSensorInto(rows);
       }
 
-      // Non-day periods: use split daily totals for proper bezug/einspeisung
-      const { data } = await supabase.rpc("get_meter_daily_totals_split" as any, {
-        p_meter_ids: config.meter_ids,
-        p_from_date: from.toISOString().split("T")[0],
-        p_to_date: to.toISOString().split("T")[0],
-      });
-      if (!data) return [];
-
-      const rows = data as Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }>;
+      // Non-day periods: use the server-side fallback RPC, which prefers archived
+      // daily totals from `meter_period_totals` and only aggregates from 5-min
+      // readings for days that aren't archived yet (typically: today). This
+      // avoids scanning tens of thousands of 5-min rows for week/month/year
+      // views and removes the previous ~60 s wait time.
+      const toLocalYmd = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      let rows: Array<{ meter_id: string; day: string; bezug: number; einspeisung: number }> = [];
+      if (powerMeterIds.length > 0) {
+        const { data: rpcRows, error: dailyError } = await supabase.rpc(
+          "get_meter_daily_totals_split_with_fallback" as any,
+          {
+            p_meter_ids: powerMeterIds,
+            p_from_date: toLocalYmd(from),
+            p_to_date: toLocalYmd(to),
+          },
+        );
+        if (dailyError) throw dailyError;
+        rows = (rpcRows ?? []) as typeof rows;
+      }
+      if (rows.length === 0 && Object.keys(sensorRowsByLabel).length === 0) return [];
 
       // Check which meters have any einspeisung (bidirectional)
       const hasBidi = new Set<string>();
@@ -333,14 +486,21 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
         }
       }
 
-      return Object.entries(dayMap).map(([day, meters]) => ({
+      // Ensure sensor-only labels get their own rows too
+      for (const label of Object.keys(sensorRowsByLabel)) {
+        if (!dayMap[label]) dayMap[label] = {};
+      }
+
+      const finalRows = Object.entries(dayMap).map(([day, meters]) => ({
         name: day,
         ...meters,
         __bidirectionalMeterIds: Array.from(hasBidi),
       }));
+      return mergeSensorInto(finalRows);
     },
     enabled: config.meter_ids.length > 0,
     staleTime: selectedPeriod === "day" ? 60 * 1000 : 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
     // Realtime invalidation triggers instant refresh on new data; this is the fallback.
     refetchInterval: 5 * 60 * 1000,
   });
@@ -415,7 +575,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOffset((o) => o - 1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-xs text-muted-foreground min-w-[140px] text-center">{periodLabel}</span>
+            <PeriodPickerLabel period={selectedPeriod} label={periodLabel} className="min-w-[140px]" />
             <Button variant="ghost" size="icon" className="h-7 w-7" disabled={!canGoForward} onClick={() => setOffset((o) => o + 1)}>
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -445,12 +605,21 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                             : value
                         }
                       />
-                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
+                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} tickFormatter={(v: number) => Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend content={() => null} />
-                      {config.meter_ids.map((mid, i) => (
-                        <Line key={mid} type="monotone" dataKey={mid} name={meterDetails[mid]?.name || `Zähler ${i + 1}`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(mid)} />
-                      ))}
+                      {config.meter_ids.flatMap((mid, i) => {
+                        const meterName = meterDetails[mid]?.name || `Zähler ${i + 1}`;
+                        if (bidirectionalMeterIds.has(mid) && selectedPeriod !== "day") {
+                          return [
+                            <Line key={`${mid}_bezug`} type="monotone" dataKey={`${mid}_bezug`} name={`${meterName} Bezug`} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(`${mid}_bezug`)} />,
+                            <Line key={`${mid}_einspeisung`} type="monotone" dataKey={`${mid}_einspeisung`} name={`${meterName} Einspeisung`} stroke={EINSPEISUNG_COLOR} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(`${mid}_einspeisung`)} />,
+                          ];
+                        }
+                        return [
+                          <Line key={mid} type="monotone" dataKey={mid} name={meterName} stroke={getSeriesColor(i)} strokeWidth={2} dot={false} connectNulls={true} hide={hiddenSeries.has(mid)} />,
+                        ];
+                      })}
                       {(config.thresholds || []).map((t, i) => (
                         <ReferenceLine key={i} y={t.value} stroke={t.color} strokeDasharray="5 5" label={t.label} />
                       ))}
@@ -468,7 +637,7 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                             : value
                         }
                       />
-                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} />
+                      <YAxis tick={{ fontSize: 11 }} domain={yDomain} allowDataOverflow={false} tickFormatter={(v: number) => Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} />
                       <Tooltip content={selectedPeriod === "day" ? <DayTooltip unit={displayUnit} /> : undefined} formatter={selectedPeriod !== "day" ? (v: number) => v?.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " " + displayUnit : undefined} />
                       <Legend content={() => null} />
                       {config.meter_ids.map((mid, i) => {
@@ -580,6 +749,8 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
                 <EnergyFlowMonitor
                   nodes={config.energy_flow_nodes || []}
                   connections={config.energy_flow_connections || []}
+                  locationId={config.energy_flow_location_id}
+                  gatewayDeviceIds={config.energy_flow_gateway_device_ids || []}
                 />
               </Suspense>
             )}

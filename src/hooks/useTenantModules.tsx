@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { getT } from "@/i18n/getT";
+import { writeAuditLog } from "@/lib/auditLog";
 
 export const ALL_MODULES = [
   { code: "dashboard", label: "Dashboard", alwaysOn: true },
@@ -20,10 +21,19 @@ export const ALL_MODULES = [
   { code: "task_management", label: "Aufgabenverwaltung" },
   { code: "brighthub_api", label: "BrightHub API" },
   { code: "arbitrage_trading", label: "Arbitragehandel (Strom)" },
+  { code: "peak_shaving", label: "Peak-Shaving (Lastspitzenkappung)" },
   { code: "tenant_electricity", label: "Mieterstrom" },
   { code: "energy_report", label: "Energiebericht" },
+  { code: "energy_sharing", label: "Energy-Sharing (Communitys)" },
+  { code: "ppa_onsite", label: "PPA On-site (Power Purchase Agreements)" },
+  { code: "ppa_offsite", label: "PPA Off-site (Power Purchase Agreements)" },
   { code: "remote_support", label: "Remote-Support (Flatrate)" },
   { code: "support_billing", label: "Support (mit Berechnung)" },
+  { code: "c_level_dashboard", label: "C-Level Dashboard (board.aicono.org)" },
+  { code: "gain_sharing", label: "Gain-Sharing (Einsparbeteiligung)" },
+  { code: "documentation", label: "Dokumentation" },
+  { code: "adhoc_payment", label: "Ad-Hoc Payment (Kartenzahlung Ladepunkt)" },
+  { code: "analytics_studio", label: "Analyse-Studio" },
 ] as const;
 
 export function useTenantModules(tenantId: string | null) {
@@ -82,11 +92,20 @@ export function useTenantModules(tenantId: string | null) {
       }
 
       await upsertModule(moduleCode, enabled);
+      return { moduleCode, enabled };
     },
-    onSuccess: () => {
+    onSuccess: ({ moduleCode, enabled }) => {
       const t = getT();
       queryClient.invalidateQueries({ queryKey: ["tenant-modules", tenantId] });
       toast({ title: t("module.updated") });
+      writeAuditLog({
+        action: "module.toggle",
+        entity_type: "module",
+        entity_label: moduleCode,
+        tenant_id: tenantId ?? null,
+        before: { is_enabled: !enabled },
+        after: { is_enabled: enabled },
+      });
     },
     onError: (e: Error) => {
       const t = getT();

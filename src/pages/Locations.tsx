@@ -87,13 +87,30 @@ const Locations = () => {
           Online
         </Badge>
       );
-    } else if (status.onlineIntegrations === 0 && !status.hasUnconfigured) {
+    } else if (status.onlineIntegrations === 0 && !status.hasUnconfigured && !status.hasSyncError) {
       badges.push(
         <Badge key="offline" variant="outline" className="gap-1 text-xs bg-destructive/10 text-destructive border-destructive/20">
           <WifiOff className="h-3 w-3" />
           Offline
         </Badge>
       );
+    }
+
+    // Sync-Fehler-Badge (gelb) für Integrationen ohne erfolgreichen Sync seit > 30 min
+    if (status.hasSyncError) {
+      status.syncErrorNames.forEach((name, i) => {
+        badges.push(
+          <Badge
+            key={`syncerr-${i}`}
+            variant="outline"
+            className="gap-1 text-xs bg-amber-500/10 text-amber-600 border-amber-500/30"
+            title={`Kein erfolgreicher Sync seit > 30 min: ${name}`}
+          >
+            <AlertCircle className="h-3 w-3" />
+            Sync-Fehler: {name}
+          </Badge>
+        );
+      });
     }
 
     // Show warning badges for unconfigured integrations with their short name
