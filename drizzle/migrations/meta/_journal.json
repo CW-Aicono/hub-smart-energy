@@ -15,6 +15,13 @@
       "when": 1791127653853,
       "tag": "0001_partner_modules_and_mennekes",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791129990439,
+      "tag": "0002_support_sessions_no_timeout_and_audit_link",
+      "breakpoints": true
     }
   ]
 }
