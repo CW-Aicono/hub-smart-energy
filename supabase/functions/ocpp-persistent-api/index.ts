@@ -869,6 +869,16 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return fail(405, "Method not allowed");
 
+  // Shared secret between OCPP server and backend. Enforced as soon as
+  // OCPP_BACKEND_SECRET is configured (staged rollout: server first, then secret).
+  const expectedSecret = Deno.env.get("OCPP_BACKEND_SECRET") ?? "";
+  if (expectedSecret) {
+    const given = req.headers.get("x-ocpp-secret") ?? "";
+    let diff = given.length ^ expectedSecret.length;
+    for (let i = 0; i < Math.min(given.length, expectedSecret.length); i++) diff |= given.charCodeAt(i) ^ expectedSecret.charCodeAt(i);
+    if (diff !== 0) return fail(401, "Unauthorized");
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
