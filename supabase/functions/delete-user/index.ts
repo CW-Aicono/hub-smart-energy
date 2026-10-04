@@ -59,6 +59,17 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
+    // Target super_admin: only super_admins may delete, and never the last one
+    const { data: targetRoles } = await supabase
+      .from("user_roles").select("role").eq("user_id", userId);
+    if ((targetRoles || []).some((r: { role: string }) => r.role === "super_admin")) {
+      if (!roles.includes("super_admin")) throw new Error("Insufficient permissions");
+      const { data: allSA } = await supabase
+        .from("user_roles").select("user_id").eq("role", "super_admin");
+      const distinct = new Set((allSA || []).map((r: { user_id: string }) => r.user_id));
+      if (distinct.size <= 1) throw new Error("Cannot delete the last super admin");
+    }
+
     // Delete auth user via admin API (cascades to profiles via DB trigger)
     const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
     if (deleteError) throw new Error(`Failed to delete user: ${deleteError.message}`);
