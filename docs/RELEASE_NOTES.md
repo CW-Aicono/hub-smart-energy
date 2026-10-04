@@ -1,6 +1,8 @@
 # Versionshinweise
 
 ## Oktober 2026
+- **Klare Versionsnummern:** Die Version heißt jetzt z. B. „v1.1.0“ (Major = große Umstellung, Minor = neue Funktionen, Patch = Fehlerbehebung). Die technische Build-Kennung steht nur noch im Hintergrund.
+- **Benutzerhandbuch aktualisiert:** Neues Kapitel „Konto, Rollen & Support“ sowie Ergänzungen zu Energieanalyse und Ladepunkten.
 - **Versionsanzeige synchron:** Unter Hilfe & Support sehen Sie oben rechts jetzt dieselbe Versionsnummer wie in der Seitenleiste; der Versionsverlauf enthält den neuen Eintrag v1.1.0.
 - **Firmenname geschützt:** Den Firmennamen ändern nur Administratoren des Mandanten, Partner-Admins oder AICONO-Super-Admins.
 - **Strengere Rechteprüfung:** Mandanten-Zuordnung und E-Mail eines Kontos ändern nur noch AICONO-Super-Admins; E-Mail-Vorlagen bearbeiten nur Administratoren.

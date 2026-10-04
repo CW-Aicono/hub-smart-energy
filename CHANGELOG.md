@@ -4,6 +4,8 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 
 ## 2026-10-04
 ### Neu
+- Semantische Versionierung: sichtbare Version = `package.json` `version` (MAJOR.MINOR.PATCH, aktuell 1.1.0), Anzeige „v1.1.0“; Commit-Hash nur noch im Tooltip/Kopie (`formatAppVersionDetails`) und in `version.json` für die Update-Erkennung.
+- Benutzerhandbuch nachgezogen: Energieanalyse (Zeitraum pro Grafik, Analytics-Studio-Energieanalyse, Link teilen), Ladepunkte („Status abfragen“), neues Kapitel „Konto, Rollen & Support“ (Bereichswechsel, Modul-Freigabe durch Partner, Remote-Support, Sperren/Löschen, Version & Updates); DE/EN/ES/NL.
 - Hilfeseite: Versionsanzeige oben rechts zeigt jetzt die echte Build-Version (`formatAppVersion`) statt der festen Konstante „1.1.0“; Versionsverlauf um Eintrag v1.1.0 (2026-10-04) mit den Oktober-Neuerungen ergänzt (Übersetzungen DE/EN/ES/NL).
 - `profiles.company_name` nur noch durch Tenant-Admin (eigener Mandant) oder Super-Admin änderbar (Trigger `guard_profile_privileged_columns`, Migration 0006). Firmenname des Mandanten (`tenants.name`) war bereits auf Tenant-Admin/Partner-Admin/Super-Admin beschränkt. GettingStarted speichert Ansprechpartner getrennt vom Firmennamen.
 - Rechte-Audit: Trigger `guard_profile_privileged_columns` – nur Super-Admins ändern `tenant_id`, `email`, `user_id` eines Profils; Tenant-Admins nur `custom_role_id` (nur Rollen des eigenen Mandanten, nicht bei sich selbst) und Sperre im eigenen Mandanten; normale Nutzer nur Name/Firma; Self-Insert mit Mandant/Rolle blockiert. `email_templates` schreibend nur noch für Admins (vorher jeder Mandanten-Nutzer). Migrationen 0004/0005.

@@ -1,19 +1,19 @@
 import { toast } from "sonner";
-import { formatAppVersion } from "@/lib/appVersion";
+import { formatAppVersion, formatAppVersionDetails } from "@/lib/appVersion";
 
 export function AppVersionLabel({ className = "" }: { className?: string }) {
-  const text = formatAppVersion();
+  const details = formatAppVersionDetails();
   return (
     <button
       type="button"
-      title="Version kopieren"
+      title={`${details}\n(Klicken zum Kopieren)`}
       onClick={(e) => {
         e.stopPropagation();
-        navigator.clipboard?.writeText(text).then(() => toast.success("Version kopiert"));
+        navigator.clipboard?.writeText(details).then(() => toast.success("Version kopiert"));
       }}
-      className={`text-[11px] text-muted-foreground hover:text-foreground font-mono truncate ${className}`}
+      className={`text-[11px] text-muted-foreground hover:text-foreground truncate ${className}`}
     >
-      {text}
+      {formatAppVersion()}
     </button>
   );
 }
