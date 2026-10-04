@@ -30,7 +30,7 @@ const statusColor: Record<string, string> = {
 
 export default function PartnerTenantDetail() {
   const { tenantId } = useParams<{ tenantId: string }>();
-  const { partnerId, permissions, loading: accessLoading } = usePartnerAccess();
+  const { partnerId, permissions, isPartnerAdmin, loading: accessLoading } = usePartnerAccess();
   const qc = useQueryClient();
   const [editOpen, setEditOpen] = useState(false);
 
@@ -260,7 +260,7 @@ export default function PartnerTenantDetail() {
             <>
               <TenantChargePointBillingCard tenantId={tenantId} modules={modules} mode="partner"
                 isKommune={tenant?.is_kommune !== false} isMember={!!tenant?.is_aicono_member} canEdit={false} />
-              <TenantDiscountsCard tenantId={tenantId} modules={modules} mode="partner" allowedModules={partnerModules}
+              <TenantDiscountsCard tenantId={tenantId} modules={modules} mode="partner" allowedModules={partnerModules} canEdit={isPartnerAdmin}
                 isKommune={tenant?.is_kommune !== false} isMember={!!tenant?.is_aicono_member} />
             </>
           )}
