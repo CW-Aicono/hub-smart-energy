@@ -5,6 +5,12 @@ Es liegt nicht an der Datenbank. Der Knopf „Module“ merkt sich zwar den gew�
 - Fenster in der Partner-Liste einbauen, damit es beim Klick aufgeht.
 - Zusätzlich: Falls die Modulliste live noch fehlt (Deploy noch nicht gelaufen), zeigt das Fenster eine klare Meldung statt still zu bleiben.
 
+## 1b. Mennekes-Box fehlt im Live-System
+Die Vorlage steckt in derselben Datenbank-Änderung wie die Modulliste. Ob sie live angekommen ist, ist noch nicht geprüft. Mögliche Ursachen: Der letzte Live-Deploy lief vor dieser Änderung, oder das Live-Einspielskript hat die neue Änderung nicht übernommen.
+- Zuerst prüfen: Deploy-Zeitpunkt gegen die Änderung abgleichen und das Einspielskript für diese Datei durchgehen.
+- Dann beheben: Einspielweg so korrigieren, dass Modulliste und Mennekes-Box beim nächsten Deploy sicher ankommen; zusätzlich gebe ich dir einen Prüfbefehl für den Server, der zeigt, ob beides da ist.
+- Danach: Deploy mit „LIVE“ starten und die Box unter Ladeinfrastruktur → Einstellungen prüfen.
+
 ## 2. Remote-Sitzung ohne Zeitlimit
 - Kein Countdown mehr, kein automatisches Ablaufen, kein „Verlängern“-Knopf.
 - Die Sitzung läuft, bis der Support oben auf „Remote-Sitzung beenden“ klickt. Dann wird sie beendet und es geht zurück zum Kunden im Super-Admin bzw. Partner-Portal.
