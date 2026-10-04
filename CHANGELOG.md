@@ -3,6 +3,8 @@
 Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrelevant – in `docs/RELEASE_NOTES.md` festgehalten.
 
 ## 2026-10-04
+### Neu
+- v1.3.0 – Ladepunktpreis nur noch als Unterpunkt von `ev_charging` (neue Spalten partner_/standard_/industry_standard_charge_point_price_monthly; bisheriger Wert als Standard übernommen, andere Module auf 0). Kundenseite: Unterzeile + Rabattspalte („+ Rabatt“), Karte „Ladepunkt-Abrechnung“ entfernt. `tenant_module_discounts`: bundle_id, duration_value/unit, payment_mode (monthly/prepaid/one_time), one_time_amount, invoiced_at; Leserecht auf gebuchte Bundles für Partner/Tenant. `generate-monthly-invoices`: Bundle-Rabatt auf Bundle-Summe, Vorkasse/Einmalzahlung einmalig berechnet und Laufzeit-Monate übersprungen. `partner-set-tenant-discount`: Bundle-Portfolio-Prüfung. Migration `0009_cp_sub_prices_and_bundle_discounts.sql`.
 ### Fix
 - v1.2.1 – Einladungen: `findAuthUserByEmail` (invite-conflict.ts, auch check-email-availability) nutzt neue RPC `get_auth_user_by_email` (SECURITY DEFINER, nur service_role) statt `listUsers(perPage:1000)`, das der Auth-Dienst ablehnte → „Benutzer-Lookup fehlgeschlagen“. Fallback paginiert mit 50. Migration `0008_get_auth_user_by_email.sql`.
 ### Neu
