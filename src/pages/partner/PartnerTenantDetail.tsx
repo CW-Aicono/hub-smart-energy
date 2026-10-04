@@ -16,6 +16,8 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, Pencil, Building2, MapPin, Package, Activity } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { ALL_MODULES } from "@/hooks/useTenantModules";
 import SavingsShareReadOnly from "@/components/savings-share/SavingsShareReadOnly";
 import { SortableHead, useSortableData } from "@/components/ui/sortable-head";
 
@@ -83,6 +85,40 @@ export default function PartnerTenantDetail() {
       return (data ?? []) as any[];
     },
   });
+
+  const { data: partnerModules = [] } = useQuery({
+    queryKey: ["partner-own-modules", partnerId],
+    enabled: !!partnerId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("partner_modules")
+        .select("module_code")
+        .eq("partner_id", partnerId!);
+      return (data ?? []).map((r: any) => r.module_code as string);
+    },
+  });
+
+  const [togglingModule, setTogglingModule] = useState<string | null>(null);
+  const toggleModule = async (code: string, enabled: boolean) => {
+    setTogglingModule(code);
+    try {
+      const { data, error } = await supabase.functions.invoke("partner-set-tenant-module", {
+        body: { tenantId, moduleCode: code, enabled },
+      });
+      const res: any = typeof data === "string" ? JSON.parse(data) : data;
+      if (error || !res?.success) {
+        let msg = res?.error;
+        try { if (!msg && (error as any)?.context?.json) msg = (await (error as any).context.json())?.error; } catch { /* ignore */ }
+        throw new Error(msg || error?.message || "Änderung fehlgeschlagen");
+      }
+      toast({ title: enabled ? "Modul aktiviert" : "Modul deaktiviert" });
+      qc.invalidateQueries({ queryKey: ["partner-tenant-modules", tenantId] });
+    } catch (e: any) {
+      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+    } finally {
+      setTogglingModule(null);
+    }
+  };
 
   const { sorted: sortedLocations, sort: locSort, toggle: toggleLocSort } = useSortableData<any, "name" | "city" | "created">(
     locations,
@@ -195,17 +231,27 @@ export default function PartnerTenantDetail() {
 
         <TabsContent value="modules" className="space-y-4">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Aktive Module ({modules.length})</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Module ({modules.length} aktiv)</CardTitle>
+              <CardDescription>Sie können nur Module freigeben, die für Ihr Partner-Konto lizenziert sind.</CardDescription>
+            </CardHeader>
             <CardContent>
-              {modules.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Keine Module aktiviert.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {modules.map((m) => (
-                    <Badge key={m.module_code} variant="secondary">{m.module_code}</Badge>
-                  ))}
-                </div>
-              )}
+              <div className="divide-y">
+                {ALL_MODULES.filter((m) => !(m as any).alwaysOn).map((m) => {
+                  const isOn = modules.some((x) => x.module_code === m.code);
+                  const allowed = partnerModules.includes(m.code);
+                  const disabled = togglingModule === m.code || (!allowed && !isOn);
+                  return (
+                    <div key={m.code} className="flex items-center justify-between gap-4 py-2">
+                      <div className="min-w-0">
+                        <p className={allowed ? "text-sm font-medium" : "text-sm font-medium text-muted-foreground"}>{m.label}</p>
+                        {!allowed && <p className="text-xs text-muted-foreground">Nicht in Ihrem Partner-Portfolio</p>}
+                      </div>
+                      <Switch checked={isOn} disabled={disabled} onCheckedChange={(v) => toggleModule(m.code, v)} />
+                    </div>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
 

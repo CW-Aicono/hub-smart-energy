@@ -9775,6 +9775,38 @@ export type Database = {
           },
         ]
       }
+      partner_modules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          module_code: string
+          partner_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          module_code: string
+          partner_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          module_code?: string
+          partner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_modules_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partners: {
         Row: {
           accent_color: string | null
