@@ -4,6 +4,8 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 
 ## 2026-10-04
 ### Neu
+- Super-Admin → Rollen & Rechte: Button „Super-Admin-Rolle entziehen“ mit Bestätigungsdialog; letzter Super-Admin geschützt; Doppel-Einträge in `user_roles` werden je Person zusammengefasst. Serverseitig durch RLS + `guard_privileged_roles`, Protokoll via `user_role_audit_log`.
+- Super-Admin → Benutzer: Löschen-Button (Mülleimer) mit Bestätigungsdialog über `delete-user`; Schutz gegen Selbstlöschung und Löschen des letzten Super-Admins (auch serverseitig in `delete-user`). Rollenanzeige zeigt jetzt die höchste Rolle statt der zufällig ersten Zeile.
 - Dashboard: Jede Grafik hat eigenen Zeitraum/Offset (`WidgetPeriodScope` überschreibt nur Zeitraum im Filter-Kontext; Liegenschaft bleibt global), gespeichert in `dashboard_widgets.config.period/offset`. Button „In Analyse öffnen“ in Energieverlauf und eigenen Widgets.
 - Neue Seite Energieanalyse `/analytics-studio/analyse` (Modul `analytics_studio`): Mehrfachauswahl Messstellen, Achse je Einheit, Linie/Balken/Fläche/gestapelt, Schnellwahl + freier Zeitraum, Auflösung 5 Min–Monat, Vergleich Vorperiode/Vorjahr/frei, Heatmap Stunde×Tag, Dauerlinie mit Grundlast/Spitze, Kennzahlen, Bezug m² NGF / Heizgradtage (Open-Meteo-Archiv), CSV/Excel. Gesamter Zustand Zod-validiert base64url in `?a=`; Daten nur via `get_power_series_auto`/Sensor-Aggregate mit Tenant-Filter.
 - Ladepunkte: Fernfunktion „Status abfragen“ (`ocpp-central` Endpoint `TriggerStatus` → OCPP `TriggerMessage(StatusNotification)`). Stündliche Plausibilitätsprüfung in `charge-point-auto-reboot`: Stecker mit Lade-/Belegt-Status > 2 h, Wallbox online, keine aktive Session → Statusmeldung anfordern (kein blindes Überschreiben).
