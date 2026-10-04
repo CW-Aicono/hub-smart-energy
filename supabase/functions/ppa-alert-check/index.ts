@@ -1,3 +1,4 @@
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
@@ -39,6 +40,7 @@ async function upsertTask(
 }
 
 Deno.serve(async (req) => {
+  { const __deny = rejectIfNotInternal(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {

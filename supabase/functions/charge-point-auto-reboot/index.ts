@@ -1,3 +1,4 @@
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 // Edge Function: charge-point-auto-reboot
 // Sendet einen Reset-Befehl (Soft/Hard) an aktivierte Ladepunkte einmal pro Tag
 // zur gewünschten Uhrzeit (Europe/Berlin). Wird stündlich per pg_cron gestartet.
@@ -20,6 +21,7 @@ interface ChargePointRow {
 }
 
 Deno.serve(async (req) => {
+  { const __deny = rejectIfNotInternal(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }

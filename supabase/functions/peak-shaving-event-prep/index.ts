@@ -1,3 +1,4 @@
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 // Peak-Shaving Event-Prep — Vor-Lade-Steuerung für geplante Events
 //
 // Aufgerufen alle 10 Minuten via pg_cron.
@@ -170,6 +171,7 @@ async function run() {
 }
 
 Deno.serve(async (req) => {
+  { const __deny = rejectIfNotInternal(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const out = await run();
