@@ -17,7 +17,7 @@ interface Props {
 export function PartnerModulesDialog({ partnerId, partnerName, open, onOpenChange }: Props) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
-  const { data: codes = [] } = useQuery({
+  const { data: codes = [], error: loadError } = useQuery({
     queryKey: ["partner-modules-admin", partnerId],
     enabled: open && !!partnerId,
     queryFn: async () => {
@@ -47,6 +47,11 @@ export function PartnerModulesDialog({ partnerId, partnerName, open, onOpenChang
             Nur hier freigeschaltete Module kann der Partner an seine Mandanten weitergeben.
           </DialogDescription>
         </DialogHeader>
+        {loadError && (
+          <p className="text-sm text-destructive">
+            Modulliste konnte nicht geladen werden: {(loadError as Error).message}. Auf dem Live-System fehlt evtl. noch die Datenbank-Änderung – bitte Deploy ausführen.
+          </p>
+        )}
         <div className="divide-y">
           {ALL_MODULES.filter((m) => !(m as any).alwaysOn).map((m) => (
             <div key={m.code} className="flex items-center justify-between gap-4 py-2">
