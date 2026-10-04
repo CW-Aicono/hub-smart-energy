@@ -3,6 +3,7 @@ import { beginImpersonation, getActiveSupportSessionId, endImpersonationAndRetur
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useTenantModules, ALL_MODULES } from "@/hooks/useTenantModules";
+import { TenantChargePointBillingCard, TenantDiscountsCard, useTenantModuleCost } from "@/components/billing/TenantBillingExtras";
 import { useTenantLicense } from "@/hooks/useTenantLicense";
 import { useModulePrices } from "@/hooks/useModulePrices";
 import { useSATranslation } from "@/hooks/useSATranslation";
@@ -344,9 +345,17 @@ const SuperAdminTenantDetail = () => {
     toast.success(t("tenant_detail.price_updated"));
   };
 
+  const { breakdown: costBreakdown } = useTenantModuleCost({
+    tenantId: id,
+    modules: modules as any,
+    isKommune: (tenant as any)?.is_kommune !== false,
+    isMember: !!(tenant as any)?.is_aicono_member,
+  });
+  // Monatssumme inkl. Ladepunktpreis × aktive Ladepunkte und aktuell gültigem Rabatt
+  const getMonthlyNet = (code: string) => costBreakdown(code).net;
   const totalMonthly = ALL_MODULES
     .filter((m) => !("alwaysOn" in m) && m.code !== "support_billing" && getModuleEnabled(m.code))
-    .reduce((sum, m) => sum + getEffectivePrice(m.code), 0);
+    .reduce((sum, m) => sum + getMonthlyNet(m.code), 0);
 
   const hasRemoteSupport = getModuleEnabled("remote_support");
   const supportPricePer15min = (tenant as any)?.support_price_per_15min ?? 25;
@@ -965,6 +974,14 @@ const SuperAdminTenantDetail = () => {
                   </div>
                 </CardContent>
               </Card>
+              {id && (
+                <>
+                  <TenantChargePointBillingCard tenantId={id} modules={modules as any} mode="super"
+                    isKommune={(tenant as any)?.is_kommune !== false} isMember={!!(tenant as any)?.is_aicono_member} />
+                  <TenantDiscountsCard tenantId={id} modules={modules as any} mode="super"
+                    isKommune={(tenant as any)?.is_kommune !== false} isMember={!!(tenant as any)?.is_aicono_member} />
+                </>
+              )}
             </TabsContent>
 
             <TabsContent value="license" className="mt-6">
@@ -1276,7 +1293,7 @@ const SuperAdminTenantDetail = () => {
                       {ALL_MODULES.filter((m) => !("alwaysOn" in m) && m.code !== "support_billing" && getModuleEnabled(m.code)).map((mod) => (
                         <TableRow key={mod.code}>
                           <TableCell className="font-medium">{mod.label}</TableCell>
-                          <TableCell className="text-right">{getEffectivePrice(mod.code).toFixed(2)} €</TableCell>
+                          <TableCell className="text-right">{getMonthlyNet(mod.code).toFixed(2)} €</TableCell>
                         </TableRow>
                       ))}
                       {ALL_MODULES.filter((m) => !("alwaysOn" in m) && m.code !== "support_billing" && getModuleEnabled(m.code)).length === 0 && (

@@ -12,6 +12,8 @@ export interface ModulePrice {
   industry_standard_price: number;
   partner_price_monthly: number;
   partner_industry_price_monthly: number;
+  charge_point_price_monthly: number;
+  industry_charge_point_price_monthly: number;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +42,8 @@ export function useModulePrices() {
       industryStandardPrice,
       partnerPriceMonthly,
       partnerIndustryPriceMonthly,
+      chargePointPriceMonthly,
+      industryChargePointPriceMonthly,
     }: {
       moduleCode: string;
       priceMonthly?: number;
@@ -48,6 +52,8 @@ export function useModulePrices() {
       industryStandardPrice?: number;
       partnerPriceMonthly?: number;
       partnerIndustryPriceMonthly?: number;
+      chargePointPriceMonthly?: number;
+      industryChargePointPriceMonthly?: number;
     }) => {
       const updates: any = { module_code: moduleCode, updated_at: new Date().toISOString() };
       if (priceMonthly !== undefined) updates.price_monthly = priceMonthly;
@@ -56,6 +62,8 @@ export function useModulePrices() {
       if (industryStandardPrice !== undefined) updates.industry_standard_price = industryStandardPrice;
       if (partnerPriceMonthly !== undefined) updates.partner_price_monthly = partnerPriceMonthly;
       if (partnerIndustryPriceMonthly !== undefined) updates.partner_industry_price_monthly = partnerIndustryPriceMonthly;
+      if (chargePointPriceMonthly !== undefined) updates.charge_point_price_monthly = chargePointPriceMonthly;
+      if (industryChargePointPriceMonthly !== undefined) updates.industry_charge_point_price_monthly = industryChargePointPriceMonthly;
       const { error } = await supabase
         .from("module_prices")
         .upsert(updates, { onConflict: "module_code" });
@@ -102,8 +110,14 @@ export function useModulePrices() {
     return p ? Number(p.partner_industry_price_monthly ?? 0) : 0;
   };
 
+  const getChargePointPrice = (moduleCode: string, industry = false): number => {
+    const p = prices.find((pr) => pr.module_code === moduleCode);
+    return p ? Number((industry ? p.industry_charge_point_price_monthly : p.charge_point_price_monthly) ?? 0) : 0;
+  };
+
   return {
     prices,
+    getChargePointPrice,
     isLoading,
     updatePrice,
     getPrice,

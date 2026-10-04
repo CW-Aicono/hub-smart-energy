@@ -1,6 +1,8 @@
 # Versionshinweise
 
 ## Oktober 2026
+- **v1.2.0 – Ladepunkt-Gebühr:** Module können pauschal, pro aktivem Ladepunkt oder beides abgerechnet werden. Eine Vorschau zeigt, wie viele Ladepunkte aktiv sind und was das aktuell kostet.
+- **Rabatte:** Für jedes Modul lassen sich Rabatte in Prozent oder Euro vergeben – dauerhaft oder befristet, z. B. 3 Monate Startpreis. Partner können das für ihre Kunden selbst tun.
 - **Klare Versionsnummern:** Die Version heißt jetzt z. B. „v1.1.0“ (Major = große Umstellung, Minor = neue Funktionen, Patch = Fehlerbehebung). Die technische Build-Kennung steht nur noch im Hintergrund.
 - **Benutzerhandbuch aktualisiert:** Neues Kapitel „Konto, Rollen & Support“ sowie Ergänzungen zu Energieanalyse und Ladepunkten.
 - **Versionsanzeige synchron:** Unter Hilfe & Support sehen Sie oben rechts jetzt dieselbe Versionsnummer wie in der Seitenleiste; der Versionsverlauf enthält den neuen Eintrag v1.1.0.
