@@ -54,3 +54,7 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 
 ## [Unreleased]
 - Sicherheit: gateway-ingest prüft Zähler-Eigentum; Gateways ohne Mandant und fremde tenant_id bei Schneider-Push werden abgewiesen.
+- Sicherheit: Wallbox-/Gateway-Befehle nur mit Geräten des eigenen Mandanten; Updates an Ladepunkten, Ladevorgängen, Rechnungen, Gateway-Befehlen und Wallboxen können Datensätze nicht mehr in fremde Mandanten verschieben.
+- Sicherheit: E-Mail-Prüfung verrät Kunden-Admins keine Konten außerhalb der eigenen Organisation.
+- Sicherheit: Alte HTTP-Schnittstelle der Ladepunkt-Zentrale nur noch mit Backend-Secret; Fernbefehle für unbekannte Ladepunkte abgewiesen.
+- Sicherheit: Rechnungsdateien (invoice-files) nur noch im Ordner des eigenen Mandanten lesbar/beschreibbar/löschbar.
