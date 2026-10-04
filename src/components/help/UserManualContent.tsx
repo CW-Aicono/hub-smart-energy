@@ -28,12 +28,13 @@ import {
   Home,
   FileText,
   Database,
+  Users,
 } from "lucide-react";
 
 interface UserManualContentProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging" | "integrations" | "arbitrageTrading" | "tasks" | "tenantElectricity" | "energyReport" | "dataManagement";
+  chapter: "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging" | "integrations" | "arbitrageTrading" | "tasks" | "tenantElectricity" | "energyReport" | "dataManagement" | "accountAccess";
 }
 
 const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentProps) => {
@@ -282,6 +283,26 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
             <h4 className="font-semibold mb-2">{T("manual.energy.exportTitle")}</h4>
             <p className="text-sm text-muted-foreground">{T("manual.energy.exportText")}</p>
           </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.energy.widgetTitle")}</h4>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>{T("manual.energy.widgetItem1")}</li>
+              <li>{T("manual.energy.widgetItem2")}</li>
+              <li>{T("manual.energy.widgetItem3")}</li>
+            </ul>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.energy.studioTitle")}</h4>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>{T("manual.energy.studioItem1")}</li>
+              <li>{T("manual.energy.studioItem2")}</li>
+              <li>{T("manual.energy.studioItem3")}</li>
+              <li>{T("manual.energy.studioItem4")}</li>
+              <li>{T("manual.energy.studioItem5")}</li>
+              <li>{T("manual.energy.studioItem6")}</li>
+              <li>{T("manual.energy.studioItem7")}</li>
+            </ul>
+          </section>
         </div>
       ),
     },
@@ -510,6 +531,7 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
               <li>{T("manual.ev.detailItem3")}</li>
               <li>{T("manual.ev.detailItem4")}</li>
               <li>{T("manual.ev.detailItem5")}</li>
+              <li>{T("manual.ev.detailItem6")}</li>
             </ul>
           </section>
 
@@ -850,6 +872,54 @@ const UserManualContent = ({ open, onOpenChange, chapter }: UserManualContentPro
           <section>
             <h4 className="font-semibold mb-2">{T("manual.data.backupTitle")}</h4>
             <p className="text-sm text-muted-foreground">{T("manual.data.backupText")}</p>
+          </section>
+        </div>
+      ),
+    },
+    accountAccess: {
+      title: T("help.accountAccessTitle"),
+      icon: <Users className="h-5 w-5" />,
+      content: (
+        <div className="space-y-6">
+          <section>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              {T("help.accountAccessTitle")}
+            </h3>
+            <p className="text-muted-foreground mb-4">{T("manual.acc.intro")}</p>
+          </section>
+          <Separator />
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.acc.areaTitle")}</h4>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>{T("manual.acc.areaItem1")}</li>
+              <li>{T("manual.acc.areaItem2")}</li>
+              <li>{T("manual.acc.areaItem3")}</li>
+            </ul>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.acc.remoteTitle")}</h4>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>{T("manual.acc.remoteItem1")}</li>
+              <li>{T("manual.acc.remoteItem2")}</li>
+              <li>{T("manual.acc.remoteItem3")}</li>
+            </ul>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.acc.lockTitle")}</h4>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>{T("manual.acc.lockItem1")}</li>
+              <li>{T("manual.acc.lockItem2")}</li>
+              <li>{T("manual.acc.lockItem3")}</li>
+            </ul>
+          </section>
+          <section>
+            <h4 className="font-semibold mb-2">{T("manual.acc.versionTitle")}</h4>
+            <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1 ml-4">
+              <li>{T("manual.acc.versionItem1")}</li>
+              <li>{T("manual.acc.versionItem2")}</li>
+              <li>{T("manual.acc.versionItem3")}</li>
+            </ul>
           </section>
         </div>
       ),

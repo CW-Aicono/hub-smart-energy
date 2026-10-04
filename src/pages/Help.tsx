@@ -9,16 +9,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck, RefreshCw, Download, Rocket, Cpu, Zap, TrendingUp, ClipboardList, Home, FileText, Database } from "lucide-react";
+import { BookOpen, HelpCircle, Mail, Phone, History, ExternalLink, Gauge, Smartphone, ShieldCheck, RefreshCw, Download, Rocket, Cpu, Zap, TrendingUp, ClipboardList, Home, FileText, Database, Users } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useTenant } from "@/hooks/useTenant";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-import { formatAppVersion } from "@/lib/appVersion";
+import { formatAppVersion, formatAppVersionDetails } from "@/lib/appVersion";
 
-type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging" | "integrations" | "arbitrageTrading" | "tasks" | "tenantElectricity" | "energyReport" | "dataManagement";
+type ManualChapter = "gettingStarted" | "locationManagement" | "floorManagement" | "energyAnalysis" | "meterManagement" | "mobileApp" | "automation" | "evCharging" | "integrations" | "arbitrageTrading" | "tasks" | "tenantElectricity" | "energyReport" | "dataManagement" | "accountAccess";
 
 const Help = () => {
   const { user, loading } = useAuth();
@@ -262,7 +262,7 @@ const Help = () => {
                   {t("help.installUpdate" as any)}
                 </Button>
               )}
-              <Badge variant="outline" className="text-xs">
+              <Badge variant="outline" className="text-xs" title={formatAppVersionDetails()}>
                 {t("help.version")} {formatAppVersion()}
               </Badge>
             </div>
@@ -455,6 +455,17 @@ const Help = () => {
                   <div className="text-left">
                     <p className="font-medium">{t("help.dataManagementTitle" as any)}</p>
                     <p className="text-xs text-muted-foreground">{t("help.dataManagementDesc" as any)}</p>
+                  </div>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="justify-start gap-3 h-auto py-4 px-5 whitespace-normal"
+                  onClick={() => openManualChapter("accountAccess")}
+                >
+                  <Users className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <div className="text-left">
+                    <p className="font-medium">{t("help.accountAccessTitle" as any)}</p>
+                    <p className="text-xs text-muted-foreground">{t("help.accountAccessDesc" as any)}</p>
                   </div>
                 </Button>
               </div>
