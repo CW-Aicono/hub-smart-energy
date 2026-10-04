@@ -1,6 +1,7 @@
 # Versionshinweise
 
 ## Oktober 2026
+- **Gesperrt heißt jetzt wirklich gesperrt:** Gesperrte Benutzer können sich nicht mehr anmelden und werden aus laufenden Sitzungen abgemeldet.
 - **Bereichswechsel immer oben rechts:** Der Umschalter Super-Admin / Kaufmännisch / Technisch sitzt jetzt in allen Bereichen an derselben Stelle – in einer eigenen schmalen Kopfleiste, sodass er keine Seiteninhalte mehr verdeckt.
 - **Super-Admin-Verwaltung ohne Konsole:** Super-Admin-Rollen lassen sich unter Rollen & Rechte entziehen, Plattform-Benutzer unter Benutzer löschen – jeweils mit Sicherheitsabfrage. Der letzte Super-Admin ist geschützt.
 - **Jede Grafik mit eigenem Zeitraum:** Im Dashboard ändert der Zeitraum nur noch die jeweilige Grafik und bleibt gespeichert.
