@@ -3601,6 +3601,10 @@ export const translations = {
 
   // Support Session Banner
   "support_banner.active": { de: "Supportsitzung aktiv!", en: "Support session active!", es: "¡Sesión de soporte activa!", nl: "Ondersteuningssessie actief!" },
+  "help.remoteHistory": { de: "Bisherige Remote-Sitzungen", en: "Past remote sessions", es: "Sesiones remotas anteriores", nl: "Eerdere remote-sessies" },
+  "help.remoteHistoryEmpty": { de: "Bisher hat keine Remote-Sitzung stattgefunden.", en: "No remote session has taken place yet.", es: "Aún no se ha realizado ninguna sesión remota.", nl: "Er heeft nog geen remote-sessie plaatsgevonden." },
+  "help.remoteHistoryNoChanges": { de: "In dieser Sitzung wurden keine Änderungen protokolliert.", en: "No changes were logged in this session.", es: "No se registraron cambios en esta sesión.", nl: "In deze sessie zijn geen wijzigingen vastgelegd." },
+  "help.remoteHistoryRunning": { de: "läuft gerade", en: "running", es: "en curso", nl: "loopt nu" },
   "support_banner.extend": { de: "Verlängern", en: "Extend", es: "Extender", nl: "Verlengen" },
 
   // Backup
