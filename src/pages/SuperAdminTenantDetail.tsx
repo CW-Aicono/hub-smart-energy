@@ -3,7 +3,7 @@ import { beginImpersonation, getActiveSupportSessionId, endImpersonationAndRetur
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useTenantModules, ALL_MODULES } from "@/hooks/useTenantModules";
-import { TenantChargePointBillingCard, TenantDiscountsCard, useTenantModuleCost } from "@/components/billing/TenantBillingExtras";
+import { ChargePointSubLine, ModuleDiscountCell, TenantDiscountsCard, useTenantModuleCost } from "@/components/billing/TenantBillingExtras";
 import { useTenantLicense } from "@/hooks/useTenantLicense";
 import { useModulePrices } from "@/hooks/useModulePrices";
 import { useSATranslation } from "@/hooks/useSATranslation";
@@ -345,7 +345,7 @@ const SuperAdminTenantDetail = () => {
     toast.success(t("tenant_detail.price_updated"));
   };
 
-  const { breakdown: costBreakdown } = useTenantModuleCost({
+  const { breakdown: costBreakdown, bundleDiscounts } = useTenantModuleCost({
     tenantId: id,
     modules: modules as any,
     isKommune: (tenant as any)?.is_kommune !== false,
@@ -353,9 +353,11 @@ const SuperAdminTenantDetail = () => {
   });
   // Monatssumme inkl. Ladepunktpreis × aktive Ladepunkte und aktuell gültigem Rabatt
   const getMonthlyNet = (code: string) => costBreakdown(code).net;
-  const totalMonthly = ALL_MODULES
-    .filter((m) => !("alwaysOn" in m) && m.code !== "support_billing" && getModuleEnabled(m.code))
-    .reduce((sum, m) => sum + getMonthlyNet(m.code), 0);
+  const enabledBillable = ALL_MODULES
+    .filter((m) => !("alwaysOn" in m) && m.code !== "support_billing" && getModuleEnabled(m.code));
+  const activeBundleDiscounts = bundleDiscounts(enabledBillable.map((m) => m.code));
+  const totalMonthly = Math.max(0, enabledBillable.reduce((sum, m) => sum + getMonthlyNet(m.code), 0)
+    - activeBundleDiscounts.reduce((s, b) => s + b.amount, 0));
 
   const hasRemoteSupport = getModuleEnabled("remote_support");
   const supportPricePer15min = (tenant as any)?.support_price_per_15min ?? 25;
@@ -910,6 +912,7 @@ const SuperAdminTenantDetail = () => {
                         </SortableHead>
                         <SortableHead sortKey="override" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-44">{t("tenant_detail.individual_price")}</SortableHead>
                         <SortableHead sortKey="effective" sort={moduleSort} onToggle={toggleModuleSort} align="right" className="w-32">{t("tenant_detail.effective")}</SortableHead>
+                        <TableHead className="w-48 text-right">Rabatt</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -923,7 +926,8 @@ const SuperAdminTenantDetail = () => {
                         const override = getModulePriceOverride(mod.code);
                         const effective = getEffectivePrice(mod.code);
                         return (
-                          <TableRow key={mod.code}>
+                          <Fragment key={mod.code}>
+                          <TableRow>
                             <TableCell className="font-medium">{mod.label}</TableCell>
                             <TableCell className="text-center">
                               {isAlwaysOn ? <Badge variant="secondary">{t("common.always")}</Badge> : (
@@ -954,12 +958,25 @@ const SuperAdminTenantDetail = () => {
                             <TableCell className="text-right font-medium">
                               {isAlwaysOn ? "–" : <span className={override != null ? "text-primary" : ""}>{effective.toFixed(2)} €</span>}
                             </TableCell>
+                            <TableCell className="text-right">
+                              {!isAlwaysOn && id && getModuleEnabled(mod.code) && (
+                                <ModuleDiscountCell tenantId={id} code={mod.code} modules={modules as any} isKommune={isKommune} isMember={isMember} />
+                              )}
+                            </TableCell>
                           </TableRow>
+                          {mod.code === "ev_charging" && id && getModuleEnabled(mod.code) && (
+                            <TableRow className="bg-muted/30 hover:bg-muted/30">
+                              <TableCell colSpan={6} className="py-2">
+                                <ChargePointSubLine tenantId={id} modules={modules as any} isKommune={isKommune} isMember={isMember} canEdit />
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          </Fragment>
                         );
                       })}
                       {sortedModules.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                          <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                             Keine Module gefunden.
                           </TableCell>
                         </TableRow>
@@ -968,7 +985,10 @@ const SuperAdminTenantDetail = () => {
                   </Table>
                   <div className="flex justify-end mt-4 pt-4 border-t">
                     <div className="text-right">
-                      <p className="text-sm text-muted-foreground">{t("tenant_detail.monthly_total")}</p>
+                      {activeBundleDiscounts.map((b) => (
+                        <p key={b.d.id} className="text-sm text-muted-foreground">Bundle-Rabatt {b.name}: −{b.amount.toFixed(2)} €</p>
+                      ))}
+                      <p className="text-sm text-muted-foreground">{t("tenant_detail.monthly_total")} (inkl. Ladepunkte und Rabatte)</p>
                       <p className="text-xl font-bold">{totalMonthly.toFixed(2)} €</p>
                     </div>
                   </div>
@@ -976,8 +996,6 @@ const SuperAdminTenantDetail = () => {
               </Card>
               {id && (
                 <>
-                  <TenantChargePointBillingCard tenantId={id} modules={modules as any} mode="super"
-                    isKommune={(tenant as any)?.is_kommune !== false} isMember={!!(tenant as any)?.is_aicono_member} />
                   <TenantDiscountsCard tenantId={id} modules={modules as any} mode="super"
                     isKommune={(tenant as any)?.is_kommune !== false} isMember={!!(tenant as any)?.is_aicono_member} />
                 </>
