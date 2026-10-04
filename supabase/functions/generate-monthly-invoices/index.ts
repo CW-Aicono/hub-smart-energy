@@ -40,10 +40,10 @@ Deno.serve(async (req) => {
     // 3. Get global module prices (member + standard + per charge point)
     const { data: globalPrices, error: gpErr } = await supabase
       .from("module_prices")
-      .select("module_code, price_monthly, standard_price, industry_price_monthly, industry_standard_price, charge_point_price_monthly, industry_charge_point_price_monthly");
+      .select("module_code, price_monthly, standard_price, industry_price_monthly, industry_standard_price, charge_point_price_monthly, industry_charge_point_price_monthly, standard_charge_point_price_monthly, industry_standard_charge_point_price_monthly");
     if (gpErr) throw gpErr;
 
-    const globalPriceMap: Record<string, { member: number; standard: number; industryMember: number; industryStandard: number; cp: number; industryCp: number }> = {};
+    const globalPriceMap: Record<string, { member: number; standard: number; industryMember: number; industryStandard: number; cp: number; industryCp: number; stdCp: number; industryStdCp: number }> = {};
     for (const gp of globalPrices ?? []) {
       globalPriceMap[gp.module_code] = {
         member: Number(gp.price_monthly),
@@ -52,6 +52,8 @@ Deno.serve(async (req) => {
         industryStandard: Number(gp.industry_standard_price ?? 0),
         cp: Number(gp.charge_point_price_monthly ?? 0),
         industryCp: Number(gp.industry_charge_point_price_monthly ?? 0),
+        stdCp: Number((gp as any).standard_charge_point_price_monthly ?? 0),
+        industryStdCp: Number((gp as any).industry_standard_charge_point_price_monthly ?? 0),
       };
     }
 
@@ -73,7 +75,7 @@ Deno.serve(async (req) => {
     {
       const { data: discounts, error: dErr } = await supabase
         .from("tenant_module_discounts")
-        .select("id, tenant_id, module_code, discount_type, value, valid_from, valid_until, note")
+        .select("id, tenant_id, module_code, bundle_id, discount_type, value, valid_from, valid_until, note, duration_value, duration_unit, payment_mode, one_time_amount, invoiced_at")
         .lte("valid_from", fmt(lastMonthEnd))
         .or(`valid_until.is.null,valid_until.gte.${fmt(lastMonthStart)}`);
       if (dErr) throw dErr;
@@ -81,6 +83,21 @@ Deno.serve(async (req) => {
         (discountsByTenant[d.tenant_id] ??= []).push(d);
       }
     }
+
+    // 3d. Bundle -> Module (für Bundle-Rabatte, Vorkasse, Einmalzahlung)
+    const bundleModules: Record<string, string[]> = {};
+    const bundleNames: Record<string, string> = {};
+    {
+      const [{ data: items }, { data: bnames }] = await Promise.all([
+        supabase.from("module_bundle_items").select("bundle_id, module_code"),
+        supabase.from("module_bundles").select("id, name"),
+      ]);
+      for (const i of items ?? []) (bundleModules[i.bundle_id] ??= []).push(i.module_code);
+      for (const b of bnames ?? []) bundleNames[b.id] = b.name;
+    }
+    const covers = (d: any, code: string) =>
+      d.module_code ? d.module_code === code : d.bundle_id ? (bundleModules[d.bundle_id] ?? []).includes(code) : true;
+    const invoicedDiscountIds: string[] = [];
 
     // 4. Get support sessions from last month for all tenants
     const { data: supportSessions, error: sErr } = await supabase
@@ -154,6 +171,10 @@ Deno.serve(async (req) => {
       let moduleTotal = 0;
       const activeCp = activeCpByTenant[tenant.id] ?? 0;
       const tenantDiscounts = discountsByTenant[tenant.id] ?? [];
+      const monthlyModuleDiscounts = tenantDiscounts.filter((d: any) => (d.payment_mode ?? "monthly") === "monthly" && !d.bundle_id);
+      const prepaidDiscounts = tenantDiscounts.filter((d: any) => (d.payment_mode ?? "monthly") !== "monthly");
+      const grossByCode: Record<string, number> = {};
+      const netByCode: Record<string, number> = {};
       for (const tm of tenantModules) {
         if (tm.module_code === "dashboard") continue;
         const priceEntry = globalPriceMap[tm.module_code];
@@ -162,15 +183,26 @@ Deno.serve(async (req) => {
         if (priceEntry) {
           if (isKommune) {
             globalPrice = isMember ? priceEntry.member : priceEntry.standard;
-            globalCpPrice = priceEntry.cp;
+            globalCpPrice = isMember ? priceEntry.cp : priceEntry.stdCp;
           } else {
             globalPrice = isMember ? priceEntry.industryMember : priceEntry.industryStandard;
-            globalCpPrice = priceEntry.industryCp;
+            globalCpPrice = isMember ? priceEntry.industryCp : priceEntry.industryStdCp;
           }
         }
         // Pauschale und Ladepunktpreis sind frei kombinierbar (0 = nicht berechnet)
         const flat = tm.price_override != null ? Number(tm.price_override) : globalPrice;
-        const cpPrice = tm.charge_point_price_override != null ? Number(tm.charge_point_price_override) : globalCpPrice;
+        // Ladepunktpreis nur als Unterpunkt von Ladeinfrastruktur
+        const cpPrice = tm.module_code !== "ev_charging" ? 0
+          : tm.charge_point_price_override != null ? Number(tm.charge_point_price_override) : globalCpPrice;
+        const cpGross = cpPrice > 0 && activeCp > 0 ? Math.round(cpPrice * activeCp * 100) / 100 : 0;
+        grossByCode[tm.module_code] = flat + cpGross;
+        // Durch Vorkasse/Einmalzahlung abgedeckt -> keine Monatsberechnung
+        const cover = prepaidDiscounts.find((d: any) => d.valid_until && covers(d, tm.module_code));
+        if (cover) {
+          moduleLineItems.push({ type: "module", code: tm.module_code, label: `${tm.module_code} – abgedeckt durch ${cover.payment_mode === "one_time" ? "Einmalzahlung" : "Vorkasse"} bis ${new Date(cover.valid_until).toLocaleDateString("de-DE")}`, amount: 0 });
+          netByCode[tm.module_code] = 0;
+          continue;
+        }
         let gross = 0;
         if (flat > 0) {
           moduleLineItems.push({ type: "module", code: tm.module_code, label: tm.module_code, amount: flat });
@@ -194,7 +226,7 @@ Deno.serve(async (req) => {
         }
         // Rabatt: im Abrechnungsmonat gültig, günstigster gilt, nie unter 0
         let best: { amount: number; d: any } | null = null;
-        for (const d of tenantDiscounts) {
+        for (const d of monthlyModuleDiscounts) {
           if (d.module_code && d.module_code !== tm.module_code) continue;
           const amt = d.discount_type === "percent" ? gross * Number(d.value) / 100 : Number(d.value);
           const capped = Math.min(gross, Math.round(amt * 100) / 100);
@@ -213,7 +245,45 @@ Deno.serve(async (req) => {
           });
           gross -= best.amount;
         }
+        netByCode[tm.module_code] = gross;
         moduleTotal += gross;
+      }
+
+      // Bundle-Rabatte (monatlich) auf die Summe der Bundle-Module nach Modul-Rabatten
+      for (const d of tenantDiscounts.filter((x: any) => x.bundle_id && (x.payment_mode ?? "monthly") === "monthly")) {
+        const base = (bundleModules[d.bundle_id] ?? []).reduce((s2, c) => s2 + (netByCode[c] ?? 0), 0);
+        const raw = d.discount_type === "percent" ? base * Number(d.value) / 100 : Number(d.value);
+        const amt = Math.max(0, Math.min(base, Math.round(raw * 100) / 100));
+        if (amt <= 0) continue;
+        const what = d.discount_type === "percent" ? `${Number(d.value).toLocaleString("de-DE")} %` : `${Number(d.value).toLocaleString("de-DE", { minimumFractionDigits: 2 })} €`;
+        const until = d.valid_until ? ` bis ${new Date(d.valid_until).toLocaleDateString("de-DE")}` : "";
+        moduleLineItems.push({ type: "discount", bundle_id: d.bundle_id, discount_id: d.id, label: `${d.note || "Bundle-Rabatt"} ${bundleNames[d.bundle_id] ?? ""} ${what}${until}`.trim(), amount: -amt });
+        moduleTotal -= amt;
+      }
+
+      // Vorkasse / Einmalzahlung: einmalig für die ganze Laufzeit berechnen
+      for (const d of prepaidDiscounts) {
+        if (d.invoiced_at || d.valid_from > fmt(lastMonthEnd)) continue;
+        const months = Number(d.duration_value ?? 0) * (d.duration_unit === "year" ? 12 : 1);
+        if (!(months > 0)) continue;
+        const target = d.module_code ?? (d.bundle_id ? `Bundle ${bundleNames[d.bundle_id] ?? ""}` : "alle Module");
+        const period = `${new Date(d.valid_from).toLocaleDateString("de-DE")} – ${new Date(d.valid_until).toLocaleDateString("de-DE")}`;
+        let amount: number;
+        let label: string;
+        if (d.payment_mode === "one_time") {
+          amount = Number(d.one_time_amount ?? 0);
+          label = `Einmalzahlung ${target}, ${months} Monate (${period})`;
+        } else {
+          const monthly = tenantModules.filter((m: any) => covers(d, m.module_code)).reduce((s2: number, m: any) => s2 + (grossByCode[m.module_code] ?? 0), 0);
+          const gross = monthly * months;
+          const disc = d.discount_type === "percent" ? gross * Number(d.value) / 100 : Number(d.value) * months;
+          amount = Math.max(0, Math.round((gross - disc) * 100) / 100);
+          const what = d.discount_type === "percent" ? `${Number(d.value).toLocaleString("de-DE")} %` : `${Number(d.value).toLocaleString("de-DE", { minimumFractionDigits: 2 })} €/Monat`;
+          label = `Vorkasse ${target}, ${months} Monate × ${monthly.toLocaleString("de-DE", { minimumFractionDigits: 2 })} € abzgl. ${what} (${period})`;
+        }
+        moduleLineItems.push({ type: d.payment_mode === "one_time" ? "one_time" : "prepaid", discount_id: d.id, label, months, amount });
+        moduleTotal += amount;
+        invoicedDiscountIds.push(d.id);
       }
 
       // Support line items (for last month)
@@ -310,6 +380,12 @@ Deno.serve(async (req) => {
         })
         .eq("id", upd.id);
       if (updErr) throw updErr;
+    }
+
+    if (invoicedDiscountIds.length > 0) {
+      const { error: invErr } = await supabase.from("tenant_module_discounts")
+        .update({ invoiced_at: new Date().toISOString() }).in("id", invoicedDiscountIds);
+      if (invErr) throw invErr;
     }
 
     return new Response(
