@@ -547,6 +547,9 @@ const ChargePointDetail = () => {
           result = await callOcppCommand("RemoteStopTransaction", { transactionId: activeSession.transaction_id });
           break;
         }
+        case "Status abfragen":
+          result = await callOcppCommand("TriggerStatus", { chargePointId: cp.ocpp_id });
+          break;
         case "Kabel entriegeln":
           result = await callOcppCommand("UnlockConnector", { chargePointId: cp.ocpp_id, connectorId: selectedConnectorId });
           break;
@@ -905,6 +908,9 @@ const FaultStatus = ({ cp }: FaultStatusProps) => {
                         </Button>
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Ladevorgang stoppen")}>
                           <Square className="h-4 w-4" /> {t("cpd.stopCharging" as any)}
+                        </Button>
+                        <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Status abfragen")}>
+                          <RefreshCw className="h-4 w-4" /> Status abfragen
                         </Button>
                         <Button variant="ghost" className="w-full justify-start gap-2 text-sm" onClick={() => remoteAction("Kabel entriegeln")}>
                           <Unlock className="h-4 w-4" /> {t("cpd.unlockCable" as any)}

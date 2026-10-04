@@ -740,6 +740,22 @@ async function handleRemoteCommand(
 
       return { status: "Accepted" };
     }
+    case "TriggerStatus": {
+      // Fordert frische StatusNotification(s) an – korrigiert hängende Anzeigen.
+      const connectorId = body.connectorId as number | undefined;
+      await supabase
+        .from("pending_ocpp_commands")
+        .insert({
+          charge_point_ocpp_id: chargePointOcppId,
+          command: "TriggerMessage",
+          payload: {
+            requestedMessage: "StatusNotification",
+            ...(connectorId ? { connectorId } : {}),
+          },
+          status: "pending",
+        });
+      return { status: "Accepted" };
+    }
     case "UnlockConnector": {
       const connectorId = (body.connectorId as number) || 1;
 
