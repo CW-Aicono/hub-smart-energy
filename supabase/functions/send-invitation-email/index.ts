@@ -1,3 +1,4 @@
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
@@ -110,6 +111,7 @@ function buildInvitationHTML(
 }
 
 const handler = async (req: Request): Promise<Response> => {
+  { const __deny = rejectIfNotInternal(req); if (__deny) return __deny; }
   console.log("send-invitation-email function called");
   const corsHeaders = getCorsHeaders(req);
 

@@ -1,3 +1,4 @@
+import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 // K2 §14a EnWG — Wendet ein Curtailment-Event auf alle SteuVE-Geräte einer Connection an.
 //
 // Eingabe: { event_id: uuid }  ODER  { connection_id: uuid }  (letzteres: nimmt aktuelles Event)
@@ -161,6 +162,7 @@ async function applyEvent(eventId: string) {
 }
 
 Deno.serve(async (req) => {
+  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const body = await req.json();
