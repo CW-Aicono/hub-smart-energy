@@ -45,6 +45,7 @@ async function callBackend<T>(action: string, payload: Record<string, unknown>):
         "Content-Type": "application/json",
         "apikey": config.supabaseAnonKey,
         "Authorization": `Bearer ${config.supabaseAnonKey}`,
+        ...(process.env.OCPP_BACKEND_SECRET ? { "x-ocpp-secret": process.env.OCPP_BACKEND_SECRET } : {}),
       },
       body: JSON.stringify({ action, ...payload }),
       signal: controller.signal,

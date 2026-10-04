@@ -1,3 +1,4 @@
+import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 // Sammelrechnungen (Gruppenrechnungen) für Ladeinfrastruktur
 // Aggregiert alle Ladevorgänge der Mitglieder einer Rechnungsgruppe im Zeitraum
 // und erstellt EINE Sammelrechnung pro Gruppe an billing_email.
@@ -146,6 +147,7 @@ function buildHtml(opts: {
 }
 
 serve(async (req) => {
+  { const __deny = await requireInternalOrUser(req, ["admin","super_admin","partner_admin"]); if (__deny) return __deny; }
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 

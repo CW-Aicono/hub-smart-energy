@@ -70,7 +70,8 @@ const handler = async (req: Request): Promise<Response> => {
     const body = await req.json().catch(() => ({}));
     const email: string | undefined = body?.email?.toString().trim().toLowerCase();
     const intent: Intent = body?.intent === "super_admin_invite" ? "super_admin_invite" : "tenant_invite";
-    const tenantId: string | null = body?.tenantId ?? callerTenantId ?? null;
+    // Nicht-Super-Admins dürfen nur ihre eigene Organisation prüfen.
+    const tenantId: string | null = callerIsSuper ? (body?.tenantId ?? callerTenantId ?? null) : callerTenantId;
 
     if (!email || !email.includes("@")) {
       return json({ error: "Invalid email" }, 400, corsHeaders);
@@ -91,7 +92,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (!existingUser) {
       return json(
-        { status: "available", message: "E-Mail-Adresse ist verfügbar." },
+        { status: "available", message: "E-Mail-Adresse kann eingeladen werden." },
         200,
         corsHeaders,
       );
@@ -153,6 +154,10 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     // Case B: invitation as tenant user/admin
+    // Tenant-Admins erfahren nichts über Konten außerhalb ihrer Organisation (keine Konto-Aufzählung).
+    if (!callerIsSuper && !(targetTenantId && tenantId && targetTenantId === tenantId)) {
+      return json({ status: "available", message: "E-Mail-Adresse kann eingeladen werden." }, 200, corsHeaders);
+    }
     if (isSuperAdmin) {
       return json(
         {

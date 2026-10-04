@@ -1,3 +1,4 @@
+import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 /**
  * bridge-aggregator
  * =================
@@ -198,6 +199,7 @@ async function run(): Promise<{
 }
 
 Deno.serve(async (req: Request) => {
+  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {

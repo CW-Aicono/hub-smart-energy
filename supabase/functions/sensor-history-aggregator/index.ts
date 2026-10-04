@@ -1,3 +1,4 @@
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 // Aggregates sensor_readings_raw into 5-minute buckets.
 // The heavy grouping runs inside Postgres via RPC so the function no longer
 // pulls large raw windows through the Data API during backend pressure.
@@ -9,6 +10,7 @@ const url = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 Deno.serve(async (req) => {
+  { const __deny = rejectIfNotInternal(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const supabase = createClient(url, serviceKey);

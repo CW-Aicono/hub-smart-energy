@@ -272,7 +272,7 @@ async function handle(action: string, body: Record<string, unknown>) {
           .from("charging_user_rfid_tags")
           .select("user:charging_users!inner(id, status, group_id)")
           .eq("tenant_id", tenantId)
-          .ilike("tag", normalizedIdTag)
+          .ilike("tag", normalizedIdTag.replace(/[\\%_]/g, (c) => "\\" + c))
           .maybeSingle();
         user = (tagRow as any)?.user ?? null;
         error = tagErr;
@@ -283,7 +283,7 @@ async function handle(action: string, body: Record<string, unknown>) {
           .from("charging_users")
           .select("id, status, group_id")
           .eq("tenant_id", tenantId)
-          .ilike("app_tag", normalizedIdTag)
+          .ilike("app_tag", normalizedIdTag.replace(/[\\%_]/g, (c) => "\\" + c))
           .maybeSingle();
         user = result.data;
         error = result.error;
@@ -868,6 +868,16 @@ async function handle(action: string, body: Record<string, unknown>) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return fail(405, "Method not allowed");
+
+  // Shared secret between OCPP server and backend. Enforced as soon as
+  // OCPP_BACKEND_SECRET is configured (staged rollout: server first, then secret).
+  const expectedSecret = Deno.env.get("OCPP_BACKEND_SECRET") ?? "";
+  if (expectedSecret) {
+    const given = req.headers.get("x-ocpp-secret") ?? "";
+    let diff = given.length ^ expectedSecret.length;
+    for (let i = 0; i < Math.min(given.length, expectedSecret.length); i++) diff |= given.charCodeAt(i) ^ expectedSecret.charCodeAt(i);
+    if (diff !== 0) return fail(401, "Unauthorized");
+  }
 
   let body: Record<string, unknown>;
   try {

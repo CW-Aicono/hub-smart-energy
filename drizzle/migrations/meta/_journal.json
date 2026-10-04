@@ -71,6 +71,27 @@
       "when": 1791149526529,
       "tag": "0009_cp_sub_prices_and_bundle_discounts",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791151466983,
+      "tag": "0010_community_tariffs_admin_write",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791153415263,
+      "tag": "0011_tenant_scope_hardening_commands_wallbox_billing",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791153435476,
+      "tag": "0012_invoice_files_tenant_scoped_storage",
+      "breakpoints": true
     }
   ]
 }

@@ -89,7 +89,7 @@ async function sha256Hex(key: string): Promise<string> {
  * routes to the device's own tenant). For the global GATEWAY_API_KEY
  * tenantId is null and the caller is treated as trusted server-to-server.
  */
-export interface GatewayAuthContext { tenantId: string | null }
+export interface GatewayAuthContext { tenantId: string | null; pendingDevice?: boolean }
 
 async function validateApiKey(req: Request): Promise<Response | GatewayAuthContext> {
   const gatewayApiKey = Deno.env.get("GATEWAY_API_KEY");
@@ -102,7 +102,8 @@ async function validateApiKey(req: Request): Promise<Response | GatewayAuthConte
   // 1) Basic Auth (username + password against gateway_devices)
   if (/^Basic\s+/i.test(authHeader)) {
     const ctx = await getDeviceFromBasicAuth(req);
-    if (ctx) return { tenantId: ctx.tenant_id };
+    // Gateway ohne Mandantenzuordnung ist NICHT vertrauenswürdig wie der globale Server-Key.
+    if (ctx) return { tenantId: ctx.tenant_id, pendingDevice: !ctx.tenant_id };
     return json({ error: "Unauthorized" }, 401);
   }
 
@@ -142,6 +143,22 @@ async function validateApiKey(req: Request): Promise<Response | GatewayAuthConte
   }
 
   return json({ error: "Unauthorized" }, 401);
+}
+
+/** Keeps only readings whose meter_id really belongs to the reading's tenant_id. */
+async function filterOwnedMeters<T extends { meter_id: string; tenant_id: string }>(
+  supabase: ReturnType<typeof getSupabase>, rows: T[], skipped: string[],
+): Promise<T[]> {
+  if (rows.length === 0) return rows;
+  const ids = [...new Set(rows.map((r) => r.meter_id))];
+  const { data, error } = await supabase.from("meters").select("id, tenant_id").in("id", ids);
+  if (error) { console.error("[gateway-ingest] meter ownership lookup failed:", error.message); return []; }
+  const owner = new Map((data || []).map((m: { id: string; tenant_id: string }) => [m.id, m.tenant_id]));
+  return rows.filter((r) => {
+    if (owner.get(r.meter_id) === r.tenant_id) return true;
+    skipped.push(`${r.meter_id}: meter does not belong to tenant`);
+    return false;
+  });
 }
 
 function isAuthError(v: Response | GatewayAuthContext): v is Response {
@@ -666,6 +683,7 @@ async function handleCompactDay(req: Request): Promise<Response> {
 async function handlePostReadings(req: Request): Promise<Response> {
   const _auth = await validateApiKey(req);
   if (isAuthError(_auth)) return _auth;
+  if (_auth.pendingDevice) return json({ error: "Gateway not assigned to a tenant" }, 403);
   const scopeTenantId = _auth.tenantId; // wenn gesetzt: Tenant-Key → strikt scoped
 
   let body: { readings?: PowerReading[] };
@@ -704,12 +722,15 @@ async function handlePostReadings(req: Request): Promise<Response> {
     });
   }
 
-  if (validReadings.length === 0) {
+  const supabase = getSupabase();
+  // Zähler-Eigentum serverseitig prüfen: meter_id muss zum angegebenen Mandanten gehören.
+  const owned = await filterOwnedMeters(supabase, validReadings, skipped);
+
+  if (owned.length === 0) {
     return json({ success: true, inserted: 0, skipped: skipped.length, skipped_details: skipped });
   }
 
-  const supabase = getSupabase();
-  const { error } = await supabase.from("meter_power_readings").insert(validReadings);
+  const { error } = await supabase.from("meter_power_readings").insert(owned);
 
   if (error) {
     console.error("[gateway-ingest] DB insert error:", error.message);
@@ -717,7 +738,7 @@ async function handlePostReadings(req: Request): Promise<Response> {
   }
 
   return json({
-    success: true, inserted: validReadings.length,
+    success: true, inserted: owned.length,
     skipped: skipped.length,
     skipped_details: skipped.length > 0 ? skipped : undefined,
   });
@@ -847,6 +868,10 @@ async function validateBasicAuth(
   // Fall back to API key auth
   const _auth = await validateApiKey(req);
   if (isAuthError(_auth)) return _auth;
+  if (_auth.pendingDevice) return json({ error: "Gateway not assigned to a tenant" }, 403);
+  if (_auth.tenantId && _auth.tenantId !== tenantId) {
+    return json({ error: "tenant_id does not match credentials" }, 403);
+  }
 
   // If using API key, load config from any matching integration for this tenant
   const locIntegrations = await findSchneiderIntegrations();
@@ -945,11 +970,12 @@ async function handleSchneiderPush(req: Request): Promise<Response> {
     }
   }
 
-  if (readings.length === 0) {
+  const ownedReadings = await filterOwnedMeters(supabase, readings, skipped);
+  if (ownedReadings.length === 0) {
     return json({ success: true, inserted: 0, skipped: skipped.length, skipped_details: skipped });
   }
 
-  const { error } = await supabase.from("meter_power_readings").insert(readings);
+  const { error } = await supabase.from("meter_power_readings").insert(ownedReadings);
   if (error) {
     console.error("[schneider-push] DB insert error:", error.message);
     return json({ error: "Database error" }, 500);
@@ -957,7 +983,7 @@ async function handleSchneiderPush(req: Request): Promise<Response> {
 
   return json({
     success: true,
-    inserted: readings.length,
+    inserted: ownedReadings.length,
     skipped: skipped.length,
     skipped_details: skipped.length > 0 ? skipped : undefined,
     sender: senderId,
@@ -2745,6 +2771,7 @@ Deno.serve(async (req) => {
   if (req.method === "GET") {
     const _auth = await validateApiKey(req);
     if (isAuthError(_auth)) return _auth;
+    if (_auth.pendingDevice) return json({ error: "Gateway not assigned to a tenant" }, 403);
     const scopeTenantId = _auth.tenantId; // null = global server key (trusted)
     if (action === "list-locations") return handleListLocations(scopeTenantId);
     if (action === "list-meters") return handleListMeters(url, scopeTenantId);

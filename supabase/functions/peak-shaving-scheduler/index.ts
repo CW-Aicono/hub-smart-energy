@@ -1,3 +1,4 @@
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 // Peak-Shaving Scheduler — Phase 2: jetzt mit echtem Hardware-Dispatch via gateway_commands
 //
 // Erweiterungen vs. Phase 1:
@@ -354,6 +355,7 @@ async function run() {
 }
 
 Deno.serve(async (req) => {
+  { const __deny = rejectIfNotInternal(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const out = await run();

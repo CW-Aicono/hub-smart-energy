@@ -1,3 +1,4 @@
+import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
@@ -13,6 +14,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
  */
 
 Deno.serve(async (req: Request) => {
+  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   const cors = getCorsHeaders(req);
 
   if (req.method === "OPTIONS") {

@@ -1,3 +1,4 @@
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 // Power-Limit-Scheduler — runs every few minutes via pg_cron.
 // Reads each connected charge point's effective power-limit schedule (CP-level
 // or inherited from group), computes the target current limit (Amps) for the
@@ -258,6 +259,7 @@ async function run(): Promise<{ processed: number; results: DispatchResult[] }> 
 }
 
 Deno.serve(async (req) => {
+  { const __deny = rejectIfNotInternal(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {

@@ -1,3 +1,4 @@
+import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { jsPDF } from "https://esm.sh/jspdf@2.5.1";
 import { getCorsHeaders } from "../_shared/cors.ts";
@@ -25,6 +26,7 @@ const CLASS_ORDER = [
 ];
 
 Deno.serve(async (req) => {
+  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   const cors = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 

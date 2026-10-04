@@ -1,3 +1,4 @@
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 // loxone-parameter-push
 // Sammelt Push-Werte aus verschiedenen Cloud-Quellen (Arbitrage-Strategien,
 // Peak-Event-Kalender, Community-Allocations, CO2-Prognosen) und legt sie in
@@ -26,6 +27,7 @@ interface PendingWriteInsert {
 }
 
 serve(async (req) => {
+  { const __deny = rejectIfNotInternal(req); if (__deny) return __deny; }
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 

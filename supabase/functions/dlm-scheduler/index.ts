@@ -1,3 +1,4 @@
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 // DLM Scheduler — Dynamic Load Management (Group-Scope Soft-Limit)
 //
 // Per-group SOFT limit  (charge_point_groups.energy_settings.dlm.{enabled,limit_kw,reference_meter_id})
@@ -192,6 +193,7 @@ async function run() {
 }
 
 Deno.serve(async (req) => {
+  { const __deny = rejectIfNotInternal(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const out = await run();
