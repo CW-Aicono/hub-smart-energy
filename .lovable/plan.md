@@ -5,9 +5,10 @@
 2. Für jedes Modul eines Mandanten lassen sich **Rabatte** hinterlegen: **absolut (€)** oder **prozentual (%)**, **dauerhaft** oder **befristet** (z. B. 3 Monate Startpreis).
 
 ## 1. Monatliche Gebühr pro aktivem Ladepunkt
-- In der Modul-Preisliste (Super-Admin → Modulpreise) erhält jedes Modul eine **Abrechnungsart**:
-  - „Pauschal pro Monat“ (heutiges Verhalten, Standard)
-  - „Pro aktivem Ladepunkt und Monat“
+- In der Modul-Preisliste (Super-Admin → Modulpreise) erhält jedes Modul zwei unabhängige Preisbestandteile, frei kombinierbar:
+  - **Pauschale pro Monat** (heutiges Verhalten, Standard)
+  - **Preis pro aktivem Ladepunkt und Monat**
+  - Möglich sind: nur Pauschale, nur Ladepunktpreis, oder beides zusammen (z. B. 49 € Grundgebühr + 9 € je Ladepunkt). Ein leeres Feld bzw. 0 € bedeutet „nicht berechnet“.
 - Für die Ladeinfrastruktur wird „pro Ladepunkt“ wählbar; der eingetragene Preis gilt dann je Ladepunkt.
 - **Aktiv** = Ladepunkt ist angelegt, nicht archiviert/deaktiviert und war im Abrechnungsmonat mindestens einmal verbunden. Neu angelegte, noch nie verbundene Ladepunkte werden nicht berechnet.
 - Rechnungsposition zeigt nachvollziehbar: „Ladeinfrastruktur – 12 Ladepunkte × 9,00 € = 108,00 €“.
