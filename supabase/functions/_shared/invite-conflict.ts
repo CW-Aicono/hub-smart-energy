@@ -97,19 +97,14 @@ export async function checkInviteConflict(args: InviteConflictArgs): Promise<Inv
         error: "Diese E-Mail gehört zu einem Plattform-Konto (Super-Admin) und kann nicht als Partner-Mitglied eingeladen werden.",
       };
     }
-    if (targetTenantId) {
-      return {
-        ok: false, status: 409,
-        error: "Diese E-Mail wird bereits als Tenant-Nutzer verwendet und kann nicht zusätzlich als Partner-Mitglied eingeladen werden. Bitte eine andere Adresse wählen.",
-      };
-    }
+    // Multi-Rollen: Tenant-Nutzer dürfen zusätzlich Partner-Mitglied sein
+    // (1 Person = 1 Konto, mehrere Hüte; Wechsel über AreaSwitcher).
     if (isPartnerMember && partnerId && !partnerIds.includes(partnerId)) {
       return {
         ok: false, status: 409,
         error: "Diese E-Mail ist bereits bei einem anderen Partner registriert. Bitte eine andere Adresse wählen.",
       };
     }
-    // Same partner or orphan → reuse
     return { ok: true, existingUserId: existingUser.id };
   }
 
@@ -120,12 +115,7 @@ export async function checkInviteConflict(args: InviteConflictArgs): Promise<Inv
       error: "Diese E-Mail gehört zu einem Plattform-Konto (Super-Admin) und kann nicht als Tenant-Nutzer eingeladen werden.",
     };
   }
-  if (isPartnerMember) {
-    return {
-      ok: false, status: 409,
-      error: "Diese E-Mail ist bereits im Partner-Portal registriert und kann nicht zusätzlich als Tenant-Nutzer eingeladen werden. Bitte eine andere Adresse wählen.",
-    };
-  }
+  // Partner-Mitglieder dürfen zusätzlich Nutzer eines (noch nicht zugeordneten) Tenants werden.
   if (targetTenantId && tenantId && targetTenantId === tenantId) {
     return { ok: true, existingUserId: existingUser.id };
   }
