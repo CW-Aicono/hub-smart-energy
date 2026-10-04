@@ -131,12 +131,12 @@ const getLocationWidget = (_locationId: string | null): string => {
 
 const DashboardContent = () => {
   const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize, updateWidgetLayout, updateWidgetPeriod } = useDashboardWidgets();
-  const scopeFor = (widgetType: string, children: React.ReactNode, keySuffix = "") => {
+  const scopeFor = (widgetType: string, children: JSX.Element, keySuffix = "") => {
     const w = widgets.find((x) => x.widget_type === widgetType);
     const cfg = (w?.config ?? {}) as Record<string, unknown>;
     return (
       <WidgetPeriodScope
-        key={`${widgetType}${keySuffix}-${String(cfg.period ?? "")}`}
+        key={`${widgetType}${keySuffix}`}
         initialPeriod={cfg.period}
         initialOffset={cfg.offset}
         onChange={(p, o) => { void updateWidgetPeriod(widgetType, p, o); }}
