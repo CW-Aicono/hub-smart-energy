@@ -92,7 +92,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (!existingUser) {
       return json(
-        { status: "available", message: "E-Mail-Adresse ist verfügbar." },
+        { status: "available", message: "E-Mail-Adresse kann eingeladen werden." },
         200,
         corsHeaders,
       );
