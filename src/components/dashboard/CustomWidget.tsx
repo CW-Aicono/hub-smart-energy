@@ -559,6 +559,8 @@ export default function CustomWidget({ definition, locationId }: CustomWidgetPro
             {name}
             <span className="text-xs text-muted-foreground">{displayUnit}</span>
           </CardTitle>
+          <div className="flex items-center gap-1">
+          <OpenInAnalysisButton meterIds={config.meter_ids} period={selectedPeriod} />
           <Select value={selectedPeriod} onValueChange={(v) => setSelectedPeriod(v as TimePeriod)}>
             <SelectTrigger className="w-[100px] h-7 text-xs">
               <SelectValue />
