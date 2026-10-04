@@ -37,6 +37,14 @@ const Auth = () => {
     if (typeof window !== "undefined" && localStorage.getItem(AUTO_LOGOUT_FLAG_KEY) === "1") {
       setShowAutoLogoutNotice(true);
     }
+    if (new URLSearchParams(window.location.search).get("blocked") === "1") {
+      toast({
+        title: t("common.error"),
+        description: "Dieses Benutzerkonto ist gesperrt. Bitte wenden Sie sich an Ihren Administrator.",
+        variant: "destructive",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const dismissAutoLogoutNotice = () => {
