@@ -108,10 +108,14 @@ const GettingStarted = () => {
         })
         .eq("id", tenant.id);
 
-      // Update profile contact person
+      // Ansprechpartner darf jeder selbst pflegen; Firmenname nur Admins (DB-Trigger prüft)
       await supabase
         .from("profiles")
-        .update({ contact_person: contactPerson || null, company_name: companyName || null })
+        .update({ contact_person: contactPerson || null })
+        .eq("user_id", user.id);
+      await supabase
+        .from("profiles")
+        .update({ company_name: companyName || null })
         .eq("user_id", user.id);
 
       await refetchTenant();

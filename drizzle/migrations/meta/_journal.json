@@ -43,6 +43,13 @@
       "when": 1791145818687,
       "tag": "0005_email_templates_admin_only_write",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791146110351,
+      "tag": "0006_company_name_admin_only",
+      "breakpoints": true
     }
   ]
 }
