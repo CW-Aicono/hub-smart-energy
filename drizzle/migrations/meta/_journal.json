@@ -36,6 +36,13 @@
       "when": 1791145786654,
       "tag": "0004_guard_profile_privileged_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791145818687,
+      "tag": "0005_email_templates_admin_only_write",
+      "breakpoints": true
     }
   ]
 }
