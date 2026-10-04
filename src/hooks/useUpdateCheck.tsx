@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useLocation } from "react-router-dom";
+import { APP_COMMIT, isVersionCheckEnabled } from "@/lib/appVersion";
 
 interface UpdateCheckState {
   updateAvailable: boolean;
@@ -50,6 +52,40 @@ export function useUpdateCheck(): UpdateCheckState {
       navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
     };
   }, []);
+
+  // Versionsabgleich über /version.json (unabhängig vom Service Worker)
+  const location = useLocation();
+  const lastCheckRef = useRef(0);
+  const checkVersion = useCallback(async (force = false) => {
+    if (!isVersionCheckEnabled()) return;
+    const now = Date.now();
+    if (!force && now - lastCheckRef.current < 60_000) return;
+    lastCheckRef.current = now;
+    try {
+      const res = await fetch(`/version.json?t=${now}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.commit && data.commit !== APP_COMMIT) setUpdateAvailable(true);
+    } catch {
+      /* offline – ignorieren */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isVersionCheckEnabled()) return;
+    checkVersion(true);
+    const id = window.setInterval(() => checkVersion(true), 5 * 60_000);
+    const onVis = () => document.visibilityState === "visible" && checkVersion();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [checkVersion]);
+
+  useEffect(() => {
+    checkVersion();
+  }, [location.pathname, checkVersion]);
 
   const checkForUpdate = useCallback(async () => {
     setChecking(true);

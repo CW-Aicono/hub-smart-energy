@@ -4,6 +4,7 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 import { stripCspMetaPlugin } from "./build/vite-plugin-strip-csp";
+import { versionPlugin } from "./build/vite-plugin-version";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -62,6 +63,7 @@ export default defineConfig(({ mode }) => ({
       },
     }),
     stripCspMetaPlugin(),
+    versionPlugin(),
   ].filter(Boolean),
 
   // IMPORTANT: Ensure Vite rebuilds and uses the React-18 compatible builds.
