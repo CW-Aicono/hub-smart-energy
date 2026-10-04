@@ -9147,8 +9147,10 @@ export type Database = {
       }
       module_prices: {
         Row: {
+          charge_point_price_monthly: number
           created_at: string
           id: string
+          industry_charge_point_price_monthly: number
           industry_price_monthly: number
           industry_standard_price: number
           module_code: string
@@ -9159,8 +9161,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          charge_point_price_monthly?: number
           created_at?: string
           id?: string
+          industry_charge_point_price_monthly?: number
           industry_price_monthly?: number
           industry_standard_price?: number
           module_code: string
@@ -9171,8 +9175,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          charge_point_price_monthly?: number
           created_at?: string
           id?: string
+          industry_charge_point_price_monthly?: number
           industry_price_monthly?: number
           industry_standard_price?: number
           module_code?: string
@@ -14165,8 +14171,62 @@ export type Database = {
           },
         ]
       }
+      tenant_module_discounts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          discount_type: string
+          id: string
+          module_code: string | null
+          note: string | null
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+          valid_from: string
+          valid_until: string | null
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          discount_type: string
+          id?: string
+          module_code?: string | null
+          note?: string | null
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+          valid_from?: string
+          valid_until?: string | null
+          value: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          discount_type?: string
+          id?: string
+          module_code?: string | null
+          note?: string | null
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          valid_from?: string
+          valid_until?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_module_discounts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_modules: {
         Row: {
+          charge_point_price_override: number | null
           created_at: string
           disabled_at: string | null
           enabled_at: string | null
@@ -14178,6 +14238,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          charge_point_price_override?: number | null
           created_at?: string
           disabled_at?: string | null
           enabled_at?: string | null
@@ -14189,6 +14250,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          charge_point_price_override?: number | null
           created_at?: string
           disabled_at?: string | null
           enabled_at?: string | null
@@ -15411,6 +15473,20 @@ export type Database = {
           meter_ids: string[]
           sensor_uuid_key: string
           tenant_id: string
+        }[]
+      }
+      get_active_charge_point_counts: {
+        Args: { p_since?: string }
+        Returns: {
+          active_count: number
+          tenant_id: string
+        }[]
+      }
+      get_auth_user_by_email: {
+        Args: { _email: string }
+        Returns: {
+          email: string
+          id: string
         }[]
       }
       get_auth_user_email: { Args: never; Returns: string }

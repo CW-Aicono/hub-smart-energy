@@ -7,6 +7,7 @@ import { ChangePasswordCard } from "@/components/settings/ChangePasswordCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { User } from "lucide-react";
+import { AppVersionLabel } from "@/components/AppVersionLabel";
 
 const Profile = () => {
   const { user, loading: authLoading } = useAuth();
@@ -61,6 +62,9 @@ const Profile = () => {
                   <p className="font-medium text-lg">{user.email}</p>
                   <p className="text-sm text-muted-foreground">
                     {t("profile.memberSince")} {new Date(user.created_at || "").toLocaleDateString(dateLocale)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    App-Version: <AppVersionLabel />
                   </p>
                 </div>
               </div>

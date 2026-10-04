@@ -8,7 +8,7 @@ import { DashboardFilterProvider } from "@/hooks/useDashboardFilter";
 import { isImpersonating } from "@/lib/supportView";
 import { usePartnerAccess } from "@/hooks/usePartnerAccess";
 import { isPartnerHost, isSalesHost } from "@/lib/hostname";
-import { getAreaPreference } from "@/lib/areaPreference";
+import { getAreaPreference, type AppArea } from "@/lib/areaPreference";
 import AreaChooser from "@/components/common/AreaChooser";
 import DashboardContent from "./DashboardContent";
 
@@ -59,9 +59,10 @@ const Index = () => {
   // Subdomain das Partner-Portal greifen.
   if (isPartnerHost()) return <Navigate to="/partner" replace />;
 
-  // Partner-Mitglieder: hat der Nutzer zusätzlich einen eigenen Mandanten,
-  // entscheidet die gespeicherte Präferenz bzw. eine einmalige Auswahl.
-  if (isPartnerMember && !isSuperAdmin) {
+  // Mehrere Bereiche (Super-Admin / Partner / eigener Mandant):
+  // gespeicherte Präferenz bzw. einmalige Auswahl. Die Präferenz ist nur
+  // Navigationshilfe – jeder Bereich hat seinen eigenen Rechte-Guard.
+  if ((isPartnerMember || isSuperAdmin) && !isImpersonating()) {
     if (tenantLoading) {
       return (
         <div className="flex min-h-screen items-center justify-center bg-background">
@@ -69,15 +70,22 @@ const Index = () => {
         </div>
       );
     }
-    if (!tenant) return <Navigate to="/partner" replace />;
-    const pref = getAreaPreference();
-    if (pref === "partner") return <Navigate to="/partner" replace />;
-    if (pref !== "ems") return <AreaChooser partnerName={partnerName} tenantName={tenant.name} />;
-  }
+    const areas: AppArea[] = [];
+    if (isSuperAdmin) areas.push("super_admin");
+    if (isPartnerMember) areas.push("partner");
+    if (tenant) areas.push("ems");
 
-  // Super-Admins have no tenant context — redirect them to their dedicated area,
-  // UNLESS they are actively viewing a tenant via Remote-Support (impersonation).
-  if (isSuperAdmin && !isImpersonating()) return <Navigate to="/super-admin" replace />;
+    if (areas.length === 1) {
+      if (areas[0] === "super_admin") return <Navigate to="/super-admin" replace />;
+      if (areas[0] === "partner") return <Navigate to="/partner" replace />;
+    } else if (areas.length > 1) {
+      const pref = getAreaPreference();
+      const valid = pref && areas.includes(pref) ? pref : null;
+      if (valid === "super_admin") return <Navigate to="/super-admin" replace />;
+      if (valid === "partner") return <Navigate to="/partner" replace />;
+      if (!valid) return <AreaChooser partnerName={partnerName} tenantName={tenant?.name} areas={areas} />;
+    }
+  }
 
   if (!onboardingChecked) {
     return (

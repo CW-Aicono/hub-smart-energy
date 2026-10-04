@@ -34,23 +34,52 @@ Deno.serve(async (req) => {
     // 2. Get all tenant_modules (active)
     const { data: allModules, error: mErr } = await supabase
       .from("tenant_modules")
-      .select("tenant_id, module_code, is_enabled, price_override");
+      .select("tenant_id, module_code, is_enabled, price_override, charge_point_price_override");
     if (mErr) throw mErr;
 
-    // 3. Get global module prices (member + standard)
+    // 3. Get global module prices (member + standard + per charge point)
     const { data: globalPrices, error: gpErr } = await supabase
       .from("module_prices")
-      .select("module_code, price_monthly, standard_price, industry_price_monthly, industry_standard_price");
+      .select("module_code, price_monthly, standard_price, industry_price_monthly, industry_standard_price, charge_point_price_monthly, industry_charge_point_price_monthly");
     if (gpErr) throw gpErr;
 
-    const globalPriceMap: Record<string, { member: number; standard: number; industryMember: number; industryStandard: number }> = {};
+    const globalPriceMap: Record<string, { member: number; standard: number; industryMember: number; industryStandard: number; cp: number; industryCp: number }> = {};
     for (const gp of globalPrices ?? []) {
       globalPriceMap[gp.module_code] = {
         member: Number(gp.price_monthly),
         standard: Number(gp.standard_price ?? gp.price_monthly),
         industryMember: Number(gp.industry_price_monthly ?? 0),
         industryStandard: Number(gp.industry_standard_price ?? 0),
+        cp: Number(gp.charge_point_price_monthly ?? 0),
+        industryCp: Number(gp.industry_charge_point_price_monthly ?? 0),
       };
+    }
+
+    // 3b. Aktive Ladepunkte im Abrechnungsmonat (mind. ein Heartbeat seit Monatsbeginn)
+    const activeCpByTenant: Record<string, number> = {};
+    {
+      const { data: cps, error: cpErr } = await supabase
+        .from("charge_points")
+        .select("tenant_id")
+        .gte("last_heartbeat", lastMonthStart.toISOString());
+      if (cpErr) throw cpErr;
+      for (const cp of cps ?? []) {
+        if (cp.tenant_id) activeCpByTenant[cp.tenant_id] = (activeCpByTenant[cp.tenant_id] ?? 0) + 1;
+      }
+    }
+
+    // 3c. Rabatte, die den Abrechnungsmonat überlappen
+    const discountsByTenant: Record<string, any[]> = {};
+    {
+      const { data: discounts, error: dErr } = await supabase
+        .from("tenant_module_discounts")
+        .select("id, tenant_id, module_code, discount_type, value, valid_from, valid_until, note")
+        .lte("valid_from", fmt(lastMonthEnd))
+        .or(`valid_until.is.null,valid_until.gte.${fmt(lastMonthStart)}`);
+      if (dErr) throw dErr;
+      for (const d of discounts ?? []) {
+        (discountsByTenant[d.tenant_id] ??= []).push(d);
+      }
     }
 
     // 4. Get support sessions from last month for all tenants
@@ -123,28 +152,68 @@ Deno.serve(async (req) => {
       // Module line items (for current month)
       const moduleLineItems: any[] = [];
       let moduleTotal = 0;
+      const activeCp = activeCpByTenant[tenant.id] ?? 0;
+      const tenantDiscounts = discountsByTenant[tenant.id] ?? [];
       for (const tm of tenantModules) {
         if (tm.module_code === "dashboard") continue;
         const priceEntry = globalPriceMap[tm.module_code];
         let globalPrice = 0;
+        let globalCpPrice = 0;
         if (priceEntry) {
           if (isKommune) {
             globalPrice = isMember ? priceEntry.member : priceEntry.standard;
+            globalCpPrice = priceEntry.cp;
           } else {
             globalPrice = isMember ? priceEntry.industryMember : priceEntry.industryStandard;
+            globalCpPrice = priceEntry.industryCp;
           }
         }
-        const price =
-          tm.price_override != null
-            ? Number(tm.price_override)
-            : globalPrice;
-        moduleLineItems.push({
-          type: "module",
-          code: tm.module_code,
-          label: tm.module_code,
-          amount: price,
-        });
-        moduleTotal += price;
+        // Pauschale und Ladepunktpreis sind frei kombinierbar (0 = nicht berechnet)
+        const flat = tm.price_override != null ? Number(tm.price_override) : globalPrice;
+        const cpPrice = tm.charge_point_price_override != null ? Number(tm.charge_point_price_override) : globalCpPrice;
+        let gross = 0;
+        if (flat > 0) {
+          moduleLineItems.push({ type: "module", code: tm.module_code, label: tm.module_code, amount: flat });
+          gross += flat;
+        }
+        if (cpPrice > 0 && activeCp > 0) {
+          const cpAmount = Math.round(cpPrice * activeCp * 100) / 100;
+          moduleLineItems.push({
+            type: "module_charge_points",
+            code: tm.module_code,
+            label: `${tm.module_code} – ${activeCp} Ladepunkte × ${cpPrice.toLocaleString("de-DE", { minimumFractionDigits: 2 })} €`,
+            quantity: activeCp,
+            unit_price: cpPrice,
+            amount: cpAmount,
+          });
+          gross += cpAmount;
+        }
+        if (flat <= 0 && !(cpPrice > 0 && activeCp > 0)) {
+          // Modul ohne Kosten trotzdem ausweisen (Transparenz wie bisher)
+          moduleLineItems.push({ type: "module", code: tm.module_code, label: tm.module_code, amount: 0 });
+        }
+        // Rabatt: im Abrechnungsmonat gültig, günstigster gilt, nie unter 0
+        let best: { amount: number; d: any } | null = null;
+        for (const d of tenantDiscounts) {
+          if (d.module_code && d.module_code !== tm.module_code) continue;
+          const amt = d.discount_type === "percent" ? gross * Number(d.value) / 100 : Number(d.value);
+          const capped = Math.min(gross, Math.round(amt * 100) / 100);
+          if (capped > 0 && (!best || capped > best.amount)) best = { amount: capped, d };
+        }
+        if (best) {
+          const d = best.d;
+          const what = d.discount_type === "percent" ? `${Number(d.value).toLocaleString("de-DE")} %` : `${Number(d.value).toLocaleString("de-DE", { minimumFractionDigits: 2 })} €`;
+          const until = d.valid_until ? ` bis ${new Date(d.valid_until).toLocaleDateString("de-DE")}` : "";
+          moduleLineItems.push({
+            type: "discount",
+            code: tm.module_code,
+            discount_id: d.id,
+            label: `${d.note || "Rabatt"} ${what}${until}`,
+            amount: -best.amount,
+          });
+          gross -= best.amount;
+        }
+        moduleTotal += gross;
       }
 
       // Support line items (for last month)

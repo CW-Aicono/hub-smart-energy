@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { findAuthUserByEmail } from "../_shared/invite-conflict.ts";
 
 /**
  * Check whether an email address can be used for a new invitation.
@@ -80,25 +81,13 @@ const handler = async (req: Request): Promise<Response> => {
       return json({ error: "Only super admins can invite platform users" }, 403, corsHeaders);
     }
 
-    // ── Look up existing user in auth.users ──
-    // listUsers is paginated; we scan up to 5 pages of 1000 = 5000 users.
-    // Safe enough for this app size; can be replaced by an indexed view later.
-    let existingUser:
-      | { id: string; email: string | null | undefined }
-      | null = null;
-    for (let page = 1; page <= 5; page++) {
-      const { data: list, error: listErr } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
-      if (listErr) {
-        console.error("[check-email-availability] listUsers error", listErr);
-        return json({ error: "Lookup failed" }, 500, corsHeaders);
-      }
-      const found = list?.users?.find((u) => u.email?.toLowerCase() === email);
-      if (found) {
-        existingUser = { id: found.id, email: found.email };
-        break;
-      }
-      if (!list?.users || list.users.length < 1000) break;
+    // ── Look up existing user in auth.users (indexed RPC, fallback paginated) ──
+    const lookup = await findAuthUserByEmail(supabase, email);
+    if ("error" in lookup) {
+      console.error("[check-email-availability] lookup error");
+      return json({ error: "Lookup failed" }, 500, corsHeaders);
     }
+    const existingUser: { id: string; email: string | null | undefined } | null = lookup.user;
 
     if (!existingUser) {
       return json(

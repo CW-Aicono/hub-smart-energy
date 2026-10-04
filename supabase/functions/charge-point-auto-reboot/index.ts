@@ -164,7 +164,43 @@ Deno.serve(async (req) => {
     console.log(`[auto-reboot] dispatched ${cp.auto_reboot_type} reset to ${cp.name} (${cp.ocpp_id})`);
   }
 
+  // --- Plausibilitätsprüfung: hängender "Lädt"-Status ----------------------
+  // Stecker meldet seit >2h einen Lade-/Belegt-Status, Wallbox ist online,
+  // aber es gibt keinen aktiven Ladevorgang → frische Statusmeldung anfordern.
+  // Der Status wird NICHT blind überschrieben; die Wallbox meldet selbst neu.
+  let staleTriggered = 0;
+  try {
+    const cutoff = new Date(nowUtc.getTime() - 2 * 3600_000).toISOString();
+    const { data: stale } = await supabase
+      .from("charge_point_connectors")
+      .select("connector_id, charge_point_id, status, last_status_at, charge_points!inner(ocpp_id, ws_connected)")
+      .in("status", ["Charging", "SuspendedEV", "SuspendedEVSE", "Finishing", "Preparing", "Occupied"])
+      .lt("last_status_at", cutoff)
+      .eq("charge_points.ws_connected", true)
+      .limit(200);
+    for (const c of (stale ?? []) as any[]) {
+      const ocppId = c.charge_points?.ocpp_id;
+      if (!ocppId) continue;
+      const { count } = await supabase
+        .from("charging_sessions")
+        .select("id", { count: "exact", head: true })
+        .eq("charge_point_id", c.charge_point_id)
+        .eq("status", "active");
+      if ((count ?? 0) > 0) continue;
+      const { error: tErr } = await supabase.from("pending_ocpp_commands").insert({
+        charge_point_ocpp_id: ocppId,
+        command: "TriggerMessage",
+        payload: { requestedMessage: "StatusNotification", connectorId: c.connector_id },
+        status: "pending",
+      });
+      if (!tErr) staleTriggered++;
+    }
+  } catch (e) {
+    console.error("[auto-reboot] stale status check failed", e);
+  }
+
   const summary = {
+    staleTriggered,
     ok: true,
     dispatched,
     skippedCharging,

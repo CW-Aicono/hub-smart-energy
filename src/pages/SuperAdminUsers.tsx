@@ -10,7 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Shield, User, UserCheck, UserX } from "lucide-react";
+import { Shield, User, UserCheck, UserX, Trash2 } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -49,8 +53,10 @@ const SuperAdminUsers = () => {
       const { data: roles, error: rErr } = await supabase.from("user_roles").select("*");
       if (rErr) throw rErr;
       return (profiles || []).map((p: any): PlatformUser => {
-        const userRole = roles?.find((r: any) => r.user_id === p.user_id);
-        return { id: p.id, user_id: p.user_id, email: p.email, contact_person: p.contact_person, is_blocked: p.is_blocked, created_at: p.created_at, role: (userRole?.role as PlatformUser["role"]) ?? "user" };
+        // A user can have several role rows – show the highest one
+        const own = (roles || []).filter((r: any) => r.user_id === p.user_id).map((r: any) => r.role);
+        const role: PlatformUser["role"] = own.includes("super_admin") ? "super_admin" : own.includes("admin") ? "admin" : "user";
+        return { id: p.id, user_id: p.user_id, email: p.email, contact_person: p.contact_person, is_blocked: p.is_blocked, created_at: p.created_at, role };
       });
     },
   });
@@ -77,6 +83,29 @@ const SuperAdminUsers = () => {
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["super-admin-users"] }); toast({ title: t("users.status_updated") }); },
     onError: () => { toast({ title: t("error.generic"), description: t("error.status_change"), variant: "destructive" }); },
+  });
+
+  const [deleteTarget, setDeleteTarget] = useState<PlatformUser | null>(null);
+  const superAdminCount = users.filter((x) => x.role === "super_admin").length;
+  const deleteUser = useMutation({
+    mutationFn: async (target: PlatformUser) => {
+      if (target.user_id === user?.id) throw new Error("Sie können Ihr eigenes Konto nicht löschen.");
+      if (target.role === "super_admin" && superAdminCount <= 1) throw new Error("Der letzte Super-Admin kann nicht gelöscht werden.");
+      const { data, error } = await supabase.functions.invoke("delete-user", { body: { userId: target.user_id } });
+      if (error) {
+        let msg = error.message;
+        try { const body = await (error as any).context?.json?.(); if (body?.error) msg = body.error; } catch { /* ignore */ }
+        throw new Error(msg);
+      }
+      if (data && data.success === false) throw new Error(data.error ?? "Löschen fehlgeschlagen");
+    },
+    onSuccess: () => {
+      setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["super-admin-users"] });
+      queryClient.invalidateQueries({ queryKey: ["sa-super-admins"] });
+      toast({ title: "Benutzer gelöscht" });
+    },
+    onError: (e: any) => { toast({ title: t("error.generic"), description: e?.message, variant: "destructive" }); },
   });
 
   const updateRole = useMutation({
@@ -171,6 +200,20 @@ const SuperAdminUsers = () => {
                                 </Button>
                               );
                             })()}
+                            {(() => {
+                              const isSelf = u.user_id === user?.id;
+                              const isLast = u.role === "super_admin" && superAdminCount <= 1;
+                              const blocked = isSelf || isLast;
+                              return (
+                                <Button variant="ghost" size="icon" aria-label="Benutzer löschen"
+                                  title={isSelf ? "Eigenes Konto kann nicht gelöscht werden" : isLast ? "Letzter Super-Admin kann nicht gelöscht werden" : "Benutzer löschen"}
+                                  disabled={blocked || deleteUser.isPending}
+                                  onClick={() => setDeleteTarget(u)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              );
+                            })()}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -182,6 +225,27 @@ const SuperAdminUsers = () => {
           </Card>
         </div>
       </main>
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Benutzer unwiderruflich löschen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="block font-medium text-foreground">{deleteTarget?.contact_person || "–"} ({deleteTarget?.email})</span>
+              <span className="block mt-2">Möchten Sie diesen Benutzer wirklich unwiderruflich löschen? Konto, Profil und alle Rollen werden entfernt. Dies kann nicht rückgängig gemacht werden.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteUser.isPending}
+              onClick={(e) => { e.preventDefault(); if (deleteTarget) deleteUser.mutate(deleteTarget); }}
+            >
+              Endgültig löschen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

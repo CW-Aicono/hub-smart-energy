@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Building2, Factory } from "lucide-react";
+import { useActiveChargePoints } from "@/hooks/useActiveChargePoints";
 
 const editableModules = ALL_MODULES.filter((m) => !("alwaysOn" in m));
 
@@ -47,7 +48,8 @@ const PriceInput = ({ currentPrice, unit, onSave }: PriceInputProps) => {
 const SuperAdminModulePricing = () => {
   const { user, loading: authLoading } = useAuth();
   const { isSuperAdmin, loading: roleLoading } = useSuperAdmin();
-  const { prices, isLoading, updatePrice, getPrice, getStandardPrice, getIndustryPrice, getIndustryStandardPrice, getPartnerPrice, getPartnerIndustryPrice } = useModulePrices();
+  const { prices, isLoading, updatePrice, getPrice, getStandardPrice, getIndustryPrice, getIndustryStandardPrice, getPartnerPrice, getPartnerIndustryPrice, getChargePointPrice } = useModulePrices();
+  const { total: activeCpTotal } = useActiveChargePoints();
   const { t } = useSATranslation();
   const [sector, setSector] = useState<"kommune" | "industrie">("kommune");
 
@@ -95,6 +97,7 @@ const SuperAdminModulePricing = () => {
                   <span className="text-sm font-semibold text-muted-foreground w-36 text-center">Partner-Einkauf</span>
                   <span className="text-sm font-semibold text-muted-foreground w-36 text-center">AICONO e.&thinsp;V.</span>
                   <span className="text-sm font-semibold text-muted-foreground w-36 text-center">Standardpreis</span>
+                  <span className="text-sm font-semibold text-muted-foreground w-36 text-center">je aktivem Ladepunkt</span>
                 </div>
               </div>
               <div className="space-y-4">
@@ -103,6 +106,7 @@ const SuperAdminModulePricing = () => {
                   const partnerPrice = sector === "kommune" ? getPartnerPrice(mod.code) : getPartnerIndustryPrice(mod.code);
                   const memberPrice = sector === "kommune" ? getPrice(mod.code) : getIndustryPrice(mod.code);
                   const stdPrice = sector === "kommune" ? getStandardPrice(mod.code) : getIndustryStandardPrice(mod.code);
+                  const cpPrice = getChargePointPrice(mod.code, sector === "industrie");
                   return (
                     <div key={mod.code} className="flex items-center justify-between gap-4">
                       <Label className="text-base flex-1">{mod.label}</Label>
@@ -140,6 +144,26 @@ const SuperAdminModulePricing = () => {
                             )
                           }
                         />
+                        {mod.code === "support_billing" ? <span className="w-36" /> : (
+                          <div className="flex flex-col items-end">
+                            <PriceInput
+                              currentPrice={cpPrice}
+                              unit="€/LP"
+                              onSave={(val) =>
+                                updatePrice.mutate(
+                                  sector === "kommune"
+                                    ? { moduleCode: mod.code, chargePointPriceMonthly: val }
+                                    : { moduleCode: mod.code, industryChargePointPriceMonthly: val }
+                                )
+                              }
+                            />
+                            {cpPrice > 0 && (
+                              <span className="text-[11px] text-muted-foreground mt-0.5">
+                                {activeCpTotal.toLocaleString("de-DE")} aktiv → {(cpPrice * activeCpTotal).toLocaleString("de-DE", { style: "currency", currency: "EUR" })}/Mo
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -148,7 +172,8 @@ const SuperAdminModulePricing = () => {
               <p className="text-xs text-muted-foreground mt-6">
                 <strong>Partner-Einkauf</strong>: Einstandspreis für Vertriebspartner im Wiederverkaufs-Modell.{" "}
                 <strong>AICONO e.&thinsp;V.</strong>: Vergünstigter Mitgliederpreis.{" "}
-                <strong>Standardpreis</strong>: empfohlener Endkundenpreis (auch Default-Verkaufspreis für Partner).
+                <strong>Standardpreis</strong>: empfohlener Endkundenpreis (auch Default-Verkaufspreis für Partner).{" "}
+                <strong>Je aktivem Ladepunkt</strong>: zusätzlich oder statt der Pauschale; 0 € = nicht berechnet. Aktiv = in den letzten 30 Tagen verbunden (aktuell {activeCpTotal.toLocaleString("de-DE")} Ladepunkte über alle Mandanten).
               </p>
             </CardContent>
           </Card>

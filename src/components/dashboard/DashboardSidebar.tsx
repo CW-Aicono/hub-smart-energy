@@ -13,6 +13,7 @@ import { useDemoMode, useDemoPath } from "@/contexts/DemoMode";
 import { Button } from "@/components/ui/button";
 import { MobileHeader } from "@/components/dashboard/MobileSidebar";
 import { LayoutDashboard, LogOut, Shield, Settings, Users, ChevronDown, ChevronRight, MapPin, PanelLeftClose, PanelLeft, UserCircle, Key, HelpCircle, Plug, Palette, Database, Gauge, Download, Car, PlugZap, Receipt, Cpu, Activity, Mail, Smartphone, Network, ListChecks, TrendingUp, Home, BookOpen, FileText, Sparkles, Sun, Share2, FileSignature, Euro, BarChart3, CreditCard } from "lucide-react";
+import { AppVersionLabel } from "@/components/AppVersionLabel";
 import { cn } from "@/lib/utils";
 import { TenantLogo } from "@/components/tenant/TenantLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -152,6 +153,7 @@ const DashboardSidebar = () => {
       children: [
         { to: "/live-values", icon: Activity, labelKey: "nav.liveValues" as TranslationKey },
         { to: "/meters", icon: Gauge, labelKey: "nav.meters" as TranslationKey },
+        { to: "/analytics-studio/analyse", icon: Activity, labelKey: "nav.energyAnalysis" as TranslationKey },
         { to: "/analytics-studio", icon: BarChart3, labelKey: "nav.analyticsStudio" as TranslationKey },
         { to: "/energy-data", icon: Download, labelKey: "nav.exports" as TranslationKey },
         { to: "/energy-report", icon: FileText, labelKey: "nav.energyReport" as TranslationKey },
@@ -390,12 +392,8 @@ const DashboardSidebar = () => {
         </Button>
       </div>
 
-      {/* Bereichs-Umschalter (nur für Partner mit eigenem Mandanten) */}
-      {!collapsed && canSwitchArea && (
-        <div className="px-4 pt-3">
-          <AreaSwitcher current="ems" className="w-full justify-between" />
-        </div>
-      )}
+      {/* Bereichs-Umschalter: fest oben rechts */}
+      <AreaSwitcher current="ems" floating />
 
       {/* Nav - scrollable */}
       <nav className={cn(
@@ -473,6 +471,9 @@ const DashboardSidebar = () => {
                 {t("nav.logout")}
               </DropdownMenuItem>
             )}
+            <div className="px-2 pt-1 pb-1 border-t mt-1">
+              <AppVersionLabel />
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

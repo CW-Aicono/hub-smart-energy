@@ -22,6 +22,48 @@
       "when": 1791129990439,
       "tag": "0002_support_sessions_no_timeout_and_audit_link",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791145498684,
+      "tag": "0003_real_account_block",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791145786654,
+      "tag": "0004_guard_profile_privileged_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791145818687,
+      "tag": "0005_email_templates_admin_only_write",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791146110351,
+      "tag": "0006_company_name_admin_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791147322185,
+      "tag": "0007_billing_charge_point_price_and_discounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791148283013,
+      "tag": "0008_get_auth_user_by_email",
+      "breakpoints": true
     }
   ]
 }
