@@ -64,7 +64,7 @@ export default defineConfig(({ mode }) => ({
     }),
     stripCspMetaPlugin(),
     versionPlugin(),
-  ].filter(Boolean),
+  ].filter(Boolean) as any[],
 
   // IMPORTANT: Ensure Vite rebuilds and uses the React-18 compatible builds.
   optimizeDeps: {
