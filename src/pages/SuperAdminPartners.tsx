@@ -944,6 +944,12 @@ export default function SuperAdminPartners() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <PartnerModulesDialog
+        partnerId={modulesPartner?.id ?? null}
+        partnerName={(modulesPartner as any)?.name}
+        open={!!modulesPartner}
+        onOpenChange={(o) => { if (!o) setModulesPartner(null); }}
+      />
       </main>
     </div>
   );
