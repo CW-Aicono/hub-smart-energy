@@ -392,12 +392,8 @@ const DashboardSidebar = () => {
         </Button>
       </div>
 
-      {/* Bereichs-Umschalter (nur für Partner mit eigenem Mandanten) */}
-      {!collapsed && canSwitchArea && (
-        <div className="px-4 pt-3">
-          <AreaSwitcher current="ems" className="w-full justify-between" />
-        </div>
-      )}
+      {/* Bereichs-Umschalter: fest oben rechts */}
+      <AreaSwitcher current="ems" floating />
 
       {/* Nav - scrollable */}
       <nav className={cn(

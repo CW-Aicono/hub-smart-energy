@@ -212,11 +212,7 @@ export default function SuperAdminSidebar() {
         </Button>
       </div>
 
-      {!collapsed && (
-        <div className="px-3 pt-3">
-          <AreaSwitcher current="super_admin" className="w-full" />
-        </div>
-      )}
+      <AreaSwitcher current="super_admin" floating />
 
       {/* Nav */}
       <nav className={cn("flex-1 space-y-1 overflow-y-auto", collapsed ? "p-2" : "p-4")}>

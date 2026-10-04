@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Briefcase, Cpu, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -7,6 +8,8 @@ import { setAreaPreference, AREA_PATHS, type AppArea } from "@/lib/areaPreferenc
 interface AreaSwitcherProps {
   current: AppArea;
   className?: string;
+  /** Fest oben rechts im Fenster anzeigen (einheitlich in allen Bereichen). */
+  floating?: boolean;
 }
 
 const META: Record<AppArea, { label: string; Icon: typeof Cpu }> = {
@@ -19,7 +22,7 @@ const META: Record<AppArea, { label: string; Icon: typeof Cpu }> = {
  * Umschalter zwischen Super-Admin, Partner-Portal und EMS.
  * Erscheint nur bei mindestens zwei berechtigten Bereichen.
  */
-export function AreaSwitcher({ current, className }: AreaSwitcherProps) {
+export function AreaSwitcher({ current, className, floating = false }: AreaSwitcherProps) {
   const { canSwitch, availableAreas } = useAreaAccess();
   const navigate = useNavigate();
 
@@ -36,11 +39,15 @@ export function AreaSwitcher({ current, className }: AreaSwitcherProps) {
   const active = "bg-primary text-primary-foreground shadow-sm";
   const inactive = "bg-transparent text-foreground/85 hover:bg-accent hover:text-accent-foreground";
 
-  return (
+  const pill = (
     <div
       role="tablist"
       aria-label="Bereich wechseln"
-      className={cn("inline-flex items-center gap-1 rounded-full border-2 border-border bg-card p-1", className)}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border-2 border-border bg-card p-1",
+        floating && "shadow-lg",
+        className,
+      )}
     >
       {availableAreas.map((area) => {
         const { label, Icon } = META[area];
@@ -54,11 +61,18 @@ export function AreaSwitcher({ current, className }: AreaSwitcherProps) {
             className={cn(base, current === area ? active : inactive)}
           >
             <Icon className="h-3.5 w-3.5 shrink-0" />
-            <span>{label}</span>
+            <span className={floating ? "hidden sm:inline" : undefined}>{label}</span>
           </button>
         );
       })}
     </div>
+  );
+
+  if (!floating) return pill;
+  // Immer an derselben Stelle oben rechts – unabhängig vom Bereich.
+  return createPortal(
+    <div className="fixed top-3 right-4 z-50 print:hidden">{pill}</div>,
+    document.body,
   );
 }
 

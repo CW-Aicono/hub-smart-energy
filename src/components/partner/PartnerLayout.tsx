@@ -50,9 +50,7 @@ export function PartnerLayout({ children }: PartnerLayoutProps) {
     <div className="flex min-h-screen bg-background">
       <PartnerSidebar />
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex justify-end border-b px-4 py-2">
-          <AreaSwitcher current="partner" />
-        </div>
+        <AreaSwitcher current="partner" floating />
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
     </div>
