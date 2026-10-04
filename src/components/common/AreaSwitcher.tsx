@@ -27,24 +27,34 @@ export function AreaSwitcher({ current, className }: AreaSwitcherProps) {
   };
 
   const base =
-    "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors";
+    "flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const active = "bg-primary text-primary-foreground shadow-sm";
+  const inactive = "bg-transparent text-foreground/85 hover:bg-accent hover:text-accent-foreground";
 
   return (
-    <div className={cn("inline-flex items-center gap-1 rounded-full border bg-muted/40 p-1", className)}>
+    <div
+      role="tablist"
+      aria-label="Bereich wechseln"
+      className={cn("flex w-full items-center gap-1 rounded-full border-2 border-border bg-card p-1", className)}
+    >
       <button
         type="button"
+        role="tab"
+        aria-selected={current === "partner"}
         onClick={() => go("partner")}
-        className={cn(base, current === "partner" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
+        className={cn(base, current === "partner" ? active : inactive)}
       >
-        <Briefcase className="h-3.5 w-3.5" />
+        <Briefcase className="h-3.5 w-3.5 shrink-0" />
         <span>Kaufmännisch</span>
       </button>
       <button
         type="button"
+        role="tab"
+        aria-selected={current === "ems"}
         onClick={() => go("ems")}
-        className={cn(base, current === "ems" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
+        className={cn(base, current === "ems" ? active : inactive)}
       >
-        <Cpu className="h-3.5 w-3.5" />
+        <Cpu className="h-3.5 w-3.5 shrink-0" />
         <span>Technisch</span>
       </button>
     </div>
