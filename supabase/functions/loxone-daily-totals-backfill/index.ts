@@ -1,3 +1,4 @@
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 // Daily cron (01:05 UTC ≙ 02:05 CET / 03:05 CEST):
 // Holt für JEDE aktive Loxone-Integration die Tagessumme des Vortags
 // (im Miniserver-Intervall, z.B. 30/60 Min) und überschreibt damit
@@ -12,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
+  { const __deny = rejectIfNotInternal(req); if (__deny) return __deny; }
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });

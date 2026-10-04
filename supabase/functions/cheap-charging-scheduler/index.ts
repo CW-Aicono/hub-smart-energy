@@ -1,3 +1,4 @@
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 // Cheap-Charging Scheduler — runs every 5 minutes via pg_cron.
 //
 // Reads each charge point's effective cheap-charging configuration (CP override
@@ -300,6 +301,7 @@ async function run() {
 }
 
 Deno.serve(async (req) => {
+  { const __deny = rejectIfNotInternal(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
