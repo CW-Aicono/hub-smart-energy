@@ -1,6 +1,7 @@
 # Versionshinweise
 
 ## Oktober 2026
+- **Fernwartung ohne Zeitdruck und nachvollziehbar:** Eine Remote-Sitzung läuft, bis sie beendet wird. Unter Hilfe → Remote-Support sehen Sie jetzt, wann und wie lange eine Sitzung stattfand und was dabei geändert wurde. Schalten Sie Remote-Support aus, endet eine laufende Sitzung sofort.
 - **Ein Konto, mehrere Rollen:** Mit derselben E-Mail-Adresse können Sie Mandant, Partner und Administrator sein und oben links zwischen „Kaufmännisch" und „Technisch" wechseln.
 - **Module für Ihre Kunden freigeben:** Partner können ihren Kunden jetzt selbst Module ein- und ausschalten – im Rahmen der für sie lizenzierten Module.
 - **Bessere Lesbarkeit:** Der Bereichs-Umschalter ist deutlicher, und der Hinweis bei einer Fernwartung verdeckt keine Knöpfe mehr.
