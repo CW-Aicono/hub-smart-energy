@@ -57,6 +57,13 @@
       "when": 1791147322185,
       "tag": "0007_billing_charge_point_price_and_discounts",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791148283013,
+      "tag": "0008_get_auth_user_by_email",
+      "breakpoints": true
     }
   ]
 }

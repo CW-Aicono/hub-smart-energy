@@ -32,13 +32,21 @@ export interface InviteConflictResult {
   existingUserId?: string;
 }
 
-async function findAuthUserByEmail(supabase: SupabaseAdmin, email: string) {
-  for (let page = 1; page <= 5; page++) {
-    const { data: list, error: listErr } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+export async function findAuthUserByEmail(supabase: SupabaseAdmin, email: string) {
+  // Primary: indexed lookup via SECURITY DEFINER RPC (service_role only).
+  const { data, error } = await supabase.rpc("get_auth_user_by_email", { _email: email });
+  if (!error) {
+    const row = Array.isArray(data) ? data[0] : data;
+    return { user: row ? { id: row.id as string, email: (row.email as string | null) ?? null } : null };
+  }
+  console.warn("[invite-conflict] RPC lookup failed, falling back to listUsers", error);
+  // Fallback: paginate with an allowed page size.
+  for (let page = 1; page <= 100; page++) {
+    const { data: list, error: listErr } = await supabase.auth.admin.listUsers({ page, perPage: 50 });
     if (listErr) return { error: "Benutzer-Lookup fehlgeschlagen." as const };
     const found = list?.users?.find((u: { email?: string | null }) => u.email?.toLowerCase() === email);
     if (found) return { user: { id: found.id as string, email: (found.email as string | null) ?? null } };
-    if (!list?.users || list.users.length < 1000) break;
+    if (!list?.users || list.users.length < 50) break;
   }
   return { user: null };
 }
