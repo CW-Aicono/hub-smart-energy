@@ -64,6 +64,13 @@
       "when": 1791148283013,
       "tag": "0008_get_auth_user_by_email",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791149526529,
+      "tag": "0009_cp_sub_prices_and_bundle_discounts",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 # Versionshinweise
 
 ## Oktober 2026
+- **v1.3.0 – Ladepunkte & Rabatte überarbeitet:** Der Preis je aktivem Ladepunkt steht jetzt als Unterpunkt unter „Ladeinfrastruktur“. Rabatte vergeben Sie direkt in der Modulzeile des Kunden – auch für Bundles, mit Laufzeit in Monaten oder Jahren, monatlich, per Vorkasse oder als Einmalzahlung.
 - **v1.2.1 – Einladungen repariert:** Bereits registrierte Personen (z. B. ein Mitarbeiter eines Kunden) können wieder zusätzlich als Partner-User oder Admin eingeladen werden.
 - **v1.2.0 – Ladepunkt-Gebühr:** Module können pauschal, pro aktivem Ladepunkt oder beides abgerechnet werden. Eine Vorschau zeigt, wie viele Ladepunkte aktiv sind und was das aktuell kostet.
 - **Rabatte:** Für jedes Modul lassen sich Rabatte in Prozent oder Euro vergeben – dauerhaft oder befristet, z. B. 3 Monate Startpreis. Partner können das für ihre Kunden selbst tun.

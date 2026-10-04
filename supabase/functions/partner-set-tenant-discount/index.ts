@@ -40,25 +40,51 @@ Deno.serve(async (req: Request) => {
 
     if (action === "create") {
       const moduleCode = body.moduleCode ? String(body.moduleCode) : null;
+      const bundleId = body.bundleId ? String(body.bundleId) : null;
       const type = body.discountType;
       const value = Number(body.value);
       const validFrom = String(body.validFrom ?? "");
-      const validUntil = body.validUntil ? String(body.validUntil) : null;
+      const paymentMode = body.paymentMode ?? "monthly";
+      const durationValue = body.durationValue == null ? null : Number(body.durationValue);
+      const durationUnit = body.durationUnit ?? null;
+      const oneTimeAmount = body.oneTimeAmount == null ? null : Number(body.oneTimeAmount);
       if (
         (moduleCode !== null && !/^[a-z0-9_]{2,64}$/.test(moduleCode)) ||
+        (bundleId !== null && !UUID.test(bundleId)) || (!moduleCode && !bundleId) || (moduleCode && bundleId) ||
         !["percent", "absolute"].includes(type) ||
-        !(value > 0) || (type === "percent" && value > 100) ||
-        !DATE.test(validFrom) || (validUntil && (!DATE.test(validUntil) || validUntil < validFrom))
+        !(value > 0) || (type === "percent" && value > 100) || !DATE.test(validFrom) ||
+        !["monthly", "prepaid", "one_time"].includes(paymentMode) ||
+        (durationValue !== null && (!Number.isInteger(durationValue) || durationValue < 1 || durationValue > 120)) ||
+        (durationValue !== null && !["month", "year"].includes(durationUnit)) ||
+        (paymentMode !== "monthly" && durationValue === null) ||
+        (paymentMode === "one_time" && !(oneTimeAmount! > 0))
       ) return json({ success: false, error: "Ungültige Rabattangaben." }, 400);
 
-      if (moduleCode) {
-        const { data: pm } = await supabase.from("partner_modules").select("id")
-          .eq("partner_id", membership.partner_id).eq("module_code", moduleCode).maybeSingle();
-        if (!pm) return json({ success: false, error: "Dieses Modul ist für Ihr Partner-Konto nicht freigeschaltet." }, 403);
+      let validUntil: string | null = null;
+      if (durationValue) {
+        const d = new Date(validFrom + "T00:00:00Z");
+        d.setUTCMonth(d.getUTCMonth() + (durationUnit === "year" ? durationValue * 12 : durationValue));
+        d.setUTCDate(d.getUTCDate() - 1);
+        validUntil = d.toISOString().slice(0, 10);
+      }
+
+      const { data: portfolio } = await supabase.from("partner_modules").select("module_code").eq("partner_id", membership.partner_id);
+      const allowed = new Set((portfolio ?? []).map((r: { module_code: string }) => r.module_code));
+      if (moduleCode && !allowed.has(moduleCode)) {
+        return json({ success: false, error: "Dieses Modul ist für Ihr Partner-Konto nicht freigeschaltet." }, 403);
+      }
+      if (bundleId) {
+        const { data: booked } = await supabase.from("tenant_bundles").select("id").eq("tenant_id", tenantId).eq("bundle_id", bundleId).maybeSingle();
+        if (!booked) return json({ success: false, error: "Dieses Bundle ist für den Mandanten nicht gebucht." }, 403);
+        const { data: items } = await supabase.from("module_bundle_items").select("module_code").eq("bundle_id", bundleId);
+        if (!items?.length || items.some((i: { module_code: string }) => !allowed.has(i.module_code))) {
+          return json({ success: false, error: "Nicht alle Module dieses Bundles sind in Ihrem Partner-Portfolio." }, 403);
+        }
       }
       const { error } = await supabase.from("tenant_module_discounts").insert({
-        tenant_id: tenantId, module_code: moduleCode, discount_type: type, value,
-        valid_from: validFrom, valid_until: validUntil,
+        tenant_id: tenantId, module_code: moduleCode, bundle_id: bundleId, discount_type: type, value,
+        valid_from: validFrom, valid_until: validUntil, duration_value: durationValue, duration_unit: durationValue ? durationUnit : null,
+        payment_mode: paymentMode, one_time_amount: paymentMode === "one_time" ? oneTimeAmount : null,
         note: typeof body.note === "string" ? body.note.slice(0, 200) : null,
         created_by: user.id, updated_by: user.id,
       });

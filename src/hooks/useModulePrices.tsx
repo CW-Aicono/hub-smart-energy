@@ -14,9 +14,18 @@ export interface ModulePrice {
   partner_industry_price_monthly: number;
   charge_point_price_monthly: number;
   industry_charge_point_price_monthly: number;
+  partner_charge_point_price_monthly: number;
+  partner_industry_charge_point_price_monthly: number;
+  standard_charge_point_price_monthly: number;
+  industry_standard_charge_point_price_monthly: number;
   created_at: string;
   updated_at: string;
 }
+
+export type CpField =
+  | "charge_point_price_monthly" | "industry_charge_point_price_monthly"
+  | "partner_charge_point_price_monthly" | "partner_industry_charge_point_price_monthly"
+  | "standard_charge_point_price_monthly" | "industry_standard_charge_point_price_monthly";
 
 export function useModulePrices() {
   const queryClient = useQueryClient();
@@ -44,6 +53,7 @@ export function useModulePrices() {
       partnerIndustryPriceMonthly,
       chargePointPriceMonthly,
       industryChargePointPriceMonthly,
+      cpFields,
     }: {
       moduleCode: string;
       priceMonthly?: number;
@@ -54,6 +64,8 @@ export function useModulePrices() {
       partnerIndustryPriceMonthly?: number;
       chargePointPriceMonthly?: number;
       industryChargePointPriceMonthly?: number;
+      /** Ladepunkt-Unterpunkt: beliebige *_charge_point_price_monthly-Spalten */
+      cpFields?: Partial<Record<CpField, number>>;
     }) => {
       const updates: any = { module_code: moduleCode, updated_at: new Date().toISOString() };
       if (priceMonthly !== undefined) updates.price_monthly = priceMonthly;
@@ -64,6 +76,7 @@ export function useModulePrices() {
       if (partnerIndustryPriceMonthly !== undefined) updates.partner_industry_price_monthly = partnerIndustryPriceMonthly;
       if (chargePointPriceMonthly !== undefined) updates.charge_point_price_monthly = chargePointPriceMonthly;
       if (industryChargePointPriceMonthly !== undefined) updates.industry_charge_point_price_monthly = industryChargePointPriceMonthly;
+      if (cpFields) Object.assign(updates, cpFields);
       const { error } = await supabase
         .from("module_prices")
         .upsert(updates, { onConflict: "module_code" });
@@ -110,9 +123,9 @@ export function useModulePrices() {
     return p ? Number(p.partner_industry_price_monthly ?? 0) : 0;
   };
 
-  const getChargePointPrice = (moduleCode: string, industry = false): number => {
-    const p = prices.find((pr) => pr.module_code === moduleCode);
-    return p ? Number((industry ? p.industry_charge_point_price_monthly : p.charge_point_price_monthly) ?? 0) : 0;
+  const getChargePointPrice = (moduleCode: string, field: CpField): number => {
+    const p = prices.find((pr) => pr.module_code === moduleCode) as any;
+    return p ? Number(p[field] ?? 0) : 0;
   };
 
   return {

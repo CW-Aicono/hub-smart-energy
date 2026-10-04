@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Navigate } from "react-router-dom";
+import { useState, useEffect, Fragment } from "react";
+import { Navigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import { useModulePrices } from "@/hooks/useModulePrices";
@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Building2, Factory } from "lucide-react";
+import { Building2, Factory, CornerDownRight } from "lucide-react";
 import { useActiveChargePoints } from "@/hooks/useActiveChargePoints";
 
 const editableModules = ALL_MODULES.filter((m) => !("alwaysOn" in m));
@@ -97,7 +97,6 @@ const SuperAdminModulePricing = () => {
                   <span className="text-sm font-semibold text-muted-foreground w-36 text-center">Partner-Einkauf</span>
                   <span className="text-sm font-semibold text-muted-foreground w-36 text-center">AICONO e.&thinsp;V.</span>
                   <span className="text-sm font-semibold text-muted-foreground w-36 text-center">Standardpreis</span>
-                  <span className="text-sm font-semibold text-muted-foreground w-36 text-center">je aktivem Ladepunkt</span>
                 </div>
               </div>
               <div className="space-y-4">
@@ -106,9 +105,14 @@ const SuperAdminModulePricing = () => {
                   const partnerPrice = sector === "kommune" ? getPartnerPrice(mod.code) : getPartnerIndustryPrice(mod.code);
                   const memberPrice = sector === "kommune" ? getPrice(mod.code) : getIndustryPrice(mod.code);
                   const stdPrice = sector === "kommune" ? getStandardPrice(mod.code) : getIndustryStandardPrice(mod.code);
-                  const cpPrice = getChargePointPrice(mod.code, sector === "industrie");
+                  const ind = sector === "industrie";
+                  const cpPartner = getChargePointPrice(mod.code, ind ? "partner_industry_charge_point_price_monthly" : "partner_charge_point_price_monthly");
+                  const cpMember = getChargePointPrice(mod.code, ind ? "industry_charge_point_price_monthly" : "charge_point_price_monthly");
+                  const cpStd = getChargePointPrice(mod.code, ind ? "industry_standard_charge_point_price_monthly" : "standard_charge_point_price_monthly");
+                  const saveCp = (field: any, val: number) => updatePrice.mutate({ moduleCode: mod.code, cpFields: { [field]: val } });
                   return (
-                    <div key={mod.code} className="flex items-center justify-between gap-4">
+                    <Fragment key={mod.code}>
+                    <div className="flex items-center justify-between gap-4">
                       <Label className="text-base flex-1">{mod.label}</Label>
                       <div className="flex gap-4">
                         <PriceInput
@@ -144,28 +148,24 @@ const SuperAdminModulePricing = () => {
                             )
                           }
                         />
-                        {mod.code === "support_billing" ? <span className="w-36" /> : (
-                          <div className="flex flex-col items-end">
-                            <PriceInput
-                              currentPrice={cpPrice}
-                              unit="€/LP"
-                              onSave={(val) =>
-                                updatePrice.mutate(
-                                  sector === "kommune"
-                                    ? { moduleCode: mod.code, chargePointPriceMonthly: val }
-                                    : { moduleCode: mod.code, industryChargePointPriceMonthly: val }
-                                )
-                              }
-                            />
-                            {cpPrice > 0 && (
-                              <span className="text-[11px] text-muted-foreground mt-0.5">
-                                {activeCpTotal.toLocaleString("de-DE")} aktiv → {(cpPrice * activeCpTotal).toLocaleString("de-DE", { style: "currency", currency: "EUR" })}/Mo
-                              </span>
-                            )}
-                          </div>
-                        )}
                       </div>
                     </div>
+                    {mod.code === "ev_charging" && (
+                      <div className="flex items-center justify-between gap-4 pl-4 -mt-2 pb-2 border-b border-dashed">
+                        <div className="flex-1">
+                          <Label className="text-sm flex items-center gap-1.5 text-muted-foreground"><CornerDownRight className="h-3.5 w-3.5" />je aktivem Ladepunkt / Monat</Label>
+                          <span className="text-[11px] text-muted-foreground pl-5">
+                            aktuell {activeCpTotal.toLocaleString("de-DE")} aktive Ladepunkte → Standard {(cpStd * activeCpTotal).toLocaleString("de-DE", { style: "currency", currency: "EUR" })}/Mo
+                          </span>
+                        </div>
+                        <div className="flex gap-4">
+                          <PriceInput currentPrice={cpPartner} unit="€/LP" onSave={(v) => saveCp(ind ? "partner_industry_charge_point_price_monthly" : "partner_charge_point_price_monthly", v)} />
+                          <PriceInput currentPrice={cpMember} unit="€/LP" onSave={(v) => saveCp(ind ? "industry_charge_point_price_monthly" : "charge_point_price_monthly", v)} />
+                          <PriceInput currentPrice={cpStd} unit="€/LP" onSave={(v) => saveCp(ind ? "industry_standard_charge_point_price_monthly" : "standard_charge_point_price_monthly", v)} />
+                        </div>
+                      </div>
+                    )}
+                    </Fragment>
                   );
                 })}
               </div>
@@ -173,7 +173,11 @@ const SuperAdminModulePricing = () => {
                 <strong>Partner-Einkauf</strong>: Einstandspreis für Vertriebspartner im Wiederverkaufs-Modell.{" "}
                 <strong>AICONO e.&thinsp;V.</strong>: Vergünstigter Mitgliederpreis.{" "}
                 <strong>Standardpreis</strong>: empfohlener Endkundenpreis (auch Default-Verkaufspreis für Partner).{" "}
-                <strong>Je aktivem Ladepunkt</strong>: zusätzlich oder statt der Pauschale; 0 € = nicht berechnet. Aktiv = in den letzten 30 Tagen verbunden (aktuell {activeCpTotal.toLocaleString("de-DE")} Ladepunkte über alle Mandanten).
+                <strong>Je aktivem Ladepunkt</strong> (Unterpunkt von Ladeinfrastruktur): zusätzlich zur Pauschale; 0 € = nicht berechnet. Aktiv = in den letzten 30 Tagen verbunden.
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Rabatte (auch für Bundles, mit Laufzeit, Vorkasse oder Einmalzahlung) stellen Sie pro Kunde ein:{" "}
+                <Link to="/super-admin/tenants" className="text-primary underline">Mandanten → Kunde → Module</Link>.
               </p>
             </CardContent>
           </Card>

@@ -9152,11 +9152,15 @@ export type Database = {
           id: string
           industry_charge_point_price_monthly: number
           industry_price_monthly: number
+          industry_standard_charge_point_price_monthly: number
           industry_standard_price: number
           module_code: string
+          partner_charge_point_price_monthly: number
+          partner_industry_charge_point_price_monthly: number
           partner_industry_price_monthly: number
           partner_price_monthly: number
           price_monthly: number
+          standard_charge_point_price_monthly: number
           standard_price: number
           updated_at: string
         }
@@ -9166,11 +9170,15 @@ export type Database = {
           id?: string
           industry_charge_point_price_monthly?: number
           industry_price_monthly?: number
+          industry_standard_charge_point_price_monthly?: number
           industry_standard_price?: number
           module_code: string
+          partner_charge_point_price_monthly?: number
+          partner_industry_charge_point_price_monthly?: number
           partner_industry_price_monthly?: number
           partner_price_monthly?: number
           price_monthly?: number
+          standard_charge_point_price_monthly?: number
           standard_price?: number
           updated_at?: string
         }
@@ -9180,11 +9188,15 @@ export type Database = {
           id?: string
           industry_charge_point_price_monthly?: number
           industry_price_monthly?: number
+          industry_standard_charge_point_price_monthly?: number
           industry_standard_price?: number
           module_code?: string
+          partner_charge_point_price_monthly?: number
+          partner_industry_charge_point_price_monthly?: number
           partner_industry_price_monthly?: number
           partner_price_monthly?: number
           price_monthly?: number
+          standard_charge_point_price_monthly?: number
           standard_price?: number
           updated_at?: string
         }
@@ -14173,12 +14185,18 @@ export type Database = {
       }
       tenant_module_discounts: {
         Row: {
+          bundle_id: string | null
           created_at: string
           created_by: string | null
           discount_type: string
+          duration_unit: string | null
+          duration_value: number | null
           id: string
+          invoiced_at: string | null
           module_code: string | null
           note: string | null
+          one_time_amount: number | null
+          payment_mode: string
           tenant_id: string
           updated_at: string
           updated_by: string | null
@@ -14187,12 +14205,18 @@ export type Database = {
           value: number
         }
         Insert: {
+          bundle_id?: string | null
           created_at?: string
           created_by?: string | null
           discount_type: string
+          duration_unit?: string | null
+          duration_value?: number | null
           id?: string
+          invoiced_at?: string | null
           module_code?: string | null
           note?: string | null
+          one_time_amount?: number | null
+          payment_mode?: string
           tenant_id: string
           updated_at?: string
           updated_by?: string | null
@@ -14201,12 +14225,18 @@ export type Database = {
           value: number
         }
         Update: {
+          bundle_id?: string | null
           created_at?: string
           created_by?: string | null
           discount_type?: string
+          duration_unit?: string | null
+          duration_value?: number | null
           id?: string
+          invoiced_at?: string | null
           module_code?: string | null
           note?: string | null
+          one_time_amount?: number | null
+          payment_mode?: string
           tenant_id?: string
           updated_at?: string
           updated_by?: string | null
@@ -14215,6 +14245,13 @@ export type Database = {
           value?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "tenant_module_discounts_bundle_id_fkey"
+            columns: ["bundle_id"]
+            isOneToOne: false
+            referencedRelation: "module_bundles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tenant_module_discounts_tenant_id_fkey"
             columns: ["tenant_id"]
