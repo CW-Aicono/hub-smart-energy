@@ -1,4 +1,5 @@
 import { useState } from "react";
+import RemoteSupportHistory from "@/components/help/RemoteSupportHistory";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -508,6 +509,7 @@ const Help = () => {
                   disabled={remoteSupportLoading}
                 />
               </div>
+              <RemoteSupportHistory />
             </CardContent>
           </Card>
 

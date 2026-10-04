@@ -591,6 +591,7 @@ export type Database = {
           ip_address: unknown
           metadata: Json | null
           partner_id: string | null
+          support_session_id: string | null
           tenant_id: string | null
           user_agent: string | null
         }
@@ -609,6 +610,7 @@ export type Database = {
           ip_address?: unknown
           metadata?: Json | null
           partner_id?: string | null
+          support_session_id?: string | null
           tenant_id?: string | null
           user_agent?: string | null
         }
@@ -627,10 +629,19 @@ export type Database = {
           ip_address?: unknown
           metadata?: Json | null
           partner_id?: string | null
+          support_session_id?: string | null
           tenant_id?: string | null
           user_agent?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_support_session_id_fkey"
+            columns: ["support_session_id"]
+            isOneToOne: false
+            referencedRelation: "support_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       automation_execution_log: {
         Row: {
@@ -15271,6 +15282,7 @@ export type Database = {
         Args: { _location_integration_id: string; _tenant_id: string }
         Returns: number
       }
+      close_stale_support_sessions: { Args: never; Returns: number }
       collect_db_metrics: { Args: never; Returns: Json }
       community_data_quality: {
         Args: { p_community_id: string }

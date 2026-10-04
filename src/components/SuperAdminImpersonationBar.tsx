@@ -58,7 +58,7 @@ export default function SuperAdminImpersonationBar() {
       onClick={handleEnd}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleEnd(); }}
       title="Klicken zum Beenden der Support-Sitzung"
-      className="fixed top-0 left-0 right-0 z-[70] bg-primary text-primary-foreground px-4 py-2 flex items-center justify-center gap-4 shadow-lg cursor-pointer hover:brightness-110 transition"
+      className="sticky top-0 left-0 right-0 z-[70] w-full bg-primary text-primary-foreground px-4 py-2 flex items-center justify-center gap-4 shadow-lg cursor-pointer hover:brightness-110 transition"
       style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
     >
       <HeadsetIcon className="h-4 w-4 shrink-0" />
