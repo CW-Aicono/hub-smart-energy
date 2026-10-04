@@ -13,6 +13,9 @@
 - **Aktiv** = Ladepunkt ist angelegt, nicht archiviert/deaktiviert und war im Abrechnungsmonat mindestens einmal verbunden. Neu angelegte, noch nie verbundene Ladepunkte werden nicht berechnet.
 - Rechnungsposition zeigt nachvollziehbar: „Ladeinfrastruktur – 12 Ladepunkte × 9,00 € = 108,00 €“.
 - Mandantenspezifischer Sonderpreis (bestehend) gilt dann ebenfalls pro Ladepunkt.
+- **Kostenvorschau:** Neben dem Ladepunktpreis steht, wie viele Ladepunkte aktuell aktiv sind, und was das monatlich kosten würde (z. B. „12 aktive Ladepunkte → 49 € + 12 × 9 € = 157 €/Monat“, inkl. aktuell gültigem Rabatt).
+  - In der Mandanten-Detailseite (Super-Admin) und beim Partner unter „Module & Lizenzen“ je Kunde.
+  - In der globalen Modulpreisliste als Summe über alle Mandanten (Anzahl aktiver Ladepunkte gesamt).
 
 ## 2. Rabatte für alle Module
 - Neuer Bereich in der Mandanten-Detailseite (Super-Admin) und für Partner bei ihren Kunden unter „Module & Lizenzen“:
