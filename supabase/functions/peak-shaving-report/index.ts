@@ -1,3 +1,4 @@
+import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 // Peak-Shaving Report — PDF-Generierung (On-Demand & monatlich automatisch)
 //
 // Modes:
@@ -212,6 +213,7 @@ async function sendReportEmail(to: string[], data: ReportData, pdfBase64: string
 }
 
 Deno.serve(async (req) => {
+  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const body = await req.json().catch(() => ({}));

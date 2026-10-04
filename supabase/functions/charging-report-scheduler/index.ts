@@ -1,3 +1,4 @@
+import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 // Charging Reporting: geplanter Versand
 // Cron-getriggert. Läuft fällige charging_report_schedules ab, generiert CSV
 // über die aktuellen charging_sessions + charging_invoices und verschickt sie
@@ -78,6 +79,7 @@ function nextRun(freq: Frequency, from = new Date()): Date {
 }
 
 serve(async (req) => {
+  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 

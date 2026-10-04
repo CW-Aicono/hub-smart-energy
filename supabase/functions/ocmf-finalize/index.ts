@@ -1,3 +1,4 @@
+import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 // Edge Function: ocmf-finalize
 // Wird vom OCPP-persistent-server nach StopTransaction aufgerufen.
 // Bauteil-Verantwortung:
@@ -29,6 +30,7 @@ type Record_ = {
 };
 
 Deno.serve(async (req: Request) => {
+  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {

@@ -43,3 +43,32 @@ export function rejectIfNotInternal(req: Request, headers: Record<string, string
     headers: { ...headers, "Content-Type": "application/json" },
   });
 }
+
+/**
+ * Allows internal callers (cron/service key) or a signed-in user. When `roles`
+ * is given, the user must hold at least one of them (checked server-side).
+ */
+export async function requireInternalOrUser(
+  req: Request,
+  roles?: string[],
+  headers: Record<string, string> = {},
+): Promise<Response | null> {
+  if (req.method === "OPTIONS") return null;
+  if (isInternalCaller(req)) return null;
+  const deny = (status: number, error: string) =>
+    new Response(JSON.stringify({ error }), { status, headers: { ...headers, "Content-Type": "application/json" } });
+  const auth = req.headers.get("Authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (!token) return deny(401, "Unauthorized");
+  const { createClient } = await import("npm:@supabase/supabase-js@2");
+  const svc = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    auth: { persistSession: false },
+  });
+  const { data: { user } } = await svc.auth.getUser(token);
+  if (!user) return deny(401, "Unauthorized");
+  if (roles?.length) {
+    const { data } = await svc.from("user_roles").select("role").eq("user_id", user.id).in("role", roles);
+    if (!data?.length) return deny(403, "Forbidden");
+  }
+  return null;
+}

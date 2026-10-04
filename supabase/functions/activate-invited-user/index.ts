@@ -96,8 +96,14 @@ const handler = async (req: Request): Promise<Response> => {
       const { email, name, role, tenantId: overrideTenantId, force, customRoleId } = body;
       if (!email) throw new Error("Missing email");
 
-      const effectiveTenantId = overrideTenantId || tenantId;
       const callerIsSuper = roles.includes("super_admin");
+      if (overrideTenantId && overrideTenantId !== tenantId && !callerIsSuper) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Nur Benutzer der eigenen Organisation können eingeladen werden." }),
+          { status: 403, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+      const effectiveTenantId = overrideTenantId || tenantId;
       const isSuperAdminInvite = role === "super_admin";
 
       // Only super_admins may invite super_admins

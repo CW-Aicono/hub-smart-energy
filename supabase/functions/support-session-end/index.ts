@@ -1,3 +1,4 @@
+import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 // Edge Function: support-session-end
 // Beendet eine Remote-Support-Sitzung: markiert support_sessions.ended_at und
 // widerruft alle Refresh-Tokens des impersonierten Support-Users (globaler Sign-Out).
@@ -23,6 +24,7 @@ function json(body: unknown, status = 200) {
 }
 
 Deno.serve(async (req) => {
+  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 

@@ -4,6 +4,7 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 
 ## 2026-10-04
 ### Sicherheit
+- Paket 2b: Einladungen (invite-tenant-admin, activate-invited-user) erlauben Tenant-Admins nur noch die eigene Organisation. 27 bisher ungeschützte Server-Funktionen verlangen jetzt internen Schlüssel oder Anmeldung; Rechnungs-/Lexware-Funktionen zusätzlich Admin-, Partner-Admin- oder Super-Admin-Rolle (`requireInternalOrUser`).
 - Paket 2a: QR-Druckansichten (Ladepunkt, Scanner) escapen HTML; OCPP-Tag-Prüfung escaped ILIKE-Platzhalter (%/_); Ad-hoc-Testzahlungen nur mit Modul `adhoc_payment`; Gemeinschafts-Tarife nur noch durch Tenant-Admins/Super-Admins änderbar (Migration 0010).
 - Paket 1: 16 reine Cron-Funktionen (u. a. peak-shaving-scheduler, dlm-, power-limit-, cheap-/solar-charging-scheduler, automation-scheduler, charge-point-auto-reboot, gateway-/loxone-/brighthub-periodic-sync, send-scheduled-report) prüfen jetzt den internen Service-Schlüssel (`_shared/internalAuth.ts`); anonyme Aufrufe → 401. Cron-Läufe nach Deploy verifiziert.
 ### Neu

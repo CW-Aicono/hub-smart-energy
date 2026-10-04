@@ -1,3 +1,4 @@
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 // K6 — Dynamic DLM Realtime Controller
 //
 // Liest pro aktiver location_dlm_config:
@@ -320,6 +321,7 @@ async function run() {
 }
 
 Deno.serve(async (req) => {
+  { const __deny = rejectIfNotInternal(req); if (__deny) return __deny; }
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const result = await run();

@@ -1,3 +1,4 @@
+import { requireInternalOrUser } from "../_shared/internalAuth.ts";
 /**
  * Schneider EcoStruxure Energy Hub – Edge Function
  * =================================================
@@ -508,6 +509,7 @@ async function handleHistory(
 /* ── Main handler ────────────────────────────────────────────────────────────── */
 
 Deno.serve(async (req) => {
+  { const __deny = await requireInternalOrUser(req); if (__deny) return __deny; }
   corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });

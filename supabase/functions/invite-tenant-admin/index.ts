@@ -30,7 +30,7 @@ const handler = async (req: Request): Promise<Response> => {
       .eq("user_id", callingUser.id);
 
     const roles = (callerRoles || []).map((r: { role: string }) => r.role);
-    const isElevated = roles.includes("super_admin") || roles.includes("admin");
+    const isSuper = roles.includes("super_admin");
 
     const { tenantId, adminEmail, adminName, role, redirectTo, force } = await req.json();
 
@@ -43,6 +43,11 @@ const handler = async (req: Request): Promise<Response> => {
     const assignedRole = role === "user" ? "user" : "admin";
 
     // Allow partner_admins to invite admins for tenants that belong to their own partner
+    let isElevated = isSuper;
+    if (!isSuper && roles.includes("admin")) {
+      const { data: cp } = await supabase.from("profiles").select("tenant_id").eq("user_id", callingUser.id).maybeSingle();
+      isElevated = !!cp?.tenant_id && cp.tenant_id === tenantId;
+    }
     if (!isElevated) {
       const { data: partnerOk } = await supabase.rpc("partner_has_tenant_access", {
         _user_id: callingUser.id,

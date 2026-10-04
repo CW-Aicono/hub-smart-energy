@@ -1,3 +1,4 @@
+import { rejectIfNotInternal } from "../_shared/internalAuth.ts";
 // One-shot bootstrap: ensure private.cron_settings holds the URL + service
 // role key so private.invoke_edge_function() can fire HTTP requests from
 // pg_cron. Calls the SECURITY DEFINER public.bootstrap_cron_settings RPC.
@@ -6,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
+  { const __deny = rejectIfNotInternal(req); if (__deny) return __deny; }
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
