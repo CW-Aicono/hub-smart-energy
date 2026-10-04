@@ -1,3 +1,4 @@
+import { OpenInAnalysisButton } from "@/components/dashboard/OpenInAnalysisButton";
 import { useMemo, useState, useCallback, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";

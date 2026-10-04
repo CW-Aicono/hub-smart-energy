@@ -1,3 +1,4 @@
+import { OpenInAnalysisButton } from "@/components/dashboard/OpenInAnalysisButton";
 import React, { useMemo, useState, useEffect } from "react";
 import { fetchPowerSeriesAuto } from "@/lib/powerSeries";
 
