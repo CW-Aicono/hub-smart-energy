@@ -759,6 +759,7 @@ const EnergyChart = ({ locationId }: EnergyChartProps) => {
               ))}
             </SelectContent>
           </Select>
+          </div>
         </div>
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">{subtitle}</p>

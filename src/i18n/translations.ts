@@ -32,6 +32,12 @@ export const translations = {
     es: "Contadores",
     nl: "Meters",
   },
+  "nav.energyAnalysis": {
+    de: "Energieanalyse",
+    en: "Energy analysis",
+    es: "Análisis energético",
+    nl: "Energieanalyse",
+  },
   "nav.analyticsStudio": {
     de: "Analyse-Studio",
     en: "Analytics Studio",
