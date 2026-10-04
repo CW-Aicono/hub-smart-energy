@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Copy, Check, Download, ExternalLink, Printer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+const __esc = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as Record<string,string>)[c]);
 
 interface ScannerQrCodeProps {
   scanner: MeterScanner;
@@ -53,7 +54,7 @@ export function ScannerQrCode({ scanner, open, onOpenChange }: ScannerQrCodeProp
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
     printWindow.document.write(`
-      <html><head><title>QR-Code: ${scanner.name}</title>
+      <html><head><title>QR-Code: ${__esc(scanner.name)}</title>
       <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 40px; }
         img { width: 250px; height: 250px; }
@@ -61,10 +62,10 @@ export function ScannerQrCode({ scanner, open, onOpenChange }: ScannerQrCodeProp
         p { color: #666; font-size: 14px; margin-top: 4px; }
         @media print { button { display: none; } }
       </style></head><body>
-      <h2>${scanner.name}</h2>
+      <h2>${__esc(scanner.name)}</h2>
       <p>Scan-App öffnen</p>
-      <img src="${qrDataUrl}" alt="QR-Code" />
-      <p style="font-size:11px; word-break:break-all;">${appUrl}</p>
+      <img src="${__esc(qrDataUrl)}" alt="QR-Code" />
+      <p style="font-size:11px; word-break:break-all;">${__esc(appUrl)}</p>
       <p>Smart Energy Hub</p>
       <br/><button onclick="window.print()">Drucken</button>
       </body></html>

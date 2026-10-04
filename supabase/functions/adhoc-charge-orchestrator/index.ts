@@ -230,6 +230,11 @@ Deno.serve(async (req) => {
 
       // ---------------- mock_full_cycle (dev convenience) ----------------
       case "mock_full_cycle": {
+        if (!isSuper) {
+          const { data: mod } = await svc.from("tenant_modules").select("is_enabled")
+            .eq("tenant_id", tenant_id).eq("module_code", "adhoc_payment").maybeSingle();
+          if (!mod?.is_enabled) return jsonResp({ error: "Modul nicht freigeschaltet" }, 403);
+        }
         // 1) ensure a mock provider exists for tenant
         let { data: provider } = await svc.from("payment_providers")
           .select("*").eq("tenant_id", tenant_id).eq("provider_type", "other").maybeSingle();

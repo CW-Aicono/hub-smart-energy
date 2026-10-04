@@ -4,6 +4,7 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 
 ## 2026-10-04
 ### Sicherheit
+- Paket 2a: QR-Druckansichten (Ladepunkt, Scanner) escapen HTML; OCPP-Tag-Prüfung escaped ILIKE-Platzhalter (%/_); Ad-hoc-Testzahlungen nur mit Modul `adhoc_payment`; Gemeinschafts-Tarife nur noch durch Tenant-Admins/Super-Admins änderbar (Migration 0010).
 - Paket 1: 16 reine Cron-Funktionen (u. a. peak-shaving-scheduler, dlm-, power-limit-, cheap-/solar-charging-scheduler, automation-scheduler, charge-point-auto-reboot, gateway-/loxone-/brighthub-periodic-sync, send-scheduled-report) prüfen jetzt den internen Service-Schlüssel (`_shared/internalAuth.ts`); anonyme Aufrufe → 401. Cron-Läufe nach Deploy verifiziert.
 ### Neu
 - v1.3.0 – Ladepunktpreis nur noch als Unterpunkt von `ev_charging` (neue Spalten partner_/standard_/industry_standard_charge_point_price_monthly; bisheriger Wert als Standard übernommen, andere Module auf 0). Kundenseite: Unterzeile + Rabattspalte („+ Rabatt“), Karte „Ladepunkt-Abrechnung“ entfernt. `tenant_module_discounts`: bundle_id, duration_value/unit, payment_mode (monthly/prepaid/one_time), one_time_amount, invoiced_at; Leserecht auf gebuchte Bundles für Partner/Tenant. `generate-monthly-invoices`: Bundle-Rabatt auf Bundle-Summe, Vorkasse/Einmalzahlung einmalig berechnet und Laufzeit-Monate übersprungen. `partner-set-tenant-discount`: Bundle-Portfolio-Prüfung. Migration `0009_cp_sub_prices_and_bundle_discounts.sql`.
