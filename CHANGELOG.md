@@ -4,6 +4,7 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 
 ## 2026-10-04
 ### Neu
+- Echte Kontosperre: Trigger `sync_profile_block_to_auth` auf `profiles.is_blocked` setzt `auth.users.banned_until` (infinity/NULL), löscht Sessions/Refresh-Tokens und erlaubt Änderung nur Super-Admin bzw. Tenant-Admin des eigenen Mandanten (vorher konnte ein Nutzer sich über die Own-Profile-Policy selbst entsperren). Bestehende Sperren nachgezogen. Zusätzlich Client-Check in `useAuth` (gesperrt → Abmelden). Migration `drizzle/migrations/0003_real_account_block.sql`.
 - Bereichs-Umschalter kein Overlay mehr: `AreaSwitcher floating` rendert jetzt per Portal in einen Slot als erstes Kind von `<main>` (eigene Kopfleiste rechts, im Seitenfluss) statt `fixed z-50` über dem Inhalt – verdeckt keine Header-Elemente (z. B. „Aktualisiert“, Liegenschaftsfilter) mehr.
 - Bereichs-Umschalter einheitlich fest oben rechts (Portal via `AreaSwitcher floating`) in EMS, Partner-Portal und Super-Admin; Kapseln aus den Seitenleisten entfernt. Staging: `super_admin` für Haupt-Login h.verst@esb-metelen.de ergänzt.
 - Super-Admin → Rollen & Rechte: Button „Super-Admin-Rolle entziehen“ mit Bestätigungsdialog; letzter Super-Admin geschützt; Doppel-Einträge in `user_roles` werden je Person zusammengefasst. Serverseitig durch RLS + `guard_privileged_roles`, Protokoll via `user_role_audit_log`.

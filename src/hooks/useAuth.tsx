@@ -70,8 +70,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, [isDemo]);
 
+  // Zweite Sicherung: gesperrte Profile sofort abmelden (Hauptsperre liegt in auth.users.banned_until)
+  useEffect(() => {
+    if (isDemo || !user) return;
+    let cancelled = false;
+    supabase
+      .from("profiles")
+      .select("is_blocked")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(async ({ data }) => {
+        if (!cancelled && data?.is_blocked) {
+          await supabase.auth.signOut();
+          window.location.href = "/auth?blocked=1";
+        }
+      });
+    return () => { cancelled = true; };
+  }, [user?.id, isDemo]);
+
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error && /banned/i.test(error.message)) {
+      return { error: new Error("Dieses Benutzerkonto ist gesperrt. Bitte wenden Sie sich an Ihren Administrator.") };
+    }
     return { error: error as Error | null };
   };
 
