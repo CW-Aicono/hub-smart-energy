@@ -1,6 +1,7 @@
 # Versionshinweise
 
 ## Oktober 2026
+- **Ladestatus korrigiert sich selbst:** Neue Fernfunktion „Status abfragen“. Zeigt eine Ladestation länger als 2 Stunden „Lädt“, obwohl kein Ladevorgang läuft, fragt das System den echten Status automatisch neu ab.
 - **Schneller Bereichswechsel:** Wer mehrere Rollen hat, wechselt mit einem Klick zwischen Super-Admin, Partner-Portal und eigenem Energie-Dashboard.
 - **Immer aktuell:** Im Benutzermenü und im Profil sehen Sie die App-Version. Gibt es eine neue Version, erscheint oben „Jetzt aktualisieren“ – kein Strg+F5 mehr nötig.
 - **Fernwartung ohne Zeitdruck und nachvollziehbar:** Eine Remote-Sitzung läuft, bis sie beendet wird. Unter Hilfe → Remote-Support sehen Sie jetzt, wann und wie lange eine Sitzung stattfand und was dabei geändert wurde. Schalten Sie Remote-Support aus, endet eine laufende Sitzung sofort.

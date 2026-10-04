@@ -4,6 +4,7 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 
 ## 2026-10-04
 ### Neu
+- Ladepunkte: Fernfunktion „Status abfragen“ (`ocpp-central` Endpoint `TriggerStatus` → OCPP `TriggerMessage(StatusNotification)`). Stündliche Plausibilitätsprüfung in `charge-point-auto-reboot`: Stecker mit Lade-/Belegt-Status > 2 h, Wallbox online, keine aktive Session → Statusmeldung anfordern (kein blindes Überschreiben).
 - Build-Fix: `vite-plugin-version.ts` nach `vite-plugins/` verschoben (Ordner `build/` wird global von git ignoriert, Datei fehlte im Build).
 - 3-Wege-Bereichsumschalter (Super-Admin / Kaufmännisch / Technisch): `AreaSwitcher` zeigt nur berechtigte Bereiche, auch in der Super-Admin-Seitenleiste; `Index.tsx` leitet Super-Admins mit Mandant/Partner nicht mehr zwangsweise um. Präferenz ist nur Navigation, Guards/RLS unverändert; während Remote-Sitzung ausgeblendet.
 - Remote-Protokoll: Ladefehler statt endlosem „…“, Sitzungen > 24 h ohne Ende als „nicht beendet“ statt „läuft gerade“.
