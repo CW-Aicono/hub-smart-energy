@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
@@ -7,9 +7,15 @@ import SuperAdminSidebar from "@/components/super-admin/SuperAdminSidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Shield, Crown, Users, CheckCircle2, Search } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Shield, Crown, Users, CheckCircle2, Search, ShieldOff } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import CreateSAPermissionRoleDialog from "@/components/super-admin/CreateSAPermissionRoleDialog";
 import EditSARoleDialog from "@/components/super-admin/EditSARoleDialog";
@@ -34,15 +40,48 @@ const SuperAdminRoles = () => {
   const { data: superAdmins = [], isLoading: adminsLoading } = useQuery({
     queryKey: ["sa-super-admins"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("user_roles").select("user_id, created_at").eq("role", "super_admin");
+      const { data, error } = await supabase.from("user_roles").select("user_id, created_at").eq("role", "super_admin").order("created_at", { ascending: true });
       if (error) throw error;
       if (!data || data.length === 0) return [];
-      const userIds = data.map((r) => r.user_id);
+      // Deduplicate: a user may have several super_admin rows (manual inserts)
+      const firstByUser = new Map<string, { user_id: string; created_at: string }>();
+      for (const r of data) if (!firstByUser.has(r.user_id)) firstByUser.set(r.user_id, r);
+      const rows = Array.from(firstByUser.values());
+      const userIds = rows.map((r) => r.user_id);
       const { data: profiles } = await supabase.from("profiles").select("user_id, email, contact_person").in("user_id", userIds);
-      return data.map((r) => {
+      return rows.map((r) => {
         const profile = profiles?.find((p) => p.user_id === r.user_id);
         return { user_id: r.user_id, email: profile?.email ?? "–", name: profile?.contact_person ?? "–", since: r.created_at };
       });
+    },
+  });
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [revokeTarget, setRevokeTarget] = useState<{ user_id: string; name: string; email: string } | null>(null);
+  const isLastSuperAdmin = superAdmins.length <= 1;
+
+  const revokeRole = useMutation({
+    mutationFn: async (userId: string) => {
+      if (superAdmins.length <= 1) throw new Error(t("roles.revoke_last"));
+      // RLS ("Super admins can delete roles") + guard_privileged_roles trigger enforce server-side; audit log via trigger
+      const { error } = await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", "super_admin");
+      if (error) throw error;
+      return userId;
+    },
+    onSuccess: (userId) => {
+      toast({ title: t("roles.revoked") });
+      setRevokeTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["sa-super-admins"] });
+      queryClient.invalidateQueries({ queryKey: ["super-admin-users"] });
+      if (userId === user?.id) {
+        queryClient.invalidateQueries();
+        navigate("/", { replace: true });
+      }
+    },
+    onError: (e: any) => {
+      toast({ title: t("error.generic"), description: e?.message ?? t("error.role_change"), variant: "destructive" });
     },
   });
 
@@ -150,13 +189,14 @@ const SuperAdminRoles = () => {
                     <SortableHead label={t("common.email")} sortKey="email" sort={sortAdmins} onToggle={toggleAdmins} />
                     <TableCell>{t("users.role")}</TableCell>
                     <SortableHead label={t("roles.since")} sortKey="since" sort={sortAdmins} onToggle={toggleAdmins} />
+                    <TableCell className="w-16">{t("common.actions")}</TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {adminsLoading ? (
-                    <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>
                   ) : sortedAdmins.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t("roles.no_sa_found")}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("roles.no_sa_found")}</TableCell></TableRow>
                   ) : (
                     sortedAdmins.map((sa: any) => (
                       <TableRow key={sa.user_id}>
@@ -164,6 +204,18 @@ const SuperAdminRoles = () => {
                         <TableCell className="text-muted-foreground">{sa.email}</TableCell>
                         <TableCell><Badge variant="destructive">{t("users.super_admin")}</Badge></TableCell>
                         <TableCell className="text-muted-foreground text-sm">{new Date(sa.since).toLocaleDateString("de-DE")}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={t("roles.revoke")}
+                            title={isLastSuperAdmin ? t("roles.revoke_last") : t("roles.revoke")}
+                            disabled={isLastSuperAdmin || revokeRole.isPending}
+                            onClick={() => setRevokeTarget(sa)}
+                          >
+                            <ShieldOff className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}

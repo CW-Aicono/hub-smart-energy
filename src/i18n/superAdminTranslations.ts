@@ -252,6 +252,14 @@ export const saTranslations: SATranslations = {
   "monitoring.table_sizes": { de: "Tabellengrößen (Top 10)", en: "Table Sizes (Top 10)", es: "Tamaños de tabla (Top 10)", nl: "Tabelgroottes (Top 10)" },
   "monitoring.not_enough_data": { de: "Noch nicht genügend Datenpunkte", en: "Not enough data points yet", es: "Todavía no hay suficientes puntos de datos", nl: "Nog niet genoeg datapunten" },
   "monitoring.no_data": { de: "Keine Daten vorhanden", en: "No data available", es: "No hay datos disponibles", nl: "Geen gegevens beschikbaar" },
+  "roles.revoke": { de: "Super-Admin-Rolle entziehen", en: "Revoke super admin role", es: "Retirar rol de super admin", nl: "Super-adminrol intrekken" },
+  "roles.revoke_title": { de: "Super-Admin-Rolle entziehen?", en: "Revoke super admin role?", es: "¿Retirar rol de super admin?", nl: "Super-adminrol intrekken?" },
+  "roles.revoke_desc": { de: "Die Person verliert sofort den Zugriff auf den Super-Admin-Bereich. Ihr Konto sowie Mandanten- und Partner-Zugänge bleiben erhalten.", en: "The person immediately loses access to the super admin area. Their account and tenant/partner access remain.", es: "La persona pierde de inmediato el acceso al área de super admin. Su cuenta y accesos de cliente/socio se mantienen.", nl: "De persoon verliest direct toegang tot het super-admingedeelte. Account en tenant-/partnertoegang blijven behouden." },
+  "roles.revoke_self_warning": { de: "Achtung: Sie entziehen sich selbst die Rolle und werden aus dem Super-Admin-Bereich abgemeldet.", en: "Warning: you are revoking your own role and will leave the super admin area.", es: "Atención: se retira su propio rol y saldrá del área de super admin.", nl: "Let op: u trekt uw eigen rol in en verlaat het super-admingedeelte." },
+  "roles.revoke_last": { de: "Der letzte Super-Admin kann nicht entfernt werden.", en: "The last super admin cannot be removed.", es: "No se puede eliminar el último super admin.", nl: "De laatste super-admin kan niet worden verwijderd." },
+  "roles.revoked": { de: "Super-Admin-Rolle entzogen", en: "Super admin role revoked", es: "Rol de super admin retirado", nl: "Super-adminrol ingetrokken" },
+  "roles.revoke_confirm": { de: "Entziehen", en: "Revoke", es: "Retirar", nl: "Intrekken" },
+  "common.cancel_action": { de: "Abbrechen", en: "Cancel", es: "Cancelar", nl: "Annuleren" },
 };
 
 // Color preset names
