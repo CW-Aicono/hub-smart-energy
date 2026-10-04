@@ -51,3 +51,6 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 - Mennekes AMTRON 4Business 760 (11/22 kW) als Ladepunkt-Vorlage.
 - Roadmap-System, Super-Admin-Gesamtübersicht Ladepunkte, Impulszähler-Support, zentrale Einheitenformatierung.
 - Datenbank-Entlastung: gestaffelte Cron-Tasks, Partitionierung, Delta-Guard, 48h-Rohdaten-Retention.
+
+## [Unreleased]
+- Sicherheit: gateway-ingest prüft Zähler-Eigentum; Gateways ohne Mandant und fremde tenant_id bei Schneider-Push werden abgewiesen.
