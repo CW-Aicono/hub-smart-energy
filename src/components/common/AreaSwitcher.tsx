@@ -35,7 +35,7 @@ export function AreaSwitcher({ current, className }: AreaSwitcherProps) {
     <div
       role="tablist"
       aria-label="Bereich wechseln"
-      className={cn("flex w-full items-center gap-1 rounded-full border-2 border-border bg-card p-1", className)}
+      className={cn("inline-flex items-center gap-1 rounded-full border-2 border-border bg-card p-1", className)}
     >
       <button
         type="button"

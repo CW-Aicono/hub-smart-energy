@@ -78,6 +78,7 @@ export default function SuperAdminPartners() {
   const [inviteSaving, setInviteSaving] = useState(false);
 
   // Edit-Dialog
+  const [modulesPartner, setModulesPartner] = useState<Partner | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editPartner, setEditPartner] = useState<Partner | null>(null);
   const [editName, setEditName] = useState("");
