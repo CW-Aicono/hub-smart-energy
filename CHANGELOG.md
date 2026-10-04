@@ -4,6 +4,7 @@ Format: neueste Einträge oben. Jede Änderung wird hier und – falls kundenrel
 
 ## 2026-10-04
 ### Neu
+- Bereichs-Umschalter kein Overlay mehr: `AreaSwitcher floating` rendert jetzt per Portal in einen Slot als erstes Kind von `<main>` (eigene Kopfleiste rechts, im Seitenfluss) statt `fixed z-50` über dem Inhalt – verdeckt keine Header-Elemente (z. B. „Aktualisiert“, Liegenschaftsfilter) mehr.
 - Bereichs-Umschalter einheitlich fest oben rechts (Portal via `AreaSwitcher floating`) in EMS, Partner-Portal und Super-Admin; Kapseln aus den Seitenleisten entfernt. Staging: `super_admin` für Haupt-Login h.verst@esb-metelen.de ergänzt.
 - Super-Admin → Rollen & Rechte: Button „Super-Admin-Rolle entziehen“ mit Bestätigungsdialog; letzter Super-Admin geschützt; Doppel-Einträge in `user_roles` werden je Person zusammengefasst. Serverseitig durch RLS + `guard_privileged_roles`, Protokoll via `user_role_audit_log`.
 - Super-Admin → Benutzer: Löschen-Button (Mülleimer) mit Bestätigungsdialog über `delete-user`; Schutz gegen Selbstlöschung und Löschen des letzten Super-Admins (auch serverseitig in `delete-user`). Rollenanzeige zeigt jetzt die höchste Rolle statt der zufällig ersten Zeile.

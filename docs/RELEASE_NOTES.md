@@ -1,7 +1,7 @@
 # Versionshinweise
 
 ## Oktober 2026
-- **Bereichswechsel immer oben rechts:** Der Umschalter Super-Admin / Kaufmännisch / Technisch sitzt jetzt in allen Bereichen an derselben Stelle.
+- **Bereichswechsel immer oben rechts:** Der Umschalter Super-Admin / Kaufmännisch / Technisch sitzt jetzt in allen Bereichen an derselben Stelle – in einer eigenen schmalen Kopfleiste, sodass er keine Seiteninhalte mehr verdeckt.
 - **Super-Admin-Verwaltung ohne Konsole:** Super-Admin-Rollen lassen sich unter Rollen & Rechte entziehen, Plattform-Benutzer unter Benutzer löschen – jeweils mit Sicherheitsabfrage. Der letzte Super-Admin ist geschützt.
 - **Jede Grafik mit eigenem Zeitraum:** Im Dashboard ändert der Zeitraum nur noch die jeweilige Grafik und bleibt gespeichert.
 - **Neue Energieanalyse:** Unter Energiedaten → Energieanalyse vergleichen Sie beliebige Messstellen, Zeiträume (z. B. Vorjahr), sehen Heatmap und Dauerlinie, beziehen Werte auf m² oder Wetter und exportieren nach CSV/Excel. Mit „Link kopieren“ teilen Sie die Analyse mit Kollegen.
