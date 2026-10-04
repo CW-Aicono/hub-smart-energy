@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { AreaSwitcher } from "@/components/common/AreaSwitcher";
 import { useSAPreferences, SAColorPreset, SAThemeMode } from "@/hooks/useSuperAdminPreferences";
 import { useSATranslation } from "@/hooks/useSATranslation";
 import { saColorPresetNames, SALanguage } from "@/i18n/superAdminTranslations";
@@ -210,6 +211,12 @@ export default function SuperAdminSidebar() {
           {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </Button>
       </div>
+
+      {!collapsed && (
+        <div className="px-3 pt-3">
+          <AreaSwitcher current="super_admin" className="w-full" />
+        </div>
+      )}
 
       {/* Nav */}
       <nav className={cn("flex-1 space-y-1 overflow-y-auto", collapsed ? "p-2" : "p-4")}>
