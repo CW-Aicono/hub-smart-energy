@@ -341,6 +341,7 @@ export function useDashboardWidgets() {
     updateWidgetSize,
     updateWidgetLayout,
     updateAllLayouts,
+    updateWidgetPeriod,
     resetLayouts,
     refetch: fetchWidgets,
   };

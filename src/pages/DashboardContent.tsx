@@ -5,7 +5,7 @@ import { useModuleGuard } from "@/hooks/useModuleGuard";
 import { useCustomWidgetDefinitions } from "@/hooks/useCustomWidgetDefinitions";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ZoomIn } from "lucide-react";
-import { useDashboardFilter } from "@/hooks/useDashboardFilter";
+import { useDashboardFilter, WidgetPeriodScope } from "@/hooks/useDashboardFilter";
 import CustomWidgetComponent from "@/components/dashboard/CustomWidget";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardCustomizer from "@/components/dashboard/DashboardCustomizer";
@@ -130,7 +130,21 @@ const getLocationWidget = (_locationId: string | null): string => {
 };
 
 const DashboardContent = () => {
-  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize, updateWidgetLayout } = useDashboardWidgets();
+  const { widgets, visibleWidgets, loading: widgetsLoading, toggleWidgetVisibility, reorderWidgets, updateWidgetSize, updateWidgetLayout, updateWidgetPeriod } = useDashboardWidgets();
+  const scopeFor = (widgetType: string, children: React.ReactNode, keySuffix = "") => {
+    const w = widgets.find((x) => x.widget_type === widgetType);
+    const cfg = (w?.config ?? {}) as Record<string, unknown>;
+    return (
+      <WidgetPeriodScope
+        key={`${widgetType}${keySuffix}-${String(cfg.period ?? "")}`}
+        initialPeriod={cfg.period}
+        initialOffset={cfg.offset}
+        onChange={(p, o) => { void updateWidgetPeriod(widgetType, p, o); }}
+      >
+        {children}
+      </WidgetPeriodScope>
+    );
+  };
   const { definitions: customWidgetDefs } = useCustomWidgetDefinitions();
   const [expandedWidget, setExpandedWidget] = useState<string | null>(null);
   const { t, language } = useTranslation();
@@ -243,7 +257,7 @@ const DashboardContent = () => {
                     >
                       <LazyWidget>
                         <WidgetErrorBoundary widgetName={customDef.name}>
-                          <CustomWidgetComponent definition={customDef} locationId={selectedLocationId} />
+                          {scopeFor(widget.widget_type, <CustomWidgetComponent definition={customDef} locationId={selectedLocationId} />)}
                         </WidgetErrorBoundary>
                       </LazyWidget>
                     </ResizableWidget>
@@ -272,7 +286,7 @@ const DashboardContent = () => {
                     )}
                     <LazyWidget>
                       <WidgetErrorBoundary widgetName={widgetType}>
-                        <Component locationId={selectedLocationId} onExpand={widget.widget_size !== "full" ? () => setExpandedWidget(widgetType) : undefined} />
+                        {scopeFor(widget.widget_type, <Component locationId={selectedLocationId} onExpand={widget.widget_size !== "full" ? () => setExpandedWidget(widgetType) : undefined} />)}
                       </WidgetErrorBoundary>
                     </LazyWidget>
                   </ResizableWidget>
@@ -295,7 +309,11 @@ const DashboardContent = () => {
             return (
               <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="animate-pulse text-muted-foreground">Laden…</div></div>}>
                 <WidgetErrorBoundary widgetName={expandedWidget}>
-                  <ExpandedComponent locationId={selectedLocationId} onCollapse={() => setExpandedWidget(null)} />
+                  {scopeFor(
+                    widgets.find((w) => w.widget_type === expandedWidget) ? expandedWidget : "location_map",
+                    <ExpandedComponent locationId={selectedLocationId} onCollapse={() => setExpandedWidget(null)} />,
+                    "-expanded",
+                  )}
                 </WidgetErrorBoundary>
               </Suspense>
             );
