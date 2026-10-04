@@ -10,6 +10,23 @@ const isChunkLoadError = (error: Error) =>
   error.message.includes("Importing a module script failed") ||
   error.message.includes("error loading dynamically imported module");
 
+const RELOAD_KEY = "aicono_chunk_reload_at";
+
+/** Lädt höchstens einmal pro 30 s neu – verhindert Endlosschleifen. */
+export function reloadOnceForNewVersion(): boolean {
+  const last = Number(sessionStorage.getItem(RELOAD_KEY) || 0);
+  if (Date.now() - last < 30_000) return false;
+  sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+  window.location.reload();
+  return true;
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("vite:preloadError", (event) => {
+    if (reloadOnceForNewVersion()) event.preventDefault();
+  });
+}
+
 export class ChunkErrorBoundary extends React.Component<
   { children: React.ReactNode },
   State
@@ -18,9 +35,9 @@ export class ChunkErrorBoundary extends React.Component<
 
   static getDerivedStateFromError(error: Error): State {
     if (isChunkLoadError(error)) {
-      // Neues Deployment: alte Chunk-URL existiert nicht mehr → Hard-Reload
+      // Neues Deployment: alte Chunk-URL existiert nicht mehr → einmaliger Reload
       // holt die aktuelle index.html mit den neuen Chunk-Hashes.
-      window.location.reload();
+      reloadOnceForNewVersion();
       return { hasError: true };
     }
     throw error; // Andere Fehler nach oben weitergeben
