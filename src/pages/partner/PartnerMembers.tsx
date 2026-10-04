@@ -181,7 +181,10 @@ export default function PartnerMembers() {
           permissions: iRole === "partner_user" ? iPerms : undefined,
         },
       });
-      const res: any = typeof data === "string" ? JSON.parse(data) : data;
+      let res: any = typeof data === "string" ? JSON.parse(data) : data;
+      if (error && !res) {
+        try { res = await (error as any).context?.json?.(); } catch { /* ignore */ }
+      }
       if (error || !res?.success) throw new Error(res?.error || error?.message || "Einladung fehlgeschlagen");
       toast({ title: "Einladung gesendet", description: `${iEmail} wurde eingeladen.` });
       setInviteOpen(false);
