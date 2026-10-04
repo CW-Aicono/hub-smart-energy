@@ -15482,6 +15482,13 @@ export type Database = {
           tenant_id: string
         }[]
       }
+      get_auth_user_by_email: {
+        Args: { _email: string }
+        Returns: {
+          email: string
+          id: string
+        }[]
+      }
       get_auth_user_email: { Args: never; Returns: string }
       get_charge_point_daily_uptime: {
         Args: { p_charge_point_id: string; p_days?: number }
