@@ -887,7 +887,7 @@ Deno.serve(async (req) => {
           .eq("ocpp_id", cpId)
           .single();
 
-        if (cpCheck && cpCheck.tenant_id !== profile.tenant_id) {
+        if (!cpCheck || cpCheck.tenant_id !== profile.tenant_id) {
           return new Response(
             JSON.stringify({ error: "Forbidden - charge point not in your tenant" }),
             { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -902,6 +902,16 @@ Deno.serve(async (req) => {
     }
 
     // OCPP message: POST /ocpp-central/{chargePointId}
+    // Legacy-HTTP-Pfad: Ladepunkt-Nachrichten nur mit Backend-Secret (oder explizit freigeschaltet).
+    {
+      const expected = Deno.env.get("OCPP_BACKEND_SECRET");
+      const provided = req.headers.get("x-ocpp-secret") ?? "";
+      const legacyOpen = Deno.env.get("OCPP_CENTRAL_HTTP_ENABLED") === "true";
+      if (expected ? provided !== expected : !legacyOpen) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
     const chargePointId = url.searchParams.get("cp") || pathParts[pathParts.length - 1];
 
     if (!chargePointId || chargePointId === "ocpp-central") {
